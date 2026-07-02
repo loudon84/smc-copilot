@@ -79,12 +79,13 @@ export function ExpertSelector({ context }: Props) {
         />
         <button
           type="button"
-          className="hermes-icon-button"
-          title={LABELS.refresh}
+          className="hermes-work-selector__refresh"
           disabled={disabled}
+          title={LABELS.refresh}
+          aria-label={LABELS.refresh}
           onClick={() => void loadExperts()}
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={14} aria-hidden />
         </button>
       </div>
     </div>

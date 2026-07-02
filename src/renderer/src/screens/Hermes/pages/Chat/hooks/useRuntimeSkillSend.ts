@@ -6,7 +6,9 @@ type LocalMessage = { role: "user" | "assistant"; content: string };
 
 type StreamHelpers = {
   appendLocalMessage: (message: LocalMessage) => void;
-  setExternalRunState: (state: "creating" | "streaming" | "completed" | "error" | "idle" | "cancelled") => void;
+  setExternalRunState: (
+    state: "creating" | "streaming" | "completed" | "error" | "idle" | "cancelled",
+  ) => void;
   setLastError: (error: string | null) => void;
 };
 
@@ -22,44 +24,51 @@ type TaskStreamHelpers = {
   }) => Promise<void>;
 };
 
-export function useWorkExpertGatewaySend(
+export function useRuntimeSkillSend(
   workContext: WorkChatContext,
   stream: StreamHelpers,
   taskStream: TaskStreamHelpers,
 ) {
-  const sendToExpertGateway = useCallback(
+  const sendToRuntimeSkill = useCallback(
     async (input: {
       text: string;
       attachmentIds: string[];
-      modelId: string | null;
       sessionId?: string | null;
       onComposerClear?: () => void;
     }) => {
-      const expert = workContext.selectedExpert;
       const skill = workContext.selectedSkill;
-      if (!expert || !skill) return;
+      const expert = workContext.selectedExpert;
+      if (!skill || !expert) return;
 
-      const trimmed = input.text.trim();
-      if (!trimmed && input.attachmentIds.length === 0) return;
+      const prompt = input.text.trim();
+      if (!prompt && input.attachmentIds.length === 0) return;
 
       stream.appendLocalMessage({
         role: "user",
-        content: trimmed || "(attachments)",
+        content: prompt || "(attachments)",
       });
+
       stream.setExternalRunState("creating");
       stream.setLastError(null);
 
       const result = await workExpertGatewayApi.callExpertSkill({
         expertSlug: expert.slug,
         skillName: skill.name,
-        prompt: trimmed,
+        prompt,
         permissionMode: workContext.permissionMode,
         attachmentIds: input.attachmentIds,
         sessionId: input.sessionId,
-        modelId: input.modelId,
       });
 
       if (result.ok && result.mode === "event_stream" && result.taskId && result.eventSseUrl) {
+        stream.appendLocalMessage({
+          role: "assistant",
+          content:
+            `**Expert task accepted**\n\n` +
+            `- Task: ${result.taskNo ?? result.taskId}\n` +
+            `- Status: ${result.status ?? "accepted"}\n`,
+        });
+
         await taskStream.startStream({
           taskId: result.taskId,
           taskNo: result.taskNo,
@@ -69,35 +78,33 @@ export function useWorkExpertGatewaySend(
           skillName: skill.displayName,
           runId: result.runId,
         });
+
         stream.setExternalRunState("streaming");
-      } else if (result.ok && result.mode === "sync_result" && result.responseText) {
+        input.onComposerClear?.();
+        return;
+      }
+
+      if (result.ok && result.mode === "sync_result" && result.responseText) {
         stream.appendLocalMessage({
           role: "assistant",
           content: result.responseText,
         });
         stream.setExternalRunState("completed");
-      } else if (!result.ok) {
-        const errText = result.error ?? "Expert Gateway call failed";
-        stream.appendLocalMessage({
-          role: "assistant",
-          content: `**Expert Gateway error**\n\n${errText}`,
-        });
-        stream.setLastError(errText);
-        stream.setExternalRunState("error");
-      } else {
-        const errText = "Expert Gateway call failed";
-        stream.appendLocalMessage({
-          role: "assistant",
-          content: `**Expert Gateway error**\n\n${errText}`,
-        });
-        stream.setLastError(errText);
-        stream.setExternalRunState("error");
+        input.onComposerClear?.();
+        return;
       }
 
+      const error = !result.ok ? (result.error ?? "Expert Gateway call failed") : "Expert Gateway call failed";
+      stream.appendLocalMessage({
+        role: "assistant",
+        content: `**Expert Gateway error**\n\n${error}`,
+      });
+      stream.setLastError(error);
+      stream.setExternalRunState("error");
       input.onComposerClear?.();
     },
     [workContext, stream, taskStream],
   );
 
-  return { sendToExpertGateway };
+  return { sendToRuntimeSkill };
 }

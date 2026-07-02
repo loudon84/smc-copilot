@@ -8,7 +8,7 @@ import { ChatBubble } from "./ChatBubble";
 import { ActivityRow } from "./ActivityRow";
 import { ErrorCard } from "./ErrorCard";
 import { UsageRow } from "./UsageRow";
-import { ExpertTaskTimelineBlock } from "./components/work/ExpertTaskTimelineBlock";
+import { RuntimeSkillTimelineBlock } from "./components/work/RuntimeSkillTimelineBlock";
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -92,7 +92,7 @@ export function ChatScrollArea({
       })}
       {expertTaskTimelines?.map((entry) => (
         <div key={entry.taskId} className="hermes-webchat-message-wrap">
-          <ExpertTaskTimelineBlock
+          <RuntimeSkillTimelineBlock
             entry={entry}
             onPreviewArtifact={onPreviewArtifact}
             onDownloadArtifact={onDownloadArtifact}

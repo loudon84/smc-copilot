@@ -13,6 +13,7 @@ import type {
   SubscribeExpertTaskEventsInput,
   SubscribeExpertTaskEventsResult,
 } from "../../shared/hermes-experts/expert-task-stream-contract";
+import { assertNoHermesRunEventStream } from "../../shared/hermes-experts/expert-task-stream-guards";
 import { cacheTaskArtifact } from "./expert-artifact-client";
 
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -285,6 +286,7 @@ export function subscribeExpertTaskEvents(
   input: SubscribeExpertTaskEventsInput,
   webContents: WebContents,
 ): SubscribeExpertTaskEventsResult {
+  assertNoHermesRunEventStream(input.eventSseUrl);
   unsubscribeExpertTaskEvents(input.taskId);
 
   const sub: ActiveSubscription = {

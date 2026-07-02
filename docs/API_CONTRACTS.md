@@ -754,24 +754,56 @@ nodeskclaw 企业 GeneHub Registry 本地安装执行器：拉取授权 Skill / 
 
 **契约**：`src/shared/hermes-experts/hermes-experts-contract.ts`、`expert-task-stream-contract.ts`（**v7.5**）、`hermes-experts-errors.ts`（含 `ExpertErrorCode`）
 
-**Renderer**：默认页 **chat**（**v7.4.2** + **v7.5 event_stream**）；`pages/Chat/` 内嵌 Work 控件（`workExpertGatewayApi` OpenAI-compatible payload → `hermes-experts:call-catalog-skill` + `subscribeExpertTaskEvents` / `onExpertTaskEvent`）；`ExpertTaskTimelineBlock` / `ExpertTaskArtifactCard` / `WorkExpertOutputPanel`；`pages/Workbench/`、`pages/Artifacts/`、`pages/Experts/` + `pages/ExpertTeams/`（统一 `ExpertCatalogCallDrawer` + `callCatalogSkill`）；`ExpertRuns/`；GeneHub `skillPush` 页签；`pages/Tasks/` 保留但导航隐藏（v7.4.1 遗留）。
+**Renderer**：默认页 **chat**（**v7.4.2** + **v7.5.1 Runtime Skill fixed route**）；`pages/Chat/` 内嵌 Work 控件（**v7.5.1** `runtimeSkillApi` → `nodeskclawRuntimeSkillAPI` + `useRuntimeSkillSend` / `useNodeskclawTaskStream`；`RuntimeSkillTimelineBlock` / `RuntimeSkillArtifactCard` / `WorkExpertOutputPanel`）；legacy v7.5 `workExpertGatewayApi` / `hermes-experts:task-event` 保留但 **Chat Runtime Skill 禁止**；`pages/Workbench/`、`pages/Artifacts/`、`pages/Experts/` + `pages/ExpertTeams/`（统一 `ExpertCatalogCallDrawer` + `callCatalogSkill`）；`ExpertRuns/`；GeneHub `skillPush` 页签；`pages/Tasks/` 保留但导航隐藏（v7.4.1 遗留）。
+
+---
+
+## NoDeskClaw Runtime Skill（v7.5.1 fixed）
+
+**背景**：Work Chat 选择 Expert + Skill 后调用远端 Runtime Skill 必须走 NoDeskClaw MCP Skill Gateway 固定路由（`sourceType=hermes_api_server`），**禁止**再走 `hermes-experts:call-catalog-skill` / OpenAI-compatible payload。
+
+**Preload**：`window.nodeskclawRuntimeSkillAPI`（`src/preload/nodeskclaw-runtime-skill-api.ts`）— **不向 Renderer 暴露 token**。
+
+| Channel | Args | Returns |
+|---------|------|---------|
+| `nodeskclaw:list-runtime-skills` | — | `McpTool[]` — `tools/list` 经 `isRuntimeSkillTool` 过滤 |
+| `nodeskclaw:call-runtime-skill` | `CallRuntimeSkillInput`（`tool` + `prompt` + `context`；**仅** `prompt`/`context` 进入 MCP `arguments`；Main 注入 `device_id`） | `RuntimeSkillStructuredContent`（`task_id` / `execution_mode=async_event` / `event_stream` 含 `/hermes/tasks/`） |
+| `nodeskclaw:subscribe-task-events` | `SubscribeTaskEventsInput` | `SubscribeTaskEventsResult` — Main 代理 SSE（禁止 `/v1/runs/`） |
+| `nodeskclaw:unsubscribe-task-events` | `taskId` | `{ ok: true }` |
+| `nodeskclaw:preview-artifact` | `NodeskclawArtifactPreviewInput` | `{ ok, data?, error?, errorCode? }` |
+| `nodeskclaw:download-artifact` | `NodeskclawArtifactDownloadInput` | `NodeskclawArtifactDownloadResult` |
+
+**事件（Main → Renderer）**：
+- `nodeskclaw:task-event` — `NodeskclawTaskEvent`；Preload `onTaskEvent(cb)` 返回 unsubscribe。
+- `nodeskclaw:task-stream-error` — `NodeskclawTaskStreamError`；Preload `onTaskStreamError(cb)`。
+- `nodeskclaw:task-stream-closed` — `NodeskclawTaskStreamClosedEvent`；Preload `onTaskStreamClosed(cb)`。
+
+**Main 模块**：`src/main/nodeskclaw/`（`nodeskclaw-mcp-client.ts` → `POST /api/v1/hermes/mcp/skill-gateway`；`nodeskclaw-runtime-skill-client.ts`；`nodeskclaw-task-stream.ts`；`nodeskclaw-artifact-client.ts`；复用 `mcp-token-provider` + `resolveBackendBaseUrl`）。
+
+**契约**：`src/shared/nodeskclaw/runtime-skill-contract.ts`、`runtime-skill-guards.ts`、`task-stream-contract.ts`、`artifact-contract.ts`。
+
+**Renderer（Chat Runtime Skill 专用）**：`api/runtimeSkillApi.ts`；`hooks/useRuntimeSkillSend.ts` + `useNodeskclawTaskStream.ts`；`RuntimeSkillTimelineBlock` / `RuntimeSkillArtifactCard`；**不得**调用 `workExpertGatewayApi.callExpertSkill` 或 `window.hermesExperts.callCatalogSkill`。
+
+**Legacy**：`window.hermesExperts` / `hermes-experts:*` 仍供 Workbench、ExpertRuns、Experts 广场等使用。
 
 ---
 
 ## v7.4.2 Chat-first Work Controls（Renderer 发送路径，无新 IPC）
 
-**背景**：从 v7.4.1「任务首页预发送」回退为 Chat 主入口；Expert + Skill 选择嵌入 `HermesDefaultWebChatSurface` / `ComposerBar`，仅在用户点击 **Send** 且 `useExpertGateway === true` 时走 Expert Gateway。
+**背景**：从 v7.4.1「任务首页预发送」回退为 Chat 主入口；Expert + Skill 选择嵌入 `HermesDefaultWebChatSurface` / `ComposerBar`，仅在用户点击 **Send** 且 `useExpertGateway === true` 时走 Runtime Skill（**v7.5.1** 起改 NoDeskClaw MCP 固定路由，不再 `workExpertGatewayApi.callExpertSkill`）。
 
-**Renderer API 层**（禁止组件直接 `window.hermesExperts`）：
+**Renderer API 层**（禁止组件直接 `window.nodeskclawRuntimeSkillAPI` / `window.hermesExperts`）：
 
 | 模块 | 职责 |
 |------|------|
-| `api/workExpertGatewayApi.ts` | `getHealth` → `workApi.gateway.health`；`listAuthorizedExperts` / `listExpertSkills`；`callExpertSkill` → `window.hermesExperts.callCatalogSkill` |
-| `hooks/useWorkChatContext.ts` | gateway / expert / skill / permission 状态；`useExpertGateway = expert && skill && gatewayStatus === "remote"` |
-| `hooks/useWorkExpertGatewaySend.ts` | Send 时 `appendLocalMessage` + `callExpertSkill`；结果仅本地 UI 展示 |
+| `api/runtimeSkillApi.ts` | **v7.5.1** `checkGatewayHealth` / `listRuntimeSkillExperts` / `listRuntimeSkillTools` / `callRuntimeSkill` → `window.nodeskclawRuntimeSkillAPI` |
+| `api/workExpertGatewayApi.ts` | **legacy** Workbench 等；Chat Runtime Skill **禁止** |
+| `hooks/useWorkChatContext.ts` | gateway / expert / skill / permission；`useExpertGateway = expert && skill?.runtimeTool && gatewayStatus === "remote"` |
+| `hooks/useRuntimeSkillSend.ts` | **v7.5.1** Send → `runtimeSkillApi.callRuntimeSkill` + `useNodeskclawTaskStream.startStream` |
+| `hooks/useNodeskclawTaskStream.ts` | 订阅 `nodeskclaw:task-event`；artifact preview/download |
 | `pages/Chat/hooks/useHermesDefaultChatStream.ts` | 扩展 `appendLocalMessage` / `setExternalRunState` / `setLastError` |
 
-**底层 IPC**（复用既有 Hermes Experts 通道，见上表）：
+**底层 IPC**（**v7.5.1 Chat Runtime Skill** 见上节 `nodeskclaw:*`；legacy Expert Gateway 仍用 Hermes Experts 通道）：
 
 - `hermes-experts:get-expert-gateway-health`（经 `workApi.gateway.health`）
 - `hermes-experts:list-catalog-skills` + `hermes-experts:call-catalog-skill`

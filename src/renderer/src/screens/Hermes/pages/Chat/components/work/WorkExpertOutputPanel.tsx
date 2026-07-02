@@ -29,7 +29,7 @@ export function WorkExpertOutputPanel({
   return (
     <aside className="hermes-expert-output-panel" aria-label="Expert output">
       <div className="hermes-expert-output-panel__header">
-        <p className="hermes-expert-output-panel__title">Expert Output</p>
+        <p className="hermes-expert-output-panel__title">Runtime Output</p>
         <button type="button" className="hermes-btn hermes-btn--ghost" onClick={onClose} aria-label="Close">
           <X size={14} />
         </button>

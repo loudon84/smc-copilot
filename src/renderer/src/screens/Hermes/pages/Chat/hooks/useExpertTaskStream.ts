@@ -13,7 +13,10 @@ function expertsApi(): NonNullable<typeof window.hermesExperts> {
   return window.hermesExperts;
 }
 
-function deriveStatus(events: ExpertTaskEvent[], current: ExpertTaskTimelineStatus): ExpertTaskTimelineStatus {
+function deriveStatus(
+  events: ExpertTaskEvent[],
+  current: ExpertTaskTimelineStatus,
+): ExpertTaskTimelineStatus {
   if (events.some((e) => e.type === "task.failed")) return "failed";
   if (events.some((e) => e.type === "task.completed")) return "completed";
   if (events.some((e) => e.type === "task.started" || e.type === "task.progress")) return "running";
@@ -124,7 +127,7 @@ export function useExpertTaskStream() {
       if (result.ok && result.data?.text != null) {
         setPreviewContent(result.data.text);
       } else {
-        setPreviewContent(result.error ?? "Preview failed");
+        setPreviewContent(result.ok ? "Preview failed" : (result.error ?? "Preview failed"));
       }
     } catch (err) {
       setPreviewContent(err instanceof Error ? err.message : String(err));
@@ -134,12 +137,11 @@ export function useExpertTaskStream() {
   }, []);
 
   const downloadArtifact = useCallback(async (artifact: ExpertTaskArtifactView) => {
-    const result = await expertsApi().downloadExpertArtifact({
+    return expertsApi().downloadExpertArtifact({
       artifactId: artifact.artifactId,
       artifactUrl: artifact.artifactUrl,
       taskId: artifact.taskId,
     });
-    return result;
   }, []);
 
   useEffect(() => {

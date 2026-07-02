@@ -14,6 +14,8 @@ export interface WorkChatSelectedExpert {
   description?: string;
   category?: string;
   riskLevel?: "low" | "medium" | "high";
+  runtimeProfile?: string;
+  runtimeInstanceId?: string;
 }
 
 export interface WorkChatSelectedSkill {

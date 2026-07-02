@@ -97,7 +97,7 @@ function appendInstalledSkill(
 export function listInstalledSkills(profile?: string): InstalledSkill[] {
   const skillsDir = join(profileHome(profile), "skills");
   if (!existsSync(skillsDir)) return [];
-  debugger;
+  
   const skills: InstalledSkill[] = [];
 
   try {

@@ -23,6 +23,7 @@ import {
   updateExpertRunStatus,
 } from "./expert-runtime-db";
 import { emitExpertRuntimeEvent } from "./expert-run-events";
+import { resolveExpertTaskUrl } from "./expert-task-url";
 
 function buildArtifactTitle(
   catalogKind: CallCatalogSkillInput["catalogKind"],
@@ -82,25 +83,31 @@ function parseEventStreamAccepted(structured: Record<string, unknown> | undefine
 } | null {
   if (!structured) return null;
   const taskId = String(structured.taskId ?? structured.task_id ?? "").trim();
-  const eventSseUrl = String(structured.eventSseUrl ?? structured.event_sse_url ?? "").trim();
+  const eventSseUrlRaw = String(
+    structured.eventSseUrl ?? structured.event_sse_url ?? structured.event_stream ?? "",
+  ).trim();
   const streaming = structured.streaming === true;
-  if (!taskId && !eventSseUrl && !streaming) return null;
-  if (!taskId || !eventSseUrl) return null;
+  if (!taskId && !eventSseUrlRaw && !streaming) return null;
+  if (!taskId || !eventSseUrlRaw) return null;
 
   const rawStatus = String(structured.status ?? "accepted");
   const status =
     rawStatus === "queued" || rawStatus === "running" ? rawStatus : "accepted";
 
+  const artifactUrlRaw =
+    structured.artifactUrl != null
+      ? String(structured.artifactUrl)
+      : structured.artifact_url != null
+        ? String(structured.artifact_url)
+        : undefined;
+
+  const eventSseUrl = resolveExpertTaskUrl(eventSseUrlRaw) ?? eventSseUrlRaw;
+
   return {
     taskId,
     taskNo: structured.taskNo != null ? String(structured.taskNo) : structured.task_no != null ? String(structured.task_no) : undefined,
     eventSseUrl,
-    artifactUrl:
-      structured.artifactUrl != null
-        ? String(structured.artifactUrl)
-        : structured.artifact_url != null
-          ? String(structured.artifact_url)
-          : undefined,
+    artifactUrl: resolveExpertTaskUrl(artifactUrlRaw) ?? artifactUrlRaw,
     status,
   };
 }

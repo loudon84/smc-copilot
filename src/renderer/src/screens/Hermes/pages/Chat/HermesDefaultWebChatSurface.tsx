@@ -11,7 +11,7 @@ import { HermesActiveExpertBar } from "./components/HermesActiveExpertBar";
 import { StatusToast } from "./StatusToast";
 import { useHermesDefaultWebChat } from "./hooks/useHermesDefaultWebChat";
 import { useWorkChatContext } from "./hooks/useWorkChatContext";
-import { useWorkExpertGatewaySend } from "./hooks/useWorkExpertGatewaySend";
+import { useRuntimeSkillSend } from "./hooks/useRuntimeSkillSend";
 import { useExpertTaskStream } from "./hooks/useExpertTaskStream";
 type Props = {
   forcedSessionId?: string | null;
@@ -30,7 +30,7 @@ export function HermesDefaultWebChatSurface({
   const expertTaskStream = useExpertTaskStream();
   const { models, attachments, composer, stream, newConversation, viewSessions, modelId, activeSessionId } =
     chat;
-  const expertGatewaySend = useWorkExpertGatewaySend(workContext, {
+  const runtimeSkillSend = useRuntimeSkillSend(workContext, {
     appendLocalMessage: stream.appendLocalMessage,
     setExternalRunState: stream.setExternalRunState,
     setLastError: stream.setLastError,
@@ -73,10 +73,9 @@ export function HermesDefaultWebChatSurface({
     const attachmentIds = attachmentMetas.map((a) => a.id);
 
     if (workContext.useExpertGateway) {
-      void expertGatewaySend.sendToExpertGateway({
+      void runtimeSkillSend.sendToRuntimeSkill({
         text,
         attachmentIds,
-        modelId,
         sessionId: activeSessionId,
         onComposerClear: () => {
           composer.clear();
@@ -94,7 +93,7 @@ export function HermesDefaultWebChatSurface({
     activeSessionId,
     attachments,
     composer,
-    expertGatewaySend,
+    runtimeSkillSend,
     modelId,
     stream,
     workContext.useExpertGateway,
