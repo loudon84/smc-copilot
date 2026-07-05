@@ -7,7 +7,7 @@ import { PermissionSelector } from "./PermissionSelector";
 
 const LABELS = {
   clear: "Clear",
-  useExpertGateway: "Use Expert Gateway",
+  mcpHostMode: "Hermes MCP Host",
 } as const;
 
 type Props = {
@@ -21,8 +21,8 @@ export function WorkComposerControls({ context }: Props) {
       <ExpertSelector context={context} />
       <ExpertSkillSelector context={context} />
       <PermissionSelector context={context} />
-      {context.useExpertGateway ? (
-        <span className="hermes-work-gateway-hint">{LABELS.useExpertGateway}</span>
+      {context.selectedExpert && context.selectedSkill ? (
+        <span className="hermes-work-gateway-hint">{LABELS.mcpHostMode}</span>
       ) : null}
       <button
         type="button"

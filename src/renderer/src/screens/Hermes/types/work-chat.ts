@@ -31,9 +31,11 @@ export interface WorkChatContext {
   selectedExpert: WorkChatSelectedExpert | null;
   selectedSkill: WorkChatSelectedSkill | null;
   permissionMode: WorkPermissionMode;
-  useExpertGateway: boolean;
+  /** v7.6: expert/skill selection only affects prompt hint; always false in business path. */
+  useExpertGateway: false;
 }
 
+/** @deprecated v7.6 — Chat no longer calls Expert Gateway directly. */
 export interface WorkExpertGatewayCallInput {
   expertSlug: string;
   skillName: string;

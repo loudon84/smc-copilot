@@ -24,6 +24,7 @@ type TaskStreamHelpers = {
   }) => Promise<void>;
 };
 
+/** @deprecated v7.6 — Chat business path uses buildExpertPromptHint + hermes-agent sendMessage. Debug only. */
 export function useRuntimeSkillSend(
   workContext: WorkChatContext,
   stream: StreamHelpers,

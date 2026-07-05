@@ -5,6 +5,7 @@ import type {
   HermesChatUsageEvent,
 } from "../../../../../../../shared/hermes-default-chat/hermes-default-chat-contract";
 import type { HermesChatRunState, HermesMessage, HermesToolCall } from "../../../types";
+import type { ToolProgressEntry } from "../components/ToolProgressTimeline";
 import { formatChatError } from "../../../utils/formatChatError";
 import { useHermesWorkspace } from "../../../context/HermesWorkspaceContext";
 
@@ -20,6 +21,7 @@ export function useHermesDefaultChatStream(input: {
   streamingContent: string;
   runState: HermesChatRunState;
   activeTool: HermesToolCall | null;
+  toolProgressTimeline: ToolProgressEntry[];
   lastError: string | null;
   lastUsage: HermesChatUsageEvent | null;
   historyLoadError: string | null;
@@ -48,6 +50,7 @@ export function useHermesDefaultChatStream(input: {
   const [streamingContent, setStreamingContent] = useState("");
   const [runState, setRunState] = useState<HermesChatRunState>("idle");
   const [activeTool, setActiveTool] = useState<HermesToolCall | null>(null);
+  const [toolProgressTimeline, setToolProgressTimeline] = useState<ToolProgressEntry[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastUsage, setLastUsage] = useState<HermesChatUsageEvent | null>(null);
   const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
@@ -79,12 +82,25 @@ export function useHermesDefaultChatStream(input: {
         setStreamingContent((prev) => prev + chunk);
       }),
       chatApi.chat.onToolProgress((tool) => {
+        const now = new Date().toISOString();
         const tc: HermesToolCall = {
-          id: `tool-${Date.now()}`,
+          id: `tool-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           name: tool,
           status: "running",
         };
         setActiveTool(tc);
+        setToolProgressTimeline((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.name === tool && last.status === "running") {
+            return prev;
+          }
+          const completed = prev.map((entry) =>
+            entry.status === "running"
+              ? { ...entry, status: "completed" as const, completedAt: now }
+              : entry,
+          );
+          return [...completed, { ...tc, startedAt: now }];
+        });
         setRunState("streaming");
       }),
       chatApi.chat.onUsage((usage) => {
@@ -108,6 +124,13 @@ export function useHermesDefaultChatStream(input: {
         });
         setRunState("completed");
         setActiveTool(null);
+        setToolProgressTimeline((prev) =>
+          prev.map((entry) =>
+            entry.status === "running"
+              ? { ...entry, status: "completed", completedAt: new Date().toISOString() }
+              : entry,
+          ),
+        );
         setLastError(null);
         if (sessionId) onSessionIdRef.current?.(sessionId);
       }),
@@ -116,6 +139,13 @@ export function useHermesDefaultChatStream(input: {
         setRunState("error");
         setStreamingContent("");
         setActiveTool(null);
+        setToolProgressTimeline((prev) =>
+          prev.map((entry) =>
+            entry.status === "running"
+              ? { ...entry, status: "error", completedAt: new Date().toISOString() }
+              : entry,
+          ),
+        );
       }),
     ];
     return () => unsubs.forEach((u) => u());
@@ -136,6 +166,7 @@ export function useHermesDefaultChatStream(input: {
       setStreamingContent("");
       setRunState("idle");
       setActiveTool(null);
+      setToolProgressTimeline([]);
       setLastError(null);
       setLastUsage(null);
     } catch (e) {
@@ -150,6 +181,7 @@ export function useHermesDefaultChatStream(input: {
     setStreamingContent("");
     setRunState("idle");
     setActiveTool(null);
+    setToolProgressTimeline([]);
     setLastError(null);
     setLastUsage(null);
     setHistoryLoadError(null);
@@ -205,6 +237,7 @@ export function useHermesDefaultChatStream(input: {
       setRunState("creating");
       setStreamingContent("");
       setActiveTool(null);
+      setToolProgressTimeline([]);
       setLastError(null);
       setLastUsage(null);
 
@@ -252,6 +285,7 @@ export function useHermesDefaultChatStream(input: {
     }
     setStreamingContent("");
     setActiveTool(null);
+    setToolProgressTimeline([]);
     setRunState("cancelled");
   }, [chatApi]);
 
@@ -260,6 +294,7 @@ export function useHermesDefaultChatStream(input: {
     streamingContent,
     runState,
     activeTool,
+    toolProgressTimeline,
     lastError,
     lastUsage,
     historyLoadError,

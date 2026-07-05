@@ -23,6 +23,7 @@ function deriveStatus(
   return current;
 }
 
+/** @deprecated v7.6 — Chat no longer subscribes to nodeskclaw SSE task events. Debug only. */
 export function useExpertTaskStream() {
   const [timelines, setTimelines] = useState<ExpertTaskTimelineEntry[]>([]);
   const [artifacts, setArtifacts] = useState<ExpertTaskArtifactView[]>([]);

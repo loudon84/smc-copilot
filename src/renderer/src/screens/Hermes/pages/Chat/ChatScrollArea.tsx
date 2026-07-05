@@ -1,14 +1,16 @@
+import { useMemo } from "react";
 import { useI18n } from "../../../../components/useI18n";
 import AgentMarkdown from "../../../../components/AgentMarkdown";
 import type { HermesChatUsageEvent } from "../../../../../../shared/hermes-default-chat/hermes-default-chat-contract";
 import type { HermesChatRunState, HermesMessage, HermesToolCall } from "../../types";
-import type { ExpertTaskArtifactView, ExpertTaskTimelineEntry } from "../../types/expert-task-stream";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { ChatBubble } from "./ChatBubble";
 import { ActivityRow } from "./ActivityRow";
 import { ErrorCard } from "./ErrorCard";
 import { UsageRow } from "./UsageRow";
-import { RuntimeSkillTimelineBlock } from "./components/work/RuntimeSkillTimelineBlock";
+import { ToolProgressTimeline, type ToolProgressEntry } from "./components/ToolProgressTimeline";
+import { LocalDocumentCard } from "./components/LocalDocumentCard";
+import { extractLocalDocumentPaths } from "./utils/extractLocalDocumentPaths";
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -20,44 +22,44 @@ export function ChatScrollArea({
   messages,
   streamingContent,
   activeTool,
+  toolProgressTimeline,
   runState,
   lastError,
   lastUsage,
   emptyTitle,
   emptyHint,
-  expertTaskTimelines,
-  onPreviewArtifact,
-  onDownloadArtifact,
 }: {
   messages: HermesMessage[];
   streamingContent: string;
   activeTool: HermesToolCall | null;
+  toolProgressTimeline?: ToolProgressEntry[];
   runState: HermesChatRunState;
   lastError: string | null;
   lastUsage?: HermesChatUsageEvent | null;
   emptyTitle?: string;
   emptyHint?: string;
-  expertTaskTimelines?: ExpertTaskTimelineEntry[];
-  onPreviewArtifact?: (artifact: ExpertTaskArtifactView) => void;
-  onDownloadArtifact?: (artifact: ExpertTaskArtifactView) => void;
 }): React.JSX.Element {
   const { t } = useI18n();
+  const streamingDocuments = useMemo(
+    () => (streamingContent ? extractLocalDocumentPaths(streamingContent) : []),
+    [streamingContent],
+  );
   const { containerRef, bottomRef } = useAutoScroll([
     messages,
     streamingContent,
     activeTool,
+    toolProgressTimeline,
     runState,
     lastError,
     lastUsage,
-    expertTaskTimelines,
   ]);
 
   const isEmpty =
     messages.length === 0 &&
     !streamingContent &&
     !activeTool &&
-    runState === "idle" &&
-    !(expertTaskTimelines?.length);
+    !(toolProgressTimeline?.length) &&
+    runState === "idle";
 
   let lastDay = "";
 
@@ -90,15 +92,11 @@ export function ChatScrollArea({
           </div>
         );
       })}
-      {expertTaskTimelines?.map((entry) => (
-        <div key={entry.taskId} className="hermes-webchat-message-wrap">
-          <RuntimeSkillTimelineBlock
-            entry={entry}
-            onPreviewArtifact={onPreviewArtifact}
-            onDownloadArtifact={onDownloadArtifact}
-          />
+      {toolProgressTimeline && toolProgressTimeline.length > 0 ? (
+        <div className="hermes-webchat-message-wrap">
+          <ToolProgressTimeline entries={toolProgressTimeline} />
         </div>
-      ))}
+      ) : null}
       {activeTool ? (
         <div className="hermes-webchat-message-wrap">
           <ActivityRow tool={activeTool} />
@@ -107,6 +105,9 @@ export function ChatScrollArea({
       {streamingContent ? (
         <div className="hermes-webchat-streaming">
           <AgentMarkdown>{streamingContent}</AgentMarkdown>
+          {streamingDocuments.map((doc) => (
+            <LocalDocumentCard key={doc.path} document={doc} />
+          ))}
         </div>
       ) : null}
       {lastError ? <ErrorCard message={lastError} /> : null}
@@ -115,4 +116,3 @@ export function ChatScrollArea({
     </div>
   );
 }
-

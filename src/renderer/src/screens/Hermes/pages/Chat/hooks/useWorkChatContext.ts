@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { workExpertGatewayApi } from "../../../api/workExpertGatewayApi";
 import type {
   ExpertGatewayStatus,
@@ -43,20 +43,12 @@ export function useWorkChatContext(): UseWorkChatContextReturn {
     setPermissionModeState("default");
   }, []);
 
-  const useExpertGateway = useMemo(
-    () =>
-      selectedExpert != null &&
-      selectedSkill != null &&
-      gatewayStatus === "remote",
-    [selectedExpert, selectedSkill, gatewayStatus],
-  );
-
   return {
     gatewayStatus,
     selectedExpert,
     selectedSkill,
     permissionMode,
-    useExpertGateway,
+    useExpertGateway: false as const,
     setExpert,
     setSkill,
     setPermissionMode,

@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 0.3.6（… + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + **v7.4.1 Work 任务 Hotfix** + …） |
+| 版本 | 0.3.6（… + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
 | 后端 | Hermes Python Gateway，`http://127.0.0.1:8642`（default Profile） |
 
@@ -82,11 +82,12 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 | `window.aiosRuntime` | `src/preload/aios-api.ts` | Portal Runtime 启停/Doctor/日志；**V5.3.4** `getPortalInfo()` 展示 monorepo 安装路径 |
 | `window.mcpSkillGatewayRuntime` | `src/preload/mcp-skill-gateway-runtime-api.ts` | **V6.4** MCP Skill Gateway Runtime（Proxy 启停、Hermes 注册、远程 MCP 健康检查）；**V6.6.1** `readStructuredLogs` / 运营诊断；**V7.0** Hermes Client bootstrap/agents/tools/readiness/task result/artifact（`hermes-client:*` IPC）；**不向 Renderer 暴露 token** |
 | `window.genehubRuntime` | `src/preload/genehub-runtime-api.ts` | **V6.5** GeneHub 连接探测、授权 Skill 列表、安装任务执行与日志；**不向 Renderer 暴露 token** |
-| `window.hermesExperts` | `src/preload/hermes-experts-api.ts` | **Expert MCP v6.1** 直连 `/api/v1/expert/mcp`：`listCatalogSkills` / `callCatalogSkill` + root `tools/list` 目录 + 本地 Runs/Artifacts；`summonExpert`/`summonTeam` 委托 `callCatalogSkill`；legacy HermesTask IPC 保留；install* deprecated；**不向 Renderer 暴露 token**；**Chat Runtime Skill 禁止走此 API（v7.5.1）** |
-| `window.nodeskclawRuntimeSkillAPI` | `src/preload/nodeskclaw-runtime-skill-api.ts` | **v7.5.1** NoDeskClaw MCP Runtime Skill 固定路由：`tools/list` + `tools/call`（`{prompt, context}`）+ Task SSE 代理 + artifact preview/download；Main 调 `POST /api/v1/hermes/mcp/skill-gateway`；**不向 Renderer 暴露 token** |
+| `window.hermesExperts` | `src/preload/hermes-experts-api.ts` | **Expert MCP v6.1** 直连 `/api/v1/expert/mcp`：Workbench / Experts 广场等；**v7.6 Chat 业务禁止** `callCatalogSkill` |
+| `window.hermesMcpConfig` | `src/preload/hermes-mcp-config-api.ts` | **v7.6** Hermes Agent `mcp_servers` 配置（读写 `config.yaml` + `.env` token 掩码）；**不向 Renderer 暴露 token** |
+| `window.nodeskclawRuntimeSkillAPI` | `src/preload/nodeskclaw-runtime-skill-api.ts` | **v7.5.1** legacy Runtime Skill 路由；**v7.6 Chat 业务禁止** |
 | `window.work` | `src/preload/work-api.ts` | **v7.4.1 Work 任务 Hotfix** `task.start` / `resume` / `list` / `getBySession`；首条消息走 `hermesDefaultChat`；元数据 `work-tasks.json`；legacy `send`/`onEvent` 保留 |
 
-类型定义：`src/preload/index.d.ts`。契约类型：`src/shared/profile-runtime/`、`src/shared/enterprise/`、**`src/shared/mcp/`（V6.1）**、**`src/shared/mcp-skill-gateway-runtime/`（V6.4）**、**`src/shared/genehub/`（V6.5）**、**`src/shared/nodeskclaw/`（v7.5.1）**、**`src/shared/work/`（v1.4）**。
+类型定义：`src/preload/index.d.ts`。契约类型：`src/shared/profile-runtime/`、`src/shared/enterprise/`、**`src/shared/mcp/`（V6.1）**、**`src/shared/mcp-skill-gateway-runtime/`（V6.4）**、**`src/shared/genehub/`（V6.5）**、**`src/shared/hermes-mcp-config/`（v7.6）**、**`src/shared/nodeskclaw/`（v7.5.1）**、**`src/shared/work/`（v1.4）**。
 
 ## 应用路由与 UI 结构
 
@@ -550,6 +551,7 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 | **V6.3.3** | **WebOperator Task Session 绑定键调整**：`source + requestId` 替代 `pageUrl` 唯一键；schema v2 + v1 迁移；Main 派生 `taskId`；HostBridge `web-host-bridge` | `prd/v6.3.3_task-to-session-request.md`, `web-operator-task-session-*`, `shared/web-operator/build-task-id.ts`, `HermesTaskPanel.tsx`, `HostBridgePanel.tsx` |
 | **V6.3.4** | **WebOperator Hermes→Host 表单写回**：Hermes 输出 `host_form_fill` artifact；Panel「写回当前表单」按钮；`HostBridgeCommandContext` 共享 `runCommand`；`desktop.host.form.fill` | `prd/v6.3.4_weboperator-hermes-host-form-fill.md`, `host-bridge/HostBridgeCommandContext.tsx`, `components/hermes/panel/host-form-fill/*`, `WebOperatorHermesPanelMessageList.tsx` |
 | **V6.7.1** | **GeneHub MCP Registration Hardening**：bundle-preview 不 claim、ignore 同步服务端、profile-mapping.json、serverProfileId sync、签名校验、scripts provenance、MCP Gateway 卡片增强 | `genehub-profile-mapping.ts`, `genehub-client.ts`, `mcp-registration-service.ts`, `skill-install-worker.ts`, `script-provenance.ts`, `skill-package-validator.ts`, `GeneHubMcpRegistrationPanel.tsx`, `McpGatewayGeneHubRegistrationCard.tsx` |
+| **v7.6** | **Hermes Agent MCP Host Mode**：Chat 统一 `hermesDefaultChat` + `buildExpertPromptHint`；`hermes-mcp:*` 写 `config.yaml` `mcp_servers`；禁止 Chat 直连 nodeskclaw / `callCatalogSkill` | `src/main/hermes-mcp-config/`, `src/shared/hermes-mcp-config/`, `pages/Chat/utils/buildExpertPromptHint.ts`, `HermesAgentMcpServersPanel.tsx`, `prd_work/v7.6_agent-host-mode.md` |
 | **v7.5.1** | **Runtime Skill Fixed Route Hotfix**：Chat Expert+Skill 改 `nodeskclaw:*` IPC + `POST /api/v1/hermes/mcp/skill-gateway`（`tools/call` 仅 `{prompt, context}`）；禁止 Chat 走 `hermes-experts:call-catalog-skill` | `src/main/nodeskclaw/`, `src/shared/nodeskclaw/`, `runtimeSkillApi.ts`, `useRuntimeSkillSend.ts`, `useNodeskclawTaskStream.ts`, `prd_work/v7.5.1_hotfix.md` |
 | **v7.4.2** | **Chat-first Work Controls**：Chat 恢复默认入口；`ComposerBar.workControlsSlot` + `WorkComposerControls` / `WorkChatContextBar`；Send 双路径（Hermes SSE vs Runtime Skill）；`tasks` 导航隐藏 | `pages/Chat/components/work/`, `api/runtimeSkillApi.ts`, `hooks/useWorkChatContext.ts`, `hooks/useRuntimeSkillSend.ts`, `prd_work/v7.4.2_hotfix.md` |
 | **v7.4.1** | **Work 任务 Hotfix**（导航已由 v7.4.2 回退）：Hermes session 绑定、`HermesDefaultWebChatSurface` 任务窗口、`work-tasks.json`、`work:task-start/list/resume`、Popover 启动器 | `pages/Tasks/`, `workTaskApi.ts`, `work-task-store.ts`, `prd_work/v7.4.1_hotfix.md` |

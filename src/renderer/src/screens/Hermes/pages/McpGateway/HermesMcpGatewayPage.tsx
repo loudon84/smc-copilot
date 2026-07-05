@@ -13,6 +13,7 @@ import { McpGatewayClientContractCard } from "./McpGatewayClientContractCard";
 import { McpGatewayAgentAliasPanel } from "./McpGatewayAgentAliasPanel";
 import { McpGatewayReadinessDrawer } from "./McpGatewayReadinessDrawer";
 import { McpGatewayTaskResultPanel } from "./McpGatewayTaskResultPanel";
+import { HermesAgentMcpServersPanel } from "./HermesAgentMcpServersPanel";
 
 function proxyBadgeClass(status: string): string {
   if (status === "running") return "hermes-badge hermes-badge--running";
@@ -266,6 +267,8 @@ export default function HermesMcpGatewayPage() {
       {loading ? <p className="hermes-muted">{t("workspaces.hermes.common.loading")}</p> : null}
       {error ? <p className="hermes-page__error">{error}</p> : null}
       {syncMessage ? <p className="hermes-muted">{syncMessage}</p> : null}
+
+      <HermesAgentMcpServersPanel />
 
       {showRestartBanner ? (
         <div className="hermes-mcp-gateway-restart-banner" role="alert">

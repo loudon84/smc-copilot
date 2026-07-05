@@ -119,6 +119,7 @@ export const workExpertGatewayApi = {
     }));
   },
 
+  /** @deprecated v7.6 — business Chat must not call Expert Gateway directly. Debug / Workbench only. */
   async callExpertSkill(input: WorkExpertGatewayCallInput): Promise<WorkExpertGatewayCallResult> {
     try {
       const payload = buildOpenAIPayload(input);

@@ -835,18 +835,53 @@ nodeskclaw 企业 GeneHub Registry 本地安装执行器：拉取授权 Skill / 
 
 ---
 
-## v7.4.2 Chat-first Work Controls（Renderer，无新 IPC）
+## v7.6 Hermes Agent MCP Host Mode
 
-Chat 为 Local Hermes 默认页；Work 控件（Expert / Skill / Permission / Gateway badge）嵌入 `ComposerBar.workControlsSlot` 与 `WorkChatContextBar`。
+**背景**：Chat 不再直连 nodeskclaw Expert MCP Gateway。Expert + Skill 选择仅生成 `buildExpertPromptHint()` 拼入用户消息，统一 `hermesDefaultChat.sendMessage` → Gateway `:8642`；hermes-agent 内部 MCP Client 调用 `config.yaml` → `mcp_servers`。
 
-**发送双路径**（用户点击 Send 时）：
+**Preload**：`window.hermesMcpConfig`（`src/preload/hermes-mcp-config-api.ts`）— token 仅 Main 读写 `.env`，Renderer 只见 `tokenConfigured`。
+
+| Channel | Args | Returns |
+|---------|------|---------|
+| `hermes-mcp:get-servers` | `profile?` | `HermesMcpServerView[]` |
+| `hermes-mcp:save-server` | `SaveHermesMcpServerInput` | `HermesMcpServerMutationResult`（写 `config.yaml` + `.env`；可触发 Gateway restart） |
+| `hermes-mcp:remove-server` | `name`, `profile?` | `HermesMcpServerMutationResult` |
+| `hermes-mcp:enable-server` | `name`, `profile?` | `HermesMcpServerMutationResult` |
+| `hermes-mcp:disable-server` | `name`, `profile?` | `HermesMcpServerMutationResult` |
+| `hermes-mcp:test-server` | `name`, `profile?` | `HermesMcpTestServerResult`（经 Hermes `:8642/health` + 配置校验；**不**直连 nodeskclaw） |
+| `hermes-mcp:reload` | `profile?` | `{ ok, restarted?, message? }` |
+| `hermes-mcp:list-tools` | `name`, `profile?` | `HermesMcpListToolsResult`（`mcp_servers.tools.include`） |
+
+**Main 模块**：`src/main/hermes-mcp-config/`（`hermes-mcp-config-service.ts` 复用 `hermes-config-yaml.ts`）。
+
+**契约**：`src/shared/hermes-mcp-config/hermes-mcp-config-contract.ts`。
+
+**Renderer（Chat）**：
+- `pages/Chat/utils/buildExpertPromptHint.ts` + `components/PromptHintPreview.tsx`
+- `components/ToolProgressTimeline.tsx`（`hermes.tool.progress`）
+- `components/LocalDocumentCard.tsx`（识别 final response 本地路径）
+- **禁止**业务 Chat 调用 `workExpertGatewayApi.callExpertSkill` / `useRuntimeSkillSend` / `useExpertTaskStream`
+
+**Renderer（MCP 配置 UI）**：`pages/McpGateway/HermesAgentMcpServersPanel.tsx` + `hooks/useHermesMcpConfig.ts`。
+
+**发送单路径**（用户点击 Send）：
 
 | 条件 | 路径 |
 |------|------|
-| `selectedExpert` + `selectedSkill` + `gatewayStatus === "remote"` | `workExpertGatewayApi.callExpertSkill` → `hermes-experts:call-catalog-skill`；消息经 `useHermesDefaultChatStream.appendLocalMessage` 展示 |
-| 否则 | `hermesDefaultChat.sendMessage` → `hermes-chat:*` → Gateway `:8642` SSE |
+| 选中 Expert + Skill | `buildExpertPromptHint(userMessage, …)` → `hermesDefaultChat.sendMessage` → Gateway `:8642` SSE |
+| 否则 | 原始 `userMessage` → `hermesDefaultChat.sendMessage` |
 
-**Renderer 模块**：`api/workExpertGatewayApi.ts`、`types/work-chat.ts`、`pages/Chat/hooks/useWorkChatContext.ts`、`useWorkExpertGatewaySend.ts`、`pages/Chat/components/work/*`（English-only UI literals）。
+**Legacy（debug / Workbench）**：`window.hermesExperts.callCatalogSkill` 与 `nodeskclaw:*` 保留，**禁止** Chat 业务路径使用。
+
+---
+
+## v7.4.2 Chat-first Work Controls（Renderer，无新 IPC — **v7.6 已由 MCP Host Mode 取代发送分叉**）
+
+Chat 为 Local Hermes 默认页；Work 控件（Expert / Skill / Permission / Gateway badge）嵌入 `ComposerBar.workControlsSlot` 与 `WorkChatContextBar`。
+
+**发送路径（v7.6 起）**：见上节 **v7.6 Hermes Agent MCP Host Mode**；`useExpertGateway` 恒为 `false`。
+
+**Renderer 模块**：`api/workExpertGatewayApi.ts`（**@deprecated** `callExpertSkill`）、`types/work-chat.ts`、`pages/Chat/hooks/useWorkChatContext.ts`、`pages/Chat/components/work/*`。
 
 ---
 

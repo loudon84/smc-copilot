@@ -41,6 +41,7 @@ export type HermesConfigDocument = Record<string, unknown> & {
   };
   streaming?: boolean;
   custom_providers?: HermesCustomProvider[];
+  mcp_servers?: Record<string, unknown>;
 };
 
 function configFilePath(profile?: string): string {

@@ -738,6 +738,7 @@ declare global {
     mcpSkillGatewayRuntime: McpSkillGatewayRuntimeAPI;
     genehubRuntime: GeneHubRuntimeAPI;
     hermesExperts: import("../shared/hermes-experts/hermes-experts-contract").HermesExpertsAPI;
+    hermesMcpConfig: import("../shared/hermes-mcp-config/hermes-mcp-config-contract").HermesMcpConfigAPI;
     work: {
       task: {
         start: (
