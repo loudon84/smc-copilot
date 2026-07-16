@@ -4,12 +4,13 @@ import { useI18n } from "../../../../components/useI18n";
 import { formatChatError } from "../../utils/formatChatError";
 import { WorkChatContextBar } from "./components/work/WorkChatContextBar";
 import { WorkComposerControls } from "./components/work/WorkComposerControls";
-import { PromptHintPreview } from "./components/PromptHintPreview";
+import { PromptHintComposer } from "./components/PromptHintComposer";
+import { TaskStatusBar } from "./components/TaskStatusBar";
 import { ChatScrollArea } from "./ChatScrollArea";
 import { ComposerBar } from "./ComposerBar";
 import { HermesActiveExpertBar } from "./components/HermesActiveExpertBar";
 import { StatusToast } from "./StatusToast";
-import { useHermesDefaultWebChat } from "./hooks/useHermesDefaultWebChat";
+import { useChatTaskWindow } from "./hooks/useChatTaskWindow";
 import { useWorkChatContext } from "./hooks/useWorkChatContext";
 import {
   buildExpertPromptHint,
@@ -26,12 +27,15 @@ export function HermesDefaultWebChatSurface({
   hideActiveExpertBar,
 }: Props = {}): React.JSX.Element {
   const { t } = useI18n();
-  const chat = useHermesDefaultWebChat(
-    forcedSessionId !== undefined ? { forcedSessionId } : undefined,
-  );
   const workContext = useWorkChatContext();
-  const { models, attachments, composer, stream, newConversation, viewSessions, modelId } = chat;
+  const chat = useChatTaskWindow({
+    forcedSessionId,
+    workContext,
+  });
+  const { models, attachments, composer, stream, newConversation, viewSessions, modelId, task } =
+    chat;
   const [search, setSearch] = useState("");
+  const [customPromptHint, setCustomPromptHint] = useState<string | null>(null);
   const selectedModelId =
     models.pendingModel?.id ?? models.models.find((m) => m.is_current)?.id ?? null;
 
@@ -79,23 +83,28 @@ export function HermesDefaultWebChatSurface({
     const attachmentMetas = attachments.attachments;
     const attachmentIds = attachmentMetas.map((a) => a.id);
 
-    const finalMessage =
+    let finalMessage = text;
+    if (
       promptHintInput &&
       shouldBuildExpertPromptHint({
         expertName: promptHintInput.expertName,
         skillName: promptHintInput.skillName,
       })
-        ? buildExpertPromptHint({
-            ...promptHintInput,
-            userMessage: text,
-          })
-        : text;
+    ) {
+      finalMessage =
+        customPromptHint ??
+        buildExpertPromptHint({
+          ...promptHintInput,
+          userMessage: text,
+        });
+    }
 
     void stream.send(finalMessage, attachmentIds, modelId, attachmentMetas).then(() => {
       composer.clear();
       attachments.clear();
+      setCustomPromptHint(null);
     });
-  }, [attachments, composer, modelId, promptHintInput, stream]);
+  }, [attachments, composer, customPromptHint, modelId, promptHintInput, stream]);
 
   const disabled = false;
   const busy = stream.runState === "streaming" || stream.runState === "creating";
@@ -103,6 +112,14 @@ export function HermesDefaultWebChatSurface({
   return (
     <div className="hermes-panel-root is-chat hermes-webchat-root">
       {!hideActiveExpertBar ? <HermesActiveExpertBar /> : null}
+      <TaskStatusBar
+        title={task.title}
+        status={task.status}
+        expertName={task.expertName}
+        skillName={task.skillName}
+        profileId={task.profileId}
+        durationMs={task.durationMs}
+      />
       <StatusToast message={toast} variant={stream.lastError ? "error" : "info"} />
       <div className="hermes-skills-tab__toolbar">
         <label className="hermes-skills-search">
@@ -130,17 +147,26 @@ export function HermesDefaultWebChatSurface({
       </div>
       {showWorkControls ? <WorkChatContextBar context={workContext} /> : null}
       {showWorkControls ? (
-        <PromptHintPreview userMessage={composer.text} hintInput={promptHintInput} />
+        <PromptHintComposer
+          userMessage={composer.text}
+          hintInput={promptHintInput}
+          onHintChange={setCustomPromptHint}
+        />
       ) : null}
       <div className="hermes-webchat-main">
         <ChatScrollArea
           messages={visibleMessages}
           streamingContent={stream.streamingContent}
           activeTool={stream.activeTool}
-          toolProgressTimeline={stream.toolProgressTimeline}
+          toolProgressTimeline={chat.toolProgressTimeline}
+          toolTimelineCollapsed={chat.timelineCollapsed}
           runState={stream.runState}
           lastError={stream.lastError}
           lastUsage={stream.lastUsage}
+          taskStatus={task.status}
+          taskTitle={task.title}
+          taskDurationMs={task.durationMs}
+          documentOutputs={chat.documentOutputs}
           emptyTitle={
             searchActive
               ? t("workspaces.hermes.chat.search.noResultsTitle", { defaultValue: "No results" })
@@ -181,6 +207,7 @@ export function HermesDefaultWebChatSurface({
           stream.clearMessages();
           composer.clear();
           attachments.clear();
+          setCustomPromptHint(null);
         }}
         onDropFiles={handleDropFiles}
         onViewSessions={viewSessions}

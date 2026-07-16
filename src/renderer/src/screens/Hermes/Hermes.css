@@ -1093,13 +1093,14 @@
 }
 
 .hermes-webchat-scroll {
+  max-height: calc(100vh-240px);
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 12px;  
 }
 
 .hermes-webchat-empty {
@@ -2860,6 +2861,11 @@
 .hermes-chat-composer,
 .hermes-composer-bar {
   overflow: visible;
+}
+
+.hermes-webchat-main {
+  max-height: calc(100vh-240px);
+  overflow-y: auto;
 }
 
 /* v7.5 Expert task stream timeline */

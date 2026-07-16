@@ -21,7 +21,7 @@ export async function routeHostBridgeEvent(
     params.event.action,
     params.event.skillName,
   );
-  debugger;
+
   if (!route) {    
     return {
       ok: true,

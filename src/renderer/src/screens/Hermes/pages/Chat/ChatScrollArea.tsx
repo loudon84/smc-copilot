@@ -3,6 +3,7 @@ import { useI18n } from "../../../../components/useI18n";
 import AgentMarkdown from "../../../../components/AgentMarkdown";
 import type { HermesChatUsageEvent } from "../../../../../../shared/hermes-default-chat/hermes-default-chat-contract";
 import type { HermesChatRunState, HermesMessage, HermesToolCall } from "../../types";
+import type { ChatTaskStatus } from "./types/chat-task-window";
 import { useAutoScroll } from "./hooks/useAutoScroll";
 import { ChatBubble } from "./ChatBubble";
 import { ActivityRow } from "./ActivityRow";
@@ -10,7 +11,8 @@ import { ErrorCard } from "./ErrorCard";
 import { UsageRow } from "./UsageRow";
 import { ToolProgressTimeline, type ToolProgressEntry } from "./components/ToolProgressTimeline";
 import { LocalDocumentCard } from "./components/LocalDocumentCard";
-import { extractLocalDocumentPaths } from "./utils/extractLocalDocumentPaths";
+import { TaskLifecycleCard } from "./components/TaskLifecycleCard";
+import { extractLocalDocumentPaths, type LocalDocumentRef } from "./utils/extractLocalDocumentPaths";
 
 function dayLabel(iso: string): string {
   const d = new Date(iso);
@@ -23,9 +25,14 @@ export function ChatScrollArea({
   streamingContent,
   activeTool,
   toolProgressTimeline,
+  toolTimelineCollapsed,
   runState,
   lastError,
   lastUsage,
+  taskStatus,
+  taskTitle,
+  taskDurationMs,
+  documentOutputs,
   emptyTitle,
   emptyHint,
 }: {
@@ -33,9 +40,14 @@ export function ChatScrollArea({
   streamingContent: string;
   activeTool: HermesToolCall | null;
   toolProgressTimeline?: ToolProgressEntry[];
+  toolTimelineCollapsed?: boolean;
   runState: HermesChatRunState;
   lastError: string | null;
   lastUsage?: HermesChatUsageEvent | null;
+  taskStatus?: ChatTaskStatus;
+  taskTitle?: string;
+  taskDurationMs?: number;
+  documentOutputs?: LocalDocumentRef[];
   emptyTitle?: string;
   emptyHint?: string;
 }): React.JSX.Element {
@@ -44,6 +56,17 @@ export function ChatScrollArea({
     () => (streamingContent ? extractLocalDocumentPaths(streamingContent) : []),
     [streamingContent],
   );
+  const mergedDocuments = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: LocalDocumentRef[] = [];
+    for (const doc of [...(documentOutputs ?? []), ...streamingDocuments]) {
+      if (seen.has(doc.path)) continue;
+      seen.add(doc.path);
+      merged.push(doc);
+    }
+    return merged;
+  }, [documentOutputs, streamingDocuments]);
+
   const { containerRef, bottomRef } = useAutoScroll([
     messages,
     streamingContent,
@@ -52,6 +75,7 @@ export function ChatScrollArea({
     runState,
     lastError,
     lastUsage,
+    taskStatus,
   ]);
 
   const isEmpty =
@@ -92,9 +116,17 @@ export function ChatScrollArea({
           </div>
         );
       })}
+      {taskStatus && taskTitle ? (
+        <TaskLifecycleCard
+          status={taskStatus}
+          title={taskTitle}
+          durationMs={taskDurationMs ?? 0}
+          documentCount={mergedDocuments.length}
+        />
+      ) : null}
       {toolProgressTimeline && toolProgressTimeline.length > 0 ? (
         <div className="hermes-webchat-message-wrap">
-          <ToolProgressTimeline entries={toolProgressTimeline} />
+          <ToolProgressTimeline entries={toolProgressTimeline} collapsed={toolTimelineCollapsed} />
         </div>
       ) : null}
       {activeTool ? (
@@ -105,7 +137,7 @@ export function ChatScrollArea({
       {streamingContent ? (
         <div className="hermes-webchat-streaming">
           <AgentMarkdown>{streamingContent}</AgentMarkdown>
-          {streamingDocuments.map((doc) => (
+          {mergedDocuments.map((doc) => (
             <LocalDocumentCard key={doc.path} document={doc} />
           ))}
         </div>
