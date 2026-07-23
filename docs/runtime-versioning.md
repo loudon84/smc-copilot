@@ -1,6 +1,6 @@
 # Hermes Runtime 版本管理
 
-各版本并排安装在 `versions/<version>/`（或 `HERMES_INSTALL_DIR/<version>/`）。
+各版本并排安装在 `HERMES_INSTALL_DIR/<version>/`（Windows 默认 `D:\Programs\HermesAgent/<version>/`）；未配置安装根时回退 Runtime 服务态下的 `versions/<version>/`（服务态根：Windows `%LOCALAPPDATA%\HermesRuntime`）。
 
 当前激活指针：`active.json`（原子替换写入）。
 

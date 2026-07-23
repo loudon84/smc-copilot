@@ -79,6 +79,32 @@ def test_platform_paths_layout(tmp_path: Path) -> None:
 def test_default_runtime_data_dir() -> None:
     path = default_runtime_data_dir()
     assert "HermesRuntime" in str(path) or ".hermes-runtime" in str(path)
+    import sys
+
+    if sys.platform == "win32":
+        assert "HermesRuntime" in str(path)
+        assert "AppData" in str(path) or "LOCALAPPDATA" in str(path).upper()
+
+
+def test_windows_programs_root_helpers() -> None:
+    import sys
+
+    from runtime.windows_program_paths import (
+        DEFAULT_HERMES_INSTALL_DIR,
+        is_under_programs_root,
+        default_hermes_install_dir,
+    )
+
+    assert is_under_programs_root(Path(r"D:\Programs\HermesAgent"))
+    assert is_under_programs_root(Path(r"D:\Programs\copilot-serve\.venv"))
+    assert not is_under_programs_root(Path(r"C:\Temp\HermesAgent"))
+    if sys.platform == "win32":
+        assert default_hermes_install_dir() == DEFAULT_HERMES_INSTALL_DIR
+        settings = Settings(hermes_install_dir="")
+        assert settings.resolved_hermes_install_dir() == DEFAULT_HERMES_INSTALL_DIR
+        assert settings.resolved_toolchain_venv_dir() is None
+    else:
+        assert default_hermes_install_dir() is None
 
 
 def test_executable_policy_blocks_shell() -> None:

@@ -116,7 +116,8 @@
 | GET | `/diagnostics/summary\|environment\|logs` | 诊断 |
 | POST/GET/DELETE | `/runtime/backups` | 备份与恢复 |
 
-工具链环境变量：`TOOLCHAIN_PYTHON_PATH`、`TOOLCHAIN_NODE_PATH`、`TOOLCHAIN_GIT_PATH`、`TOOLCHAIN_VENV_DIR`、`HERMES_INSTALL_DIR`。
+工具链环境变量：`TOOLCHAIN_PYTHON_PATH`、`TOOLCHAIN_NODE_PATH`、`TOOLCHAIN_GIT_PATH`、`TOOLCHAIN_VENV_DIR`、`HERMES_INSTALL_DIR`。  
+Windows：`HERMES_INSTALL_DIR` 默认 `D:\Programs\HermesAgent`（须在 `D:\Programs` 下）；服务态默认 `%LOCALAPPDATA%\HermesRuntime`（`RUNTIME_DATA_DIR` 空即可，不迁出）。
 
 ---
 

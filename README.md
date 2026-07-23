@@ -18,16 +18,30 @@
 
 文档描述性文字仅使用简体中文；文件路径、API、类名、环境变量、代码片段保持原文。
 
+
+---
+
+## 安装约定（Windows 企业）
+
+1. 工程师手工安装 Python 3.12、Node、Git（及 uv），并配置 PATH。
+2. 将本仓库 clone 到 `D:\Programs\copilot-serve`（源码与 serve `.venv` 必须在 `D:\Programs` 下）。
+3. Hermes Agent 版本与其 venv 安装到 `D:\Programs\HermesAgent\`（默认；可用 `HERMES_INSTALL_DIR` 覆盖，仍须在 `D:\Programs` 下）。
+4. **Runtime 服务态**（DB / 日志 / downloads / staging）继续使用 `%LOCALAPPDATA%\HermesRuntime`，**不改动**，与程序目录分离。
+
+允许例外：`%USERPROFILE%\.hermes`（Hermes 用户数据）、`%LOCALAPPDATA%\HermesRuntime`（服务态）。
+
 ---
 
 ## 目录约定
 
 | 用途 | Windows | macOS / Linux |
 |------|---------|---------------|
-| Runtime 程序与版本数据 | `%LOCALAPPDATA%\HermesRuntime\` | `~/.hermes-runtime/` |
-| Hermes 用户数据（配置/会话等） | `%USERPROFILE%\.hermes\` | `~/.hermes/` |
+| Runtime **服务态**（DB/日志/staging） | `%LOCALAPPDATA%\HermesRuntime\` | `~/.hermes-runtime/` |
+| 本仓库 / serve `.venv` | `D:\Programs\copilot-serve\` | 任意工作目录 |
+| Hermes 版本与 Agent venv | `D:\Programs\HermesAgent\<version>\` | `HERMES_INSTALL_DIR` 或 Runtime `versions/` |
+| Hermes 用户数据 | `%USERPROFILE%\.hermes\` | `~/.hermes/` |
 
-二者必须隔离：升级 Runtime 或 Hermes Agent **不得**删除 `~/.hermes`。
+服务态与程序目录必须隔离：升级或卸载程序时默认 **不得**删除 `~/.hermes`；服务态仅在显式 `-RemoveRuntimeData` 时清理。
 
 ---
 
@@ -97,15 +111,15 @@ pytest
 | `TOOLCHAIN_PYTHON_PATH` | `toolchain.pythonPath` | Python 可执行文件或目录 |
 | `TOOLCHAIN_NODE_PATH` | `toolchain.nodePath` | Node 可执行文件或目录 |
 | `TOOLCHAIN_GIT_PATH` | `toolchain.gitPath` | Git 可执行文件或目录 |
-| `TOOLCHAIN_VENV_DIR` | `toolchain.venvDir` | Hermes 隔离 venv 根目录 |
-| `HERMES_INSTALL_DIR` | `toolchain.hermesInstallDir` | Hermes 版本安装根目录 |
+| `TOOLCHAIN_VENV_DIR` | `toolchain.venvDir` | 可选；空则用 `<HERMES_INSTALL_DIR>/<version>/venv` |
+| `HERMES_INSTALL_DIR` | `toolchain.hermesInstallDir` | Windows 默认 `D:\Programs\HermesAgent` |
 
 其他常用项见 [`.env.example`](.env.example)：
 
 | 变量 | 说明 |
 |------|------|
 | `RUNTIME_HOST` / `RUNTIME_PORT` | 默认 `127.0.0.1:8765` |
-| `RUNTIME_DATA_DIR` | Runtime 数据根；空=平台默认 |
+| `RUNTIME_DATA_DIR` | 服务态根；空=Windows `%LOCALAPPDATA%\HermesRuntime`（保持默认即可） |
 | `HERMES_HOME` | Hermes 用户数据；默认 `~/.hermes` |
 | `HERMES_MANIFEST_URL` | Hermes 版本 Manifest（必配才可走安装 Job） |
 | `RUNTIME_REQUIRE_AUTH` | 生产建议 `true` |
@@ -116,22 +130,21 @@ pytest
 #### 3.1 预检与安装脚本
 
 ```powershell
-cd copilot-serve
+cd D:\Programs\copilot-serve
 
-# 预检（可传入自定义工具链路径）
+# 预检（Python/Node/Git 可传绝对路径；HermesInstallDir 默认 D:\Programs\HermesAgent）
 .\scripts\runtime-precheck-windows.ps1 `
+  -RepoRoot $PWD `
   -PythonPath "C:\Python312\python.exe" `
   -NodePath "C:\Program Files\nodejs\node.exe" `
   -GitPath "C:\Program Files\Git\cmd\git.exe"
 
-# 引导 venv / 依赖 / .env / 迁移；可选写入工具链路径并注册用户级登录自启
+# 引导 .venv / 依赖 / .env / 迁移；默认不改 RUNTIME_DATA_DIR（服务态仍 LOCALAPPDATA）
 .\scripts\runtime-install-windows.ps1 `
   -PythonPath "C:\Python312\python.exe" `
   -NodePath "C:\Program Files\nodejs" `
   -GitPath "C:\Program Files\Git\cmd\git.exe" `
-  -VenvDir "D:\hermes-venvs" `
-  -HermesInstallDir "D:\hermes-versions" `
-  -RuntimeDataDir "$env:LOCALAPPDATA\HermesRuntime" `
+  -HermesInstallDir "D:\Programs\HermesAgent" `
   -UserDaemon
 ```
 

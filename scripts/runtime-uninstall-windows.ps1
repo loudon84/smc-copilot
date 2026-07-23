@@ -17,11 +17,17 @@ try {
 if ($RemoveRuntimeData) {
     $runtime = Join-Path $env:LOCALAPPDATA "HermesRuntime"
     if (Test-Path $runtime) {
-        Write-Host "Removing Runtime data: $runtime"
+        Write-Host "Removing Runtime 服务态数据: $runtime"
         Remove-Item -Recurse -Force $runtime
     }
+    $hermesAgent = "D:\Programs\HermesAgent"
+    if (Test-Path $hermesAgent) {
+        Write-Host "Removing Hermes 程序安装目录: $hermesAgent"
+        Remove-Item -Recurse -Force $hermesAgent
+    }
 } else {
-    Write-Host "Keeping Runtime data under %LOCALAPPDATA%\HermesRuntime"
+    Write-Host "保留 Runtime 服务态: %LOCALAPPDATA%\HermesRuntime"
+    Write-Host "保留 Hermes 程序目录: D:\Programs\HermesAgent（如需删除请加 -RemoveRuntimeData）"
 }
 
 if ($RemoveHermesUserData) {

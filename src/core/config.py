@@ -6,6 +6,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from runtime.platform_paths import default_runtime_data_dir
+from runtime.windows_program_paths import default_hermes_install_dir, is_windows, require_under_programs_root
 
 
 def _resolve_project_root() -> Path:
@@ -165,6 +166,29 @@ class Settings(BaseSettings):
         if self.runtime_data_dir:
             return Path(self.runtime_data_dir)
         return default_runtime_data_dir()
+
+    def resolved_hermes_install_dir(self) -> Path | None:
+        """Hermes 版本安装根。Windows 默认 D:\\Programs\\HermesAgent；其它平台空则用 Runtime versions/。"""
+        if self.hermes_install_dir:
+            return Path(self.hermes_install_dir)
+        return default_hermes_install_dir()
+
+    def resolved_toolchain_venv_dir(self) -> Path | None:
+        """显式 TOOLCHAIN_VENV_DIR；空则安装时使用 <hermes_install>/<version>/venv。"""
+        if self.toolchain_venv_dir:
+            return Path(self.toolchain_venv_dir)
+        return None
+
+    def enforce_windows_program_paths(self) -> None:
+        """Windows 上校验程序安装路径必须在 D:\\Programs 下（服务态 RUNTIME_DATA_DIR 除外）。"""
+        if not is_windows():
+            return
+        install = self.resolved_hermes_install_dir()
+        if install is not None:
+            require_under_programs_root(install, label="HERMES_INSTALL_DIR")
+        venv = self.resolved_toolchain_venv_dir()
+        if venv is not None:
+            require_under_programs_root(venv, label="TOOLCHAIN_VENV_DIR")
 
     def require_auth(self) -> bool:
         return bool(self.runtime_require_auth or self.copilot_require_token)

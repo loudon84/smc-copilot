@@ -10,6 +10,7 @@ from pathlib import Path
 from core.config import Settings
 from core.runtime_errors import RuntimeServiceError
 from runtime.platform_paths import RuntimeLayout
+from runtime.windows_program_paths import is_windows, require_under_programs_root
 
 
 @dataclass
@@ -88,6 +89,12 @@ class EnvironmentProbe:
             or overrides.get("hermes_install_dir")
             or self._settings.hermes_install_dir
         )
+        # Windows：未指定时使用企业默认程序目录（服务态仍走 LOCALAPPDATA Runtime）
+        if not hermes:
+            default_install = self._settings.resolved_hermes_install_dir()
+            hermes = str(default_install) if default_install else ""
+        if not venv and self._settings.resolved_toolchain_venv_dir():
+            venv = str(self._settings.resolved_toolchain_venv_dir())
 
         py_names = ["python3", "python", "py"]
         if sys.platform == "win32":
@@ -134,6 +141,11 @@ class EnvironmentProbe:
                 "Python runtime not found; set TOOLCHAIN_PYTHON_PATH or install Python 3.12+",
                 code="python_runtime_failed",
             )
+        if is_windows():
+            if result.toolchain.hermes_install_dir is not None:
+                require_under_programs_root(result.toolchain.hermes_install_dir, label="HERMES_INSTALL_DIR")
+            if result.toolchain.venv_dir is not None:
+                require_under_programs_root(result.toolchain.venv_dir, label="TOOLCHAIN_VENV_DIR")
         return result
 
 

@@ -12,8 +12,14 @@ Desktop 不得自行安装 Python/Hermes、拉起 Gateway，也不得直接读�
 
 ## 目录布局
 
-- 程序与版本数据：Windows 为 `%LOCALAPPDATA%\HermesRuntime\`，macOS/Linux 为 `~/.hermes-runtime/`
-- 用户数据：`~/.hermes/`（不得放入版本目录）
+| 用途 | Windows | macOS / Linux |
+|------|---------|---------------|
+| Runtime **服务态**（DB/日志/downloads/staging） | `%LOCALAPPDATA%\HermesRuntime\`（默认，不改动） | `~/.hermes-runtime/` |
+| 源码 / serve `.venv` | `D:\Programs\copilot-serve\` | 任意工作目录 |
+| Hermes 版本与 Agent venv | `D:\Programs\HermesAgent\<version>\` | `HERMES_INSTALL_DIR` 或 Runtime `versions/` |
+| Hermes 用户数据 | `~/.hermes/` | `~/.hermes/` |
+
+服务态与程序安装目录分离：Windows 企业策略要求程序与 venv 在 `D:\Programs` 下，但 **不** 把服务态迁出 LOCALAPPDATA。
 
 ## 模块映射
 
