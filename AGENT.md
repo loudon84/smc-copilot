@@ -1,12 +1,12 @@
 # AGENTS.md
 
-## Project identity
+## 项目定位
 
-This repository implements `smc-copilot-serve`, the local control-plane service for `smc-copilot-desktop`.
+本仓库实现 `smc-copilot-serve`，作为 `smc-copilot-desktop` 的本地控制面服务（v1.3 起亦称 **Hermes Runtime Service**）。
 
-The service is not a generic backend. It manages local Hermes Agent runtimes, multiple Hermes Gateway profiles, team-assigned tasks, approval gates, workspace safety policies, and the API surface consumed by Electron / React desktop UI.
+本服务不是通用后端。它管理本机 Hermes Agent 运行时、多 Profile Gateway、团队任务、审批门控、工作空间安全策略，以及 Electron / React 桌面端消费的 API。
 
-Primary architecture path:
+主架构路径：
 
 ```text
 Electron Desktop UI
@@ -15,41 +15,42 @@ Electron Desktop UI
   -> Team Task Hub / Workspace / Local Tools
 ```
 
-## Non-negotiable boundaries
+## 不可违背的边界
 
-1. Electron Renderer must not directly manage Hermes processes.
-2. Electron Renderer must not read or write `~/.hermes` directly.
-3. Electron Renderer must not execute shell commands directly.
-4. All local runtime actions must go through `smc-copilot-serve` APIs.
-5. All Hermes Gateway access must go through `HermesGatewayClient` or an adapter under `integrations/hermes/`.
-6. All risky actions must go through Approval Runtime and Workspace Guard.
-7. Never hardcode user secrets, model API keys, workspace paths, or private Git URLs.
-8. Do not change public API contracts without updating schemas, tests, and docs.
+1. Electron Renderer 不得直接管理 Hermes 进程。
+2. Electron Renderer 不得直接读写 `~/.hermes`。
+3. Electron Renderer 不得直接执行 Shell 命令。
+4. 所有本机运行时动作必须经 `smc-copilot-serve` API。
+5. 所有 Hermes Gateway 访问必须经 `HermesGatewayClient` 或 `integrations/hermes/` 下的适配器。
+6. 所有高风险动作必须经 Approval Runtime 与 Workspace Guard。
+7. 不得硬编码用户密钥、模型 API Key、工作空间路径或私有 Git URL。
+8. 变更公共 API 契约时，必须同步更新 schemas、测试与文档。
 
-## Target stack
+## 技术栈
 
-Backend:
+后端：
 
 - Python 3.12
 - FastAPI
 - Uvicorn
-- Pydantic v2 and pydantic-settings
+- Pydantic v2 与 pydantic-settings
 - SQLAlchemy 2.x
 - Alembic
-- SQLite for local-first desktop state
-- httpx for outbound HTTP
-- `python-multipart` (required by FastAPI `Form` / `UploadFile`, e.g. workspace chat attachments)
-- asyncio subprocess and psutil for process supervision
-- pytest and pytest-asyncio
+- SQLite（本地优先的桌面状态）
+- httpx（出站 HTTP）
+- `python-multipart`（FastAPI `Form` / `UploadFile` 必需，如工作空间聊天附件）
+- asyncio subprocess 与 psutil（进程监管）
+- pytest 与 pytest-asyncio
 
-Desktop integration:
+桌面集成：
 
-- Electron Main Process spawns `copilot-serve` and exposes `window.copilotServe` (connection only).
-- Renderer calls `http://127.0.0.1:8765/api/v1/*` directly with `X-Copilot-Desktop-Token`.
-- V1.3: global/task SSE under `/api/v1/desktop/task-workbench/events/stream` and `/api/v1/tasks/{id}/events/stream`.
-- V1.3.1 hotfix: pure ASGI CORS (`build_asgi_app`), `COPILOT_REQUIRE_TOKEN=true` from desktop spawn, sync terminal `append_event`, dynamic SSE `Access-Control-Allow-Origin`.
+- Electron Main Process 可 spawn `copilot-serve`，并暴露 `window.copilotServe`（仅连接）。
+- Renderer 使用 `X-Copilot-Desktop-Token` 直接调用 `http://127.0.0.1:8765/api/v1/*`。
+- v1.3：全局/任务 SSE 位于 `/api/v1/desktop/task-workbench/events/stream` 与 `/api/v1/tasks/{id}/events/stream`。
+- v1.3.1 hotfix：纯 ASGI CORS（`build_asgi_app`）、桌面 spawn 时 `COPILOT_REQUIRE_TOKEN=true`、同步终端 `append_event`、动态 SSE `Access-Control-Allow-Origin`。
+- Runtime v1.3：生产期望 Desktop 连接常驻 Runtime，不默认 spawn；鉴权优先 `Authorization: Bearer <device-token>`。
 
-## Expected repository layout
+## 期望仓库布局
 
 ```text
 src/                                    # 扁平源码根（dev-mode-dirs / pythonpath）
@@ -65,13 +66,22 @@ src/                                    # 扁平源码根（dev-mode-dirs / pyth
     lifecycle.py
     logging.py
     task_routing.py
+    capabilities.py
+    runtime_enums.py
+    runtime_errors.py
   api/
     deps.py
     router.py
+    middleware/
+      cors_asgi.py
+      error_envelope.py
     v1/
       health.py
       system.py
       profiles.py
+      runtime.py
+      instances.py
+      pairings.py
       chat.py
       attachments.py
       gateways.py
@@ -90,6 +100,7 @@ src/                                    # 扁平源码根（dev-mode-dirs / pyth
     models/
       __init__.py
       profile.py
+      runtime.py
       chat_settings.py
       chat_attachment.py
       role_spec.py
@@ -98,10 +109,12 @@ src/                                    # 扁平源码根（dev-mode-dirs / pyth
       workspace_db.py
     repositories/
       profile_repo.py
+      runtime_repo.py
       v12_repos.py
   schemas/
     common.py
     profile.py
+    runtime.py
     profile_events.py
     gateway.py
     hermes.py
@@ -114,6 +127,12 @@ src/                                    # 扁平源码根（dev-mode-dirs / pyth
     profile_service.py
     gateway_supervisor.py
     hermes_gateway_client.py
+    runtime_status_service.py
+    runtime_job_service.py
+    installation_service.py
+    instance_service.py
+    update_service.py
+    pairing_service.py
     task_runtime.py
     task_state_machine.py
     task_sync_service.py
@@ -124,6 +143,7 @@ src/                                    # 扁平源码根（dev-mode-dirs / pyth
   integrations/
     hermes/
       client.py
+      cli_adapter.py
       config_writer.py
       profile_loader.py
     team_hub/
@@ -133,8 +153,17 @@ src/                                    # 扁平源码根（dev-mode-dirs / pyth
   runtime/
     gateway_process.py
     port_allocator.py
+    platform_paths.py
+    environment_probe.py
+    artifact_downloader.py
+    checksum_verifier.py
+    executable_policy.py
+  local_service/
+    windows_service.py
+    windows_user_daemon.py
   workers/
     v12_workers.py
+    runtime_job_worker.py
   utils/
     paths.py
 
@@ -145,59 +174,61 @@ scripts/
 prd/
 ```
 
-## Module responsibilities
+## 模块职责
 
 ### `core/`
 
-Cross-cutting configuration, logging, lifecycle, error handling, and security helpers.
+横切配置、日志、生命周期、错误处理与安全辅助。
 
 ### `api/v1/`
 
-FastAPI routers only. Routers must stay thin. Do not put business logic in routers.
+仅 FastAPI 路由。路由必须保持薄壳，禁止在路由中写业务逻辑。
 
 ### `schemas/`
 
-Pydantic request and response models. Use explicit DTOs. Do not return ORM models directly.
+Pydantic 请求/响应模型。使用显式 DTO，禁止直接返回 ORM 模型。
 
 ### `db/models/`
 
-SQLAlchemy models only.
+仅 SQLAlchemy 模型。
 
 ### `db/repositories/`
 
-Database access layer. Repositories must not call Hermes Gateway, shell, filesystem mutations, or remote Team Hub APIs.
+数据访问层。仓库不得调用 Hermes Gateway、Shell、文件系统变更或远程 Team Hub API。
 
 ### `services/`
 
-Business orchestration layer.
+业务编排层。
 
-**team_v1.8 Workspace Chat:** `profile_ref_resolver.py`（ref→`profile_id`，含 `not_deployed`）、`chat_model_service.py`、`chat_stream_service.py`（Gateway SSE 代理）、`attachment_service.py`、`chat_session_service.py`（读 profile `state.db` 消息）。路由：`api/v1/chat.py`、`api/v1/attachments.py`；表 `profile_chat_settings`、`chat_attachments`。
+**team_v1.8 Workspace Chat：** `profile_ref_resolver.py`（ref→`profile_id`，含 `not_deployed`）、`chat_model_service.py`、`chat_stream_service.py`（Gateway SSE 代理）、`attachment_service.py`、`chat_session_service.py`（读 profile `state.db` 消息）。路由：`api/v1/chat.py`、`api/v1/attachments.py`；表 `profile_chat_settings`、`chat_attachments`。
 
-**team_v1.8.1 hotfix:** `chat.done` 携带 `resolved_session_id`；`GET .../sessions/{session_id}/messages`；`require_deployed_profile`；完整 PRD 错误码 factory（`core/errors.py`）。
+**team_v1.8.1 hotfix：** `chat.done` 携带 `resolved_session_id`；`GET .../sessions/{session_id}/messages`；`require_deployed_profile`；完整 PRD 错误码 factory（`core/errors.py`）。
+
+**Runtime v1.3：** `runtime_status_service.py`、`runtime_job_service.py`、`installation_service.py`、`instance_service.py`、`pairing_service.py` 等。Runtime Core 不得依赖 Task / Team Hub 模块。
 
 ### `integrations/hermes/`
 
-Hermes profile loading, config generation, gateway HTTP client, run event streaming.
+Hermes Profile 加载、配置生成、Gateway HTTP 客户端、Run 事件流、CLI 适配器。
 
 ### `integrations/team_hub/`
 
-Remote task hub client and sync logic.
+远程任务 Hub 客户端与同步逻辑。
 
-### `integrations/local_shell/` (规划中)
+### `integrations/local_shell/`（规划中）
 
-Command runner and command policy. Shell execution must be mediated by Workspace Guard and Approval Runtime. 当前 Workspace Guard 实现在 `services/workspace_guard.py`，local_shell 集成待实现。
+命令执行与命令策略。Shell 执行必须经 Workspace Guard 与 Approval Runtime 中介。当前 Workspace Guard 实现在 `services/workspace_guard.py`，local_shell 集成待实现。
 
 ### `runtime/`
 
-Profile runtime state, gateway process registry, port allocation, heartbeat, and locks.
+Profile/Instance 运行时状态、Gateway 进程注册、端口分配、心跳、锁、安装布局与 Artifact 下载。
 
 ### `workers/`
 
-Background polling, gateway health checks, retry, and cleanup.
+后台轮询、Gateway 健康检查、Runtime Job、重试与清理。
 
-## Development commands
+## 开发命令
 
-Prefer `uv` if the repository uses it. Otherwise use the checked-in project manager.
+优先使用 `uv`（若仓库已采用）。否则使用项目已登记的包管理器。
 
 ```bash
 uv sync
@@ -208,78 +239,83 @@ uv run ruff check .
 uv run mypy src
 ```
 
-### Database / Migrations (team_v1.4.1)
+### 数据库 / 迁移
 
-Alembic chain: `0001` (profiles) → `0002` (v1.2 task tables) → `001_role_spec` (display fields + `profile_role_specs`) → `002_team_v18_chat` (`profile_chat_settings`, `chat_attachments`).
+Alembic 链：`0001`（profiles）→ `0002`（v1.2 任务表）→ `001_role_spec`（展示字段 + `profile_role_specs`）→ `002_team_v18_chat`（`profile_chat_settings`、`chat_attachments`）→ `003_runtime_core`（Runtime 表与 instances 迁移）。
 
-| Scenario | Command |
-|----------|---------|
-| Fresh SQLite | `uv run alembic upgrade head` |
-| Existing DB at v1.2 (`0002`) without v1.4 columns | `uv run alembic upgrade head` |
-| Already applied v1.4 role_spec DDL manually | `uv run alembic stamp 001_role_spec` |
-| Empty DB must not skip `0001`/`0002` — run full `upgrade head`, not only `001_role_spec` |
+| 场景 | 命令 |
+|------|------|
+| 全新 SQLite | `uv run alembic upgrade head` |
+| 已有 v1.2（`0002`）库但缺 v1.4 列 | `uv run alembic upgrade head` |
+| 已手动应用 v1.4 role_spec DDL | `uv run alembic stamp 001_role_spec` |
+| 空库不得跳过 `0001`/`0002` — 执行完整 `upgrade head`，不要只跑 `001_role_spec` |
 
-Production must not rely on test-only `init_db()`; use Alembic only (`core/lifecycle.py`).
+生产不得依赖测试专用 `init_db()`；仅使用 Alembic（`core/lifecycle.py`）。
 
-**Role source layout:** compiled files live under `skills/role-source/agency-agents-zh/<repo-relative-path>`. Profiles installed before v1.4.1 with flat `skills/role-source/*.md` should run **Recompile Role** or reinstall preset.
+**角色源布局：** 编译文件位于 `skills/role-source/agency-agents-zh/<repo-relative-path>`。v1.4.1 前以扁平 `skills/role-source/*.md` 安装的 Profile，应执行 **Recompile Role** 或重新安装预设。
 
-### team_v1.4.1 Windows verification (manual)
+### team_v1.4.1 Windows 手工验证
 
 1. `uv run alembic upgrade head`
-2. Desktop: install preset `team_v1.4` (optional overwrite)
-3. Start six expert profiles (9601–9641) or `startAll`
-4. Curl `http://127.0.0.1:9601/health` … `9641/health` — all OK
-5. Stop one profile; others remain healthy
-6. `GET /api/v1/profiles/{id}/events` — includes `profile_started` / `profile_stopped` audit rows
+2. Desktop：安装预设 `team_v1.4`（可选覆盖）
+3. 启动六个专家 Profile（9601–9641）或 `startAll`
+4. Curl `http://127.0.0.1:9601/health` … `9641/health` — 全部 OK
+5. 停止其中一个 Profile；其余保持健康
+6. `GET /api/v1/profiles/{id}/events` — 含 `profile_started` / `profile_stopped` 审计行
 
-If the project uses PowerShell scripts on Windows, prefer:
+若项目在 Windows 使用 PowerShell 脚本，优先：
 
 ```powershell
 scripts/smoke-test.ps1
+scripts/runtime-smoke-test-windows.ps1
 ```
 
-Do not invent commands. Inspect `pyproject.toml`, `README.md`, and `scripts/` before running anything.
+不要臆造命令。运行任何内容前先检查 `pyproject.toml`、`README.md` 与 `scripts/`。
 
-## Coding rules
+## 编码规则
 
-1. Use typed Python. Add type hints for public functions.
-2. Use async for HTTP clients, stream handling, and process orchestration where appropriate.
-3. Avoid global mutable runtime state. Use registries and lifecycle-managed dependencies.
-4. All API responses must use Pydantic schemas.
-5. All DB schema changes require Alembic migration.
-6. Every service change should include unit tests or integration tests.
-7. Long-running loops must support cancellation.
-8. Process supervision must handle start, stop, restart, crash detection, and log capture.
-9. Use explicit status enums for profile, gateway, task, approval, and run state.
-10. Keep Windows 10 Home compatibility in mind.
+1. 使用带类型的 Python。公共函数补充类型注解。
+2. HTTP 客户端、流处理与进程编排在适当时使用 async。
+3. 避免全局可变运行时状态。使用注册表与生命周期管理的依赖。
+4. 所有 API 响应必须使用 Pydantic schemas。
+5. 所有数据库 schema 变更需要 Alembic migration。
+6. 每次服务变更应包含单元测试或集成测试。
+7. 长循环必须支持取消。
+8. 进程监管必须处理 start、stop、restart、崩溃检测与日志捕获。
+9. Profile、Gateway、Task、Approval、Run、Instance、Job 状态使用显式枚举。
+10. 兼顾 Windows 10 Home 兼容性。
 
-## Safety rules
+## 安全规则
 
-Before implementing anything that executes commands, modifies files, changes Git state, or deploys containers:
+在实现会执行命令、修改文件、变更 Git 状态或部署容器的功能前：
 
-1. Validate workspace policy.
-2. Check command allowlist / denylist.
-3. Determine whether approval is required.
-4. Record audit log.
-5. Make execution idempotent when possible.
-6. Return structured errors.
+1. 校验工作空间策略。
+2. 检查命令允许/拒绝列表。
+3. 判断是否需要审批。
+4. 记录审计日志。
+5. 尽可能使执行幂等。
+6. 返回结构化错误。
 
-Never bypass `WorkspaceGuard` or `ApprovalService` for:
+以下场景不得绕过 `WorkspaceGuard` 或 `ApprovalService`：
 
-- shell command execution
-- file write outside allowed workspace paths
-- `git commit`, `git push`, `git reset`, `git clean`
-- Docker start / stop / compose operations
-- Hermes profile config mutation
-- remote task attachment download
+- Shell 命令执行
+- 在允许工作空间路径之外写文件
+- `git commit`、`git push`、`git reset`、`git clean`
+- Docker start / stop / compose
+- Hermes Profile 配置变更
+- 远程任务附件下载
 
-## API design rules
+## API 设计规则
 
-Use these route groups:
+使用以下路由分组：
 
 ```text
 /api/v1/health
 /api/v1/system
+/api/v1/runtime
+/api/v1/instances
+/api/v1/pairings
+/api/v1/secrets
 /api/v1/profiles
 /api/v1/profiles/resolve
 /api/v1/profiles/{profile_id}/chat/models
@@ -295,21 +331,21 @@ Use these route groups:
 /api/v1/audit
 ```
 
-**Profile gateway lifecycle (team_v1.8.3):** `POST .../start|stop|restart` — start 失败将 DB 从 `starting` 置 `error` 并返回 503 `gateway_error`；stop 释放端口监听；restart 在 stop 后等待端口空闲再 start。`GET .../resolve` 在 `starting` 时返回 `healthy=false`。
+**Profile Gateway 生命周期（team_v1.8.3）：** `POST .../start|stop|restart` — start 失败将 DB 从 `starting` 置 `error` 并返回 503 `gateway_error`；stop 释放端口监听；restart 在 stop 后等待端口空闲再 start。`GET .../resolve` 在 `starting` 时返回 `healthy=false`。
 
-Rules:
+规则：
 
-1. Keep route naming stable.
-2. Return structured errors with machine-readable codes.
-3. Do not leak local filesystem secrets in error responses.
-4. Use pagination for list endpoints that can grow.
-5. Stream Hermes run events through SSE-compatible endpoints.
+1. 保持路由命名稳定。
+2. 返回带机器可读 code 的结构化错误。
+3. 错误响应不得泄露本机文件系统密钥。
+4. 可能增长的列表接口使用分页。
+5. 通过 SSE 兼容端点转发 Hermes Run 事件。
 
-## Hermes integration rules
+## Hermes 集成规则
 
-Hermes Gateway behavior must be isolated behind `HermesGatewayClient`.
+Hermes Gateway 行为必须隔离在 `HermesGatewayClient` / CLI Adapter 之后。
 
-Required client methods:
+客户端需支持的方法：
 
 ```python
 list_models(profile_id: str) -> list[HermesModel]
@@ -319,30 +355,31 @@ get_run(profile_id: str, run_id: str) -> HermesRun
 cancel_run(profile_id: str, run_id: str) -> None
 ```
 
-Never call Hermes Gateway URLs directly from API routers.
+禁止在 API 路由中直接调用 Hermes Gateway URL。禁止 `shell=True`。
 
-## Gateway Supervisor rules
+## Gateway Supervisor 规则
 
-Gateway lifecycle must support:
+Gateway 生命周期必须支持：
 
 ```text
 STOPPED -> STARTING -> RUNNING -> ERROR -> RESTARTING -> RUNNING
 ```
 
-Implementation requirements:
+实现要求：
 
-1. Each profile must have a stable gateway port.
-2. Default profile should normally use `8642` unless configured otherwise.
-3. Additional profiles must use allocated ports and must not collide.
-4. A crashed profile must not terminate other profiles.
-5. Logs must be separated by profile.
-6. Health checks must not block the API event loop.
+1. 每个 Profile/Instance 必须有稳定 Gateway 端口。
+2. 默认 Profile 通常使用 `8642`，除非另行配置。
+3. 其它 Profile 使用分配端口，且不得冲突。
+4. 某个 Profile 崩溃不得终止其它 Profile。
+5. 日志按 Profile/Instance 隔离。
+6. 健康检查不得阻塞 API 事件循环。
+7. 启动路径优先使用 `RuntimeVersion.executable_path`，以参数数组拼装命令。
 
-## Team Task Runtime rules
+## Team Task Runtime 规则
 
-Remote task sync should start with polling. Do not introduce message queues unless explicitly required.
+远程任务同步应从轮询开始。除非明确要求，否则不要引入消息队列。
 
-Task state model:
+任务状态模型：
 
 ```text
 REMOTE_ASSIGNED
@@ -357,73 +394,82 @@ CANCELLED
 SYNCED
 ```
 
-Rules:
+规则：
 
-1. Use `remote_task_id + assignment_id + local_attempt_id` for idempotency.
-2. Claim before execution.
-3. Bind each task to a target profile.
-4. Persist all state transitions.
-5. Sync results back to Team Task Hub.
-6. Failed sync must be retryable.
+1. 使用 `remote_task_id + assignment_id + local_attempt_id` 保证幂等。
+2. 执行前先 Claim。
+3. 每个任务绑定目标 Profile。
+4. 持久化所有状态迁移。
+5. 将结果同步回 Team Task Hub。
+6. 同步失败必须可重试。
 
-## Testing requirements
+## 测试要求
 
-For any non-trivial change, add or update tests.
+对任何非平凡变更，增加或更新测试。
 
-Minimum test coverage by module:
+按模块的最低覆盖：
 
-- Profile Runtime: profile CRUD, config path handling, port allocation.
-- Gateway Supervisor: start/stop/restart state transitions with mocked subprocess（**team_v1.8.3**：start 失败恢复 DB 状态；stop 释放端口；restart 等待端口空闲；见 `tests/api/test_profile_start_failure_recovery.py`）。
-- Hermes Client: models, runs, stream events with mocked HTTP.
-- Task Runtime: polling, claim, local creation, idempotency, sync.
-- Approval Runtime: pending/approve/reject flows.
-- Workspace Guard: allowlist, denylist, path traversal, command policy.
+- Profile Runtime：Profile CRUD、配置路径处理、端口分配。
+- Gateway Supervisor：带 mock 子进程的 start/stop/restart 状态迁移（**team_v1.8.3**：start 失败恢复 DB 状态；stop 释放端口；restart 等待端口空闲；见 `tests/api/test_profile_start_failure_recovery.py`）。
+- Hermes Client：带 mock HTTP 的 models、runs、stream events。
+- Task Runtime：轮询、claim、本地创建、幂等、同步。
+- Approval Runtime：pending/approve/reject 流程。
+- Workspace Guard：允许列表、拒绝列表、路径穿越、命令策略。
+- Runtime Core：Job 锁、capabilities、安装/配对/MCP 策略（见 `tests/test_runtime_core.py`）。
 
-Before finalizing a change, run the smallest relevant test set first, then broader tests if time allows.
+定稿前先跑最小相关测试集，时间允许再跑更广测试。
 
-## Documentation rules
+## 文档规则
 
-Update docs when changing architecture, API contracts, runtime behavior, or deployment scripts.
+变更架构、API 契约、运行时行为或部署脚本时必须更新文档。
 
-Expected docs:
+**描述性文字只允许使用简体中文**；文件路径、API、类名、环境变量、代码片段等技术标识保持原文。
+
+期望文档：
 
 ```text
-docs/INDEX.md          # 目录地图 + 模块索引（与代码同步）
-docs/api-contract.md   # 全量 HTTP 端点 + Chat SSE / 错误码
+docs/INDEX.md                      # 目录地图 + 模块索引（与代码同步）
+docs/api-contract.md               # 全量 HTTP 端点 + Chat SSE / 错误码
+docs/runtime-architecture.md       # Runtime 架构
+docs/runtime-installation.md       # 安装与工具链
+docs/runtime-versioning.md         # 版本管理
+docs/runtime-security.md           # 安全
+docs/runtime-desktop-contract.md   # Desktop 契约
+README.md                          # 开发与部署说明
 ```
 
-## Pull request / change summary format
+## Pull Request / 变更摘要格式
 
-Every completed agent task should produce:
+每次完成的 Agent 任务应产出：
 
 ```text
 Summary:
-- What changed
-- Why it changed
-- Main files touched
+- 改了什么
+- 为什么改
+- 主要涉及文件
 
 Validation:
-- Commands run
-- Tests passed / failed
-- Manual checks
+- 执行的命令
+- 测试通过 / 失败
+- 手工检查
 
 Risk:
-- Runtime impact
-- Migration impact
-- Windows impact
-- Security impact
+- 运行时影响
+- 迁移影响
+- Windows 影响
+- 安全影响
 
 Follow-ups:
-- Remaining work
+- 剩余工作
 ```
 
-## When uncertain
+## 不确定时
 
-Do not guess external API contracts, Hermes CLI flags, Windows service details, or database schema.
+不要猜测外部 API 契约、Hermes CLI 参数、Windows 服务细节或数据库 schema。
 
-Instead:
+应改为：
 
-1. Inspect existing code and docs.
-2. Search repository references.
-3. Add a small adapter interface if the implementation detail is unstable.
-4. Keep behavior behind tests.
+1. 检查现有代码与文档。
+2. 搜索仓库引用。
+3. 若实现细节不稳定，增加小型适配器接口。
+4. 用测试锁定行为。

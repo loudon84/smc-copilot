@@ -138,7 +138,9 @@ async def test_v12_workspace_validate_path_policy_deny(app_client, tmp_path: Pat
 
     deny = await client.post(f"/api/v1/workspaces/{wid}/validate-path", json={"path": "secret/token"})
     assert deny.status_code == 403
-    assert deny.json()["code"] == "policy_denied"
+    body = deny.json()
+    code = body.get("code") or body.get("error", {}).get("code")
+    assert code == "policy_denied"
 
 
 @pytest.mark.asyncio

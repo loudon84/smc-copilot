@@ -7,13 +7,20 @@ from api.v1 import (
     approvals,
     attachments,
     chat,
+    configurations,
     desktop_workbench,
+    diagnostics,
     gateways,
     health,
     hermes_runs,
+    instances,
+    pairings,
     profiles,
     role_library,
+    runtime,
+    secrets,
     service,
+    sessions,
     system,
     task_routing,
     tasks,
@@ -25,6 +32,13 @@ api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_desktop_to
 api_router.include_router(health.router)
 api_router.include_router(system.router)
 api_router.include_router(service.router)
+api_router.include_router(runtime.router)
+api_router.include_router(instances.router)
+api_router.include_router(sessions.router)
+api_router.include_router(configurations.router)
+api_router.include_router(secrets.router)
+api_router.include_router(pairings.router)
+api_router.include_router(diagnostics.router)
 api_router.include_router(chat.router)
 api_router.include_router(attachments.router)
 api_router.include_router(profiles.router)

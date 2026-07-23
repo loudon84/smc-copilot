@@ -109,6 +109,7 @@ class GatewayProcessManager:
         port: int,
         *,
         mock_command: list[str] | None = None,
+        hermes_executable: str | None = None,
     ) -> GatewayProcessHandle:
         if profile_id in self._handles and self._handles[profile_id].is_alive():
             return self._handles[profile_id]
@@ -119,6 +120,17 @@ class GatewayProcessManager:
 
         if mock_command is not None:
             cmd = mock_command
+        elif hermes_executable:
+            # PRD §7.7: argv array only; never shell=True
+            cmd = [
+                hermes_executable,
+                "gateway",
+                "run",
+                "--profile",
+                profile_name,
+                "--port",
+                str(port),
+            ]
         else:
             base = shlex.split(self._settings.hermes_gateway_command, posix=(sys.platform != "win32"))
             cmd = [*base, "--port", str(port), "--profile", profile_name]

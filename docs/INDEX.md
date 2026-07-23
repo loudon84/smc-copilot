@@ -1,7 +1,8 @@
 # smc-copilot-serve — 文档索引
 
-> 本地控制面服务：Hermes Gateway 多 Profile、任务运行时、审批门控、工作空间安全策略、**Workspaces Chat**（team_v1.8）。
+> 本地控制面服务：Hermes Gateway 多 Profile、任务运行时、审批门控、工作空间安全策略、**Workspaces Chat**（team_v1.8）、**Hermes Runtime Service**（v1.3）。
 > 本索引与 [`AGENT.md`](../AGENT.md) 对齐，供 Agent / 开发者按需加载。
+> **文档语言：** 描述性文字仅使用简体中文；文件路径、API、类名、环境变量、代码片段保持原文。
 
 ---
 
@@ -187,6 +188,7 @@ copilot-serve/
 | `0002` | `0002_v12_tables.py` | 任务、审批、工作空间、审计等 v1.2 表 |
 | `001_role_spec` | `001_add_role_spec_and_profile_fields.py` | Profile 展示字段 + `profile_role_specs` |
 | `002_team_v18_chat` | `20260525_team_v18_workspace_chat.py` | `profile_chat_settings`、`chat_attachments` |
+| `003_runtime_core` | `20260723_runtime_core.py` | Runtime 表（versions/jobs/instances/devices 等）+ profiles→instances 数据迁移 |
 
 ```bash
 uv sync
@@ -227,15 +229,24 @@ Windows 冒烟：`scripts/smoke-test.ps1` / `scripts/smoke-test-windows.ps1`（�
 |---|---|
 | [`AGENT.md`](../AGENT.md) | Agent 工作手册、边界、编码与安全规则 |
 | [`api-contract.md`](api-contract.md) | **全量 HTTP 端点清单**与 Chat SSE/错误码 |
-| [`../prd/team_v1.8_chatpanel.md`](../prd/team_v1.8_chatpanel.md) | 桌面 Chat 产品 PRD（跨仓库） |
+| [`runtime-architecture.md`](runtime-architecture.md) | Hermes Runtime 架构与边界 |
+| [`runtime-installation.md`](runtime-installation.md) | Hermes 安装与工具链路径 |
+| [`runtime-versioning.md`](runtime-versioning.md) | 版本管理、更新与回滚 |
+| [`runtime-security.md`](runtime-security.md) | 鉴权、Secret、执行策略 |
+| [`runtime-desktop-contract.md`](runtime-desktop-contract.md) | Desktop 与 Runtime 契约 |
+| [`runtime-acceptance-v1.3.md`](runtime-acceptance-v1.3.md) | v1.3 验收记录 |
+| [`../prd/ver1.3-runtime-service.md`](../prd/ver1.3-runtime-service.md) | Runtime Service 改造 PRD |
 | [`.env.example`](../.env.example) | 环境变量 |
 
 ---
 
-## 十、索引维护规则
+## 十、文档语言规则
+
+项目文档的**描述性文字只允许使用简体中文**。文件路径、API、类名、环境变量、代码片段等技术标识保持原文。
 
 新增模块或变更公共 API 时**必须**同步：
 
 1. 本文件「目录结构」「已实现 API 模块」「迁移链」
 2. [`api-contract.md`](api-contract.md) 端点表
 3. [`AGENT.md`](../AGENT.md) 的 layout / API design rules（若架构级变更）
+4. 相关 `docs/runtime-*.md`（若涉及 Runtime）

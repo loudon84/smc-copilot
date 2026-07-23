@@ -42,6 +42,25 @@ class GatewaySupervisor:
         """Test hook: use mock HTTP gateway script instead of hermes CLI."""
         self._mock_command = cmd
 
+    async def _resolve_hermes_executable(self, profile_or_instance_id: str) -> str | None:
+        """Prefer RuntimeVersion.executable_path bound to Instance, else active version."""
+        try:
+            from db.models.runtime import HermesInstance, RuntimeVersion
+            from db.repositories.runtime_repo import RuntimeVersionRepository
+
+            async with self._session_maker() as session:
+                inst = await session.get(HermesInstance, profile_or_instance_id)
+                if inst and inst.runtime_version_id:
+                    ver = await session.get(RuntimeVersion, inst.runtime_version_id)
+                    if ver and ver.executable_path:
+                        return ver.executable_path
+                active = await RuntimeVersionRepository(session).get_active()
+                if active and active.executable_path:
+                    return active.executable_path
+        except Exception:
+            logger.warning("resolve_hermes_executable_failed", profile_id=profile_or_instance_id)
+        return None
+
     async def _with_session(self) -> tuple[AsyncSession, ProfileService]:
         session = self._session_maker()
         repo = ProfileRepository(session)
@@ -176,11 +195,13 @@ class GatewaySupervisor:
             await session.commit()
 
             try:
+                hermes_executable = await self._resolve_hermes_executable(profile.id)
                 await self._process_manager.start(
                     profile.id,
                     profile.name,
                     profile.gateway_port,
                     mock_command=self._mock_command,
+                    hermes_executable=hermes_executable,
                 )
                 handle = self._process_manager.get_handle(profile.id)
                 profile = await svc.set_status(

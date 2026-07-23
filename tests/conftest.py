@@ -30,10 +30,15 @@ def test_settings(tmp_data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Settin
     log_dir = tmp_data_dir / "logs"
     hermes_home = tmp_data_dir / "hermes"
     hermes_home.mkdir()
+    runtime_data = tmp_data_dir / "hermes-runtime"
+    runtime_data.mkdir()
     monkeypatch.setenv("SQLITE_PATH", str(db_path))
     monkeypatch.setenv("LOG_DIR", str(log_dir))
     monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("RUNTIME_DATA_DIR", str(runtime_data))
     monkeypatch.setenv("DEFAULT_GATEWAY_PORT", "18742")
+    monkeypatch.setenv("RUNTIME_REQUIRE_AUTH", "false")
+    monkeypatch.setenv("COPILOT_REQUIRE_TOKEN", "false")
     import core.config as config_mod
 
     config_mod._settings = None

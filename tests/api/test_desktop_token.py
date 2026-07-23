@@ -31,6 +31,9 @@ async def token_required_client(
     monkeypatch.setenv("DEFAULT_GATEWAY_PORT", "18742")
     monkeypatch.setenv("COPILOT_REQUIRE_TOKEN", "true")
     monkeypatch.setenv("COPILOT_DESKTOP_TOKEN", "test-desktop-token")
+    monkeypatch.setenv("RUNTIME_ALLOW_LEGACY_TOKEN", "true")
+    monkeypatch.setenv("RUNTIME_DATA_DIR", str(data / "hermes-runtime"))
+    (data / "hermes-runtime").mkdir(exist_ok=True)
     import core.config as config_mod
 
     config_mod._settings = None

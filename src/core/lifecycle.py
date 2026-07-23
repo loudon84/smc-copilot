@@ -12,6 +12,7 @@ from db.session import create_engine, create_sessionmaker
 from integrations.team_hub.client import HttpTeamHubClient, StubTeamHubClient
 from local_service.service_state import mark_service_boot
 from services.gateway_supervisor import GatewaySupervisor
+from services.runtime_job_service import RuntimeJobService
 from services.task_routing_registry import TaskRoutingRegistry
 from workers.v12_workers import RunEventWorker, SyncOutboxWorker, TaskListenerWorker
 
@@ -27,6 +28,27 @@ def _hub_factory(settings) -> StubTeamHubClient | HttpTeamHubClient:
         settings.device_id,
         settings.agent_id,
     )
+
+
+def _register_runtime_handlers(job_service: RuntimeJobService, settings, session_maker) -> None:
+    """Wire install/update/rollback/doctor handlers (lazy import to avoid circular deps)."""
+    try:
+        from services.installation_service import InstallationService
+        from services.update_service import UpdateService
+        from services.rollback_service import RollbackService
+        from services.doctor_service import DoctorService
+
+        install = InstallationService(settings, session_maker)
+        update = UpdateService(settings, session_maker)
+        rollback = RollbackService(settings, session_maker)
+        doctor = DoctorService(settings, session_maker)
+
+        job_service.register_handler("install", install.run_job)
+        job_service.register_handler("update", update.run_job)
+        job_service.register_handler("rollback", rollback.run_job)
+        job_service.register_handler("doctor", doctor.run_job)
+    except ImportError:
+        logger.warning("runtime_handlers_partial", reason="some runtime services not yet available")
 
 
 @asynccontextmanager
@@ -52,11 +74,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     injected_hub = getattr(app.state, "_test_team_hub", None)
     hub = injected_hub if injected_hub is not None else _hub_factory(settings)
 
+    job_service = getattr(app.state, "_test_runtime_job_service", None)
+    if job_service is None:
+        job_service = RuntimeJobService(settings, session_maker)
+        _register_runtime_handlers(job_service, settings, session_maker)
+
     app.state.engine = engine
     app.state.session_maker = session_maker
     app.state.gateway_supervisor = supervisor
     app.state.team_hub = hub
     app.state.task_routing_registry = registry
+    app.state.runtime_job_service = job_service
+
+    recovered = await job_service.recover_incomplete_jobs()
+    if recovered:
+        logger.info("runtime_jobs_recovered", count=recovered)
 
     disable_gateway_autostart = bool(getattr(app.state, "_disable_gateway_autostart", False))
     if not disable_gateway_autostart:
@@ -65,6 +97,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     bg_tasks: list[asyncio.Task[None]] = []
     disable_workers = bool(getattr(app.state, "_disable_workers", False))
+
+    await job_service.start_worker()
 
     if not disable_workers:
         listener = TaskListenerWorker(
@@ -80,12 +114,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info(
         "copilot_serve_started",
-        host=settings.copilot_host,
-        port=settings.copilot_port,
+        host=settings.bind_host,
+        port=settings.bind_port,
         workers=not disable_workers,
     )
 
     yield
+
+    await job_service.stop_worker()
 
     for t in bg_tasks:
         t.cancel()

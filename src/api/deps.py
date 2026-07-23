@@ -17,6 +17,14 @@ from services.role_library_service import RoleLibraryService
 from services.task_routing_registry import TaskRoutingRegistry
 from services.task_runtime import TaskRuntimeService
 
+AUTH_WHITELIST = {
+    "/api/v1/health",
+    "/api/v1/pairings/start",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+}
+
 
 def get_app_settings() -> Settings:
     return get_settings()
@@ -94,17 +102,53 @@ def get_approval_service(
     return ApprovalService(db, settings)
 
 
-def verify_desktop_token(
+def require_loopback(request: Request) -> None:
+    client = request.client.host if request.client else "127.0.0.1"
+    allowed = {"127.0.0.1", "::1", "localhost", "testclient", "test"}
+    if client not in allowed:
+        raise HTTPException(status_code=403, detail="Pairing only allowed from loopback")
+
+
+async def verify_desktop_token(
     request: Request,
     settings: Annotated[Settings, Depends(get_app_settings)],
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     token: Annotated[str | None, Header(alias="X-Copilot-Desktop-Token")] = None,
 ) -> None:
-    if request.url.path in {"/api/v1/health", "/docs", "/openapi.json", "/redoc"}:
+    path = request.url.path
+    if path in AUTH_WHITELIST or path.startswith("/api/v1/pairings/"):
         return
-    if not settings.copilot_require_token:
+    if not settings.require_auth():
         return
-    expected = settings.copilot_desktop_token
-    if not expected:
-        return
-    if token != expected:
-        raise HTTPException(status_code=401, detail="Invalid or missing desktop token")
+
+    bearer: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        bearer = authorization[7:].strip()
+
+    # Prefer device token (Bearer)
+    if bearer:
+        session_maker = request.app.state.session_maker
+        session = session_maker()
+        try:
+            from services.pairing_service import PairingService
+
+            device = await PairingService(settings, session).authenticate_token(bearer)
+            await session.commit()
+            if device is not None:
+                request.state.device_id = device.id
+                return
+        finally:
+            await session.close()
+        raise HTTPException(status_code=401, detail="Invalid or revoked device token")
+
+    # Legacy header bridge (deprecated)
+    if settings.runtime_allow_legacy_token:
+        expected = settings.effective_legacy_token()
+        if expected and token == expected:
+            request.state.device_id = "legacy"
+            return
+        # Also accept legacy when COPILOT_REQUIRE_TOKEN path used empty expected
+        if not expected and not settings.runtime_require_auth:
+            return
+
+    raise HTTPException(status_code=401, detail="Invalid or missing authorization")

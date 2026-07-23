@@ -1,55 +1,23 @@
 ﻿from __future__ import annotations
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 
 from version import __version__
 from api.middleware.cors_asgi import PureAsgiCorsMiddleware
+from api.middleware.error_envelope import register_error_handlers
 from api.router import api_router
 from core.config import get_settings
-from core.errors import ChatApiError, CopilotError
 from core.lifecycle import lifespan
-from schemas.common import ErrorBody, ErrorResponse, StructuredErrorResponse
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="smc-copilot-serve",
+        title="Hermes Runtime Service",
         version=__version__,
-        description="smc-copilot-desktop local control plane",
+        description="Local Hermes Runtime Service for smc-copilot-desktop",
         lifespan=lifespan,
     )
-
-    @app.exception_handler(ChatApiError)
-    async def chat_api_error_handler(_request: Request, exc: ChatApiError) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.http_status,
-            content=StructuredErrorResponse(
-                error=ErrorBody(
-                    code=exc.code,
-                    message=exc.message,
-                    details=exc.details or None,
-                )
-            ).model_dump(),
-        )
-
-    @app.exception_handler(CopilotError)
-    async def copilot_error_handler(_request: Request, exc: CopilotError) -> JSONResponse:
-        code_map: dict[str, int] = {
-            "not_found": 404,
-            "conflict": 409,
-            "gateway_error": 503,
-            "hermes_client_error": 502,
-            "policy_denied": 403,
-            "invalid_state_transition": 409,
-            "team_hub_error": 502,
-        }
-        status_code = code_map.get(exc.code, 400)
-        return JSONResponse(
-            status_code=status_code,
-            content=ErrorResponse(code=exc.code, message=exc.message).model_dump(),
-        )
-
+    register_error_handlers(app)
     app.include_router(api_router)
     return app
 

@@ -1,6 +1,6 @@
-# smc-copilot-serve API Contract
+﻿# smc-copilot-serve API 契约
 
-**Base URL:** `http://127.0.0.1:8765`（`COPILOT_HOST` / `COPILOT_PORT`）
+**Base URL：** `http://127.0.0.1:8765`（`COPILOT_HOST` / `COPILOT_PORT`；亦可用 `RUNTIME_HOST` / `RUNTIME_PORT`）
 
 **代码根：** 扁平 `src/`；启动：`uv run uvicorn main:app --app-dir src --host 127.0.0.1 --port 8765`
 
@@ -74,22 +74,68 @@
 
 ---
 
+## Runtime Service（v1.3）
+
+统一错误信封：
+
+```json
+{
+  "error": {
+    "code": "runtime_lock_conflict",
+    "message": "Another runtime job is running",
+    "details": { "jobId": "…" },
+    "requestId": "…"
+  }
+}
+```
+
+鉴权：优先 `Authorization: Bearer <device-token>`；兼容期可启用 `X-Copilot-Desktop-Token`（`RUNTIME_ALLOW_LEGACY_TOKEN`）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/runtime/status` | Runtime 状态、Hermes 安装、capabilities |
+| GET | `/runtime/capabilities` | 能力协商 features[] |
+| GET | `/runtime/compatibility` | API 兼容提示 |
+| POST | `/runtime/install` | 创建安装 Job（可带 toolchain 覆盖） |
+| POST | `/runtime/update` | 更新 Job |
+| POST | `/runtime/rollback` | 回滚 Job |
+| POST | `/runtime/doctor` | Doctor Job |
+| GET/POST | `/runtime/jobs` | Job 列表 / 创建 |
+| GET | `/runtime/jobs/{id}` | Job 详情 |
+| GET | `/runtime/jobs/{id}/events` | Job SSE |
+| POST | `/runtime/jobs/{id}/cancel` | 取消 Job |
+| GET | `/runtime/versions` | 已安装版本 |
+| GET/POST/PATCH/DELETE | `/instances` | Instance CRUD |
+| POST | `/instances/{id}/start\|stop\|restart` | Gateway 生命周期 |
+| GET/PATCH | `/instances/{id}/configuration` | 配置读写 |
+| GET/POST/PUT/DELETE | `/instances/{id}/mcp/servers` | MCP CRUD |
+| PUT/GET/DELETE | `/secrets/{scope}/…` | Secret（GET 不返回明文） |
+| POST | `/pairings/start` | 设备配对（仅 loopback） |
+| POST | `/pairings/{id}/confirm` | 确认并签发 device token |
+| GET/DELETE | `/devices` | 设备列表 / 吊销 |
+| GET | `/diagnostics/summary\|environment\|logs` | 诊断 |
+| POST/GET/DELETE | `/runtime/backups` | 备份与恢复 |
+
+工具链环境变量：`TOOLCHAIN_PYTHON_PATH`、`TOOLCHAIN_NODE_PATH`、`TOOLCHAIN_GIT_PATH`、`TOOLCHAIN_VENV_DIR`、`HERMES_INSTALL_DIR`。
+
+---
+
 ## 端点总览（按模块）
 
 > 下列路径均相对于 **`/api/v1`**，除非注明。
 
-### System / Health / Service
+### 系统 / 健康 / 服务
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/health` | 存活探测（无需 Token 时可匿名） |
 | GET | `/system/info` | 版本、hermes_home、sqlite_path、默认 Gateway 端口 |
 | GET | `/service/status` | 服务 PID、uptime、Profile 运行计数（Windows 服务场景） |
 
 ### Profiles
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/profiles` | 列表 |
 | POST | `/profiles` | 创建 |
 | GET | `/profiles/{profile_id}` | 详情 |
@@ -118,8 +164,8 @@
 
 ### Workspace Chat（team_v1.8 / v1.8.1）
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/profiles/resolve?ref=` | 解析 `ref`（id / name / `default`）→ `ResolvedProfile` |
 | GET | `/profiles/{profile_id}/chat/models` | 模型列表（Gateway 未运行时可 `models:[]`, `status: gateway_not_running`） |
 | GET | `/profiles/{profile_id}/chat/model-config` | 默认模型配置（可 null） |
@@ -158,10 +204,10 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 
 **Session messages：** 返回 `{ "messages": [{ "id", "role", "content", "timestamp" }] }`；无 `state.db` 时为空数组。
 
-### Attachments（multipart）
+### 附件（multipart）
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | POST | `/workspaces/{workspace_id}/attachments` | `multipart/form-data`：`profile_id`, `session_id`, `files[]` |
 | DELETE | `/workspaces/{workspace_id}/attachments/{attachment_id}` | 删除附件元数据与暂存文件 |
 
@@ -169,17 +215,17 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 
 ### Gateways
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/gateways/{gateway_id}/health` | Gateway 健康（v1.0：`gateway_id` = `profile_id`） |
 | GET | `/gateways/{gateway_id}/logs?tail=200` | 日志尾部 |
 
-### Hermes proxy（Run API）
+### Hermes 代理（Run API）
 
 需 Profile Gateway `running` 且 `healthy`。
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/profiles/{profile_id}/models` | 代理 `GET /v1/models` |
 | POST | `/profiles/{profile_id}/runs` | 代理 `POST /v1/runs` |
 | GET | `/profiles/{profile_id}/runs/{run_id}` | 代理 `GET /v1/runs/{id}` |
@@ -195,19 +241,19 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 }
 ```
 
-### Role library（team_v1.4.1）
+### 角色库（team_v1.4.1）
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | POST | `/role-library/sync` | 同步角色库（可选 body） |
 | GET | `/role-library/specs` | 列出 Role spec |
 | POST | `/role-library/recompile/{profile_id}` | 按 Profile 重编译角色 |
 | POST | `/profiles/import-preset` | 导入预设 Profile 包 |
 
-### Tasks（v1.2）
+### 任务（v1.2）
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/tasks` | 列表 |
 | POST | `/tasks` | 创建 |
 | GET | `/tasks/{task_id}` | 详情 |
@@ -220,10 +266,10 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 
 任务终态后 SSE 约 **30s** 内关闭；支持 `Last-Event-ID`。
 
-### Team tasks（v1.2）
+### 团队任务（v1.2）
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | POST | `/team-tasks/pull` | 轮询 Hub 并 ingest |
 | GET | `/team-tasks` | 绑定列表 |
 | GET | `/team-tasks/{binding_id}` | 单条绑定 |
@@ -232,27 +278,27 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 
 环境变量见 `.env.example`（`AIOS_TEAM_HUB_*`、`TASK_ROUTING_JSON`）。默认 `StubTeamHubClient`。
 
-### Task routing
+### 任务路由
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/task-routing` | 有效路由规则 |
 | PATCH | `/task-routing` | Body `{ "rules": { "<task_type>": { "profile_type", "require_approval" } } }` |
 
-### Approvals
+### 审批
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/approvals` | 最近审批 |
 | GET | `/approvals/pending` | 待审 |
 | GET | `/approvals/{approval_id}` | 单条 |
 | POST | `/approvals/{approval_id}/approve` | 可选 `{ "approved_by": "…" }` |
 | POST | `/approvals/{approval_id}/reject` | 可选 `{ "actor", "reason" }` |
 
-### Workspaces
+### 工作空间
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/workspaces` | 列表 |
 | POST | `/workspaces` | 创建 |
 | GET | `/workspaces/{workspace_id}` | 详情 |
@@ -261,10 +307,10 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 | POST | `/workspaces/{workspace_id}/validate-path` | Body `{ "path": "…" }` |
 | POST | `/workspaces/{workspace_id}/validate-command` | Body `{ "command": "…" }` → `classification` |
 
-### Desktop workbench
+### 桌面工作台
 
-| Method | Path | Description |
-|--------|------|-------------|
+| 方法 | 路径 | 说明 |
+|------|------|------|
 | GET | `/desktop/task-workbench/summary` | Profile/Task/Approval 计数 + Hub stub 计数 |
 | GET | `/desktop/task-workbench/events/stream` | **SSE** 全局：`task_created` / `task_updated` / `approval_created` / `ping`（10s） |
 
