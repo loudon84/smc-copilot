@@ -41,6 +41,8 @@ export type ChatSubmitInput = {
   teamId?: string;
   expertRunId?: string;
   workMode?: "ask" | "plan" | "craft" | string;
+  /** Permission prompt mode — distinct from workMode (ask/plan/craft). */
+  permissionMode?: "default" | "ask_each_time";
   invocationSource: ChatInvocationSource;
 };
 
@@ -62,9 +64,33 @@ export type ChatAbortInput = {
   runId: string;
 };
 
+export type ChatRuntimeCommand =
+  | {
+      type: "clarify.respond";
+      runId: string;
+      requestId: string;
+      answer: string;
+    }
+  | {
+      type: "approval.approve";
+      runId: string;
+      requestId: string;
+    }
+  | {
+      type: "approval.deny";
+      runId: string;
+      requestId: string;
+      reason?: string;
+    };
+
+export type ChatRuntimeCommandResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 export const CHAT_RUNTIME_CHANNELS = {
   submit: "chat-runtime:submit",
   abort: "chat-runtime:abort",
   event: "chat-runtime:event",
   reconcile: "chat-runtime:reconcile-session",
+  command: "chat-runtime:command",
 } as const;

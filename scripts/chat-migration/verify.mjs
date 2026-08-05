@@ -71,6 +71,46 @@ if (refHits.length > 0) {
   failures.push(`Forbidden references/ imports:\n${refHits.map((h) => `  - ${h}`).join("\n")}`);
 }
 
+// 1b. Production chat modules must not import _upstream
+const prodChatRoots = [
+  join(ROOT, "src/renderer/src/modules/chat/controller"),
+  join(ROOT, "src/renderer/src/modules/chat/adapters"),
+  join(ROOT, "src/renderer/src/modules/chat/ports"),
+  join(ROOT, "src/renderer/src/modules/chat/components/messages"),
+  join(ROOT, "src/renderer/src/modules/chat/components/composer"),
+  join(ROOT, "src/renderer/src/modules/chat/components/session-files"),
+  join(ROOT, "src/renderer/src/modules/chat/workspace"),
+  join(ROOT, "src/main/chat-runtime"),
+];
+for (const root of prodChatRoots) {
+  /** @type {string[]} */
+  const files = [];
+  walk(root, files);
+  for (const f of files) {
+    const lower = f.toLowerCase();
+    const ext = lower.includes(".") ? lower.slice(lower.lastIndexOf(".")) : "";
+    if (!CODE_EXT.has(ext)) continue;
+    const text = readFileSync(f, "utf8");
+    if (/_upstream\//.test(text)) {
+      failures.push(
+        `Production code references _upstream: ${relative(ROOT, f).replace(/\\/g, "/")}`,
+      );
+    }
+    if (
+      root.includes(`${"modules"}${"/"}chat`) &&
+      /window\.(hermesAPI|chatRuntime|chatFiles|aiosBrowser)/.test(text) &&
+      !root.includes("adapters")
+    ) {
+      // Core / controller / ports / components should go through ports; adapters only.
+      if (!f.replace(/\\/g, "/").includes("/adapters/")) {
+        warnings.push(
+          `Direct window.* API outside adapters: ${relative(ROOT, f).replace(/\\/g, "/")}`,
+        );
+      }
+    }
+  }
+}
+
 // 2. target trees must exist (after copy) — warn if missing (phase 0 may run before copy)
 for (const entry of map.copies) {
   const toAbs = join(ROOT, entry.to);

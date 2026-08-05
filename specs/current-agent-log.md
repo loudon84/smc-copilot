@@ -1,10 +1,13 @@
-# Current Agent Log
+﻿# Agent Log
 
-## 2026-06-02
-- Completed v6.2 WebOperator Hermes Panel attachments: hermesPanelApi upload/remove wrappers, hook attachment state + merge with web context, composer tray/drag-drop, CSS; typecheck OK.
+## 2026-08-05 — v8.0.1 Chat migration closure
 
-## 2026-06-02 (earlier)
-- Started v6.1 Hermes MCP implementation per plan `hermes-mcp-v61`.
-- Confirmed legacy MCP list API in `installer.ts` (`listMcpServers`); new registry will not replace it in v6.1.
-- Completed full stack: shared/mcp, main/mcp (DB, client, sync, binding, proxy, bridge), mcp:* IPC, hermesAPI.mcp, HermesMCPPage + i18n.
-- typecheck + tests/mcp-registry.test.ts passed; docs synced.
+Completed PR1–PR5 of PRD 8.0.1 (default engine kept `copilot`).
+
+Verification (all OK):
+- npm run typecheck:chat
+- npm run typecheck
+- npm test -- tests/chat- (19 passed)
+- npm run check:chat-boundaries
+- npm run check:no-reference-imports
+- npm run build

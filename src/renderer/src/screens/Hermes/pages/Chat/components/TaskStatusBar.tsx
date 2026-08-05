@@ -7,6 +7,7 @@ type Props = {
   skillName?: string;
   profileId: string;
   durationMs: number;
+  toolLabel?: string;
 };
 
 function statusLabel(status: ChatTaskStatus): string {
@@ -50,6 +51,7 @@ export function TaskStatusBar({
   skillName,
   profileId,
   durationMs,
+  toolLabel,
 }: Props): React.JSX.Element | null {
   if (status === "draft") return null;
 
@@ -77,6 +79,11 @@ export function TaskStatusBar({
         ) : null}
         {skillName ? (
           <span className="hermes-webchat-task-status__chip">Skill: {skillName}</span>
+        ) : null}
+        {toolLabel ? (
+          <span className="hermes-webchat-task-status__chip" title={toolLabel}>
+            Tool: {toolLabel}
+          </span>
         ) : null}
         {showDuration ? (
           <span className="hermes-webchat-task-status__chip">{formatDuration(durationMs)}</span>

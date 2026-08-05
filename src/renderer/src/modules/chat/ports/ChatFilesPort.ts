@@ -18,5 +18,13 @@ export interface ChatFilesPort {
   remove?(fileId: string, profileId?: string): Promise<void>;
   preview?(fileId: string, profileId?: string): Promise<{ content?: string; url?: string }>;
   reveal?(path: string): Promise<void>;
-  saveAs?(fileId: string, suggestedName?: string): Promise<boolean>;
+  /** @deprecated Prefer saveManagedFileAs / saveLocalPathAs */
+  saveAs?(fileIdOrPath: string, suggestedName?: string): Promise<boolean>;
+  saveManagedFileAs?(fileId: string, suggestedName?: string): Promise<boolean>;
+  saveLocalPathAs?(filePath: string, suggestedName?: string): Promise<boolean>;
+  migrateDraft?(
+    sessionId: string,
+    profileId?: string,
+    draftSessionId?: string,
+  ): Promise<ChatFileRef[]>;
 }

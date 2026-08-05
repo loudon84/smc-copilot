@@ -110,6 +110,36 @@ export const chatFilesApi = {
       suggestedName,
     );
   },
+
+  saveManagedFileAs(
+    fileId: string,
+    suggestedName?: string,
+  ): Promise<{ ok: boolean; path?: string }> {
+    return ipcRenderer.invoke(
+      "chat-files:save-managed-as",
+      fileId,
+      suggestedName,
+    );
+  },
+
+  saveLocalPathAs(
+    filePath: string,
+    suggestedName?: string,
+  ): Promise<{ ok: boolean; path?: string }> {
+    return ipcRenderer.invoke(
+      "chat-files:save-local-path-as",
+      filePath,
+      suggestedName,
+    );
+  },
+
+  migrateDraft(payload: {
+    profile?: string;
+    draftSessionId?: string;
+    sessionId: string;
+  }): Promise<{ files: ChatFilesListed[] }> {
+    return ipcRenderer.invoke("chat-files:migrate-draft", payload);
+  },
 };
 
 export type ChatFilesAPI = typeof chatFilesApi;

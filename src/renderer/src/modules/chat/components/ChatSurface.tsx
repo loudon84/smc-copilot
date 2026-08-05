@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChatRuntimePort } from "../ports/ChatRuntimePort";
 import type { ChatSessionPort } from "../ports/ChatSessionPort";
 import type { ChatModelsPort } from "../ports/ChatModelsPort";
 import type { ChatFilesPort } from "../ports/ChatFilesPort";
 import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
-import type { ChatRuntimeEvent } from "@shared/chat-runtime/chat-runtime-events";
-import { useChatEvents } from "../hooks/useChatEvents";
-import { useChatActions } from "../hooks/useChatActions";
-import { useChatQueue } from "../hooks/useChatQueue";
+import type { ChatSubmitInput } from "@shared/chat-runtime/chat-runtime-contract";
+import type { ChatUsage } from "@shared/chat-runtime/chat-runtime-events";
+import { useChatController } from "../controller/useChatController";
+import type { ChatRunState } from "../controller/chatViewTypes";
+import { MessageList } from "./messages/MessageList";
+import { ChatComposer } from "./composer/ChatComposer";
+import { ModelPicker } from "./composer/ModelPicker";
 import "../styles/copilot-chat.css";
 
 export type ChatSurfaceSlots = {
@@ -16,6 +19,14 @@ export type ChatSurfaceSlots = {
   statusBarSlot?: React.ReactNode;
   activeExpertSlot?: React.ReactNode;
   rightPanelSlot?: React.ReactNode;
+  attachmentTraySlot?: React.ReactNode;
+  filesPanelSlot?: React.ReactNode;
+  renderStatusBar?: (ctx: {
+    runState: ChatRunState;
+    toolProgress: string | null;
+    durationMs: number;
+    usage: ChatUsage | null;
+  }) => React.ReactNode;
 };
 
 export type ChatSurfaceProps = ChatSurfaceSlots & {
@@ -30,25 +41,28 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   teamId?: string;
   expertRunId?: string;
   workMode?: string;
+  permissionMode?: "default" | "ask_each_time";
+  invocationSource?: ChatSubmitInput["invocationSource"];
   runId?: string;
   className?: string;
-};
-
-type UiMessage = {
-  id: string;
-  role: "user" | "agent";
-  content: string;
-  kind?: string;
-  pending?: boolean;
-  error?: string;
+  onSessionIdChange?: (sessionId: string | null) => void;
+  composeMessage?: (raw: string) => string | Promise<string>;
+  onRuntimeCommand?: (command: {
+    type: "clarify.respond" | "approval.approve" | "approval.deny";
+    requestId: string;
+    answer?: string;
+    reason?: string;
+  }) => void;
 };
 
 /**
- * Copilot Chat Surface — UI/interaction kernel host.
- * Work/Expert/MCP host content is injected via slots; runtime via ports.
+ * Copilot Chat Surface — Controller + production MessageList/Composer.
  */
 export function ChatSurface({
   runtime,
+  session,
+  models,
+  files,
   navigation,
   profileId,
   sessionId,
@@ -56,6 +70,8 @@ export function ChatSurface({
   teamId,
   expertRunId,
   workMode,
+  permissionMode,
+  invocationSource,
   runId: runIdProp,
   className,
   contextBarSlot,
@@ -63,211 +79,132 @@ export function ChatSurface({
   statusBarSlot,
   activeExpertSlot,
   rightPanelSlot,
+  attachmentTraySlot,
+  filesPanelSlot,
+  renderStatusBar,
+  onSessionIdChange,
+  composeMessage,
+  onRuntimeCommand,
 }: ChatSurfaceProps): React.JSX.Element {
-  const autoId = useId().replace(/:/g, "");
-  const runId = runIdProp || `run-${autoId}`;
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [toolProgress, setToolProgress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const { queue, enqueue, dequeue } = useChatQueue();
-  const { submit, abort, openWeb } = useChatActions({
+  const {
+    state,
+    input,
+    setInput,
+    queueLength,
+    send,
+    abort,
+    openWeb,
+    setSelectedModel,
+  } = useChatController({
     runtime,
+    session,
+    models,
+    files,
     navigation,
-    runId,
     profileId,
-    sessionId: sessionId || undefined,
+    forcedSessionId: sessionId,
+    runId: runIdProp,
     expertId,
     teamId,
     expertRunId,
     workMode,
+    permissionMode,
+    invocationSource,
+    onSessionIdChange,
+    composeMessage,
   });
 
-  const onEvent = useCallback((event: ChatRuntimeEvent) => {
-    switch (event.type) {
-      case "message.delta":
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === "agent" && last.pending && !last.error) {
-            return [
-              ...prev.slice(0, -1),
-              { ...last, content: last.content + event.content },
-            ];
-          }
-          return [
-            ...prev,
-            {
-              id: `agent-${Date.now()}`,
-              role: "agent",
-              content: event.content,
-              pending: true,
-            },
-          ];
-        });
-        break;
-      case "reasoning.delta":
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.kind === "reasoning") {
-            return [
-              ...prev.slice(0, -1),
-              { ...last, content: last.content + event.content },
-            ];
-          }
-          return [
-            ...prev,
-            {
-              id: `reasoning-${Date.now()}`,
-              role: "agent",
-              kind: "reasoning",
-              content: event.content,
-            },
-          ];
-        });
-        break;
-      case "tool.progress":
-        setToolProgress(event.tool);
-        break;
-      case "tool.event":
-        setToolProgress(event.event.label || event.event.name);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `tool-${event.event.callId}`,
-            role: "agent",
-            kind: "tool",
-            content: `${event.event.name}: ${event.event.status}`,
-          },
-        ]);
-        break;
-      case "clarify.requested":
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `clarify-${event.request.requestId}`,
-            role: "agent",
-            kind: "clarify",
-            content: event.request.question,
-          },
-        ]);
-        setIsLoading(true);
-        break;
-      case "completed":
-        setIsLoading(false);
-        setToolProgress(null);
-        setMessages((prev) =>
-          prev.map((m) => (m.pending ? { ...m, pending: false } : m)),
-        );
-        break;
-      case "failed":
-        setIsLoading(false);
-        setToolProgress(null);
-        setError(event.error.message);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `err-${Date.now()}`,
-            role: "agent",
-            content: event.error.message,
-            error: event.error.message,
-          },
-        ]);
-        break;
-      case "cancelled":
-        setIsLoading(false);
-        setToolProgress(null);
-        break;
-      default:
-        break;
-    }
-  }, []);
+  const [modelOptions, setModelOptions] = useState<
+    Array<{ id: string; label: string }>
+  >([]);
 
-  useChatEvents(runtime, runId, onEvent);
-
-  // Drain queue when idle
   useEffect(() => {
-    if (isLoading) return;
-    const next = dequeue();
-    if (!next) return;
+    let cancelled = false;
     void (async () => {
-      setIsLoading(true);
-      setError(null);
-      setMessages((prev) => [
-        ...prev,
-        { id: `user-${Date.now()}`, role: "user", content: next.text },
-        { id: `agent-${Date.now()}`, role: "agent", content: "", pending: true },
-      ]);
+      if (!models?.listModels) return;
       try {
-        await submit(next.text);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setIsLoading(false);
+        const list = await models.listModels(profileId);
+        if (cancelled) return;
+        setModelOptions(
+          list.map((m) => ({
+            id: m.id,
+            label: m.label || m.id,
+          })),
+        );
+      } catch {
+        /* optional */
       }
     })();
-  }, [isLoading, dequeue, submit]);
+    return () => {
+      cancelled = true;
+    };
+  }, [models, profileId]);
 
-  const handleSend = useCallback(async () => {
-    const text = input.trim();
-    if (!text) return;
-    setInput("");
-    if (isLoading) {
-      enqueue(text);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    setMessages((prev) => [
-      ...prev,
-      { id: `user-${Date.now()}`, role: "user", content: text },
-      { id: `agent-${Date.now()}`, role: "agent", content: "", pending: true },
-    ]);
-    // Auto-open web from URLs in tool output is handled via navigation port from host
-    try {
-      await submit(text);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setIsLoading(false);
-    }
-  }, [input, isLoading, enqueue, submit]);
+  const isBusy =
+    state.runState === "streaming" ||
+    state.runState === "creating" ||
+    state.runState === "waiting_approval" ||
+    state.runState === "waiting_clarify";
 
-  const handleAbort = useCallback(async () => {
-    await abort();
-    setIsLoading(false);
-    setToolProgress(null);
+  const handleSend = useCallback(() => {
+    void send();
+  }, [send]);
+
+  const handleAbort = useCallback(() => {
+    void abort();
   }, [abort]);
 
   const urlHint = useMemo(() => {
-    const last = [...messages].reverse().find((m) => m.kind === "tool");
-    const match = last?.content.match(/https?:\/\/\S+/);
-    return match?.[0];
-  }, [messages]);
+    for (let i = state.messages.length - 1; i >= 0; i -= 1) {
+      const m = state.messages[i];
+      if (m.kind === "tool_call" || m.kind === "tool_result") {
+        const text = `${m.event.label || ""} ${m.event.preview || ""} ${m.event.result || ""}`;
+        const match = text.match(/https?:\/\/\S+/);
+        if (match) return match[0];
+      }
+      if (m.kind === "assistant") {
+        const match = m.content.match(/https?:\/\/\S+/);
+        if (match) return match[0];
+      }
+    }
+    return undefined;
+  }, [state.messages]);
+
+  const statusNode = renderStatusBar
+    ? renderStatusBar({
+        runState: state.runState,
+        toolProgress: state.toolProgress,
+        durationMs: 0,
+        usage: state.usage,
+      })
+    : statusBarSlot;
 
   return (
     <div className={`copilot-chat-root ${className || ""}`.trim()}>
       {activeExpertSlot}
-      {statusBarSlot}
+      {statusNode}
       {contextBarSlot}
       <div className="chat-body">
         <div className="chat-main">
-          <div className="chat-messages" role="log" aria-live="polite">
-            {messages.length === 0 && (
-              <div className="chat-empty">Start a conversation</div>
-            )}
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`message-row message-row--${m.role}${m.kind ? ` message-row--${m.kind}` : ""}${m.error ? " message-row--error" : ""}`}
-              >
-                <div className="message-content">{m.content || (m.pending ? "…" : "")}</div>
-              </div>
-            ))}
-            {toolProgress && (
-              <div className="tool-progress">{toolProgress}</div>
-            )}
-          </div>
-          {error && <div className="chat-error">{error}</div>}
+          <MessageList
+            messages={state.messages}
+            toolProgress={state.toolProgress}
+            isBusy={isBusy}
+            onClarifyAnswer={(requestId, answer) =>
+              onRuntimeCommand?.({
+                type: "clarify.respond",
+                requestId,
+                answer,
+              })
+            }
+            onApproval={(requestId, approve) =>
+              onRuntimeCommand?.({
+                type: approve ? "approval.approve" : "approval.deny",
+                requestId,
+              })
+            }
+          />
+          {state.lastError && <div className="chat-error">{state.lastError}</div>}
           {urlHint && (
             <button
               type="button"
@@ -277,38 +214,38 @@ export function ChatSurface({
               Open in Web Operator
             </button>
           )}
-          {queue.length > 0 && (
-            <div className="chat-queue">{queue.length} queued</div>
-          )}
-          <div className="composer">
-            {composerControlsSlot}
-            <textarea
-              className="composer-input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void handleSend();
-                }
-              }}
-              placeholder="Message Hermes…"
-              rows={3}
-            />
-            <div className="composer-actions">
-              {isLoading ? (
-                <button type="button" onClick={() => void handleAbort()}>
-                  Stop
-                </button>
-              ) : (
-                <button type="button" onClick={() => void handleSend()} disabled={!input.trim()}>
-                  Send
-                </button>
-              )}
-            </div>
-          </div>
+          <ChatComposer
+            value={input}
+            onChange={setInput}
+            onSend={handleSend}
+            onAbort={handleAbort}
+            isBusy={isBusy}
+            composerControlsSlot={composerControlsSlot}
+            attachmentTraySlot={attachmentTraySlot}
+            queueLength={queueLength}
+            modelPickerSlot={
+              <ModelPicker
+                models={modelOptions}
+                selectedModelId={state.selectedModelId}
+                onSelect={(id) => {
+                  setSelectedModel(id || null);
+                  void models?.setSessionModel?.(
+                    state.activeSessionId || "draft",
+                    id,
+                    profileId,
+                  );
+                }}
+                disabled={isBusy}
+              />
+            }
+          />
         </div>
-        {rightPanelSlot && <aside className="chat-right-panel">{rightPanelSlot}</aside>}
+        {(rightPanelSlot || filesPanelSlot) && (
+          <aside className="chat-right-panel">
+            {filesPanelSlot}
+            {rightPanelSlot}
+          </aside>
+        )}
       </div>
     </div>
   );

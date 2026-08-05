@@ -26,4 +26,26 @@ export const aiosFilesAdapter: ChatFilesPort = {
     const result = await window.chatFiles.saveAs(filePath, suggestedName);
     return !!result.ok;
   },
+  async saveManagedFileAs(fileId, suggestedName) {
+    const result = await window.chatFiles.saveManagedFileAs(
+      fileId,
+      suggestedName,
+    );
+    return !!result.ok;
+  },
+  async saveLocalPathAs(filePath, suggestedName) {
+    const result = await window.chatFiles.saveLocalPathAs(
+      filePath,
+      suggestedName,
+    );
+    return !!result.ok;
+  },
+  async migrateDraft(sessionId, profileId, draftSessionId) {
+    const res = await window.chatFiles.migrateDraft({
+      profile: profileId,
+      draftSessionId,
+      sessionId,
+    });
+    return res.files as ChatFileRef[];
+  },
 };

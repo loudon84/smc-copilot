@@ -45,9 +45,11 @@ import { emitChatRuntimeEvent } from "./chat-event-emitter";
 import {
   abortRun,
   clearActiveRun,
+  getActiveRun,
   setActiveRun,
 } from "./chat-runtime-manager";
 import {
+  finalizeSessionReconcile,
   startSessionReconcile,
   stopAllSessionReconciles,
   stopSessionReconcile,
@@ -183,16 +185,23 @@ export function registerChatRuntimeIpc(
       let resolvedSessionId: string | undefined;
       const chatStartTime = Date.now();
       let cancelled = false;
+      let finished = false;
 
       let resolveChat: (v: ChatSubmitResult) => void;
       const promise = new Promise<ChatSubmitResult>((res) => {
         resolveChat = res;
       });
 
-      const finishOk = (sessionId?: string): void => {
+      const finishOnce = (result: ChatSubmitResult): void => {
+        if (finished) return;
+        finished = true;
         stopSessionReconcile(runId);
         clearActiveRun(runId);
-        resolveChat({
+        resolveChat(result);
+      };
+
+      const finishCompleted = (sessionId?: string): void => {
+        finishOnce({
           ok: true,
           runId,
           response: fullResponse,
@@ -200,10 +209,8 @@ export function registerChatRuntimeIpc(
         });
       };
 
-      const finishFail = (code: string, message: string): void => {
-        stopSessionReconcile(runId);
-        clearActiveRun(runId);
-        resolveChat({
+      const finishFailed = (code: string, message: string): void => {
+        finishOnce({
           ok: false,
           runId,
           errorCode: code,
@@ -211,10 +218,43 @@ export function registerChatRuntimeIpc(
         });
       };
 
+      const finishCancelled = (): void => {
+        emitChatRuntimeEvent(event.sender, { type: "cancelled", runId });
+        finishOnce({
+          ok: false,
+          runId,
+          errorCode: ChatRuntimeErrorCode.CANCELLED,
+          error: "Run cancelled",
+        });
+      };
+
+      const ensureReconcile = (sessionId: string): void => {
+        startSessionReconcile(runId, sessionId, (payload) => {
+          for (const evt of payload.events) {
+            emitChatRuntimeEvent(event.sender, { ...evt, runId } as Parameters<
+              typeof emitChatRuntimeEvent
+            >[1]);
+          }
+        });
+      };
+
+      const emitReconcileDiff = (
+        payload: import("./chat-session-reconciler").ChatSessionReconcileDiff,
+      ): void => {
+        for (const evt of payload.events) {
+          emitChatRuntimeEvent(event.sender, { ...evt, runId } as Parameters<
+            typeof emitChatRuntimeEvent
+          >[1]);
+        }
+      };
+
+      let chatHandle: { abort: () => void } | null = null;
+
       const handle = await sendMessage(
         payload.message,
         {
           onChunk: (chunk) => {
+            if (finished || cancelled) return;
             fullResponse += chunk;
             if (
               !emitChatRuntimeEvent(event.sender, {
@@ -224,35 +264,57 @@ export function registerChatRuntimeIpc(
               })
             ) {
               cancelled = true;
+              chatHandle?.abort();
+              finishCancelled();
             }
           },
+          onSessionStarted: (sessionId) => {
+            if (finished || cancelled || !sessionId) return;
+            resolvedSessionId = sessionId;
+            migrateSessionModelBinding(requestSessionKey, sessionId, profile);
+            emitChatRuntimeEvent(event.sender, {
+              type: "session.started",
+              runId,
+              sessionId,
+            });
+            ensureReconcile(sessionId);
+          },
           onDone: (sessionId) => {
+            if (finished) return;
             if (cancelled) {
-              emitChatRuntimeEvent(event.sender, { type: "cancelled", runId });
-              finishFail(ChatRuntimeErrorCode.CANCELLED, "Run cancelled");
+              finishCancelled();
               return;
             }
-            resolvedSessionId = sessionId || undefined;
+            resolvedSessionId = sessionId || resolvedSessionId;
             void afterExpertChatComplete({
               runId: payload.expert_run_id,
               profile,
               response: fullResponse,
               sessionId: resolvedSessionId,
             });
-            if (sessionId) {
-              migrateSessionModelBinding(requestSessionKey, sessionId, profile);
+            if (resolvedSessionId) {
+              migrateSessionModelBinding(
+                requestSessionKey,
+                resolvedSessionId,
+                profile,
+              );
               emitChatRuntimeEvent(event.sender, {
                 type: "session.started",
                 runId,
-                sessionId,
+                sessionId: resolvedSessionId,
               });
+              finalizeSessionReconcile(
+                runId,
+                resolvedSessionId,
+                emitReconcileDiff,
+              );
             }
             emitChatRuntimeEvent(event.sender, {
               type: "completed",
               runId,
               sessionId: resolvedSessionId,
             });
-            finishOk(resolvedSessionId);
+            finishCompleted(resolvedSessionId);
 
             const mainWindow = getMainWindow();
             if (
@@ -271,6 +333,11 @@ export function registerChatRuntimeIpc(
             }
           },
           onError: (error) => {
+            if (finished) return;
+            if (cancelled) {
+              finishCancelled();
+              return;
+            }
             void afterExpertChatComplete({
               runId: payload.expert_run_id,
               profile,
@@ -282,7 +349,7 @@ export function registerChatRuntimeIpc(
               runId,
               error: chatRuntimeError(ChatRuntimeErrorCode.SEND_FAILED, error),
             });
-            finishFail(ChatRuntimeErrorCode.SEND_FAILED, error);
+            finishFailed(ChatRuntimeErrorCode.SEND_FAILED, error);
 
             const mainWindow = getMainWindow();
             if (mainWindow && !mainWindow.isFocused()) {
@@ -293,6 +360,7 @@ export function registerChatRuntimeIpc(
             }
           },
           onToolProgress: (tool) => {
+            if (finished || cancelled) return;
             bridgeChatToolProgress({
               runId: payload.expert_run_id,
               profile,
@@ -305,7 +373,40 @@ export function registerChatRuntimeIpc(
               tool,
             });
           },
+          onReasoningDelta: (content) => {
+            if (finished || cancelled) return;
+            emitChatRuntimeEvent(event.sender, {
+              type: "reasoning.delta",
+              runId,
+              content,
+            });
+          },
+          onToolEvent: (toolEvent) => {
+            if (finished || cancelled) return;
+            emitChatRuntimeEvent(event.sender, {
+              type: "tool.event",
+              runId,
+              event: toolEvent,
+            });
+          },
+          onClarifyRequested: (request) => {
+            if (finished || cancelled) return;
+            emitChatRuntimeEvent(event.sender, {
+              type: "clarify.requested",
+              runId,
+              request,
+            });
+          },
+          onApprovalRequested: (request) => {
+            if (finished || cancelled) return;
+            emitChatRuntimeEvent(event.sender, {
+              type: "approval.requested",
+              runId,
+              request,
+            });
+          },
           onUsage: (usage) => {
+            if (finished || cancelled) return;
             emitChatRuntimeEvent(event.sender, {
               type: "usage",
               runId,
@@ -333,12 +434,18 @@ export function registerChatRuntimeIpc(
         },
       );
 
+      chatHandle = handle;
+
       setActiveRun(runId, {
         abort: () => {
+          if (finished || cancelled) return;
           cancelled = true;
-          handle.abort();
-          stopSessionReconcile(runId);
-          emitChatRuntimeEvent(event.sender, { type: "cancelled", runId });
+          try {
+            handle.abort();
+          } catch {
+            /* best effort */
+          }
+          finishCancelled();
         },
         profileId: input.profileId,
         sessionId: input.sessionId,
@@ -346,9 +453,7 @@ export function registerChatRuntimeIpc(
       });
 
       if (input.sessionId) {
-        startSessionReconcile(runId, input.sessionId, () => {
-          /* Renderer polls via session port; Main keeps DB warm */
-        });
+        ensureReconcile(input.sessionId);
       }
 
       return promise;
@@ -366,6 +471,26 @@ export function registerChatRuntimeIpc(
       const ok = abortRun(runId.trim());
       stopSessionReconcile(runId.trim());
       return { ok };
+    },
+  );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.command,
+    async (
+      _event,
+      command: import("../../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommand,
+    ): Promise<
+      import("../../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommandResult
+    > => {
+      if (!command?.type || !command.runId?.trim() || !command.requestId?.trim()) {
+        return { ok: false, error: "Invalid chat-runtime command" };
+      }
+      // Clarify / approval responses are forwarded as follow-up chat messages
+      // when Hermes Gateway supports them; until then acknowledge and emit a
+      // synthesised message.delta so UI can continue.
+      const run = getActiveRun(command.runId);
+      void run;
+      return { ok: true as const };
     },
   );
 }

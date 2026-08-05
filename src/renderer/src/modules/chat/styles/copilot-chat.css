@@ -131,3 +131,88 @@
   border-left: 1px solid var(--chat-border);
   overflow: auto;
 }
+
+.copilot-chat-root .chat-typing {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.copilot-chat-root .chat-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--chat-text-muted);
+  animation: copilot-chat-bounce 1s infinite ease-in-out;
+}
+
+.copilot-chat-root .chat-typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.copilot-chat-root .chat-typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes copilot-chat-bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.copilot-chat-root .message-kind-label {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--chat-text-muted);
+}
+
+.copilot-chat-root .clarify-actions,
+.copilot-chat-root .approval-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.copilot-chat-root .model-picker select {
+  margin-left: 8px;
+  background: var(--chat-bg-secondary);
+  color: var(--chat-text-primary);
+  border: 1px solid var(--chat-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.copilot-chat-root .session-files-panel,
+.copilot-chat-root .file-preview-panel {
+  padding: 12px;
+  font-size: 13px;
+}
+
+.copilot-chat-root .session-files-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.copilot-chat-root .session-files-panel__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.copilot-chat-root .file-preview-panel__content {
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 12px;
+}

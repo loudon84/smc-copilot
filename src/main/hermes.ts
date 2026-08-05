@@ -244,6 +244,27 @@ export interface ChatCallbacks {
   onDone: (sessionId?: string) => void;
   onError: (error: string) => void;
   onToolProgress?: (tool: string) => void;
+  onSessionStarted?: (sessionId: string) => void;
+  onReasoningDelta?: (content: string) => void;
+  onToolEvent?: (event: {
+    callId: string;
+    name: string;
+    status: "running" | "completed" | "failed";
+    label?: string;
+    preview?: string;
+    result?: string;
+  }) => void;
+  onClarifyRequested?: (request: {
+    requestId: string;
+    question: string;
+    choices?: string[];
+  }) => void;
+  onApprovalRequested?: (request: {
+    requestId: string;
+    toolName: string;
+    summary: string;
+    riskLevel?: "low" | "medium" | "high";
+  }) => void;
   onUsage?: (usage: {
     promptTokens: number;
     completionTokens: number;
@@ -400,6 +421,104 @@ async function sendMessageViaApi(
         cb.onToolProgress(emoji ? `${emoji} ${label}` : label);
       } catch {
         /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.session.started" && cb.onSessionStarted) {
+      try {
+        const payload = JSON.parse(data);
+        const sid = payload.session_id || payload.sessionId;
+        if (typeof sid === "string" && sid.trim()) cb.onSessionStarted(sid);
+      } catch {
+        /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.reasoning.delta" && cb.onReasoningDelta) {
+      try {
+        const payload = JSON.parse(data);
+        const content = payload.content || payload.delta || "";
+        if (content) cb.onReasoningDelta(String(content));
+      } catch {
+        /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.tool.event" && cb.onToolEvent) {
+      try {
+        const payload = JSON.parse(data);
+        cb.onToolEvent({
+          callId: String(payload.call_id || payload.callId || payload.id || ""),
+          name: String(payload.name || payload.tool || "tool"),
+          status: (payload.status || "running") as "running" | "completed" | "failed",
+          label: payload.label,
+          preview: payload.preview,
+          result: payload.result,
+        });
+      } catch {
+        /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.clarify.requested" && cb.onClarifyRequested) {
+      try {
+        const payload = JSON.parse(data);
+        cb.onClarifyRequested({
+          requestId: String(payload.request_id || payload.requestId || ""),
+          question: String(payload.question || ""),
+          choices: Array.isArray(payload.choices) ? payload.choices.map(String) : undefined,
+        });
+      } catch {
+        /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.approval.requested" && cb.onApprovalRequested) {
+      try {
+        const payload = JSON.parse(data);
+        cb.onApprovalRequested({
+          requestId: String(payload.request_id || payload.requestId || ""),
+          toolName: String(payload.tool_name || payload.toolName || ""),
+          summary: String(payload.summary || ""),
+          riskLevel: payload.risk_level || payload.riskLevel,
+        });
+      } catch {
+        /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.usage" && cb.onUsage) {
+      try {
+        const payload = JSON.parse(data);
+        cb.onUsage({
+          promptTokens: payload.prompt_tokens || payload.promptTokens || 0,
+          completionTokens: payload.completion_tokens || payload.completionTokens || 0,
+          totalTokens: payload.total_tokens || payload.totalTokens || 0,
+          cost: payload.cost,
+          rateLimitRemaining: payload.rate_limit_remaining || payload.rateLimitRemaining,
+          rateLimitReset: payload.rate_limit_reset || payload.rateLimitReset,
+        });
+      } catch {
+        /* malformed — skip */
+      }
+      return;
+    }
+    if (eventType === "hermes.failed" && cb.onError) {
+      try {
+        const payload = JSON.parse(data);
+        cb.onError(String(payload.message || payload.error || "Hermes failed"));
+      } catch {
+        cb.onError("Hermes failed");
+      }
+      return;
+    }
+    if (eventType === "hermes.completed") {
+      try {
+        const payload = JSON.parse(data);
+        const sid = payload.session_id || payload.sessionId;
+        if (sid && cb.onSessionStarted) cb.onSessionStarted(String(sid));
+      } catch {
+        /* ignore */
       }
     }
   }

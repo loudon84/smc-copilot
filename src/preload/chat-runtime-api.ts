@@ -17,6 +17,14 @@ export const chatRuntimeApi = {
     return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.abort, input);
   },
 
+  command(
+    input: import("../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommand,
+  ): Promise<
+    import("../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommandResult
+  > {
+    return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.command, input);
+  },
+
   onEvent(callback: (event: ChatRuntimeEvent) => void): () => void {
     const listener = (
       _event: Electron.IpcRendererEvent,

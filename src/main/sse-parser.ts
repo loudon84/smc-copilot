@@ -11,25 +11,62 @@ export interface ParsedUsage {
   rateLimitReset?: number;
 }
 
+export interface SseToolEvent {
+  callId: string;
+  name: string;
+  status: "running" | "completed" | "failed";
+  label?: string;
+  preview?: string;
+  result?: string;
+}
+
+export interface SseClarifyRequest {
+  requestId: string;
+  question: string;
+  choices?: string[];
+}
+
+export interface SseApprovalRequest {
+  requestId: string;
+  toolName: string;
+  summary: string;
+  riskLevel?: "low" | "medium" | "high";
+}
+
 export interface SseCallbacks {
   onChunk: (text: string) => void;
   onToolProgress?: (tool: string) => void;
   onUsage?: (usage: ParsedUsage) => void;
   onError?: (message: string) => void;
   onDone?: () => void;
+  onSessionStarted?: (sessionId: string) => void;
+  onReasoningDelta?: (content: string) => void;
+  onToolEvent?: (event: SseToolEvent) => void;
+  onClarifyRequested?: (request: SseClarifyRequest) => void;
+  onApprovalRequested?: (request: SseApprovalRequest) => void;
 }
 
 /** Tool progress pattern: `emoji tool_name` or `emoji description` */
 const toolProgressRe = /^`([^\s`]+)\s+([^`]+)`$/;
 
 /**
- * Process a custom SSE event (e.g. hermes.tool.progress).
+ * Process a custom SSE event (e.g. hermes.tool.progress, hermes.reasoning.delta).
  * Returns true if the event was handled.
  */
 export function processCustomEvent(
   eventType: string,
   data: string,
-  cb: Pick<SseCallbacks, "onToolProgress">,
+  cb: Pick<
+    SseCallbacks,
+    | "onToolProgress"
+    | "onSessionStarted"
+    | "onReasoningDelta"
+    | "onToolEvent"
+    | "onClarifyRequested"
+    | "onApprovalRequested"
+    | "onUsage"
+    | "onError"
+  >,
 ): boolean {
   if (eventType === "hermes.tool.progress" && cb.onToolProgress) {
     try {
@@ -41,6 +78,105 @@ export function processCustomEvent(
     } catch {
       /* malformed — skip */
     }
+  }
+  if (eventType === "hermes.session.started" && cb.onSessionStarted) {
+    try {
+      const payload = JSON.parse(data);
+      const sid = payload.session_id || payload.sessionId;
+      if (typeof sid === "string" && sid.trim()) {
+        cb.onSessionStarted(sid);
+        return true;
+      }
+    } catch {
+      /* malformed — skip */
+    }
+  }
+  if (eventType === "hermes.reasoning.delta" && cb.onReasoningDelta) {
+    try {
+      const payload = JSON.parse(data);
+      const content = payload.content || payload.delta || "";
+      if (content) {
+        cb.onReasoningDelta(String(content));
+        return true;
+      }
+    } catch {
+      /* malformed — skip */
+    }
+  }
+  if (eventType === "hermes.tool.event" && cb.onToolEvent) {
+    try {
+      const payload = JSON.parse(data);
+      cb.onToolEvent({
+        callId: String(payload.call_id || payload.callId || payload.id || ""),
+        name: String(payload.name || payload.tool || "tool"),
+        status: (payload.status || "running") as SseToolEvent["status"],
+        label: payload.label,
+        preview: payload.preview,
+        result: payload.result,
+      });
+      return true;
+    } catch {
+      /* malformed — skip */
+    }
+  }
+  if (eventType === "hermes.clarify.requested" && cb.onClarifyRequested) {
+    try {
+      const payload = JSON.parse(data);
+      cb.onClarifyRequested({
+        requestId: String(payload.request_id || payload.requestId || ""),
+        question: String(payload.question || ""),
+        choices: Array.isArray(payload.choices)
+          ? payload.choices.map(String)
+          : undefined,
+      });
+      return true;
+    } catch {
+      /* malformed — skip */
+    }
+  }
+  if (eventType === "hermes.approval.requested" && cb.onApprovalRequested) {
+    try {
+      const payload = JSON.parse(data);
+      cb.onApprovalRequested({
+        requestId: String(payload.request_id || payload.requestId || ""),
+        toolName: String(payload.tool_name || payload.toolName || ""),
+        summary: String(payload.summary || ""),
+        riskLevel: payload.risk_level || payload.riskLevel,
+      });
+      return true;
+    } catch {
+      /* malformed — skip */
+    }
+  }
+  if (eventType === "hermes.usage" && cb.onUsage) {
+    try {
+      const payload = JSON.parse(data);
+      cb.onUsage({
+        promptTokens: payload.prompt_tokens || payload.promptTokens || 0,
+        completionTokens:
+          payload.completion_tokens || payload.completionTokens || 0,
+        totalTokens: payload.total_tokens || payload.totalTokens || 0,
+        cost: payload.cost,
+        rateLimitRemaining:
+          payload.rate_limit_remaining || payload.rateLimitRemaining,
+        rateLimitReset: payload.rate_limit_reset || payload.rateLimitReset,
+      });
+      return true;
+    } catch {
+      /* malformed — skip */
+    }
+  }
+  if (eventType === "hermes.failed" && cb.onError) {
+    try {
+      const payload = JSON.parse(data);
+      cb.onError(String(payload.message || payload.error || "Hermes failed"));
+    } catch {
+      cb.onError("Hermes failed");
+    }
+    return true;
+  }
+  if (eventType === "hermes.completed") {
+    return true;
   }
   return false;
 }
@@ -89,6 +225,15 @@ export function processSseData(
         rateLimitRemaining: parsed.usage.rate_limit_remaining,
         rateLimitReset: parsed.usage.rate_limit_reset,
       });
+    }
+
+    // OpenAI-style reasoning / thinking deltas (when present)
+    const reasoning =
+      delta?.reasoning_content ||
+      delta?.reasoning ||
+      parsed.reasoning_content;
+    if (reasoning && cb.onReasoningDelta) {
+      cb.onReasoningDelta(String(reasoning));
     }
 
     if (delta?.content) {

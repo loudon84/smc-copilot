@@ -3,15 +3,24 @@
 | Stage | Status |
 |---|---|
 | v8.0-chat-module-migration | done |
+| v8.0.1-pr1-controller | done |
+| v8.0.1-pr1-session | done |
+| v8.0.1-pr1-abort | done |
+| v8.0.1-pr1-workparams | done |
+| v8.0.1-pr1-runtime-events | done |
+| v8.0.1-pr1-tests | done |
+| v8.0.1-pr2-surface | done |
+| v8.0.1-pr2-compile | done |
+| v8.0.1-pr3-work-mcp | done |
+| v8.0.1-pr4-files | done |
+| v8.0.1-pr5-multichat-ci-docs | done |
 
 ## Notes
 
-**v8.0 Copilot Chat Module migration** complete for planned stages:
-
-- `scripts/chat-migration/*` + `check:no-reference-imports` / `check:chat-boundaries`
-- `window.chatRuntime` runId isolation (`src/main/chat-runtime`, `src/shared/chat-runtime`)
-- `window.chatFiles` thin bridge; full File Platform upstream parked in `src/main/chat-files/_upstream`
-- `modules/chat` ChatSurface + AI-OS adapters/ports; host `AiosCopilotChatHost`
-- Entry switch via `VITE_CHAT_ENGINE=legacy|copilot` (default copilot)
-- Docs: `docs/API_CONTRACTS.md` + `AGENTS.md` preload/version rows
-- Verified: `npm run typecheck`, boundary checks, `tests/chat-runtime-ipc.test.ts`
+PRD 8.0.1 closure implemented:
+- Controller Session/History/Abort finish* guards
+- MessageList/ChatComposer production UI + ChatRunRegistry
+- composeWorkPrompt + chat-runtime:command
+- Persisted chat-files-session-store (no memory Map)
+- typecheck:chat + ci includes build
+- Docs: AGENTS.md / API_CONTRACTS / PRELOAD_API_USAGE
