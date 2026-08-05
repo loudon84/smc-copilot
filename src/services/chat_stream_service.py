@@ -50,6 +50,7 @@ def _parse_tool_progress(event_type: str, data_line: str) -> tuple[str, str] | N
         return None
 
 
+# @lat: [[chat-sessions#Chat SSE 流]]
 class ChatStreamService:
     def __init__(
         self,

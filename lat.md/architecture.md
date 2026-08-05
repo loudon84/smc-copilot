@@ -1,0 +1,35 @@
+# 架构总览
+
+控制面采用薄路由 + 服务编排 + 仓储 + 集成适配器的分层结构。API 只做请求解析与依赖注入，业务逻辑在 `services/`，数据库访问在 `db/repositories/`，外部系统在 `integrations/`，进程与端口在 `runtime/`，可取消后台循环在 `workers/`。
+
+边界规则见 [[design-decisions#关键设计决策]] 与 [[index#系统边界]]。源码布局见 [[index#文档导航]]。
+
+## 分层职责
+
+每层只承担单一职责，禁止跨层直访外部系统。
+
+| 目录 | 职责 | 禁止 |
+|------|------|------|
+| `api/v1/` | 薄路由、依赖注入、响应映射 | 写业务逻辑、直连 Gateway |
+| `schemas/` | 请求/响应 DTO（Pydantic） | 直接返回 ORM |
+| `db/models/` | SQLAlchemy 模型 | — |
+| `db/repositories/` | 数据访问 | 调 Gateway / Shell / Team Hub |
+| `services/` | 业务编排与状态迁移 | 跨层直访外部系统 |
+| `integrations/hermes/` | Gateway HTTP、配置、Profile 加载、角色编译 | — |
+| `integrations/team_hub/` | 远程 Team Task Hub 同步 | — |
+| `runtime/` | 进程注册、端口分配、Gateway 子进程、环境探测 | — |
+| `workers/` | 可取消后台循环（监听/同步/事件采集） | 阻塞事件循环 |
+
+仓储层只做 DB 操作；外部调用必须经 `integrations/` 适配器；进程与端口经 `runtime/`；后台循环经 `workers/` 且必须可取消、受生命周期管理（见 [[task-runtime#后台 Worker]]）。
+
+## 应用装配
+
+入口 `src/main.py` 通过 [[src/app.py#build_asgi_app]] 构造纯 ASGI 应用：`create_app()` 创建 FastAPI 并挂载 `api_router`，再以 `PureAsgiCorsMiddleware` 包裹（SSE 安全，v1.3.1 hotfix）。CORS 源来自 `CORS_ALLOW_ORIGINS`，缺省 `127.0.0.1`/`localhost`。
+
+路由聚合在 [[src/api/router.py#api_router]]，统一前缀 `/api/v1`，并以 [[src/api/deps.py#verify_desktop_token]] 作为全局依赖（白名单见 [[auth-pairing#本地鉴权与设备配对]]）。
+
+## 生命周期与后台循环
+
+[[src/core/lifecycle.py#lifespan]] 在启动期完成：配置日志、标记服务启动、建引擎与 sessionmaker、构造 [[src/services/gateway_supervisor.py#GatewaySupervisor]]、`TaskRoutingRegistry`、Team Hub 客户端、`RuntimeJobService` 并注册 install/update/rollback/doctor 处理器。
+
+随后：恢复未完成 Job（见 [[runtime-service#Job 恢复]]）、`reconcile_on_boot` + 自启 Profile（见 [[gateway-supervisor#启动时重协调]]）、启动 Job worker 与三个后台 Worker。关闭期取消 worker、`shutdown_all` Gateway、释放引擎。测试可通过 `app.state._test_*` 注入桩件并禁用自启/worker。

@@ -120,6 +120,7 @@ def build_memory_markdown(*, role_name: str, profile_name: str, role_key: str) -
     )
 
 
+# @lat: [[profiles-instances#角色编译]]
 def compile_role_files(
     *,
     profile_name: str,

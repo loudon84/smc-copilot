@@ -16,6 +16,7 @@ def default_runtime_data_dir() -> Path:
     return Path.home() / ".hermes-runtime"
 
 
+# @lat: [[runtime-service#目录布局]]
 @dataclass(frozen=True)
 class RuntimeLayout:
     root: Path

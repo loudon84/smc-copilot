@@ -23,6 +23,7 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+# @lat: [[auth-pairing#设备配对]]
 class PairingService:
     def __init__(self, settings: Settings, session: AsyncSession) -> None:
         self._settings = settings

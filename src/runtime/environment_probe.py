@@ -32,6 +32,7 @@ class ProbeResult:
     errors: list[str] = field(default_factory=list)
 
 
+# @lat: [[runtime-service#环境探测与工具链]]
 class EnvironmentProbe:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings

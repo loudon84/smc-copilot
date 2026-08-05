@@ -14,6 +14,7 @@ from services.task_state_machine import assert_transition_allowed
 from services.task_sync_service import TaskSyncService
 
 
+# @lat: [[approval-workspace#审批运行时]]
 class ApprovalService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self._session = session

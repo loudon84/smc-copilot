@@ -10,6 +10,7 @@ from core.config import get_settings
 from core.lifecycle import lifespan
 
 
+# @lat: [[architecture#应用装配]]
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Hermes Runtime Service",

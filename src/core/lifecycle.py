@@ -51,6 +51,7 @@ def _register_runtime_handlers(job_service: RuntimeJobService, settings, session
         logger.warning("runtime_handlers_partial", reason="some runtime services not yet available")
 
 
+# @lat: [[architecture#生命周期与后台循环]]
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()

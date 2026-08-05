@@ -22,6 +22,7 @@ FORBIDDEN_SHELL_ENTRYPOINTS = frozenset(
 FORBIDDEN_FLAGS = frozenset({"/c", "/C", "-Command", "-c", "-EncodedCommand"})
 
 
+# @lat: [[approval-workspace#可执行策略]]
 class ExecutablePolicy:
     """MCP / process executable policy (PRD §7.10)."""
 

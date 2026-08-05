@@ -18,6 +18,7 @@ def _normalize_policy(policy_json: str | None) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+# @lat: [[approval-workspace#Workspace Guard]]
 class WorkspaceGuard:
     def validate_path(self, workspace_root: str, relative_uri: str, policy_json: str | None = None) -> None:
         self.validate_path_with_policy(workspace_root, relative_uri, policy_json)

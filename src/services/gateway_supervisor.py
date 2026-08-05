@@ -25,6 +25,7 @@ _STARTING_STALE_SEC = 60.0
 _PORT_FREE_WAIT_SEC = 5.0
 
 
+# @lat: [[gateway-supervisor#Gateway 监管]]
 class GatewaySupervisor:
     def __init__(
         self,

@@ -24,6 +24,7 @@ from runtime.environment_probe import ActivationManager, EnvironmentProbe, Versi
 logger = get_logger(__name__)
 
 
+# @lat: [[runtime-service#安装 Job]]
 class InstallationService:
     def __init__(self, settings: Settings, session_maker: async_sessionmaker[AsyncSession]) -> None:
         self._settings = settings

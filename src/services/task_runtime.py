@@ -30,6 +30,7 @@ from services.task_sync_service import TaskSyncService
 from services.workspace_guard import WorkspaceGuard
 
 
+# @lat: [[task-runtime#任务运行时]]
 class TaskRuntimeService:
     def __init__(
         self,

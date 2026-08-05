@@ -19,6 +19,7 @@ DEFAULT_FEATURES: tuple[str, ...] = (
 )
 
 
+# @lat: [[profiles-instances#能力协商]]
 @dataclass
 class CapabilityRegistry:
     """Capability negotiation for Desktop (PRD §5.5 / §7.1)."""

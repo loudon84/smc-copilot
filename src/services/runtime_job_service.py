@@ -56,6 +56,7 @@ def job_to_response(job: RuntimeJob) -> RuntimeJobResponse:
     )
 
 
+# @lat: [[runtime-service#运行时 Job 队列]]
 class RuntimeJobService:
     def __init__(
         self,

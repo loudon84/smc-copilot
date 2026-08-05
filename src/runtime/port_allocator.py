@@ -11,6 +11,7 @@ def is_port_available(host: str, port: int) -> bool:
         return sock.connect_ex((host, port)) != 0
 
 
+# @lat: [[gateway-supervisor#端口分配]]
 def allocate_port(
     settings: Settings,
     requested: int | None,

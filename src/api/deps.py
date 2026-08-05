@@ -109,6 +109,7 @@ def require_loopback(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Pairing only allowed from loopback")
 
 
+# @lat: [[auth-pairing#鉴权依赖]]
 async def verify_desktop_token(
     request: Request,
     settings: Annotated[Settings, Depends(get_app_settings)],
