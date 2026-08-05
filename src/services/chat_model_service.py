@@ -3,12 +3,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from core.config import Settings, get_settings
 from core.constants import GatewayStatus
 from core.errors import ChatApiError, gateway_health_failed, gateway_not_running
 from db.models.chat_settings import ProfileChatSettings
 from db.repositories.chat_settings_repo import ChatSettingsRepository
 from db.repositories.profile_repo import ProfileRepository
-from integrations.hermes.client import HermesGatewayClient, HermesClientError
+from integrations.hermes.client import HermesClientError
+from integrations.hermes.client_factory import HermesGatewayClientFactory
 from schemas.chat import (
     ChatModel,
     ChatModelListResponse,
@@ -36,10 +38,16 @@ class ChatModelService:
         self,
         profile_repo: ProfileRepository,
         settings_repo: ChatSettingsRepository,
+        *,
+        settings: Settings | None = None,
     ) -> None:
         self._profiles = profile_repo
         self._settings = settings_repo
-        self._resolver = ProfileRefResolver(profile_repo)
+        self._app_settings = settings or get_settings()
+        self._resolver = ProfileRefResolver(profile_repo, settings=self._app_settings)
+
+    def _factory(self) -> HermesGatewayClientFactory:
+        return HermesGatewayClientFactory(self._app_settings, self._profiles._session)
 
     async def list_models(self, profile_id: str) -> ChatModelListResponse:
         profile = await self._resolver.require_profile(profile_id)
@@ -50,7 +58,9 @@ class ChatModelService:
                 status="gateway_not_running",
             )
 
-        client = HermesGatewayClient(profile.gateway_port)
+        client = await self._factory().create_for_profile_name(
+            profile.name, profile.gateway_port, require_key=False
+        )
         healthy = await client.health_check()
         if not healthy:
             return ChatModelListResponse(
@@ -156,6 +166,9 @@ class ChatModelService:
         profile = await self._resolver.require_profile(profile_id)
         if profile.status != GatewayStatus.RUNNING.value:
             raise gateway_not_running(profile_id=profile_id, state=profile.status)
-        healthy = await HermesGatewayClient(profile.gateway_port).health_check()
+        client = await self._factory().create_for_profile_name(
+            profile.name, profile.gateway_port, require_key=False
+        )
+        healthy = await client.health_check()
         if not healthy:
             raise gateway_health_failed(profile_id=profile_id)

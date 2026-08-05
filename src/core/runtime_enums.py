@@ -20,6 +20,7 @@ class RuntimeJobType(StrEnum):
     RESTORE = "restore"
     CONFIG_MIGRATE = "config_migrate"
     RUNTIME_CLEANUP = "runtime_cleanup"
+    BOOTSTRAP = "bootstrap"
 
 
 class RuntimeJobStatus(StrEnum):
@@ -52,3 +53,11 @@ class DevicePairingStatus(StrEnum):
 class DeviceStatus(StrEnum):
     ACTIVE = "active"
     REVOKED = "revoked"
+
+
+class BootstrapSessionStatus(StrEnum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    EXPIRED = "expired"
+    INVALIDATED = "invalidated"

@@ -16,7 +16,7 @@ from db.models.local_task import LocalTask
 from db.models.task_related import SyncOutbox, TaskEvent
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.v12_repos import SyncOutboxRepository, TaskEventRepository, TaskRepository
-from integrations.hermes.client import HermesGatewayClient
+from integrations.hermes.client_factory import HermesGatewayClientFactory
 from integrations.team_hub.client import TeamHubClient
 from services.gateway_supervisor import GatewaySupervisor
 from services.task_routing_registry import TaskRoutingRegistry
@@ -165,7 +165,11 @@ class RunEventWorker:
                 profile = await profiles.get_by_id(task.target_profile_id)
                 if not profile:
                     continue
-                hc = HermesGatewayClient(profile.gateway_port)
+                hc = await HermesGatewayClientFactory(self._settings, session).create_for_profile_name(
+                    profile.name,
+                    profile.gateway_port,
+                    require_key=False,
+                )
                 run_id = task.hermes_run_id
                 if not run_id:
                     continue

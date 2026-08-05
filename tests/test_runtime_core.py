@@ -23,13 +23,16 @@ async def test_runtime_status_and_capabilities(app_client) -> None:
     status = await client.get("/api/v1/runtime/status")
     assert status.status_code == 200
     body = status.json()
-    assert body["status"] == "ready"
+    assert body["status"] in ("ready", "degraded", "starting")
     assert "features" in body
-    assert body["apiVersion"] == "1.0"
+    assert "checks" in body
+    assert body["apiVersion"] == "1.1"
+    assert "gateway.auth.internal" in body["features"]
 
     caps = await client.get("/api/v1/runtime/capabilities")
     assert caps.status_code == 200
     assert "runtime.install" in caps.json()["features"]
+    assert caps.json()["apiVersion"] == "1.1"
 
 
 @pytest.mark.asyncio
@@ -90,18 +93,29 @@ def test_windows_programs_root_helpers() -> None:
     import sys
 
     from runtime.windows_program_paths import (
-        DEFAULT_HERMES_INSTALL_DIR,
+        DEFAULT_USER_HERMES_INSTALL_DIR,
+        LEGACY_HERMES_INSTALL_DIR,
+        LEGACY_PROGRAMS_ROOT,
+        allowed_install_roots,
         default_hermes_install_dir,
+        detect_legacy_install_paths,
         is_under_programs_root,
+        user_level_smc_root,
     )
 
-    assert is_under_programs_root(Path(r"D:\Programs\HermesAgent"))
-    assert is_under_programs_root(Path(r"D:\Programs\copilot-serve\.venv"))
+    smc_root = user_level_smc_root()
+    assert is_under_programs_root(smc_root / "HermesAgent")
+    assert is_under_programs_root(smc_root / "CopilotRuntime" / ".venv")
+    assert is_under_programs_root(LEGACY_PROGRAMS_ROOT / "HermesAgent")
+    assert is_under_programs_root(LEGACY_PROGRAMS_ROOT / "copilot-serve" / ".venv")
     assert not is_under_programs_root(Path(r"C:\Temp\HermesAgent"))
+    assert LEGACY_HERMES_INSTALL_DIR == LEGACY_PROGRAMS_ROOT / "HermesAgent"
+    assert isinstance(detect_legacy_install_paths(), dict)
+    assert smc_root in allowed_install_roots()
     if sys.platform == "win32":
-        assert default_hermes_install_dir() == DEFAULT_HERMES_INSTALL_DIR
+        assert default_hermes_install_dir() == DEFAULT_USER_HERMES_INSTALL_DIR
         settings = Settings(hermes_install_dir="")
-        assert settings.resolved_hermes_install_dir() == DEFAULT_HERMES_INSTALL_DIR
+        assert settings.resolved_hermes_install_dir() == DEFAULT_USER_HERMES_INSTALL_DIR
         assert settings.resolved_toolchain_venv_dir() is None
     else:
         assert default_hermes_install_dir() is None

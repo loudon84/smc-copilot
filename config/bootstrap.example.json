@@ -1,0 +1,13 @@
+{
+  "tenantId": "smc",
+  "runtimeChannel": "stable",
+  "runtimeManifestUrl": "https://releases.example.com/runtime/manifest.json",
+  "hermesManifestUrl": "https://releases.example.com/hermes/manifest.json",
+  "requireAuth": true,
+  "allowLegacyToken": false,
+  "defaultInstance": {
+    "name": "default",
+    "gatewayPort": 8642,
+    "autoStart": true
+  }
+}

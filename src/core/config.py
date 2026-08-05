@@ -6,7 +6,12 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from runtime.platform_paths import default_runtime_data_dir
-from runtime.windows_program_paths import default_hermes_install_dir, is_windows, require_under_programs_root
+from runtime.windows_program_paths import (
+    default_copilot_runtime_dir,
+    default_hermes_install_dir,
+    detect_legacy_install_paths,
+    is_windows,
+)
 
 
 def _resolve_project_root() -> Path:
@@ -60,6 +65,17 @@ class Settings(BaseSettings):
 
     hermes_runtime_channel: str = Field(default="stable", alias="HERMES_RUNTIME_CHANNEL")
     hermes_manifest_url: str = Field(default="", alias="HERMES_MANIFEST_URL")
+    runtime_service_manifest_url: str = Field(default="", alias="RUNTIME_SERVICE_MANIFEST_URL")
+    runtime_manifest_public_keys_json: str = Field(
+        default="",
+        alias="RUNTIME_MANIFEST_PUBLIC_KEYS_JSON",
+        description='JSON map of keyId -> base64 Ed25519 public key for manifest verification',
+    )
+    artifact_allowed_domains: str = Field(default="", alias="ARTIFACT_ALLOWED_DOMAINS")
+    artifact_max_manifest_bytes: int = Field(default=1_048_576, alias="ARTIFACT_MAX_MANIFEST_BYTES")
+    artifact_max_artifact_bytes: int = Field(default=500_000_000, alias="ARTIFACT_MAX_ARTIFACT_BYTES")
+    artifact_max_archive_files: int = Field(default=10_000, alias="ARTIFACT_MAX_ARCHIVE_FILES")
+    artifact_max_archive_total_bytes: int = Field(default=1_000_000_000, alias="ARTIFACT_MAX_ARCHIVE_TOTAL_BYTES")
     hermes_install_timeout_seconds: int = Field(default=900, alias="HERMES_INSTALL_TIMEOUT_SECONDS")
     hermes_doctor_timeout_seconds: int = Field(default=300, alias="HERMES_DOCTOR_TIMEOUT_SECONDS")
     hermes_gateway_start_timeout_seconds: int = Field(default=60, alias="HERMES_GATEWAY_START_TIMEOUT_SECONDS")
@@ -173,10 +189,14 @@ class Settings(BaseSettings):
         return default_runtime_data_dir()
 
     def resolved_hermes_install_dir(self) -> Path | None:
-        """Hermes 版本安装根。Windows 默认 D:\\Programs\\HermesAgent；其它平台空则用 Runtime versions/。"""
+        """Hermes 版本安装根。Windows 默认 %LOCALAPPDATA%\\Programs\\SMC\\HermesAgent；其它平台空则用 Runtime versions/。"""
         if self.hermes_install_dir:
             return Path(self.hermes_install_dir)
         return default_hermes_install_dir()
+
+    def resolved_copilot_runtime_dir(self) -> Path | None:
+        """Copilot Runtime 程序根。Windows 默认 %LOCALAPPDATA%\\Programs\\SMC\\CopilotRuntime。"""
+        return default_copilot_runtime_dir() if is_windows() else None
 
     def resolved_toolchain_venv_dir(self) -> Path | None:
         """显式 TOOLCHAIN_VENV_DIR；空则安装时使用 <hermes_install>/<version>/venv。"""
@@ -185,15 +205,11 @@ class Settings(BaseSettings):
         return None
 
     def enforce_windows_program_paths(self) -> None:
-        """Windows 上校验程序安装路径必须在 D:\\Programs 下（服务态 RUNTIME_DATA_DIR 除外）。"""
+        """Windows install-path policy (FR-13): defaults under SMC; legacy D:\\Programs detected only."""
         if not is_windows():
             return
-        install = self.resolved_hermes_install_dir()
-        if install is not None:
-            require_under_programs_root(install, label="HERMES_INSTALL_DIR")
-        venv = self.resolved_toolchain_venv_dir()
-        if venv is not None:
-            require_under_programs_root(venv, label="TOOLCHAIN_VENV_DIR")
+        # No hard root enforcement — enterprise may override via env. Legacy paths are surfaced for migration.
+        detect_legacy_install_paths()
 
     def require_auth(self) -> bool:
         return bool(self.runtime_require_auth or self.copilot_require_token)

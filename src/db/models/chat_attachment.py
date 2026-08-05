@@ -11,6 +11,7 @@ class ChatAttachment(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     profile_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    instance_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     workspace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     original_name: Mapped[str] = mapped_column(String(512), nullable=False)

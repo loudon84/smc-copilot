@@ -6,7 +6,13 @@
 
 [[src/api/deps.py#verify_desktop_token]] 是 `/api/v1` 全局依赖。白名单 `AUTH_WHITELIST` 含 `/api/v1/health`、`/api/v1/pairings/start`、`/docs`、`/openapi.json`、`/redoc`，且所有 `/api/v1/pairings/*` 放行。`require_auth()` 综合 `RUNTIME_REQUIRE_AUTH` 与 `COPILOT_REQUIRE_TOKEN`。
 
+`/api/v1/bootstrap` 与 `/api/v1/bootstrap/jobs/*` 在 `RUNTIME_REQUIRE_AUTH=true` 时仅接受有效 Bootstrap 一次性令牌（`Authorization: Bearer <token>`）；其它路由仍须 Device Token。
+
 Bearer token 经 [[src/services/pairing_service.py#PairingService]] `authenticate_token` 校验（SHA256 比对 active Device），成功则置 `request.state.device_id`。无 Bearer 时回退遗留 header（见下）。[[src/api/deps.py#require_loopback]] 限制配对仅来自 loopback。
+
+## Bootstrap 一次性令牌
+
+安装器以 `RUNTIME_BOOTSTRAP_TOKEN` 启动时注册 `bootstrap_sessions`（令牌仅存 SHA256）。仅 `POST /api/v1/bootstrap` 与 `GET /api/v1/bootstrap/jobs/{id}` 可用该 Bearer；完成后 session 标 `completed` 并失效。配置示例见 `config/bootstrap.example.json`，不得含 Provider API Key。
 
 ## 设备配对
 

@@ -15,3 +15,7 @@ team_v1.8 引入 Workspace Chat：Runtime 解析 Profile、注入默认模型与
 ## Session 访问
 
 Runtime 通过 `sessions` 路由读取 Profile 目录下 Hermes `state.db` 的会话消息（`chat_session_service`），暴露 `sessions.read` 能力（见 [[profiles-instances#能力协商]]）。Runtime 不持有会话存储，仅作受控代理。
+
+## Instance Chat
+
+v1.4 Chat 以 HermesInstance 为一等公民。[[src/services/instance_ref_resolver.py#InstanceRefResolver]] 解析 id/name/profile_name/default；[[src/services/instance_chat_service.py#InstanceChatService]] 经 credential broker 代理 models/config/completions/sessions。旧 `/profiles/{id}/chat/*` 映射到 Instance 并返回 `Deprecation`/`Sunset` 头；chat settings 优先 `instance_id`。

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -8,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_app_settings, get_db_session
 from core.config import Settings
+from core.runtime_errors import RuntimeServiceError
 from schemas.runtime import (
     RuntimeCapabilitiesResponse,
     RuntimeCompatibilityResponse,
@@ -17,6 +20,8 @@ from schemas.runtime import (
     RuntimeJobResponse,
     RuntimeRollbackRequest,
     RuntimeStatusResponse,
+    RuntimeUpdatePlanRequest,
+    RuntimeUpdatePlanResponse,
     RuntimeUpdateRequest,
     RuntimeVersionResponse,
 )
@@ -61,6 +66,32 @@ async def runtime_install(
 ) -> RuntimeJobAcceptedResponse:
     payload = body.model_dump(by_alias=True, exclude_none=True)
     return await jobs.create_job("install", payload)
+
+
+@router.post("/update/plan", response_model=RuntimeUpdatePlanResponse)
+async def runtime_update_plan(
+    body: RuntimeUpdatePlanRequest,
+    request: Request,
+    settings: Settings = Depends(get_app_settings),
+) -> RuntimeUpdatePlanResponse:
+    from services.runtime_update_plan_service import RuntimeUpdatePlanService
+
+    session_maker = request.app.state.session_maker
+    service = RuntimeUpdatePlanService(settings, session_maker)
+    result = await service.create_plan(
+        version=body.version,
+        channel=body.channel,
+        instance_ids=body.instance_ids,
+        strategy=body.strategy,
+    )
+    return RuntimeUpdatePlanResponse(
+        planId=result.get("planId"),
+        fromVersion=result.get("fromVersion"),
+        toVersion=result["toVersion"],
+        affectedInstances=result.get("affectedInstances") or [],
+        compatibility=result["compatibility"],
+        warnings=result.get("warnings") or [],
+    )
 
 
 @router.post("/update", response_model=RuntimeJobAcceptedResponse)
@@ -186,22 +217,17 @@ async def delete_runtime_version(
     version: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    from core.runtime_enums import RuntimeVersionStatus
-    from core.runtime_errors import RuntimeServiceError
     from db.repositories.runtime_repo import RuntimeVersionRepository
-    from sqlalchemy import select
-    from db.models.runtime import HermesInstance
+    from services.runtime_version_pin_service import RuntimeVersionPinService
 
     repo = RuntimeVersionRepository(session)
     row = await repo.get_by_version(version)
     if row is None:
         raise RuntimeServiceError(f"Version not found: {version}", code="not_found")
-    if row.status == RuntimeVersionStatus.ACTIVE.value:
-        raise RuntimeServiceError("Cannot delete active version", code="invalid_state")
-    pinned = await session.execute(
-        select(HermesInstance).where(HermesInstance.runtime_version_id == row.id).limit(1)
-    )
-    if pinned.scalar_one_or_none() is not None:
-        raise RuntimeServiceError("Version is pinned by an instance", code="invalid_state")
+    await RuntimeVersionPinService(session).assert_deletable(row)
+    path = Path(row.install_path)
+    if path.exists():
+        shutil.rmtree(path, ignore_errors=True)
     await repo.delete(row)
+    await session.commit()
     return {"status": "deleted", "version": version}

@@ -22,6 +22,8 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "invalid_state_transition": 409,
     "team_hub_error": 502,
     "runtime_lock_conflict": 409,
+    "runtime_version_pinned": 409,
+    "cancelled": 409,
     "unsupported_platform": 400,
     "unsupported_architecture": 400,
     "insufficient_disk_space": 422,

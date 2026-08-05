@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from core.config import Settings, get_settings
 from core.errors import ChatApiError
 from db.repositories.chat_attachment_repo import ChatAttachmentRepository
 from db.repositories.chat_settings_repo import ChatSettingsRepository
@@ -16,6 +17,7 @@ from db.repositories.v12_repos import WorkspaceRepository
 from schemas.chat import WorkspaceChatSendPayload
 from services.attachment_service import AttachmentService
 from services.chat_model_service import ChatModelService
+from services.gateway_credential_service import GatewayCredentialService
 from services.profile_ref_resolver import ProfileRefResolver
 from services.sse_helpers import format_sse
 
@@ -58,12 +60,18 @@ class ChatStreamService:
         settings_repo: ChatSettingsRepository,
         attachment_repo: ChatAttachmentRepository,
         workspace_repo: WorkspaceRepository,
+        *,
+        settings: Settings | None = None,
     ) -> None:
-        self._model_service = ChatModelService(profile_repo, settings_repo)
+        self._profiles = profile_repo
+        self._app_settings = settings or get_settings()
+        self._model_service = ChatModelService(
+            profile_repo, settings_repo, settings=self._app_settings
+        )
         self._attachment_service = AttachmentService(
             profile_repo, attachment_repo, workspace_repo
         )
-        self._resolver = ProfileRefResolver(profile_repo)
+        self._resolver = ProfileRefResolver(profile_repo, settings=self._app_settings)
 
     async def stream_chat(
         self,
@@ -113,6 +121,11 @@ class ChatStreamService:
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream",
             }
+            api_key = await GatewayCredentialService(
+                self._app_settings, self._profiles._session
+            ).optional_key_for_profile(profile.name)
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
             if body.session_id:
                 headers["x-hermes-session-id"] = body.session_id
 

@@ -1,38 +1,61 @@
-# Hermes Runtime precheck (Windows)
-# 约定：源码与 venv 须在 D:\Programs 下；服务态仍用 %LOCALAPPDATA%\HermesRuntime（不检查）。
+# Hermes Runtime precheck (Windows) — FR-13 install-path policy
+# Defaults: user-level %LOCALAPPDATA%\Programs\SMC\{CopilotRuntime,HermesAgent}
+# Service data stays at %LOCALAPPDATA%\HermesRuntime (not validated here).
+# Node/Git are optional (warn-only); Python optional when using bundled runtime.
 param(
     [string]$RepoRoot = "",
     [string]$PythonPath = "",
     [string]$NodePath = "",
     [string]$GitPath = "",
     [string]$VenvDir = "",
-    [string]$HermesInstallDir = "D:\Programs\HermesAgent",
+    [string]$HermesInstallDir = "",
     [int]$Port = 8765,
-    [switch]$AllowExistingRuntime
+    [switch]$AllowExistingRuntime,
+    [switch]$RequirePython,
+    [switch]$BundledRuntime
 )
 
 $ErrorActionPreference = "Stop"
-$ProgramsRoot = "D:\Programs"
-Write-Host "== runtime-precheck-windows =="
-Write-Host "ProgramsRoot: $ProgramsRoot (程序/venv 必须在此目录下)"
-Write-Host "Runtime service data: %LOCALAPPDATA%\HermesRuntime (服务态，保持不变)"
 
-function Test-UnderPrograms([string]$Path, [string]$Label) {
-    if (-not $Path) { return $true }
-    $full = [System.IO.Path]::GetFullPath($Path)
-    $root = [System.IO.Path]::GetFullPath($ProgramsRoot)
-    if ($full.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        Write-Host "OK $Label under Programs: $full"
-        return $true
-    }
-    Write-Host "FAIL $Label 必须位于 $ProgramsRoot 下，当前: $full"
-    return $false
+$LocalAppData = $env:LOCALAPPDATA
+if (-not $LocalAppData) {
+    $LocalAppData = Join-Path $env:USERPROFILE "AppData\Local"
+}
+$UserSmcRoot = Join-Path $LocalAppData "Programs\SMC"
+$DefaultCopilotRuntime = Join-Path $UserSmcRoot "CopilotRuntime"
+$DefaultHermesInstall = Join-Path $UserSmcRoot "HermesAgent"
+$LegacyProgramsRoot = "D:\Programs"
+
+if (-not $HermesInstallDir) {
+    $HermesInstallDir = $DefaultHermesInstall
 }
 
-function Test-Exe([string]$PathOrName, [string]$Label) {
+Write-Host "== runtime-precheck-windows =="
+Write-Host "User SMC root: $UserSmcRoot"
+Write-Host "Default CopilotRuntime: $DefaultCopilotRuntime"
+Write-Host "Default HermesAgent: $DefaultHermesInstall"
+Write-Host "Runtime service data: $LocalAppData\HermesRuntime (unchanged)"
+Write-Host "Legacy detection: $LegacyProgramsRoot\copilot-serve, $LegacyProgramsRoot\HermesAgent (migration only)"
+
+function Test-LegacyPaths {
+    $legacyCopilot = Join-Path $LegacyProgramsRoot "copilot-serve"
+    $legacyHermes = Join-Path $LegacyProgramsRoot "HermesAgent"
+    if (Test-Path $legacyCopilot) {
+        Write-Host "WARN legacy copilot-serve detected: $legacyCopilot (migrate manually; not auto-deleted)"
+    }
+    if (Test-Path $legacyHermes) {
+        Write-Host "WARN legacy HermesAgent detected: $legacyHermes (migrate manually; not auto-deleted)"
+    }
+}
+
+function Test-Exe([string]$PathOrName, [string]$Label, [switch]$Optional) {
     if ($PathOrName) {
         if (Test-Path $PathOrName) {
             Write-Host "OK $Label : $PathOrName"
+            return $true
+        }
+        if ($Optional) {
+            Write-Host "WARN optional $Label not found: $PathOrName"
             return $true
         }
         Write-Host "MISSING $Label : $PathOrName"
@@ -43,11 +66,15 @@ function Test-Exe([string]$PathOrName, [string]$Label) {
         Write-Host "OK $Label : $($cmd.Source)"
         return $true
     }
+    if ($Optional) {
+        Write-Host "WARN optional $Label not on PATH"
+        return $true
+    }
     Write-Host "MISSING $Label (not on PATH)"
     return $false
 }
 
-function Test-PythonVersion([string]$PythonPath) {
+function Test-PythonVersion([string]$PythonPath, [switch]$Optional) {
     $exe = if ($PythonPath) { $PythonPath } else { "python" }
     try {
         $out = & $exe --version 2>&1 | Out-String
@@ -55,25 +82,35 @@ function Test-PythonVersion([string]$PythonPath) {
             Write-Host ("OK Python version: " + $out.Trim())
             return $true
         }
+        if ($Optional) {
+            Write-Host "WARN Python 3.12 not found (bundled runtime may supply Python): $out"
+            return $true
+        }
         Write-Host "FAIL Python 3.12 required, got: $out"
         return $false
     } catch {
+        if ($Optional) {
+            Write-Host "WARN cannot run Python (bundled runtime may supply Python): $_"
+            return $true
+        }
         Write-Host "FAIL cannot run Python: $_"
         return $false
     }
 }
 
+Test-LegacyPaths
+
 $ok = $true
-$ok = (Test-Exe $PythonPath "python") -and $ok
-$ok = (Test-PythonVersion $PythonPath) -and $ok
-$ok = (Test-Exe $NodePath "node") -and $ok
-$ok = (Test-Exe $GitPath "git") -and $ok
+$pythonOptional = (-not $RequirePython) -or $BundledRuntime
+$ok = (Test-Exe $PythonPath "python" -Optional:$pythonOptional) -and $ok
+$ok = (Test-PythonVersion $PythonPath -Optional:$pythonOptional) -and $ok
+# Node/Git: optional tool runtime only (FR-13 / FR-14)
+$null = Test-Exe $NodePath "node" -Optional
+$null = Test-Exe $GitPath "git" -Optional
 
 if ($RepoRoot) {
-    $ok = (Test-UnderPrograms $RepoRoot "RepoRoot") -and $ok
+    Write-Host "RepoRoot: $RepoRoot (no D:\Programs requirement)"
 }
-$ok = (Test-UnderPrograms $VenvDir "VenvDir") -and $ok
-$ok = (Test-UnderPrograms $HermesInstallDir "HermesInstallDir") -and $ok
 
 $portBusy = $false
 try {
@@ -104,9 +141,9 @@ if ($portBusy) {
 if ($VenvDir) {
     Write-Host "VenvDir: $VenvDir"
 } else {
-    Write-Host "VenvDir: (empty → <HermesInstallDir>\<version>\venv)"
+    Write-Host "VenvDir: (empty -> <HermesInstallDir>\<version>\venv)"
 }
-if ($HermesInstallDir) { Write-Host "HermesInstallDir: $HermesInstallDir" }
+Write-Host "HermesInstallDir: $HermesInstallDir"
 if ($PythonPath) { Write-Host "PythonPath: $PythonPath" }
 
 if (-not $ok) { exit 1 }

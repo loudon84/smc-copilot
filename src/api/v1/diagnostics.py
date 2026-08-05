@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_app_settings, get_db_session
@@ -10,7 +10,6 @@ from runtime.platform_paths import RuntimeLayout
 from schemas.runtime import BackupCreateRequest
 from services.backup_service import BackupService
 from services.runtime_job_service import RuntimeJobService
-from fastapi import Request
 
 router = APIRouter(tags=["diagnostics-backup"])
 
@@ -78,13 +77,24 @@ async def diagnostics_logs(settings: Settings = Depends(get_app_settings), tail:
     return {"lines": lines[-tail:], "truncated": truncated}
 
 
+@router.post("/diagnostics/bundle")
+async def create_diagnostic_bundle(
+    request: Request,
+    settings: Settings = Depends(get_app_settings),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    from services.diagnostic_bundle_service import DiagnosticBundleService
+
+    return await DiagnosticBundleService(settings, session, app_state=request.app.state).create_bundle()
+
+
 @router.post("/runtime/backups")
 async def create_backup(
     body: BackupCreateRequest,
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    return BackupService(settings, session).create(
+    return await BackupService(settings, session).create_async(
         include_sessions=body.include_sessions,
         include_skills=body.include_skills,
         include_memories=body.include_memories,
@@ -105,7 +115,7 @@ async def restore_backup(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    return BackupService(settings, session).restore(backup_id)
+    return await BackupService(settings, session).restore(backup_id)
 
 
 @router.delete("/runtime/backups/{backup_id}")

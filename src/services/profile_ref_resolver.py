@@ -2,17 +2,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core.config import Settings, get_settings
 from core.constants import GatewayStatus
-from core.errors import ChatApiError, profile_not_deployed, profile_not_found
+from core.errors import profile_not_deployed, profile_not_found
 from db.models.profile import Profile
 from db.repositories.profile_repo import ProfileRepository
-from integrations.hermes.client import HermesGatewayClient
+from integrations.hermes.client_factory import HermesGatewayClientFactory
 from schemas.chat import ResolvedProfile
 
 
 class ProfileRefResolver:
-    def __init__(self, repo: ProfileRepository) -> None:
+    def __init__(
+        self,
+        repo: ProfileRepository,
+        *,
+        settings: Settings | None = None,
+    ) -> None:
         self._repo = repo
+        self._settings = settings or get_settings()
 
     async def resolve(self, ref: str) -> ResolvedProfile:
         profile = await self._resolve_profile(ref)
@@ -25,7 +32,12 @@ class ProfileRefResolver:
         elif status == GatewayStatus.STARTING.value:
             status = "starting"
         elif status == GatewayStatus.RUNNING.value:
-            healthy = await HermesGatewayClient(profile.gateway_port).health_check()
+            client = await HermesGatewayClientFactory(self._settings, self._repo._session).create_for_profile_name(
+                profile.name,
+                profile.gateway_port,
+                require_key=False,
+            )
+            healthy = await client.health_check()
         elif status == GatewayStatus.STOPPED.value:
             status = "stopped"
 

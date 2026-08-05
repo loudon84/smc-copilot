@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -47,6 +48,11 @@ def _register_runtime_handlers(job_service: RuntimeJobService, settings, session
         job_service.register_handler("update", update.run_job)
         job_service.register_handler("rollback", rollback.run_job)
         job_service.register_handler("doctor", doctor.run_job)
+
+        from services.bootstrap_service import BootstrapService
+
+        bootstrap = BootstrapService(settings, session_maker=session_maker)
+        job_service.register_handler("bootstrap", bootstrap.run_job)
     except ImportError:
         logger.warning("runtime_handlers_partial", reason="some runtime services not yet available")
 
@@ -86,6 +92,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.team_hub = hub
     app.state.task_routing_registry = registry
     app.state.runtime_job_service = job_service
+
+    bootstrap_token = (os.environ.get("RUNTIME_BOOTSTRAP_TOKEN") or "").strip()
+    if bootstrap_token:
+        from services.bootstrap_service import BootstrapService
+
+        async with session_maker() as session:
+            await BootstrapService(settings, session).register_token(bootstrap_token)
+            await session.commit()
+        logger.info("bootstrap_token_registered")
 
     recovered = await job_service.recover_incomplete_jobs()
     if recovered:

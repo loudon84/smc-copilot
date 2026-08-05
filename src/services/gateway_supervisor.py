@@ -18,6 +18,7 @@ from runtime.gateway_process import GatewayProcessManager, is_pid_alive, termina
 from runtime.port_allocator import is_port_available
 from schemas.profile import ProfileStatusResponse
 from schemas.runtime import InstanceResponse
+from services.gateway_credential_service import GatewayCredentialService
 from services.instance_gateway_service import InstanceGatewayService
 from services.profile_service import ProfileService
 
@@ -131,12 +132,19 @@ class GatewaySupervisor:
             await session.commit()
             await session.close()
 
+    async def _gateway_client(self, session: AsyncSession, profile: Profile) -> HermesGatewayClient:
+        key = await GatewayCredentialService(self._settings, session).optional_key_for_profile(
+            profile.name
+        )
+        return HermesGatewayClient(profile.gateway_port, api_key=key)
+
     async def _compute_status(
         self, session: AsyncSession, svc: ProfileService, profile: Profile
     ) -> ProfileStatusResponse:
         handle = self._process_manager.get_handle(profile.id)
         alive = handle.is_alive() if handle else False
         pid = handle.pid if handle and alive else profile.gateway_pid
+        client = await self._gateway_client(session, profile)
 
         healthy = False
         message: str | None = None
@@ -144,7 +152,7 @@ class GatewaySupervisor:
 
         if profile.status == GatewayStatus.RUNNING.value and not alive:
             if pid and is_pid_alive(pid):
-                healthy = await HermesGatewayClient(profile.gateway_port).health_check()
+                healthy = await client.health_check()
                 health_checked = True
                 if not healthy:
                     profile = await svc.set_status(profile, GatewayStatus.ERROR)
@@ -160,7 +168,7 @@ class GatewaySupervisor:
             message = None
 
         if profile.status == GatewayStatus.RUNNING.value and not health_checked:
-            healthy = await HermesGatewayClient(profile.gateway_port).health_check()
+            healthy = await client.health_check()
             if not healthy and not alive:
                 profile = await svc.set_status(profile, GatewayStatus.ERROR)
                 message = "Gateway health check failed"
@@ -248,7 +256,10 @@ class GatewaySupervisor:
                     pid=handle.pid if handle else None,
                 )
 
-                healthy = await self._wait_for_health(profile.gateway_port)
+                key = await GatewayCredentialService(self._settings, session).optional_key_for_profile(
+                    profile.name
+                )
+                healthy = await self._wait_for_health(profile.gateway_port, api_key=key)
                 if not healthy:
                     profile = await svc.set_status(profile, GatewayStatus.ERROR)
                     await self._append_profile_audit(
@@ -283,8 +294,8 @@ class GatewaySupervisor:
         finally:
             await session.close()
 
-    async def _wait_for_health(self, port: int) -> bool:
-        client = HermesGatewayClient(port)
+    async def _wait_for_health(self, port: int, *, api_key: str | None = None) -> bool:
+        client = HermesGatewayClient(port, api_key=api_key)
         deadline = time.monotonic() + self._settings.gateway_health_timeout_sec
         while time.monotonic() < deadline:
             if await client.health_check():
@@ -398,7 +409,7 @@ class GatewaySupervisor:
                     continue
 
                 if pid and is_pid_alive(pid):
-                    healthy = await HermesGatewayClient(profile.gateway_port).health_check()
+                    healthy = await (await self._gateway_client(session, profile)).health_check()
                     if healthy:
                         await self._append_profile_audit(
                             session,

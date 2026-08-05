@@ -50,7 +50,23 @@ if ($RequireGateway) {
     if ($gwHealth.status -ne "ok") {
         throw "Gateway /health did not return status=ok"
     }
-    $null = Invoke-RestMethod -Uri "http://127.0.0.1:$gwPort/v1/models" -Method GET
+    $modelsOk = $false
+    if ($env:HERMES_API_SERVER_KEY) {
+        $modelsHeaders = @{ Authorization = "Bearer $($env:HERMES_API_SERVER_KEY)" }
+        $null = Invoke-RestMethod -Uri "http://127.0.0.1:$gwPort/v1/models" -Method GET -Headers $modelsHeaders
+        $modelsOk = $true
+    } else {
+        try {
+            $null = Invoke-RestMethod -Uri "$BaseUrl/api/v1/instances/$($default.id)/chat/models" -Method GET
+            $modelsOk = $true
+            Write-Host "Gateway models via Runtime Instance Chat OK"
+        } catch {
+            Write-Host "Instance Chat models not available; trying direct /v1/models"
+            $null = Invoke-RestMethod -Uri "http://127.0.0.1:$gwPort/v1/models" -Method GET
+            $modelsOk = $true
+        }
+    }
+    if (-not $modelsOk) { throw "Gateway /v1/models probe failed" }
     Write-Host "Gateway /health and /v1/models OK"
 }
 

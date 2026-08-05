@@ -35,15 +35,21 @@ async def patch_configuration(
     supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
 ) -> dict:
     svc = ConfigurationService(settings, session)
-    result = await svc.patch(instance_id, body.values, group=body.group)
-    if result.get("restartRequired"):
-        try:
-            await supervisor.restart_instance(instance_id)
-            result["restarted"] = True
-        except Exception as exc:
-            result["restarted"] = False
-            result["restartError"] = str(exc)
+    result = await svc.patch(instance_id, body.values, group=body.group, apply=body.apply)
+    if body.apply:
+        applied = await svc.apply(instance_id, supervisor=supervisor)
+        result = {**result, **applied}
     return result
+
+
+@router.post("/instances/{instance_id}/configuration/apply")
+async def apply_configuration(
+    instance_id: str,
+    settings: Settings = Depends(get_app_settings),
+    session: AsyncSession = Depends(get_db_session),
+    supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
+) -> dict:
+    return await ConfigurationService(settings, session).apply(instance_id, supervisor=supervisor)
 
 
 @router.post("/instances/{instance_id}/configuration/validate")
@@ -70,7 +76,7 @@ async def list_mcp_servers(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[McpServerResponse]:
-    return McpService(settings, session).list(instance_id)
+    return await McpService(settings, session).list(instance_id)
 
 
 @router.post("/instances/{instance_id}/mcp/servers", response_model=McpServerResponse)
@@ -80,7 +86,7 @@ async def create_mcp_server(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> McpServerResponse:
-    return McpService(settings, session).create(instance_id, body)
+    return await McpService(settings, session).create(instance_id, body)
 
 
 @router.get("/instances/{instance_id}/mcp/servers/{server_id}", response_model=McpServerResponse)
@@ -90,7 +96,7 @@ async def get_mcp_server(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> McpServerResponse:
-    return McpService(settings, session).get(instance_id, server_id)
+    return await McpService(settings, session).get(instance_id, server_id)
 
 
 @router.put("/instances/{instance_id}/mcp/servers/{server_id}", response_model=McpServerResponse)
@@ -101,7 +107,7 @@ async def put_mcp_server(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> McpServerResponse:
-    return McpService(settings, session).update(instance_id, server_id, body)
+    return await McpService(settings, session).update(instance_id, server_id, body)
 
 
 @router.delete("/instances/{instance_id}/mcp/servers/{server_id}")
@@ -111,7 +117,7 @@ async def delete_mcp_server(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    McpService(settings, session).delete(instance_id, server_id)
+    await McpService(settings, session).delete(instance_id, server_id)
     return {"status": "deleted"}
 
 
@@ -132,7 +138,7 @@ async def enable_mcp_server(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> McpServerResponse:
-    return McpService(settings, session).set_enabled(instance_id, server_id, True)
+    return await McpService(settings, session).set_enabled(instance_id, server_id, True)
 
 
 @router.post("/instances/{instance_id}/mcp/servers/{server_id}/disable", response_model=McpServerResponse)
@@ -142,4 +148,4 @@ async def disable_mcp_server(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> McpServerResponse:
-    return McpService(settings, session).set_enabled(instance_id, server_id, False)
+    return await McpService(settings, session).set_enabled(instance_id, server_id, False)

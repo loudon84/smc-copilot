@@ -10,6 +10,7 @@ class ProfileChatSettings(Base):
     __tablename__ = "profile_chat_settings"
 
     profile_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    instance_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     provider: Mapped[str] = mapped_column(String(64), nullable=False, default="auto")
     model_id: Mapped[str] = mapped_column(String(256), nullable=False)
     model_label: Mapped[str | None] = mapped_column(String(256), nullable=True)

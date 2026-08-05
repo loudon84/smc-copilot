@@ -11,7 +11,7 @@ import psutil
 from core.config import Settings
 from core.logging import get_logger
 from integrations.hermes.cli_adapter import HermesCliAdapter
-from runtime.gateway_environment import build_gateway_environment, redact_env_for_log
+from runtime.gateway_environment import build_gateway_environment
 from runtime.hermes_profile_paths import profile_home
 
 logger = get_logger(__name__)
@@ -168,7 +168,7 @@ class GatewayProcessManager:
             cmd=cmd,
             port=port,
             cwd=str(cwd),
-            env=redact_env_for_log(child_env) if child_env else None,
+            envKeys=sorted(child_env.keys()) if child_env else None,
         )
         process = await self._create_gateway_process(cmd, log_file, cwd=cwd, env=child_env)
         handle = GatewayProcessHandle(

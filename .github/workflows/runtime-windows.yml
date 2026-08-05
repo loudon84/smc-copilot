@@ -1,0 +1,93 @@
+# Runtime Windows CI (FR-25)
+#
+# Channels: dev → beta → stable (stable promotes verified artifacts; does not rebuild).
+# Authenticode signing requires repository secrets (not available in all environments).
+
+name: runtime-windows
+
+on:
+  push:
+    branches: [main, "feature/runtime-v1.4-*"]
+    tags: ["runtime-v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel (dev|beta|stable)"
+        required: false
+        default: "dev"
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Pytest
+        run: pytest -q --tb=short
+
+  build-bundle:
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          python -m pip install -U pip build
+          python -m build --wheel
+      - name: Build runtime bundle
+        run: powershell -ExecutionPolicy Bypass -File build/runtime-bundle.ps1
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-bundle-win-x64
+          path: dist/runtime-bundle-win-x64.zip
+
+  # MSI / Setup.exe / Authenticode — gated on secrets
+  package-sign:
+    runs-on: windows-latest
+    needs: build-bundle
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/runtime-v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-bundle-win-x64
+          path: dist
+      - name: Build MSI (requires WiX)
+        continue-on-error: true
+        run: |
+          if (Get-Command wix -ErrorAction SilentlyContinue) {
+            wix build installer/wix/Package.wxs -o dist/SMC-Copilot-Runtime-x64.msi
+          } else {
+            Write-Host "WiX not installed — skipping MSI (scaffold only)"
+          }
+      - name: Authenticode sign
+        # Requires secrets: CODE_SIGNING_CERT_PFX (base64), CODE_SIGNING_CERT_PASSWORD
+        if: ${{ secrets.CODE_SIGNING_CERT_PFX != '' }}
+        env:
+          CODE_SIGNING_CERT_PFX: ${{ secrets.CODE_SIGNING_CERT_PFX }}
+          CODE_SIGNING_CERT_PASSWORD: ${{ secrets.CODE_SIGNING_CERT_PASSWORD }}
+        run: |
+          $bytes = [Convert]::FromBase64String($env:CODE_SIGNING_CERT_PFX)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", $bytes)
+          Get-ChildItem dist -Include *.msi,*.exe -Recurse | ForEach-Object {
+            signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGNING_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+          }
+      - name: Publish manifest placeholder
+        run: |
+          $channel = "${{ github.event.inputs.channel || 'dev' }}"
+          Write-Host "Would publish signed artifacts to channel=$channel"

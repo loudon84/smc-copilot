@@ -16,7 +16,9 @@ Instance API **不得**调用 `start_profile`；走 `start_instance` / `stop_ins
 
 ## Gateway 环境注入
 
-[[src/runtime/gateway_environment.py#build_gateway_environment]] 复制 `os.environ` 后注入 `HERMES_HOME`、`API_SERVER_ENABLED=true`、`API_SERVER_HOST`、`API_SERVER_PORT`、`API_SERVER_KEY` 及 Profile 作用域 provider keys。禁止 Secret 覆盖 `PATH` 等保留名；禁止空 `API_SERVER_KEY` 注入；日志经 `redact_env_for_log` 脱敏。见 [[runtime-service#配置与 Secret]]。
+[[src/runtime/gateway_environment.py#build_gateway_environment]] 构建 Gateway 子进程环境：仅白名单继承主机变量，再注入 `HERMES_HOME`、`API_SERVER_*` 与 Profile 作用域密钥。
+
+白名单：`PATH`/`PATHEXT`/`SYSTEMROOT`/`WINDIR`/`COMSPEC`/`USERPROFILE`/`LOCALAPPDATA`/`APPDATA`/`TEMP`/`TMP`/`LANG`。父进程 `*_API_KEY`/`API_SERVER_KEY` 等敏感变量不得继承。禁止 Secret 覆盖 `PATH` 等保留名；禁止空 `API_SERVER_KEY`；日志仅记录 `envKeys`（不记录值）。见 [[runtime-service#配置与 Secret]]。
 
 ## 端口分配
 

@@ -13,9 +13,11 @@ from api.v1 import (
     gateways,
     health,
     hermes_runs,
+    instance_chat,
     instances,
     pairings,
     profiles,
+    bootstrap,
     role_library,
     runtime,
     secrets,
@@ -33,11 +35,13 @@ api_router.include_router(health.router)
 api_router.include_router(system.router)
 api_router.include_router(service.router)
 api_router.include_router(runtime.router)
+api_router.include_router(instance_chat.router)
 api_router.include_router(instances.router)
 api_router.include_router(sessions.router)
 api_router.include_router(configurations.router)
 api_router.include_router(secrets.router)
 api_router.include_router(pairings.router)
+api_router.include_router(bootstrap.router)
 api_router.include_router(diagnostics.router)
 api_router.include_router(chat.router)
 api_router.include_router(attachments.router)

@@ -10,7 +10,6 @@ from pathlib import Path
 from core.config import Settings
 from core.runtime_errors import RuntimeServiceError
 from runtime.platform_paths import RuntimeLayout
-from runtime.windows_program_paths import is_windows, require_under_programs_root
 
 
 @dataclass
@@ -142,11 +141,6 @@ class EnvironmentProbe:
                 "Python runtime not found; set TOOLCHAIN_PYTHON_PATH or install Python 3.12+",
                 code="python_runtime_failed",
             )
-        if is_windows():
-            if result.toolchain.hermes_install_dir is not None:
-                require_under_programs_root(result.toolchain.hermes_install_dir, label="HERMES_INSTALL_DIR")
-            if result.toolchain.venv_dir is not None:
-                require_under_programs_root(result.toolchain.venv_dir, label="TOOLCHAIN_VENV_DIR")
         return result
 
 

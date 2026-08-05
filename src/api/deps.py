@@ -25,6 +25,12 @@ AUTH_WHITELIST = {
     "/redoc",
 }
 
+BOOTSTRAP_PREFIX = "/api/v1/bootstrap"
+
+
+def _is_bootstrap_path(path: str) -> bool:
+    return path == BOOTSTRAP_PREFIX or path.startswith(f"{BOOTSTRAP_PREFIX}/jobs/")
+
 
 def get_app_settings() -> Settings:
     return get_settings()
@@ -80,8 +86,11 @@ def get_role_library_service(
     )
 
 
-def get_hermes_service() -> HermesGatewayService:
-    return HermesGatewayService()
+def get_hermes_service(
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+) -> HermesGatewayService:
+    return HermesGatewayService(session, settings)
 
 
 def get_task_runtime(
@@ -119,12 +128,32 @@ async def verify_desktop_token(
     path = request.url.path
     if path in AUTH_WHITELIST or path.startswith("/api/v1/pairings/"):
         return
-    if not settings.require_auth():
-        return
 
     bearer: str | None = None
     if authorization and authorization.lower().startswith("bearer "):
         bearer = authorization[7:].strip()
+
+    if _is_bootstrap_path(path):
+        if not bearer:
+            if settings.require_auth():
+                raise HTTPException(status_code=401, detail="Bootstrap token required")
+            return
+        session_maker = request.app.state.session_maker
+        session = session_maker()
+        try:
+            from services.bootstrap_service import BootstrapService
+
+            boot = await BootstrapService(settings, session).authenticate_token(bearer)
+            await session.commit()
+            if boot is not None:
+                request.state.bootstrap_session_id = boot.id
+                return
+        finally:
+            await session.close()
+        raise HTTPException(status_code=401, detail="Invalid or expired bootstrap token")
+
+    if not settings.require_auth():
+        return
 
     # Prefer device token (Bearer)
     if bearer:

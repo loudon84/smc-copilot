@@ -11,12 +11,15 @@ import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
+from core.logging import get_logger
 from core.runtime_errors import RuntimeServiceError
 from db.models.runtime import ConfigSnapshot, HermesInstance
 from integrations.hermes.cli_adapter import HermesCliAdapter
 from runtime.checksum_verifier import sha256_file
 from runtime.hermes_profile_paths import profile_config_path, profile_home
 from runtime.platform_paths import RuntimeLayout
+
+logger = get_logger(__name__)
 
 
 class HermesConfigAdapter:
@@ -108,9 +111,17 @@ class ConfigurationService:
         await self._session.flush()
         return row
 
-    async def patch(self, instance_id: str, values: dict[str, Any], *, group: str | None = None) -> dict[str, Any]:
+    async def patch(
+        self,
+        instance_id: str,
+        values: dict[str, Any],
+        *,
+        group: str | None = None,
+        apply: bool = False,
+    ) -> dict[str, Any]:
+        _ = apply  # orchestrated by API when body.apply is true
         inst = await self._instance(instance_id)
-        await self.create_snapshot(instance_id, reason=f"patch:{group or 'all'}")
+        snap = await self.create_snapshot(instance_id, reason=f"patch:{group or 'all'}")
         current = self._adapter.read(inst.profile_name)
         if group:
             section = current.get(group)
@@ -141,6 +152,42 @@ class ConfigurationService:
         return {
             "configuration": current,
             "restartRequired": (group in self.RESTART_GROUPS) if group else False,
+            "applied": False,
+            "snapshotId": snap.id,
+        }
+
+    async def apply(self, instance_id: str, *, supervisor: Any) -> dict[str, Any]:
+        """Restart gateway to apply pending configuration; rollback snapshot on failure (FR-05)."""
+        inst = await self._instance(instance_id)
+
+        async def _rollback_and_reraise(reason: str, *, cause: Exception | None = None) -> None:
+            await self.restore_latest_snapshot(instance_id)
+            try:
+                await supervisor.restart_instance(instance_id)
+            except Exception:
+                logger.exception(
+                    "configuration_apply_rollback_restart_failed",
+                    instance_id=instance_id,
+                )
+            msg = f"Configuration apply failed: {reason}"
+            if cause is not None:
+                raise RuntimeServiceError(msg, code="configuration_apply_failed", details={"reason": reason}) from cause
+            raise RuntimeServiceError(msg, code="configuration_apply_failed", details={"reason": reason})
+
+        try:
+            result = await supervisor.restart_instance(instance_id)
+        except Exception as exc:
+            await _rollback_and_reraise(str(exc), cause=exc)
+
+        healthy = bool(getattr(result, "healthy", False))
+        if not healthy:
+            await _rollback_and_reraise("gateway unhealthy after restart")
+
+        return {
+            "configuration": self._adapter.read(inst.profile_name),
+            "restartRequired": False,
+            "applied": True,
+            "snapshotId": None,
         }
 
     async def _native_check(self, profile_name: str) -> dict[str, Any]:

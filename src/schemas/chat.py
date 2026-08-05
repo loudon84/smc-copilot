@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResolvedProfile(BaseModel):
@@ -11,6 +11,18 @@ class ResolvedProfile(BaseModel):
     display_name: str | None = None
     gateway_port: int | None = None
     base_url: str | None = None
+    status: str
+    healthy: bool
+
+
+class ResolvedInstance(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    instance_id: str = Field(alias="instanceId")
+    name: str
+    profile_name: str = Field(alias="profileName")
+    runtime_version: str | None = Field(default=None, alias="runtimeVersion")
+    gateway_port: int = Field(alias="gatewayPort")
     status: str
     healthy: bool
 
@@ -25,7 +37,8 @@ class ChatModel(BaseModel):
 
 
 class ChatModelListResponse(BaseModel):
-    profile_id: str
+    profile_id: str | None = None
+    instance_id: str | None = None
     models: list[ChatModel]
     status: str | None = None
     raw: dict[str, Any] | None = None
@@ -40,7 +53,25 @@ class ProfileChatModelConfig(BaseModel):
     updated_at: str
 
 
+class InstanceChatModelConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    instance_id: str = Field(alias="instanceId")
+    provider: str
+    model_id: str
+    model_label: str | None = None
+    base_url: str | None = None
+    updated_at: str
+
+
 class SetProfileChatModelConfigPayload(BaseModel):
+    provider: str = "auto"
+    model_id: str
+    model_label: str | None = None
+    base_url: str | None = None
+
+
+class SetInstanceChatModelConfigPayload(BaseModel):
     provider: str = "auto"
     model_id: str
     model_label: str | None = None

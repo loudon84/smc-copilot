@@ -6,9 +6,15 @@ v1.3 生产默认连接常驻 Runtime；v1.3.1 补齐 Windows 真实 Hermes 闭�
 
 ## Windows 用户级后台
 
-[[src/local_service/windows_user_daemon.py]] 用 `schtasks /Create /SC ONLOGON /RL LIMITED` 注册登录即启任务（`HermesRuntimeUserDaemon`），免管理员。`install` 前 `detect_port_conflict`，8765 占用则拒绝。正式安装顺序由 [[deployment#Windows Provision]] 保证：smoke 通过后再装 UserDaemon。
+[[src/local_service/windows_user_daemon.py]] 用 `schtasks /Create /SC ONLOGON /RL LIMITED` 注册登录即启任务（`HermesRuntimeUserDaemon`），免管理员。`install` 前检测 8765：非 `--replace` 时端口占用则拒绝；`install --replace` 会停止本机 Runtime、等待端口释放后重装任务并启动。另支持 `start`/`stop`/`restart`/`repair`/`status --json`。
 
-CLI：`python -m local_service.windows_user_daemon install|uninstall|status|check-port`。
+CLI：`python -m local_service.windows_user_daemon install|install --replace|uninstall|status|status --json|check-port|start|stop|restart|repair`。
+
+## Windows Installer（脚手架）
+
+`installer/wix/`（WiX 5 MSI）与 `installer/bootstrapper/`（Burn）为 FR-16 构建脚手架：默认安装到 `%LOCALAPPDATA%\Programs\SMC\CopilotRuntime`，标准退出码 0/10–17，ONLOGON 任务注册概念见 WiX README。Python 侧无需安装 WiX 即可开发与测试。
+
+Bootstrap 安装器参数：`/quiet /channel=stable /installScope=user /bootstrapConfig=<path> /norestart /log=<path>`。示例配置见 `config/bootstrap.example.json`。
 
 ## Windows Provision
 
@@ -18,13 +24,15 @@ CLI：`python -m local_service.windows_user_daemon install|uninstall|status|chec
 
 ## Windows 服务
 
+**EXPERIMENTAL** — v1.4 默认不用 LocalSystem Windows Service。生产使用 per-user Task Scheduler（见 [[deployment#Windows 用户级后台]]）。
+
 [[src/local_service/windows_service.py]]（服务名 `HermesLocalService`）经 `pywin32` 实现，`SvcDoRun` 在工作线程跑 `run_local_service`，`SvcStop` 经 `request_shutdown` 优雅停止。需管理员安装（`uv sync --extra service` + `ai-copilot-service install`）。非 win32 平台提供同名占位类。绑定使用 `bind_host`/`bind_port`。
 
 ## 程序目录约束
 
-企业 Windows 下程序必须在 `D:\Programs` 下，服务态例外。
+v1.4（FR-13）取消固定 `D:\Programs`。默认用户级 `%LOCALAPPDATA%\Programs\SMC\{CopilotRuntime,HermesAgent}`；可选机器级 `%ProgramFiles%\SMC\...`。服务态仍用 `%LOCALAPPDATA%\HermesRuntime` 与 `%USERPROFILE%\.hermes`。
 
-[[src/runtime/windows_program_paths.py]] 固定该根：`DEFAULT_HERMES_INSTALL_DIR=D:\Programs\HermesAgent`、`DEFAULT_COPILOT_SERVE_DIR=D:\Programs\copilot-serve`。`require_under_programs_root` 在安装/探测期强制 `HERMES_INSTALL_DIR`/`TOOLCHAIN_VENV_DIR` 位于其下；服务态 `RUNTIME_DATA_DIR` 例外（仍走 `%LOCALAPPDATA%\HermesRuntime`）。
+[[src/runtime/windows_program_paths.py]] 提供默认路径、[[src/runtime/windows_program_paths.py#detect_legacy_install_paths]] 检测旧 `D:\Programs\copilot-serve` / `HermesAgent`（供迁移，不自动删除）。`enforce_windows_program_paths` 不再强制单一根目录；Node/Git 在 precheck 中为可选。
 
 ## 跨平台
 
@@ -37,8 +45,8 @@ macOS/Linux 的 Runtime 逻辑（探测、目录、API）与 Windows 一致；�
 | 用途 | Windows | macOS/Linux |
 |------|---------|-------------|
 | Runtime 服务态 | `%LOCALAPPDATA%\HermesRuntime\` | `~/.hermes-runtime/` |
-| 本仓库 / serve venv | `D:\Programs\copilot-serve\` | 任意工作目录 |
-| Hermes 版本 / Agent venv | `D:\Programs\HermesAgent\<version>\` | `HERMES_INSTALL_DIR` 或 Runtime `versions/` |
+| 本仓库 / serve | `%LOCALAPPDATA%\Programs\SMC\CopilotRuntime\`（默认） | 任意工作目录 |
+| Hermes 版本 / Agent venv | `%LOCALAPPDATA%\Programs\SMC\HermesAgent\<version>\` | `HERMES_INSTALL_DIR` 或 Runtime `versions/` |
 | Hermes 用户数据 | `%USERPROFILE%\.hermes\` | `~/.hermes/` |
 
 升级/卸载程序时默认不删 `~/.hermes`；服务态仅在显式 `-RemoveRuntimeData` 时清理。详见 [[runtime-service#目录布局]]。

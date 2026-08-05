@@ -6,9 +6,9 @@
 
 ## Runtime 表
 
-`db/models/runtime.py` 定义：[[src/db/models/runtime.py#RuntimeVersion]]、[[src/db/models/runtime.py#RuntimeJob]]、[[src/db/models/runtime.py#RuntimeJobEvent]]、[[src/db/models/runtime.py#HermesInstance]]、[[src/db/models/runtime.py#ConfigSnapshot]]、[[src/db/models/runtime.py#DevicePairing]]、[[src/db/models/runtime.py#Device]]、[[src/db/models/runtime.py#SecretReference]]、[[src/db/models/runtime.py#RuntimeAuditLog]]。
+`db/models/runtime.py` 定义：[[src/db/models/runtime.py#RuntimeVersion]]、[[src/db/models/runtime.py#RuntimeJob]]、[[src/db/models/runtime.py#RuntimeJobEvent]]、[[src/db/models/runtime.py#HermesInstance]]、[[src/db/models/runtime.py#ConfigSnapshot]]、[[src/db/models/runtime.py#DevicePairing]]、[[src/db/models/runtime.py#BootstrapSession]]、[[src/db/models/runtime.py#Device]]、[[src/db/models/runtime.py#SecretReference]]、[[src/db/models/runtime.py#McpServer]]、[[src/db/models/runtime.py#McpSecretRef]]、[[src/db/models/runtime.py#McpTestResult]]、[[src/db/models/runtime.py#RuntimeAuditLog]]。
 
-`RuntimeJobEvent` 用递增 `sequence` 保 SSE 顺序；`SecretReference` 仅存存储引用（provider + key），不存明文；`RuntimeAuditLog` 独立于任务模块 `AuditLog`。仓储见 [[src/db/repositories/runtime_repo.py#RuntimeVersionRepository]] / [[src/db/repositories/runtime_repo.py#RuntimeJobRepository]]。
+`RuntimeJobEvent` 用递增 `sequence` 保 SSE 顺序；`SecretReference` 仅存存储引用（provider + key），不存明文；`McpSecretRef` 关联 MCP 与 Secret 引用；`RuntimeAuditLog` 独立于任务模块 `AuditLog`。仓储见 [[src/db/repositories/runtime_repo.py#RuntimeVersionRepository]] / [[src/db/repositories/runtime_repo.py#RuntimeJobRepository]] / [[src/db/repositories/mcp_repo.py#McpServerRepository]]。
 
 ## Profile 与任务表
 
@@ -29,5 +29,9 @@ Profile 与任务相关表及枚举。
 | `001_role_spec` | Profile 展示字段 + `profile_role_specs` |
 | `002_team_v18_chat` | `profile_chat_settings`、`chat_attachments` |
 | `003_runtime_core` | Runtime 表（versions/jobs/instances/devices 等）+ profiles→instances 数据迁移 |
+| `004_v14_instance_chat` | `profile_chat_settings`/`chat_attachments` 增加 `instance_id` |
+| `005_v14_mcp_tables` | `mcp_servers`/`mcp_secret_refs`/`mcp_test_results` |
+| `006_v14_bootstrap_sessions` | `bootstrap_sessions` 一次性安装令牌 |
+| `007_v14_merge_heads` | 合并 bootstrap 与 artifact/service-update 两条分支，收敛为单一 head |
 
 生产启动前 `alembic upgrade head`。新增表必须配 Alembic 迁移。

@@ -24,6 +24,18 @@ Instance 启停、CLI 合同、Profile 路径与 Gateway env 注入的回归测�
 
 `tests/test_instance_gateway_supervisor.py` 验证不调用 `start_profile` 与 health 字段。`tests/test_gateway_command_contract.py`、`tests/test_profile_paths.py`、`tests/test_gateway_secret_environment.py` 覆盖 CLI/路径/env。`tests/test_secret_isolation_and_reverify.py` 验证 naming Profile 不借用 default secrets，以及 `alreadyInstalled` 复验。见 [[gateway-supervisor#Hermes CLI 合同]]、[[profiles-instances#Profile 路径]]、[[runtime-service#配置与 Secret]]。
 
+## Gateway Env
+
+Gateway 子进程环境白名单继承与日志仅记录 key 名的回归测试（v1.4 FR-06）。
+
+### Parent provider secrets not inherited
+
+父进程 `base_env` 含 `DASHSCOPE_API_KEY` 等 provider 密钥时，命名 Profile 未在 `secrets` 中声明则子进程 env 不得包含这些变量；`API_SERVER_KEY` 仅来自 scoped secrets。
+
+### Logs only env keys
+
+`build_gateway_environment` 的 `gateway_env_built` 日志 kwargs 必须含 `envKeys` 且不得含密钥值或 `env`/`keys` 整表 dict。
+
 ## 任务与审批
 
 `tests/test_v12_integration.py` 覆盖本地/Team Hub 任务 ingest、路由、审批门控、执行与 Outbox 同步的端到端流转。`tests/test_permission_service.py` 验证审批与权限。`tests/api/test_task_events_stream.py`、`tests/api/test_task_workbench_stream.py` 验证任务 SSE。对应 [[task-runtime#任务运行时]] 与 [[approval-workspace#审批与工作空间]]。
@@ -32,18 +44,110 @@ Instance 启停、CLI 合同、Profile 路径与 Gateway env 注入的回归测�
 
 `tests/api/test_desktop_token.py` 覆盖 `verify_desktop_token` 白名单、Bearer device token 与遗留 header 兼容。对应 [[auth-pairing#本地鉴权与设备配对]]。
 
+## Gateway Auth
+
+`tests/test_gateway_client_auth.py` 验证 Runtime→Hermes 内部 Bearer 鉴权（v1.4 FR-01）。API_SERVER_KEY 不得落日志。
+
+### Client adds Bearer token
+
+`HermesGatewayClient` 在设置 `api_key` 时，对 `/v1/models` 等请求发送 `Authorization: Bearer <key>`。
+
+### Chat stream adds Bearer token
+
+Chat SSE 路径通过 Credential Broker 解析 key 并加入 Authorization header。
+
+### Client omits auth when no key
+
+未配置 `api_key` 时不发送 Authorization header（兼容 mock / 未启用鉴权的过渡态）。
+
 ## Workspace Chat
 
 `tests/api/test_workspace_attachments.py` 覆盖附件上传/删除/作用域与上下文注入。对应 [[chat-sessions#Workspace Chat]]。
+
+## Instance Chat
+
+`tests/test_instance_chat_resolver.py` 验证 Instance Chat 仅读 `HermesInstance` 状态、不依赖 `profiles.status` 或 `ProfileRefResolver`。对应 [[chat-sessions#Instance Chat]]。
+
+### Does not read profiles status
+
+当 Profile `status=stopped` 而 Instance `status=running` 时，`InstanceChatService.list_models` 仍按 Instance 状态调用 Gateway；静态检查确保 `instance_ref_resolver` / `instance_chat_service` 不引用 `ProfileRefResolver` 或 `GatewayStatus`。
 
 ## 角色库
 
 `tests/test_role_compiler.py` 验证 `SOUL.md`/`MEMORY.md`/manifest 生成与端口不写入 SOUL。`tests/test_role_library_service.py`、`tests/test_role_library_import.py`、`tests/test_role_library_preset_resolve.py` 验证角色库同步与预设导入。对应 [[profiles-instances#角色编译]]。
 
+## MCP Compile
+
+`tests/test_mcp_compile.py` 验证 [[runtime-service#MCP 配置编译]]：`McpConfigCompiler` 将启用中的 MCP 记录写入 Profile `config.yaml` 的 `mcp.servers` 段并保留既有配置。
+
+### Writes Hermes config
+
+Mock `HermesConfigAdapter` 后断言编译结果在 config dict 中包含 `mcp.servers.<name>`（stdio 含 `command`/`args`），且未覆盖其它顶层键。
+
 ## 部署与端口
 
 `tests/test_profile_port_update.py`、`tests/api/test_profile_events.py` 覆盖 Profile 端口与事件。`tests/test_windows_bootstrap_contract.py` 验证 `.cmd` Bypass、provision 中 UserDaemon 在 smoke 之后、PythonPath/precheck/smoke 契约。对应 [[deployment#Windows Provision]]。
 
+## Transactional update
+
+v1.4 事务化 Hermes 更新/回滚、pinned 版本清理与 Job 取消的单元测试。
+
+### Rebinds instances on success
+
+`test_update_rebinds_instances` 验证 update Job 在 mock 安装成功后按 Instance 重绑 `runtime_version_id`、重启 Gateway 并激活新版本。
+
+### Restores binding on failure
+
+`test_update_failure_restores_instance_binding` 验证探活失败时恢复 Instance 绑定与 active 版本。
+
+### Rejects pinned delete
+
+`test_cleanup_rejects_pinned_version` 验证 active/被 Instance 引用的版本 DELETE 返回 `runtime_version_pinned`。
+
+### Terminates pip subprocess
+
+`test_job_cancel_terminates_pip` 验证取消 token 在 pip 安装期间触发 `kill()`。
+
+## Bootstrap 配置校验
+
+`tests/test_bootstrap_service.py` 验证 Bootstrap JSON 拒绝 Provider API Key、允许 manifest URL。对应 [[auth-pairing#Bootstrap 一次性令牌]]。
+
+### 拒绝嵌套 Provider Key
+
+嵌套在 `defaultInstance` 等对象内的 `providerApiKey` 等字段必须被 `find_forbidden_provider_keys` 检出。
+
+### 允许 manifest URL
+
+`runtimeManifestUrl` 与 `hermesManifestUrl` 为合法字段，不得误判为密钥。
+
+## Artifact Security
+
+`tests/test_v14_security_readiness.py` 覆盖 Manifest 签名结构校验与 Archive 路径穿越拒绝（FR-23/24）。
+
+### Rejects path traversal
+
+含 `../` 成员的 ZIP 在 `ArchivePolicy.safe_extract_archive` 时返回 `policy_denied`。
+
+### Signature structure
+
+无 `payload`/`keyId`/`signature` 的 Manifest 被 `ArtifactSignatureVerifier.validate_structure` 拒绝。
+
+## Backup
+
+安全备份默认排除明文 Secret（FR-26）。
+
+### Excludes plaintext env
+
+默认备份 ZIP 不得包含 `.env`；`manifest.json` 的 `excluded` 列出 `.env` 等条目，Secret 仅元数据。
+
+## Runtime Readiness
+
+Runtime 状态机含 `starting`/`ready`/`degraded`/`maintenance`/`failed`（FR-27）。
+
+### Degraded status
+
+当某检查项为 `failed` 或 `degraded`（如 defaultInstance）但数据库仍可用时，聚合状态为 `degraded`。
+
 ## 验收
 
-`tests/test_v1_acceptance.py` 是 v1.3 验收用例集；v1.3.1 另以真实 Hermes/Gateway smoke（`scripts/runtime-smoke-test-windows.ps1 -RequireHermes`）为准。
+`tests/test_v1_acceptance.py` 是 v1.3 验收用例集；v1.3.1 另以真实 Hermes/Gateway smoke（`scripts/runtime-smoke-test-windows.ps1 -RequireHermes`）为准。v1.4 另有 gated E2E（见 `tests/test_windows_e2e_gated.py`，需真实 Artifact）。

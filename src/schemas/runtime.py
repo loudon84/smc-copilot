@@ -12,6 +12,7 @@ class RuntimeStatusResponse(BaseModel):
     service_version: str = Field(alias="serviceVersion")
     api_version: str = Field(alias="apiVersion")
     status: str
+    checks: dict[str, str] = Field(default_factory=dict)
     hermes_installed: bool = Field(alias="hermesInstalled")
     active_hermes_version: str | None = Field(default=None, alias="activeHermesVersion")
     platform: str
@@ -61,13 +62,45 @@ class RuntimeUpdateRequest(BaseModel):
 
     version: str = "latest"
     channel: str = "stable"
+    instance_ids: list[str] | None = Field(default=None, alias="instanceIds")
+    strategy: str = "rolling"
     toolchain: ToolchainOverride | None = None
+
+
+class RuntimeUpdatePlanRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    version: str = "latest"
+    channel: str = "stable"
+    instance_ids: list[str] | None = Field(default=None, alias="instanceIds")
+    strategy: str = "rolling"
+
+
+class RuntimeCompatibilityFlags(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    api: bool = True
+    config: bool = True
+    python: bool = True
+
+
+class RuntimeUpdatePlanResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    plan_id: str | None = Field(default=None, alias="planId")
+    from_version: str | None = Field(default=None, alias="fromVersion")
+    to_version: str = Field(alias="toVersion")
+    affected_instances: list[dict[str, Any]] = Field(default_factory=list, alias="affectedInstances")
+    compatibility: RuntimeCompatibilityFlags
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RuntimeRollbackRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     version: str | None = None
+    mode: str = "all"
+    instance_ids: list[str] | None = Field(default=None, alias="instanceIds")
 
 
 class RuntimeJobCreateRequest(BaseModel):
@@ -228,6 +261,7 @@ class ConfigurationPatchRequest(BaseModel):
 
     group: str | None = None
     values: dict[str, Any] = Field(default_factory=dict)
+    apply: bool = False
 
 
 class BackupCreateRequest(BaseModel):

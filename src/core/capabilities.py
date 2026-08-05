@@ -16,6 +16,18 @@ DEFAULT_FEATURES: tuple[str, ...] = (
     "secrets.manage",
     "pairing.device",
     "config.manage",
+    "gateway.auth.internal",
+    "instances.chat",
+    "instances.sessions",
+    "runtime.update.plan",
+    "runtime.update.transactional",
+    "runtime.job.cancel",
+    "runtime.service.update",
+    "runtime.bootstrap",
+    "runtime.repair",
+    "mcp.compile",
+    "diagnostics.bundle",
+    "artifact.signature",
 )
 
 
@@ -24,7 +36,7 @@ DEFAULT_FEATURES: tuple[str, ...] = (
 class CapabilityRegistry:
     """Capability negotiation for Desktop (PRD §5.5 / §7.1)."""
 
-    api_version: str = "1.0"
+    api_version: str = "1.1"
     features: list[str] = field(default_factory=lambda: list(DEFAULT_FEATURES))
 
     def list_features(self) -> list[str]:

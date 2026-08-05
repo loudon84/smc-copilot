@@ -61,6 +61,10 @@ def profile_not_found(message: str = "Profile not found", **details: object) -> 
     return ChatApiError(message, code="PROFILE_NOT_FOUND", details=dict(details), http_status=404)
 
 
+def instance_not_found(message: str = "Instance not found", **details: object) -> ChatApiError:
+    return ChatApiError(message, code="INSTANCE_NOT_FOUND", details=dict(details), http_status=404)
+
+
 def gateway_not_running(message: str = "Hermes gateway is not running", **details: object) -> ChatApiError:
     return ChatApiError(message, code="GATEWAY_NOT_RUNNING", details=dict(details), http_status=503)
 

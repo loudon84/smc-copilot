@@ -18,6 +18,8 @@ from db.models.runtime import HermesInstance, RuntimeJob, RuntimeVersion
 from db.repositories.runtime_repo import RuntimeVersionRepository
 from integrations.hermes.cli_adapter import HermesCliAdapter
 from runtime.artifact_downloader import ArtifactDownloader
+from runtime.artifact_signature import ArtifactSignatureVerifier
+from runtime.cancellation_token import CancellationToken, JobCancelled
 from runtime.checksum_verifier import ChecksumVerifier
 from runtime.environment_probe import ActivationManager, EnvironmentProbe, VersionLayout
 
@@ -98,20 +100,43 @@ class InstallationService:
         self._settings = settings
         self._session_maker = session_maker
         self._probe = EnvironmentProbe(settings)
-        self._downloader = ArtifactDownloader(timeout=float(settings.hermes_install_timeout_seconds))
+        self._downloader = ArtifactDownloader(timeout=float(settings.hermes_install_timeout_seconds), settings=settings)
         self._checksum = ChecksumVerifier()
         self._layout = VersionLayout(settings)
         self._activation = ActivationManager(settings)
+        self._signature = ArtifactSignatureVerifier(self._load_public_keys())
 
-    async def run_job(self, job: RuntimeJob, request: dict[str, Any], progress) -> dict[str, Any]:
+    def _load_public_keys(self) -> dict[str, str]:
+        raw = (self._settings.runtime_manifest_public_keys_json or "").strip()
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                return {str(k): str(v) for k, v in data.items()}
+        except json.JSONDecodeError:
+            pass
+        return {}
+
+    async def run_job(
+        self,
+        job: RuntimeJob,
+        request: dict[str, Any],
+        progress,
+        cancellation_token: CancellationToken | None = None,
+    ) -> dict[str, Any]:
+        token = cancellation_token or CancellationToken()
         version = str(request.get("version") or "latest")
         channel = str(request.get("channel") or self._settings.hermes_runtime_channel)
         force = bool(request.get("force", False))
         create_default = bool(
             request.get("createDefaultInstance", request.get("create_default_instance", True))
         )
+        activate_on_complete = create_default
         toolchain_override = request.get("toolchain") or {}
+        self._current_pip_proc: asyncio.subprocess.Process | None = None
 
+        token.raise_if_cancelled()
         await progress("Probing environment", phase="probe", progress_value=0.05, event_type="job.phase_changed")
         probe = self._probe.require_ready(overrides=toolchain_override if isinstance(toolchain_override, dict) else {})
 
@@ -150,15 +175,18 @@ class InstallationService:
         staging.mkdir(parents=True, exist_ok=True)
 
         try:
+            token.raise_if_cancelled()
             await progress("Downloading artifact", phase="download", progress_value=0.25, event_type="job.phase_changed")
             archive_name = Path(artifact_url).name or f"hermes-{resolved_version}.zip"
             archive_path = self._layout.download_path(archive_name)
-            await self._downloader.download(artifact_url, archive_path)
+            await self._downloader.download(artifact_url, archive_path, cancellation_token=token)
 
+            token.raise_if_cancelled()
             await progress("Verifying checksum", phase="checksum", progress_value=0.4, event_type="job.phase_changed")
             if not self._checksum.verify_file(archive_path, expected_sha):
                 raise RuntimeServiceError("Artifact checksum mismatch", code="checksum_mismatch")
 
+            token.raise_if_cancelled()
             await progress("Extracting to staging", phase="extract", progress_value=0.5, event_type="job.phase_changed")
             extract_dir = staging / "content"
             await self._downloader.extract_archive_async(archive_path, extract_dir)
@@ -174,12 +202,14 @@ class InstallationService:
                 shutil.rmtree(version_root, ignore_errors=True)
             version_root.parent.mkdir(parents=True, exist_ok=True)
 
+            token.raise_if_cancelled()
             await progress("Creating isolated Python environment", phase="venv", progress_value=0.6, event_type="job.phase_changed")
             venv_dir = probe.toolchain.venv_dir or (version_root / "venv")
-            await self._create_venv(probe.toolchain.python_path, venv_dir)  # type: ignore[arg-type]
+            await self._create_venv(probe.toolchain.python_path, venv_dir, token)  # type: ignore[arg-type]
 
+            token.raise_if_cancelled()
             await progress("Installing Hermes Agent", phase="install", progress_value=0.7, event_type="job.phase_changed")
-            await self._pip_install(venv_dir, extract_dir)
+            await self._pip_install(venv_dir, extract_dir, token)
 
             if not version_root.exists():
                 version_root.mkdir(parents=True, exist_ok=True)
@@ -187,6 +217,7 @@ class InstallationService:
             executable = _resolve_hermes_executable(venv_dir, version_root)
             cli = HermesCliAdapter(self._settings, executable=executable)
 
+            token.raise_if_cancelled()
             await progress("Verifying Hermes executable", phase="version", progress_value=0.8)
             hermes_ver = await cli.version()
             if not _versions_compatible(hermes_ver, resolved_version):
@@ -196,13 +227,16 @@ class InstallationService:
                     details={"reported": hermes_ver, "expected": resolved_version},
                 )
 
+            token.raise_if_cancelled()
             await progress("Running config migrate", phase="migrate", progress_value=0.85)
             await cli.config_migrate()
 
+            token.raise_if_cancelled()
             await progress("Running hermes doctor", phase="doctor", progress_value=0.9)
             await cli.doctor()
             doctor_ok = True
 
+            token.raise_if_cancelled()
             await progress("Activating version", phase="activate", progress_value=0.95, event_type="job.phase_changed")
             python_path = str(probe.toolchain.python_path) if probe.toolchain.python_path else None
             async with self._session_maker() as session:
@@ -217,6 +251,10 @@ class InstallationService:
                         executable_path=str(executable),
                         python_path=python_path,
                         checksum=expected_sha,
+                        artifact_type=artifact_type,
+                        manifest_version=str(manifest.get("manifestVersion") or manifest.get("manifest_version") or ""),
+                        signature_key_id=str(manifest.get("keyId") or manifest.get("key_id") or "") or None,
+                        verified_at=now,
                         status=RuntimeVersionStatus.INSTALLED.value,
                         metadata_json=json.dumps(
                             {
@@ -240,24 +278,30 @@ class InstallationService:
                     row.python_path = python_path
                     row.checksum = expected_sha
                     row.channel = channel
+                    row.artifact_type = artifact_type
+                    row.manifest_version = str(manifest.get("manifestVersion") or manifest.get("manifest_version") or "")
+                    row.signature_key_id = str(manifest.get("keyId") or manifest.get("key_id") or "") or None
+                    row.verified_at = now
                     row.installed_at = now
 
-                activated = await repo.set_active(row.id)
-                if activated is None:
-                    raise RuntimeServiceError("Failed to activate version", code="activation_failed")
-
                 instance_id = None
-                if create_default:
-                    instance_id = await self._ensure_default_instance(session, activated.id)
+                if activate_on_complete:
+                    activated = await repo.set_active(row.id)
+                    if activated is None:
+                        raise RuntimeServiceError("Failed to activate version", code="activation_failed")
+                    if create_default:
+                        instance_id = await self._ensure_default_instance(session, activated.id)
+                    self._activation.write_active_atomic(
+                        {
+                            "version": resolved_version,
+                            "versionId": activated.id,
+                            "executablePath": activated.executable_path,
+                            "activatedAt": now.isoformat(),
+                        }
+                    )
+                else:
+                    row.status = RuntimeVersionStatus.INSTALLED.value
 
-                self._activation.write_active_atomic(
-                    {
-                        "version": resolved_version,
-                        "versionId": activated.id,
-                        "executablePath": activated.executable_path,
-                        "activatedAt": now.isoformat(),
-                    }
-                )
                 await session.commit()
 
             await progress("Install complete", phase="completed", progress_value=1.0)
@@ -272,11 +316,15 @@ class InstallationService:
                 "artifactType": artifact_type,
                 "stub": False,
             }
+        except JobCancelled:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
         finally:
             shutil.rmtree(staging, ignore_errors=True)
+            self._current_pip_proc = None
 
     async def _resolve_manifest(
         self, version: str, channel: str, platform_name: str, architecture: str
@@ -288,6 +336,8 @@ class InstallationService:
                 code="manifest_invalid",
             )
         data = await self._downloader.fetch_json(url)
+        if "payload" in data:
+            data = self._signature.verify(data)
         if "releases" in data and isinstance(data["releases"], list):
             candidates = [
                 r
@@ -304,6 +354,8 @@ class InstallationService:
             # FR-02: pick highest semver, never array order
             candidates.sort(key=lambda r: _semver_key(str(r.get("version") or "0")), reverse=True)
             selected = candidates[0]
+            if "payload" in selected:
+                selected = self._signature.verify(selected)
             self._validate_manifest_release(selected, platform_name, architecture)
             return selected
 
@@ -343,7 +395,8 @@ class InstallationService:
                 code="artifact_architecture_mismatch",
             )
 
-    async def _create_venv(self, python: Path, venv_dir: Path) -> None:
+    async def _create_venv(self, python: Path, venv_dir: Path, token: CancellationToken) -> None:
+        token.raise_if_cancelled()
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
         if venv_dir.exists():
             return
@@ -356,6 +409,7 @@ class InstallationService:
             stderr=asyncio.subprocess.PIPE,
         )
         _out, err = await proc.communicate()
+        token.raise_if_cancelled()
         if proc.returncode != 0:
             raise RuntimeServiceError(
                 f"Failed to create venv: {err.decode('utf-8', errors='replace')}",
@@ -363,7 +417,8 @@ class InstallationService:
                 details={"exitCode": proc.returncode, "stderrTail": err.decode("utf-8", errors="replace")[-2000:]},
             )
 
-    async def _pip_install(self, venv_dir: Path, package_path: Path) -> None:
+    async def _pip_install(self, venv_dir: Path, package_path: Path, token: CancellationToken) -> None:
+        token.raise_if_cancelled()
         if sys.platform == "win32":
             python = venv_dir / "Scripts" / "python.exe"
         else:
@@ -382,7 +437,26 @@ class InstallationService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _out, err = await proc.communicate()
+        self._current_pip_proc = proc
+
+        async def _wait_pip() -> tuple[bytes, bytes]:
+            return await proc.communicate()
+
+        wait_task = asyncio.create_task(_wait_pip())
+        cancel_task = asyncio.create_task(token.wait_cancelled())
+        done, pending = await asyncio.wait(
+            {wait_task, cancel_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if cancel_task in done and token.is_cancelled:
+            if proc.returncode is None:
+                proc.kill()
+                await proc.wait()
+            for task in pending:
+                task.cancel()
+            raise JobCancelled()
+        _out, err = wait_task.result()
+        token.raise_if_cancelled()
         if proc.returncode != 0:
             stderr_text = err.decode("utf-8", errors="replace")
             logger.error("pip_install_failed", exit_code=proc.returncode, stderr_tail=stderr_text[-2000:])

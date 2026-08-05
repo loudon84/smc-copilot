@@ -6,7 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.runtime_enums import RuntimeJobStatus, RuntimeVersionStatus
-from db.models.runtime import RuntimeJob, RuntimeJobEvent, RuntimeVersion
+from db.models.runtime import RuntimeJob, RuntimeJobEvent, RuntimeUpdatePlan, RuntimeVersion
 
 
 class RuntimeVersionRepository:
@@ -55,6 +55,35 @@ class RuntimeVersionRepository:
     async def delete(self, row: RuntimeVersion) -> None:
         await self._session.delete(row)
         await self._session.flush()
+
+
+class RuntimeUpdatePlanRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, row: RuntimeUpdatePlan) -> RuntimeUpdatePlan:
+        self._session.add(row)
+        await self._session.flush()
+        return row
+
+    async def get(self, plan_id: str) -> RuntimeUpdatePlan | None:
+        return await self._session.get(RuntimeUpdatePlan, plan_id)
+
+    async def list_referencing_version(self, version: str) -> list[RuntimeUpdatePlan]:
+        result = await self._session.execute(
+            select(RuntimeUpdatePlan).where(
+                (RuntimeUpdatePlan.from_version == version) | (RuntimeUpdatePlan.to_version == version)
+            )
+        )
+        return list(result.scalars().all())
+
+    async def list_active(self) -> list[RuntimeUpdatePlan]:
+        result = await self._session.execute(
+            select(RuntimeUpdatePlan).where(
+                RuntimeUpdatePlan.status.in_(("planned", "running"))
+            )
+        )
+        return list(result.scalars().all())
 
 
 class RuntimeJobRepository:

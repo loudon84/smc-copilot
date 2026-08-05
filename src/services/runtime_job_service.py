@@ -12,6 +12,7 @@ from core.config import Settings
 from core.logging import get_logger
 from core.runtime_enums import RuntimeJobStatus, RuntimeJobType
 from core.runtime_errors import RuntimeServiceError, runtime_lock_conflict
+from runtime.cancellation_token import CancellationToken, JobCancelled
 from db.models.runtime import RuntimeJob, RuntimeJobEvent
 from db.repositories.runtime_repo import RuntimeJobRepository
 from schemas.runtime import RuntimeJobAcceptedResponse, RuntimeJobResponse
@@ -28,6 +29,7 @@ WRITE_JOB_TYPES = frozenset(
         RuntimeJobType.RESTORE.value,
         RuntimeJobType.CONFIG_MIGRATE.value,
         RuntimeJobType.RUNTIME_CLEANUP.value,
+        RuntimeJobType.BOOTSTRAP.value,
     }
 )
 
@@ -72,6 +74,8 @@ class RuntimeJobService:
         self._queue: asyncio.Queue[str] = asyncio.Queue()
         self._worker_task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
+        self._cancellation_tokens: dict[str, CancellationToken] = {}
+        self._running_job_id: str | None = None
 
     def register_handler(self, job_type: str, handler: JobHandler) -> None:
         self._handlers[job_type] = handler
@@ -174,30 +178,52 @@ class RuntimeJobService:
             return [job_to_response(j) for j in jobs]
 
     async def cancel_job(self, job_id: str) -> RuntimeJobResponse:
-        async with self._session_maker() as session:
-            repo = RuntimeJobRepository(session)
-            job = await repo.get(job_id)
-            if job is None:
-                raise RuntimeServiceError(f"Job not found: {job_id}", code="not_found")
-            if job.status in (
-                RuntimeJobStatus.SUCCEEDED.value,
-                RuntimeJobStatus.FAILED.value,
-                RuntimeJobStatus.CANCELLED.value,
-            ):
-                raise RuntimeServiceError("Job already finished", code="invalid_state")
-            job.status = RuntimeJobStatus.CANCELLED.value
-            job.completed_at = datetime.now(timezone.utc)
-            await repo.add_event(
-                RuntimeJobEvent(
-                    job_id=job.id,
-                    sequence=await repo.next_sequence(job.id),
-                    event_type="job.cancelled",
-                    level="warn",
-                    message="Job cancelled",
-                )
-            )
-            await session.commit()
-            return job_to_response(job)
+        async with self._lock:
+            async with self._session_maker() as session:
+                repo = RuntimeJobRepository(session)
+                job = await repo.get(job_id)
+                if job is None:
+                    raise RuntimeServiceError(f"Job not found: {job_id}", code="not_found")
+                if job.status in (
+                    RuntimeJobStatus.SUCCEEDED.value,
+                    RuntimeJobStatus.FAILED.value,
+                    RuntimeJobStatus.CANCELLED.value,
+                ):
+                    raise RuntimeServiceError("Job already finished", code="invalid_state")
+
+                job.cancellation_requested_at = datetime.now(timezone.utc)
+                token = self._cancellation_tokens.get(job_id)
+                if token is not None:
+                    token.cancel()
+                elif self._running_job_id == job_id:
+                    token = CancellationToken()
+                    token.cancel()
+                    self._cancellation_tokens[job_id] = token
+
+                if job.status == RuntimeJobStatus.PENDING.value:
+                    job.status = RuntimeJobStatus.CANCELLED.value
+                    job.completed_at = datetime.now(timezone.utc)
+                    await repo.add_event(
+                        RuntimeJobEvent(
+                            job_id=job.id,
+                            sequence=await repo.next_sequence(job.id),
+                            event_type="job.cancelled",
+                            level="warn",
+                            message="Job cancelled",
+                        )
+                    )
+                else:
+                    await repo.add_event(
+                        RuntimeJobEvent(
+                            job_id=job.id,
+                            sequence=await repo.next_sequence(job.id),
+                            event_type="job.cancel_requested",
+                            level="warn",
+                            message="Cancellation requested",
+                        )
+                    )
+                await session.commit()
+                return job_to_response(job)
 
     async def iter_events(
         self, job_id: str, *, after_sequence: int = 0, poll_interval: float = 0.5
@@ -277,130 +303,169 @@ class RuntimeJobService:
                 logger.exception("runtime_job_worker_failed", job_id=job_id)
 
     async def _execute_job(self, job_id: str) -> None:
-        async with self._session_maker() as session:
-            repo = RuntimeJobRepository(session)
-            job = await repo.get(job_id)
-            if job is None:
-                return
-            if job.status == RuntimeJobStatus.CANCELLED.value:
-                return
-            job.status = RuntimeJobStatus.RUNNING.value
-            job.started_at = datetime.now(timezone.utc)
-            job.phase = "running"
-            await session.commit()
-
-            request: dict[str, Any] = {}
-            if job.request_json:
-                try:
-                    parsed = json.loads(job.request_json)
-                    if isinstance(parsed, dict):
-                        request = parsed
-                except json.JSONDecodeError:
-                    request = {}
-
-            handler = self._handlers.get(job.job_type)
-
-            async def progress(
-                message: str,
-                *,
-                phase: str | None = None,
-                progress_value: float | None = None,
-                event_type: str = "job.progress",
-                payload: dict[str, Any] | None = None,
-            ) -> None:
-                await self._emit(
-                    session,
-                    job,
-                    event_type,
-                    message,
-                    phase=phase,
-                    progress=progress_value,
-                    payload=payload,
-                )
-
-            try:
-                if handler is None:
-                    # No-op handler for doctor/backup stubs until later phases wire real logic
-                    await progress("No handler registered; completing as stub", phase="stub", progress_value=1.0)
-                    result: dict[str, Any] = {"stub": True, "jobType": job.job_type}
-                else:
-                    result = await handler(job, request, progress)
-
+        token = CancellationToken()
+        self._cancellation_tokens[job_id] = token
+        self._running_job_id = job_id
+        try:
+            async with self._session_maker() as session:
+                repo = RuntimeJobRepository(session)
                 job = await repo.get(job_id)
                 if job is None:
                     return
                 if job.status == RuntimeJobStatus.CANCELLED.value:
                     return
-                # v1.3.1: install/update must never succeed without real executable verification
-                if job.job_type in ("install", "update") and isinstance(result, dict):
-                    if result.get("alreadyInstalled") and result.get("realExecutableVerified") is not True:
-                        raise RuntimeServiceError(
-                            "alreadyInstalled without realExecutableVerified",
-                            code="hermes_version_invalid",
-                        )
-                    if not result.get("alreadyInstalled") and result.get("realExecutableVerified") is not True:
-                        raise RuntimeServiceError(
-                            "Install/update result missing realExecutableVerified=true",
-                            code="hermes_version_invalid",
-                            details={"stub": result.get("stub")},
-                        )
-                    if result.get("stub") is True:
-                        raise RuntimeServiceError(
-                            "Install/update must not report stub=true",
-                            code="hermes_version_invalid",
-                        )
-                job.status = RuntimeJobStatus.SUCCEEDED.value
-                job.progress = 1.0
-                job.phase = "completed"
-                job.result_json = json.dumps(result)
-                job.completed_at = datetime.now(timezone.utc)
-                await repo.add_event(
-                    RuntimeJobEvent(
-                        job_id=job.id,
-                        sequence=await repo.next_sequence(job.id),
-                        event_type="job.completed",
-                        level="info",
-                        message="Job completed",
-                        payload_json=json.dumps(result),
-                    )
-                )
+                if job.cancellation_requested_at is not None:
+                    token.cancel()
+                job.status = RuntimeJobStatus.RUNNING.value
+                job.started_at = datetime.now(timezone.utc)
+                job.phase = "running"
                 await session.commit()
-            except RuntimeServiceError as exc:
-                job = await repo.get(job_id)
-                if job is None:
-                    return
-                job.status = RuntimeJobStatus.FAILED.value
-                job.error_code = exc.code
-                job.error_message = exc.message
-                job.completed_at = datetime.now(timezone.utc)
-                await repo.add_event(
-                    RuntimeJobEvent(
-                        job_id=job.id,
-                        sequence=await repo.next_sequence(job.id),
-                        event_type="job.failed",
-                        level="error",
-                        message=exc.message,
-                        payload_json=json.dumps({"errorCode": exc.code, "details": exc.details}),
+
+                request: dict[str, Any] = {}
+                if job.request_json:
+                    try:
+                        parsed = json.loads(job.request_json)
+                        if isinstance(parsed, dict):
+                            request = parsed
+                    except json.JSONDecodeError:
+                        request = {}
+
+                handler = self._handlers.get(job.job_type)
+
+                async def progress(
+                    message: str,
+                    *,
+                    phase: str | None = None,
+                    progress_value: float | None = None,
+                    event_type: str = "job.progress",
+                    payload: dict[str, Any] | None = None,
+                ) -> None:
+                    await self._emit(
+                        session,
+                        job,
+                        event_type,
+                        message,
+                        phase=phase,
+                        progress=progress_value,
+                        payload=payload,
                     )
-                )
-                await session.commit()
-            except Exception as exc:
-                logger.exception("runtime_job_failed", job_id=job_id)
-                job = await repo.get(job_id)
-                if job is None:
-                    return
-                job.status = RuntimeJobStatus.FAILED.value
-                job.error_code = "internal_error"
-                job.error_message = str(exc)
-                job.completed_at = datetime.now(timezone.utc)
-                await repo.add_event(
-                    RuntimeJobEvent(
-                        job_id=job.id,
-                        sequence=await repo.next_sequence(job.id),
-                        event_type="job.failed",
-                        level="error",
-                        message=str(exc),
-                        payload_json=json.dumps({"errorCode": "internal_error"}),
+
+                try:
+                    if handler is None:
+                        await progress("No handler registered; completing as stub", phase="stub", progress_value=1.0)
+                        result: dict[str, Any] = {"stub": True, "jobType": job.job_type}
+                    else:
+                        result = await handler(job, request, progress, token)
+
+                    job = await repo.get(job_id)
+                    if job is None:
+                        return
+                    if job.status == RuntimeJobStatus.CANCELLED.value or token.is_cancelled:
+                        job.status = RuntimeJobStatus.CANCELLED.value
+                        job.completed_at = datetime.now(timezone.utc)
+                        await repo.add_event(
+                            RuntimeJobEvent(
+                                job_id=job.id,
+                                sequence=await repo.next_sequence(job.id),
+                                event_type="job.cancelled",
+                                level="warn",
+                                message="Job cancelled",
+                            )
+                        )
+                        await session.commit()
+                        return
+                    # v1.3.1: install/update must never succeed without real executable verification
+                    if job.job_type in ("install", "update") and isinstance(result, dict):
+                        if result.get("alreadyInstalled") and result.get("realExecutableVerified") is not True:
+                            raise RuntimeServiceError(
+                                "alreadyInstalled without realExecutableVerified",
+                                code="hermes_version_invalid",
+                            )
+                        if not result.get("alreadyInstalled") and result.get("realExecutableVerified") is not True:
+                            raise RuntimeServiceError(
+                                "Install/update result missing realExecutableVerified=true",
+                                code="hermes_version_invalid",
+                                details={"stub": result.get("stub")},
+                            )
+                        if result.get("stub") is True:
+                            raise RuntimeServiceError(
+                                "Install/update must not report stub=true",
+                                code="hermes_version_invalid",
+                            )
+                    job.status = RuntimeJobStatus.SUCCEEDED.value
+                    job.progress = 1.0
+                    job.phase = "completed"
+                    job.result_json = json.dumps(result)
+                    job.completed_at = datetime.now(timezone.utc)
+                    await repo.add_event(
+                        RuntimeJobEvent(
+                            job_id=job.id,
+                            sequence=await repo.next_sequence(job.id),
+                            event_type="job.completed",
+                            level="info",
+                            message="Job completed",
+                            payload_json=json.dumps(result),
+                        )
                     )
-                )
-                await session.commit()
+                    await session.commit()
+                except JobCancelled:
+                    job = await repo.get(job_id)
+                    if job is None:
+                        return
+                    job.status = RuntimeJobStatus.CANCELLED.value
+                    job.error_code = "cancelled"
+                    job.error_message = "Job cancelled"
+                    job.completed_at = datetime.now(timezone.utc)
+                    await repo.add_event(
+                        RuntimeJobEvent(
+                            job_id=job.id,
+                            sequence=await repo.next_sequence(job.id),
+                            event_type="job.cancelled",
+                            level="warn",
+                            message="Job cancelled",
+                        )
+                    )
+                    await session.commit()
+                except RuntimeServiceError as exc:
+                    job = await repo.get(job_id)
+                    if job is None:
+                        return
+                    job.status = RuntimeJobStatus.FAILED.value
+                    job.error_code = exc.code
+                    job.error_message = exc.message
+                    job.completed_at = datetime.now(timezone.utc)
+                    await repo.add_event(
+                        RuntimeJobEvent(
+                            job_id=job.id,
+                            sequence=await repo.next_sequence(job.id),
+                            event_type="job.failed",
+                            level="error",
+                            message=exc.message,
+                            payload_json=json.dumps({"errorCode": exc.code, "details": exc.details}),
+                        )
+                    )
+                    await session.commit()
+                except Exception as exc:
+                    logger.exception("runtime_job_failed", job_id=job_id)
+                    job = await repo.get(job_id)
+                    if job is None:
+                        return
+                    job.status = RuntimeJobStatus.FAILED.value
+                    job.error_code = "internal_error"
+                    job.error_message = str(exc)
+                    job.completed_at = datetime.now(timezone.utc)
+                    await repo.add_event(
+                        RuntimeJobEvent(
+                            job_id=job.id,
+                            sequence=await repo.next_sequence(job.id),
+                            event_type="job.failed",
+                            level="error",
+                            message=str(exc),
+                            payload_json=json.dumps({"errorCode": "internal_error"}),
+                        )
+                    )
+                    await session.commit()
+        finally:
+            self._cancellation_tokens.pop(job_id, None)
+            if self._running_job_id == job_id:
+                self._running_job_id = None

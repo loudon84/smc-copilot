@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX Burn bootstrapper scaffold (FR-16).
+  Chains SMC-Copilot-Runtime MSI and forwards /quiet /channel /installScope /bootstrapConfig /norestart /log.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+
+  <Bundle
+    Name="SMC Copilot Runtime Setup"
+    Version="1.4.0.0"
+    Manufacturer="SMC"
+    UpgradeCode="C3D4E5F6-A7B8-9012-CDEF-123456789012"
+    IconSourceFile="!(bindpath.assets)\copilot-runtime.ico">
+
+    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense" />
+
+    <Chain>
+      <MsiPackage
+        Id="CopilotRuntimeMsi"
+        SourceFile="!(bindpath.build)\SMC-Copilot-Runtime-x64.msi"
+        Vital="yes"
+        Compressed="yes"
+        DisplayInternalUI="no" />
+    </Chain>
+
+    <!--
+      Variable forwarding (concept — implement in BA/custom theme):
+        WixBundleLog      -> /log=
+        BootstrapChannel  -> /channel=
+        InstallScope      -> /installScope=
+        BootstrapConfig   -> /bootstrapConfig=
+    -->
+  </Bundle>
+</Wix>

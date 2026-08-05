@@ -19,7 +19,8 @@ from db.repositories.v12_repos import (
     TaskRepository,
     TeamTaskBindingRepository,
 )
-from integrations.hermes.client import HermesGatewayClient, extract_run_id
+from integrations.hermes.client import extract_run_id
+from integrations.hermes.client_factory import HermesGatewayClientFactory
 from integrations.team_hub.client import TeamHubClient
 from integrations.team_hub.dto import RemoteAssignmentDTO
 from services.approval_service import ApprovalService
@@ -288,7 +289,11 @@ class TaskRuntimeService:
 
         inp = payload.get("input", payload.get("prompt", ""))
 
-        hc = HermesGatewayClient(profile.gateway_port)
+        hc = await HermesGatewayClientFactory(self._settings, self._session).create_for_profile_name(
+            profile.name,
+            profile.gateway_port,
+            require_key=False,
+        )
         try:
             resp = await hc.create_run(model=payload.get("model"), input_payload=inp, metadata=payload.get("metadata"))
         except HermesClientError as e:
@@ -419,7 +424,13 @@ class TaskRuntimeService:
             profile = await self._profiles.get_by_id(task.target_profile_id)
             if profile:
                 try:
-                    await HermesGatewayClient(profile.gateway_port).cancel_run(task.hermes_run_id)
+                    await (
+                        await HermesGatewayClientFactory(self._settings, self._session).create_for_profile_name(
+                            profile.name,
+                            profile.gateway_port,
+                            require_key=False,
+                        )
+                    ).cancel_run(task.hermes_run_id)
                 except HermesClientError:
                     pass
         self._transition(task, TaskStatus.CANCELLED)

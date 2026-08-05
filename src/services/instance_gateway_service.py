@@ -117,8 +117,12 @@ class InstanceGatewayService:
             details={"port": port, "pids": listeners, "instancePid": inst.pid},
         )
 
-    async def _wait_for_health(self, port: int) -> bool:
-        client = HermesGatewayClient(port)
+    def _client_for(self, port: int, secrets: dict[str, str] | None = None) -> HermesGatewayClient:
+        key = (secrets or {}).get("API_SERVER_KEY") if secrets else None
+        return HermesGatewayClient(port, api_key=key)
+
+    async def _wait_for_health(self, port: int, *, api_key: str | None = None) -> bool:
+        client = HermesGatewayClient(port, api_key=api_key)
         timeout = float(self._settings.hermes_gateway_start_timeout_seconds)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -133,11 +137,13 @@ class InstanceGatewayService:
             handle = self._process_manager.get_handle(instance_id)
             alive = handle.is_alive() if handle else False
             pid = handle.pid if handle and alive else inst.pid
+            secrets = await self._resolve_secrets(session, inst.profile_name)
+            client = self._client_for(inst.gateway_port, secrets)
 
             healthy = False
             if inst.status == InstanceStatus.RUNNING.value:
                 if pid and is_pid_alive(pid):
-                    healthy = await HermesGatewayClient(inst.gateway_port).health_check()
+                    healthy = await client.health_check()
                     if not healthy:
                         inst.status = InstanceStatus.ERROR.value
                         inst.healthy = False
@@ -148,7 +154,7 @@ class InstanceGatewayService:
                     inst.pid = None
                     inst.last_error = "Gateway process exited unexpectedly"
                 elif alive:
-                    healthy = await HermesGatewayClient(inst.gateway_port).health_check()
+                    healthy = await client.health_check()
                     inst.healthy = healthy
                 else:
                     inst.status = InstanceStatus.ERROR.value
@@ -156,12 +162,12 @@ class InstanceGatewayService:
                     inst.last_error = "Gateway process not tracked"
             elif alive:
                 inst.status = InstanceStatus.RUNNING.value
-                healthy = await HermesGatewayClient(inst.gateway_port).health_check()
+                healthy = await client.health_check()
                 inst.healthy = healthy
                 inst.pid = pid
 
             if inst.status == InstanceStatus.RUNNING.value:
-                inst.healthy = healthy or await HermesGatewayClient(inst.gateway_port).health_check()
+                inst.healthy = healthy or await client.health_check()
                 inst.pid = pid
 
             version = await self._version_label(session, inst.runtime_version_id)
@@ -172,7 +178,6 @@ class InstanceGatewayService:
             except RuntimeServiceError:
                 exe_ok = False
             await session.commit()
-            secrets = await self._resolve_secrets(session, inst.profile_name)
             resp = instance_to_response(inst, version)
             resp.executable_verified = exe_ok
             resp.api_server_enabled = self._api_server_enabled(secrets)
@@ -219,7 +224,10 @@ class InstanceGatewayService:
                 inst.pid = handle.pid if handle else None
                 await session.commit()
 
-                healthy = await self._wait_for_health(inst.gateway_port)
+                healthy = await self._wait_for_health(
+                    inst.gateway_port,
+                    api_key=secrets.get("API_SERVER_KEY"),
+                )
                 if not healthy:
                     inst.status = InstanceStatus.ERROR.value
                     inst.healthy = False
@@ -297,7 +305,8 @@ class InstanceGatewayService:
                 if tracked:
                     continue
                 if pid and is_pid_alive(pid):
-                    healthy = await HermesGatewayClient(inst.gateway_port).health_check()
+                    secrets = await self._resolve_secrets(session, inst.profile_name)
+                    healthy = await self._client_for(inst.gateway_port, secrets).health_check()
                     if healthy:
                         continue
                     await asyncio.to_thread(terminate_pid, pid)
