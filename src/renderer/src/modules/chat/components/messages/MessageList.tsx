@@ -31,6 +31,12 @@ type Props = {
   isBusy?: boolean;
   runId?: string;
   agentAvatar?: AgentAvatarInfo;
+  emptyContext?: {
+    expertName?: string;
+    teamName?: string;
+    description?: string;
+    suggestions?: Array<{ text: string; label?: string }>;
+  };
   onClarifyAnswer?: (requestId: string, answer: string) => void;
   onApproval?: (requestId: string, approve: boolean) => void;
   onSelectSuggestion?: (text: string) => void;
@@ -73,6 +79,7 @@ export const MessageList = memo(function MessageList({
   isBusy,
   runId = "default",
   agentAvatar,
+  emptyContext,
   onClarifyAnswer,
   onApproval,
   onSelectSuggestion,
@@ -103,6 +110,7 @@ export const MessageList = memo(function MessageList({
     return (
       <div className="chat-messages" role="log" aria-live="polite">
         <ChatEmptyState
+          emptyContext={emptyContext}
           onSelectSuggestion={(text) => onSelectSuggestion?.(text)}
         />
       </div>

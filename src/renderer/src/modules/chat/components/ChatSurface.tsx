@@ -13,7 +13,17 @@ import { MessageList } from "./messages/MessageList";
 import { CopilotChatInput } from "./composer/CopilotChatInput";
 import { ModelPicker, groupChatModels } from "./composer/ModelPicker";
 import { PromptNavigator } from "./navigator/PromptNavigator";
+import { ChatContentRail } from "../layout/ChatContentRail";
 import "../styles/copilot-chat.css";
+
+export type ControllerStateChangeSnapshot = {
+  runId: string;
+  sessionId: string | null;
+  runState: ChatRunState;
+  selectedModelId: string | null;
+  usage: ChatUsage | null;
+  firstUserPrompt?: string;
+};
 
 export type ChatSurfaceSlots = {
   contextBarSlot?: React.ReactNode;
@@ -25,6 +35,12 @@ export type ChatSurfaceSlots = {
   filesPanelSlot?: React.ReactNode;
   filesToggleSlot?: React.ReactNode;
   showRightPanel?: boolean;
+  emptyContext?: {
+    expertName?: string;
+    teamName?: string;
+    description?: string;
+    suggestions?: Array<{ text: string; label?: string }>;
+  };
   renderStatusBar?: (ctx: {
     runState: ChatRunState;
     toolProgress: string | null;
@@ -53,6 +69,7 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   onSessionIdChange?: (sessionId: string | null) => void;
   composeMessage?: (raw: string) => string | Promise<string>;
   onInputChange?: (value: string) => void;
+  onControllerStateChange?: (snapshot: ControllerStateChangeSnapshot) => void;
   onRuntimeCommand?: (command: {
     type: "clarify.respond" | "approval.approve" | "approval.deny";
     requestId: string;
@@ -86,10 +103,12 @@ export function ChatSurface({
   filesPanelSlot,
   filesToggleSlot,
   showRightPanel,
+  emptyContext,
   renderStatusBar,
   onSessionIdChange,
   composeMessage,
   onInputChange,
+  onControllerStateChange,
   onRuntimeCommand,
 }: ChatSurfaceProps): React.JSX.Element {
   const {
@@ -168,6 +187,31 @@ export function ChatSurface({
     state.runState === "waiting_approval" ||
     state.runState === "waiting_clarify";
 
+  const firstUserPrompt = useMemo(() => {
+    const first = state.messages.find((m) => m.kind === "user");
+    return first && first.kind === "user" ? first.content : undefined;
+  }, [state.messages]);
+
+  useEffect(() => {
+    if (!onControllerStateChange) return;
+    onControllerStateChange({
+      runId: state.activeRunId,
+      sessionId: state.activeSessionId,
+      runState: state.runState,
+      selectedModelId: state.selectedModelId,
+      usage: state.usage,
+      firstUserPrompt,
+    });
+  }, [
+    firstUserPrompt,
+    onControllerStateChange,
+    state.activeRunId,
+    state.activeSessionId,
+    state.runState,
+    state.selectedModelId,
+    state.usage,
+  ]);
+
   const pendingClarify = useMemo(
     () =>
       [...state.messages]
@@ -219,6 +263,14 @@ export function ChatSurface({
 
   const rightOpen = showRightPanel === true;
 
+  const handleSuggestion = useCallback(
+    (text: string) => {
+      setInput(text);
+      onInputChange?.(text);
+    },
+    [onInputChange, setInput],
+  );
+
   return (
     <div className={`copilot-chat-root ${className || ""}`.trim()}>
       {activeExpertSlot}
@@ -227,93 +279,101 @@ export function ChatSurface({
       <div className="chat-body">
         <div className="chat-main">
           <div className="chat-messages-scroll">
-            <MessageList
-              messages={state.messages}
-              toolProgress={state.toolProgress}
-              isBusy={isBusy}
-              runId={state.activeRunId}
-              onSelectSuggestion={(text) => {
-                setInput(text);
-                onInputChange?.(text);
-              }}
-              pendingClarifyRequestId={
-                pendingClarify?.kind === "clarify"
-                  ? pendingClarify.request.requestId
-                  : null
-              }
-              pendingApprovalRequestId={
-                pendingApproval?.kind === "approval"
-                  ? pendingApproval.request.requestId
-                  : null
-              }
-              onClarifyAnswer={(requestId, answer) =>
-                onRuntimeCommand?.({
-                  type: "clarify.respond",
-                  requestId,
-                  answer,
-                })
-              }
-              onApproval={(requestId, approve) =>
-                onRuntimeCommand?.({
-                  type: approve ? "approval.approve" : "approval.deny",
-                  requestId,
-                })
-              }
-            />
+            <ChatContentRail>
+              <MessageList
+                messages={state.messages}
+                toolProgress={state.toolProgress}
+                isBusy={isBusy}
+                runId={state.activeRunId}
+                emptyContext={emptyContext}
+                onSelectSuggestion={handleSuggestion}
+                pendingClarifyRequestId={
+                  pendingClarify?.kind === "clarify"
+                    ? pendingClarify.request.requestId
+                    : null
+                }
+                pendingApprovalRequestId={
+                  pendingApproval?.kind === "approval"
+                    ? pendingApproval.request.requestId
+                    : null
+                }
+                onClarifyAnswer={(requestId, answer) =>
+                  onRuntimeCommand?.({
+                    type: "clarify.respond",
+                    requestId,
+                    answer,
+                  })
+                }
+                onApproval={(requestId, approve) =>
+                  onRuntimeCommand?.({
+                    type: approve ? "approval.approve" : "approval.deny",
+                    requestId,
+                  })
+                }
+              />
+            </ChatContentRail>
             <PromptNavigator
               messages={state.messages}
               runId={state.activeRunId}
               suppressed={rightOpen}
             />
           </div>
-          {state.lastError && <div className="chat-error">{state.lastError}</div>}
-          {urlHint && (
-            <button
-              type="button"
-              className="chat-open-web"
-              onClick={() => openWeb(urlHint)}
-            >
-              Open in Web Operator
-            </button>
+          {state.lastError && (
+            <ChatContentRail>
+              <div className="chat-error">{state.lastError}</div>
+            </ChatContentRail>
           )}
-          <CopilotChatInput
-            value={input}
-            onChange={(v) => {
-              setInput(v);
-              onInputChange?.(v);
-            }}
-            onSend={(text) => void send(text)}
-            onAbort={() => void abort()}
-            isBusy={isBusy}
-            attachments={state.attachments}
-            onAddAttachments={addAttachments}
-            onRemoveAttachment={removeAttachment}
-            queue={queue}
-            contextUsage={contextUsage}
-            files={files}
-            commands={commands}
-            sessionId={state.activeSessionId}
-            profileId={profileId}
-            filesToggle={filesToggleSlot}
-            toolbarExtras={
-              <>
-                {composerControlsSlot}
-                <ModelPicker
-                  groups={modelGroups}
-                  selectedModelId={state.selectedModelId}
-                  onSelect={(id) => {
-                    setSelectedModel(id || null);
-                    void models?.setSessionModel?.(
-                      state.activeSessionId || "draft",
-                      id,
-                      profileId,
-                    );
-                  }}
-                  disabled={isBusy}
-                />
-              </>
-            }
-          />
+          {urlHint && (
+            <ChatContentRail>
+              <button
+                type="button"
+                className="chat-open-web"
+                onClick={() => openWeb(urlHint)}
+              >
+                Open in Web Operator
+              </button>
+            </ChatContentRail>
+          )}
+          <ChatContentRail className="chat-composer-rail">
+            <CopilotChatInput
+              value={input}
+              onChange={(v) => {
+                setInput(v);
+                onInputChange?.(v);
+              }}
+              onSend={(text) => void send(text)}
+              onAbort={() => void abort()}
+              isBusy={isBusy}
+              attachments={state.attachments}
+              onAddAttachments={addAttachments}
+              onRemoveAttachment={removeAttachment}
+              queue={queue}
+              contextUsage={contextUsage}
+              files={files}
+              commands={commands}
+              sessionId={state.activeSessionId}
+              profileId={profileId}
+              filesToggle={filesToggleSlot}
+              toolbarExtras={
+                <>
+                  {composerControlsSlot}
+                  <ModelPicker
+                    groups={modelGroups}
+                    selectedModelId={state.selectedModelId}
+                    onSelect={(id) => {
+                      setSelectedModel(id || null);
+                      void models?.setSessionModel?.(
+                        state.activeSessionId || "draft",
+                        id,
+                        profileId,
+                      );
+                    }}
+                    disabled={isBusy}
+                  />
+                </>
+              }
+            />
+          </ChatContentRail>
         </div>
         {rightOpen && (
           <aside className="chat-right-panel">

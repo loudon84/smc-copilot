@@ -4,12 +4,12 @@ import { useI18n } from "@renderer/components/useI18n";
 import titleLine from "../../assets/title-line.png";
 
 interface Suggestion {
-  i18nKey: string;
+  i18nKey?: string;
   text: string;
-  Icon: typeof Search;
+  Icon?: typeof Search;
 }
 
-const SUGGESTIONS: Suggestion[] = [
+const DEFAULT_SUGGESTIONS: Suggestion[] = [
   {
     i18nKey: "chat.suggestionSearch",
     text: "Search the web for today's top tech news",
@@ -42,14 +42,43 @@ const SUGGESTIONS: Suggestion[] = [
   },
 ];
 
+export type ChatEmptyContext = {
+  expertName?: string;
+  teamName?: string;
+  description?: string;
+  suggestions?: Array<{ text: string; label?: string }>;
+};
+
 interface ChatEmptyStateProps {
   onSelectSuggestion: (text: string) => void;
+  emptyContext?: ChatEmptyContext;
 }
 
 export const ChatEmptyState = memo(function ChatEmptyState({
   onSelectSuggestion,
+  emptyContext,
 }: ChatEmptyStateProps): React.JSX.Element {
   const { t } = useI18n();
+  const heading =
+    emptyContext?.teamName ||
+    emptyContext?.expertName ||
+    "Hermes Default";
+  const description =
+    emptyContext?.description ||
+    (emptyContext?.expertName
+      ? `Ask ${emptyContext.expertName} to help with your next task.`
+      : emptyContext?.teamName
+        ? `Coordinate with ${emptyContext.teamName} on your next task.`
+        : "What can Hermes help you with today?");
+
+  const suggestions: Suggestion[] =
+    emptyContext?.suggestions && emptyContext.suggestions.length > 0
+      ? emptyContext.suggestions.map((s) => ({
+          text: s.text,
+          i18nKey: undefined,
+          Icon: Search,
+        }))
+      : DEFAULT_SUGGESTIONS;
 
   return (
     <div className="chat-empty chat-empty--rich">
@@ -62,18 +91,26 @@ export const ChatEmptyState = memo(function ChatEmptyState({
           height={160}
         />
       </div>
+      <div className="chat-empty-heading">{heading}</div>
+      <p className="chat-empty-desc">{description}</p>
       <div className="chat-empty-suggestions">
-        {SUGGESTIONS.map(({ i18nKey, text, Icon }) => (
-          <button
-            key={i18nKey}
-            type="button"
-            className="chat-suggestion"
-            onClick={() => onSelectSuggestion(text)}
-          >
-            <Icon size={16} />
-            <span>{t(i18nKey, { defaultValue: text })}</span>
-          </button>
-        ))}
+        {suggestions.slice(0, 6).map((item, idx) => {
+          const Icon = item.Icon || Search;
+          const label = item.i18nKey
+            ? t(item.i18nKey, { defaultValue: item.text })
+            : item.text;
+          return (
+            <button
+              key={`${idx}-${item.text.slice(0, 24)}`}
+              type="button"
+              className="chat-suggestion"
+              onClick={() => onSelectSuggestion(item.text)}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

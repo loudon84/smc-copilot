@@ -7,8 +7,7 @@ type Props = {
 };
 
 /**
- * Compact Chat header — Active Expert/Team + Ask/Plan/Craft + return default.
- * Task status lives in conditional TaskStatusBar (not ready-only).
+ * @deprecated v8.0.3 — use ChatRunHeader instead. Kept for legacy references.
  */
 export function ChatHeader({
   expertName,

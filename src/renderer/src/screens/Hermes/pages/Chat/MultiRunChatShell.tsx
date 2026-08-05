@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   ChatWorkspaceProvider,
   useChatWorkspace,
@@ -8,6 +8,7 @@ import {
   ChatRunHost,
   ChatRunTabs,
 } from "@renderer/modules/chat/workspace/ChatRunTabs";
+import { useHermesWorkspace } from "../../context/HermesWorkspaceContext";
 import { AiosCopilotChatHost } from "./AiosCopilotChatHost";
 
 function newRunId(): string {
@@ -19,58 +20,93 @@ function MultiRunChatShellInner({
 }: {
   hideActiveExpertBar?: boolean;
 }): React.JSX.Element {
+  const hermes = useHermesWorkspace();
   const {
     runs,
     activeRunId,
     setActiveRunId,
     openRun,
     closeRun,
+    patchRun,
+    renameRun,
   } = useChatWorkspace();
-  const [mountedIds, setMountedIds] = useState<string[]>([]);
+  const seededRef = useRef(false);
 
   useEffect(() => {
-    if (mountedIds.length > 0) return;
-    const id = newRunId();
+    if (runs.length > 0) {
+      seededRef.current = true;
+      return;
+    }
+    if (seededRef.current) {
+      // Last run closed — open a blank default run.
+      openRun({
+        runId: newRunId(),
+        profileId: hermes.activeProfileId || "default",
+        title: "New Chat",
+        workMode: hermes.workMode,
+      });
+      return;
+    }
+    seededRef.current = true;
+    if (hermes.mode === "expert" && hermes.activeExpertId) {
+      openRun({
+        runId: newRunId(),
+        profileId: hermes.activeProfileId || "default",
+        sessionId: hermes.activeSessionId,
+        mode: "expert",
+        expertId: hermes.activeExpertId,
+        expertRunId: hermes.activeRunId,
+        workMode: hermes.workMode,
+        title: "New Chat",
+      });
+      return;
+    }
+    if (hermes.mode === "team" && hermes.activeTeamId) {
+      openRun({
+        runId: newRunId(),
+        profileId: hermes.activeProfileId || "default",
+        sessionId: hermes.activeSessionId,
+        mode: "team",
+        teamId: hermes.activeTeamId,
+        expertRunId: hermes.activeRunId,
+        workMode: hermes.workMode,
+        title: "New Chat",
+      });
+      return;
+    }
     openRun({
-      runId: id,
-      profileId: "default",
-      title: "Chat",
+      runId: newRunId(),
+      profileId: hermes.activeProfileId || "default",
+      title: "New Chat",
+      workMode: hermes.workMode,
     });
-    setMountedIds([id]);
-  }, [mountedIds.length, openRun]);
+  }, [
+    hermes.activeExpertId,
+    hermes.activeProfileId,
+    hermes.activeRunId,
+    hermes.activeSessionId,
+    hermes.activeTeamId,
+    hermes.mode,
+    hermes.workMode,
+    openRun,
+    runs.length,
+  ]);
 
   useEffect(() => {
-    setMountedIds((prev) => {
-      const next = new Set(prev);
-      for (const r of runs) next.add(r.runId);
-      return [...next];
-    });
-  }, [runs]);
+    if (runs.length === 0) return;
+    if (!activeRunId || !runs.some((r) => r.runId === activeRunId)) {
+      setActiveRunId(runs[runs.length - 1].runId);
+    }
+  }, [activeRunId, runs, setActiveRunId]);
 
   const handleNew = useCallback(() => {
-    const id = newRunId();
-    openRun({ runId: id, profileId: "default", title: "Chat" });
-    setMountedIds((prev) => [...prev, id]);
-  }, [openRun]);
-
-  const handleClose = useCallback(
-    (runId: string) => {
-      closeRun(runId);
-      setMountedIds((prev) => {
-        const next = prev.filter((id) => id !== runId);
-        if (next.length === 0) {
-          const id = newRunId();
-          openRun({ runId: id, profileId: "default", title: "Chat" });
-          return [id];
-        }
-        if (activeRunId === runId && next[0]) {
-          setActiveRunId(next[0]);
-        }
-        return next;
-      });
-    },
-    [activeRunId, closeRun, openRun, setActiveRunId],
-  );
+    openRun({
+      runId: newRunId(),
+      profileId: hermes.activeProfileId || "default",
+      title: "New Chat",
+      workMode: hermes.workMode,
+    });
+  }, [hermes.activeProfileId, hermes.workMode, openRun]);
 
   return (
     <div className="multi-run-chat-shell">
@@ -78,20 +114,23 @@ function MultiRunChatShellInner({
         runs={runs}
         activeRunId={activeRunId}
         onSelect={setActiveRunId}
-        onClose={handleClose}
+        onClose={closeRun}
         onNew={handleNew}
+        onRename={renameRun}
       />
       <BackgroundRunIndicator runs={runs} activeRunId={activeRunId} />
       <div className="multi-run-chat-hosts">
-        {mountedIds.map((runId) => (
+        {runs.map((run) => (
           <ChatRunHost
-            key={runId}
-            runId={runId}
-            active={runId === activeRunId}
+            key={run.runId}
+            runId={run.runId}
+            active={run.runId === activeRunId}
           >
             <AiosCopilotChatHost
-              hideActiveExpertBar={hideActiveExpertBar}
-              runId={runId}
+              run={run}
+              active={run.runId === activeRunId}
+              onPatchRun={patchRun}
+              hideWorkControls={hideActiveExpertBar}
             />
           </ChatRunHost>
         ))}

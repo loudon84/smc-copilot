@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
 import { ChatSurface } from "@renderer/modules/chat/components/ChatSurface";
+import type { ControllerStateChangeSnapshot } from "@renderer/modules/chat/components/ChatSurface";
 import {
   aiosChatRuntimeAdapter,
   aiosSessionAdapter,
@@ -10,140 +11,292 @@ import {
   aiosCommandAdapter,
   composeWorkPrompt,
 } from "@renderer/modules/chat/adapters/aios";
-import type { ChatRunState } from "@renderer/modules/chat/controller/chatViewTypes";
 import type { ChatFileRef } from "@renderer/modules/chat/ports/ChatFilesPort";
 import { SessionFilesPanel } from "@renderer/modules/chat/components/session-files/SessionFilesPanel";
 import { FilePreviewPanel } from "@renderer/modules/chat/components/files/preview/FilePreviewPanel";
 import { useFilePreview } from "@renderer/modules/chat/hooks/files/useFilePreview";
+import { ChatRunHeader } from "@renderer/modules/chat/components/header/ChatRunHeader";
+import { ChatRunStatus } from "@renderer/modules/chat/components/header/ChatRunStatus";
+import { WorkContextChip } from "@renderer/modules/chat/components/composer/WorkContextChip";
+import { WorkContextPopover } from "@renderer/modules/chat/components/composer/WorkContextPopover";
 import {
-  upsertChatRun,
-  patchChatRun,
-} from "@renderer/modules/chat/workspace/chatRunRegistry";
-import type { ChatTaskStatus } from "./types/chat-task-window";
-import { HermesActiveExpertBar } from "./components/HermesActiveExpertBar";
-import { TaskStatusBar } from "./components/TaskStatusBar";
-import { WorkComposerControls } from "./components/work/WorkComposerControls";
-import { PromptHintComposer } from "./components/PromptHintComposer";
-import { ChatHeader } from "@renderer/modules/chat/components/ChatHeader";
-import { useHermesWorkspace } from "../../context/HermesWorkspaceContext";
-import { useWorkChatContext } from "./hooks/useWorkChatContext";
+  PromptAssistPanel,
+  resolveEffectivePromptHint,
+} from "@renderer/modules/chat/components/composer/PromptAssistPanel";
+import { ComposerMoreMenu } from "@renderer/modules/chat/components/composer/ComposerMoreMenu";
+import type {
+  ChatRunRecord,
+  DeepPartial,
+  PromptHintState,
+} from "@renderer/modules/chat/workspace/ChatRunRecord";
+import {
+  useRunWorkContext,
+  setRunWorkGatewayHealthApi,
+} from "@renderer/modules/chat/workspace/useRunWorkContext";
+import { useChatWorkspace } from "@renderer/modules/chat/workspace/ChatWorkspaceProvider";
+import {
+  buildExpertPromptHint,
+  shouldBuildExpertPromptHint,
+} from "./utils/buildExpertPromptHint";
+import { ExpertSelector } from "./components/work/ExpertSelector";
+import { ExpertSkillSelector } from "./components/work/ExpertSkillSelector";
+import { PermissionSelector } from "./components/work/PermissionSelector";
+import { GatewayStatusBadge } from "./components/work/GatewayStatusBadge";
+import { workExpertGatewayApi } from "../../api/workExpertGatewayApi";
+import type { UseWorkChatContextReturn } from "../../types/work-chat";
+
+setRunWorkGatewayHealthApi({
+  getHealth: () => workExpertGatewayApi.getHealth(),
+});
 
 type Props = {
-  forcedSessionId?: string | null;
-  hideActiveExpertBar?: boolean;
-  /** Stable run id from MultiRunChatShell (background streaming isolation). */
-  runId?: string;
+  run: ChatRunRecord;
+  active: boolean;
+  onPatchRun: (runId: string, patch: DeepPartial<ChatRunRecord>) => void;
+  hideWorkControls?: boolean;
 };
 
-function mapRunStateToTaskStatus(runState: ChatRunState): ChatTaskStatus {
-  switch (runState) {
-    case "creating":
-      return "creating";
-    case "streaming":
-      return "running";
-    case "waiting_approval":
-      return "waiting_approval";
-    case "waiting_clarify":
-      return "waiting_tool";
-    case "completed":
-      return "completed";
-    case "failed":
-      return "failed";
-    case "cancelled":
-      return "cancelled";
-    default:
-      return "ready";
-  }
+function useComposerDensity(): "full" | "expert" | "icon" {
+  const [width, setWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1280,
+  );
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  if (width >= 1280) return "full";
+  if (width >= 960) return "expert";
+  return "icon";
 }
 
 /**
  * Host that mounts Copilot ChatSurface with AI-OS Work slots + adapters.
- * v8.0.2: right-panel tri-state, Work toolbar (no duplicate context bar),
- * Prompt Hint bound to composer input.
+ * v8.0.3: per-run state via ChatRunRecord; single header; compact composer.
  */
 export function AiosCopilotChatHost({
-  forcedSessionId,
-  hideActiveExpertBar,
-  runId: runIdProp,
-}: Props = {}): React.JSX.Element {
-  const workspace = useHermesWorkspace();
-  const workContext = useWorkChatContext();
-  const profileId = workspace.activeProfileId || "default";
-  const showWorkControls = !hideActiveExpertBar;
-  const hostRunId = runIdProp || `host-${useId().replace(/:/g, "")}`;
+  run,
+  active,
+  onPatchRun,
+  hideWorkControls,
+}: Props): React.JSX.Element {
+  const workContext = useRunWorkContext(run.runId);
+  const { applyControllerSnapshot } = useChatWorkspace();
+  const density = useComposerDensity();
+  const showWorkControls = !hideWorkControls;
+  const profileId = run.identity.profileId || "default";
+  const sessionId = run.identity.sessionId;
 
-  const [sessionFilesVisible, setSessionFilesVisible] = useState(false);
-  const [previewMaximized, setPreviewMaximized] = useState(false);
-  const [composerInput, setComposerInput] = useState("");
-  const [customPromptHint, setCustomPromptHint] = useState<string | null>(null);
   const filePreview = useFilePreview();
 
-  const sessionId = forcedSessionId ?? workspace.activeSessionId;
+  // Sync panel visibility with run presentation
+  const sessionFilesVisible = run.presentation.sessionFilesVisible;
+  const previewMaximized = run.presentation.previewMaximized;
 
-  const invocationSource =
-    workspace.mode === "expert"
-      ? "expert_chat"
-      : workspace.mode === "team"
-        ? "team_chat"
-        : "default_chat";
+  const setSessionFilesVisible = useCallback(
+    (visible: boolean | ((prev: boolean) => boolean)) => {
+      const next =
+        typeof visible === "function"
+          ? visible(run.presentation.sessionFilesVisible)
+          : visible;
+      onPatchRun(run.runId, {
+        presentation: { sessionFilesVisible: next },
+      });
+    },
+    [onPatchRun, run.presentation.sessionFilesVisible, run.runId],
+  );
+
+  const setPreviewMaximized = useCallback(
+    (value: boolean | ((prev: boolean) => boolean)) => {
+      const next =
+        typeof value === "function"
+          ? value(run.presentation.previewMaximized)
+          : value;
+      onPatchRun(run.runId, {
+        presentation: { previewMaximized: next },
+      });
+    },
+    [onPatchRun, run.presentation.previewMaximized, run.runId],
+  );
+
+  const [composerInput, setComposerInput] = useState(
+    run.presentation.draft || "",
+  );
 
   useEffect(() => {
-    upsertChatRun({
-      runId: hostRunId,
-      sessionId: sessionId ?? null,
-      profileId,
-      expertRunId: workspace.activeRunId,
-      title: workContext.selectedSkill?.name || "Chat",
-      loading: false,
-      unread: false,
-      completed: false,
+    setComposerInput(run.presentation.draft || "");
+  }, [run.runId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset draft on run switch only
+
+  const promptHintState: PromptHintState = run.presentation.promptHint ?? {
+    mode: "auto",
+  };
+
+  const setPromptHintState = useCallback(
+    (next: PromptHintState) => {
+      onPatchRun(run.runId, { presentation: { promptHint: next } });
+    },
+    [onPatchRun, run.runId],
+  );
+
+  const selectorContext = workContext as unknown as UseWorkChatContextReturn;
+
+  const autoHint = useMemo(() => {
+    if (
+      !workContext.selectedExpert ||
+      !workContext.selectedSkill ||
+      !shouldBuildExpertPromptHint({
+        expertName: workContext.selectedExpert.name,
+        skillName: workContext.selectedSkill.name,
+      })
+    ) {
+      return "";
+    }
+    return buildExpertPromptHint({
+      userMessage: composerInput.trim() || "(empty message)",
+      expertName: workContext.selectedExpert.name,
+      expertId: workContext.selectedExpert.expertId,
+      skillName: workContext.selectedSkill.name,
+      permissionMode: workContext.permissionMode,
     });
   }, [
-    hostRunId,
-    profileId,
-    sessionId,
-    workspace.activeRunId,
-    workContext.selectedSkill?.name,
+    composerInput,
+    workContext.permissionMode,
+    workContext.selectedExpert,
+    workContext.selectedSkill,
   ]);
-
-  const hintInput = useMemo(
-    () =>
-      workContext.selectedExpert && workContext.selectedSkill
-        ? {
-            expertName: workContext.selectedExpert.name,
-            expertId: workContext.selectedExpert.expertId,
-            skillName: workContext.selectedSkill.name,
-            permissionMode: workContext.permissionMode,
-          }
-        : null,
-    [
-      workContext.selectedExpert,
-      workContext.selectedSkill,
-      workContext.permissionMode,
-    ],
-  );
 
   const composeMessage = useCallback(
     (raw: string) => {
-      if (customPromptHint && customPromptHint.trim()) {
-        return customPromptHint.trim();
-      }
-      return composeWorkPrompt({
-        userMessage: raw,
-        selectedExpert: workContext.selectedExpert,
-        selectedSkill: workContext.selectedSkill,
-        permissionMode: workContext.permissionMode,
-      });
+      const auto =
+        workContext.selectedExpert && workContext.selectedSkill
+          ? composeWorkPrompt({
+              userMessage: raw,
+              selectedExpert: workContext.selectedExpert,
+              selectedSkill: workContext.selectedSkill,
+              permissionMode: workContext.permissionMode,
+            })
+          : raw;
+      return resolveEffectivePromptHint(promptHintState, auto, raw);
     },
     [
-      customPromptHint,
+      promptHintState,
+      workContext.permissionMode,
       workContext.selectedExpert,
       workContext.selectedSkill,
-      workContext.permissionMode,
     ],
   );
 
-  const showRightPanel = sessionFilesVisible || filePreview.state.open;
+  const headerLabel =
+    run.context.mode === "team"
+      ? run.context.teamName || run.context.teamId || "Team"
+      : run.context.mode === "expert"
+        ? run.context.expertName || run.context.expertId || "Expert"
+        : "Hermes Default";
+
+  const handleControllerState = useCallback(
+    (snapshot: ControllerStateChangeSnapshot) => {
+      applyControllerSnapshot(
+        {
+          runId: run.runId,
+          sessionId: snapshot.sessionId,
+          runState: snapshot.runState,
+          selectedModelId: snapshot.selectedModelId,
+          firstUserPrompt: snapshot.firstUserPrompt,
+        },
+        active,
+      );
+    },
+    [active, applyControllerSnapshot, run.runId],
+  );
+
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setComposerInput(value);
+      onPatchRun(run.runId, { presentation: { draft: value } });
+    },
+    [onPatchRun, run.runId],
+  );
+
+  const showRightPanel =
+    sessionFilesVisible || filePreview.state.open;
+
+  const emptyContext = useMemo(() => {
+    if (run.context.mode === "team") {
+      return {
+        teamName: run.context.teamName || run.context.teamId,
+        description: "Coordinate with your team on the next deliverable.",
+      };
+    }
+    if (run.context.mode === "expert" && run.context.expertName) {
+      const suggestions = run.context.skillName
+        ? [
+            {
+              text: `Use skill ${run.context.skillName} to analyze this`,
+              label: run.context.skillDisplayName || run.context.skillName,
+            },
+            {
+              text: `Ask ${run.context.expertName} for a step-by-step plan`,
+            },
+            {
+              text: `Summarize key risks for ${run.context.expertName}`,
+            },
+          ]
+        : undefined;
+      return {
+        expertName: run.context.expertName,
+        description: `Ask ${run.context.expertName} to help with your next task.`,
+        suggestions,
+      };
+    }
+    return undefined;
+  }, [run.context]);
+
+  const contextPopover = (
+    <WorkContextPopover onClear={workContext.clearContext}>
+      <GatewayStatusBadge status={workContext.gatewayStatus} />
+      <ExpertSelector context={selectorContext} />
+      <ExpertSkillSelector context={selectorContext} />
+      <PermissionSelector context={selectorContext} />
+    </WorkContextPopover>
+  );
+
+  const workChip = showWorkControls ? (
+    <WorkContextChip
+      expertName={workContext.selectedExpert?.name}
+      skillName={
+        workContext.selectedSkill?.displayName ||
+        workContext.selectedSkill?.name
+      }
+      gatewayStatus={workContext.gatewayStatus}
+      density={density === "full" ? "full" : density === "expert" ? "expert" : "icon"}
+    >
+      {contextPopover}
+    </WorkContextChip>
+  ) : null;
+
+  const promptHintControl = showWorkControls ? (
+    <PromptAssistPanel
+      state={promptHintState}
+      autoHint={autoHint}
+      density={density === "icon" ? "icon" : "full"}
+      onChange={setPromptHintState}
+    />
+  ) : null;
+
+  const composerControls =
+    showWorkControls && density === "icon" ? (
+      <div className="aios-work-composer-toolbar aios-work-composer-toolbar--compact">
+        {workChip}
+        <ComposerMoreMenu>
+          {promptHintControl}
+        </ComposerMoreMenu>
+      </div>
+    ) : showWorkControls ? (
+      <div className="aios-work-composer-toolbar">
+        {workChip}
+        {promptHintControl}
+      </div>
+    ) : null;
 
   return (
     <ChatSurface
@@ -155,21 +308,22 @@ export function AiosCopilotChatHost({
       commands={aiosCommandAdapter}
       profileId={profileId}
       sessionId={sessionId}
-      runId={hostRunId}
-      expertId={workspace.activeExpertId}
-      teamId={workspace.activeTeamId}
-      expertRunId={workspace.activeRunId}
-      workMode={workspace.workMode}
-      permissionMode={workContext.permissionMode}
-      invocationSource={invocationSource}
+      runId={run.runId}
+      expertId={run.context.expertId}
+      teamId={run.context.teamId}
+      expertRunId={run.execution.expertRunId}
+      workMode={run.context.workMode}
+      permissionMode={run.context.permissionMode}
+      invocationSource={run.execution.invocationSource}
       composeMessage={composeMessage}
-      onInputChange={setComposerInput}
+      onInputChange={handleInputChange}
+      emptyContext={emptyContext}
       onSessionIdChange={(id) => {
-        workspace.setActiveSessionId(id);
-        patchChatRun(hostRunId, { sessionId: id });
+        onPatchRun(run.runId, { identity: { sessionId: id } });
       }}
+      onControllerStateChange={handleControllerState}
       onRuntimeCommand={(command) => {
-        const runId = hostRunId;
+        const runId = run.runId;
         if (command.type === "clarify.respond") {
           void aiosChatRuntimeAdapter.command?.({
             type: "clarify.respond",
@@ -194,46 +348,27 @@ export function AiosCopilotChatHost({
       }}
       activeExpertSlot={
         showWorkControls ? (
-          <>
-            <ChatHeader
-              expertName={workContext.selectedExpert?.name}
-              workMode={workspace.workMode}
-              onReturnDefault={() => {
-                /* workspace clears active expert via HermesActiveExpertBar */
-              }}
-              onWorkModeChange={(mode) => workspace.setWorkMode(mode)}
-            />
-            <HermesActiveExpertBar />
-          </>
-        ) : null
-      }
-      renderStatusBar={({ runState, toolProgress }) => {
-        const status = mapRunStateToTaskStatus(runState);
-        if (status === "ready") return null;
-        return (
-          <TaskStatusBar
-            title={workContext.selectedSkill?.name || "Chat"}
-            status={status}
-            expertName={workContext.selectedExpert?.name}
-            skillName={workContext.selectedSkill?.name}
-            profileId={profileId}
-            durationMs={0}
-            toolLabel={toolProgress || undefined}
+          <ChatRunHeader
+            mode={run.context.mode}
+            label={headerLabel}
+            skillName={run.context.skillName}
+            skillDisplayName={run.context.skillDisplayName}
+            workMode={run.context.workMode}
+            showReturnDefault={run.context.mode !== "default"}
+            onReturnDefault={() => workContext.clearContext()}
+            onWorkModeChange={(mode) => workContext.setWorkMode(mode)}
           />
-        );
-      }}
-      composerControlsSlot={
-        showWorkControls ? (
-          <div className="aios-work-composer-toolbar">
-            <WorkComposerControls context={workContext} />
-            <PromptHintComposer
-              userMessage={composerInput}
-              hintInput={hintInput}
-              onHintChange={setCustomPromptHint}
-            />
-          </div>
         ) : null
       }
+      renderStatusBar={({ runState, toolProgress, usage }) => (
+        <ChatRunStatus
+          runState={runState}
+          toolLabel={toolProgress}
+          usage={usage}
+          startedAt={run.execution.startedAt}
+        />
+      )}
+      composerControlsSlot={composerControls}
       filesToggleSlot={
         <button
           type="button"

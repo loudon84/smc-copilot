@@ -7,12 +7,16 @@ import {
   getChatRun,
 } from "../src/renderer/src/modules/chat/workspace/chatRunRegistry";
 
-describe("chatRunRegistry multi-chat isolation", () => {
+/**
+ * Legacy registry — retained for compatibility until callers migrate fully.
+ * New isolation tests live in chat-workspace-reducer.test.ts.
+ */
+describe("chatRunRegistry (legacy compat)", () => {
   beforeEach(() => {
     __resetChatRunRegistryForTests();
   });
 
-  it("tracks three concurrent runs independently", () => {
+  it("tracks concurrent runs independently", () => {
     upsertChatRun({
       runId: "r1",
       sessionId: "s1",
@@ -31,19 +35,9 @@ describe("chatRunRegistry multi-chat isolation", () => {
       unread: false,
       completed: false,
     });
-    upsertChatRun({
-      runId: "r3",
-      sessionId: null,
-      profileId: "writer",
-      title: "C",
-      loading: false,
-      unread: false,
-      completed: false,
-    });
     patchChatRun("r2", { loading: false, completed: true, unread: true });
     expect(getChatRun("r1")?.loading).toBe(true);
     expect(getChatRun("r2")?.completed).toBe(true);
-    expect(getChatRun("r3")?.profileId).toBe("writer");
-    expect(listChatRuns()).toHaveLength(3);
+    expect(listChatRuns()).toHaveLength(2);
   });
 });

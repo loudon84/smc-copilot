@@ -26,6 +26,14 @@ Concurrent chat turns are isolated by `runId` through [[src/main/chat-runtime/ch
 
 See [[domain/chat#Chat runtime isolation]].
 
+## Chat workspace per-run state (v8.0.3)
+
+Each Chat Run owns Session/Expert/Skill/WorkMode in `ChatRunRecord`; do not share them via `HermesWorkspaceContext`.
+
+Multi-run UI state lives in `ChatWorkspaceProvider`. Return Default clears only the active run. Tab titles come from session/user/first prompt — never Skill name. One `ChatRunHeader`, shared content rail, and compact Context Chip keep layout and payload consistent. Hermes navigation may seed a run once; it is not the live Session/Expert store.
+
+See [[domain/chat#Chat workspace per-run state]], [[domain/chat#Host and navigation seeding]], [[domain/chat#Unified header and content rail]], [[domain/chat#Composer context chip]], [[domain/chat#Run tabs and titles]], [[domain/chat#Workspace persistence]].
+
 ## Chat must not bypass Hermes MCP host mode
 
 After v7.6, Chat business paths use Hermes Agent MCP host mode (`hermesDefaultChat` + prompt hints). Chat must not call `nodeskclaw` Runtime Skill or `hermesExperts.callCatalogSkill` for ordinary sends.
