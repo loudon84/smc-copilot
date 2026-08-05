@@ -21,6 +21,7 @@ export function hasActiveRun(runId: string): boolean {
   return activeRuns.has(runId);
 }
 
+// @lat: [[domain/chat#Chat runtime isolation]]
 export function setActiveRun(runId: string, handle: ChatRunHandle): void {
   const previous = activeRuns.get(runId);
   if (previous) {

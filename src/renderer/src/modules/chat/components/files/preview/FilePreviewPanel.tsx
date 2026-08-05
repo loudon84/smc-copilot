@@ -83,15 +83,15 @@ export function FilePreviewPanel({
 
   const handleOpenExternal = (): void => {
     if (!fileId) return;
-    void window.hermesAPI.files.openExternal(profile, fileId);
+    void window.chatFiles.platform.openExternal(profile, fileId);
   };
   const handleReveal = (): void => {
     if (!fileId) return;
-    void window.hermesAPI.files.revealInFolder(profile, fileId);
+    void window.chatFiles.platform.revealInFolder(profile, fileId);
   };
   const handleSaveAs = (): void => {
     if (!fileId) return;
-    void window.hermesAPI.files.saveAs(profile, fileId);
+    void window.chatFiles.platform.saveAs(profile, fileId);
   };
 
   const createFromMessageDoc = async (
@@ -103,7 +103,7 @@ export function FilePreviewPanel({
     if (!effectiveSessionId) return;
     setDocBusy(true);
     try {
-      const result = await window.hermesAPI.files.createFromMessage({
+      const result = await window.chatFiles.platform.createFromMessage({
         profile,
         sessionId: effectiveSessionId,
         messageId: source.messageId,
@@ -113,7 +113,7 @@ export function FilePreviewPanel({
       });
       onMessageFileCreated?.(result.file.id);
       if (thenSaveAs) {
-        await window.hermesAPI.files.saveAs(profile, result.file.id);
+        await window.chatFiles.platform.saveAs(profile, result.file.id);
       }
     } catch {
       /* surfaced via toast elsewhere if needed */
@@ -131,7 +131,7 @@ export function FilePreviewPanel({
   const handleAddToContext = (): void => {
     if (!canAddToContext || !sessionId || !fileId) return;
     setContextBusy(true);
-    void window.hermesAPI.files
+    void window.chatFiles.platform
       .addToSessionContext({ profile, sessionId, fileId })
       .catch(() => undefined)
       .finally(() => setContextBusy(false));
@@ -140,7 +140,7 @@ export function FilePreviewPanel({
   const handleRetryParse = (): void => {
     if (!canRetryParse || !fileId) return;
     setParseBusy(true);
-    void window.hermesAPI.files
+    void window.chatFiles.platform
       .retryParse(profile, fileId)
       .then(() => onRetry())
       .catch(() => undefined)

@@ -6,10 +6,10 @@ import type {
 } from "@shared/chat-files";
 
 export type FilePickerPickResult =
-  /** `hermesAPI.files.pickFiles` ran â€” results are File Platform imports
+  /** `chatFiles.platform.pickFiles` ran â€?results are File Platform imports
    * (staged/hashed on Main; no renderer byte access needed). */
   | { source: "managed"; results: FileImportResult[] }
-  /** Fallback hidden `<input type="file">` â€” plain browser `File[]`, the
+  /** Fallback hidden `<input type="file">` â€?plain browser `File[]`, the
    * shape `attachmentUtils.processFiles` already knows how to ingest. */
   | { source: "raw"; files: File[] };
 
@@ -51,7 +51,7 @@ function pickViaHiddenInput(accept?: string, multiple = true): Promise<File[]> {
       () => finish(input.files ? Array.from(input.files) : []),
       { once: true },
     );
-    // Dialog cancellation fires no `change` event â€” resolve empty once the
+    // Dialog cancellation fires no `change` event â€?resolve empty once the
     // window regains focus (the dialog closing) so `picking` doesn't hang.
     const onWindowFocus = (): void => {
       setTimeout(() => finish(input.files ? Array.from(input.files) : []), 300);
@@ -64,9 +64,9 @@ function pickViaHiddenInput(accept?: string, multiple = true): Promise<File[]> {
 }
 
 /**
- * Opens the native "managed" file dialog via `hermesAPI.files.pickFiles`
+ * Opens the native "managed" file dialog via `chatFiles.platform.pickFiles`
  * when an import `context` is supplied, otherwise falls back to a hidden
- * `<input type="file">` â€” the same mechanism the composer's paperclip
+ * `<input type="file">` â€?the same mechanism the composer's paperclip
  * button already uses, kept intact for the legacy `Attachment` send path.
  */
 export function useFilePicker(
@@ -80,7 +80,7 @@ export function useFilePicker(
     const { context, pickerOptions, accept, multiple } = optionsRef.current;
     setPicking(true);
     try {
-      const filesApi = window.hermesAPI?.files;
+      const filesApi = window.chatFiles?.platform;
       if (context && filesApi?.pickFiles) {
         const results = await filesApi.pickFiles(pickerOptions, context);
         return { source: "managed", results };

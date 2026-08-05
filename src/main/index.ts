@@ -188,6 +188,7 @@ import {
   shutdownChatRuntimeIpc,
 } from "./chat-runtime/chat-runtime-ipc";
 import { registerChatFilesIpc } from "./chat-files/chat-files-ipc";
+import { registerFilesIpcHandlers } from "./chat-files/platform/register-file-ipc";
 import { registerWebOperatorTaskSessionIpc } from "./web-operator-task-session-ipc";
 import { setupProfileRoleIPC } from "./profile-role-ipc";
 import { registerFirstRunWizardIPC } from "./enterprise/first-run-wizard";
@@ -476,6 +477,7 @@ function setupIPC(): void {
     });
     registerChatRuntimeIpc(() => mainWindow);
     registerChatFilesIpc();
+    registerFilesIpcHandlers(ipcMain);
     registerMcpIpc(() => mainWindow);
     seedDefaultMcpServers();
     registerMcpSkillGatewayRuntimeIpc();

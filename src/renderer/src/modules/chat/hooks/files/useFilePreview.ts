@@ -64,7 +64,7 @@ export function useFilePreview(): UseFilePreviewResult {
         });
       }
       try {
-        const result = await window.hermesAPI.files.getPreview(
+        const result = await window.chatFiles.platform.getPreview(
           profile,
           fileId,
           options,

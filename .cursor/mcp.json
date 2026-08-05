@@ -9,6 +9,12 @@
         "--path",
         "E:\\git-ai\\smc-coworker-full\\copilot-desktop"
       ]
+    },
+    "lat": {
+      "command": "lat",
+      "args": [
+        "mcp"
+      ]
     }
   }
 }

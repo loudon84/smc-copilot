@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { PanelRightOpen } from "lucide-react";
 import { ChatSurface } from "@renderer/modules/chat/components/ChatSurface";
 import {
   aiosChatRuntimeAdapter,
@@ -6,12 +7,14 @@ import {
   aiosFilesAdapter,
   aiosModelsAdapter,
   aiosNavigationAdapter,
+  aiosCommandAdapter,
   composeWorkPrompt,
 } from "@renderer/modules/chat/adapters/aios";
 import type { ChatRunState } from "@renderer/modules/chat/controller/chatViewTypes";
 import type { ChatFileRef } from "@renderer/modules/chat/ports/ChatFilesPort";
 import { SessionFilesPanel } from "@renderer/modules/chat/components/session-files/SessionFilesPanel";
-import { FilePreviewPanel } from "@renderer/modules/chat/components/session-files/FilePreviewPanel";
+import { FilePreviewPanel } from "@renderer/modules/chat/components/files/preview/FilePreviewPanel";
+import { useFilePreview } from "@renderer/modules/chat/hooks/files/useFilePreview";
 import {
   upsertChatRun,
   patchChatRun,
@@ -19,15 +22,17 @@ import {
 import type { ChatTaskStatus } from "./types/chat-task-window";
 import { HermesActiveExpertBar } from "./components/HermesActiveExpertBar";
 import { TaskStatusBar } from "./components/TaskStatusBar";
-import { WorkChatContextBar } from "./components/work/WorkChatContextBar";
 import { WorkComposerControls } from "./components/work/WorkComposerControls";
 import { PromptHintComposer } from "./components/PromptHintComposer";
+import { ChatHeader } from "@renderer/modules/chat/components/ChatHeader";
 import { useHermesWorkspace } from "../../context/HermesWorkspaceContext";
 import { useWorkChatContext } from "./hooks/useWorkChatContext";
 
 type Props = {
   forcedSessionId?: string | null;
   hideActiveExpertBar?: boolean;
+  /** Stable run id from MultiRunChatShell (background streaming isolation). */
+  runId?: string;
 };
 
 function mapRunStateToTaskStatus(runState: ChatRunState): ChatTaskStatus {
@@ -53,17 +58,25 @@ function mapRunStateToTaskStatus(runState: ChatRunState): ChatTaskStatus {
 
 /**
  * Host that mounts Copilot ChatSurface with AI-OS Work slots + adapters.
+ * v8.0.2: right-panel tri-state, Work toolbar (no duplicate context bar),
+ * Prompt Hint bound to composer input.
  */
 export function AiosCopilotChatHost({
   forcedSessionId,
   hideActiveExpertBar,
+  runId: runIdProp,
 }: Props = {}): React.JSX.Element {
   const workspace = useHermesWorkspace();
   const workContext = useWorkChatContext();
   const profileId = workspace.activeProfileId || "default";
   const showWorkControls = !hideActiveExpertBar;
-  const hostRunId = `host-${useId().replace(/:/g, "")}`;
-  const [previewFile, setPreviewFile] = useState<ChatFileRef | null>(null);
+  const hostRunId = runIdProp || `host-${useId().replace(/:/g, "")}`;
+
+  const [sessionFilesVisible, setSessionFilesVisible] = useState(false);
+  const [previewMaximized, setPreviewMaximized] = useState(false);
+  const [composerInput, setComposerInput] = useState("");
+  const [customPromptHint, setCustomPromptHint] = useState<string | null>(null);
+  const filePreview = useFilePreview();
 
   const sessionId = forcedSessionId ?? workspace.activeSessionId;
 
@@ -93,20 +106,44 @@ export function AiosCopilotChatHost({
     workContext.selectedSkill?.name,
   ]);
 
-  const composeMessage = useCallback(
-    (raw: string) =>
-      composeWorkPrompt({
-        userMessage: raw,
-        selectedExpert: workContext.selectedExpert,
-        selectedSkill: workContext.selectedSkill,
-        permissionMode: workContext.permissionMode,
-      }),
+  const hintInput = useMemo(
+    () =>
+      workContext.selectedExpert && workContext.selectedSkill
+        ? {
+            expertName: workContext.selectedExpert.name,
+            expertId: workContext.selectedExpert.expertId,
+            skillName: workContext.selectedSkill.name,
+            permissionMode: workContext.permissionMode,
+          }
+        : null,
     [
       workContext.selectedExpert,
       workContext.selectedSkill,
       workContext.permissionMode,
     ],
   );
+
+  const composeMessage = useCallback(
+    (raw: string) => {
+      if (customPromptHint && customPromptHint.trim()) {
+        return customPromptHint.trim();
+      }
+      return composeWorkPrompt({
+        userMessage: raw,
+        selectedExpert: workContext.selectedExpert,
+        selectedSkill: workContext.selectedSkill,
+        permissionMode: workContext.permissionMode,
+      });
+    },
+    [
+      customPromptHint,
+      workContext.selectedExpert,
+      workContext.selectedSkill,
+      workContext.permissionMode,
+    ],
+  );
+
+  const showRightPanel = sessionFilesVisible || filePreview.state.open;
 
   return (
     <ChatSurface
@@ -115,6 +152,7 @@ export function AiosCopilotChatHost({
       files={aiosFilesAdapter}
       models={aiosModelsAdapter}
       navigation={aiosNavigationAdapter}
+      commands={aiosCommandAdapter}
       profileId={profileId}
       sessionId={sessionId}
       runId={hostRunId}
@@ -125,6 +163,7 @@ export function AiosCopilotChatHost({
       permissionMode={workContext.permissionMode}
       invocationSource={invocationSource}
       composeMessage={composeMessage}
+      onInputChange={setComposerInput}
       onSessionIdChange={(id) => {
         workspace.setActiveSessionId(id);
         patchChatRun(hostRunId, { sessionId: id });
@@ -153,56 +192,96 @@ export function AiosCopilotChatHost({
           });
         }
       }}
-      activeExpertSlot={showWorkControls ? <HermesActiveExpertBar /> : null}
-      renderStatusBar={({ runState, toolProgress }) => (
-        <TaskStatusBar
-          title={workContext.selectedSkill?.name || "Chat"}
-          status={mapRunStateToTaskStatus(runState)}
-          expertName={workContext.selectedExpert?.name}
-          skillName={workContext.selectedSkill?.name}
-          profileId={profileId}
-          durationMs={0}
-          toolLabel={toolProgress || undefined}
-        />
-      )}
-      contextBarSlot={
+      activeExpertSlot={
         showWorkControls ? (
           <>
-            <WorkChatContextBar context={workContext} />
-            <PromptHintComposer
-              userMessage=""
-              hintInput={
-                workContext.selectedExpert && workContext.selectedSkill
-                  ? {
-                      expertName: workContext.selectedExpert.name,
-                      expertId: workContext.selectedExpert.expertId,
-                      skillName: workContext.selectedSkill.name,
-                      permissionMode: workContext.permissionMode,
-                    }
-                  : null
-              }
+            <ChatHeader
+              expertName={workContext.selectedExpert?.name}
+              workMode={workspace.workMode}
+              onReturnDefault={() => {
+                /* workspace clears active expert via HermesActiveExpertBar */
+              }}
+              onWorkModeChange={(mode) => workspace.setWorkMode(mode)}
             />
+            <HermesActiveExpertBar />
           </>
         ) : null
       }
+      renderStatusBar={({ runState, toolProgress }) => {
+        const status = mapRunStateToTaskStatus(runState);
+        if (status === "ready") return null;
+        return (
+          <TaskStatusBar
+            title={workContext.selectedSkill?.name || "Chat"}
+            status={status}
+            expertName={workContext.selectedExpert?.name}
+            skillName={workContext.selectedSkill?.name}
+            profileId={profileId}
+            durationMs={0}
+            toolLabel={toolProgress || undefined}
+          />
+        );
+      }}
       composerControlsSlot={
-        showWorkControls ? <WorkComposerControls context={workContext} /> : null
+        showWorkControls ? (
+          <div className="aios-work-composer-toolbar">
+            <WorkComposerControls context={workContext} />
+            <PromptHintComposer
+              userMessage={composerInput}
+              hintInput={hintInput}
+              onHintChange={setCustomPromptHint}
+            />
+          </div>
+        ) : null
       }
+      filesToggleSlot={
+        <button
+          type="button"
+          className="copilot-icon-btn"
+          title="Session files"
+          onClick={() => setSessionFilesVisible((v) => !v)}
+        >
+          <PanelRightOpen size={16} />
+        </button>
+      }
+      showRightPanel={showRightPanel}
       filesPanelSlot={
-        <>
-          <SessionFilesPanel
-            files={aiosFilesAdapter}
-            sessionId={sessionId}
-            profileId={profileId}
-            onPreview={setPreviewFile}
-          />
-          <FilePreviewPanel
-            files={aiosFilesAdapter}
-            file={previewFile}
-            profileId={profileId}
-            onClose={() => setPreviewFile(null)}
-          />
-        </>
+        showRightPanel ? (
+          <>
+            {sessionFilesVisible && (
+              <SessionFilesPanel
+                files={aiosFilesAdapter}
+                sessionId={sessionId}
+                profileId={profileId}
+                onPreview={(f: ChatFileRef) => {
+                  setPreviewMaximized(false);
+                  void filePreview.openPreview(f.id, profileId);
+                }}
+                onClose={() => setSessionFilesVisible(false)}
+              />
+            )}
+            {filePreview.state.open ? (
+              <FilePreviewPanel
+                state={filePreview.state}
+                profile={profileId}
+                sessionId={sessionId ?? undefined}
+                maximized={previewMaximized}
+                onToggleMaximized={() => setPreviewMaximized((v) => !v)}
+                onClose={() => {
+                  filePreview.closePreview();
+                  setPreviewMaximized(false);
+                }}
+                onRetry={() => filePreview.retry()}
+                onLoadMore={() => {
+                  void filePreview.loadMore();
+                }}
+                onMessageFileCreated={(fileId) => {
+                  void filePreview.openPreview(fileId, profileId);
+                }}
+              />
+            ) : null}
+          </>
+        ) : null
       }
     />
   );

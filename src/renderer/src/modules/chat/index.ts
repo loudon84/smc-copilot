@@ -10,3 +10,12 @@ export {
   patchChatRun,
 } from "./workspace/chatRunRegistry";
 export { useChatWorkspaceManager } from "./workspace/useChatWorkspaceManager";
+export {
+  ChatWorkspaceProvider,
+  useChatWorkspace,
+} from "./workspace/ChatWorkspaceProvider";
+export {
+  ChatRunTabs,
+  ChatRunHost,
+  BackgroundRunIndicator,
+} from "./workspace/ChatRunTabs";

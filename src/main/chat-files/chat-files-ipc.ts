@@ -1,6 +1,6 @@
 /**
  * Chat Files IPC (v8.0.1) — persistent session index + hermes attachment bridge.
- * Full parser/preview pipeline remains available under `_upstream/` for progressive enablement.
+ * Full parser/preview pipeline is productionized under `platform/` (`files:*` IPC).
  */
 
 import { ipcMain, shell, dialog, BrowserWindow } from "electron";

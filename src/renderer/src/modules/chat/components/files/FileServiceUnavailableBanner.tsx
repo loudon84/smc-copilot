@@ -29,7 +29,7 @@ export function FileServiceUnavailableBanner({
     let cancelled = false;
     void (async () => {
       try {
-        const caps = await window.hermesAPI.files.getCapabilities(profile);
+        const caps = await window.chatFiles.platform.getCapabilities(profile);
         if (cancelled) return;
         if (caps.available !== false && caps.handlers) {
           const absent = HANDLER_LABELS.filter(

@@ -1,15 +1,16 @@
-import { AiosCopilotChatHost } from "./AiosCopilotChatHost";
-import { HermesDefaultWebChatSurface as HermesDefaultWebChatSurfaceLegacy } from "./HermesDefaultWebChatSurface.legacy";
+import { MultiRunChatShell } from "./MultiRunChatShell";
+import { HermesDefaultWebChatSurface } from "./HermesDefaultWebChatSurface.legacy";
 
 /**
- * Chat entry with engine switch:
+ * Local Hermes Chat page entry.
  * - VITE_CHAT_ENGINE=legacy → previous HermesDefaultWebChatSurface
- * - default / VITE_CHAT_ENGINE=copilot → Copilot ChatSurface host
+ * - default / VITE_CHAT_ENGINE=copilot → multi-run Copilot Chat host
  */
 export default function HermesDefaultChatPage(): React.JSX.Element {
-  const engine = (import.meta.env.VITE_CHAT_ENGINE as string | undefined) || "copilot";
+  const engine =
+    (import.meta.env.VITE_CHAT_ENGINE as string | undefined) || "copilot";
   if (engine === "legacy") {
-    return <HermesDefaultWebChatSurfaceLegacy />;
+    return <HermesDefaultWebChatSurface />;
   }
-  return <AiosCopilotChatHost />;
+  return <MultiRunChatShell />;
 }

@@ -1,5 +1,5 @@
 import type { FilePreviewState } from "../../../hooks/files/useFilePreview";
-import { RichContentRenderer } from "../../rich-content";
+import { AgentMarkdown } from "@renderer/components/AgentMarkdown";
 
 export function MarkdownFilePreview({
   state,
@@ -8,10 +8,7 @@ export function MarkdownFilePreview({
 }): React.JSX.Element {
   return (
     <div className="file-preview-markdown">
-      <RichContentRenderer
-        content={state.descriptor?.content || ""}
-        streaming={false}
-      />
+      <AgentMarkdown>{state.descriptor?.content || ""}</AgentMarkdown>
     </div>
   );
 }

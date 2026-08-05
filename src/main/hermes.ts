@@ -1048,6 +1048,7 @@ export function stopHealthPolling(): void {
 let gatewayProcess: ChildProcess | null = null;
 let gatewayStartedByApp = false;
 
+// @lat: [[domain/gateway#Gateway lifecycle]]
 export function startGateway(profile?: string): boolean {
   ensureInitialized();
   if (profile && profile !== "default" && isExpertManagedProfile(profile)) {

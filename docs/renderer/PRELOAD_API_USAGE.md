@@ -27,7 +27,7 @@ Renderer 通过 Preload（`src/preload/index.ts`）暴露的 `window.*` 全局�
 | `window.workspaceChat` | `workspace-chat-api.ts` | Workspaces Chat（SSE） |
 | `window.hermesDefaultChat` | `hermes-default-chat-api.ts` | Local Hermes Chat |
 | `window.chatRuntime` | `chat-runtime-api.ts` | **v8.0.1** runId 隔离 Chat Runtime（submit/abort/command + event） |
-| `window.chatFiles` | `chat-files-api.ts` | **v8.0.1** Chat Files（持久化 session index + migrateDraft / saveManaged） |
+| `window.chatFiles` | `chat-files-api.ts` | **v8.0.2** Chat Files + `.platform` File Platform（`files:*` HermesFilesAPI）；不扩展 `hermesAPI.files` |
 | `window.webOperatorTaskSession` | `web-operator-task-session-api.ts` | WebOperator 任务会话 |
 
 ## 3. hermesAPI 方法分组

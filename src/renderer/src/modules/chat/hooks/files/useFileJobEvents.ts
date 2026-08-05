@@ -45,7 +45,7 @@ export function useFileJobEvents(
   const onFailed = options?.onFailed;
 
   useEffect(() => {
-    const filesApi = window.hermesAPI?.files;
+    const filesApi = window.chatFiles?.platform;
     if (!filesApi?.onFileJobEvent) return;
 
     const unsubscribe = filesApi.onFileJobEvent((event) => {

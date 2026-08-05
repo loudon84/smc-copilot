@@ -262,11 +262,16 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 ---
 
-## Chat Files（v8.0.1 persisted index）
+## Chat Files（v8.0.1 persisted index + v8.0.2 File Platform）
 
-**Preload**：`window.chatFiles`（`src/preload/chat-files-api.ts`）— **不**扩展 `hermesAPI.files`  
-**Main**：`src/main/chat-files/chat-files-ipc.ts` + `chat-files-session-store.ts`（持久化 `~/.hermes/desktop/chat-files-index.json`；完整 parser 仍在 `_upstream/`）  
+**Preload**：`window.chatFiles`（`src/preload/chat-files-api.ts`）— **不**扩展 `hermesAPI.files`；完整 File Platform 挂在 `window.chatFiles.platform`（`HermesFilesAPI` / `files:*`）  
+**Main**：
+- `chat-files:*` — `src/main/chat-files/chat-files-ipc.ts` + `chat-files-session-store.ts`（持久化 `~/.hermes/desktop/chat-files-index.json`；Hermes 附件桥）
+- `files:*` — `src/main/chat-files/platform/register-file-ipc.ts` → `file-service.ts`（完整 pick/import/parse/preview/context/FTS）
+
 **Shared**：`src/shared/chat-files/`（`src/shared/files` 为兼容 re-export）
+
+### `chat-files:*`（Hermes 附件 + 持久化 index）
 
 | Channel | Args | Returns |
 |---------|------|---------|
@@ -279,6 +284,27 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 | `chat-files:save-managed-as` | `fileId`, `suggestedName?` | `{ ok, path? }` |
 | `chat-files:save-local-path-as` | `filePath`, `suggestedName?` | `{ ok, path? }` |
 | `chat-files:migrate-draft` | `{ profile?, draftSessionId?, sessionId }` | `{ files }` |
+
+### `files:*`（File Platform — `FILES_IPC_CHANNELS`）
+
+| Channel | Args | Returns |
+|---------|------|---------|
+| `files:get-capabilities` | `profile?` | `FilesCapabilities` |
+| `files:pick-files` | `options?`, `context` | managed file list |
+| `files:import-dropped` | `paths[]`, `context` | managed file list |
+| `files:stage-clipboard` | `input`, `context` | managed file |
+| `files:list-session` | `profile?`, `sessionId` | managed file list |
+| `files:get` | `profile?`, `fileId` | `ManagedFile` |
+| `files:get-preview` | `profile?`, `fileId`, `options?` | preview payload |
+| `files:get-parsed` | `profile?`, `fileId` | parsed content |
+| `files:retry-parse` | `profile?`, `fileId` | `{ ok }` |
+| `files:to-attachments` / `files:attach-to-message` / `files:detach-from-message` | association input | wire/result |
+| `files:add-to-context` / `files:remove-from-context` | `{ profile?, sessionId, fileId }` | void |
+| `files:search-session` | `{ profile?, sessionId, query, maxResults? }` | search hits |
+| `files:open-external` / `files:reveal-in-folder` / `files:save-as` | `profile?`, `fileId` | `{ ok, path? }` |
+| `files:create-from-message` / `files:delete-association` / `files:cleanup` | lifecycle input | result |
+
+Preload exposes a File Platform subset on `window.chatFiles`（`searchSessionFiles` / `addToSessionContext` / `removeFromSessionContext` / `getPreview`）。Chat Core 经 Ports + adapters 调用，禁止直连 `window.*`。
 
 ## Hermes memory (AIOSWorkspace)
 

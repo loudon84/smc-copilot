@@ -48,6 +48,7 @@ function bootstrapPendingDecision(connectionMode: ConnectionMode): StartupDecisi
  *    - local → runtimeReady + !modelConfigured → setup
  *    - local → !runtimeReady → welcome
  */
+// @lat: [[domain/auth#Startup gate]]
 export async function resolveStartupDecision(): Promise<StartupDecision> {
   const conn = getConnectionConfig();
   const connectionMode: ConnectionMode = conn.mode === "remote" || conn.mode === "ssh"

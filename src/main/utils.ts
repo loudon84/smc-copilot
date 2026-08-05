@@ -1,5 +1,5 @@
 import { join, dirname } from "path";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "fs";
 import { HERMES_HOME } from "./installer";
 
 /**
@@ -19,10 +19,28 @@ export function stripAnsi(str: string): string {
  * 'default' or undefined maps to ~/.hermes; named profiles
  * live under ~/.hermes/profiles/<name>.
  */
+// @lat: [[domain/profiles#Profile isolation]]
 export function profileHome(profile?: string): string {
   return profile && profile !== "default"
     ? join(HERMES_HOME, "profiles", profile)
     : HERMES_HOME;
+}
+
+/** Read ~/.hermes/active_profile (default when missing). */
+export function getActiveProfileNameSync(): string {
+  try {
+    const activeFile = join(HERMES_HOME, "active_profile");
+    if (!existsSync(activeFile)) return "default";
+    const name = readFileSync(activeFile, "utf-8").trim();
+    return name || "default";
+  } catch {
+    return "default";
+  }
+}
+
+/** Active profile `state.db` path (default → ~/.hermes/state.db). */
+export function activeStateDbPath(): string {
+  return join(profileHome(getActiveProfileNameSync()), "state.db");
 }
 
 /**

@@ -79,9 +79,55 @@ const prodChatRoots = [
   join(ROOT, "src/renderer/src/modules/chat/components/messages"),
   join(ROOT, "src/renderer/src/modules/chat/components/composer"),
   join(ROOT, "src/renderer/src/modules/chat/components/session-files"),
+  join(ROOT, "src/renderer/src/modules/chat/components/clarify"),
+  join(ROOT, "src/renderer/src/modules/chat/components/empty"),
+  join(ROOT, "src/renderer/src/modules/chat/components/navigator"),
+  join(ROOT, "src/renderer/src/modules/chat/components/history"),
   join(ROOT, "src/renderer/src/modules/chat/workspace"),
   join(ROOT, "src/main/chat-runtime"),
 ];
+
+// Production snapshot remnants must be gone
+const forbiddenTrees = [
+  "src/renderer/src/modules/chat/source",
+  "src/main/chat-files/_upstream",
+];
+for (const rel of forbiddenTrees) {
+  if (existsSync(join(ROOT, rel))) {
+    failures.push(`Forbidden leftover tree still present: ${rel}`);
+  }
+}
+
+const requiredTrees = [
+  "src/main/chat-files/platform",
+  "src/renderer/src/modules/chat/components/messages",
+  "src/renderer/src/modules/chat/components/composer",
+];
+for (const rel of requiredTrees) {
+  if (!existsSync(join(ROOT, rel))) {
+    failures.push(`Required production tree missing: ${rel}`);
+  }
+}
+
+// Lite/Thin placeholder filenames in production components
+const liteHits = [];
+for (const root of prodChatRoots) {
+  /** @type {string[]} */
+  const files = [];
+  walk(root, files);
+  for (const f of files) {
+    const base = f.replace(/\\/g, "/").split("/").pop() || "";
+    if (/Lite|Thin|placeholder/i.test(base) && !base.includes("test")) {
+      liteHits.push(relative(ROOT, f).replace(/\\/g, "/"));
+    }
+  }
+}
+if (liteHits.length > 0) {
+  failures.push(
+    `Lite/Thin/placeholder production files:\n${liteHits.map((h) => `  - ${h}`).join("\n")}`,
+  );
+}
+
 for (const root of prodChatRoots) {
   /** @type {string[]} */
   const files = [];
@@ -91,7 +137,8 @@ for (const root of prodChatRoots) {
     const ext = lower.includes(".") ? lower.slice(lower.lastIndexOf(".")) : "";
     if (!CODE_EXT.has(ext)) continue;
     const text = readFileSync(f, "utf8");
-    if (/_upstream\//.test(text)) {
+    // File Platform lives under chat-files/platform; renderer must not reference _upstream
+    if (/modules\/chat/.test(root.replace(/\\/g, "/")) && /_upstream\//.test(text)) {
       failures.push(
         `Production code references _upstream: ${relative(ROOT, f).replace(/\\/g, "/")}`,
       );
@@ -101,7 +148,6 @@ for (const root of prodChatRoots) {
       /window\.(hermesAPI|chatRuntime|chatFiles|aiosBrowser)/.test(text) &&
       !root.includes("adapters")
     ) {
-      // Core / controller / ports / components should go through ports; adapters only.
       if (!f.replace(/\\/g, "/").includes("/adapters/")) {
         warnings.push(
           `Direct window.* API outside adapters: ${relative(ROOT, f).replace(/\\/g, "/")}`,

@@ -1,11 +1,11 @@
-/** Canonical chat view model for Renderer Controller (v8.0.1). */
+/** Canonical chat view model for Renderer Controller (v8.0.2). */
 
 import type {
   ApprovalRequest,
-  ChatToolEvent,
   ChatUsage,
   ClarifyRequest,
 } from "@shared/chat-runtime/chat-runtime-events";
+import type { Attachment } from "@shared/attachments";
 
 export type ChatRunState =
   | "idle"
@@ -17,6 +17,8 @@ export type ChatRunState =
   | "failed"
   | "cancelled";
 
+export type ChatAttachment = Attachment;
+
 export type ChatViewItem =
   | {
       id: string;
@@ -24,6 +26,7 @@ export type ChatViewItem =
       content: string;
       timestamp?: number;
       pending?: boolean;
+      attachments?: ChatAttachment[];
     }
   | {
       id: string;
@@ -31,6 +34,9 @@ export type ChatViewItem =
       content: string;
       timestamp?: number;
       pending?: boolean;
+      attachments?: ChatAttachment[];
+      error?: string;
+      isSlashLoader?: boolean;
     }
   | {
       id: string;
@@ -41,17 +47,25 @@ export type ChatViewItem =
   | {
       id: string;
       kind: "tool_call";
-      event: ChatToolEvent;
+      callId: string;
+      name: string;
+      args: string;
+      status: "running" | "completed" | "failed";
     }
   | {
       id: string;
       kind: "tool_result";
-      event: ChatToolEvent;
+      callId: string;
+      name: string;
+      content: string;
+      attachments?: ChatAttachment[];
     }
   | {
       id: string;
       kind: "clarify";
       request: ClarifyRequest;
+      answer?: string;
+      resolved?: boolean;
     }
   | {
       id: string;
@@ -71,6 +85,11 @@ export type ChatAttachmentState = {
   mimeType?: string;
   sizeBytes?: number;
   path?: string;
+  kind?: Attachment["kind"];
+  dataUrl?: string;
+  text?: string;
+  mime?: string;
+  size?: number;
 };
 
 export type ChatControllerState = {

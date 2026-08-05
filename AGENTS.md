@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 0.3.6（… + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
+| 版本 | 0.3.6（… + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
 | 后端 | Hermes Python Gateway，`http://127.0.0.1:8642`（default Profile） |
 
@@ -79,7 +79,7 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 | `window.copilotServe` | `src/preload/copilot-serve-api.ts` | **V1.3** 本地 `copilot-serve` 生命周期（:get-connection / start / stop / logs）；**不含**任务业务 API |
 | `window.workspaceChat` | `src/preload/workspace-chat-api.ts` | **team_v1.8** Workspaces Chat（resolve / 模型 / 附件 / send SSE）；见 `docs/API_CONTRACTS.md` § Workspace Chat |
 | `window.chatRuntime` | `src/preload/chat-runtime-api.ts` | **v8.0.1** runId 隔离 Chat Runtime（`chat-runtime:submit/abort/command` + `chat-runtime:event`） |
-| `window.chatFiles` | `src/preload/chat-files-api.ts` | **v8.0.1** Chat Files（持久化 session index + upload/preview/reveal/saveManaged/saveLocal/migrateDraft；不扩展 `hermesAPI.files`） |
+| `window.chatFiles` | `src/preload/chat-files-api.ts` | **v8.0.2** Chat Files + File Platform（`chat-files:*` 持久化 index + `files:*` preview/search/context；不扩展 `hermesAPI.files`） |
 | `window.webOperatorTaskSession` | `src/preload/web-operator-task-session-api.ts` | **V5.7.5** WebOperator Page→Hermes 任务会话（`task_session` SQLite） |
 | `window.aiosRuntime` | `src/preload/aios-api.ts` | Portal Runtime 启停/Doctor/日志；**V5.3.4** `getPortalInfo()` 展示 monorepo 安装路径 |
 | `window.mcpSkillGatewayRuntime` | `src/preload/mcp-skill-gateway-runtime-api.ts` | **V6.4** MCP Skill Gateway Runtime（Proxy 启停、Hermes 注册、远程 MCP 健康检查）；**V6.6.1** `readStructuredLogs` / 运营诊断；**V7.0** Hermes Client bootstrap/agents/tools/readiness/task result/artifact（`hermes-client:*` IPC）；**不向 Renderer 暴露 token** |
@@ -190,7 +190,7 @@ Chat.tsx
 
 **v5.6.4（Hermes Chat 多模型 hotfix）：** Models 页维护 `models.json` + `config.yaml` `custom_providers`（`hermes-config-yaml.ts`）；**Set Default** 走 `hermes-chat:set-model-config`；Chat 下拉为 **session 级**（`session-models.json` + `hermes-chat:get/set-session-model`）；普通发送**不**写 `config.yaml`、**不** restart Gateway；Chat **无** Save as Default。
 **v5.6.2（Local Hermes WebChat Surface）：** `screens/Hermes/pages/Chat/*` 通过 `window.hermesDefaultChat`；事件复用全局 `chat-*`。
-**v8.0 / v8.0.1（Copilot Chat Module）：** 默认入口 `HermesDefaultChatPage` → `AiosCopilotChatHost` → `modules/chat` `ChatSurface` + `controller`（Session/History/Abort 闭环）；Runtime 走 `window.chatRuntime`（runId 隔离 + `command`）；Files 走 `window.chatFiles`（持久化 index）；Work Prompt Hint 经 `composeWorkPrompt`；`VITE_CHAT_ENGINE=legacy` 回退 `HermesDefaultWebChatSurface.legacy`。
+**v8.0 / v8.0.1 / v8.0.2（Copilot Chat Module）：** 默认入口 `HermesDefaultChatPage` → `MultiRunChatShell`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）→ `AiosCopilotChatHost` → `modules/chat` `ChatSurface` + full Composer/Messages/PromptNavigator/SessionFiles；Runtime 走 `window.chatRuntime`；Files 走 `window.chatFiles` + Main `chat-files/platform`（`files:*`）；Work Prompt Hint 经 `composeWorkPrompt`（rawInput→customPromptHint→effectivePrompt）；多 Chat 后台并行经 `ChatWorkspaceProvider` / `ChatRunHost`。
 
 ### 单 Gateway（legacy default）
 
@@ -556,6 +556,7 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 | **V6.7.1** | **GeneHub MCP Registration Hardening**：bundle-preview 不 claim、ignore 同步服务端、profile-mapping.json、serverProfileId sync、签名校验、scripts provenance、MCP Gateway 卡片增强 | `genehub-profile-mapping.ts`, `genehub-client.ts`, `mcp-registration-service.ts`, `skill-install-worker.ts`, `script-provenance.ts`, `skill-package-validator.ts`, `GeneHubMcpRegistrationPanel.tsx`, `McpGatewayGeneHubRegistrationCard.tsx` |
 | **v8.0** | **Copilot Chat Module 迁移**：runId Chat Runtime IPC、`modules/chat` Surface + AI-OS adapters/slots、`window.chatFiles`、File Platform shared 契约、`VITE_CHAT_ENGINE` 切换 | `prd_work/v8.0_upgrade-chat-module.md`, `src/main/chat-runtime/`, `src/shared/chat-runtime/`, `src/renderer/src/modules/chat/`, `scripts/chat-migration/` |
 | **v8.0.1** | **Chat 迁移闭环**：Controller Session/History、Abort Promise、Work 参数、SSE 事件、Prompt Hint、`chat-runtime:command`、持久化 File index、ChatRunRegistry、`typecheck:chat` | `prd_work/v8.0.1_migrate.md`, `modules/chat/controller/`, `chat-files-session-store.ts`, `workspace/chatRunRegistry.ts` |
+| **v8.0.2** | **Chat Full Integration**：完整 MessageList/Composer/ModelPicker、File Platform `chat-files/platform`（`files:*`）、PromptNavigator、多 Chat 后台并行、删除 `source/**` 与 `_upstream/**` | `prd_work/v8.0.2_chat-full-integrated.md`, `modules/chat/components/**`, `src/main/chat-files/platform/`, `MultiRunChatShell.tsx` |
 | **v7.6** | **Hermes Agent MCP Host Mode**：Chat 统一 `hermesDefaultChat` + `buildExpertPromptHint`；`hermes-mcp:*` 写 `config.yaml` `mcp_servers`；禁止 Chat 直连 nodeskclaw / `callCatalogSkill` | `src/main/hermes-mcp-config/`, `src/shared/hermes-mcp-config/`, `pages/Chat/utils/buildExpertPromptHint.ts`, `HermesAgentMcpServersPanel.tsx`, `prd_work/v7.6_agent-host-mode.md` |
 | **v7.5.1** | **Runtime Skill Fixed Route Hotfix**：Chat Expert+Skill 改 `nodeskclaw:*` IPC + `POST /api/v1/hermes/mcp/skill-gateway`（`tools/call` 仅 `{prompt, context}`）；禁止 Chat 走 `hermes-experts:call-catalog-skill` | `src/main/nodeskclaw/`, `src/shared/nodeskclaw/`, `runtimeSkillApi.ts`, `useRuntimeSkillSend.ts`, `useNodeskclawTaskStream.ts`, `prd_work/v7.5.1_hotfix.md` |
 | **v7.4.2** | **Chat-first Work Controls**：Chat 恢复默认入口；`ComposerBar.workControlsSlot` + `WorkComposerControls` / `WorkChatContextBar`；Send 双路径（Hermes SSE vs Runtime Skill）；`tasks` 导航隐藏 | `pages/Chat/components/work/`, `api/runtimeSkillApi.ts`, `hooks/useWorkChatContext.ts`, `hooks/useRuntimeSkillSend.ts`, `prd_work/v7.4.2_hotfix.md` |
@@ -582,3 +583,111 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 ---
 
 编码时：**先确定改哪一层（Renderer / Preload / Main）→ 查是否已有 IPC → 复用现有模块与类型 → 同步文档与测试。**
+
+%% lat:begin %%
+# Before starting work
+
+- Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
+- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
+
+# Post-task checklist (REQUIRED — do not skip)
+
+After EVERY task, before responding to the user:
+
+- [ ] Update `lat.md/` if you added or changed any functionality, architecture, tests, or behavior
+- [ ] Run `lat check` — all wiki links and code refs must pass
+- [ ] Do not skip these steps. Do not consider your task done until both are complete.
+
+---
+
+# What is lat.md?
+
+This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing.
+
+# Commands
+
+```bash
+lat locate "Section Name"      # find a section by name (exact, fuzzy)
+lat refs "file#Section"        # find what references a section
+lat search "natural language"  # semantic search across all sections
+lat expand "user prompt text"  # expand [[refs]] to resolved locations
+lat check                      # validate all links and code refs
+```
+
+Run `lat --help` when in doubt about available commands or options.
+
+If `lat search` fails because no API key is configured, explain to the user that semantic search requires a key provided via `LAT_LLM_KEY` (direct value), `LAT_LLM_KEY_FILE` (path to key file), or `LAT_LLM_KEY_HELPER` (command that prints the key). Supported key prefixes: `sk-...` (OpenAI) or `vck_...` (Vercel). If the user doesn't want to set it up, use `lat locate` for direct lookups instead.
+
+# Syntax primer
+
+- **Section ids**: `lat.md/path/to/file#Heading#SubHeading` — full form uses project-root-relative path (e.g. `lat.md/tests/search#RAG Replay Tests`). Short form uses bare file name when unique (e.g. `search#RAG Replay Tests`, `cli#search#Indexing`).
+- **Wiki links**: `[[target]]` or `[[target|alias]]` — cross-references between sections. Can also reference source code: `[[src/foo.ts#myFunction]]`.
+- **Source code links**: Wiki links in `lat.md/` files can reference functions, classes, constants, and methods in TypeScript/JavaScript/Python/Rust/Go/C files. Use the full path: `[[src/config.ts#getConfigDir]]`, `[[src/server.ts#App#listen]]` (class method), `[[lib/utils.py#parse_args]]`, `[[src/lib.rs#Greeter#greet]]` (Rust impl method), `[[src/app.go#Greeter#Greet]]` (Go method), `[[src/app.h#Greeter]]` (C struct). `lat check` validates these exist.
+- **Code refs**: `// @lat: [[section-id]]` (JS/TS/Rust/Go/C) or `# @lat: [[section-id]]` (Python) — ties source code to concepts
+
+# Test specs
+
+Key tests can be described as sections in `lat.md/` files (e.g. `tests.md`). Add frontmatter to require that every leaf section is referenced by a `// @lat:` or `# @lat:` comment in test code:
+
+```markdown
+---
+lat:
+  require-code-mention: true
+---
+# Tests
+
+Authentication and authorization test specifications.
+
+## User login
+
+Verify credential validation and error handling for the login endpoint.
+
+### Rejects expired tokens
+Tokens past their expiry timestamp are rejected with 401, even if otherwise valid.
+
+### Handles missing password
+Login request without a password field returns 400 with a descriptive error.
+```
+
+Every section MUST have a description — at least one sentence explaining what the test verifies and why. Empty sections with just a heading are not acceptable. (This is a specific case of the general leading paragraph rule below.)
+
+Each test in code should reference its spec with exactly one comment placed next to the relevant test — not at the top of the file:
+
+```python
+# @lat: [[tests#User login#Rejects expired tokens]]
+def test_rejects_expired_tokens():
+    ...
+
+# @lat: [[tests#User login#Handles missing password]]
+def test_handles_missing_password():
+    ...
+```
+
+Do not duplicate refs. One `@lat:` comment per spec section, placed at the test that covers it. `lat check` will flag any spec section not covered by a code reference, and any code reference pointing to a nonexistent section.
+
+# Section structure
+
+Every section in `lat.md/` **must** have a leading paragraph — at least one sentence immediately after the heading, before any child headings or other block content. The first paragraph must be ≤250 characters (excluding `[[wiki link]]` content). This paragraph serves as the section's overview and is used in search results, command output, and RAG context — keeping it concise guarantees the section's essence is always captured.
+
+```markdown
+# Good Section
+
+Brief overview of what this section documents and why it matters.
+
+More detail can go in subsequent paragraphs, code blocks, or lists.
+
+## Child heading
+
+Details about this child topic.
+```
+
+```markdown
+# Bad Section
+
+## Child heading
+
+Details about this child topic.
+```
+
+The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.
+%% lat:end %%

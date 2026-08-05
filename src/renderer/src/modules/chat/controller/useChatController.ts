@@ -52,12 +52,15 @@ export type UseChatControllerResult = {
   input: string;
   setInput: (value: string) => void;
   queueLength: number;
+  queue: Array<{ text: string }>;
   send: (text?: string) => Promise<void>;
   abort: () => Promise<void>;
   reset: () => void;
   openWeb: (url: string) => void;
   loadSession: (sessionId: string) => Promise<void>;
   setSelectedModel: (modelId: string | null) => void;
+  addAttachments: (files: File[]) => Promise<void>;
+  removeAttachment: (id: string) => void;
 };
 
 export function useChatController(
@@ -227,7 +230,8 @@ export function useChatController(
   const send = useCallback(
     async (overrideText?: string) => {
       const text = (overrideText ?? inputRef.current).trim();
-      if (!text) return;
+      const hasAttachments = stateRef.current.attachments.length > 0;
+      if (!text && !hasAttachments) return;
 
       if (!overrideText) {
         inputRef.current = "";
@@ -241,20 +245,36 @@ export function useChatController(
         stateRef.current.runState === "waiting_clarify";
 
       if (busy) {
-        enqueue(text);
+        enqueue(text || "(attachments)");
         return;
       }
 
       const userId = `user-${Date.now()}`;
       const agentId = `agent-${runId}-${Date.now()}`;
+      const attachmentPayload = stateRef.current.attachments.map((a) => ({
+        id: a.id,
+        name: a.name,
+        mime: a.mime || a.mimeType || "application/octet-stream",
+        size: a.size ?? a.sizeBytes ?? 0,
+        kind: a.kind || ("path-ref" as const),
+        path: a.path,
+        dataUrl: a.dataUrl,
+        text: a.text,
+      }));
       dispatch({
         type: "APPEND_MESSAGES",
         messages: [
-          { id: userId, kind: "user", content: text },
+          {
+            id: userId,
+            kind: "user",
+            content: text,
+            attachments: attachmentPayload.length
+              ? attachmentPayload
+              : undefined,
+          },
           { id: agentId, kind: "assistant", content: "", pending: true },
         ],
       });
-      // Seed streaming id so deltas append to this placeholder
       dispatch({
         type: "UPSERT_STREAMING_ASSISTANT",
         id: agentId,
@@ -264,6 +284,7 @@ export function useChatController(
 
       try {
         await submitMessage(text);
+        dispatch({ type: "SET_ATTACHMENTS", attachments: [] });
       } catch (err) {
         dispatch({
           type: "FAIL",
@@ -315,16 +336,64 @@ export function useChatController(
     [navigation],
   );
 
+  const addAttachments = useCallback(
+    async (fileList: File[]) => {
+      if (!fileList.length) return;
+      const sid = stateRef.current.activeSessionId || "draft";
+      if (files?.upload) {
+        try {
+          const uploaded = await files.upload(sid, profileId, fileList);
+          for (const f of uploaded) {
+            dispatch({
+              type: "ADD_ATTACHMENT",
+              attachment: {
+                id: f.id,
+                name: f.name,
+                mimeType: f.mimeType,
+                sizeBytes: f.sizeBytes,
+                path: f.path,
+              },
+            });
+          }
+          return;
+        } catch {
+          /* fall through to local stubs */
+        }
+      }
+      for (const file of fileList) {
+        dispatch({
+          type: "ADD_ATTACHMENT",
+          attachment: {
+            id: `local-${Date.now()}-${file.name}`,
+            name: file.name,
+            mimeType: file.type || undefined,
+            sizeBytes: file.size,
+            kind: file.type.startsWith("image/") ? "image" : "path-ref",
+          },
+        });
+      }
+    },
+    [files, profileId],
+  );
+
+  const removeAttachment = useCallback((id: string) => {
+    dispatch({ type: "REMOVE_ATTACHMENT", id });
+    void files?.remove?.(id, profileId).catch(() => undefined);
+  }, [files, profileId]);
+
   return {
     state,
     input: inputRef.current,
     setInput,
     queueLength: queue.length,
+    queue: queue.map((q) => ({ text: q.text })),
     send,
     abort,
     reset,
     openWeb,
     loadSession,
     setSelectedModel,
+    addAttachments,
+    removeAttachment,
   };
 }

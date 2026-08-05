@@ -1,5 +1,4 @@
 import type { FilePreviewState } from "../../../hooks/files/useFilePreview";
-import { CodeBlock } from "../../rich-content";
 
 export function CodeFilePreview({
   state,
@@ -9,9 +8,9 @@ export function CodeFilePreview({
   const language = state.descriptor?.language;
   return (
     <div className="file-preview-code">
-      <CodeBlock className={language ? `language-${language}` : undefined}>
-        {state.descriptor?.content || ""}
-      </CodeBlock>
+      <pre className={language ? `language-${language}` : undefined}>
+        <code>{state.descriptor?.content || ""}</code>
+      </pre>
     </div>
   );
 }

@@ -7,7 +7,15 @@
     "src/shared/**/*",
     "src/preload/*.d.ts"
   ],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/renderer/src/modules/chat/source/**", "src/renderer/src/modules/chat/components/files/**", "src/renderer/src/modules/chat/hooks/files/**"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/renderer/src/modules/chat/components/files/common/**",
+    "src/renderer/src/modules/chat/components/files/composer/**",
+    "src/renderer/src/modules/chat/components/files/message/**",
+    "src/renderer/src/modules/chat/components/files/FileServiceUnavailableBanner.tsx",
+    "src/renderer/src/modules/chat/components/files/index.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",

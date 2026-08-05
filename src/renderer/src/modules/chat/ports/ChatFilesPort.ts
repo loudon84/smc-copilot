@@ -10,14 +10,23 @@ export type ChatFileRef = {
 /** Port for session files / attachments / preview. */
 export interface ChatFilesPort {
   listSessionFiles?(sessionId: string, profileId?: string): Promise<ChatFileRef[]>;
+  searchSessionFiles?(
+    sessionId: string,
+    query: string,
+    profileId?: string,
+  ): Promise<ChatFileRef[]>;
   upload?(
     sessionId: string,
     profileId: string,
     files: FileList | File[],
   ): Promise<ChatFileRef[]>;
   remove?(fileId: string, profileId?: string): Promise<void>;
-  preview?(fileId: string, profileId?: string): Promise<{ content?: string; url?: string }>;
+  preview?(
+    fileId: string,
+    profileId?: string,
+  ): Promise<{ content?: string; url?: string; error?: string }>;
   reveal?(path: string): Promise<void>;
+  openExternal?(path: string): Promise<void>;
   /** @deprecated Prefer saveManagedFileAs / saveLocalPathAs */
   saveAs?(fileIdOrPath: string, suggestedName?: string): Promise<boolean>;
   saveManagedFileAs?(fileId: string, suggestedName?: string): Promise<boolean>;
@@ -27,4 +36,14 @@ export interface ChatFilesPort {
     profileId?: string,
     draftSessionId?: string,
   ): Promise<ChatFileRef[]>;
+  addToContext?(
+    sessionId: string,
+    fileId: string,
+    profileId?: string,
+  ): Promise<void>;
+  removeFromContext?(
+    sessionId: string,
+    fileId: string,
+    profileId?: string,
+  ): Promise<void>;
 }

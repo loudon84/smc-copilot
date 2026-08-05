@@ -40,20 +40,42 @@ export function chatRuntimeEventToActions(
       ];
 
     case "tool.event": {
-      const done =
-        event.event.status === "completed" || event.event.status === "failed";
+      const te = event.event;
+      const done = te.status === "completed" || te.status === "failed";
+      if (done) {
+        return [
+          {
+            type: "UPSERT_TOOL_EVENT",
+            item: {
+              id: `tool-result-${te.callId}`,
+              kind: "tool_result",
+              callId: te.callId,
+              name: te.name,
+              content: te.result || te.preview || "",
+            },
+          },
+          {
+            type: "SET_TOOL_PROGRESS",
+            tool: te.label || te.name,
+          },
+          { type: "SET_RUN_STATE", runState: "streaming" },
+        ];
+      }
       return [
         {
           type: "UPSERT_TOOL_EVENT",
           item: {
-            id: `tool-${event.event.callId}`,
-            kind: done ? "tool_result" : "tool_call",
-            event: event.event,
+            id: `tool-call-${te.callId}`,
+            kind: "tool_call",
+            callId: te.callId,
+            name: te.name,
+            args: te.preview || "",
+            status: te.status,
           },
         },
         {
           type: "SET_TOOL_PROGRESS",
-          tool: event.event.label || event.event.name,
+          tool: te.label || te.name,
         },
         { type: "SET_RUN_STATE", runState: "streaming" },
       ];

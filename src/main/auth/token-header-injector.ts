@@ -6,6 +6,7 @@ import { shouldInjectTokenForUrl, TOKEN_INJECT_PARTITIONS } from "./token-inject
  * Injects Authorization for portal layer only (partition `persist:aios-home`), on whitelisted origins.
  * Does NOT attach to web-operator, external-browser, office, or workspaces.
  */
+// @lat: [[domain/auth#Token vault and injection]]
 export function installTokenHeaderInjector(): void {
   for (const partition of TOKEN_INJECT_PARTITIONS) {
     const ses = session.fromPartition(partition);

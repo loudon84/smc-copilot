@@ -14,7 +14,14 @@ export type ChatControllerAction =
   | { type: "SET_RUN_STATE"; runState: ChatRunState }
   | { type: "SET_MODEL"; modelId: string | null }
   | { type: "SET_ATTACHMENTS"; attachments: ChatAttachmentState[] }
+  | { type: "ADD_ATTACHMENT"; attachment: ChatAttachmentState }
+  | { type: "REMOVE_ATTACHMENT"; id: string }
   | { type: "APPEND_MESSAGES"; messages: ChatViewItem[] }
+  | {
+      type: "RESOLVE_CLARIFY";
+      requestId: string;
+      answer: string;
+    }
   | {
       type: "UPSERT_STREAMING_ASSISTANT";
       id: string;
@@ -94,8 +101,29 @@ export function chatReducer(
     case "SET_ATTACHMENTS":
       return { ...state, attachments: action.attachments };
 
+    case "ADD_ATTACHMENT":
+      return {
+        ...state,
+        attachments: [...state.attachments, action.attachment],
+      };
+
+    case "REMOVE_ATTACHMENT":
+      return {
+        ...state,
+        attachments: state.attachments.filter((a) => a.id !== action.id),
+      };
+
     case "APPEND_MESSAGES":
       return { ...state, messages: [...state.messages, ...action.messages] };
+
+    case "RESOLVE_CLARIFY": {
+      const next = state.messages.map((m) => {
+        if (m.kind !== "clarify") return m;
+        if (m.request.requestId !== action.requestId) return m;
+        return { ...m, resolved: true, answer: action.answer };
+      });
+      return { ...state, messages: next };
+    }
 
     case "UPSERT_STREAMING_ASSISTANT": {
       const { id, content, append } = action;
@@ -154,22 +182,39 @@ export function chatReducer(
     case "UPSERT_TOOL_EVENT": {
       const callId =
         action.item.kind === "tool_call" || action.item.kind === "tool_result"
-          ? action.item.event.callId
+          ? action.item.callId
           : null;
       if (!callId) {
         return { ...state, messages: [...state.messages, action.item] };
       }
-      const idx = state.messages.findIndex(
+      // Prefer replacing same-kind tool row; result can coexist after call.
+      const sameKindIdx = state.messages.findIndex(
         (m) =>
+          m.kind === action.item.kind &&
           (m.kind === "tool_call" || m.kind === "tool_result") &&
-          m.event.callId === callId,
+          m.callId === callId,
       );
-      if (idx < 0) {
-        return { ...state, messages: [...state.messages, action.item] };
+      if (sameKindIdx >= 0) {
+        const next = [...state.messages];
+        next[sameKindIdx] = action.item;
+        return { ...state, messages: next };
       }
-      const next = [...state.messages];
-      next[idx] = action.item;
-      return { ...state, messages: next };
+      if (action.item.kind === "tool_result") {
+        // Upgrade an existing running tool_call to completed, then append result.
+        const callIdx = state.messages.findIndex(
+          (m) => m.kind === "tool_call" && m.callId === callId,
+        );
+        if (callIdx >= 0) {
+          const next = [...state.messages];
+          const prev = next[callIdx];
+          if (prev.kind === "tool_call") {
+            next[callIdx] = { ...prev, status: "completed" };
+          }
+          next.push(action.item);
+          return { ...state, messages: next };
+        }
+      }
+      return { ...state, messages: [...state.messages, action.item] };
     }
 
     case "APPEND_CLARIFY":

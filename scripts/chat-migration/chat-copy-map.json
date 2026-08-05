@@ -3,23 +3,23 @@
   "copies": [
     {
       "from": "src/renderer/src/screens/Chat",
-      "to": "src/renderer/src/modules/chat/source",
-      "description": "Chat screen kernel (UI + hooks + core utils)"
+      "to": "src/renderer/src/modules/chat/components",
+      "description": "Copilot Chat production UI (messages/composer/navigator/session-files)"
     },
     {
       "from": "src/renderer/src/components/files",
-      "to": "src/renderer/src/modules/chat/components/files",
-      "description": "File Platform UI components"
-    },
-    {
-      "from": "src/renderer/src/hooks/files",
-      "to": "src/renderer/src/modules/chat/hooks/files",
-      "description": "File Platform hooks"
+      "to": "src/renderer/src/modules/chat/components/session-files",
+      "description": "Session files + preview panels (File Platform UI)"
     },
     {
       "from": "src/shared/files",
       "to": "src/shared/chat-files",
       "description": "File Platform shared contracts"
+    },
+    {
+      "from": "src/main/files",
+      "to": "src/main/chat-files/platform",
+      "description": "File Platform Main (files:* IPC)"
     }
   ],
   "excludes": [
@@ -32,14 +32,6 @@
     {
       "pattern": "from [\"'](\\.\\./)+shared/files(/[^\"']*)?[\"']",
       "replacement": "from \"@shared/chat-files$2\""
-    },
-    {
-      "pattern": "from [\"']\\.\\./\\.\\./components/files(/[^\"']*)?[\"']",
-      "replacement": "from \"../../components/files$1\""
-    },
-    {
-      "pattern": "from [\"']\\.\\./\\.\\./hooks/files(/[^\"']*)?[\"']",
-      "replacement": "from \"../../hooks/files$1\""
     }
   ]
 }

@@ -11,3 +11,7 @@ Verification (all OK):
 - npm run check:chat-boundaries
 - npm run check:no-reference-imports
 - npm run build
+
+## 2026-08-05
+- Phase 5: _upstream -> platform; docs; platform tests fixed; full-suite stale failures deferred.
+

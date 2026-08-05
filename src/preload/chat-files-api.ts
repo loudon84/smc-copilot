@@ -1,6 +1,7 @@
 /**
- * Preload API — window.chatFiles (v8.0).
- * Thin bridge over chat-files:* IPC; does not extend hermesAPI.files.
+ * Preload API — window.chatFiles (v8.0.2).
+ * - `chat-files:*` Hermes attachment + persistence bridge
+ * - `.platform` full File Platform (`files:*` / HermesFilesAPI)
  */
 
 import { ipcRenderer, webUtils } from "electron";
@@ -8,10 +9,14 @@ import {
   CHAT_FILES_CHANNELS,
   type ChatFilesListed,
 } from "../shared/chat-files/chat-files-ipc-channels";
+import { chatFilesPlatformApi } from "./chat-files-platform-api";
 
 export type { ChatFilesListed };
 
 export const chatFilesApi = {
+  /** Full File Platform (getPreview/pickFiles/createFromMessage/…). */
+  platform: chatFilesPlatformApi,
+
   listSessionFiles(
     profile: string | undefined,
     sessionId: string,
@@ -139,6 +144,51 @@ export const chatFilesApi = {
     sessionId: string;
   }): Promise<{ files: ChatFilesListed[] }> {
     return ipcRenderer.invoke("chat-files:migrate-draft", payload);
+  },
+
+  /** @deprecated Prefer `platform.searchSessionFiles` */
+  searchSessionFiles(payload: {
+    profile?: string;
+    sessionId: string;
+    query: string;
+    maxResults?: number;
+  }): Promise<Array<{ fileId: string; fileName: string; snippet?: string }>> {
+    return chatFilesPlatformApi.searchSessionFiles(payload).then((rows) =>
+      rows.map((r) => ({
+        fileId: r.fileId,
+        fileName: r.fileName,
+        snippet: r.snippet,
+      })),
+    );
+  },
+
+  /** @deprecated Prefer `platform.addToSessionContext` */
+  addToSessionContext(payload: {
+    profile?: string;
+    sessionId: string;
+    fileId: string;
+  }): Promise<void> {
+    return chatFilesPlatformApi.addToSessionContext(payload);
+  },
+
+  /** @deprecated Prefer `platform.removeFromSessionContext` */
+  removeFromSessionContext(payload: {
+    profile?: string;
+    sessionId: string;
+    fileId: string;
+  }): Promise<void> {
+    return chatFilesPlatformApi.removeFromSessionContext(payload);
+  },
+
+  /** @deprecated Prefer `platform.getPreview` */
+  getPreview(
+    profile: string | undefined,
+    fileId: string,
+    options?: { maxBytes?: number },
+  ): Promise<unknown> {
+    return chatFilesPlatformApi.getPreview(profile, fileId, {
+      limit: options?.maxBytes,
+    });
   },
 };
 

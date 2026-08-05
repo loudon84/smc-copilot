@@ -9,8 +9,8 @@ export interface UseFileOperationsResult {
 }
 
 /**
- * Thin wrappers around `window.hermesAPI.files.{openExternal,revealInFolder,
- * saveAs}` â€” tracks a shared busy/error flag so a context menu or preview
+ * Thin wrappers around `window.chatFiles.platform.{openExternal,revealInFolder,
+ * saveAs}` â€?tracks a shared busy/error flag so a context menu or preview
  * panel can disable itself mid-request without wiring up its own state.
  * All three take a `ManagedFile` id, so callers need a File Platform id
  * (not a legacy `Attachment`) before these are usable.
@@ -37,21 +37,21 @@ export function useFileOperations(profile?: string): UseFileOperationsResult {
 
   const openExternal = useCallback(
     async (fileId: string): Promise<void> => {
-      await run(() => window.hermesAPI.files.openExternal(profile, fileId));
+      await run(() => window.chatFiles.platform.openExternal(profile, fileId));
     },
     [profile, run],
   );
 
   const revealInFolder = useCallback(
     async (fileId: string): Promise<void> => {
-      await run(() => window.hermesAPI.files.revealInFolder(profile, fileId));
+      await run(() => window.chatFiles.platform.revealInFolder(profile, fileId));
     },
     [profile, run],
   );
 
   const saveAs = useCallback(
     (fileId: string): Promise<string | null> =>
-      run(() => window.hermesAPI.files.saveAs(profile, fileId)),
+      run(() => window.chatFiles.platform.saveAs(profile, fileId)),
     [profile, run],
   );
 

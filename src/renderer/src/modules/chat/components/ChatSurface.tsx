@@ -4,13 +4,15 @@ import type { ChatSessionPort } from "../ports/ChatSessionPort";
 import type { ChatModelsPort } from "../ports/ChatModelsPort";
 import type { ChatFilesPort } from "../ports/ChatFilesPort";
 import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
+import type { ChatCommandPort } from "../ports/ChatCommandPort";
 import type { ChatSubmitInput } from "@shared/chat-runtime/chat-runtime-contract";
 import type { ChatUsage } from "@shared/chat-runtime/chat-runtime-events";
 import { useChatController } from "../controller/useChatController";
 import type { ChatRunState } from "../controller/chatViewTypes";
 import { MessageList } from "./messages/MessageList";
-import { ChatComposer } from "./composer/ChatComposer";
-import { ModelPicker } from "./composer/ModelPicker";
+import { CopilotChatInput } from "./composer/CopilotChatInput";
+import { ModelPicker, groupChatModels } from "./composer/ModelPicker";
+import { PromptNavigator } from "./navigator/PromptNavigator";
 import "../styles/copilot-chat.css";
 
 export type ChatSurfaceSlots = {
@@ -21,6 +23,8 @@ export type ChatSurfaceSlots = {
   rightPanelSlot?: React.ReactNode;
   attachmentTraySlot?: React.ReactNode;
   filesPanelSlot?: React.ReactNode;
+  filesToggleSlot?: React.ReactNode;
+  showRightPanel?: boolean;
   renderStatusBar?: (ctx: {
     runState: ChatRunState;
     toolProgress: string | null;
@@ -35,6 +39,7 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   models?: ChatModelsPort;
   files?: ChatFilesPort;
   navigation?: ChatNavigationPort;
+  commands?: ChatCommandPort;
   profileId: string;
   sessionId?: string | null;
   expertId?: string;
@@ -47,6 +52,7 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   className?: string;
   onSessionIdChange?: (sessionId: string | null) => void;
   composeMessage?: (raw: string) => string | Promise<string>;
+  onInputChange?: (value: string) => void;
   onRuntimeCommand?: (command: {
     type: "clarify.respond" | "approval.approve" | "approval.deny";
     requestId: string;
@@ -55,15 +61,13 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   }) => void;
 };
 
-/**
- * Copilot Chat Surface — Controller + production MessageList/Composer.
- */
 export function ChatSurface({
   runtime,
   session,
   models,
   files,
   navigation,
+  commands,
   profileId,
   sessionId,
   expertId,
@@ -79,22 +83,26 @@ export function ChatSurface({
   statusBarSlot,
   activeExpertSlot,
   rightPanelSlot,
-  attachmentTraySlot,
   filesPanelSlot,
+  filesToggleSlot,
+  showRightPanel,
   renderStatusBar,
   onSessionIdChange,
   composeMessage,
+  onInputChange,
   onRuntimeCommand,
 }: ChatSurfaceProps): React.JSX.Element {
   const {
     state,
     input,
     setInput,
-    queueLength,
+    queue,
     send,
     abort,
     openWeb,
     setSelectedModel,
+    addAttachments,
+    removeAttachment,
   } = useChatController({
     runtime,
     session,
@@ -115,7 +123,13 @@ export function ChatSurface({
   });
 
   const [modelOptions, setModelOptions] = useState<
-    Array<{ id: string; label: string }>
+    Array<{
+      id: string;
+      label: string;
+      provider?: string | null;
+      model: string;
+      baseUrl?: string | null;
+    }>
   >([]);
 
   useEffect(() => {
@@ -129,6 +143,9 @@ export function ChatSurface({
           list.map((m) => ({
             id: m.id,
             label: m.label || m.id,
+            provider: m.provider,
+            model: m.model,
+            baseUrl: m.baseUrl,
           })),
         );
       } catch {
@@ -140,26 +157,38 @@ export function ChatSurface({
     };
   }, [models, profileId]);
 
+  const modelGroups = useMemo(
+    () => groupChatModels(modelOptions),
+    [modelOptions],
+  );
+
   const isBusy =
     state.runState === "streaming" ||
     state.runState === "creating" ||
     state.runState === "waiting_approval" ||
     state.runState === "waiting_clarify";
 
-  const handleSend = useCallback(() => {
-    void send();
-  }, [send]);
-
-  const handleAbort = useCallback(() => {
-    void abort();
-  }, [abort]);
+  const pendingClarify = useMemo(
+    () =>
+      [...state.messages]
+        .reverse()
+        .find((m) => m.kind === "clarify" && !m.resolved),
+    [state.messages],
+  );
+  const pendingApproval = useMemo(
+    () => [...state.messages].reverse().find((m) => m.kind === "approval"),
+    [state.messages],
+  );
 
   const urlHint = useMemo(() => {
     for (let i = state.messages.length - 1; i >= 0; i -= 1) {
       const m = state.messages[i];
-      if (m.kind === "tool_call" || m.kind === "tool_result") {
-        const text = `${m.event.label || ""} ${m.event.preview || ""} ${m.event.result || ""}`;
-        const match = text.match(/https?:\/\/\S+/);
+      if (m.kind === "tool_call") {
+        const match = `${m.name} ${m.args}`.match(/https?:\/\/\S+/);
+        if (match) return match[0];
+      }
+      if (m.kind === "tool_result") {
+        const match = `${m.name} ${m.content}`.match(/https?:\/\/\S+/);
         if (match) return match[0];
       }
       if (m.kind === "assistant") {
@@ -170,6 +199,15 @@ export function ChatSurface({
     return undefined;
   }, [state.messages]);
 
+  const contextUsage = state.usage
+    ? {
+        used: state.usage.contextTokens ?? state.usage.promptTokens,
+        window: state.usage.contextWindowTokens ?? 128000,
+        cacheReadTokens: state.usage.cacheReadTokens,
+        cacheWriteTokens: state.usage.cacheWriteTokens,
+      }
+    : null;
+
   const statusNode = renderStatusBar
     ? renderStatusBar({
         runState: state.runState,
@@ -179,6 +217,8 @@ export function ChatSurface({
       })
     : statusBarSlot;
 
+  const rightOpen = showRightPanel === true;
+
   return (
     <div className={`copilot-chat-root ${className || ""}`.trim()}>
       {activeExpertSlot}
@@ -186,24 +226,46 @@ export function ChatSurface({
       {contextBarSlot}
       <div className="chat-body">
         <div className="chat-main">
-          <MessageList
-            messages={state.messages}
-            toolProgress={state.toolProgress}
-            isBusy={isBusy}
-            onClarifyAnswer={(requestId, answer) =>
-              onRuntimeCommand?.({
-                type: "clarify.respond",
-                requestId,
-                answer,
-              })
-            }
-            onApproval={(requestId, approve) =>
-              onRuntimeCommand?.({
-                type: approve ? "approval.approve" : "approval.deny",
-                requestId,
-              })
-            }
-          />
+          <div className="chat-messages-scroll">
+            <MessageList
+              messages={state.messages}
+              toolProgress={state.toolProgress}
+              isBusy={isBusy}
+              runId={state.activeRunId}
+              onSelectSuggestion={(text) => {
+                setInput(text);
+                onInputChange?.(text);
+              }}
+              pendingClarifyRequestId={
+                pendingClarify?.kind === "clarify"
+                  ? pendingClarify.request.requestId
+                  : null
+              }
+              pendingApprovalRequestId={
+                pendingApproval?.kind === "approval"
+                  ? pendingApproval.request.requestId
+                  : null
+              }
+              onClarifyAnswer={(requestId, answer) =>
+                onRuntimeCommand?.({
+                  type: "clarify.respond",
+                  requestId,
+                  answer,
+                })
+              }
+              onApproval={(requestId, approve) =>
+                onRuntimeCommand?.({
+                  type: approve ? "approval.approve" : "approval.deny",
+                  requestId,
+                })
+              }
+            />
+            <PromptNavigator
+              messages={state.messages}
+              runId={state.activeRunId}
+              suppressed={rightOpen}
+            />
+          </div>
           {state.lastError && <div className="chat-error">{state.lastError}</div>}
           {urlHint && (
             <button
@@ -214,33 +276,46 @@ export function ChatSurface({
               Open in Web Operator
             </button>
           )}
-          <ChatComposer
+          <CopilotChatInput
             value={input}
-            onChange={setInput}
-            onSend={handleSend}
-            onAbort={handleAbort}
+            onChange={(v) => {
+              setInput(v);
+              onInputChange?.(v);
+            }}
+            onSend={(text) => void send(text)}
+            onAbort={() => void abort()}
             isBusy={isBusy}
-            composerControlsSlot={composerControlsSlot}
-            attachmentTraySlot={attachmentTraySlot}
-            queueLength={queueLength}
-            modelPickerSlot={
-              <ModelPicker
-                models={modelOptions}
-                selectedModelId={state.selectedModelId}
-                onSelect={(id) => {
-                  setSelectedModel(id || null);
-                  void models?.setSessionModel?.(
-                    state.activeSessionId || "draft",
-                    id,
-                    profileId,
-                  );
-                }}
-                disabled={isBusy}
-              />
+            attachments={state.attachments}
+            onAddAttachments={addAttachments}
+            onRemoveAttachment={removeAttachment}
+            queue={queue}
+            contextUsage={contextUsage}
+            files={files}
+            commands={commands}
+            sessionId={state.activeSessionId}
+            profileId={profileId}
+            filesToggle={filesToggleSlot}
+            toolbarExtras={
+              <>
+                {composerControlsSlot}
+                <ModelPicker
+                  groups={modelGroups}
+                  selectedModelId={state.selectedModelId}
+                  onSelect={(id) => {
+                    setSelectedModel(id || null);
+                    void models?.setSessionModel?.(
+                      state.activeSessionId || "draft",
+                      id,
+                      profileId,
+                    );
+                  }}
+                  disabled={isBusy}
+                />
+              </>
             }
           />
         </div>
-        {(rightPanelSlot || filesPanelSlot) && (
+        {rightOpen && (
           <aside className="chat-right-panel">
             {filesPanelSlot}
             {rightPanelSlot}

@@ -36,3 +36,6 @@ release/
 **/src-tauri/target/
 **/src-tauri/gen/
 **/src-tauri/WixTools/
+# lat.md embedding / init cache
+lat.md/.cache/
+

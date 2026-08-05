@@ -1,25 +1,19 @@
-import { RichContentRenderer } from "../../rich-content/RichContentRenderer";
+import { AgentMarkdown } from "@renderer/components/AgentMarkdown";
 
 export interface MessageDocumentPreviewProps {
   title: string;
   markdown: string;
 }
 
-/**
- * In-memory Markdown preview for an Assistant Message document (no fileId yet).
- */
-// @lat: [[file-ui-components#Message document preview]]
-export function MessageDocumentPreview(
-  props: MessageDocumentPreviewProps,
-): React.JSX.Element {
+/** In-memory assistant message document preview (no ManagedFile yet). */
+export function MessageDocumentPreview({
+  title,
+  markdown,
+}: MessageDocumentPreviewProps): React.JSX.Element {
   return (
     <div className="message-document-preview">
-      <RichContentRenderer
-        content={props.markdown}
-        contentType="markdown"
-        streaming={false}
-        sourceId={`message-doc:${props.title}`}
-      />
+      <div className="file-preview-message-doc-title">{title}</div>
+      <AgentMarkdown>{markdown || ""}</AgentMarkdown>
     </div>
   );
 }

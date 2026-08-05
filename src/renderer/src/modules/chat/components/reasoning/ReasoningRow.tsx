@@ -1,16 +1,8 @@
-/** Thin production wrappers — reasoning / tools / clarify / navigator slots. */
+/** Thin re-exports — production HistoryRows owns Reasoning / Tool UI. */
 
-export { MessageList } from "../messages/MessageList";
-
-export function ReasoningRow(props: {
-  content: string;
-}): React.JSX.Element {
-  return (
-    <div className="message-row message-row--reasoning">
-      <div className="message-content">
-        <span className="message-kind-label">Reasoning</span>
-        {props.content}
-      </div>
-    </div>
-  );
-}
+export {
+  ReasoningRow,
+  ToolActivityGroup,
+  orderToolActivityItems,
+  toolActivityGroupTitle,
+} from "../messages/HistoryRows";

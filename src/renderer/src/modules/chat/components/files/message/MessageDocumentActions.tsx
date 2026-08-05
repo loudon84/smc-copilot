@@ -59,7 +59,7 @@ export function MessageDocumentActions({
       setState("creating");
       setError(null);
       try {
-        const result = await window.hermesAPI.files.createFromMessage({
+        const result = await window.chatFiles.platform.createFromMessage({
           profile,
           sessionId,
           messageId,
@@ -70,7 +70,7 @@ export function MessageDocumentActions({
         setState("created");
         onFileCreated(result.file.id);
         if (thenSaveAs) {
-          await window.hermesAPI.files.saveAs(profile, result.file.id);
+          await window.chatFiles.platform.saveAs(profile, result.file.id);
         }
       } catch (err) {
         setState("error");
