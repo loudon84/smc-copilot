@@ -2,14 +2,16 @@
 
 | Stage | Status |
 |---|---|
-| v7.6-hermes-agent-mcp-host-mode | done |
+| v8.0-chat-module-migration | done |
 
 ## Notes
 
-**v7.6 Hermes Agent MCP Host Mode**（PRD `prd_work/v7.6_agent-host-mode.md`）：
+**v8.0 Copilot Chat Module migration** complete for planned stages:
 
-- Chat 移除 `useExpertGateway` 分叉；Expert+Skill → `buildExpertPromptHint` → 统一 `hermesDefaultChat.sendMessage`
-- 新增 `hermes-mcp-config` Main/Preload/Shared + `window.hermesMcpConfig`
-- McpGateway 页新增 `HermesAgentMcpServersPanel` 写 `config.yaml` `mcp_servers`
-- Chat UI：`PromptHintPreview` / `ToolProgressTimeline` / `LocalDocumentCard`
-- Legacy `useRuntimeSkillSend` / `useExpertTaskStream` / `callExpertSkill` 标记 @deprecated
+- `scripts/chat-migration/*` + `check:no-reference-imports` / `check:chat-boundaries`
+- `window.chatRuntime` runId isolation (`src/main/chat-runtime`, `src/shared/chat-runtime`)
+- `window.chatFiles` thin bridge; full File Platform upstream parked in `src/main/chat-files/_upstream`
+- `modules/chat` ChatSurface + AI-OS adapters/ports; host `AiosCopilotChatHost`
+- Entry switch via `VITE_CHAT_ENGINE=legacy|copilot` (default copilot)
+- Docs: `docs/API_CONTRACTS.md` + `AGENTS.md` preload/version rows
+- Verified: `npm run typecheck`, boundary checks, `tests/chat-runtime-ipc.test.ts`

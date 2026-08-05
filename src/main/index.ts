@@ -183,6 +183,11 @@ import { generateId, getProfileByName, insertAuditEvent } from "./profile-runtim
 import { setupWorkspacesIPC } from "./workspaces-ipc";
 import { registerWorkspaceChatIpc } from "./workspace-chat/workspace-chat-ipc";
 import { registerHermesDefaultChatIpc } from "./hermes-default-chat/hermes-default-chat-ipc";
+import {
+  registerChatRuntimeIpc,
+  shutdownChatRuntimeIpc,
+} from "./chat-runtime/chat-runtime-ipc";
+import { registerChatFilesIpc } from "./chat-files/chat-files-ipc";
 import { registerWebOperatorTaskSessionIpc } from "./web-operator-task-session-ipc";
 import { setupProfileRoleIPC } from "./profile-role-ipc";
 import { registerFirstRunWizardIPC } from "./enterprise/first-run-wizard";
@@ -469,6 +474,8 @@ function setupIPC(): void {
         currentChatAbort = v;
       },
     });
+    registerChatRuntimeIpc(() => mainWindow);
+    registerChatFilesIpc();
     registerMcpIpc(() => mainWindow);
     seedDefaultMcpServers();
     registerMcpSkillGatewayRuntimeIpc();
@@ -1702,6 +1709,9 @@ app.on("before-quit", () => {
     currentChatAbort();
     currentChatAbort = null;
   }
+  try {
+    shutdownChatRuntimeIpc();
+  } catch { /* best effort */ }
   try {
     profileRuntimeBeforeQuit();
   } catch { /* best effort */ }

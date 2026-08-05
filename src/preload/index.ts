@@ -36,6 +36,8 @@ import { copilotServeApi } from "./copilot-serve-api";
 import { workspaceChatApi } from "./workspace-chat-api";
 import { workApiBridge } from "./work-api";
 import { hermesDefaultChatApi } from "./hermes-default-chat-api";
+import { chatRuntimeApi } from "./chat-runtime-api";
+import { chatFilesApi } from "./chat-files-api";
 import { webOperatorTaskSessionApi } from "./web-operator-task-session-api";
 import { mcpApi } from "./mcp-api";
 import { mcpSkillGatewayRuntimeApi } from "./mcp-skill-gateway-runtime-api";
@@ -898,6 +900,8 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("workspaces", workspaces);
     contextBridge.exposeInMainWorld("workspaceChat", workspaceChatApi);
     contextBridge.exposeInMainWorld("hermesDefaultChat", hermesDefaultChatApi);
+    contextBridge.exposeInMainWorld("chatRuntime", chatRuntimeApi);
+    contextBridge.exposeInMainWorld("chatFiles", chatFilesApi);
     contextBridge.exposeInMainWorld("webOperatorTaskSession", webOperatorTaskSessionApi);
     contextBridge.exposeInMainWorld("mcpSkillGatewayRuntime", mcpSkillGatewayRuntimeApi);
     contextBridge.exposeInMainWorld("genehubRuntime", genehubRuntimeApi);
@@ -938,6 +942,10 @@ if (process.contextIsolated) {
   window.workspaceChat = workspaceChatApi;
   // @ts-ignore (define in dts)
   window.hermesDefaultChat = hermesDefaultChatApi;
+  // @ts-ignore (define in dts)
+  window.chatRuntime = chatRuntimeApi;
+  // @ts-ignore (define in dts)
+  window.chatFiles = chatFilesApi;
   // @ts-ignore (define in dts)
   window.webOperatorTaskSession = webOperatorTaskSessionApi;
   // @ts-ignore (define in dts)

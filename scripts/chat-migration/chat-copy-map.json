@@ -1,0 +1,45 @@
+{
+  "sourceRoot": "references/copilot-desktop",
+  "copies": [
+    {
+      "from": "src/renderer/src/screens/Chat",
+      "to": "src/renderer/src/modules/chat/source",
+      "description": "Chat screen kernel (UI + hooks + core utils)"
+    },
+    {
+      "from": "src/renderer/src/components/files",
+      "to": "src/renderer/src/modules/chat/components/files",
+      "description": "File Platform UI components"
+    },
+    {
+      "from": "src/renderer/src/hooks/files",
+      "to": "src/renderer/src/modules/chat/hooks/files",
+      "description": "File Platform hooks"
+    },
+    {
+      "from": "src/shared/files",
+      "to": "src/shared/chat-files",
+      "description": "File Platform shared contracts"
+    }
+  ],
+  "excludes": [
+    "**/WebPreviewPanel.tsx",
+    "**/RemoteFolderPicker.tsx",
+    "**/WorktreePanel.tsx",
+    "**/*.snap"
+  ],
+  "importRewrites": [
+    {
+      "pattern": "from [\"'](\\.\\./)+shared/files(/[^\"']*)?[\"']",
+      "replacement": "from \"@shared/chat-files$2\""
+    },
+    {
+      "pattern": "from [\"']\\.\\./\\.\\./components/files(/[^\"']*)?[\"']",
+      "replacement": "from \"../../components/files$1\""
+    },
+    {
+      "pattern": "from [\"']\\.\\./\\.\\./hooks/files(/[^\"']*)?[\"']",
+      "replacement": "from \"../../hooks/files$1\""
+    }
+  ]
+}

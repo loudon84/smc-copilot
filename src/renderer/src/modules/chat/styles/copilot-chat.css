@@ -1,0 +1,133 @@
+/* Scoped Copilot Chat styles — do not pollute Hermes.css / MainPage. */
+
+.copilot-chat-root {
+  --chat-bg-primary: var(--bg-primary, #0f1115);
+  --chat-bg-secondary: var(--bg-secondary, #171a21);
+  --chat-text-primary: var(--text-primary, #e8eaed);
+  --chat-text-muted: var(--text-muted, #9aa0a6);
+  --chat-border: var(--border, #2a2f3a);
+  --chat-accent: var(--accent, #5b8cff);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  color: var(--chat-text-primary);
+  background: var(--chat-bg-primary);
+}
+
+.copilot-chat-root .chat-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.copilot-chat-root .chat-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.copilot-chat-root .chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.copilot-chat-root .chat-empty {
+  margin: auto;
+  color: var(--chat-text-muted);
+}
+
+.copilot-chat-root .message-row {
+  max-width: 900px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--chat-border);
+  background: var(--chat-bg-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.copilot-chat-root .message-row--user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--chat-accent) 18%, var(--chat-bg-secondary));
+}
+
+.copilot-chat-root .message-row--reasoning {
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.copilot-chat-root .message-row--tool {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.copilot-chat-root .message-row--error {
+  border-color: #c44;
+}
+
+.copilot-chat-root .tool-progress,
+.copilot-chat-root .chat-queue,
+.copilot-chat-root .chat-error {
+  padding: 8px 16px;
+  color: var(--chat-text-muted);
+  font-size: 12px;
+}
+
+.copilot-chat-root .chat-error {
+  color: #f88;
+}
+
+.copilot-chat-root .composer {
+  border-top: 1px solid var(--chat-border);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.copilot-chat-root .composer-input {
+  width: 100%;
+  resize: none;
+  border-radius: 8px;
+  border: 1px solid var(--chat-border);
+  background: var(--chat-bg-secondary);
+  color: var(--chat-text-primary);
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.copilot-chat-root .composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.copilot-chat-root .composer-actions button,
+.copilot-chat-root .chat-open-web {
+  border: 1px solid var(--chat-border);
+  background: var(--chat-accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.copilot-chat-root .composer-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.copilot-chat-root .chat-right-panel {
+  width: 320px;
+  border-left: 1px solid var(--chat-border);
+  overflow: auto;
+}

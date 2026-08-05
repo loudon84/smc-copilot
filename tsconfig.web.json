@@ -7,14 +7,15 @@
     "src/shared/**/*",
     "src/preload/*.d.ts"
   ],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/renderer/src/modules/chat/source/**", "src/renderer/src/modules/chat/components/files/**", "src/renderer/src/modules/chat/hooks/files/**"],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
     "types": ["vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["src/renderer/src/*"]
+      "@renderer/*": ["src/renderer/src/*"],
+      "@shared/*": ["src/shared/*"]
     },
     "noUnusedLocals": false,
     "noUnusedParameters": false

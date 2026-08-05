@@ -1,0 +1,582 @@
+{
+  "copied": [
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/attachmentUtils.test.ts",
+      "to": "src/renderer/src/modules/chat/source/attachmentUtils.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/attachmentUtils.ts",
+      "to": "src/renderer/src/modules/chat/source/attachmentUtils.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/chat-layout.css",
+      "to": "src/renderer/src/modules/chat/source/chat-layout.css"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/Chat.layout.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/Chat.layout.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/Chat.tsx",
+      "to": "src/renderer/src/modules/chat/source/Chat.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ChatEmptyState.tsx",
+      "to": "src/renderer/src/modules/chat/source/ChatEmptyState.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ChatInput.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/ChatInput.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ChatInput.tsx",
+      "to": "src/renderer/src/modules/chat/source/ChatInput.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/chatMessages.ts",
+      "to": "src/renderer/src/modules/chat/source/chatMessages.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ClarifyCard.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/ClarifyCard.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ClarifyCard.tsx",
+      "to": "src/renderer/src/modules/chat/source/ClarifyCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/composerFilePlatform.ts",
+      "to": "src/renderer/src/modules/chat/source/composerFilePlatform.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ContextFolderChip.tsx",
+      "to": "src/renderer/src/modules/chat/source/ContextFolderChip.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ContextGauge.tsx",
+      "to": "src/renderer/src/modules/chat/source/ContextGauge.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/contextWindows.test.ts",
+      "to": "src/renderer/src/modules/chat/source/contextWindows.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/contextWindows.ts",
+      "to": "src/renderer/src/modules/chat/source/contextWindows.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/dashboardEventAdapter.test.ts",
+      "to": "src/renderer/src/modules/chat/source/dashboardEventAdapter.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/dashboardEventAdapter.ts",
+      "to": "src/renderer/src/modules/chat/source/dashboardEventAdapter.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/dashboardGatewayClient.test.ts",
+      "to": "src/renderer/src/modules/chat/source/dashboardGatewayClient.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/dashboardGatewayClient.ts",
+      "to": "src/renderer/src/modules/chat/source/dashboardGatewayClient.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/FileViewer.tsx",
+      "to": "src/renderer/src/modules/chat/source/FileViewer.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/HistoryRow.tsx",
+      "to": "src/renderer/src/modules/chat/source/HistoryRow.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/parseBackgroundCommand.test.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/parseBackgroundCommand.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/usageFromPayload.test.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/usageFromPayload.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useChatActions.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useChatActions.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useChatIPC.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/hooks/useChatIPC.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useChatIPC.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useChatIPC.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useChatScroll.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useChatScroll.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useDashboardChatTransport.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/hooks/useDashboardChatTransport.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useDashboardChatTransport.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useDashboardChatTransport.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useFastMode.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useFastMode.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useInputHistory.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useInputHistory.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useLocalCommands.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useLocalCommands.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useModelConfig.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/hooks/useModelConfig.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useModelConfig.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useModelConfig.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useReasoningEffort.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useReasoningEffort.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/hooks/useVoiceInput.ts",
+      "to": "src/renderer/src/modules/chat/source/hooks/useVoiceInput.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/keyboard.test.ts",
+      "to": "src/renderer/src/modules/chat/source/keyboard.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/keyboard.ts",
+      "to": "src/renderer/src/modules/chat/source/keyboard.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/liveReasoningEvents.ts",
+      "to": "src/renderer/src/modules/chat/source/liveReasoningEvents.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/liveToolEvents.ts",
+      "to": "src/renderer/src/modules/chat/source/liveToolEvents.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/lossyText.test.ts",
+      "to": "src/renderer/src/modules/chat/source/lossyText.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/lossyText.ts",
+      "to": "src/renderer/src/modules/chat/source/lossyText.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/mediaUtils.test.ts",
+      "to": "src/renderer/src/modules/chat/source/mediaUtils.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/mediaUtils.ts",
+      "to": "src/renderer/src/modules/chat/source/mediaUtils.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/MessageList.tsx",
+      "to": "src/renderer/src/modules/chat/source/MessageList.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/MessageRow.tsx",
+      "to": "src/renderer/src/modules/chat/source/MessageRow.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ModelPicker.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/ModelPicker.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ModelPicker.tsx",
+      "to": "src/renderer/src/modules/chat/source/ModelPicker.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/prompt-navigator.css",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/prompt-navigator.css"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/PromptNavigator.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/PromptNavigator.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/PromptNavigator.tsx",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/PromptNavigator.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/PromptNavigatorItem.tsx",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/PromptNavigatorItem.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/promptNavigatorUtils.test.ts",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/promptNavigatorUtils.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/promptNavigatorUtils.ts",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/promptNavigatorUtils.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/usePromptNavigator.test.ts",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/usePromptNavigator.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/prompt-navigator/usePromptNavigator.ts",
+      "to": "src/renderer/src/modules/chat/source/prompt-navigator/usePromptNavigator.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/QueuedMessages.tsx",
+      "to": "src/renderer/src/modules/chat/source/QueuedMessages.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/ReasoningEffortPicker.tsx",
+      "to": "src/renderer/src/modules/chat/source/ReasoningEffortPicker.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/AgentOutputEmptyState.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/AgentOutputEmptyState.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/AgentOutputFileCard.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/AgentOutputFileCard.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/AgentOutputFileCard.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/AgentOutputFileCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/AgentOutputSection.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/AgentOutputSection.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/session-file-actions.ts",
+      "to": "src/renderer/src/modules/chat/source/session-files/session-file-actions.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/SessionFileRow.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/SessionFileRow.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/SessionFilesPanel.test.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/SessionFilesPanel.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/SessionFilesPanel.tsx",
+      "to": "src/renderer/src/modules/chat/source/session-files/SessionFilesPanel.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/session-files/useSessionFiles.ts",
+      "to": "src/renderer/src/modules/chat/source/session-files/useSessionFiles.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/sessionHistory.ts",
+      "to": "src/renderer/src/modules/chat/source/sessionHistory.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/commandCatalog.test.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/commandCatalog.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/commandCatalog.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/commandCatalog.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/desktopCommands.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/desktopCommands.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/executeAgentCommand.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/executeAgentCommand.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/handleSlashCommand.test.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/handleSlashCommand.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/handleSlashCommand.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/handleSlashCommand.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/parseSlashCommand.test.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/parseSlashCommand.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/parseSlashCommand.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/parseSlashCommand.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/prepareModelSubmission.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/prepareModelSubmission.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/SlashCommandIcon.tsx",
+      "to": "src/renderer/src/modules/chat/source/slash/SlashCommandIcon.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/types.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/types.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slash/virtualSlashCommands.ts",
+      "to": "src/renderer/src/modules/chat/source/slash/virtualSlashCommands.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slashCommands.ts",
+      "to": "src/renderer/src/modules/chat/source/slashCommands.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slashExec.test.ts",
+      "to": "src/renderer/src/modules/chat/source/slashExec.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/slashExec.ts",
+      "to": "src/renderer/src/modules/chat/source/slashExec.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/transcriptUtils.test.ts",
+      "to": "src/renderer/src/modules/chat/source/transcriptUtils.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/transcriptUtils.ts",
+      "to": "src/renderer/src/modules/chat/source/transcriptUtils.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/types.ts",
+      "to": "src/renderer/src/modules/chat/source/types.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/screens/Chat/useChatPanelLayout.ts",
+      "to": "src/renderer/src/modules/chat/source/useChatPanelLayout.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/common/FileBadge.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/common/FileBadge.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/common/FileContextMenu.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/common/FileContextMenu.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/common/FileIcon.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/common/FileIcon.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/common/FileOperationCard.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/common/FileOperationCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/common/ImageAttachmentPreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/common/ImageAttachmentPreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/composer/ComposerAttachmentCard.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/composer/ComposerAttachmentCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/composer/ComposerAttachmentTray.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/composer/ComposerAttachmentTray.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/composer/file-card-utils.ts",
+      "to": "src/renderer/src/modules/chat/components/files/composer/file-card-utils.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/composer/FileDropOverlay.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/composer/FileDropOverlay.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/composer/FilePickerButton.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/composer/FilePickerButton.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/composer/FileProcessingStatus.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/composer/FileProcessingStatus.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/FileServiceUnavailableBanner.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/FileServiceUnavailableBanner.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/index.ts",
+      "to": "src/renderer/src/modules/chat/components/files/index.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/AgentOutputFileCard.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/message/AgentOutputFileCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/document-action-errors.test.ts",
+      "to": "src/renderer/src/modules/chat/components/files/message/document-action-errors.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/document-action-errors.ts",
+      "to": "src/renderer/src/modules/chat/components/files/message/document-action-errors.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/document-message-utils.test.ts",
+      "to": "src/renderer/src/modules/chat/components/files/message/document-message-utils.test.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/document-message-utils.ts",
+      "to": "src/renderer/src/modules/chat/components/files/message/document-message-utils.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/MessageAttachmentCard.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/message/MessageAttachmentCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/MessageAttachmentGrid.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/message/MessageAttachmentGrid.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/MessageDocumentActions.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/message/MessageDocumentActions.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/message/MessageImageCard.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/message/MessageImageCard.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/CodeFilePreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/CodeFilePreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/FilePreviewError.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/FilePreviewError.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/FilePreviewHeader.test.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/FilePreviewHeader.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/FilePreviewHeader.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/FilePreviewHeader.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/FilePreviewPanel.test.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/FilePreviewPanel.test.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/FilePreviewPanel.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/FilePreviewPanel.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/FilePreviewRouter.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/FilePreviewRouter.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/ImageFilePreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/ImageFilePreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/MarkdownFilePreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/MarkdownFilePreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/MessageDocumentPreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/MessageDocumentPreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/PdfFilePreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/PdfFilePreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/TextFilePreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/TextFilePreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/components/files/preview/UnsupportedFilePreview.tsx",
+      "to": "src/renderer/src/modules/chat/components/files/preview/UnsupportedFilePreview.tsx"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/hooks/files/useDocumentPreview.ts",
+      "to": "src/renderer/src/modules/chat/hooks/files/useDocumentPreview.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/hooks/files/useFileDrop.ts",
+      "to": "src/renderer/src/modules/chat/hooks/files/useFileDrop.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/hooks/files/useFileJobEvents.ts",
+      "to": "src/renderer/src/modules/chat/hooks/files/useFileJobEvents.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/hooks/files/useFileOperations.ts",
+      "to": "src/renderer/src/modules/chat/hooks/files/useFileOperations.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/hooks/files/useFilePicker.ts",
+      "to": "src/renderer/src/modules/chat/hooks/files/useFilePicker.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/renderer/src/hooks/files/useFilePreview.ts",
+      "to": "src/renderer/src/modules/chat/hooks/files/useFilePreview.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/classify.ts",
+      "to": "src/shared/chat-files/classify.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-association.ts",
+      "to": "src/shared/chat-files/file-association.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-contracts.ts",
+      "to": "src/shared/chat-files/file-contracts.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-errors.ts",
+      "to": "src/shared/chat-files/file-errors.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-events.ts",
+      "to": "src/shared/chat-files/file-events.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-ipc.ts",
+      "to": "src/shared/chat-files/file-ipc.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-job.ts",
+      "to": "src/shared/chat-files/file-job.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-preview.ts",
+      "to": "src/shared/chat-files/file-preview.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/file-status.ts",
+      "to": "src/shared/chat-files/file-status.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/index.ts",
+      "to": "src/shared/chat-files/index.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/legacy-attachment-adapter.ts",
+      "to": "src/shared/chat-files/legacy-attachment-adapter.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/managed-file.ts",
+      "to": "src/shared/chat-files/managed-file.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/message-document.ts",
+      "to": "src/shared/chat-files/message-document.ts"
+    },
+    {
+      "from": "references/copilot-desktop/src/shared/files/parser-contract.ts",
+      "to": "src/shared/chat-files/parser-contract.ts"
+    }
+  ],
+  "skipped": [
+    "references/copilot-desktop/src/renderer/src/screens/Chat/RemoteFolderPicker.tsx",
+    "references/copilot-desktop/src/renderer/src/screens/Chat/WebPreviewPanel.tsx",
+    "references/copilot-desktop/src/renderer/src/screens/Chat/WorktreePanel.tsx"
+  ],
+  "errors": []
+}

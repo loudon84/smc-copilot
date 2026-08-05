@@ -242,6 +242,40 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 | `chat-tool-progress` | `string` | Tool name |
 | `chat-usage` | `HermesChatUsageEvent` | tokens / cost |
 
+---
+
+## Chat Runtime（v8.0 runId 隔离）
+
+**Preload**：`window.chatRuntime`（`src/preload/chat-runtime-api.ts`）  
+**Main**：`src/main/chat-runtime/`（`activeRuns` Map；与 legacy `hermes-chat:send-message` / 全局 `chat-*` **并存**供灰度）  
+**契约**：`src/shared/chat-runtime/`
+
+| Channel | Direction | Args | Returns | Notes |
+|---------|-----------|------|---------|-------|
+| `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / `profileId` / `invocationSource`） | `ChatSubmitResult` | 复用 `hermes.sendMessage` + expert-run-bridge；事件带同一 `runId` |
+| `chat-runtime:abort` | invoke | `ChatAbortInput \| string`（`runId`） | `{ ok: boolean }` | **仅**取消指定 run；无 id 时 abort all |
+
+**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent` 判别联合（`session.started` / `message.delta` / `reasoning.delta` / `tool.progress` / `tool.event` / `clarify.requested` / `approval.requested` / `usage` / `completed` / `failed` / `cancelled`）；Preload `chatRuntime.onEvent(cb)` 返回 unsubscribe。
+
+**Renderer**：`modules/chat` ports + `adapters/aios/aiosChatRuntimeAdapter`；入口 `HermesDefaultChatPage` → `AiosCopilotChatHost`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）。
+
+---
+
+## Chat Files（v8.0 thin bridge）
+
+**Preload**：`window.chatFiles`（`src/preload/chat-files-api.ts`）— **不**扩展 `hermesAPI.files`  
+**Main**：`src/main/chat-files/chat-files-ipc.ts`（复用 hermes-default-chat attachments；完整 File Platform 源码在 `_upstream/` 待渐进启用）  
+**Shared**：`src/shared/chat-files/` + `chat-files-ipc-channels.ts`
+
+| Channel | Args | Returns |
+|---------|------|---------|
+| `chat-files:list-session-files` | `profile?`, `sessionId` | `ChatFilesListed[]` |
+| `chat-files:upload-paths` | `{ profile?, session_id, file_paths }` | `{ files }` |
+| `chat-files:upload-buffers` | `{ profile?, session_id, files }` | `{ files }` |
+| `chat-files:remove` | `profile?`, `fileId`, `sessionId?` | `{ ok: true }` |
+| `chat-files:preview` | `profile?`, `fileId` | `{ content?, name?, error? }` |
+| `chat-files:reveal` / `open-external` / `save-as` | path… | `{ ok, path? }` |
+
 ## Hermes memory (AIOSWorkspace)
 
 | Channel | Direction | Args | Returns | Notes |
