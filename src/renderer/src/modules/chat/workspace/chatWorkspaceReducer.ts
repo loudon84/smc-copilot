@@ -286,14 +286,23 @@ export function chatWorkspaceReducer(
 
         if (unchanged) return run;
 
-        const startedAt =
-          run.execution.startedAt ??
-          (isBusy(nextState) ? Date.now() : undefined);
-        const completedAt =
-          nextState === "completed" ||
-          nextState === "failed" ||
-          nextState === "cancelled"
-            ? run.execution.completedAt ?? Date.now()
+        const enteringBusy = !isBusy(prevState) && isBusy(nextState);
+        const leavingBusy = isBusy(prevState) && !isBusy(nextState);
+
+        const startedAt = enteringBusy
+          ? Date.now()
+          : isBusy(nextState)
+            ? (run.execution.startedAt ?? Date.now())
+            : run.execution.startedAt;
+
+        const completedAt = enteringBusy
+          ? undefined
+          : nextState === "completed" ||
+              nextState === "failed" ||
+              nextState === "cancelled"
+            ? leavingBusy || !run.execution.completedAt
+              ? Date.now()
+              : run.execution.completedAt
             : run.execution.completedAt;
 
         return touch({

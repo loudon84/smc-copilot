@@ -20,6 +20,8 @@ On message send, composed session-file context is injected into the wire payload
 
 Renderer panel lists managed files for the current session, reacts to file domain/job events, and opens previews. It never performs filesystem IO directly.
 
+In Copilot Chat, the open/close control is the Folder FAB on [[domain/chat#Floating rail]] (not Composer). The panel itself still renders in the right aside when active.
+
 ## Agent Output Section
 
 UI section listing agent output files associated with the session, with cards that open preview/actions through Preload file APIs.

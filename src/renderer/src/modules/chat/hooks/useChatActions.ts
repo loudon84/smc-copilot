@@ -36,6 +36,7 @@ export function useChatActions({
     async (message: string, history: ChatSubmitInput["history"] = []) => {
       await runtime.submit({
         runId,
+        turnId: `turn-${Date.now()}`,
         profileId,
         sessionId,
         message,

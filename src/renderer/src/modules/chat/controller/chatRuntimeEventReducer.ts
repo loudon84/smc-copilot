@@ -3,8 +3,7 @@ import type { ChatControllerAction } from "./chatReducer";
 
 /**
  * Map a ChatRuntimeEvent into one or more ChatControllerActions.
- * Session.started is returned as SET_SESSION_ID so the controller can
- * also propagate it to HermesWorkspaceContext.
+ * Session.started binds the runtime session id without loading history.
  */
 export function chatRuntimeEventToActions(
   event: ChatRuntimeEvent,
@@ -12,7 +11,7 @@ export function chatRuntimeEventToActions(
 ): ChatControllerAction[] {
   switch (event.type) {
     case "session.started":
-      return [{ type: "SET_SESSION_ID", sessionId: event.sessionId }];
+      return [{ type: "BIND_SESSION", sessionId: event.sessionId }];
 
     case "message.delta": {
       const id = streamingMessageId || `agent-${event.runId}`;

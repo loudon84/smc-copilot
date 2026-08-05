@@ -51,6 +51,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  position: relative;
 }
 
 .copilot-chat-root .chat-messages {
@@ -764,19 +765,101 @@
   padding: 4px 8px;
   cursor: pointer;
 }
-.copilot-chat-root .prompt-navigator {
+
+.copilot-chat-root .chat-floating-rail {
   position: absolute;
-  right: 12px;
-  top: 12px;
+  inset-inline-end: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.copilot-chat-root .chat-floating-rail-item {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.copilot-chat-root .chat-fab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--chat-border, #2a2f3a);
+  background: var(--chat-bg-secondary, #171a21);
+  color: inherit;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, #000 25%, transparent);
+}
+
+.copilot-chat-root .chat-fab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.copilot-chat-root .chat-fab.is-active {
+  border-color: var(--chat-accent, #5b8cff);
+  color: var(--chat-accent, #5b8cff);
+}
+
+.copilot-chat-root .chat-fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  background: var(--chat-accent, #5b8cff);
+  color: #fff;
+}
+
+.copilot-chat-root .prompt-navigator,
+.copilot-chat-root .prompt-navigator--rail {
+  position: absolute;
+  inset-inline-end: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
   width: 200px;
-  max-height: 50%;
+  max-height: 50vh;
   overflow: auto;
   border: 1px solid var(--chat-border, #2a2f3a);
   border-radius: 10px;
   background: var(--chat-bg-primary, #0f1115);
   z-index: 5;
   padding: 8px;
+  box-shadow: 0 4px 16px color-mix(in srgb, #000 30%, transparent);
 }
+
+.copilot-chat-root .chat-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.copilot-chat-root .chat-error-action {
+  border: 1px solid var(--chat-border, #2a2f3a);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .copilot-chat-root .prompt-navigator-list {
   list-style: none;
   margin: 0;

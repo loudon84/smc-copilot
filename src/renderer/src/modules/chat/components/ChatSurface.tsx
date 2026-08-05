@@ -12,7 +12,7 @@ import type { ChatRunState } from "../controller/chatViewTypes";
 import { MessageList } from "./messages/MessageList";
 import { CopilotChatInput } from "./composer/CopilotChatInput";
 import { ModelPicker, groupChatModels } from "./composer/ModelPicker";
-import { PromptNavigator } from "./navigator/PromptNavigator";
+import { ChatFloatingRail } from "./floating/ChatFloatingRail";
 import { ChatContentRail } from "../layout/ChatContentRail";
 import "../styles/copilot-chat.css";
 
@@ -33,8 +33,12 @@ export type ChatSurfaceSlots = {
   rightPanelSlot?: React.ReactNode;
   attachmentTraySlot?: React.ReactNode;
   filesPanelSlot?: React.ReactNode;
+  /** @deprecated Session Files toggle moved to ChatFloatingRail. */
   filesToggleSlot?: React.ReactNode;
   showRightPanel?: boolean;
+  sessionFilesActive?: boolean;
+  sessionFilesCount?: number;
+  onToggleSessionFiles?: () => void;
   emptyContext?: {
     expertName?: string;
     teamName?: string;
@@ -57,7 +61,9 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   navigation?: ChatNavigationPort;
   commands?: ChatCommandPort;
   profileId: string;
+  /** Mount-time session id for one-shot history hydrate (not runtime bind). */
   sessionId?: string | null;
+  initialDraft?: string;
   expertId?: string;
   teamId?: string;
   expertRunId?: string;
@@ -87,6 +93,7 @@ export function ChatSurface({
   commands,
   profileId,
   sessionId,
+  initialDraft,
   expertId,
   teamId,
   expertRunId,
@@ -101,8 +108,10 @@ export function ChatSurface({
   activeExpertSlot,
   rightPanelSlot,
   filesPanelSlot,
-  filesToggleSlot,
   showRightPanel,
+  sessionFilesActive,
+  sessionFilesCount,
+  onToggleSessionFiles,
   emptyContext,
   renderStatusBar,
   onSessionIdChange,
@@ -115,13 +124,14 @@ export function ChatSurface({
     state,
     input,
     setInput,
-    queue,
-    send,
+    submitComposer,
+    submitPayload,
     abort,
     openWeb,
     setSelectedModel,
     addAttachments,
     removeAttachment,
+    queue,
   } = useChatController({
     runtime,
     session,
@@ -129,7 +139,8 @@ export function ChatSurface({
     files,
     navigation,
     profileId,
-    forcedSessionId: sessionId,
+    initialSessionId: sessionId,
+    initialDraft,
     runId: runIdProp,
     expertId,
     teamId,
@@ -138,6 +149,7 @@ export function ChatSurface({
     permissionMode,
     invocationSource,
     onSessionIdChange,
+    onDraftChange: onInputChange,
     composeMessage,
   });
 
@@ -287,6 +299,13 @@ export function ChatSurface({
                 runId={state.activeRunId}
                 emptyContext={emptyContext}
                 onSelectSuggestion={handleSuggestion}
+                onRetry={(text) =>
+                  void submitPayload({ text, source: "retry" })
+                }
+                onEditRetry={(text) => {
+                  setInput(text);
+                  onInputChange?.(text);
+                }}
                 pendingClarifyRequestId={
                   pendingClarify?.kind === "clarify"
                     ? pendingClarify.request.requestId
@@ -312,11 +331,6 @@ export function ChatSurface({
                 }
               />
             </ChatContentRail>
-            <PromptNavigator
-              messages={state.messages}
-              runId={state.activeRunId}
-              suppressed={rightOpen}
-            />
           </div>
           {state.lastError && (
             <ChatContentRail>
@@ -341,7 +355,7 @@ export function ChatSurface({
                 setInput(v);
                 onInputChange?.(v);
               }}
-              onSend={(text) => void send(text)}
+              onSend={() => void submitComposer()}
               onAbort={() => void abort()}
               isBusy={isBusy}
               attachments={state.attachments}
@@ -353,7 +367,6 @@ export function ChatSurface({
               commands={commands}
               sessionId={state.activeSessionId}
               profileId={profileId}
-              filesToggle={filesToggleSlot}
               toolbarExtras={
                 <>
                   {composerControlsSlot}
@@ -374,6 +387,19 @@ export function ChatSurface({
               }
             />
           </ChatContentRail>
+          <ChatFloatingRail
+            messages={state.messages}
+            runId={state.activeRunId}
+            sessionFiles={{
+              count: sessionFilesCount ?? 0,
+              active: sessionFilesActive === true,
+              disabled:
+                !state.activeSessionId &&
+                state.attachments.length === 0 &&
+                (sessionFilesCount ?? 0) === 0,
+              onToggle: () => onToggleSessionFiles?.(),
+            }}
+          />
         </div>
         {rightOpen && (
           <aside className="chat-right-panel">

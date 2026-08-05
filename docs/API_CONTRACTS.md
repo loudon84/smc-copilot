@@ -244,7 +244,7 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 ---
 
-## Chat Runtime（v8.0 / v8.0.1 runId 隔离）
+## Chat Runtime（v8.0 / v8.0.1 runId 隔离 · v8.0.4 turnId）
 
 **Preload**：`window.chatRuntime`（`src/preload/chat-runtime-api.ts`）  
 **Main**：`src/main/chat-runtime/`（`activeRuns` Map；abort 走互斥 `finishCompleted` / `finishFailed` / `finishCancelled`；与 legacy `hermes-chat:send-message` / 全局 `chat-*` **并存**供灰度）  
@@ -252,13 +252,13 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
-| `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / `profileId` / `invocationSource`；可选 `permissionMode` 独立于 `workMode`） | `ChatSubmitResult` | 复用 `hermes.sendMessage` + expert-run-bridge；事件带同一 `runId`；必带 `history` |
+| `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / **`turnId`** / `profileId` / `invocationSource`；可选 `permissionMode` 独立于 `workMode`） | `ChatSubmitResult`（含同一 `turnId`） | 复用 `hermes.sendMessage` + expert-run-bridge；事件带同一 `runId`+`turnId`；必带 `history`；`session.started` 每 turn 至多一次 |
 | `chat-runtime:abort` | invoke | `ChatAbortInput \| string`（`runId`） | `{ ok: boolean }` | **仅**取消指定 run；无 id 时 abort all；**保证** submit Promise resolve |
 | `chat-runtime:command` | invoke | `ChatRuntimeCommand`（`clarify.respond` / `approval.approve` / `approval.deny`） | `ChatRuntimeCommandResult` | v8.0.1 Clarify / Approval 响应 |
 
-**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent` 判别联合（`session.started` / `message.delta` / `reasoning.delta` / `tool.progress` / `tool.event` / `clarify.requested` / `approval.requested` / `usage` / `completed` / `failed` / `cancelled`）；Preload `chatRuntime.onEvent(cb)` 返回 unsubscribe。SSE 识别 `hermes.session.started` / `hermes.reasoning.delta` / `hermes.tool.event` / `hermes.clarify.requested` / `hermes.approval.requested` 等。
+**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent` 判别联合（每事件必含 `runId` + **`turnId`**：`session.started` / `message.delta` / `reasoning.delta` / `tool.progress` / `tool.event` / `clarify.requested` / `approval.requested` / `usage` / `completed` / `failed` / `cancelled`）；终态后同 turn 非终态事件丢弃；Preload `chatRuntime.onEvent(cb)` 返回 unsubscribe。SSE 识别 `hermes.session.started` / `hermes.reasoning.delta` / `hermes.tool.event` / `hermes.clarify.requested` / `hermes.approval.requested` 等。
 
-**Renderer**：`modules/chat/controller` + ports + `adapters/aios/*`（含 `composeWorkPrompt`）；入口 `HermesDefaultChatPage` → `AiosCopilotChatHost`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）；多会话 `workspace/chatRunRegistry`。
+**Renderer**：`modules/chat/controller`（`initialSessionId` hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft）+ ports + `adapters/aios/*`；入口 `HermesDefaultChatPage` → `AiosCopilotChatHost`；浮动层 `ChatFloatingRail`；多会话 `ChatWorkspaceProvider`。
 
 ---
 

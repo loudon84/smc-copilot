@@ -12,6 +12,7 @@ describe("chat-runtime submit payload shape", () => {
     ]);
     const input: ChatSubmitInput = {
       runId: "run-1",
+      turnId: "turn-1",
       profileId: "default",
       sessionId: "sess-1",
       message: "round 2",

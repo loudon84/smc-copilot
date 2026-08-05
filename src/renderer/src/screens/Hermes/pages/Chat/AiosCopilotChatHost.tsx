@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PanelRightOpen } from "lucide-react";
 import { ChatSurface } from "@renderer/modules/chat/components/ChatSurface";
 import type { ControllerStateChangeSnapshot } from "@renderer/modules/chat/components/ChatSurface";
 import {
@@ -308,6 +307,7 @@ export function AiosCopilotChatHost({
       commands={aiosCommandAdapter}
       profileId={profileId}
       sessionId={sessionId}
+      initialDraft={run.presentation.draft || ""}
       runId={run.runId}
       expertId={run.context.expertId}
       teamId={run.context.teamId}
@@ -369,16 +369,9 @@ export function AiosCopilotChatHost({
         />
       )}
       composerControlsSlot={composerControls}
-      filesToggleSlot={
-        <button
-          type="button"
-          className="copilot-icon-btn"
-          title="Session files"
-          onClick={() => setSessionFilesVisible((v) => !v)}
-        >
-          <PanelRightOpen size={16} />
-        </button>
-      }
+      sessionFilesActive={sessionFilesVisible}
+      sessionFilesCount={0}
+      onToggleSessionFiles={() => setSessionFilesVisible((v) => !v)}
       showRightPanel={showRightPanel}
       filesPanelSlot={
         showRightPanel ? (

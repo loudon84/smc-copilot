@@ -40,6 +40,8 @@ type Props = {
   onClarifyAnswer?: (requestId: string, answer: string) => void;
   onApproval?: (requestId: string, approve: boolean) => void;
   onSelectSuggestion?: (text: string) => void;
+  onRetry?: (text: string) => void;
+  onEditRetry?: (text: string) => void;
   pendingClarifyRequestId?: string | null;
   pendingApprovalRequestId?: string | null;
 };
@@ -83,6 +85,8 @@ export const MessageList = memo(function MessageList({
   onClarifyAnswer,
   onApproval,
   onSelectSuggestion,
+  onRetry,
+  onEditRetry,
   pendingClarifyRequestId,
   pendingApprovalRequestId,
 }: Props): React.JSX.Element {
@@ -204,10 +208,45 @@ export const MessageList = memo(function MessageList({
     }
 
     if (msg.kind === "error") {
+      let lastUserText = "";
+      for (let j = i - 1; j >= 0; j -= 1) {
+        const prevMsg = visibleMessages[j];
+        if (prevMsg.kind === "user") {
+          lastUserText = prevMsg.content;
+          break;
+        }
+      }
       rows.push(
         <div key={msg.id} className="chat-message chat-message-agent">
           <div className="chat-bubble chat-bubble-agent chat-bubble-error">
             {msg.content}
+            {lastUserText ? (
+              <div className="chat-error-actions">
+                <button
+                  type="button"
+                  className="chat-error-action"
+                  onClick={() => onRetry?.(lastUserText)}
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  className="chat-error-action"
+                  onClick={() => onEditRetry?.(lastUserText)}
+                >
+                  Edit and retry
+                </button>
+                <button
+                  type="button"
+                  className="chat-error-action"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText?.(msg.content);
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>,
       );

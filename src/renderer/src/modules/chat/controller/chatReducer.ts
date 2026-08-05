@@ -9,8 +9,11 @@ import type {
 export type ChatControllerAction =
   | { type: "RESET"; runId: string }
   | { type: "LOAD_HISTORY"; sessionId: string; messages: ChatViewItem[] }
+  | { type: "HYDRATE_SESSION"; sessionId: string; messages: ChatViewItem[] }
+  | { type: "BIND_SESSION"; sessionId: string }
   | { type: "SET_SESSION_ID"; sessionId: string }
   | { type: "SET_RUN_ID"; runId: string }
+  | { type: "BEGIN_TURN"; turnId: string }
   | { type: "SET_RUN_STATE"; runState: ChatRunState }
   | { type: "SET_MODEL"; modelId: string | null }
   | { type: "SET_ATTACHMENTS"; attachments: ChatAttachmentState[] }
@@ -43,16 +46,46 @@ export function createInitialChatState(runId: string): ChatControllerState {
   return {
     activeSessionId: null,
     activeRunId: runId,
+    activeTurnId: null,
     messages: [],
     streamingMessageId: null,
     toolProgress: null,
     usage: null,
+    cumulativeUsage: null,
     attachments: [],
     selectedModelId: null,
     runState: "idle",
     lastError: null,
     runGeneration: 0,
   };
+}
+
+function isBusyRunState(runState: ChatRunState): boolean {
+  return (
+    runState === "streaming" ||
+    runState === "creating" ||
+    runState === "waiting_approval" ||
+    runState === "waiting_clarify"
+  );
+}
+
+function isTerminalRunState(runState: ChatRunState): boolean {
+  return (
+    runState === "completed" ||
+    runState === "failed" ||
+    runState === "cancelled"
+  );
+}
+
+/** Hydrate only when idle/interrupted-like and the transcript is still empty. */
+function canHydrateSession(state: ChatControllerState): boolean {
+  if (isBusyRunState(state.runState)) return false;
+  if (state.messages.length > 0) return false;
+  return (
+    state.runState === "idle" ||
+    state.runState === "cancelled" ||
+    state.runState === "failed"
+  );
 }
 
 function finalizePending(messages: ChatViewItem[]): ChatViewItem[] {
@@ -62,6 +95,38 @@ function finalizePending(messages: ChatViewItem[]): ChatViewItem[] {
     }
     return m;
   });
+}
+
+function mergeUsage(
+  prev: ChatUsage | null,
+  next: ChatUsage,
+): ChatUsage {
+  if (!prev) return next;
+  return {
+    promptTokens: prev.promptTokens + next.promptTokens,
+    completionTokens: prev.completionTokens + next.completionTokens,
+    totalTokens: prev.totalTokens + next.totalTokens,
+    cost:
+      prev.cost != null || next.cost != null
+        ? (prev.cost ?? 0) + (next.cost ?? 0)
+        : undefined,
+    rateLimitRemaining: next.rateLimitRemaining ?? prev.rateLimitRemaining,
+    rateLimitReset: next.rateLimitReset ?? prev.rateLimitReset,
+    cacheReadTokens:
+      (prev.cacheReadTokens ?? 0) + (next.cacheReadTokens ?? 0) || undefined,
+    cacheWriteTokens:
+      (prev.cacheWriteTokens ?? 0) + (next.cacheWriteTokens ?? 0) || undefined,
+    contextTokens: next.contextTokens ?? prev.contextTokens,
+    contextWindowTokens: next.contextWindowTokens ?? prev.contextWindowTokens,
+  };
+}
+
+/** Block streaming mutations once the turn is already terminal. */
+function rejectIfTerminal(
+  state: ChatControllerState,
+): ChatControllerState | null {
+  if (isTerminalRunState(state.runState)) return state;
+  return null;
 }
 
 export function chatReducer(
@@ -76,6 +141,7 @@ export function chatReducer(
       };
 
     case "LOAD_HISTORY":
+      if (isBusyRunState(state.runState)) return state;
       return {
         ...state,
         activeSessionId: action.sessionId,
@@ -84,7 +150,24 @@ export function chatReducer(
         toolProgress: null,
         runState: "idle",
         lastError: null,
+        activeTurnId: null,
       };
+
+    case "HYDRATE_SESSION":
+      if (!canHydrateSession(state)) return state;
+      return {
+        ...state,
+        activeSessionId: action.sessionId,
+        messages: action.messages,
+        streamingMessageId: null,
+        toolProgress: null,
+        runState: "idle",
+        lastError: null,
+        activeTurnId: null,
+      };
+
+    case "BIND_SESSION":
+      return { ...state, activeSessionId: action.sessionId };
 
     case "SET_SESSION_ID":
       return { ...state, activeSessionId: action.sessionId };
@@ -92,7 +175,23 @@ export function chatReducer(
     case "SET_RUN_ID":
       return { ...state, activeRunId: action.runId };
 
+    case "BEGIN_TURN":
+      return {
+        ...state,
+        activeTurnId: action.turnId,
+        toolProgress: null,
+        usage: null,
+        runState: "streaming",
+        lastError: null,
+      };
+
     case "SET_RUN_STATE":
+      if (
+        isTerminalRunState(state.runState) &&
+        isBusyRunState(action.runState)
+      ) {
+        return state;
+      }
       return { ...state, runState: action.runState };
 
     case "SET_MODEL":
@@ -126,6 +225,7 @@ export function chatReducer(
     }
 
     case "UPSERT_STREAMING_ASSISTANT": {
+      if (rejectIfTerminal(state)) return state;
       const { id, content, append } = action;
       const idx = state.messages.findIndex((m) => m.id === id);
       if (idx >= 0) {
@@ -152,6 +252,7 @@ export function chatReducer(
     }
 
     case "APPEND_REASONING": {
+      if (rejectIfTerminal(state)) return state;
       const last = state.messages[state.messages.length - 1];
       if (last?.kind === "reasoning") {
         const next = [...state.messages];
@@ -177,9 +278,11 @@ export function chatReducer(
     }
 
     case "SET_TOOL_PROGRESS":
+      if (rejectIfTerminal(state)) return state;
       return { ...state, toolProgress: action.tool };
 
     case "UPSERT_TOOL_EVENT": {
+      if (rejectIfTerminal(state)) return state;
       const callId =
         action.item.kind === "tool_call" || action.item.kind === "tool_result"
           ? action.item.callId
@@ -187,7 +290,6 @@ export function chatReducer(
       if (!callId) {
         return { ...state, messages: [...state.messages, action.item] };
       }
-      // Prefer replacing same-kind tool row; result can coexist after call.
       const sameKindIdx = state.messages.findIndex(
         (m) =>
           m.kind === action.item.kind &&
@@ -200,7 +302,6 @@ export function chatReducer(
         return { ...state, messages: next };
       }
       if (action.item.kind === "tool_result") {
-        // Upgrade an existing running tool_call to completed, then append result.
         const callIdx = state.messages.findIndex(
           (m) => m.kind === "tool_call" && m.callId === callId,
         );
@@ -218,6 +319,7 @@ export function chatReducer(
     }
 
     case "APPEND_CLARIFY":
+      if (rejectIfTerminal(state)) return state;
       return {
         ...state,
         messages: [...state.messages, action.item],
@@ -225,6 +327,7 @@ export function chatReducer(
       };
 
     case "APPEND_APPROVAL":
+      if (rejectIfTerminal(state)) return state;
       return {
         ...state,
         messages: [...state.messages, action.item],
@@ -232,7 +335,12 @@ export function chatReducer(
       };
 
     case "SET_USAGE":
-      return { ...state, usage: action.usage };
+      if (rejectIfTerminal(state)) return state;
+      return {
+        ...state,
+        usage: action.usage,
+        cumulativeUsage: mergeUsage(state.cumulativeUsage, action.usage),
+      };
 
     case "COMPLETE_STREAM":
       return {
@@ -279,3 +387,9 @@ export function chatReducer(
       return state;
   }
 }
+
+export {
+  isBusyRunState,
+  isTerminalRunState,
+  canHydrateSession,
+};

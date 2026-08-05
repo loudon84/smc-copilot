@@ -37,7 +37,8 @@ export type ChatInputReadiness = {
 type Props = {
   value: string;
   onChange: (value: string) => void;
-  onSend: (text: string) => void;
+  /** Submit current composer value — controller clears input immediately. */
+  onSend: () => void;
   onAbort: () => void;
   isBusy: boolean;
   attachments?: ChatAttachmentState[];
@@ -187,7 +188,7 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
         }
       }
       history.push(text);
-      onSend(text);
+      onSend();
     }, [
       attachments.length,
       commands,

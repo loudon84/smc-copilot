@@ -95,10 +95,14 @@ export type ChatAttachmentState = {
 export type ChatControllerState = {
   activeSessionId: string | null;
   activeRunId: string;
+  /** Isolates concurrent turns within the same run (v8.0.4). */
+  activeTurnId: string | null;
   messages: ChatViewItem[];
   streamingMessageId: string | null;
   toolProgress: string | null;
   usage: ChatUsage | null;
+  /** Cumulative usage across turns in this run (tooltip). */
+  cumulativeUsage: ChatUsage | null;
   attachments: ChatAttachmentState[];
   selectedModelId: string | null;
   runState: ChatRunState;

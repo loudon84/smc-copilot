@@ -5,7 +5,7 @@ export type ChatSessionReconcileDiff = {
   sessionId: string;
   newMessages: SessionMessage[];
   /** Structured events derived from new DB rows (no full assistant replay — avoids streaming duplicates). */
-  events: Array<Omit<ChatRuntimeEvent, "runId"> & { runId?: string }>;
+  events: Array<Omit<ChatRuntimeEvent, "runId" | "turnId"> & { runId?: string; turnId?: string }>;
 };
 
 const POLL_MS = 750;
@@ -26,17 +26,21 @@ const polls = new Map<string, PollHandle>();
  */
 export function buildReconcileEvents(
   messages: SessionMessage[],
-): Array<Omit<ChatRuntimeEvent, "runId"> & { runId?: string }> {
-  const events: Array<Omit<ChatRuntimeEvent, "runId"> & { runId?: string }> = [];
+): Array<Omit<ChatRuntimeEvent, "runId" | "turnId"> & { runId?: string; turnId?: string }> {
+  const events: Array<
+    Omit<ChatRuntimeEvent, "runId" | "turnId"> & { runId?: string; turnId?: string }
+  > = [];
   for (const msg of messages) {
     if (msg.role === "tool") {
       const evt: Extract<ChatRuntimeEvent, { type: "tool.progress" }> = {
         type: "tool.progress",
         runId: "",
+        turnId: "",
         tool: msg.content.slice(0, 200),
       };
-      const { runId: _unused, ...rest } = evt;
+      const { runId: _unused, turnId: _turn, ...rest } = evt;
       void _unused;
+      void _turn;
       events.push(rest);
     }
   }

@@ -28,6 +28,8 @@ export type ChatModelOverride = {
 
 export type ChatSubmitInput = {
   runId: string;
+  /** Isolates concurrent turns within the same run (v8.0.4). */
+  turnId: string;
   profileId: string;
   sessionId?: string;
 
@@ -50,12 +52,14 @@ export type ChatSubmitResult =
   | {
       ok: true;
       runId: string;
+      turnId: string;
       response: string;
       sessionId?: string;
     }
   | {
       ok: false;
       runId: string;
+      turnId: string;
       errorCode?: string;
       error: string;
     };

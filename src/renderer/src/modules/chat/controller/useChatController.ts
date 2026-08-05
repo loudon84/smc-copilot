@@ -4,9 +4,13 @@ import {
   useId,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import type { ChatSubmitInput } from "@shared/chat-runtime/chat-runtime-contract";
 import type { ChatRuntimeEvent } from "@shared/chat-runtime/chat-runtime-events";
+import {
+  CHAT_TURN_NON_TERMINAL_EVENTS,
+} from "@shared/chat-runtime/chat-runtime-events";
 import type { ChatRuntimePort } from "../ports/ChatRuntimePort";
 import type { ChatSessionPort } from "../ports/ChatSessionPort";
 import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
@@ -17,13 +21,18 @@ import { useChatQueue } from "../hooks/useChatQueue";
 import {
   chatReducer,
   createInitialChatState,
+  isBusyRunState,
+  isTerminalRunState,
 } from "./chatReducer";
 import {
   historyForSubmit,
   sessionMessagesToViewItems,
 } from "./chatHistoryMapper";
 import { chatRuntimeEventToActions } from "./chatRuntimeEventReducer";
-import type { ChatControllerState } from "./chatViewTypes";
+import type {
+  ChatAttachmentState,
+  ChatControllerState,
+} from "./chatViewTypes";
 
 export type UseChatControllerOptions = {
   runtime: ChatRuntimePort;
@@ -32,7 +41,12 @@ export type UseChatControllerOptions = {
   files?: ChatFilesPort;
   navigation?: ChatNavigationPort;
   profileId: string;
-  /** Forced / restored session id (from Host or workspace). */
+  /**
+   * Session id used once on mount to hydrate history.
+   * Runtime session binding must NOT flow back through this prop.
+   */
+  initialSessionId?: string | null;
+  /** @deprecated Use initialSessionId — kept briefly for call-site migration. */
   forcedSessionId?: string | null;
   runId?: string;
   expertId?: string;
@@ -43,16 +57,31 @@ export type UseChatControllerOptions = {
   invocationSource?: ChatSubmitInput["invocationSource"];
   /** Called when Hermes assigns / confirms a session id (null on New Chat). */
   onSessionIdChange?: (sessionId: string | null) => void;
+  /** Optional draft restored when this controller mounts for a run. */
+  initialDraft?: string;
+  /** Draft text sync for workspace persistence — always cleared on submit. */
+  onDraftChange?: (draft: string) => void;
   /** Optional prompt rewriter (Work Expert/Skill hint). */
   composeMessage?: (raw: string) => string | Promise<string>;
+};
+
+export type SubmitPayload = {
+  text: string;
+  attachments?: ChatAttachmentState[];
+  source?: "composer" | "queue" | "retry" | "edit";
 };
 
 export type UseChatControllerResult = {
   state: ChatControllerState;
   input: string;
   setInput: (value: string) => void;
+  commitInput: (value: string) => void;
   queueLength: number;
   queue: Array<{ text: string }>;
+  /** Clears composer immediately, then submits. */
+  submitComposer: () => Promise<void>;
+  submitPayload: (payload: SubmitPayload) => Promise<void>;
+  /** @deprecated Prefer submitComposer / submitPayload. */
   send: (text?: string) => Promise<void>;
   abort: () => Promise<void>;
   reset: () => void;
@@ -63,6 +92,10 @@ export type UseChatControllerResult = {
   removeAttachment: (id: string) => void;
 };
 
+function newTurnId(): string {
+  return `turn-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function useChatController(
   options: UseChatControllerOptions,
 ): UseChatControllerResult {
@@ -72,6 +105,7 @@ export function useChatController(
     files,
     navigation,
     profileId,
+    initialSessionId: initialSessionIdProp,
     forcedSessionId,
     runId: runIdProp,
     expertId,
@@ -81,6 +115,7 @@ export function useChatController(
     permissionMode,
     invocationSource = "default_chat",
     onSessionIdChange,
+    onDraftChange,
     composeMessage,
   } = options;
 
@@ -94,56 +129,128 @@ export function useChatController(
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  const inputRef = useRef("");
-  const [, bumpInput] = useReducer((n: number) => n + 1, 0);
-  const setInput = useCallback((value: string) => {
-    inputRef.current = value;
-    bumpInput();
-  }, []);
+  const [input, setInputState] = useState(
+    () => options.initialDraft ?? "",
+  );
+  const inputLiveRef = useRef(input);
+  inputLiveRef.current = input;
+  const commitInput = useCallback(
+    (value: string) => {
+      setInputState(value);
+      inputLiveRef.current = value;
+      onDraftChange?.(value);
+    },
+    [onDraftChange],
+  );
+  const setInput = commitInput;
 
   const { queue, enqueue, dequeue, clear: clearQueue } = useChatQueue();
   const drainLockRef = useRef(false);
-  const loadedSessionRef = useRef<string | null>(null);
 
-  // Keep runId in sync when prop changes
+  /** Capture mount-time hydrate target once (never re-hydrate from runtime bind). */
+  const initialHydrationIdRef = useRef<string | null>(
+    (initialSessionIdProp ?? forcedSessionId)?.trim() || null,
+  );
+  const hydratedSessionIdRef = useRef<string | null>(null);
+  const runtimeBoundSessionIdRef = useRef<string | null>(null);
+  const hydrateRequestIdRef = useRef(0);
+  const activeTurnIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (state.activeRunId !== runId) {
       dispatch({ type: "SET_RUN_ID", runId });
     }
   }, [runId, state.activeRunId]);
 
+  useEffect(() => {
+    activeTurnIdRef.current = state.activeTurnId;
+  }, [state.activeTurnId]);
+
+  const bindSession = useCallback(
+    (sessionId: string) => {
+      runtimeBoundSessionIdRef.current = sessionId;
+      dispatch({ type: "BIND_SESSION", sessionId });
+      onSessionIdChange?.(sessionId);
+      void files?.migrateDraft?.(sessionId, profileId).catch(() => undefined);
+    },
+    [onSessionIdChange, files, profileId],
+  );
+
   const loadSession = useCallback(
     async (sessionId: string) => {
       if (!session || !sessionId.trim()) return;
+      if (isBusyRunState(stateRef.current.runState)) return;
+      const requestId = ++hydrateRequestIdRef.current;
       const items = await session.getMessages(sessionId, profileId);
+      if (requestId !== hydrateRequestIdRef.current) return;
+      if (isBusyRunState(stateRef.current.runState)) return;
       dispatch({
         type: "LOAD_HISTORY",
         sessionId,
         messages: sessionMessagesToViewItems(items),
       });
-      loadedSessionRef.current = sessionId;
+      hydratedSessionIdRef.current = sessionId;
       onSessionIdChange?.(sessionId);
     },
     [session, profileId, onSessionIdChange],
   );
 
-  // Hydrate forced / restored session history once
+  // One-shot mount hydrate from initialSessionId
   useEffect(() => {
-    const sid = forcedSessionId?.trim();
-    if (!sid) return;
-    if (loadedSessionRef.current === sid) return;
-    void loadSession(sid);
-  }, [forcedSessionId, loadSession]);
+    const sid = initialHydrationIdRef.current;
+    if (!sid || !session) return;
+    if (hydratedSessionIdRef.current === sid) return;
+
+    const requestId = ++hydrateRequestIdRef.current;
+    let cancelled = false;
+
+    void (async () => {
+      const items = await session.getMessages(sid, profileId);
+      if (cancelled || requestId !== hydrateRequestIdRef.current) return;
+      if (isBusyRunState(stateRef.current.runState)) return;
+      if (stateRef.current.messages.length > 0) return;
+      dispatch({
+        type: "HYDRATE_SESSION",
+        sessionId: sid,
+        messages: sessionMessagesToViewItems(items),
+      });
+      hydratedSessionIdRef.current = sid;
+      onSessionIdChange?.(sid);
+    })();
+
+    return () => {
+      cancelled = true;
+      hydrateRequestIdRef.current += 1;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once hydrate
+  }, [session, profileId]);
+
+  // Invalidate pending hydrate when runId changes
+  useEffect(() => {
+    hydrateRequestIdRef.current += 1;
+  }, [runId]);
 
   const onEvent = useCallback(
     (event: ChatRuntimeEvent) => {
+      if (event.runId !== runId) return;
+      const turnId = activeTurnIdRef.current;
+      if (turnId && event.turnId !== turnId) return;
+
+      if (
+        isTerminalRunState(stateRef.current.runState) &&
+        CHAT_TURN_NON_TERMINAL_EVENTS.has(event.type)
+      ) {
+        return;
+      }
+
       const actions = chatRuntimeEventToActions(
         event,
         stateRef.current.streamingMessageId,
       );
       for (const action of actions) {
         dispatch(action);
-        if (action.type === "SET_SESSION_ID") {
+        if (action.type === "BIND_SESSION" || action.type === "SET_SESSION_ID") {
+          runtimeBoundSessionIdRef.current = action.sessionId;
           onSessionIdChange?.(action.sessionId);
           void files
             ?.migrateDraft?.(action.sessionId, profileId)
@@ -151,19 +258,18 @@ export function useChatController(
         }
       }
     },
-    [onSessionIdChange, files, profileId],
+    [runId, onSessionIdChange, files, profileId],
   );
 
   useChatEvents(runtime, runId, onEvent);
 
   const submitMessage = useCallback(
-    async (rawText: string) => {
+    async (rawText: string, turnId: string) => {
       const current = stateRef.current;
       const text = composeMessage
         ? await composeMessage(rawText)
         : rawText;
       const history = historyForSubmit(current.messages);
-      // Exclude the user message we are about to send if it is already appended
       const historyWithoutCurrentUser =
         history.length > 0 &&
         history[history.length - 1]?.role === "user" &&
@@ -171,11 +277,9 @@ export function useChatController(
           ? history.slice(0, -1)
           : history;
 
-      dispatch({ type: "SET_RUN_STATE", runState: "streaming" });
-      dispatch({ type: "CLEAR_ERROR" });
-
       const result = await runtime.submit({
         runId,
+        turnId,
         profileId,
         sessionId: current.activeSessionId || undefined,
         message: text,
@@ -199,11 +303,12 @@ export function useChatController(
       });
 
       if (result.ok && result.sessionId) {
-        dispatch({ type: "SET_SESSION_ID", sessionId: result.sessionId });
-        onSessionIdChange?.(result.sessionId);
+        bindSession(result.sessionId);
       } else if (!result.ok) {
-        // failed / cancelled events usually already dispatched; ensure FAIL if not
-        if (stateRef.current.runState === "streaming") {
+        if (
+          stateRef.current.runState === "streaming" &&
+          stateRef.current.activeTurnId === turnId
+        ) {
           dispatch({
             type: "FAIL",
             error: result.error,
@@ -223,35 +328,41 @@ export function useChatController(
       workMode,
       permissionMode,
       invocationSource,
-      onSessionIdChange,
+      bindSession,
     ],
   );
 
-  const send = useCallback(
-    async (overrideText?: string) => {
-      const text = (overrideText ?? inputRef.current).trim();
-      const hasAttachments = stateRef.current.attachments.length > 0;
+  const submitPayload = useCallback(
+    async (payload: SubmitPayload) => {
+      const text = payload.text.trim();
+      const attachmentOverride = payload.attachments;
+      const hasAttachments =
+        (attachmentOverride?.length ?? stateRef.current.attachments.length) > 0;
       if (!text && !hasAttachments) return;
 
-      if (!overrideText) {
-        inputRef.current = "";
-        bumpInput();
+      // Transaction: clear composer + draft synchronously before network work
+      commitInput("");
+      if (attachmentOverride) {
+        dispatch({ type: "SET_ATTACHMENTS", attachments: attachmentOverride });
       }
 
-      const busy =
-        stateRef.current.runState === "streaming" ||
-        stateRef.current.runState === "creating" ||
-        stateRef.current.runState === "waiting_approval" ||
-        stateRef.current.runState === "waiting_clarify";
-
-      if (busy) {
+      const busy = isBusyRunState(stateRef.current.runState);
+      if (busy && payload.source !== "queue") {
         enqueue(text || "(attachments)");
+        dispatch({ type: "SET_ATTACHMENTS", attachments: [] });
         return;
       }
 
+      const turnId = newTurnId();
+      activeTurnIdRef.current = turnId;
+      // Invalidate any in-flight hydrate when a turn begins
+      hydrateRequestIdRef.current += 1;
+
       const userId = `user-${Date.now()}`;
       const agentId = `agent-${runId}-${Date.now()}`;
-      const attachmentPayload = stateRef.current.attachments.map((a) => ({
+      const attachmentSource =
+        attachmentOverride ?? stateRef.current.attachments;
+      const attachmentPayload = attachmentSource.map((a) => ({
         id: a.id,
         name: a.name,
         mime: a.mime || a.mimeType || "application/octet-stream",
@@ -261,6 +372,8 @@ export function useChatController(
         dataUrl: a.dataUrl,
         text: a.text,
       }));
+
+      dispatch({ type: "BEGIN_TURN", turnId });
       dispatch({
         type: "APPEND_MESSAGES",
         messages: [
@@ -281,21 +394,38 @@ export function useChatController(
         content: "",
         append: false,
       });
+      dispatch({ type: "SET_ATTACHMENTS", attachments: [] });
 
       try {
-        await submitMessage(text);
-        dispatch({ type: "SET_ATTACHMENTS", attachments: [] });
+        await submitMessage(text, turnId);
       } catch (err) {
-        dispatch({
-          type: "FAIL",
-          error: err instanceof Error ? err.message : String(err),
-        });
+        if (stateRef.current.activeTurnId === turnId) {
+          dispatch({
+            type: "FAIL",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     },
-    [enqueue, runId, submitMessage],
+    [commitInput, enqueue, runId, submitMessage],
   );
 
-  // Drain queue when idle
+  const submitComposer = useCallback(async () => {
+    await submitPayload({ text: inputLiveRef.current, source: "composer" });
+  }, [submitPayload]);
+
+  const send = useCallback(
+    async (overrideText?: string) => {
+      if (overrideText !== undefined) {
+        await submitPayload({ text: overrideText, source: "queue" });
+        return;
+      }
+      await submitComposer();
+    },
+    [submitComposer, submitPayload],
+  );
+
+  // Drain queue when idle / terminal
   useEffect(() => {
     const idle =
       state.runState === "idle" ||
@@ -306,10 +436,10 @@ export function useChatController(
     const next = dequeue();
     if (!next) return;
     drainLockRef.current = true;
-    void send(next.text).finally(() => {
+    void submitPayload({ text: next.text, source: "queue" }).finally(() => {
       drainLockRef.current = false;
     });
-  }, [state.runState, dequeue, send]);
+  }, [state.runState, dequeue, submitPayload]);
 
   const abort = useCallback(async () => {
     await runtime.abort(runId);
@@ -318,12 +448,14 @@ export function useChatController(
 
   const reset = useCallback(() => {
     clearQueue();
-    loadedSessionRef.current = null;
-    inputRef.current = "";
-    bumpInput();
+    hydrateRequestIdRef.current += 1;
+    hydratedSessionIdRef.current = null;
+    runtimeBoundSessionIdRef.current = null;
+    activeTurnIdRef.current = null;
+    commitInput("");
     dispatch({ type: "RESET", runId });
     onSessionIdChange?.(null);
-  }, [clearQueue, runId, onSessionIdChange]);
+  }, [clearQueue, runId, onSessionIdChange, commitInput]);
 
   const setSelectedModel = useCallback((modelId: string | null) => {
     dispatch({ type: "SET_MODEL", modelId });
@@ -376,17 +508,23 @@ export function useChatController(
     [files, profileId],
   );
 
-  const removeAttachment = useCallback((id: string) => {
-    dispatch({ type: "REMOVE_ATTACHMENT", id });
-    void files?.remove?.(id, profileId).catch(() => undefined);
-  }, [files, profileId]);
+  const removeAttachment = useCallback(
+    (id: string) => {
+      dispatch({ type: "REMOVE_ATTACHMENT", id });
+      void files?.remove?.(id, profileId).catch(() => undefined);
+    },
+    [files, profileId],
+  );
 
   return {
     state,
-    input: inputRef.current,
+    input,
     setInput,
+    commitInput,
     queueLength: queue.length,
     queue: queue.map((q) => ({ text: q.text })),
+    submitComposer,
+    submitPayload,
     send,
     abort,
     reset,

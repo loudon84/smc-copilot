@@ -26,6 +26,14 @@ Concurrent chat turns are isolated by `runId` through [[src/main/chat-runtime/ch
 
 See [[domain/chat#Chat runtime isolation]].
 
+## Chat turn lifecycle (v8.0.4)
+
+Each submit uses a `turnId`; hydrate once via `initialSessionId`, bind with `BIND_SESSION` only.
+
+Composer submit clears Input/Draft immediately. Terminal turn state is monotonic — late deltas cannot reopen a completed turn. Prompt Navigator and Session Files sit on `ChatFloatingRail`.
+
+See [[domain/chat#Session hydrate vs bind]], [[domain/chat#Turn lifecycle]], [[domain/chat#Composer submit transaction]], [[domain/chat#Floating rail]].
+
 ## Chat workspace per-run state (v8.0.3)
 
 Each Chat Run owns Session/Expert/Skill/WorkMode in `ChatRunRecord`; do not share them via `HermesWorkspaceContext`.

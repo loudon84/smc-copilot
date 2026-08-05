@@ -9,7 +9,7 @@ Architecture framing: [[architecture#Three-layer process model]]. Decisions: [[d
 Sibling domain concept files under `lat.md/domain/`. Pick the domain that matches the code you are changing.
 
 - [[auth]] — Startup gate, token vault, Portal bootstrap
-- [[chat]] — Chat runtime isolation, per-run workspace state, surfaces, session model scoping
+- [[chat]] — Chat runtime/turn isolation, hydrate vs bind, floating rail, per-run workspace, surfaces
 - [[gateway]] — Gateway lifecycle and multi-profile runtime
 - [[install]] — Windows runtime layout and bootstrap vs NSIS
 - [[mcp]] — MCP Skill Gateway, Hermes MCP host mode, GeneHub/Experts

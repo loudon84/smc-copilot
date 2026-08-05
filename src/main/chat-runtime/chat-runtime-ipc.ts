@@ -5,6 +5,7 @@ import type {
   ChatSubmitResult,
 } from "../../shared/chat-runtime/chat-runtime-contract";
 import { CHAT_RUNTIME_CHANNELS } from "../../shared/chat-runtime/chat-runtime-contract";
+import { isChatTurnTerminalEventType } from "../../shared/chat-runtime/chat-runtime-events";
 import {
   ChatRuntimeErrorCode,
   chatRuntimeError,
@@ -117,6 +118,7 @@ function resolveSendModelId(payload: HermesChatSendPayload): {
 
 function validateSubmit(input: ChatSubmitInput): string | null {
   if (!input?.runId?.trim()) return "runId is required";
+  if (!input?.turnId?.trim()) return "turnId is required";
   if (!input.profileId?.trim()) return "profileId is required";
   if (!input.message?.trim() && !(input.attachments && input.attachments.length > 0)) {
     return "message or attachments required";
@@ -136,25 +138,56 @@ export function registerChatRuntimeIpc(
         return {
           ok: false,
           runId: input?.runId || "",
+          turnId: input?.turnId || "",
           errorCode: ChatRuntimeErrorCode.INVALID_INPUT,
           error: invalid,
         };
       }
 
       const runId = input.runId.trim();
+      const turnId = input.turnId.trim();
       const payload = toHermesPayload(input);
       const profile = payload.profile;
 
+      /** Drop non-terminal events after the turn has finished. */
+      let turnTerminal = false;
+      let sessionStartedEmitted = false;
+
+      const emitTurnEvent = (
+        evt: Parameters<typeof emitChatRuntimeEvent>[1],
+      ): boolean => {
+        if (turnTerminal && !isChatTurnTerminalEventType(evt.type)) {
+          return true;
+        }
+        if (isChatTurnTerminalEventType(evt.type)) {
+          turnTerminal = true;
+        }
+        return emitChatRuntimeEvent(event.sender, { ...evt, runId, turnId });
+      };
+
+      const emitSessionStartedOnce = (sessionId: string): void => {
+        if (sessionStartedEmitted || !sessionId || turnTerminal) return;
+        sessionStartedEmitted = true;
+        void emitTurnEvent({
+          type: "session.started",
+          runId,
+          turnId,
+          sessionId,
+        });
+      };
+
       const block = await beforeExpertChatSend(payload);
       if (block) {
-        emitChatRuntimeEvent(event.sender, {
+        emitTurnEvent({
           type: "failed",
           runId,
+          turnId,
           error: chatRuntimeError(ChatRuntimeErrorCode.EXPERT_BLOCKED, block.message),
         });
         return {
           ok: false,
           runId,
+          turnId,
           errorCode: block.errorCode || ChatRuntimeErrorCode.EXPERT_BLOCKED,
           error: block.message,
         };
@@ -204,6 +237,7 @@ export function registerChatRuntimeIpc(
         finishOnce({
           ok: true,
           runId,
+          turnId,
           response: fullResponse,
           sessionId,
         });
@@ -213,16 +247,18 @@ export function registerChatRuntimeIpc(
         finishOnce({
           ok: false,
           runId,
+          turnId,
           errorCode: code,
           error: message,
         });
       };
 
       const finishCancelled = (): void => {
-        emitChatRuntimeEvent(event.sender, { type: "cancelled", runId });
+        emitTurnEvent({ type: "cancelled", runId, turnId });
         finishOnce({
           ok: false,
           runId,
+          turnId,
           errorCode: ChatRuntimeErrorCode.CANCELLED,
           error: "Run cancelled",
         });
@@ -231,9 +267,11 @@ export function registerChatRuntimeIpc(
       const ensureReconcile = (sessionId: string): void => {
         startSessionReconcile(runId, sessionId, (payload) => {
           for (const evt of payload.events) {
-            emitChatRuntimeEvent(event.sender, { ...evt, runId } as Parameters<
-              typeof emitChatRuntimeEvent
-            >[1]);
+            emitTurnEvent({
+              ...evt,
+              runId,
+              turnId,
+            } as Parameters<typeof emitChatRuntimeEvent>[1]);
           }
         });
       };
@@ -242,9 +280,11 @@ export function registerChatRuntimeIpc(
         payload: import("./chat-session-reconciler").ChatSessionReconcileDiff,
       ): void => {
         for (const evt of payload.events) {
-          emitChatRuntimeEvent(event.sender, { ...evt, runId } as Parameters<
-            typeof emitChatRuntimeEvent
-          >[1]);
+          emitTurnEvent({
+            ...evt,
+            runId,
+            turnId,
+          } as Parameters<typeof emitChatRuntimeEvent>[1]);
         }
       };
 
@@ -257,9 +297,10 @@ export function registerChatRuntimeIpc(
             if (finished || cancelled) return;
             fullResponse += chunk;
             if (
-              !emitChatRuntimeEvent(event.sender, {
+              !emitTurnEvent({
                 type: "message.delta",
                 runId,
+                turnId,
                 content: chunk,
               })
             ) {
@@ -272,11 +313,7 @@ export function registerChatRuntimeIpc(
             if (finished || cancelled || !sessionId) return;
             resolvedSessionId = sessionId;
             migrateSessionModelBinding(requestSessionKey, sessionId, profile);
-            emitChatRuntimeEvent(event.sender, {
-              type: "session.started",
-              runId,
-              sessionId,
-            });
+            emitSessionStartedOnce(sessionId);
             ensureReconcile(sessionId);
           },
           onDone: (sessionId) => {
@@ -298,20 +335,17 @@ export function registerChatRuntimeIpc(
                 resolvedSessionId,
                 profile,
               );
-              emitChatRuntimeEvent(event.sender, {
-                type: "session.started",
-                runId,
-                sessionId: resolvedSessionId,
-              });
+              emitSessionStartedOnce(resolvedSessionId);
               finalizeSessionReconcile(
                 runId,
                 resolvedSessionId,
                 emitReconcileDiff,
               );
             }
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "completed",
               runId,
+              turnId,
               sessionId: resolvedSessionId,
             });
             finishCompleted(resolvedSessionId);
@@ -344,9 +378,10 @@ export function registerChatRuntimeIpc(
               response: fullResponse,
               error,
             });
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "failed",
               runId,
+              turnId,
               error: chatRuntimeError(ChatRuntimeErrorCode.SEND_FAILED, error),
             });
             finishFailed(ChatRuntimeErrorCode.SEND_FAILED, error);
@@ -367,49 +402,55 @@ export function registerChatRuntimeIpc(
               expertId: payload.expert_id,
               toolLabel: tool,
             });
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "tool.progress",
               runId,
+              turnId,
               tool,
             });
           },
           onReasoningDelta: (content) => {
             if (finished || cancelled) return;
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "reasoning.delta",
               runId,
+              turnId,
               content,
             });
           },
           onToolEvent: (toolEvent) => {
             if (finished || cancelled) return;
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "tool.event",
               runId,
+              turnId,
               event: toolEvent,
             });
           },
           onClarifyRequested: (request) => {
             if (finished || cancelled) return;
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "clarify.requested",
               runId,
+              turnId,
               request,
             });
           },
           onApprovalRequested: (request) => {
             if (finished || cancelled) return;
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "approval.requested",
               runId,
+              turnId,
               request,
             });
           },
           onUsage: (usage) => {
             if (finished || cancelled) return;
-            emitChatRuntimeEvent(event.sender, {
+            emitTurnEvent({
               type: "usage",
               runId,
+              turnId,
               usage: {
                 promptTokens: usage.promptTokens,
                 completionTokens: usage.completionTokens,
