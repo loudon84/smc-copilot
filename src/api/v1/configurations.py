@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_app_settings, get_db_session, get_gateway_supervisor
@@ -38,7 +38,7 @@ async def patch_configuration(
     result = await svc.patch(instance_id, body.values, group=body.group)
     if result.get("restartRequired"):
         try:
-            await supervisor.restart_profile(instance_id)
+            await supervisor.restart_instance(instance_id)
             result["restarted"] = True
         except Exception as exc:
             result["restarted"] = False
@@ -60,7 +60,7 @@ async def reload_configuration(
     instance_id: str,
     supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
 ) -> dict:
-    await supervisor.restart_profile(instance_id)
+    await supervisor.restart_instance(instance_id)
     return {"status": "reloaded"}
 
 

@@ -22,4 +22,4 @@ Hermes Gateway 是外部进程，控制面只经 `integrations/hermes/` 适配�
 
 ## 失败不破坏现状
 
-安装/更新/回滚 Job 串行互斥（见 [[runtime-service#运行时 Job 队列]]），失败保留当前 active 版本；服务重启将未完成 Job 标记失败（见 [[runtime-service#Job 恢复]]）；Gateway 启动失败置 `error` 但不删配置。这是 Runtime 的核心可靠性约束。
+安装/更新/回滚 Job 串行互斥（见 [[runtime-service#运行时 Job 队列]]），失败保留当前 active 版本且 **禁止 Stub 激活**（v1.3.1）；服务重启将未完成 Job 标记失败（见 [[runtime-service#Job 恢复]]）；Gateway 启动失败置 `error` 但不删配置。端口冲突不杀未知 PID。这是 Runtime 的核心可靠性约束。

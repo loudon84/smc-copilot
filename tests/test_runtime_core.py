@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from app import create_app
 from core.config import Settings
 from core.lifecycle import lifespan
-from db.session import create_engine, create_sessionmaker, init_db
+from db.session import create_engine, init_db
 from runtime.checksum_verifier import sha256_file
 from runtime.executable_policy import ExecutablePolicy
 from runtime.platform_paths import RuntimeLayout, default_runtime_data_dir
@@ -91,8 +91,8 @@ def test_windows_programs_root_helpers() -> None:
 
     from runtime.windows_program_paths import (
         DEFAULT_HERMES_INSTALL_DIR,
-        is_under_programs_root,
         default_hermes_install_dir,
+        is_under_programs_root,
     )
 
     assert is_under_programs_root(Path(r"D:\Programs\HermesAgent"))
@@ -221,8 +221,10 @@ async def test_backup_create_list(app_client, test_settings: Settings) -> None:
 
 
 @pytest.mark.asyncio
-async def test_install_job_with_local_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """End-to-end install against a local file:// manifest + zip artifact."""
+async def test_install_job_rejects_non_installable_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """v1.3.1: non-installable artifact must fail the job (no stub activation)."""
     import json
     import sys
 
@@ -232,17 +234,18 @@ async def test_install_job_with_local_manifest(tmp_path: Path, monkeypatch: pyte
     db_path = tmp_path / "db.sqlite"
     artifact_dir = tmp_path / "artifact"
     artifact_dir.mkdir()
-    # minimal package-like content (no setup.py -> stub hermes)
-    (artifact_dir / "README.md").write_text("hermes stub\n", encoding="utf-8")
+    (artifact_dir / "README.md").write_text("not installable\n", encoding="utf-8")
     zip_path = tmp_path / "hermes-0.19.0.zip"
     with zipfile.ZipFile(zip_path, "w") as zf:
         zf.write(artifact_dir / "README.md", arcname="README.md")
     checksum = sha256_file(zip_path)
+    platform = "windows" if sys.platform == "win32" else ("macos" if sys.platform == "darwin" else "linux")
     manifest = {
         "version": "0.19.0",
         "channel": "stable",
-        "platform": "windows" if sys.platform == "win32" else ("macos" if sys.platform == "darwin" else "linux"),
+        "platform": platform,
         "architecture": "x86_64",
+        "artifactType": "wheel-bundle",
         "url": zip_path.as_uri(),
         "sha256": checksum,
     }
@@ -264,7 +267,6 @@ async def test_install_job_with_local_manifest(tmp_path: Path, monkeypatch: pyte
     settings = get_settings()
     engine = create_engine(settings)
     await init_db(engine)
-    session_maker = create_sessionmaker(engine)
 
     app = create_app()
     app.state._test_engine = engine
@@ -288,10 +290,8 @@ async def test_install_job_with_local_manifest(tmp_path: Path, monkeypatch: pyte
                     break
                 await asyncio.sleep(0.1)
             assert final is not None
-            assert final["status"] == "succeeded", final
-            versions = await client.get("/api/v1/runtime/versions")
-            assert any(v["version"] == "0.19.0" for v in versions.json())
-            status = await client.get("/api/v1/runtime/status")
-            assert status.json()["hermesInstalled"] is True
+            assert final["status"] == "failed", final
+            err = final.get("errorCode") or final.get("error_code") or ""
+            assert "artifact_not_installable" in str(err) or "artifact_not_installable" in str(final)
 
     config_mod._settings = None

@@ -7,7 +7,8 @@ param(
     [string]$GitPath = "",
     [string]$VenvDir = "",
     [string]$HermesInstallDir = "D:\Programs\HermesAgent",
-    [int]$Port = 8765
+    [int]$Port = 8765,
+    [switch]$AllowExistingRuntime
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,8 +47,25 @@ function Test-Exe([string]$PathOrName, [string]$Label) {
     return $false
 }
 
+function Test-PythonVersion([string]$PythonPath) {
+    $exe = if ($PythonPath) { $PythonPath } else { "python" }
+    try {
+        $out = & $exe --version 2>&1 | Out-String
+        if ($out -match "3\.12") {
+            Write-Host ("OK Python version: " + $out.Trim())
+            return $true
+        }
+        Write-Host "FAIL Python 3.12 required, got: $out"
+        return $false
+    } catch {
+        Write-Host "FAIL cannot run Python: $_"
+        return $false
+    }
+}
+
 $ok = $true
 $ok = (Test-Exe $PythonPath "python") -and $ok
+$ok = (Test-PythonVersion $PythonPath) -and $ok
 $ok = (Test-Exe $NodePath "node") -and $ok
 $ok = (Test-Exe $GitPath "git") -and $ok
 
@@ -57,13 +75,30 @@ if ($RepoRoot) {
 $ok = (Test-UnderPrograms $VenvDir "VenvDir") -and $ok
 $ok = (Test-UnderPrograms $HermesInstallDir "HermesInstallDir") -and $ok
 
+$portBusy = $false
 try {
     $tcp = New-Object System.Net.Sockets.TcpClient
     $tcp.Connect("127.0.0.1", $Port)
     $tcp.Close()
-    Write-Host "WARN port $Port is already in use"
+    $portBusy = $true
 } catch {
     Write-Host "OK port $Port is free"
+}
+
+if ($portBusy) {
+    $healthy = $false
+    try {
+        $null = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/health" -Method GET -TimeoutSec 3
+        $healthy = $true
+        Write-Host "Port $Port occupied by healthy Runtime"
+    } catch {
+        Write-Host "FAIL port $Port occupied and Runtime health check failed"
+        $ok = $false
+    }
+    if ($healthy -and -not $AllowExistingRuntime) {
+        Write-Host "FAIL port $Port in use by Runtime; pass -AllowExistingRuntime to continue"
+        $ok = $false
+    }
 }
 
 if ($VenvDir) {
@@ -72,6 +107,7 @@ if ($VenvDir) {
     Write-Host "VenvDir: (empty → <HermesInstallDir>\<version>\venv)"
 }
 if ($HermesInstallDir) { Write-Host "HermesInstallDir: $HermesInstallDir" }
+if ($PythonPath) { Write-Host "PythonPath: $PythonPath" }
 
 if (-not $ok) { exit 1 }
 Write-Host "Precheck passed"

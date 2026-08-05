@@ -1,6 +1,6 @@
 # Hermes Runtime Service
 
-v1.3 起 `smc-copilot-serve` 定位为本机常驻 Runtime，接管 Hermes Agent 的安装、更新、回滚与版本激活，并通过 Instance 统一 Profile/Gateway/Runtime Version。所有写操作经异步 Job 队列串行化，失败不破坏当前 active 版本与 `~/.hermes` 用户数据。
+v1.3 起本机常驻 Runtime 接管 Hermes 安装/更新/回滚与版本激活；v1.3.1 hotfix 要求**真实** Artifact 可执行校验，禁止 Stub 成功路径。写 Job 串行化，失败不破坏 active 版本与 `~/.hermes`。
 
 相关：[[gateway-supervisor#Gateway 监管]]、[[data-model#Runtime 表]]、[[deployment#目录布局]]。
 
@@ -12,9 +12,17 @@ v1.3 起 `smc-copilot-serve` 定位为本机常驻 Runtime，接管 Hermes Agent
 
 ## 安装 Job
 
-[[src/services/installation_service.py#InstallationService]] `run_job` 执行阶段化安装：环境探测 → 拉 Manifest → 下载 Artifact → 校验 SHA256 → 解压到 staging → 建 venv → `pip install` → 读版本/`config migrate`/`doctor` → 写 `RuntimeVersion` 并激活 → 原子写 `active.json`。`force` 跳过已安装检查；`createDefaultInstance` 顺带创建 default Instance。
+[[src/services/installation_service.py#InstallationService]] `run_job`：探测 → Manifest（semver 最高）→ 下载/校验 → 解压 → 可安装判定 → venv → pip → `--version`/`doctor` → 激活。禁止 Stub；成功需 `realExecutableVerified: true`。
 
-Manifest 解析支持扁平或 `releases[]` 形式，按 `channel`/`platform`/`architecture` 过滤。`HERMES_MANIFEST_URL` 未配置或缺失 `url`/`sha256` 时报 `manifest_invalid`。无真实包时回退写 `hermes` stub，保证受限环境 Job 可完成。staging 在 finally 中清理。
+无 wheel/pyproject/setup 报 `artifact_not_installable`；pip 失败报 `hermes_install_failed`。`alreadyInstalled` 也会复验可执行文件/`--version`/`doctor`，失败则不得声称已验证。
+
+Manifest 支持扁平或 `releases[]`，按 channel/platform/arch 过滤后取 **semver 最大**（不依赖数组顺序）；必填 `version`/`url`/`sha256`/`artifactType` 等。`HERMES_MANIFEST_URL` 未配置报 `manifest_invalid`。staging 在 finally 清理。见 [[tests#真实安装]]。
+
+## 配置与 Secret
+
+[[src/services/configuration_service.py#ConfigurationService]] 经统一 Profile 路径读写 `config.yaml`（原子 tmp→fsync→replace），必要时跑 `hermes config check`；失败恢复 snapshot。重启分组含 `gateway`/`provider`/`model`/`runtime`/`platforms`。
+
+[[src/services/secret_service.py#SecretStore]] Windows 优先 DPAPI；失败默认 `secret_store_unavailable`，仅 `RUNTIME_ALLOW_INSECURE_SECRET_STORE=true` 才允许 XOR 文件。[[src/runtime/gateway_environment.py#build_gateway_environment]] 向 Gateway 注入 `HERMES_HOME`、`API_SERVER_*` 与 Profile 作用域密钥（见 [[gateway-supervisor#Gateway 环境注入]]）；缺 `API_SERVER_KEY` 时拒绝启动。Instance 密钥按 Profile 作用域隔离，命名 Profile **不**借用 `default`/`runtime`（见 [[src/services/instance_gateway_service.py#InstanceGatewayService]]）。Instance 创建时 [[src/services/secret_service.py#SecretService]] `ensure_api_server_key` 生成 CSPRNG 密钥（不得静默吞错）。
 
 ## 更新与回滚
 
@@ -34,7 +42,7 @@ Job 状态机见 [[src/core/runtime_enums.py#RuntimeJobStatus]]：`pending → r
 
 [[src/runtime/environment_probe.py#EnvironmentProbe]] 检测平台/架构、磁盘空间（≥500MB）、解析工具链（python/node/git/venv/hermes_install_dir）。`require_ready` 在 Windows 上强制 [[src/runtime/windows_program_paths.py#require_under_programs_root]] 校验 `HERMES_INSTALL_DIR`/`TOOLCHAIN_VENV_DIR` 位于 `D:\Programs` 下（见 [[deployment#程序目录约束]]）。
 
-工具链路径可由环境变量或 Install API 的 `toolchain` 字段覆盖；空则探测 PATH。`VersionLayout` 计算版本安装根与 staging/download 路径。
+工具链路径可由环境变量或 Install API 的 `toolchain` 字段覆盖；空则探测 PATH。`VersionLayout` 计算版本安装根与 staging/download 路径。显式 `-PythonPath` / `TOOLCHAIN_PYTHON_PATH` 须贯穿 bootstrap 与 provision（见 [[deployment#Windows Provision]]）。
 
 ## 目录布局
 

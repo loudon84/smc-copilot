@@ -30,8 +30,8 @@ async def _serve() -> None:
     mark_service_boot()
     config = uvicorn.Config(
         "main:app",
-        host=settings.copilot_host,
-        port=settings.copilot_port,
+        host=settings.bind_host,
+        port=settings.bind_port,
         reload=False,
         access_log=False,
         app_dir="src",

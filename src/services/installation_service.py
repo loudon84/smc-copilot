@@ -4,7 +4,7 @@ import asyncio
 import json
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,74 @@ from runtime.checksum_verifier import ChecksumVerifier
 from runtime.environment_probe import ActivationManager, EnvironmentProbe, VersionLayout
 
 logger = get_logger(__name__)
+
+_REQUIRED_MANIFEST_FIELDS = ("version", "channel", "platform", "architecture", "url", "sha256", "artifactType")
+
+
+def _semver_key(version: str) -> tuple[int, int, int]:
+    """Parse major.minor.patch for sorting; non-numeric parts ignored."""
+    core = version.strip().lstrip("vV").split("+", 1)[0].split("-", 1)[0]
+    parts = core.split(".")
+    nums: list[int] = []
+    for part in parts[:3]:
+        digits = "".join(ch for ch in part if ch.isdigit())
+        nums.append(int(digits) if digits else 0)
+    while len(nums) < 3:
+        nums.append(0)
+    return nums[0], nums[1], nums[2]
+
+
+def _find_installable(package_path: Path) -> tuple[str, Path]:
+    """Return (artifact_type, path) for wheel or Python project root."""
+    wheels = sorted(package_path.glob("**/*.whl"))
+    if wheels:
+        return "wheel", wheels[0]
+    setup_markers = list(package_path.glob("**/pyproject.toml")) + list(package_path.glob("**/setup.py"))
+    if setup_markers:
+        return "source", setup_markers[0].parent
+    raise RuntimeServiceError(
+        "Hermes artifact contains no wheel or Python project",
+        code="artifact_not_installable",
+    )
+
+
+def _resolve_hermes_executable(venv_dir: Path, version_root: Path) -> Path:
+    candidates: list[Path] = []
+    if sys.platform == "win32":
+        candidates.extend(
+            [
+                venv_dir / "Scripts" / "hermes.exe",
+                version_root / "venv" / "Scripts" / "hermes.exe",
+            ]
+        )
+    else:
+        candidates.extend(
+            [
+                venv_dir / "bin" / "hermes",
+                version_root / "venv" / "bin" / "hermes",
+            ]
+        )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise RuntimeServiceError(
+        "Hermes executable missing after install",
+        code="hermes_executable_missing",
+        details={"searched": [str(c) for c in candidates]},
+    )
+
+
+def _versions_compatible(reported: str, expected: str) -> bool:
+    """Loose compatibility: exact match or same major.minor, or reported contains expected."""
+    if not reported or not expected:
+        return False
+    if reported == expected:
+        return True
+    if expected in reported or reported in expected:
+        return True
+    a = _semver_key(reported)
+    b = _semver_key(expected)
+    return a[0] == b[0] and a[1] == b[1]
 
 
 # @lat: [[runtime-service#安装 Job]]
@@ -52,16 +120,23 @@ class InstallationService:
         resolved_version = str(manifest.get("version") or version)
         if resolved_version == "latest":
             raise RuntimeServiceError("Manifest missing concrete version", code="manifest_invalid")
+        artifact_type = str(manifest.get("artifactType") or manifest.get("artifact_type") or "unknown")
 
         async with self._session_maker() as session:
             repo = RuntimeVersionRepository(session)
             existing = await repo.get_by_version(resolved_version)
             if existing and existing.status == RuntimeVersionStatus.ACTIVE.value and not force:
+                await self._verify_existing_executable(existing, resolved_version)
                 await session.commit()
                 return {
                     "version": resolved_version,
                     "alreadyInstalled": True,
                     "status": existing.status,
+                    "installPath": existing.install_path,
+                    "executablePath": existing.executable_path,
+                    "realExecutableVerified": True,
+                    "stub": False,
+                    "artifactType": artifact_type,
                 }
 
         artifact_url = str(manifest.get("url") or "")
@@ -88,6 +163,11 @@ class InstallationService:
             extract_dir = staging / "content"
             await self._downloader.extract_archive_async(archive_path, extract_dir)
 
+            # Fail fast before creating venv if artifact is not installable (FR-01)
+            detected_type, _pkg = _find_installable(extract_dir)
+            if artifact_type == "unknown":
+                artifact_type = detected_type
+
             hermes_install_dir = probe.toolchain.hermes_install_dir
             version_root = self._layout.version_root(resolved_version, hermes_install_dir=hermes_install_dir)
             if version_root.exists() and force:
@@ -101,68 +181,34 @@ class InstallationService:
             await progress("Installing Hermes Agent", phase="install", progress_value=0.7, event_type="job.phase_changed")
             await self._pip_install(venv_dir, extract_dir)
 
-            # Move/copy content into version root if needed
             if not version_root.exists():
                 version_root.mkdir(parents=True, exist_ok=True)
-            if venv_dir.parent != version_root and not (version_root / "venv").exists():
-                # venv already under version_root in default case
-                pass
 
-            executable = self._layout.hermes_executable(version_root if (version_root / "venv").exists() else venv_dir.parent)
-            if not executable.exists():
-                # try venv_dir based path
-                if sys.platform == "win32":
-                    executable = venv_dir / "Scripts" / "hermes.exe"
-                else:
-                    executable = venv_dir / "bin" / "hermes"
-            if not executable.exists():
-                # stub fallbacks written by _write_stub_hermes / failed pip
-                if sys.platform == "win32":
-                    for name in ("hermes.cmd", "hermes.bat", "hermes.py"):
-                        candidate = venv_dir / "Scripts" / name
-                        if candidate.exists():
-                            executable = candidate
-                            break
-                else:
-                    candidate = venv_dir / "bin" / "hermes"
-                    if candidate.exists():
-                        executable = candidate
+            executable = _resolve_hermes_executable(venv_dir, version_root)
+            cli = HermesCliAdapter(self._settings, executable=executable)
 
-            cli = HermesCliAdapter(self._settings, executable=executable if executable.exists() else None)
-            if executable.exists():
-                cli.set_executable(executable)
-
-            await progress("Reading Hermes version", phase="version", progress_value=0.8)
-            try:
-                hermes_ver = await cli.version()
-            except RuntimeServiceError:
-                hermes_ver = resolved_version
+            await progress("Verifying Hermes executable", phase="version", progress_value=0.8)
+            hermes_ver = await cli.version()
+            if not _versions_compatible(hermes_ver, resolved_version):
+                raise RuntimeServiceError(
+                    f"Installed version {hermes_ver!r} incompatible with manifest {resolved_version!r}",
+                    code="hermes_version_invalid",
+                    details={"reported": hermes_ver, "expected": resolved_version},
+                )
 
             await progress("Running config migrate", phase="migrate", progress_value=0.85)
-            try:
-                await cli.config_migrate()
-            except RuntimeServiceError as exc:
-                # Allow missing hermes binary in offline/mock installs
-                if executable.exists():
-                    raise
-                logger.warning("config_migrate_skipped", error=str(exc))
+            await cli.config_migrate()
 
             await progress("Running hermes doctor", phase="doctor", progress_value=0.9)
+            await cli.doctor()
             doctor_ok = True
-            try:
-                await cli.doctor()
-            except RuntimeServiceError as exc:
-                if executable.exists():
-                    raise
-                doctor_ok = False
-                logger.warning("doctor_skipped", error=str(exc))
 
             await progress("Activating version", phase="activate", progress_value=0.95, event_type="job.phase_changed")
             python_path = str(probe.toolchain.python_path) if probe.toolchain.python_path else None
             async with self._session_maker() as session:
                 repo = RuntimeVersionRepository(session)
                 row = await repo.get_by_version(resolved_version)
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if row is None:
                     row = RuntimeVersion(
                         version=resolved_version,
@@ -176,6 +222,7 @@ class InstallationService:
                             {
                                 "platform": probe.platform,
                                 "architecture": probe.architecture,
+                                "artifactType": artifact_type,
                                 "toolchain": {
                                     "python": python_path,
                                     "node": str(probe.toolchain.node_path) if probe.toolchain.node_path else None,
@@ -221,6 +268,9 @@ class InstallationService:
                 "executablePath": str(executable),
                 "instanceId": instance_id,
                 "doctorOk": doctor_ok,
+                "realExecutableVerified": True,
+                "artifactType": artifact_type,
+                "stub": False,
             }
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
@@ -233,31 +283,65 @@ class InstallationService:
     ) -> dict[str, Any]:
         url = (self._settings.hermes_manifest_url or "").strip()
         if not url:
-            # Offline / test fallback: local stub manifest pointing to empty zip created later by tests
             raise RuntimeServiceError(
                 "HERMES_MANIFEST_URL is not configured",
                 code="manifest_invalid",
             )
         data = await self._downloader.fetch_json(url)
-        # Support either flat or releases[] manifest
         if "releases" in data and isinstance(data["releases"], list):
             candidates = [
                 r
                 for r in data["releases"]
                 if isinstance(r, dict)
-                and r.get("channel", channel) == channel
-                and r.get("platform", platform_name) == platform_name
-                and r.get("architecture", architecture) == architecture
+                and str(r.get("channel", channel)) == channel
+                and str(r.get("platform", platform_name)) == platform_name
+                and str(r.get("architecture", architecture)) == architecture
             ]
             if version != "latest":
-                candidates = [r for r in candidates if r.get("version") == version]
+                candidates = [r for r in candidates if str(r.get("version")) == version]
             if not candidates:
                 raise RuntimeServiceError("No matching release in manifest", code="manifest_invalid")
-            return candidates[0]
+            # FR-02: pick highest semver, never array order
+            candidates.sort(key=lambda r: _semver_key(str(r.get("version") or "0")), reverse=True)
+            selected = candidates[0]
+            self._validate_manifest_release(selected, platform_name, architecture)
+            return selected
+
+        # Flat manifest
         if version != "latest" and data.get("version") not in (None, version):
             raise RuntimeServiceError("Requested version not in manifest", code="manifest_invalid")
         data.setdefault("version", version if version != "latest" else data.get("version"))
+        data.setdefault("channel", channel)
+        data.setdefault("platform", platform_name)
+        data.setdefault("architecture", architecture)
+        data.setdefault("artifactType", data.get("artifact_type") or "wheel-bundle")
+        self._validate_manifest_release(data, platform_name, architecture)
         return data
+
+    def _validate_manifest_release(
+        self, release: dict[str, Any], platform_name: str, architecture: str
+    ) -> None:
+        missing = [f for f in _REQUIRED_MANIFEST_FIELDS if not release.get(f) and not release.get(f.replace("Type", "_type"))]
+        # Accept artifact_type snake_case as alias
+        if not release.get("artifactType") and release.get("artifact_type"):
+            release["artifactType"] = release["artifact_type"]
+            missing = [f for f in missing if f != "artifactType"]
+        if missing:
+            raise RuntimeServiceError(
+                f"Manifest release missing fields: {', '.join(missing)}",
+                code="manifest_invalid",
+                details={"missing": missing},
+            )
+        if str(release.get("platform")) != platform_name:
+            raise RuntimeServiceError(
+                f"Artifact platform mismatch: {release.get('platform')} != {platform_name}",
+                code="artifact_platform_mismatch",
+            )
+        if str(release.get("architecture")) != architecture:
+            raise RuntimeServiceError(
+                f"Artifact architecture mismatch: {release.get('architecture')} != {architecture}",
+                code="artifact_architecture_mismatch",
+            )
 
     async def _create_venv(self, python: Path, venv_dir: Path) -> None:
         venv_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -275,32 +359,23 @@ class InstallationService:
         if proc.returncode != 0:
             raise RuntimeServiceError(
                 f"Failed to create venv: {err.decode('utf-8', errors='replace')}",
-                code="python_runtime_failed",
+                code="venv_creation_failed",
+                details={"exitCode": proc.returncode, "stderrTail": err.decode("utf-8", errors="replace")[-2000:]},
             )
 
     async def _pip_install(self, venv_dir: Path, package_path: Path) -> None:
         if sys.platform == "win32":
-            pip = venv_dir / "Scripts" / "pip.exe"
             python = venv_dir / "Scripts" / "python.exe"
         else:
-            pip = venv_dir / "bin" / "pip"
             python = venv_dir / "bin" / "python"
-        # Prefer python -m pip
-        cmd = [str(python if python.exists() else pip), "-m", "pip", "install", str(package_path)]
-        if not python.exists() and pip.exists():
-            cmd = [str(pip), "install", str(package_path)]
-        # If package_path has pyproject/setup, install it; else install from wheel/dir
-        setup_markers = list(package_path.glob("**/pyproject.toml")) + list(package_path.glob("**/setup.py"))
-        wheels = list(package_path.glob("**/*.whl"))
-        if wheels:
-            cmd = [str(python if python.exists() else sys.executable), "-m", "pip", "install", str(wheels[0])]
-        elif setup_markers:
-            pkg_root = setup_markers[0].parent
-            cmd = [str(python if python.exists() else sys.executable), "-m", "pip", "install", str(pkg_root)]
-        else:
-            # Create a marker hermes stub script for environments without real package
-            await self._write_stub_hermes(venv_dir)
-            return
+        if not python.exists():
+            raise RuntimeServiceError(
+                f"venv python missing: {python}",
+                code="venv_creation_failed",
+            )
+
+        _kind, target = _find_installable(package_path)
+        cmd = [str(python), "-m", "pip", "install", str(target)]
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -309,31 +384,44 @@ class InstallationService:
         )
         _out, err = await proc.communicate()
         if proc.returncode != 0:
-            # Fall back to stub so install job can complete in constrained environments
-            logger.warning("pip_install_failed_using_stub", error=err.decode("utf-8", errors="replace"))
-            await self._write_stub_hermes(venv_dir)
+            stderr_text = err.decode("utf-8", errors="replace")
+            logger.error("pip_install_failed", exit_code=proc.returncode, stderr_tail=stderr_text[-2000:])
+            raise RuntimeServiceError(
+                "Failed to install Hermes Agent",
+                code="hermes_install_failed",
+                details={"exitCode": proc.returncode, "stderrTail": stderr_text[-2000:]},
+            )
 
-    async def _write_stub_hermes(self, venv_dir: Path) -> None:
-        if sys.platform == "win32":
-            bin_dir = venv_dir / "Scripts"
-            bin_dir.mkdir(parents=True, exist_ok=True)
-            stub = bin_dir / "hermes.cmd"
-            stub.write_text("@echo off\necho hermes 0.0.0-stub\nexit /b 0\n", encoding="utf-8")
-            # also write hermes.exe placeholder as .py launcher isn't needed
-            py_stub = bin_dir / "hermes.py"
-            py_stub.write_text(
-                "#!/usr/bin/env python\nimport sys\nprint('hermes 0.0.0-stub')\nsys.exit(0)\n",
-                encoding="utf-8",
+    async def _verify_existing_executable(self, existing: RuntimeVersion, resolved_version: str) -> None:
+        """Re-verify ACTIVE install before claiming alreadyInstalled + realExecutableVerified."""
+        exe = Path(existing.executable_path or "")
+        if not exe.is_file():
+            raise RuntimeServiceError(
+                f"Recorded executable missing for already-installed version: {exe}",
+                code="hermes_executable_missing",
+                details={"version": resolved_version, "executablePath": str(exe)},
             )
-        else:
-            bin_dir = venv_dir / "bin"
-            bin_dir.mkdir(parents=True, exist_ok=True)
-            stub = bin_dir / "hermes"
-            stub.write_text(
-                "#!/usr/bin/env bash\necho 'hermes 0.0.0-stub'\nexit 0\n",
-                encoding="utf-8",
+        # Stub markers from older broken installers must never short-circuit as verified
+        stub_markers = ("# stub hermes", "print('hermes stub')", "hermes-stub")
+        try:
+            text = exe.read_text(encoding="utf-8", errors="ignore")[:4000]
+        except OSError:
+            text = ""
+        if any(m in text for m in stub_markers) or exe.name.lower() in {"hermes.stub", "hermes-stub.exe"}:
+            raise RuntimeServiceError(
+                "Recorded Hermes executable looks like a stub; reinstall required",
+                code="artifact_not_installable",
+                details={"executablePath": str(exe)},
             )
-            stub.chmod(0o755)
+        cli = HermesCliAdapter(self._settings, executable=exe)
+        hermes_ver = await cli.version()
+        if not _versions_compatible(hermes_ver, resolved_version):
+            raise RuntimeServiceError(
+                f"Already-installed version {hermes_ver!r} incompatible with {resolved_version!r}",
+                code="hermes_version_invalid",
+                details={"reported": hermes_ver, "expected": resolved_version},
+            )
+        await cli.doctor()
 
     async def _ensure_default_instance(self, session: AsyncSession, runtime_version_id: str) -> str:
         from sqlalchemy import select

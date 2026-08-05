@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -17,6 +17,8 @@ from integrations.hermes.client import HermesGatewayClient
 from runtime.gateway_process import GatewayProcessManager, is_pid_alive, terminate_pid
 from runtime.port_allocator import is_port_available
 from schemas.profile import ProfileStatusResponse
+from schemas.runtime import InstanceResponse
+from services.instance_gateway_service import InstanceGatewayService
 from services.profile_service import ProfileService
 
 logger = get_logger(__name__)
@@ -38,10 +40,45 @@ class GatewaySupervisor:
         self._session_maker = session_maker
         self._process_manager = process_manager or GatewayProcessManager(settings)
         self._mock_command: list[str] | None = None
+        self._instances = InstanceGatewayService(
+            settings=settings,
+            session_maker=session_maker,
+            process_manager=self._process_manager,
+        )
 
     def set_mock_gateway_command(self, cmd: list[str]) -> None:
         """Test hook: use mock HTTP gateway script instead of hermes CLI."""
         self._mock_command = cmd
+        self._instances.set_mock_gateway_command(cmd)
+
+    # --- Instance lifecycle (v1.3.1 FR-05) ---
+
+    async def start_instance(self, instance_id: str) -> InstanceResponse:
+        return await self._instances.start_instance(instance_id)
+
+    async def stop_instance(self, instance_id: str) -> InstanceResponse:
+        return await self._instances.stop_instance(instance_id)
+
+    async def restart_instance(self, instance_id: str) -> InstanceResponse:
+        return await self._instances.restart_instance(instance_id)
+
+    async def refresh_instance_status(self, instance_id: str) -> InstanceResponse:
+        return await self._instances.refresh_instance_status(instance_id)
+
+    async def reconcile_instances_on_boot(self) -> None:
+        await self._instances.reconcile_instances_on_boot()
+
+    async def start_auto_start_instances(self) -> list[InstanceResponse]:
+        return await self._instances.start_auto_start_instances()
+
+    async def shutdown_all_instances(self) -> None:
+        await self._instances.shutdown_all_instances()
+
+    async def reconcile_legacy_profiles_on_boot(self) -> None:
+        await self.reconcile_on_boot()
+
+    async def shutdown_all_legacy_profiles(self) -> None:
+        await self.shutdown_all()
 
     async def _resolve_hermes_executable(self, profile_or_instance_id: str) -> str | None:
         """Prefer RuntimeVersion.executable_path bound to Instance, else active version."""
@@ -143,8 +180,8 @@ class GatewaySupervisor:
         if updated is None:
             return False
         if updated.tzinfo is None:
-            updated = updated.replace(tzinfo=timezone.utc)
-        age = (datetime.now(timezone.utc) - updated).total_seconds()
+            updated = updated.replace(tzinfo=UTC)
+        age = (datetime.now(UTC) - updated).total_seconds()
         return age > _STARTING_STALE_SEC
 
     @staticmethod
@@ -275,6 +312,7 @@ class GatewaySupervisor:
                 profile.id,
                 pid=profile.gateway_pid,
                 port=profile.gateway_port,
+                kill_unknown_port_listeners=True,
             )
             profile = await svc.set_status(profile, GatewayStatus.STOPPED)
             await self._append_profile_audit(session, profile, "profile_stopped")

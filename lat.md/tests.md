@@ -1,18 +1,28 @@
 # 测试规范
 
-`pytest` / `pytest-asyncio`，测试在 `conftest` 用 `init_db(create_all)` 建表并经 `app.state._test_*` 注入桩件、禁用 Gateway 自启与后台 worker。本节描述关键测试覆盖区域与意图，作为回归基线。具体用例见 `tests/`。
+`pytest` / `pytest-asyncio`，测试在 `conftest` 用 `init_db(create_all)` 建表并经 `app.state._test_*` 注入桩件、禁用 Gateway 自启与后台 worker。本节描述关键测试覆盖与 v1.3.1 hotfix 回归基线。具体用例见 `tests/`。
 
 相关：[[architecture#生命周期与后台循环]]、[[tests#Runtime 核心]]。
 
 ## Runtime 核心
 
-`tests/test_runtime_core.py` 覆盖 Runtime Job 队列串行化、写 Job 互斥、`recover_incomplete_jobs` 重启恢复、版本激活唯一性。`tests/test_checksum.py` 校验 SHA256 校验器。`tests/test_snapshot_save_schema.py` 校验 ConfigSnapshot 落盘 schema。对应 [[runtime-service#运行时 Job 队列]] 与 [[runtime-service#Job 恢复]]。
+`tests/test_runtime_core.py` 覆盖 Job 串行化、写锁、`recover_incomplete_jobs`、版本激活；非可安装 Artifact 安装 Job 必须失败（无 Stub）。`tests/test_checksum.py`、`tests/test_snapshot_save_schema.py` 覆盖校验与 snapshot。对应 [[runtime-service#运行时 Job 队列]]。
+
+## 真实安装
+
+`tests/test_real_artifact_install.py` 验证无 wheel/pyproject 时报 `artifact_not_installable`、semver 取最高、源码中无 Stub writer。对应 [[runtime-service#安装 Job]]。
 
 ## Gateway 监管
 
 覆盖启停、自启、关闭期孤儿清理、子进程 pid 跟踪与端口分配。
 
-`tests/test_gateway_supervisor_boot.py`、`tests/test_gateway_autostart_lifespan.py` 验证 `reconcile_on_boot` 与自启在 lifespan 中的行为。`tests/test_gateway_shutdown_orphans.py` 验证关闭期停 Gateway 与孤儿清理。`tests/test_gateway_subprocess_windows.py`、`tests/test_gateway_process_pid.py` 验证子进程启停与 pid 跟踪。`tests/test_port_allocator.py` 验证端口分配与冲突。对应 [[gateway-supervisor#Gateway 监管]]。
+`tests/test_gateway_supervisor_boot.py`、`tests/test_gateway_autostart_lifespan.py` 验证 boot reconcile/自启。`tests/test_gateway_shutdown_orphans.py`、`tests/test_gateway_subprocess_windows.py`、`tests/test_gateway_process_pid.py`、`tests/test_port_allocator.py` 覆盖进程与端口。对应 [[gateway-supervisor#Gateway 监管]]。
+
+## Instance Gateway
+
+Instance 启停、CLI 合同、Profile 路径与 Gateway env 注入的回归测试。
+
+`tests/test_instance_gateway_supervisor.py` 验证不调用 `start_profile` 与 health 字段。`tests/test_gateway_command_contract.py`、`tests/test_profile_paths.py`、`tests/test_gateway_secret_environment.py` 覆盖 CLI/路径/env。`tests/test_secret_isolation_and_reverify.py` 验证 naming Profile 不借用 default secrets，以及 `alreadyInstalled` 复验。见 [[gateway-supervisor#Hermes CLI 合同]]、[[profiles-instances#Profile 路径]]、[[runtime-service#配置与 Secret]]。
 
 ## 任务与审批
 
@@ -32,8 +42,8 @@
 
 ## 部署与端口
 
-`tests/test_profile_port_update.py` 验证 Profile 改端口时的重新分配与配置同步。`tests/api/test_profile_events.py` 验证 Profile 事件审计。对应 [[deployment#部署形态]] 与 [[profiles-instances#Profile 服务]]。
+`tests/test_profile_port_update.py`、`tests/api/test_profile_events.py` 覆盖 Profile 端口与事件。`tests/test_windows_bootstrap_contract.py` 验证 `.cmd` Bypass、provision 中 UserDaemon 在 smoke 之后、PythonPath/precheck/smoke 契约。对应 [[deployment#Windows Provision]]。
 
 ## 验收
 
-`tests/test_v1_acceptance.py` 是 v1.3 验收用例集，对齐 `docs/runtime-acceptance-v1.3.md`。
+`tests/test_v1_acceptance.py` 是 v1.3 验收用例集；v1.3.1 另以真实 Hermes/Gateway smoke（`scripts/runtime-smoke-test-windows.ps1 -RequireHermes`）为准。

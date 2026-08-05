@@ -1,18 +1,24 @@
 # 部署形态
 
-v1.3 生产默认改为「连接常驻 Runtime」，与 Desktop 生命周期解耦。Runtime 逻辑跨平台；Windows 提供用户级后台（推荐，免管理员）与企业 Service（可选）。不要让 UserDaemon / Service / Desktop spawn 同时监听 8765。
+v1.3 生产默认连接常驻 Runtime；v1.3.1 补齐 Windows 真实 Hermes 闭环：`.cmd` Bypass、`-PythonPath` 贯穿、Provision 编排，且 UserDaemon 仅在 smoke 通过后安装。
 
 相关：[[runtime-service#目录布局]]、[[design-decisions#服务态与程序目录隔离]]、[[tests#部署与端口]]。
 
 ## Windows 用户级后台
 
-[[src/local_service/windows_user_daemon.py]] 用 `schtasks /Create /SC ONLOGON /RL LIMITED` 注册登录即启的 Task Scheduler 任务（任务名 `HermesRuntimeUserDaemon`），免管理员。`install` 前先 `detect_port_conflict`，8765 已占用则拒绝安装，避免与企业 Service 或其它进程冲突。
+[[src/local_service/windows_user_daemon.py]] 用 `schtasks /Create /SC ONLOGON /RL LIMITED` 注册登录即启任务（`HermesRuntimeUserDaemon`），免管理员。`install` 前 `detect_port_conflict`，8765 占用则拒绝。正式安装顺序由 [[deployment#Windows Provision]] 保证：smoke 通过后再装 UserDaemon。
 
 CLI：`python -m local_service.windows_user_daemon install|uninstall|status|check-port`。
 
+## Windows Provision
+
+`scripts/runtime-provision-windows.ps1`（经 `.cmd`）完成 precheck→Runtime→Hermes install→instance/start→smoke，最后装 UserDaemon。
+
+入口 `.cmd` 仅进程级 `ExecutionPolicy Bypass`。`-PythonPath` 写入 `TOOLCHAIN_PYTHON_PATH` 并传 bootstrap/`uv venv --python`。8765 若已被健康 Runtime 占用需 `-AllowExistingRuntime`，否则失败。
+
 ## Windows 服务
 
-[[src/local_service/windows_service.py]]（服务名 `HermesLocalService`）经 `pywin32` 实现，`SvcDoRun` 在工作线程跑 `run_local_service`，`SvcStop` 经 `request_shutdown` 优雅停止。需管理员安装（`uv sync --extra service` + `ai-copilot-service install`）。非 win32 平台提供同名占位类。
+[[src/local_service/windows_service.py]]（服务名 `HermesLocalService`）经 `pywin32` 实现，`SvcDoRun` 在工作线程跑 `run_local_service`，`SvcStop` 经 `request_shutdown` 优雅停止。需管理员安装（`uv sync --extra service` + `ai-copilot-service install`）。非 win32 平台提供同名占位类。绑定使用 `bind_host`/`bind_port`。
 
 ## 程序目录约束
 

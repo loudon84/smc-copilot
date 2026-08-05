@@ -28,16 +28,15 @@ Python 3.12、FastAPI + Uvicorn、Pydantic v2 + pydantic-settings、SQLAlchemy 2
 | 文档 | 主题 |
 |------|------|
 | [[architecture#架构总览]] | 分层职责、应用装配、生命周期 |
-| [[runtime-service#Hermes Runtime Service]] | 版本管理、安装/更新/回滚、Job 队列 |
-| [[gateway-supervisor#Gateway 监管]] | 进程生命周期、端口、健康、重协调 |
-| [[profiles-instances#Profile 与 Instance]] | Profile CRUD、角色编译、能力协商 |
+| [[runtime-service#Hermes Runtime Service]] | 真实安装、版本/Job、配置与 Secret |
+| [[gateway-supervisor#Gateway 监管]] | Instance/legacy 启停、CLI 合同、env 注入 |
+| [[profiles-instances#Profile 与 Instance]] | Profile 路径、Instance、角色编译 |
 | [[task-runtime#任务运行时]] | 状态机、路由、Team Hub、Outbox、Worker |
 | [[approval-workspace#审批与工作空间]] | 审批运行时、Workspace Guard、可执行策略 |
 | [[auth-pairing#本地鉴权与设备配对]] | loopback、配对、遗留 Token |
 | [[chat-sessions#Workspace Chat]] | Chat SSE、附件、Session |
-| [[deployment#部署形态]] | Windows 服务/后台、目录约束、跨平台 |
+| [[deployment#部署形态]] | Provision、UserDaemon、目录约束 |
 | [[data-model#数据模型]] | 表、迁移链 |
-| [[design-decisions#关键设计决策]] | 本地优先、隔离、门控 |
-| [[tests#测试规范]] | 关键测试覆盖 |
-
+| [[design-decisions#关键设计决策]] | 本地优先、隔离、失败不破坏现状 |
+| [[tests#测试规范]] | 真实安装、Instance Gateway、bootstrap |
 源码根为扁平 `src/`（`PYTHONPATH=src` 或 `--app-dir src`），不再使用 `src/copilot_serve/` 包前缀。

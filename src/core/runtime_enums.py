@@ -39,6 +39,7 @@ class InstanceStatus(StrEnum):
     STOPPING = "stopping"
     RESTARTING = "restarting"
     FAILED = "failed"
+    ERROR = "error"
 
 
 class DevicePairingStatus(StrEnum):

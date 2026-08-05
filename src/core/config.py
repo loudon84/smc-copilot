@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     runtime_max_old_versions: int = Field(default=2, alias="RUNTIME_MAX_OLD_VERSIONS")
     runtime_job_log_retention_days: int = Field(default=30, alias="RUNTIME_JOB_LOG_RETENTION_DAYS")
     runtime_gateway_log_retention_days: int = Field(default=14, alias="RUNTIME_GATEWAY_LOG_RETENTION_DAYS")
+    runtime_allow_insecure_secret_store: bool = Field(
+        default=False,
+        alias="RUNTIME_ALLOW_INSECURE_SECRET_STORE",
+        description="When true, allow XOR file secret store if DPAPI unavailable (dev only)",
+    )
 
     # --- Configurable toolchain (user-specified install dirs) ---
     toolchain_python_path: str = Field(default="", alias="TOOLCHAIN_PYTHON_PATH")

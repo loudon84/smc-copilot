@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import asyncio
-import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -11,6 +10,9 @@ import psutil
 
 from core.config import Settings
 from core.logging import get_logger
+from integrations.hermes.cli_adapter import HermesCliAdapter
+from runtime.gateway_environment import build_gateway_environment, redact_env_for_log
+from runtime.hermes_profile_paths import profile_home
 
 logger = get_logger(__name__)
 
@@ -25,13 +27,16 @@ def is_pid_alive(pid: int) -> bool:
 def terminate_pid(pid: int, *, timeout: float = 10.0) -> None:
     if not is_pid_alive(pid):
         return
-    proc = psutil.Process(pid)
-    proc.terminate()
     try:
-        proc.wait(timeout=timeout)
-    except psutil.TimeoutExpired:
-        proc.kill()
-        proc.wait(timeout=timeout)
+        proc = psutil.Process(pid)
+        proc.terminate()
+        try:
+            proc.wait(timeout=timeout)
+        except psutil.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=timeout)
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return
 
 
 def find_pids_listening_on_port(port: int) -> list[int]:
@@ -85,12 +90,17 @@ class GatewayProcessManager:
         self,
         cmd: list[str],
         log_file: object,
+        *,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
     ) -> asyncio.subprocess.Process:
         kwargs: dict[str, object] = {
             "stdout": log_file,
             "stderr": asyncio.subprocess.STDOUT,
-            "cwd": str(self._settings.hermes_home_path),
+            "cwd": str(cwd) if cwd else str(self._settings.hermes_home_path),
         }
+        if env is not None:
+            kwargs["env"] = env
 
         if sys.platform == "win32":
             startupinfo = subprocess.STARTUPINFO()
@@ -110,6 +120,8 @@ class GatewayProcessManager:
         *,
         mock_command: list[str] | None = None,
         hermes_executable: str | None = None,
+        env: dict[str, str] | None = None,
+        secrets: dict[str, str] | None = None,
     ) -> GatewayProcessHandle:
         if profile_id in self._handles and self._handles[profile_id].is_alive():
             return self._handles[profile_id]
@@ -118,25 +130,47 @@ class GatewayProcessManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_file = log_path.open("a", encoding="utf-8")
 
+        child_env = env
+        if child_env is None and mock_command is None:
+            # Instance path always passes secrets=; legacy profile may omit (require_api_server_key=False)
+            child_env = build_gateway_environment(
+                self._settings,
+                profile_name=profile_name,
+                gateway_port=port,
+                secrets=secrets,
+                require_api_server_key=secrets is not None,
+            )
+
         if mock_command is not None:
             cmd = mock_command
-        elif hermes_executable:
-            # PRD §7.7: argv array only; never shell=True
-            cmd = [
-                hermes_executable,
-                "gateway",
-                "run",
-                "--profile",
-                profile_name,
-                "--port",
-                str(port),
-            ]
         else:
-            base = shlex.split(self._settings.hermes_gateway_command, posix=(sys.platform != "win32"))
-            cmd = [*base, "--port", str(port), "--profile", profile_name]
+            adapter = HermesCliAdapter(
+                self._settings,
+                executable=Path(hermes_executable) if hermes_executable else None,
+            )
+            cmd = adapter.gateway_command(profile_name=profile_name, port=port)
+            # Forbid legacy flags (v1.3.1 FR-03)
+            if "--profile" in cmd or "--port" in cmd:
+                from core.runtime_errors import RuntimeServiceError
 
-        logger.info("gateway_starting", profile_id=profile_id, cmd=cmd, port=port)
-        process = await self._create_gateway_process(cmd, log_file)
+                raise RuntimeServiceError(
+                    "Invalid gateway command contains forbidden --profile/--port",
+                    code="gateway_command_invalid",
+                    details={"cmd": cmd},
+                )
+
+        cwd = profile_home(self._settings, profile_name)
+        cwd.mkdir(parents=True, exist_ok=True)
+
+        logger.info(
+            "gateway_starting",
+            profile_id=profile_id,
+            cmd=cmd,
+            port=port,
+            cwd=str(cwd),
+            env=redact_env_for_log(child_env) if child_env else None,
+        )
+        process = await self._create_gateway_process(cmd, log_file, cwd=cwd, env=child_env)
         handle = GatewayProcessHandle(
             profile_id=profile_id,
             profile_name=profile_name,
@@ -162,21 +196,35 @@ class GatewayProcessManager:
         if handle._log_file:
             handle._log_file.close()
 
-    async def stop(self, profile_id: str, *, pid: int | None = None, port: int | None = None) -> None:
+    async def stop(
+        self,
+        profile_id: str,
+        *,
+        pid: int | None = None,
+        port: int | None = None,
+        kill_unknown_port_listeners: bool = False,
+    ) -> None:
         handle = self._handles.pop(profile_id, None)
 
         if handle is not None:
             await self._stop_handle(handle)
             port = port or handle.port
+            pid = pid or handle.pid
 
         if pid is not None and is_pid_alive(pid):
             await asyncio.to_thread(terminate_pid, pid)
 
-        if port is not None:
+        # v1.3.1: never kill unknown PIDs on port unless explicitly requested (legacy stop)
+        if port is not None and kill_unknown_port_listeners:
             from runtime.port_allocator import is_port_available
 
             if not is_port_available("127.0.0.1", port):
-                await terminate_listeners_on_port(port)
+                listeners = find_pids_listening_on_port(port)
+                for listener_pid in listeners:
+                    if pid is not None and listener_pid == pid:
+                        continue
+                    # only kill if we intentionally requested full port release
+                    await asyncio.to_thread(terminate_pid, listener_pid)
 
     async def release_port(self, port: int) -> None:
         """Force-release a gateway port when stop did not clear an orphan listener."""

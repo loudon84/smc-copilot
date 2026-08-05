@@ -30,6 +30,6 @@
 
 ## 生命周期与后台循环
 
-[[src/core/lifecycle.py#lifespan]] 在启动期完成：配置日志、标记服务启动、建引擎与 sessionmaker、构造 [[src/services/gateway_supervisor.py#GatewaySupervisor]]、`TaskRoutingRegistry`、Team Hub 客户端、`RuntimeJobService` 并注册 install/update/rollback/doctor 处理器。
+[[src/core/lifecycle.py#lifespan]] 启动：日志、引擎、Supervisor、JobService（注册 install/update/rollback/doctor）、recover jobs，再按 FR-06 顺序 reconcile/autostart Instance 与 legacy Profile，最后启 worker。
 
-随后：恢复未完成 Job（见 [[runtime-service#Job 恢复]]）、`reconcile_on_boot` + 自启 Profile（见 [[gateway-supervisor#启动时重协调]]）、启动 Job worker 与三个后台 Worker。关闭期取消 worker、`shutdown_all` Gateway、释放引擎。测试可通过 `app.state._test_*` 注入桩件并禁用自启/worker。
+关闭：停 Job worker 与后台 Worker → `shutdown_all_instances` → `shutdown_all_legacy_profiles` → dispose 引擎。绑定地址用 `settings.bind_host`/`bind_port`（`RUNTIME_*` 优先于 `COPILOT_*`）。测试经 `app.state._test_*` 注入并禁用自启/worker。详见 [[gateway-supervisor#启动时重协调]]。

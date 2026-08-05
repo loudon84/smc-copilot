@@ -16,8 +16,14 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
 
 
 def test_allocate_requested_port_when_free(settings: Settings) -> None:
-    port = allocate_port(settings, 19999, set())
-    assert port == 19999
+    # Pick a free ephemeral-range port to avoid collisions with other tests / OS listeners
+    candidate = 39999
+    for offset in range(200):
+        p = candidate - offset
+        if is_port_available("127.0.0.1", p):
+            assert allocate_port(settings, p, set()) == p
+            return
+    pytest.skip("no free candidate port found")
 
 
 def test_allocate_rejects_port_used_by_another_profile(settings: Settings) -> None:

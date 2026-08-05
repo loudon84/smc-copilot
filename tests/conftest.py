@@ -39,6 +39,7 @@ def test_settings(tmp_data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Settin
     monkeypatch.setenv("DEFAULT_GATEWAY_PORT", "18742")
     monkeypatch.setenv("RUNTIME_REQUIRE_AUTH", "false")
     monkeypatch.setenv("COPILOT_REQUIRE_TOKEN", "false")
+    monkeypatch.setenv("RUNTIME_ALLOW_INSECURE_SECRET_STORE", "true")
     import core.config as config_mod
 
     config_mod._settings = None

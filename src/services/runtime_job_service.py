@@ -331,6 +331,24 @@ class RuntimeJobService:
                     return
                 if job.status == RuntimeJobStatus.CANCELLED.value:
                     return
+                # v1.3.1: install/update must never succeed without real executable verification
+                if job.job_type in ("install", "update") and isinstance(result, dict):
+                    if result.get("alreadyInstalled") and result.get("realExecutableVerified") is not True:
+                        raise RuntimeServiceError(
+                            "alreadyInstalled without realExecutableVerified",
+                            code="hermes_version_invalid",
+                        )
+                    if not result.get("alreadyInstalled") and result.get("realExecutableVerified") is not True:
+                        raise RuntimeServiceError(
+                            "Install/update result missing realExecutableVerified=true",
+                            code="hermes_version_invalid",
+                            details={"stub": result.get("stub")},
+                        )
+                    if result.get("stub") is True:
+                        raise RuntimeServiceError(
+                            "Install/update must not report stub=true",
+                            code="hermes_version_invalid",
+                        )
                 job.status = RuntimeJobStatus.SUCCEEDED.value
                 job.progress = 1.0
                 job.phase = "completed"

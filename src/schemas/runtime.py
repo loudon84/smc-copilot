@@ -147,6 +147,8 @@ class InstanceResponse(BaseModel):
     auto_start: bool = Field(alias="autoStart")
     pid: int | None = None
     last_error: str | None = Field(default=None, alias="lastError")
+    executable_verified: bool | None = Field(default=None, alias="executableVerified")
+    api_server_enabled: bool | None = Field(default=None, alias="apiServerEnabled")
 
 
 class PairingStartResponse(BaseModel):

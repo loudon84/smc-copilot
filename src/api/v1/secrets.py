@@ -20,15 +20,16 @@ async def list_secrets(
     return await SecretService(settings, session).list_meta(scope)
 
 
-@router.put("/{scope}/{name}", response_model=SecretMetaResponse)
+@router.put("/{scope}/{name}")
 async def put_secret(
     scope: str,
     name: str,
     body: SecretPutRequest,
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
-) -> SecretMetaResponse:
-    return await SecretService(settings, session).put(scope, name, body.value)
+) -> dict:
+    # FR-09/side-effect: may include restartRequired when instance is running
+    return await SecretService(settings, session).put_with_restart_hint(scope, name, body.value)
 
 
 @router.delete("/{scope}/{name}")

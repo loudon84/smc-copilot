@@ -33,10 +33,10 @@ def _hub_factory(settings) -> StubTeamHubClient | HttpTeamHubClient:
 def _register_runtime_handlers(job_service: RuntimeJobService, settings, session_maker) -> None:
     """Wire install/update/rollback/doctor handlers (lazy import to avoid circular deps)."""
     try:
-        from services.installation_service import InstallationService
-        from services.update_service import UpdateService
-        from services.rollback_service import RollbackService
         from services.doctor_service import DoctorService
+        from services.installation_service import InstallationService
+        from services.rollback_service import RollbackService
+        from services.update_service import UpdateService
 
         install = InstallationService(settings, session_maker)
         update = UpdateService(settings, session_maker)
@@ -93,7 +93,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     disable_gateway_autostart = bool(getattr(app.state, "_disable_gateway_autostart", False))
     if not disable_gateway_autostart:
-        await supervisor.reconcile_on_boot()
+        # FR-06 boot: recover jobs (above) → reconcile instances → legacy profiles → autostart both
+        await supervisor.reconcile_instances_on_boot()
+        await supervisor.reconcile_legacy_profiles_on_boot()
+        await supervisor.start_auto_start_instances()
         await supervisor.start_auto_start_profiles()
 
     bg_tasks: list[asyncio.Task[None]] = []
@@ -129,6 +132,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if bg_tasks:
         await asyncio.gather(*bg_tasks, return_exceptions=True)
 
-    await supervisor.shutdown_all()
+    # FR-06 shutdown: instances then legacy profiles
+    await supervisor.shutdown_all_instances()
+    await supervisor.shutdown_all_legacy_profiles()
     await engine.dispose()
     logger.info("copilot_serve_stopped")

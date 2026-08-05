@@ -4,21 +4,23 @@ import base64
 import hashlib
 import json
 import os
+import secrets
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
 from core.runtime_errors import RuntimeServiceError
-from db.models.runtime import SecretReference
+from db.models.runtime import HermesInstance, SecretReference
+from runtime.gateway_environment import validate_secret_name
 from runtime.platform_paths import RuntimeLayout
 from schemas.runtime import SecretMetaResponse
 
 
 class SecretStore:
-    """Dev encrypted-file store; Windows can use DPAPI when available."""
+    """Windows DPAPI store; insecure XOR file only when RUNTIME_ALLOW_INSECURE_SECRET_STORE=true."""
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -26,6 +28,7 @@ class SecretStore:
         layout.ensure()
         self._store_path = layout.root / "secrets.enc.json"
         self._key = self._derive_key()
+        self._allow_insecure = bool(getattr(settings, "runtime_allow_insecure_secret_store", False))
 
     def _derive_key(self) -> bytes:
         seed = os.environ.get("RUNTIME_SECRET_KEY", "dev-only-not-for-production")
@@ -51,37 +54,60 @@ class SecretStore:
         blob = base64.b64encode(self._xor(plain))
         self._store_path.write_bytes(blob)
 
-    def put(self, storage_key: str, value: str) -> None:
+    def put(self, storage_key: str, value: str) -> str:
+        """Persist secret; returns storage provider name."""
         if sys.platform == "win32":
             try:
                 import win32crypt  # type: ignore
 
                 encrypted = win32crypt.CryptProtectData(value.encode("utf-8"), None, None, None, None, 0)
-                path = self._store_path.parent / f"{storage_key}.dpapi"
+                safe = storage_key.replace(":", "_").replace("/", "_")
+                path = self._store_path.parent / f"{safe}.dpapi"
                 path.write_bytes(encrypted)
-                return
-            except Exception:
-                pass
-        data = self._load()
-        data[storage_key] = value
-        self._save(data)
+                return "dpapi"
+            except Exception as exc:
+                if not self._allow_insecure:
+                    raise RuntimeServiceError(
+                        f"DPAPI secret store unavailable: {exc}",
+                        code="secret_store_unavailable",
+                    ) from exc
+        elif not self._allow_insecure and sys.platform == "win32":
+            raise RuntimeServiceError("DPAPI secret store unavailable", code="secret_store_unavailable")
+
+        if sys.platform == "win32" and not self._allow_insecure:
+            raise RuntimeServiceError("DPAPI secret store unavailable", code="secret_store_unavailable")
+
+        # Non-Windows or explicit insecure fallback
+        if sys.platform != "win32" or self._allow_insecure:
+            data = self._load()
+            data[storage_key] = value
+            self._save(data)
+            return "encrypted_file"
+
+        raise RuntimeServiceError("Secret store unavailable", code="secret_store_unavailable")
 
     def get(self, storage_key: str) -> str | None:
         if sys.platform == "win32":
-            path = self._store_path.parent / f"{storage_key}.dpapi"
+            safe = storage_key.replace(":", "_").replace("/", "_")
+            path = self._store_path.parent / f"{safe}.dpapi"
             if path.exists():
                 try:
                     import win32crypt  # type: ignore
 
                     _desc, plain = win32crypt.CryptUnprotectData(path.read_bytes(), None, None, None, 0)
                     return plain.decode("utf-8")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    if not self._allow_insecure:
+                        raise RuntimeServiceError(
+                            f"DPAPI decrypt failed: {exc}",
+                            code="secret_store_unavailable",
+                        ) from exc
         return self._load().get(storage_key)
 
     def delete(self, storage_key: str) -> None:
         if sys.platform == "win32":
-            path = self._store_path.parent / f"{storage_key}.dpapi"
+            safe = storage_key.replace(":", "_").replace("/", "_")
+            path = self._store_path.parent / f"{safe}.dpapi"
             if path.exists():
                 path.unlink(missing_ok=True)
         data = self._load()
@@ -98,6 +124,7 @@ class SecretService:
     async def put(self, scope: str, name: str, value: str) -> SecretMetaResponse:
         if not value:
             raise RuntimeServiceError("Secret value required", code="validation_error")
+        validate_secret_name(name)
         storage_key = f"{scope}:{name}"
         result = await self._session.execute(
             select(SecretReference).where(
@@ -107,9 +134,8 @@ class SecretService:
             )
         )
         row = result.scalar_one_or_none()
-        provider = "dpapi" if sys.platform == "win32" else "encrypted_file"
-        self._store.put(storage_key, value)
-        now = datetime.now(timezone.utc)
+        provider = self._store.put(storage_key, value)
+        now = datetime.now(UTC)
         if row is None:
             row = SecretReference(
                 scope_type="scope",
@@ -125,6 +151,23 @@ class SecretService:
             row.updated_at = now
         await self._session.flush()
         return SecretMetaResponse(name=name, configured=True, updatedAt=row.updated_at or now)
+
+    async def put_with_restart_hint(
+        self, scope: str, name: str, value: str
+    ) -> dict:
+        meta = await self.put(scope, name, value)
+        # If any running instance uses this profile scope, caller should restart.
+        result = await self._session.execute(
+            select(HermesInstance).where(
+                HermesInstance.profile_name == scope,
+                HermesInstance.status.in_(("running", "starting")),
+            )
+        )
+        running = list(result.scalars().all())
+        payload = meta.model_dump(by_alias=True)
+        if running:
+            payload["restartRequired"] = True
+        return payload
 
     async def list_meta(self, scope: str) -> list[SecretMetaResponse]:
         result = await self._session.execute(
@@ -157,3 +200,23 @@ class SecretService:
     def resolve(self, storage_key: str) -> str | None:
         """Internal only — never expose via GET APIs."""
         return self._store.get(storage_key)
+
+    async def ensure_api_server_key(self, profile_name: str) -> None:
+        """FR-08: create API_SERVER_KEY via CSPRNG if missing for profile scope."""
+        name = "API_SERVER_KEY"
+        scope = profile_name or "default"
+        result = await self._session.execute(
+            select(SecretReference).where(
+                SecretReference.scope_type == "scope",
+                SecretReference.scope_id == scope,
+                SecretReference.secret_name == name,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            existing = self._store.get(row.storage_key)
+            if existing:
+                return
+        # 32 bytes CSPRNG → urlsafe text
+        value = secrets.token_urlsafe(32)
+        await self.put(scope, name, value)

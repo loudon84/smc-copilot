@@ -90,7 +90,7 @@ pytest
 
 ---
 
-## 部署说明（v1.3）
+## 部署说明（v1.3 / v1.3.1 hotfix）
 
 ### 1. 前置条件
 
@@ -100,7 +100,7 @@ pytest
 | 网络 | 下载 Hermes Artifact（或本地 `file://` Manifest） |
 | 可选 | Node、Git（Hermes 构建/工具链前置；可自定义路径） |
 
-默认只监听 **`127.0.0.1`**，不要默认绑定 `0.0.0.0`。
+默认只监听 **`127.0.0.1`**，不要默认绑定 `0.0.0.0`。v1.3.1：仅真实 Hermes Artifact 可安装成功（禁止 Stub）。
 
 ### 2. 可配置工具链路径
 
@@ -118,14 +118,26 @@ pytest
 
 | 变量 | 说明 |
 |------|------|
-| `RUNTIME_HOST` / `RUNTIME_PORT` | 默认 `127.0.0.1:8765` |
+| `RUNTIME_HOST` / `RUNTIME_PORT` | 默认 `127.0.0.1:8765`（优先于 `COPILOT_*`） |
 | `RUNTIME_DATA_DIR` | 服务态根；空=Windows `%LOCALAPPDATA%\HermesRuntime`（保持默认即可） |
 | `HERMES_HOME` | Hermes 用户数据；默认 `~/.hermes` |
 | `HERMES_MANIFEST_URL` | Hermes 版本 Manifest（必配才可走安装 Job） |
 | `RUNTIME_REQUIRE_AUTH` | 生产建议 `true` |
 | `RUNTIME_ALLOW_LEGACY_TOKEN` | 是否兼容旧 `X-Copilot-Desktop-Token` |
+| `RUNTIME_ALLOW_INSECURE_SECRET_STORE` | 仅开发：DPAPI 不可用时允许 XOR 文件存储（默认 `false`） |
 
 ### 3. Windows 部署
+
+#### 3.0 一键 Provision（推荐，v1.3.1）
+
+Restricted 策略下用 `.cmd`（仅进程级 Bypass）：
+
+```cmd
+cd /d D:\Programs\copilot-serve
+scripts\runtime-provision-windows.cmd -PythonPath C:\Python312\python.exe
+```
+
+顺序：precheck → Runtime → Hermes install → Instance → smoke → **最后** UserDaemon。详见 [docs/runtime-installation.md](docs/runtime-installation.md)。
 
 #### 3.1 预检与安装脚本
 
@@ -140,18 +152,25 @@ cd D:\Programs\copilot-serve
   -GitPath "C:\Program Files\Git\cmd\git.exe"
 
 # 引导 .venv / 依赖 / .env / 迁移；默认不改 RUNTIME_DATA_DIR（服务态仍 LOCALAPPDATA）
+# v1.3.1：勿在烟测前加 -UserDaemon；请用 provision 脚本在 smoke 通过后安装
 .\scripts\runtime-install-windows.ps1 `
   -PythonPath "C:\Python312\python.exe" `
   -NodePath "C:\Program Files\nodejs" `
   -GitPath "C:\Program Files\Git\cmd\git.exe" `
-  -HermesInstallDir "D:\Programs\HermesAgent" `
-  -UserDaemon
+  -HermesInstallDir "D:\Programs\HermesAgent"
 ```
 
 手动启动（开发或未启用 UserDaemon 时）：
 
 ```powershell
-uv run uvicorn main:app --app-dir src --host 127.0.0.1 --port 8765
+scripts\runtime-start-windows.cmd
+# 或: uv run uvicorn main:app --app-dir src --host 127.0.0.1 --port 8765
+```
+
+烟测（要求真实 Hermes + Gateway）：
+
+```powershell
+.\scripts\runtime-smoke-test-windows.ps1 -RequireHermes -RequireGateway
 ```
 
 #### 3.2 用户级后台（推荐，无需管理员）
@@ -299,4 +318,4 @@ v1.3 起生产默认改为 **连接常驻 Runtime**；开发模式仍可显式 s
 | Desktop 无法写接口 | 完成配对或开启遗留 Token；确认 `RUNTIME_REQUIRE_AUTH` |
 | 卸载后想保留对话/配置 | 默认已保留 `~/.hermes`；勿加 `-RemoveHermesUserData` |
 
-验收记录：[docs/runtime-acceptance-v1.3.md](docs/runtime-acceptance-v1.3.md)。
+验收记录：[docs/runtime-acceptance-v1.3.md](docs/runtime-acceptance-v1.3.md)；v1.3.1 hotfix：[docs/runtime-acceptance-v1.3.1.md](docs/runtime-acceptance-v1.3.1.md)。

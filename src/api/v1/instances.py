@@ -90,15 +90,9 @@ async def restart_instance(
 @router.get("/{instance_id}/health", response_model=InstanceResponse)
 async def instance_health(
     instance_id: str,
-    svc: InstanceService = Depends(get_instance_service),
     supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
 ) -> InstanceResponse:
-    status = await supervisor.refresh_status(instance_id)
-    inst = await svc.get(instance_id)
-    inst.healthy = status.healthy
-    inst.status = status.status.value if hasattr(status.status, "value") else str(status.status)
-    inst.pid = status.gateway_pid
-    return await svc.get_response(instance_id)
+    return await supervisor.refresh_instance_status(instance_id)
 
 
 @router.get("/{instance_id}/logs")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +12,9 @@ from db.models.runtime import HermesInstance, RuntimeVersion
 from db.repositories.runtime_repo import RuntimeVersionRepository
 from runtime.port_allocator import allocate_port, is_port_available
 from schemas.runtime import InstanceCreateRequest, InstanceResponse, InstanceUpdateRequest
-from services.gateway_supervisor import GatewaySupervisor
+
+if TYPE_CHECKING:
+    from services.gateway_supervisor import GatewaySupervisor
 
 
 def instance_to_response(inst: HermesInstance, version: str | None = None) -> InstanceResponse:
@@ -105,6 +109,10 @@ class InstanceService:
         )
         self._session.add(inst)
         await self._session.flush()
+        # FR-08: ensure API_SERVER_KEY exists for the profile scope
+        from services.secret_service import SecretService
+
+        await SecretService(self._settings, self._session).ensure_api_server_key(inst.profile_name)
         return instance_to_response(inst, version_label)
 
     async def update(self, instance_id: str, body: InstanceUpdateRequest) -> InstanceResponse:
@@ -145,30 +153,15 @@ class InstanceService:
     async def start(self, instance_id: str) -> InstanceResponse:
         if self._supervisor is None:
             raise RuntimeServiceError("Gateway supervisor not available", code="internal_error")
-        # Instances share profile_id with migrated profiles; start via supervisor using instance id
-        status = await self._supervisor.start_profile(instance_id)
-        inst = await self.get(instance_id)
-        inst.status = status.status.value if hasattr(status.status, "value") else str(status.status)
-        inst.healthy = status.healthy
-        inst.pid = status.gateway_pid
-        if status.message:
-            inst.last_error = status.message
-        await self._session.flush()
-        return await self.get_response(instance_id)
+        # v1.3.1: Instance-native start — must NOT call start_profile()
+        return await self._supervisor.start_instance(instance_id)
 
     async def stop(self, instance_id: str) -> InstanceResponse:
         if self._supervisor is None:
             raise RuntimeServiceError("Gateway supervisor not available", code="internal_error")
-        await self._supervisor.stop_profile(instance_id)
-        inst = await self.get(instance_id)
-        inst.status = InstanceStatus.STOPPED.value
-        inst.healthy = False
-        inst.pid = None
-        await self._session.flush()
-        return await self.get_response(instance_id)
+        return await self._supervisor.stop_instance(instance_id)
 
     async def restart(self, instance_id: str) -> InstanceResponse:
         if self._supervisor is None:
             raise RuntimeServiceError("Gateway supervisor not available", code="internal_error")
-        await self._supervisor.restart_profile(instance_id)
-        return await self.get_response(instance_id)
+        return await self._supervisor.restart_instance(instance_id)

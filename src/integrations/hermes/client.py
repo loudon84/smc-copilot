@@ -20,13 +20,28 @@ class HermesGatewayClient:
 
     async def health_check(self) -> bool:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            for path in ("/health", "/v1/models"):
-                try:
-                    resp = await client.get(self._url(path))
-                    if resp.status_code < 500:
-                        return True
-                except httpx.HTTPError:
-                    continue
+            try:
+                resp = await client.get(self._url("/health"))
+                if resp.status_code < 400:
+                    try:
+                        data = resp.json()
+                        if isinstance(data, dict) and str(data.get("status", "")).lower() == "ok":
+                            return True
+                        # Tolerate gateways that return non-JSON ok body but 200
+                        if resp.status_code == 200:
+                            return True
+                    except Exception:
+                        if resp.status_code == 200:
+                            return True
+            except httpx.HTTPError:
+                pass
+            # Fallback for mocks / older gateways
+            try:
+                resp = await client.get(self._url("/v1/models"))
+                if resp.status_code < 500:
+                    return True
+            except httpx.HTTPError:
+                pass
         return False
 
     async def list_models(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:

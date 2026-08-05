@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
-from datetime import datetime, timezone
+import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import Settings
 from core.runtime_errors import RuntimeServiceError
 from db.models.runtime import ConfigSnapshot, HermesInstance
+from integrations.hermes.cli_adapter import HermesCliAdapter
 from runtime.checksum_verifier import sha256_file
+from runtime.hermes_profile_paths import profile_config_path, profile_home
 from runtime.platform_paths import RuntimeLayout
 
 
@@ -20,7 +24,7 @@ class HermesConfigAdapter:
         self._settings = settings
 
     def profile_config_path(self, profile_name: str) -> Path:
-        return self._settings.hermes_home_path / "profiles" / profile_name / "config.yaml"
+        return profile_config_path(self._settings, profile_name)
 
     def read(self, profile_name: str) -> dict[str, Any]:
         path = self.profile_config_path(profile_name)
@@ -31,10 +35,27 @@ class HermesConfigAdapter:
             raise RuntimeServiceError("config.yaml is not a mapping", code="validation_error")
         return data
 
-    def write(self, profile_name: str, data: dict[str, Any]) -> None:
+    def write_atomic(self, profile_name: str, data: dict[str, Any]) -> None:
+        """Atomic write: tmp → fsync → replace (FR-10)."""
         path = self.profile_config_path(profile_name)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        text = yaml.safe_dump(data, sort_keys=False)
+        fd, tmp_name = tempfile.mkstemp(prefix=".config-", suffix=".yaml", dir=str(path.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_name, path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise
+
+    def write(self, profile_name: str, data: dict[str, Any]) -> None:
+        self.write_atomic(profile_name, data)
 
     def validate(self, data: dict[str, Any]) -> list[str]:
         errors: list[str] = []
@@ -44,7 +65,7 @@ class HermesConfigAdapter:
 
 
 class ConfigurationService:
-    RESTART_GROUPS = frozenset({"gateway", "provider", "model", "runtime"})
+    RESTART_GROUPS = frozenset({"gateway", "provider", "model", "runtime", "platforms"})
 
     def __init__(self, settings: Settings, session: AsyncSession) -> None:
         self._settings = settings
@@ -68,7 +89,7 @@ class ConfigurationService:
         src = self._adapter.profile_config_path(inst.profile_name)
         snap_dir = self._layout.backups / "config_snapshots" / instance_id
         snap_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         dest = snap_dir / f"{stamp}.yaml"
         if src.exists():
             shutil.copy2(src, dest)
@@ -102,17 +123,60 @@ class ConfigurationService:
         errors = self._adapter.validate(current)
         if errors:
             raise RuntimeServiceError("; ".join(errors), code="validation_error")
-        self._adapter.write(inst.profile_name, current)
+
+        try:
+            self._adapter.write(inst.profile_name, current)
+            # Native hermes config check when executable available
+            await self._native_check(inst.profile_name)
+        except RuntimeServiceError:
+            await self.restore_latest_snapshot(instance_id)
+            raise
+        except Exception as exc:
+            await self.restore_latest_snapshot(instance_id)
+            raise RuntimeServiceError(
+                f"configuration write failed: {exc}",
+                code="configuration_invalid",
+            ) from exc
+
         return {
             "configuration": current,
             "restartRequired": (group in self.RESTART_GROUPS) if group else False,
         }
 
+    async def _native_check(self, profile_name: str) -> dict[str, Any]:
+        from db.repositories.runtime_repo import RuntimeVersionRepository
+
+        active = await RuntimeVersionRepository(self._session).get_active()
+        if active is None or not active.executable_path or not Path(active.executable_path).exists():
+            # Soft skip when Hermes not installed (unit tests / offline)
+            return {"ok": True, "nativeCheck": False, "skipped": True}
+        cli = HermesCliAdapter(self._settings, executable=Path(active.executable_path))
+        return await cli.config_check(profile_name=profile_name)
+
     async def validate(self, instance_id: str) -> dict[str, Any]:
         inst = await self._instance(instance_id)
         data = self._adapter.read(inst.profile_name)
         errors = self._adapter.validate(data)
-        return {"ok": not errors, "errors": errors}
+        warnings: list[str] = []
+        native_check = False
+        try:
+            native = await self._native_check(inst.profile_name)
+            native_check = bool(native.get("nativeCheck"))
+            if native.get("skipped"):
+                warnings.append("hermes executable not available; native check skipped")
+        except RuntimeServiceError as exc:
+            errors.append(str(exc))
+            details = getattr(exc, "details", {}) or {}
+            if details.get("stderrTail"):
+                warnings.append(str(details["stderrTail"])[:500])
+        return {
+            "ok": not errors,
+            "profileName": inst.profile_name,
+            "nativeCheck": native_check,
+            "errors": errors,
+            "warnings": warnings,
+            "profileHome": str(profile_home(self._settings, inst.profile_name)),
+        }
 
     async def restore_latest_snapshot(self, instance_id: str) -> None:
         from sqlalchemy import select

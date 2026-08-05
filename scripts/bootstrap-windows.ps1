@@ -2,6 +2,7 @@
 # 约定：RepoRoot 应在 D:\Programs 下（如 D:\Programs\copilot-serve），.venv 随之落在 Programs 内。
 param(
     [string]$RepoRoot = $PSScriptRoot + "\..",
+    [string]$PythonPath = "",
     [switch]$Force,
     [switch]$SkipProgramsCheck
 )
@@ -19,7 +20,18 @@ if (-not $SkipProgramsCheck) {
     }
 }
 
-function Test-Python312 {
+function Resolve-Python312 {
+    if ($PythonPath) {
+        if (-not (Test-Path $PythonPath)) {
+            throw "PythonPath not found: $PythonPath"
+        }
+        $out = & $PythonPath --version 2>&1 | Out-String
+        if ($out -notmatch "3\.12") {
+            throw "PythonPath must be Python 3.12, got: $out"
+        }
+        Write-Host "Using explicit PythonPath: $PythonPath"
+        return $PythonPath
+    }
     $candidates = @(
         @{ Cmd = "py"; Args = @("-3.12", "--version") },
         @{ Cmd = "python"; Args = @("--version") }
@@ -27,16 +39,24 @@ function Test-Python312 {
     foreach ($c in $candidates) {
         try {
             $out = & $c.Cmd @($c.Args) 2>&1 | Out-String
-            if ($out -match "3\.12") { return $c }
+            if ($out -match "3\.12") {
+                if ($c.Cmd -eq "py") { return "py -3.12" }
+                return "python"
+            }
         } catch { }
     }
-    throw "Python 3.12 not found. 请先手工安装 Python 3.12 到 D:\Programs 并确保 'py -3.12' 或 'python' 可用。"
+    throw "Python 3.12 not found. Pass -PythonPath or install Python 3.12."
 }
 
 function Ensure-Uv {
+    param([string]$ResolvedPython)
     if (Get-Command uv -ErrorAction SilentlyContinue) { return }
-    Write-Host "Installing uv..."
-    & py -3.12 -m pip install uv
+    Write-Host "Installing uv via: $ResolvedPython"
+    if ($ResolvedPython -match '^py(\s|$)') {
+        Invoke-Expression "& $ResolvedPython -m pip install uv"
+    } else {
+        & $ResolvedPython -m pip install uv
+    }
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
         throw "uv not found after install attempt"
     }
@@ -45,10 +65,10 @@ function Ensure-Uv {
 Write-Host "== bootstrap-windows =="
 Write-Host "Repo: $RepoRoot"
 
-$py = Test-Python312
-Write-Host "Python OK: $($py.Cmd) $($py.Args -join ' ')"
+$resolvedPython = Resolve-Python312
+Write-Host "Python OK: $resolvedPython"
 
-Ensure-Uv
+Ensure-Uv -ResolvedPython $resolvedPython
 
 $venvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if ($Force -and (Test-Path (Join-Path $RepoRoot ".venv"))) {
@@ -57,7 +77,11 @@ if ($Force -and (Test-Path (Join-Path $RepoRoot ".venv"))) {
 
 if (-not (Test-Path $venvPython)) {
     Write-Host "Creating venv under repo (must be under D:\Programs)..."
-    & uv venv --python 3.12
+    if ($PythonPath) {
+        & uv venv --python $PythonPath
+    } else {
+        & uv venv --python 3.12
+    }
 }
 
 Write-Host "uv sync --extra service..."
@@ -67,6 +91,18 @@ $envFile = Join-Path $RepoRoot ".env"
 if ($Force -or -not (Test-Path $envFile)) {
     Write-Host "Writing .env from .env.example..."
     Copy-Item (Join-Path $RepoRoot ".env.example") $envFile -Force
+}
+
+if ($PythonPath) {
+    $content = Get-Content $envFile -Raw
+    $line = "TOOLCHAIN_PYTHON_PATH=$PythonPath"
+    if ($content -match "(?m)^TOOLCHAIN_PYTHON_PATH=") {
+        $content = [regex]::Replace($content, "(?m)^TOOLCHAIN_PYTHON_PATH=.*$", $line)
+        Set-Content -Path $envFile -Value $content -Encoding UTF8 -NoNewline
+    } else {
+        Add-Content $envFile "`n$line"
+    }
+    Write-Host "Wrote TOOLCHAIN_PYTHON_PATH to .env"
 }
 
 Write-Host "alembic upgrade head..."

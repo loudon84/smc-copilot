@@ -1,16 +1,20 @@
 # Profile 与 Instance
 
-Profile 是 Hermes Gateway 的运行单元（名称、类型、端口、角色），Instance 是 v1.3 引入的统一抽象，将 Profile/Gateway/RuntimeVersion 绑定。Profile 类型见 [[src/core/constants.py#ProfileType]]，Gateway 状态见 [[src/core/constants.py#GatewayStatus]]。
+Profile 是 Hermes Gateway 运行单元；Instance 将 Profile/Gateway/RuntimeVersion 绑定。v1.3.1 起 Instance 启停不依赖 `profiles` 表行；默认 Profile 路径为 `HERMES_HOME`，命名 Profile 为 `profiles/<name>/`。
 
 相关：[[gateway-supervisor#Gateway 监管]]、[[runtime-service#版本管理]]、[[data-model#Profile 与任务表]]。
 
 ## Profile 服务
 
-[[src/services/profile_service.py#ProfileService]] 做 Profile CRUD：创建时校验名称唯一、经 [[gateway-supervisor#端口分配]] 分配端口、`sync_profile_config` 写 Hermes 配置；更新改端口时重新分配并同步配置；`set_status` 维护 `status`/`gateway_pid`。Profile 模型见 [[src/db/models/profile.py#Profile]]。
+[[src/services/profile_service.py#ProfileService]] 做 Profile CRUD：创建时校验名称唯一、经 [[gateway-supervisor#端口分配]] 分配端口、`sync_profile_config` 写 Hermes 配置；更新改端口时重新分配并同步配置；`set_status` 维护 `status`/`gateway_pid`。Profile 模型见 [[src/db/models/profile.py#Profile]]。旧 `/profiles` API 保留。
+
+## Profile 路径
+
+[[src/runtime/hermes_profile_paths.py#profile_home]]：`default`/空 → `settings.hermes_home_path`；命名 → `hermes_home/profiles/<name>/`。`profile_config_path` / `profile_env_path` 同步。`utils.paths` 与 Configuration/Gateway cwd 均委托该方法，禁止硬编码 `profiles/<name>` 给 default。
 
 ## Instance
 
-[[src/db/models/runtime.py#HermesInstance]] 绑定 `profile_name`、`runtime_version_id`、`gateway_port`、`status`、`pid`、`auto_start`。状态机见 [[src/core/runtime_enums.py#InstanceStatus]]。安装 Job 可顺带创建 default Instance（见 [[runtime-service#安装 Job]]）。GatewaySupervisor 解析可执行文件时优先读 Instance 绑定版本。
+[[src/db/models/runtime.py#HermesInstance]] 绑定 `profile_name`、`runtime_version_id`、`gateway_port`、`status`、`pid`、`auto_start`。状态机见 [[src/core/runtime_enums.py#InstanceStatus]]（含 `error`）。[[src/services/instance_service.py#InstanceService]] start/stop/restart 调用 Supervisor 的 Instance API，不调用 `start_profile`。安装 Job 可创建 default Instance。创建时确保 `API_SERVER_KEY`（见 [[runtime-service#配置与 Secret]]）。
 
 ## 角色编译
 
