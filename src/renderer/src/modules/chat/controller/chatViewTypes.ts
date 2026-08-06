@@ -66,18 +66,41 @@ export type ChatViewItem =
       request: ClarifyRequest;
       answer?: string;
       resolved?: boolean;
+      interactionStatus?: ChatPendingInteractionStatus;
+      interactionError?: string;
     }
   | {
       id: string;
       kind: "approval";
       request: ApprovalRequest;
+      resolved?: boolean;
+      decision?: "approved" | "denied";
+      denyReason?: string;
+      interactionStatus?: ChatPendingInteractionStatus;
+      interactionError?: string;
     }
   | {
       id: string;
       kind: "error";
       content: string;
       code?: string;
+      /** Links error row to the turn snapshot for Retry. */
+      turnId?: string;
     };
+
+export type ChatPendingInteractionStatus =
+  | "waiting"
+  | "submitting"
+  | "resolved"
+  | "failed";
+
+export type ChatPendingInteractionState = {
+  requestId: string;
+  turnId: string;
+  type: "clarify" | "approval";
+  status: ChatPendingInteractionStatus;
+  error?: string;
+};
 
 export type ChatAttachmentState = {
   id: string;
@@ -109,4 +132,5 @@ export type ChatControllerState = {
   lastError: string | null;
   /** Monotonic seq for correlating late events with the current run generation. */
   runGeneration: number;
+  pendingInteraction: ChatPendingInteractionState | null;
 };

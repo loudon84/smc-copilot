@@ -1,36 +1,45 @@
 import { useCallback, useRef, useState } from "react";
+import type { ChatTurnRequestSnapshot } from "../controller/chatTurnSnapshot";
 
-export type QueuedChatMessage = {
+export type QueuedChatTurn = {
   id: string;
-  text: string;
+  snapshot: ChatTurnRequestSnapshot;
   enqueuedAt: number;
 };
 
 /**
- * Simple FIFO queue for messages typed while a run is still streaming.
+ * FIFO queue of full turn snapshots (text + attachments + context).
  */
 export function useChatQueue(): {
-  queue: QueuedChatMessage[];
-  enqueue: (text: string) => void;
-  dequeue: () => QueuedChatMessage | undefined;
+  queue: QueuedChatTurn[];
+  enqueue: (snapshot: ChatTurnRequestSnapshot) => void;
+  dequeue: () => QueuedChatTurn | undefined;
   clear: () => void;
-  peek: () => QueuedChatMessage | undefined;
+  peek: () => QueuedChatTurn | undefined;
 } {
-  const [queue, setQueue] = useState<QueuedChatMessage[]>([]);
+  const [queue, setQueue] = useState<QueuedChatTurn[]>([]);
   const idRef = useRef(0);
 
-  const enqueue = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  const enqueue = useCallback((snapshot: ChatTurnRequestSnapshot) => {
+    const hasText = snapshot.rawText.trim().length > 0;
+    const hasAttachments = snapshot.attachments.length > 0;
+    if (!hasText && !hasAttachments) return;
     idRef.current += 1;
     setQueue((prev) => [
       ...prev,
-      { id: `q-${idRef.current}`, text: trimmed, enqueuedAt: Date.now() },
+      {
+        id: `q-${idRef.current}`,
+        snapshot: {
+          ...snapshot,
+          attachments: snapshot.attachments.map((a) => ({ ...a })),
+        },
+        enqueuedAt: Date.now(),
+      },
     ]);
   }, []);
 
-  const dequeue = useCallback((): QueuedChatMessage | undefined => {
-    let next: QueuedChatMessage | undefined;
+  const dequeue = useCallback((): QueuedChatTurn | undefined => {
+    let next: QueuedChatTurn | undefined;
     setQueue((prev) => {
       if (prev.length === 0) return prev;
       next = prev[0];
@@ -41,7 +50,7 @@ export function useChatQueue(): {
 
   const clear = useCallback(() => setQueue([]), []);
 
-  const peek = useCallback((): QueuedChatMessage | undefined => queue[0], [queue]);
+  const peek = useCallback((): QueuedChatTurn | undefined => queue[0], [queue]);
 
   return { queue, enqueue, dequeue, clear, peek };
 }

@@ -6,7 +6,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ChatSubmitInput } from "@shared/chat-runtime/chat-runtime-contract";
+import type {
+  ChatSubmitInput,
+  ChatRuntimeCommand,
+  ChatRuntimeCommandDraft,
+} from "@shared/chat-runtime/chat-runtime-contract";
 import type { ChatRuntimeEvent } from "@shared/chat-runtime/chat-runtime-events";
 import {
   CHAT_TURN_NON_TERMINAL_EVENTS,
@@ -17,7 +21,7 @@ import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
 import type { ChatFilesPort } from "../ports/ChatFilesPort";
 import type { ChatModelsPort } from "../ports/ChatModelsPort";
 import { useChatEvents } from "../hooks/useChatEvents";
-import { useChatQueue } from "../hooks/useChatQueue";
+import { useChatQueue, type QueuedChatTurn } from "../hooks/useChatQueue";
 import {
   chatReducer,
   createInitialChatState,
@@ -29,6 +33,10 @@ import {
   sessionMessagesToViewItems,
 } from "./chatHistoryMapper";
 import { chatRuntimeEventToActions } from "./chatRuntimeEventReducer";
+import {
+  createTurnSnapshot,
+  type ChatTurnRequestSnapshot,
+} from "./chatTurnSnapshot";
 import type {
   ChatAttachmentState,
   ChatControllerState,
@@ -41,34 +49,32 @@ export type UseChatControllerOptions = {
   files?: ChatFilesPort;
   navigation?: ChatNavigationPort;
   profileId: string;
-  /**
-   * Session id used once on mount to hydrate history.
-   * Runtime session binding must NOT flow back through this prop.
-   */
   initialSessionId?: string | null;
-  /** @deprecated Use initialSessionId — kept briefly for call-site migration. */
+  /** @deprecated Use initialSessionId */
   forcedSessionId?: string | null;
   runId?: string;
   expertId?: string;
   teamId?: string;
   expertRunId?: string;
+  skillName?: string;
   workMode?: string;
   permissionMode?: "default" | "ask_each_time";
+  promptHintMode?: "auto" | "custom" | "disabled";
   invocationSource?: ChatSubmitInput["invocationSource"];
-  /** Called when Hermes assigns / confirms a session id (null on New Chat). */
   onSessionIdChange?: (sessionId: string | null) => void;
-  /** Optional draft restored when this controller mounts for a run. */
   initialDraft?: string;
-  /** Draft text sync for workspace persistence — always cleared on submit. */
   onDraftChange?: (draft: string) => void;
-  /** Optional prompt rewriter (Work Expert/Skill hint). */
   composeMessage?: (raw: string) => string | Promise<string>;
 };
 
 export type SubmitPayload = {
   text: string;
   attachments?: ChatAttachmentState[];
-  source?: "composer" | "queue" | "retry" | "edit";
+  source?: "composer" | "queue" | "retry" | "retry_current" | "edit";
+  /** When replaying a snapshot, preserve its frozen context. */
+  snapshot?: ChatTurnRequestSnapshot;
+  /** Skip appending user+assistant rows (already present). */
+  skipAppendUser?: boolean;
 };
 
 export type UseChatControllerResult = {
@@ -77,10 +83,14 @@ export type UseChatControllerResult = {
   setInput: (value: string) => void;
   commitInput: (value: string) => void;
   queueLength: number;
-  queue: Array<{ text: string }>;
-  /** Clears composer immediately, then submits. */
+  queue: QueuedChatTurn[];
+  lastTurnSnapshot: ChatTurnRequestSnapshot | null;
   submitComposer: () => Promise<void>;
   submitPayload: (payload: SubmitPayload) => Promise<void>;
+  submitRuntimeCommand: (command: ChatRuntimeCommandDraft) => Promise<void>;
+  retryLastTurn: () => Promise<void>;
+  editAndRetryLastTurn: () => void;
+  retryLastTurnWithCurrentContext: () => Promise<void>;
   /** @deprecated Prefer submitComposer / submitPayload. */
   send: (text?: string) => Promise<void>;
   abort: () => Promise<void>;
@@ -111,8 +121,10 @@ export function useChatController(
     expertId,
     teamId,
     expertRunId,
+    skillName,
     workMode,
     permissionMode,
+    promptHintMode,
     invocationSource = "default_chat",
     onSessionIdChange,
     onDraftChange,
@@ -155,6 +167,9 @@ export function useChatController(
   const runtimeBoundSessionIdRef = useRef<string | null>(null);
   const hydrateRequestIdRef = useRef(0);
   const activeTurnIdRef = useRef<string | null>(null);
+  const lastTurnSnapshotRef = useRef<ChatTurnRequestSnapshot | null>(null);
+  const [lastTurnSnapshot, setLastTurnSnapshot] =
+    useState<ChatTurnRequestSnapshot | null>(null);
 
   useEffect(() => {
     if (state.activeRunId !== runId) {
@@ -264,11 +279,13 @@ export function useChatController(
   useChatEvents(runtime, runId, onEvent);
 
   const submitMessage = useCallback(
-    async (rawText: string, turnId: string) => {
+    async (
+      rawText: string,
+      turnId: string,
+      snap: ChatTurnRequestSnapshot,
+    ) => {
       const current = stateRef.current;
-      const text = composeMessage
-        ? await composeMessage(rawText)
-        : rawText;
+      const text = snap.effectiveText || rawText;
       const history = historyForSubmit(current.messages);
       const historyWithoutCurrentUser =
         history.length > 0 &&
@@ -280,26 +297,27 @@ export function useChatController(
       const result = await runtime.submit({
         runId,
         turnId,
-        profileId,
-        sessionId: current.activeSessionId || undefined,
+        profileId: snap.profileId,
+        sessionId: snap.sessionId || undefined,
         message: text,
         history: historyWithoutCurrentUser,
-        attachments: current.attachments.map((a) => ({
+        attachments: snap.attachments.map((a) => ({
           id: a.id,
           name: a.name,
           mime_type: a.mimeType,
           size_bytes: a.sizeBytes,
           storage_path: a.path,
         })),
-        model: current.selectedModelId
-          ? { modelId: current.selectedModelId }
-          : undefined,
-        expertId,
-        teamId,
-        expertRunId,
-        workMode,
-        permissionMode,
-        invocationSource,
+        model: snap.modelId ? { modelId: snap.modelId } : undefined,
+        expertId: snap.expertId,
+        teamId: snap.teamId,
+        expertRunId: snap.expertRunId,
+        workMode: snap.workMode,
+        permissionMode: snap.permissionMode as
+          | "default"
+          | "ask_each_time"
+          | undefined,
+        invocationSource: snap.invocationSource,
       });
 
       if (result.ok && result.sessionId) {
@@ -313,56 +331,140 @@ export function useChatController(
             type: "FAIL",
             error: result.error,
             code: result.errorCode,
+            turnId,
           });
         }
       }
     },
+    [runtime, runId, bindSession],
+  );
+
+  const buildSnapshot = useCallback(
+    (
+      rawText: string,
+      effectiveText: string,
+      attachments: ChatAttachmentState[],
+      turnId: string,
+      overrides?: Partial<ChatTurnRequestSnapshot>,
+    ): ChatTurnRequestSnapshot => {
+      const current = stateRef.current;
+      return createTurnSnapshot({
+        turnId,
+        rawText,
+        effectiveText,
+        attachments,
+        sessionId: current.activeSessionId,
+        profileId,
+        modelId: current.selectedModelId,
+        expertId,
+        teamId,
+        expertRunId,
+        skillName,
+        workMode,
+        permissionMode,
+        invocationSource,
+        promptHintMode,
+        ...overrides,
+      });
+    },
     [
-      composeMessage,
-      runtime,
-      runId,
       profileId,
       expertId,
       teamId,
       expertRunId,
+      skillName,
       workMode,
       permissionMode,
       invocationSource,
-      bindSession,
+      promptHintMode,
     ],
   );
 
   const submitPayload = useCallback(
     async (payload: SubmitPayload) => {
-      const text = payload.text.trim();
-      const attachmentOverride = payload.attachments;
+      const fromSnap = payload.snapshot;
+      const text = (fromSnap?.rawText ?? payload.text).trim();
+      const attachmentOverride =
+        fromSnap?.attachments ?? payload.attachments;
       const hasAttachments =
         (attachmentOverride?.length ?? stateRef.current.attachments.length) > 0;
       if (!text && !hasAttachments) return;
 
-      // Transaction: clear composer + draft synchronously before network work
       commitInput("");
-      if (attachmentOverride) {
-        dispatch({ type: "SET_ATTACHMENTS", attachments: attachmentOverride });
-      }
 
       const busy = isBusyRunState(stateRef.current.runState);
       if (busy && payload.source !== "queue") {
-        enqueue(text || "(attachments)");
+        const queueSnap =
+          fromSnap ??
+          buildSnapshot(
+            text,
+            text,
+            attachmentOverride ?? stateRef.current.attachments,
+            `queued-${Date.now()}`,
+          );
+        enqueue(queueSnap);
         dispatch({ type: "SET_ATTACHMENTS", attachments: [] });
         return;
       }
 
-      const turnId = newTurnId();
+      const turnId = fromSnap?.turnId?.startsWith("queued-")
+        ? newTurnId()
+        : fromSnap && payload.source === "retry"
+          ? newTurnId()
+          : newTurnId();
       activeTurnIdRef.current = turnId;
-      // Invalidate any in-flight hydrate when a turn begins
       hydrateRequestIdRef.current += 1;
+
+      const attachmentSource =
+        attachmentOverride ?? stateRef.current.attachments;
+
+      let effectiveText = text;
+      if (composeMessage && payload.source !== "retry") {
+        effectiveText = await composeMessage(text);
+      } else if (fromSnap?.effectiveText) {
+        effectiveText = fromSnap.effectiveText;
+      }
+
+      const snap = createTurnSnapshot({
+        ...(fromSnap ??
+          buildSnapshot(text, effectiveText, attachmentSource, turnId)),
+        turnId,
+        rawText: text,
+        effectiveText:
+          payload.source === "retry_current"
+            ? composeMessage
+              ? await composeMessage(text)
+              : text
+            : effectiveText,
+        attachments: attachmentSource,
+        modelId:
+          payload.source === "retry_current"
+            ? stateRef.current.selectedModelId
+            : (fromSnap?.modelId ?? stateRef.current.selectedModelId),
+        expertId:
+          payload.source === "retry_current" ? expertId : fromSnap?.expertId ?? expertId,
+        teamId:
+          payload.source === "retry_current" ? teamId : fromSnap?.teamId ?? teamId,
+        workMode:
+          payload.source === "retry_current"
+            ? workMode
+            : fromSnap?.workMode ?? workMode,
+        permissionMode:
+          payload.source === "retry_current"
+            ? permissionMode
+            : fromSnap?.permissionMode ?? permissionMode,
+        skillName:
+          payload.source === "retry_current"
+            ? skillName
+            : fromSnap?.skillName ?? skillName,
+      });
+
+      lastTurnSnapshotRef.current = snap;
+      setLastTurnSnapshot(snap);
 
       const userId = `user-${Date.now()}`;
       const agentId = `agent-${runId}-${Date.now()}`;
-      const attachmentSource =
-        attachmentOverride ?? stateRef.current.attachments;
-      const attachmentPayload = attachmentSource.map((a) => ({
+      const attachmentPayload = snap.attachments.map((a) => ({
         id: a.id,
         name: a.name,
         mime: a.mime || a.mimeType || "application/octet-stream",
@@ -374,40 +476,55 @@ export function useChatController(
       }));
 
       dispatch({ type: "BEGIN_TURN", turnId });
-      dispatch({
-        type: "APPEND_MESSAGES",
-        messages: [
-          {
-            id: userId,
-            kind: "user",
-            content: text,
-            attachments: attachmentPayload.length
-              ? attachmentPayload
-              : undefined,
-          },
-          { id: agentId, kind: "assistant", content: "", pending: true },
-        ],
-      });
-      dispatch({
-        type: "UPSERT_STREAMING_ASSISTANT",
-        id: agentId,
-        content: "",
-        append: false,
-      });
+      if (!payload.skipAppendUser) {
+        dispatch({
+          type: "APPEND_MESSAGES",
+          messages: [
+            {
+              id: userId,
+              kind: "user",
+              content: text,
+              attachments: attachmentPayload.length
+                ? attachmentPayload
+                : undefined,
+            },
+            { id: agentId, kind: "assistant", content: "", pending: true },
+          ],
+        });
+        dispatch({
+          type: "UPSERT_STREAMING_ASSISTANT",
+          id: agentId,
+          content: "",
+          append: false,
+        });
+      }
       dispatch({ type: "SET_ATTACHMENTS", attachments: [] });
 
       try {
-        await submitMessage(text, turnId);
+        await submitMessage(text, turnId, snap);
       } catch (err) {
         if (stateRef.current.activeTurnId === turnId) {
           dispatch({
             type: "FAIL",
             error: err instanceof Error ? err.message : String(err),
+            turnId,
           });
         }
       }
     },
-    [commitInput, enqueue, runId, submitMessage],
+    [
+      commitInput,
+      enqueue,
+      runId,
+      submitMessage,
+      buildSnapshot,
+      composeMessage,
+      expertId,
+      teamId,
+      workMode,
+      permissionMode,
+      skillName,
+    ],
   );
 
   const submitComposer = useCallback(async () => {
@@ -425,6 +542,76 @@ export function useChatController(
     [submitComposer, submitPayload],
   );
 
+  const submitRuntimeCommand = useCallback(
+    async (command: ChatRuntimeCommandDraft) => {
+      const turnId =
+        command.turnId ||
+        stateRef.current.activeTurnId ||
+        activeTurnIdRef.current;
+      if (!turnId || !runtime.command) {
+        dispatch({
+          type: "INTERACTION_FAILED",
+          requestId: command.requestId,
+          error: "No active turn for interaction command",
+        });
+        return;
+      }
+      const interactionType =
+        command.type === "clarify.respond" ? "clarify" : "approval";
+      dispatch({
+        type: "INTERACTION_SUBMIT",
+        requestId: command.requestId,
+        turnId,
+        interactionType,
+      });
+      const result = await runtime.command({
+        ...command,
+        runId,
+        turnId,
+        sessionId: stateRef.current.activeSessionId || undefined,
+      } as ChatRuntimeCommand);
+      if (!result.ok) {
+        dispatch({
+          type: "INTERACTION_FAILED",
+          requestId: command.requestId,
+          error: result.error,
+        });
+      }
+      // resolved events arrive via onEvent
+    },
+    [runtime, runId],
+  );
+
+  const retryLastTurn = useCallback(async () => {
+    const snap = lastTurnSnapshotRef.current;
+    if (!snap) return;
+    await submitPayload({
+      text: snap.rawText,
+      snapshot: snap,
+      source: "retry",
+    });
+  }, [submitPayload]);
+
+  const editAndRetryLastTurn = useCallback(() => {
+    const snap = lastTurnSnapshotRef.current;
+    if (!snap) return;
+    commitInput(snap.rawText);
+    dispatch({ type: "SET_ATTACHMENTS", attachments: snap.attachments });
+    if (snap.modelId) {
+      dispatch({ type: "SET_MODEL", modelId: snap.modelId });
+    }
+  }, [commitInput]);
+
+  const retryLastTurnWithCurrentContext = useCallback(async () => {
+    const snap = lastTurnSnapshotRef.current;
+    if (!snap) return;
+    await submitPayload({
+      text: snap.rawText,
+      snapshot: snap,
+      source: "retry_current",
+    });
+  }, [submitPayload]);
+
   // Drain queue when idle / terminal
   useEffect(() => {
     const idle =
@@ -436,7 +623,11 @@ export function useChatController(
     const next = dequeue();
     if (!next) return;
     drainLockRef.current = true;
-    void submitPayload({ text: next.text, source: "queue" }).finally(() => {
+    void submitPayload({
+      text: next.snapshot.rawText,
+      snapshot: next.snapshot,
+      source: "queue",
+    }).finally(() => {
       drainLockRef.current = false;
     });
   }, [state.runState, dequeue, submitPayload]);
@@ -522,9 +713,14 @@ export function useChatController(
     setInput,
     commitInput,
     queueLength: queue.length,
-    queue: queue.map((q) => ({ text: q.text })),
+    queue,
+    lastTurnSnapshot,
     submitComposer,
     submitPayload,
+    submitRuntimeCommand,
+    retryLastTurn,
+    editAndRetryLastTurn,
+    retryLastTurnWithCurrentContext,
     send,
     abort,
     reset,

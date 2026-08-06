@@ -107,6 +107,34 @@ export function chatRuntimeEventToActions(
     case "usage":
       return [{ type: "SET_USAGE", usage: event.usage }];
 
+    case "clarify.resolved":
+      return [
+        {
+          type: "INTERACTION_RESOLVED",
+          requestId: event.requestId,
+          answer: event.answer,
+        },
+      ];
+
+    case "approval.resolved":
+      return [
+        {
+          type: "INTERACTION_RESOLVED",
+          requestId: event.requestId,
+          decision: event.decision,
+          reason: event.reason,
+        },
+      ];
+
+    case "interaction.failed":
+      return [
+        {
+          type: "INTERACTION_FAILED",
+          requestId: event.requestId,
+          error: event.error.message,
+        },
+      ];
+
     case "completed":
       return [{ type: "COMPLETE_STREAM", sessionId: event.sessionId }];
 
@@ -116,6 +144,7 @@ export function chatRuntimeEventToActions(
           type: "FAIL",
           error: event.error.message,
           code: event.error.code,
+          turnId: event.turnId,
         },
       ];
 

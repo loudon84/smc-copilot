@@ -8,31 +8,33 @@ type ClarifyMsg = Extract<ChatViewItem, { kind: "clarify" }>;
 
 interface ClarifyCardProps {
   msg: ClarifyMsg;
-  onResolved: (requestId: string, answer: string) => void;
+  onSubmit: (requestId: string, answer: string) => void;
+  onRetry?: (requestId: string, answer: string) => void;
 }
 
 /**
- * Inline clarify card — answers go through Host → chatRuntime.command,
- * never window.hermesAPI from Chat Core.
+ * Inline clarify card — answers go through Host → chatRuntime.command.
+ * Resolved only after Main emits clarify.resolved (not on invoke alone).
  */
 export const ClarifyCard = memo(function ClarifyCard({
   msg,
-  onResolved,
+  onSubmit,
+  onRetry,
 }: ClarifyCardProps): React.JSX.Element {
   const { t } = useI18n();
   const [text, setText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const resolved = !!msg.resolved;
+  const [lastAnswer, setLastAnswer] = useState(msg.answer || "");
+  const status =
+    msg.interactionStatus || (msg.resolved ? "resolved" : "waiting");
+  const submitting = status === "submitting";
+  const failed = status === "failed";
+  const resolved = !!msg.resolved || status === "resolved";
   const choices = msg.request.choices || [];
 
   const submit = (answer: string): void => {
     if (resolved || submitting) return;
-    setSubmitting(true);
-    try {
-      onResolved(msg.request.requestId, answer);
-    } finally {
-      setSubmitting(false);
-    }
+    setLastAnswer(answer);
+    onSubmit(msg.request.requestId, answer);
   };
 
   if (resolved) {
@@ -51,7 +53,7 @@ export const ClarifyCard = memo(function ClarifyCard({
   const hasChoices = choices.length > 0;
 
   return (
-    <div className="chat-clarify">
+    <div className="chat-clarify" data-testid="clarify-card">
       <div className="chat-clarify-question">
         {msg.request.question || t("chat.clarify.defaultQuestion")}
       </div>
@@ -91,7 +93,7 @@ export const ClarifyCard = memo(function ClarifyCard({
             disabled={submitting || !text.trim()}
             onClick={() => submit(text)}
           >
-            {t("chat.clarify.submit")}
+            {submitting ? "…" : t("chat.clarify.submit")}
           </button>
         </div>
       )}
@@ -103,6 +105,22 @@ export const ClarifyCard = memo(function ClarifyCard({
       >
         {t("chat.clarify.skip")}
       </button>
+      {failed ? (
+        <div className="chat-interaction-error">
+          {msg.interactionError || "Command failed"}
+          {onRetry ? (
+            <button
+              type="button"
+              className="chat-error-action"
+              onClick={() =>
+                onRetry(msg.request.requestId, lastAnswer || text)
+              }
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 });

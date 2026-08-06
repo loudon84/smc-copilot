@@ -14,6 +14,7 @@ import type { ChatFileRef } from "@renderer/modules/chat/ports/ChatFilesPort";
 import { SessionFilesPanel } from "@renderer/modules/chat/components/session-files/SessionFilesPanel";
 import { FilePreviewPanel } from "@renderer/modules/chat/components/files/preview/FilePreviewPanel";
 import { useFilePreview } from "@renderer/modules/chat/hooks/files/useFilePreview";
+import { useSessionFilesSummary } from "@renderer/modules/chat/hooks/useSessionFilesSummary";
 import { ChatRunHeader } from "@renderer/modules/chat/components/header/ChatRunHeader";
 import { ChatRunStatus } from "@renderer/modules/chat/components/header/ChatRunStatus";
 import { WorkContextChip } from "@renderer/modules/chat/components/composer/WorkContextChip";
@@ -117,6 +118,11 @@ export function AiosCopilotChatHost({
     },
     [onPatchRun, run.presentation.previewMaximized, run.runId],
   );
+
+  const filesSummary = useSessionFilesSummary({
+    sessionId,
+    profileId,
+  });
 
   const [composerInput, setComposerInput] = useState(
     run.presentation.draft || "",
@@ -312,8 +318,10 @@ export function AiosCopilotChatHost({
       expertId={run.context.expertId}
       teamId={run.context.teamId}
       expertRunId={run.execution.expertRunId}
+      skillName={run.context.skillName}
       workMode={run.context.workMode}
       permissionMode={run.context.permissionMode}
+      promptHintMode={run.presentation.promptHint?.mode}
       invocationSource={run.execution.invocationSource}
       composeMessage={composeMessage}
       onInputChange={handleInputChange}
@@ -322,30 +330,6 @@ export function AiosCopilotChatHost({
         onPatchRun(run.runId, { identity: { sessionId: id } });
       }}
       onControllerStateChange={handleControllerState}
-      onRuntimeCommand={(command) => {
-        const runId = run.runId;
-        if (command.type === "clarify.respond") {
-          void aiosChatRuntimeAdapter.command?.({
-            type: "clarify.respond",
-            runId,
-            requestId: command.requestId,
-            answer: command.answer || "",
-          });
-        } else if (command.type === "approval.approve") {
-          void aiosChatRuntimeAdapter.command?.({
-            type: "approval.approve",
-            runId,
-            requestId: command.requestId,
-          });
-        } else {
-          void aiosChatRuntimeAdapter.command?.({
-            type: "approval.deny",
-            runId,
-            requestId: command.requestId,
-            reason: command.reason,
-          });
-        }
-      }}
       activeExpertSlot={
         showWorkControls ? (
           <ChatRunHeader
@@ -370,7 +354,7 @@ export function AiosCopilotChatHost({
       )}
       composerControlsSlot={composerControls}
       sessionFilesActive={sessionFilesVisible}
-      sessionFilesCount={0}
+      sessionFilesCount={filesSummary.total}
       onToggleSessionFiles={() => setSessionFilesVisible((v) => !v)}
       showRightPanel={showRightPanel}
       filesPanelSlot={

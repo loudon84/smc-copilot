@@ -34,6 +34,14 @@ Composer submit clears Input/Draft immediately. Terminal turn state is monotonic
 
 See [[domain/chat#Session hydrate vs bind]], [[domain/chat#Turn lifecycle]], [[domain/chat#Composer submit transaction]], [[domain/chat#Floating rail]].
 
+## Chat interaction loop (v8.0.5)
+
+Clarify/Approval commands require `runId`+`turnId`+`requestId` and resolve only on Main events.
+
+Gateway bridge uses structured follow-up messages; never fake success. Cross-turn or stale request commands are rejected (`TURN_MISMATCH` / `REQUEST_*`). Queue/Retry keep full turn snapshots including attachments and expert/model. Session Files badge listens to `chat-files:changed` (not hardcoded).
+
+See [[domain/chat#Interaction loop (Clarify / Approval)]], [[domain/chat#Turn snapshot queue and retry]], [[domain/chat#Session files live summary]], [[file-platform#Chat files changed events]], [[session-file-context#Session Files Panel]].
+
 ## Chat workspace per-run state (v8.0.3)
 
 Each Chat Run owns Session/Expert/Skill/WorkMode in `ChatRunRecord`; do not share them via `HermesWorkspaceContext`.

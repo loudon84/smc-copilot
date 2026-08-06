@@ -22,10 +22,15 @@ import {
   migratePersistedDraftAttachments,
   removePersistedSessionFile,
 } from "./chat-files-session-store";
+import { emitChatFilesChanged } from "./chat-files-event-emitter";
 
 export { CHAT_FILES_CHANNELS };
 
 const DRAFT_SESSION = "draft";
+
+function profileKey(profile: string | undefined): string {
+  return profile?.trim() || "default";
+}
 
 export function registerChatFilesIpc(): void {
   ipcMain.handle(
@@ -38,7 +43,7 @@ export function registerChatFilesIpc(): void {
   ipcMain.handle(
     CHAT_FILES_CHANNELS.uploadPaths,
     async (
-      _e,
+      event,
       payload: { profile?: string; session_id: string; file_paths: string[] },
     ) => {
       const res = await pickAndUploadHermesAttachments({
@@ -55,6 +60,14 @@ export function registerChatFilesIpc(): void {
         category: "attachment" as const,
       }));
       appendPersistedSessionFiles(payload.profile, payload.session_id, listed);
+      for (const f of listed) {
+        emitChatFilesChanged(event.sender, {
+          profileId: profileKey(payload.profile),
+          sessionId: payload.session_id,
+          reason: "uploaded",
+          fileId: f.id,
+        });
+      }
       return { files: listed };
     },
   );
@@ -62,7 +75,7 @@ export function registerChatFilesIpc(): void {
   ipcMain.handle(
     CHAT_FILES_CHANNELS.uploadBuffers,
     async (
-      _e,
+      event,
       payload: {
         profile?: string;
         session_id: string;
@@ -83,15 +96,36 @@ export function registerChatFilesIpc(): void {
         category: "attachment" as const,
       }));
       appendPersistedSessionFiles(payload.profile, payload.session_id, listed);
+      for (const f of listed) {
+        emitChatFilesChanged(event.sender, {
+          profileId: profileKey(payload.profile),
+          sessionId: payload.session_id,
+          reason: "uploaded",
+          fileId: f.id,
+        });
+      }
       return { files: listed };
     },
   );
 
   ipcMain.handle(
     CHAT_FILES_CHANNELS.remove,
-    async (_e, profile: string | undefined, fileId: string, sessionId?: string) => {
+    async (
+      event,
+      profile: string | undefined,
+      fileId: string,
+      sessionId?: string,
+    ) => {
       await removeHermesAttachment(profile, fileId);
       removePersistedSessionFile(profile, fileId, sessionId);
+      if (sessionId) {
+        emitChatFilesChanged(event.sender, {
+          profileId: profileKey(profile),
+          sessionId,
+          reason: "removed",
+          fileId,
+        });
+      }
       return { ok: true as const };
     },
   );
@@ -145,7 +179,7 @@ export function registerChatFilesIpc(): void {
   ipcMain.handle(
     "chat-files:migrate-draft",
     (
-      _e,
+      event,
       payload: { profile?: string; draftSessionId?: string; sessionId: string },
     ) => {
       const files = migratePersistedDraftAttachments(
@@ -153,6 +187,11 @@ export function registerChatFilesIpc(): void {
         payload.draftSessionId || DRAFT_SESSION,
         payload.sessionId,
       );
+      emitChatFilesChanged(event.sender, {
+        profileId: profileKey(payload.profile),
+        sessionId: payload.sessionId,
+        reason: "draft_migrated",
+      });
       return { files };
     },
   );

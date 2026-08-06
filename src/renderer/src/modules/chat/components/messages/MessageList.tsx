@@ -4,6 +4,7 @@ import { MessageRow } from "./MessageRow";
 import { HermesAvatar, type AgentAvatarInfo } from "./HermesAvatar";
 import { ReasoningRow, ToolActivityGroup } from "./HistoryRows";
 import { ClarifyCard } from "../clarify/ClarifyCard";
+import { ApprovalCard } from "../approval/ApprovalCard";
 import { ChatEmptyState } from "../empty/ChatEmptyState";
 import { getPromptAnchorId } from "../navigator/promptNavigatorUtils";
 
@@ -38,10 +39,13 @@ type Props = {
     suggestions?: Array<{ text: string; label?: string }>;
   };
   onClarifyAnswer?: (requestId: string, answer: string) => void;
-  onApproval?: (requestId: string, approve: boolean) => void;
+  onApproval?: (requestId: string, approve: boolean, reason?: string) => void;
   onSelectSuggestion?: (text: string) => void;
   onRetry?: (text: string) => void;
   onEditRetry?: (text: string) => void;
+  onRetryWithCurrentContext?: (text: string) => void;
+  onClarifyRetry?: (requestId: string, answer: string) => void;
+  onApprovalRetry?: (requestId: string) => void;
   pendingClarifyRequestId?: string | null;
   pendingApprovalRequestId?: string | null;
 };
@@ -87,6 +91,9 @@ export const MessageList = memo(function MessageList({
   onSelectSuggestion,
   onRetry,
   onEditRetry,
+  onRetryWithCurrentContext,
+  onClarifyRetry,
+  onApprovalRetry,
   pendingClarifyRequestId,
   pendingApprovalRequestId,
 }: Props): React.JSX.Element {
@@ -168,8 +175,11 @@ export const MessageList = memo(function MessageList({
         <ClarifyCard
           key={msg.id}
           msg={msg}
-          onResolved={(requestId, answer) =>
+          onSubmit={(requestId, answer) =>
             onClarifyAnswer?.(requestId, answer)
+          }
+          onRetry={(requestId, answer) =>
+            onClarifyRetry?.(requestId, answer)
           }
         />,
       );
@@ -177,31 +187,17 @@ export const MessageList = memo(function MessageList({
     }
 
     if (msg.kind === "approval") {
-      const requestId = msg.request.requestId;
       rows.push(
         <div key={msg.id} className="chat-message chat-message-agent">
           <HermesAvatar agent={agentAvatar} />
-          <div className="chat-bubble chat-bubble-agent approval-card">
-            <div className="message-content">
-              <strong>{msg.request.toolName}</strong>: {msg.request.summary}
-            </div>
-            <div className="approval-actions chat-approval-bar">
-              <button
-                type="button"
-                className="chat-approval-btn chat-approve"
-                onClick={() => onApproval?.(requestId, true)}
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                className="chat-approval-btn chat-deny"
-                onClick={() => onApproval?.(requestId, false)}
-              >
-                Deny
-              </button>
-            </div>
-          </div>
+          <ApprovalCard
+            msg={msg}
+            onApprove={(requestId) => onApproval?.(requestId, true)}
+            onDeny={(requestId, reason) =>
+              onApproval?.(requestId, false, reason)
+            }
+            onRetry={(requestId) => onApprovalRetry?.(requestId)}
+          />
         </div>,
       );
       continue;
@@ -235,6 +231,13 @@ export const MessageList = memo(function MessageList({
                   onClick={() => onEditRetry?.(lastUserText)}
                 >
                   Edit and retry
+                </button>
+                <button
+                  type="button"
+                  className="chat-error-action"
+                  onClick={() => onRetryWithCurrentContext?.(lastUserText)}
+                >
+                  Retry with current context
                 </button>
                 <button
                   type="button"

@@ -24,6 +24,8 @@ import { resolveFileCategory, resolveMime } from "../file-category";
 import { nowIso, toManagedFileView } from "../file-metadata";
 import { agentOutputError } from "./agent-output-errors";
 import { emitFileDomainEvent } from "../file-domain-events";
+import { BrowserWindow } from "electron";
+import { emitChatFilesChanged } from "../../chat-files-event-emitter";
 import {
   createGeneratedFileName,
   resolveUniqueFileName,
@@ -235,6 +237,16 @@ export async function createFromMessage(
     sessionId,
     role: "agent-output",
   });
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    emitChatFilesChanged(win.webContents, {
+      profileId: profileId || "default",
+      sessionId,
+      reason: "agent_output_created",
+      fileId,
+    });
+  }
 
   const stored = getManagedFile(profileId, fileId) ?? managed;
   return {

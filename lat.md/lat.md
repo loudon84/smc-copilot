@@ -20,8 +20,8 @@ Top-level concept files in this folder. Start with architecture and decisions, t
 - [[decisions]] — Cross-cutting design decisions and invariants
 - [[domain]] — Product domains (profiles, gateway, chat, auth, install, MCP, Web Operator)
 - [[file-platform]] — Chat managed-file platform (parse, preview, jobs, security)
-- [[session-file-context]] — Session file context builder, FTS chunking, Session Files panel
-- [[chat-commands]] — Slash command routing (local vs gateway)
+- [[session-file-context]] — Session file context builder, FTS chunking, Session Files panel + live badge
+- [[chat-commands]] — Slash command routing (local vs gateway); runtime Clarify/Approval is under [[domain/chat]]
 - [[file-ui-components]] — Chat file preview and document action UI
 - [[chat-performance]] — Composer performance constraints
 - [[prompt-navigator]] — Conversation prompt navigator concept

@@ -1,10 +1,19 @@
-/** v8.0 Chat Runtime — per-run abort handle registry. */
+/** v8.0 Chat Runtime — per-run abort + interaction handle registry. */
+
+import type { PendingInteraction } from "./chat-interaction-registry";
 
 export type ChatRunHandle = {
   abort: () => void;
   profileId: string;
   sessionId?: string;
+  /** Active turn for command validation (v8.0.5). */
+  turnId?: string;
   startedAt: number;
+  /** Pending clarify/approval for the active turn. */
+  pendingInteractions: Map<string, PendingInteraction>;
+  respondClarify?(requestId: string, answer: string): Promise<void>;
+  approve?(requestId: string): Promise<void>;
+  deny?(requestId: string, reason?: string): Promise<void>;
 };
 
 const activeRuns = new Map<string, ChatRunHandle>();
@@ -31,11 +40,26 @@ export function setActiveRun(runId: string, handle: ChatRunHandle): void {
       /* best effort */
     }
   }
+  if (!handle.pendingInteractions) {
+    handle.pendingInteractions = new Map();
+  }
   activeRuns.set(runId, handle);
 }
 
 export function clearActiveRun(runId: string): void {
   activeRuns.delete(runId);
+}
+
+export function patchActiveRun(
+  runId: string,
+  patch: Partial<
+    Pick<ChatRunHandle, "turnId" | "sessionId" | "respondClarify" | "approve" | "deny">
+  >,
+): ChatRunHandle | undefined {
+  const run = activeRuns.get(runId);
+  if (!run) return undefined;
+  Object.assign(run, patch);
+  return run;
 }
 
 /** Abort one run when given its id; with no id abort all (legacy fallback). */

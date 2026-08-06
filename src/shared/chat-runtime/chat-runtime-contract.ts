@@ -1,4 +1,4 @@
-/** v8.0 Chat Runtime — shared submit / model / attachment contracts. */
+/** v8.0 Chat Runtime — shared submit / model / attachment / command contracts. */
 
 export type ChatInvocationSource =
   | "default_chat"
@@ -68,28 +68,76 @@ export type ChatAbortInput = {
   runId: string;
 };
 
+/** v8.0.5 — commands are turn-scoped. */
+export type ChatRuntimeCommandBase = {
+  runId: string;
+  turnId: string;
+  requestId: string;
+  sessionId?: string;
+};
+
 export type ChatRuntimeCommand =
+  | (ChatRuntimeCommandBase & {
+      type: "clarify.respond";
+      answer: string;
+    })
+  | (ChatRuntimeCommandBase & {
+      type: "approval.approve";
+    })
+  | (ChatRuntimeCommandBase & {
+      type: "approval.deny";
+      reason?: string;
+    });
+
+/**
+ * Controller / UI draft — runId filled by host; turnId defaults to active turn.
+ * Do not use `Omit<ChatRuntimeCommand, …>` (union Omit collapses payload fields).
+ */
+export type ChatRuntimeCommandDraft =
   | {
       type: "clarify.respond";
-      runId: string;
       requestId: string;
       answer: string;
+      turnId?: string;
+      sessionId?: string;
     }
   | {
       type: "approval.approve";
-      runId: string;
       requestId: string;
+      turnId?: string;
+      sessionId?: string;
     }
   | {
       type: "approval.deny";
-      runId: string;
       requestId: string;
       reason?: string;
+      turnId?: string;
+      sessionId?: string;
     };
 
+export type ChatRuntimeCommandErrorCode =
+  | "RUN_NOT_FOUND"
+  | "TURN_MISMATCH"
+  | "REQUEST_NOT_FOUND"
+  | "REQUEST_ALREADY_RESOLVED"
+  | "INVALID_STATE"
+  | "GATEWAY_UNSUPPORTED"
+  | "COMMAND_FAILED"
+  | "INVALID_INPUT";
+
 export type ChatRuntimeCommandResult =
-  | { ok: true }
-  | { ok: false; error: string };
+  | {
+      ok: true;
+      runId: string;
+      turnId: string;
+      requestId: string;
+      acceptedAt: number;
+    }
+  | {
+      ok: false;
+      code: ChatRuntimeCommandErrorCode;
+      error: string;
+    };
 
 export const CHAT_RUNTIME_CHANNELS = {
   submit: "chat-runtime:submit",

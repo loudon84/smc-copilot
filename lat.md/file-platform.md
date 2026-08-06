@@ -52,6 +52,12 @@ Cleanup removes orphaned managed files and expired job artifacts according to re
 
 [[src/main/chat-files/platform/file-domain-events.ts#emitFileDomainEvent]] broadcasts path-free `FileDomainEvent`s to Main subscribers and Renderer windows for live UI updates.
 
+## Chat files changed events
+
+Session Files Badge and summary hooks listen to a dedicated lightweight channel, separate from full `FileDomainEvent` payloads.
+
+[[src/main/chat-files/chat-files-event-emitter.ts#emitChatFilesChanged]] sends `chat-files:changed` with [[src/shared/chat-files/chat-files-events.ts#ChatFilesChangedEvent]] (`uploaded` / `removed` / `context_added` / `context_removed` / `agent_output_created` / `draft_migrated`). Emit sites: `chat-files:*` IPC, context add/remove in [[src/main/chat-files/platform/register-file-ipc.ts#registerFilesIpcHandlers]], and agent-output create. Preload: `window.chatFiles.onChanged`. Concept: [[domain/chat#Session files live summary]].
+
 ## AgentOutputService
 
 Captures agent-produced output files into the managed store so Session Files / Agent Output UI can list and preview them safely.

@@ -36,9 +36,27 @@ export type ChatControllerAction =
   | { type: "UPSERT_TOOL_EVENT"; item: ChatViewItem }
   | { type: "APPEND_CLARIFY"; item: ChatViewItem }
   | { type: "APPEND_APPROVAL"; item: ChatViewItem }
+  | {
+      type: "INTERACTION_SUBMIT";
+      requestId: string;
+      turnId: string;
+      interactionType: "clarify" | "approval";
+    }
+  | {
+      type: "INTERACTION_RESOLVED";
+      requestId: string;
+      answer?: string;
+      decision?: "approved" | "denied";
+      reason?: string;
+    }
+  | {
+      type: "INTERACTION_FAILED";
+      requestId: string;
+      error: string;
+    }
   | { type: "SET_USAGE"; usage: ChatUsage }
   | { type: "COMPLETE_STREAM"; sessionId?: string }
-  | { type: "FAIL"; error: string; code?: string }
+  | { type: "FAIL"; error: string; code?: string; turnId?: string }
   | { type: "CANCEL" }
   | { type: "CLEAR_ERROR" };
 
@@ -57,6 +75,7 @@ export function createInitialChatState(runId: string): ChatControllerState {
     runState: "idle",
     lastError: null,
     runGeneration: 0,
+    pendingInteraction: null,
   };
 }
 
@@ -183,6 +202,7 @@ export function chatReducer(
         usage: null,
         runState: "streaming",
         lastError: null,
+        pendingInteraction: null,
       };
 
     case "SET_RUN_STATE":
@@ -322,17 +342,122 @@ export function chatReducer(
       if (rejectIfTerminal(state)) return state;
       return {
         ...state,
-        messages: [...state.messages, action.item],
+        messages: [
+          ...state.messages,
+          action.item.kind === "clarify"
+            ? { ...action.item, interactionStatus: "waiting" as const }
+            : action.item,
+        ],
         runState: "waiting_clarify",
+        pendingInteraction:
+          action.item.kind === "clarify"
+            ? {
+                requestId: action.item.request.requestId,
+                turnId: state.activeTurnId || "",
+                type: "clarify",
+                status: "waiting",
+              }
+            : state.pendingInteraction,
       };
 
     case "APPEND_APPROVAL":
       if (rejectIfTerminal(state)) return state;
       return {
         ...state,
-        messages: [...state.messages, action.item],
+        messages: [
+          ...state.messages,
+          action.item.kind === "approval"
+            ? { ...action.item, interactionStatus: "waiting" as const }
+            : action.item,
+        ],
         runState: "waiting_approval",
+        pendingInteraction:
+          action.item.kind === "approval"
+            ? {
+                requestId: action.item.request.requestId,
+                turnId: state.activeTurnId || "",
+                type: "approval",
+                status: "waiting",
+              }
+            : state.pendingInteraction,
       };
+
+    case "INTERACTION_SUBMIT":
+      return {
+        ...state,
+        pendingInteraction: {
+          requestId: action.requestId,
+          turnId: action.turnId,
+          type: action.interactionType,
+          status: "submitting",
+        },
+        messages: state.messages.map((m) => {
+          if (m.kind === "clarify" && m.request.requestId === action.requestId) {
+            return { ...m, interactionStatus: "submitting" as const };
+          }
+          if (m.kind === "approval" && m.request.requestId === action.requestId) {
+            return { ...m, interactionStatus: "submitting" as const };
+          }
+          return m;
+        }),
+      };
+
+    case "INTERACTION_RESOLVED": {
+      const nextMessages = state.messages.map((m) => {
+        if (m.kind === "clarify" && m.request.requestId === action.requestId) {
+          return {
+            ...m,
+            resolved: true,
+            answer: action.answer,
+            interactionStatus: "resolved" as const,
+            interactionError: undefined,
+          };
+        }
+        if (m.kind === "approval" && m.request.requestId === action.requestId) {
+          return {
+            ...m,
+            resolved: true,
+            decision: action.decision,
+            denyReason: action.reason,
+            interactionStatus: "resolved" as const,
+            interactionError: undefined,
+          };
+        }
+        return m;
+      });
+      return {
+        ...state,
+        messages: nextMessages,
+        pendingInteraction: null,
+        runState: "streaming",
+      };
+    }
+
+    case "INTERACTION_FAILED": {
+      return {
+        ...state,
+        pendingInteraction: state.pendingInteraction
+          ? {
+              ...state.pendingInteraction,
+              status: "failed",
+              error: action.error,
+            }
+          : null,
+        messages: state.messages.map((m) => {
+          if (
+            (m.kind === "clarify" || m.kind === "approval") &&
+            m.request.requestId === action.requestId
+          ) {
+            return {
+              ...m,
+              interactionStatus: "failed" as const,
+              interactionError: action.error,
+            };
+          }
+          return m;
+        }),
+      };
+    }
 
     case "SET_USAGE":
       if (rejectIfTerminal(state)) return state;
@@ -351,6 +476,7 @@ export function chatReducer(
         toolProgress: null,
         runState: "completed",
         lastError: null,
+        pendingInteraction: null,
       };
 
     case "FAIL":
@@ -363,12 +489,14 @@ export function chatReducer(
             kind: "error",
             content: action.error,
             code: action.code,
+            turnId: action.turnId ?? state.activeTurnId ?? undefined,
           },
         ],
         streamingMessageId: null,
         toolProgress: null,
         runState: "failed",
         lastError: action.error,
+        pendingInteraction: null,
       };
 
     case "CANCEL":
@@ -378,6 +506,7 @@ export function chatReducer(
         streamingMessageId: null,
         toolProgress: null,
         runState: "cancelled",
+        pendingInteraction: null,
       };
 
     case "CLEAR_ERROR":

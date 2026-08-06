@@ -50,11 +50,23 @@ import {
   setActiveRun,
 } from "./chat-runtime-manager";
 import {
+  createPendingApproval,
+  createPendingClarify,
+  validatePendingInteraction,
+} from "./chat-interaction-registry";
+import {
+  createHermesChatCommandAdapter,
+  HermesChatCommandFailedError,
+  HermesChatCommandUnsupportedError,
+} from "./hermes-chat-command-adapter";
+import {
   finalizeSessionReconcile,
   startSessionReconcile,
   stopAllSessionReconciles,
   stopSessionReconcile,
 } from "./chat-session-reconciler";
+
+const hermesCommandAdapter = createHermesChatCommandAdapter();
 
 function toHermesPayload(input: ChatSubmitInput): HermesChatSendPayload {
   return {
@@ -290,6 +302,48 @@ export function registerChatRuntimeIpc(
 
       let chatHandle: { abort: () => void } | null = null;
 
+      // Register before sendMessage so mid-stream clarify/approval can attach pending.
+      setActiveRun(runId, {
+        abort: () => {
+          if (finished || cancelled) return;
+          cancelled = true;
+          try {
+            chatHandle?.abort();
+          } catch {
+            /* best effort */
+          }
+          finishCancelled();
+        },
+        profileId: input.profileId,
+        sessionId: input.sessionId,
+        turnId,
+        startedAt: Date.now(),
+        pendingInteractions: new Map(),
+        respondClarify: async (requestId, answer) => {
+          await hermesCommandAdapter.respondClarify({
+            profileId: input.profileId,
+            sessionId: resolvedSessionId || input.sessionId,
+            requestId,
+            answer,
+          });
+        },
+        approve: async (requestId) => {
+          await hermesCommandAdapter.approve({
+            profileId: input.profileId,
+            sessionId: resolvedSessionId || input.sessionId,
+            requestId,
+          });
+        },
+        deny: async (requestId, reason) => {
+          await hermesCommandAdapter.deny({
+            profileId: input.profileId,
+            sessionId: resolvedSessionId || input.sessionId,
+            requestId,
+            reason,
+          });
+        },
+      });
+
       const handle = await sendMessage(
         payload.message,
         {
@@ -313,6 +367,8 @@ export function registerChatRuntimeIpc(
             if (finished || cancelled || !sessionId) return;
             resolvedSessionId = sessionId;
             migrateSessionModelBinding(requestSessionKey, sessionId, profile);
+            const run = getActiveRun(runId);
+            if (run) run.sessionId = sessionId;
             emitSessionStartedOnce(sessionId);
             ensureReconcile(sessionId);
           },
@@ -429,6 +485,13 @@ export function registerChatRuntimeIpc(
           },
           onClarifyRequested: (request) => {
             if (finished || cancelled) return;
+            const run = getActiveRun(runId);
+            if (run) {
+              run.pendingInteractions.set(
+                request.requestId,
+                createPendingClarify(request.requestId, turnId),
+              );
+            }
             emitTurnEvent({
               type: "clarify.requested",
               runId,
@@ -438,6 +501,17 @@ export function registerChatRuntimeIpc(
           },
           onApprovalRequested: (request) => {
             if (finished || cancelled) return;
+            const run = getActiveRun(runId);
+            if (run) {
+              run.pendingInteractions.set(
+                request.requestId,
+                createPendingApproval(
+                  request.requestId,
+                  turnId,
+                  request.toolName,
+                ),
+              );
+            }
             emitTurnEvent({
               type: "approval.requested",
               runId,
@@ -477,22 +551,6 @@ export function registerChatRuntimeIpc(
 
       chatHandle = handle;
 
-      setActiveRun(runId, {
-        abort: () => {
-          if (finished || cancelled) return;
-          cancelled = true;
-          try {
-            handle.abort();
-          } catch {
-            /* best effort */
-          }
-          finishCancelled();
-        },
-        profileId: input.profileId,
-        sessionId: input.sessionId,
-        startedAt: Date.now(),
-      });
-
       if (input.sessionId) {
         ensureReconcile(input.sessionId);
       }
@@ -518,20 +576,120 @@ export function registerChatRuntimeIpc(
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.command,
     async (
-      _event,
+      event: IpcMainInvokeEvent,
       command: import("../../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommand,
     ): Promise<
       import("../../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommandResult
     > => {
-      if (!command?.type || !command.runId?.trim() || !command.requestId?.trim()) {
-        return { ok: false, error: "Invalid chat-runtime command" };
+      if (
+        !command?.type ||
+        !command.runId?.trim() ||
+        !command.turnId?.trim() ||
+        !command.requestId?.trim()
+      ) {
+        return {
+          ok: false,
+          code: "INVALID_INPUT",
+          error: "runId, turnId, and requestId are required",
+        };
       }
-      // Clarify / approval responses are forwarded as follow-up chat messages
-      // when Hermes Gateway supports them; until then acknowledge and emit a
-      // synthesised message.delta so UI can continue.
-      const run = getActiveRun(command.runId);
-      void run;
-      return { ok: true as const };
+
+      const runId = command.runId.trim();
+      const turnId = command.turnId.trim();
+      const requestId = command.requestId.trim();
+      const run = getActiveRun(runId);
+      if (!run) {
+        return {
+          ok: false,
+          code: "RUN_NOT_FOUND",
+          error: `No active run ${runId}`,
+        };
+      }
+      if (run.turnId && run.turnId !== turnId) {
+        return {
+          ok: false,
+          code: "TURN_MISMATCH",
+          error: `Command turn ${turnId} does not match active turn ${run.turnId}`,
+        };
+      }
+
+      const expectKind =
+        command.type === "clarify.respond" ? "clarify" : "approval";
+      const pending = run.pendingInteractions.get(requestId);
+      const invalid = validatePendingInteraction({
+        pending,
+        commandTurnId: turnId,
+        commandType: command.type,
+        expectKind,
+      });
+      if (invalid) {
+        return {
+          ok: false,
+          code: invalid,
+          error: `Interaction invalid: ${invalid}`,
+        };
+      }
+
+      try {
+        if (command.type === "clarify.respond") {
+          await run.respondClarify?.(requestId, command.answer);
+          const entry = run.pendingInteractions.get(requestId);
+          if (entry) entry.resolved = true;
+          run.pendingInteractions.delete(requestId);
+          emitChatRuntimeEvent(event.sender, {
+            type: "clarify.resolved",
+            runId,
+            turnId,
+            requestId,
+            answer: command.answer,
+          });
+        } else if (command.type === "approval.approve") {
+          await run.approve?.(requestId);
+          run.pendingInteractions.delete(requestId);
+          emitChatRuntimeEvent(event.sender, {
+            type: "approval.resolved",
+            runId,
+            turnId,
+            requestId,
+            decision: "approved",
+          });
+        } else {
+          await run.deny?.(requestId, command.reason);
+          run.pendingInteractions.delete(requestId);
+          emitChatRuntimeEvent(event.sender, {
+            type: "approval.resolved",
+            runId,
+            turnId,
+            requestId,
+            decision: "denied",
+            reason: command.reason,
+          });
+        }
+      } catch (err) {
+        const code =
+          err instanceof HermesChatCommandUnsupportedError
+            ? "GATEWAY_UNSUPPORTED"
+            : err instanceof HermesChatCommandFailedError
+              ? "COMMAND_FAILED"
+              : "COMMAND_FAILED";
+        const message = err instanceof Error ? err.message : String(err);
+        emitChatRuntimeEvent(event.sender, {
+          type: "interaction.failed",
+          runId,
+          turnId,
+          requestId,
+          error: { code, message },
+        });
+        return { ok: false, code, error: message };
+      }
+
+      return {
+        ok: true,
+        runId,
+        turnId,
+        requestId,
+        acceptedAt: Date.now(),
+      };
     },
   );
 }

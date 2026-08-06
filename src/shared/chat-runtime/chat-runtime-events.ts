@@ -64,6 +64,22 @@ export type ChatRuntimeEvent =
       type: "approval.requested";
       request: ApprovalRequest;
     })
+  | (ChatRuntimeEventBase & {
+      type: "clarify.resolved";
+      requestId: string;
+      answer: string;
+    })
+  | (ChatRuntimeEventBase & {
+      type: "approval.resolved";
+      requestId: string;
+      decision: "approved" | "denied";
+      reason?: string;
+    })
+  | (ChatRuntimeEventBase & {
+      type: "interaction.failed";
+      requestId: string;
+      error: ChatRuntimeError;
+    })
   | (ChatRuntimeEventBase & { type: "usage"; usage: ChatUsage })
   | (ChatRuntimeEventBase & { type: "completed"; sessionId?: string })
   | (ChatRuntimeEventBase & { type: "failed"; error: ChatRuntimeError })
@@ -89,6 +105,9 @@ export const CHAT_TURN_NON_TERMINAL_EVENTS = new Set([
   "usage",
   "clarify.requested",
   "approval.requested",
+  "clarify.resolved",
+  "approval.resolved",
+  "interaction.failed",
 ]);
 
 export function isChatTurnTerminalEventType(type: string): boolean {

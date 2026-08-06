@@ -2,7 +2,7 @@
 
 Chat spans Local Hermes surfaces, Workspaces, and Web Operator panels. v8 Copilot Chat Module isolates concurrent turns by `runId`+`turnId` and persists files via `chatFiles`.
 
-Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat turn lifecycle (v8.0.4)]], [[decisions#Chat must not bypass Hermes MCP host mode]], [[decisions#Chat workspace per-run state (v8.0.3)]]. File platform detail: [[file-platform#File Platform]].
+Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat turn lifecycle (v8.0.4)]], [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Chat must not bypass Hermes MCP host mode]], [[decisions#Chat workspace per-run state (v8.0.3)]]. File platform detail: [[file-platform#File Platform]].
 
 ## Chat runtime isolation
 
@@ -10,7 +10,7 @@ Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat tur
 
 Abort must resolve cleanly so UI does not hang on cancelled turns. Session reconcile heals history after reconnects without mixing run streams. Decision: [[decisions#Chat runId isolation (v8)]].
 
-Shared wire contracts: [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatSubmitInput]] (required `turnId`) and [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEvent]] (every event carries `runId`+`turnId`). Main registration: [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]].
+Shared wire contracts: [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatSubmitInput]] (required `turnId`) and [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEvent]] (every event carries `runId`+`turnId`). Commands use [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommand]] / [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommandResult]] (required `runId`+`turnId`+`requestId`). Main registration: [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]]. Run handle fields: [[src/main/chat-runtime/chat-runtime-manager.ts#ChatRunHandle]] (`pendingInteractions`, `respondClarify` / `approve` / `deny`).
 
 ## Session hydrate vs bind
 
@@ -24,11 +24,31 @@ Every submit carries a `turnId`; Main and Controller ignore late non-terminal ev
 
 Controller `BEGIN_TURN` sets `activeTurnId` and clears per-turn usage. Event intake requires `event.runId` and `event.turnId` to match the active turn. Terminal guards use [[src/shared/chat-runtime/chat-runtime-events.ts#CHAT_TURN_NON_TERMINAL_EVENTS]] / [[src/shared/chat-runtime/chat-runtime-events.ts#isChatTurnTerminalEventType]]. Workspace [[src/renderer/src/modules/chat/workspace/chatWorkspaceReducer.ts#chatWorkspaceReducer]] resets `startedAt` on each busy entry; [[src/renderer/src/modules/chat/components/header/ChatRunStatus.tsx#ChatRunStatus]] refreshes duration every second.
 
+## Interaction loop (Clarify / Approval)
+
+Clarify and Approval cards must wait for Main-resolved events — never optimism from a successful `invoke` alone.
+
+UI drafts use [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommandDraft]]; Controller [[src/renderer/src/modules/chat/controller/useChatController.ts#useChatController]] `submitRuntimeCommand` fills `runId`/`turnId` and dispatches `INTERACTION_SUBMIT` / resolves only on events. Pending state lives on [[src/renderer/src/modules/chat/controller/chatViewTypes.ts#ChatPendingInteractionState]] + clarify/approval rows in [[src/renderer/src/modules/chat/controller/chatReducer.ts#chatReducer]].
+
+SSE `hermes.clarify.requested` / `hermes.approval.requested` register pending via [[src/main/chat-runtime/chat-interaction-registry.ts#createPendingClarify]] / [[src/main/chat-runtime/chat-interaction-registry.ts#createPendingApproval]]. [[src/main/chat-runtime/chat-interaction-registry.ts#validatePendingInteraction]] rejects turn/request/kind mismatches. [[src/main/chat-runtime/hermes-chat-command-adapter.ts#createHermesChatCommandAdapter]] prefers structured follow-up messages (`[[hermes.clarify.response]]` / `[[hermes.approval.response]]`); unsupported gateways return `GATEWAY_UNSUPPORTED` (no fake `ok: true`). Events: `clarify.resolved` / `approval.resolved` / `interaction.failed` on [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEvent]]. UI: [[src/renderer/src/modules/chat/components/clarify/ClarifyCard.tsx#ClarifyCard]], [[src/renderer/src/modules/chat/components/approval/ApprovalCard.tsx#ApprovalCard]] (high-risk confirm + deny reason). Distinct from slash routing in [[chat-commands#Chat Commands]]. Decision: [[decisions#Chat interaction loop (v8.0.5)]].
+
+## Turn snapshot queue and retry
+
+Busy sends enqueue a full [[src/renderer/src/modules/chat/controller/chatTurnSnapshot.ts#ChatTurnRequestSnapshot]] (text, attachments, model, expert/skill, work mode). Drain replays the snapshot into `runtime.submit`.
+
+[[src/renderer/src/modules/chat/controller/chatTurnSnapshot.ts#createTurnSnapshot]] builds the snapshot at `BEGIN_TURN`; busy enqueue uses [[src/renderer/src/modules/chat/hooks/useChatQueue.ts#useChatQueue]] (`QueuedChatTurn`). Retry APIs on the controller: `retryLastTurn` (exact snapshot), `editAndRetryLastTurn` (restore composer, no auto-send), `retryLastTurnWithCurrentContext` (original text+attachments, live model/expert). Avoid double-appending the same user row on replay. Decision: [[decisions#Chat interaction loop (v8.0.5)]].
+
+## Session files live summary
+
+Session Files badge `total` comes from [[src/renderer/src/modules/chat/hooks/useSessionFilesSummary.ts#useSessionFilesSummary]] (list + `chat-files:changed`), not a hardcoded `0`.
+
+Main emits via [[src/main/chat-files/chat-files-event-emitter.ts#emitChatFilesChanged]] after upload/remove/migrate/context/agent-output. Event shape: [[src/shared/chat-files/chat-files-events.ts#ChatFilesChangedEvent]]. Preload: `window.chatFiles.onChanged`. Host wires `sessionFilesCount` in [[src/renderer/src/screens/Hermes/pages/Chat/AiosCopilotChatHost.tsx#AiosCopilotChatHost]]. Badge and panel should share the same summary source — see [[session-file-context#Session Files Panel]] and [[file-platform#Chat files changed events]].
+
 ## Composer submit transaction
 
 Send must clear Input, Draft, and pending attachments synchronously before network work so switching Runs cannot restore the old prompt.
 
-[[src/renderer/src/modules/chat/controller/useChatController.ts#useChatController]] exposes `submitComposer` / `submitPayload` + `commitInput` / `onDraftChange`. [[src/renderer/src/modules/chat/components/composer/CopilotChatInput.tsx#CopilotChatInput]] calls `onSend()` with no text override. Failures do not auto-restore the prompt; message rows offer Retry / Edit and retry / Copy via [[src/renderer/src/modules/chat/components/messages/MessageList.tsx#MessageList]].
+[[src/renderer/src/modules/chat/controller/useChatController.ts#useChatController]] exposes `submitComposer` / `submitPayload` + `commitInput` / `onDraftChange`. When the run is busy, `submitPayload` enqueues a full turn snapshot instead of dropping attachments — see [[domain/chat#Turn snapshot queue and retry]]. [[src/renderer/src/modules/chat/components/composer/CopilotChatInput.tsx#CopilotChatInput]] calls `onSend()` with no text override. Failures do not auto-restore the prompt; message rows offer Retry / Edit and retry / Copy via [[src/renderer/src/modules/chat/components/messages/MessageList.tsx#MessageList]].
 
 ## Chat workspace per-run state
 
@@ -62,7 +82,7 @@ Expert/Skill/Permission/Gateway live in [[src/renderer/src/modules/chat/componen
 
 [[src/renderer/src/modules/chat/components/floating/ChatFloatingRail.tsx#ChatFloatingRail]] is a direct child of `chat-main` in [[src/renderer/src/modules/chat/components/ChatSurface.tsx#ChatSurface]], fixed on the right, outside the scroll and Composer.
 
-Prompt Navigator expands left from the rail (utils still in [[prompt-navigator#Conversation Prompt Navigator]]); Session Files uses [[src/renderer/src/modules/chat/components/floating/FloatingActionButton.tsx#FloatingActionButton]] with Folder + badge + active. Disabled when there is no session and no draft/session files. See also [[session-file-context#Session Files Panel]].
+Prompt Navigator expands left from the rail (utils still in [[prompt-navigator#Conversation Prompt Navigator]]); Session Files uses [[src/renderer/src/modules/chat/components/floating/FloatingActionButton.tsx#FloatingActionButton]] with Folder + badge + active. Badge count is live via [[domain/chat#Session files live summary]] — never hardcode `0`. Disabled when there is no session and no draft/session files. See also [[session-file-context#Session Files Panel]].
 
 ## Run tabs and titles
 

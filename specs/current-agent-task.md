@@ -1,18 +1,11 @@
-# Current Agent Task
+# Current Agent Task — Chat Interaction Loop v8.0.5
 
 ## Goal
-
-Implement PRD v8.0.2 Copilot Chat full integration across 5 phases.
+Implement PR1–PR4 from plan `chat_interaction_v805` (no Playwright E2E / no PR6 cleanup).
 
 ## Stages
-
-1. Phase 1 — Message model + full MessageList/MessageRow/HistoryRow/Clarify/Empty + Reasoning/Tool grouping
-2. Phase 2 — CopilotChatInput + ModelPicker + Ports (Command/Voice) + attachments
-3. Phase 3 — File Platform productionize + session files/preview panels + right panel tri-state
-4. Phase 4 — Work toolbar converge + Prompt Hint bind + PromptNavigator + multi Chat workspace
-5. Phase 5 — Cleanup source/_upstream + verify + docs + typecheck/test/build
-
-## Source of truth
-
-- `prd_work/v8.0.2_chat-full-integrated.md`
-- `.cursor/plans/chat_v8.0.2_full_integration_d3433200.plan.md`
+1. PR1 Runtime Command contract — done
+2. PR2 Hermes Interaction Bridge + Clarify/Approval UI — done
+3. PR3 Turn Snapshot / Queue / Retry — done
+4. PR4 Session Files Live Badge — done
+5. Vitest + typecheck/build + docs/lat — in progress

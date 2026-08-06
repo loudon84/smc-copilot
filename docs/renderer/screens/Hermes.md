@@ -21,6 +21,7 @@ src/renderer/src/screens/Hermes/
 - **v7.4.2 Chat-first Work Controls**：Chat 恢复默认入口与侧栏首位；`ComposerBar.workControlsSlot` 内嵌 `WorkComposerControls`（Expert / Skill / Permission / Gateway）；`WorkChatContextBar`；Send 双路径（Hermes SSE vs `workExpertGatewayApi.callExpertSkill`）；`tasks` / `workbench` 导航隐藏；`pages/Tasks/**` 源码保留不继续优化
 - **v8.0.3 Chat Workspace Layout**：`ChatRunRecord` per-run 隔离；单一 Header + Content Rail；Composer Context Chip；Tab 状态真实回传；`chat-workspace-state.v1` 持久化
 - **v8.0.4 Chat Turn Lifecycle**：`initialSessionId` 一次性 hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft；`turnId` 终态保护；右侧 `ChatFloatingRail`（Prompt Navigator + Session Files）
+- **v8.0.5 Chat Interaction Loop**：Clarify/Approval 真 Command（Follow-up Message）；Turn Snapshot Queue/Retry；Session Files Badge 走 `useSessionFilesSummary` + `chat-files:changed`（禁止硬编码 0）
 - **v7.4.1 Work 任务 Hotfix**（导航已由 v7.4.2 回退）：`pages/Tasks/` — `WorkTaskStartComposer`、`TaskWindow`、`work-tasks.json` 仍保留供遗留路径
 - **v1.4 Work 任务窗口**（已由 v7.4.1 取代主路径）：~~TaskStream mock SSE~~
 - 左栏 Sidebar：**三段分组**（主流程含 **chat**（默认）/ experts / expertTeams …；`tasks` / `workbench` **v7.4.2 隐藏**；能力管理 / 高级设置，后两组默认折叠）；**v1.3 Phase 6** `requiresGateway` 离线门控（disabled + tooltip）；窄栏仅显示主流程 icon
@@ -64,8 +65,10 @@ src/renderer/src/screens/Hermes/
 | `pages/Chat/ComposerBar.tsx` | **v7.4.2** `workControlsSlot` 插槽 |
 | `pages/Chat/HermesDefaultWebChatSurface.tsx` | Chat 主面 + Work 控件 + Send 双路径；支持 `forcedSessionId`（任务窗口遗留）；**默认引擎已切 Copilot** |
 | `pages/Chat/MultiRunChatShell.tsx` | **v8.0.3** 多 Run 壳：`ChatWorkspaceProvider` + Tabs + 保活 Host |
-| `pages/Chat/AiosCopilotChatHost.tsx` | **v8.0.4** Host props=`run/active/onPatchRun`；`initialDraft`；Session Files 经 Floating Rail；单一 `ChatRunHeader` |
-| `modules/chat/controller/useChatController.ts` | **v8.0.4** `initialSessionId` / `submitComposer` / `turnId` / 终态事件过滤 |
+| `pages/Chat/AiosCopilotChatHost.tsx` | **v8.0.5** Host props=`run/active/onPatchRun`；`sessionFilesCount`←`useSessionFilesSummary`；单一 `ChatRunHeader` |
+| `modules/chat/controller/useChatController.ts` | **v8.0.5** `submitRuntimeCommand` / Turn Snapshot Queue/Retry；**v8.0.4** hydrate / 清 Draft / turn 终态 |
+| `modules/chat/hooks/useSessionFilesSummary.ts` | **v8.0.5** list + `chatFiles.onChanged` 驱动 Badge `total` |
+| `modules/chat/components/approval/ApprovalCard.tsx` | **v8.0.5** Tool/Summary/Risk；high 二次确认；Deny reason |
 | `modules/chat/components/floating/ChatFloatingRail.tsx` | **v8.0.4** 右侧固定 Prompt Navigator + Session Files |
 | `modules/chat/workspace/ChatRunRecord.ts` | **v8.0.3** per-run Session/Expert/Skill/WorkMode/Model/draft 单一状态源 |
 | `modules/chat/workspace/chatWorkspaceReducer.ts` | **v8.0.3** open/close/patch/returnDefault/applyControllerSnapshot；`createdOrder` 保序 |

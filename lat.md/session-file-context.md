@@ -22,6 +22,8 @@ Renderer panel lists managed files for the current session, reacts to file domai
 
 In Copilot Chat, the open/close control is the Folder FAB on [[domain/chat#Floating rail]] (not Composer). The panel itself still renders in the right aside when active.
 
+v8.0.5 live badge counts use the same session scope as the panel: [[domain/chat#Session files live summary]] refreshes on `chat-files:changed` ([[src/shared/chat-files/chat-files-events.ts#ChatFilesChangedEvent]]) so FAB `total` and list stay aligned. Context add/remove under `files:*` also emit that channel — see [[file-platform#Chat files changed events]].
+
 ## Agent Output Section
 
 UI section listing agent output files associated with the session, with cards that open preview/actions through Preload file APIs.

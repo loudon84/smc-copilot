@@ -79,9 +79,12 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   onRuntimeCommand?: (command: {
     type: "clarify.respond" | "approval.approve" | "approval.deny";
     requestId: string;
+    turnId?: string;
     answer?: string;
     reason?: string;
   }) => void;
+  skillName?: string;
+  promptHintMode?: "auto" | "custom" | "disabled";
 };
 
 export function ChatSurface({
@@ -119,6 +122,8 @@ export function ChatSurface({
   onInputChange,
   onControllerStateChange,
   onRuntimeCommand,
+  skillName,
+  promptHintMode,
 }: ChatSurfaceProps): React.JSX.Element {
   const {
     state,
@@ -126,6 +131,10 @@ export function ChatSurface({
     setInput,
     submitComposer,
     submitPayload,
+    submitRuntimeCommand,
+    retryLastTurn,
+    editAndRetryLastTurn,
+    retryLastTurnWithCurrentContext,
     abort,
     openWeb,
     setSelectedModel,
@@ -145,8 +154,10 @@ export function ChatSurface({
     expertId,
     teamId,
     expertRunId,
+    skillName,
     workMode,
     permissionMode,
+    promptHintMode,
     invocationSource,
     onSessionIdChange,
     onDraftChange: onInputChange,
@@ -299,13 +310,11 @@ export function ChatSurface({
                 runId={state.activeRunId}
                 emptyContext={emptyContext}
                 onSelectSuggestion={handleSuggestion}
-                onRetry={(text) =>
-                  void submitPayload({ text, source: "retry" })
+                onRetry={() => void retryLastTurn()}
+                onEditRetry={() => editAndRetryLastTurn()}
+                onRetryWithCurrentContext={() =>
+                  void retryLastTurnWithCurrentContext()
                 }
-                onEditRetry={(text) => {
-                  setInput(text);
-                  onInputChange?.(text);
-                }}
                 pendingClarifyRequestId={
                   pendingClarify?.kind === "clarify"
                     ? pendingClarify.request.requestId
@@ -316,19 +325,43 @@ export function ChatSurface({
                     ? pendingApproval.request.requestId
                     : null
                 }
-                onClarifyAnswer={(requestId, answer) =>
-                  onRuntimeCommand?.({
+                onClarifyAnswer={(requestId, answer) => {
+                  void submitRuntimeCommand({
                     type: "clarify.respond",
                     requestId,
                     answer,
-                  })
-                }
-                onApproval={(requestId, approve) =>
-                  onRuntimeCommand?.({
-                    type: approve ? "approval.approve" : "approval.deny",
+                  });
+                }}
+                onClarifyRetry={(requestId, answer) => {
+                  void submitRuntimeCommand({
+                    type: "clarify.respond",
                     requestId,
-                  })
-                }
+                    answer,
+                  });
+                }}
+                onApproval={(requestId, approve, reason) => {
+                  void submitRuntimeCommand(
+                    approve
+                      ? { type: "approval.approve", requestId }
+                      : { type: "approval.deny", requestId, reason },
+                  );
+                }}
+                onApprovalRetry={(requestId) => {
+                  const pending = state.messages.find(
+                    (m) =>
+                      m.kind === "approval" &&
+                      m.request.requestId === requestId,
+                  );
+                  void submitRuntimeCommand(
+                    pending?.kind === "approval" && pending.decision === "denied"
+                      ? {
+                          type: "approval.deny",
+                          requestId,
+                          reason: pending.denyReason,
+                        }
+                      : { type: "approval.approve", requestId },
+                  );
+                }}
               />
             </ChatContentRail>
           </div>
@@ -361,7 +394,10 @@ export function ChatSurface({
               attachments={state.attachments}
               onAddAttachments={addAttachments}
               onRemoveAttachment={removeAttachment}
-              queue={queue}
+              queue={queue.map((q) => ({
+                text: q.snapshot.rawText,
+                attachmentsCount: q.snapshot.attachments.length,
+              }))}
               contextUsage={contextUsage}
               files={files}
               commands={commands}

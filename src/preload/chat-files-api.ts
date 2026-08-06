@@ -9,6 +9,10 @@ import {
   CHAT_FILES_CHANNELS,
   type ChatFilesListed,
 } from "../shared/chat-files/chat-files-ipc-channels";
+import {
+  CHAT_FILES_CHANGED_CHANNEL,
+  type ChatFilesChangedEvent,
+} from "../shared/chat-files/chat-files-events";
 import { chatFilesPlatformApi } from "./chat-files-platform-api";
 
 export type { ChatFilesListed };
@@ -189,6 +193,28 @@ export const chatFilesApi = {
     return chatFilesPlatformApi.getPreview(profile, fileId, {
       limit: options?.maxBytes,
     });
+  },
+
+  onChanged(
+    callback: (event: ChatFilesChangedEvent) => void,
+  ): () => void {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: unknown,
+    ): void => {
+      if (!payload || typeof payload !== "object") return;
+      const evt = payload as ChatFilesChangedEvent;
+      if (
+        typeof evt.profileId === "string" &&
+        typeof evt.sessionId === "string" &&
+        typeof evt.reason === "string"
+      ) {
+        callback(evt);
+      }
+    };
+    ipcRenderer.on(CHAT_FILES_CHANGED_CHANNEL, listener);
+    return () =>
+      ipcRenderer.removeListener(CHAT_FILES_CHANGED_CHANNEL, listener);
   },
 };
 

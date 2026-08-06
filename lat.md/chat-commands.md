@@ -2,7 +2,7 @@
 
 Slash-command handling for Copilot Chat: local desktop catalog via Ports, with optional Gateway-backed execution when adapters wire it.
 
-Composer integration: [[src/renderer/src/modules/chat/components/composer/CopilotChatInput.tsx]].
+Composer integration: [[src/renderer/src/modules/chat/components/composer/CopilotChatInput.tsx]]. Clarify/Approval runtime commands (`chat-runtime:command`) are **not** slash commands — see [[domain/chat#Interaction loop (Clarify / Approval)]].
 
 ## Slash command execution
 

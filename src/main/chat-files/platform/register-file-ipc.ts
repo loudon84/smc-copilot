@@ -2,7 +2,7 @@
  * Register `files:*` IPC handlers. Keep handlers thin — logic lives in FileService.
  */
 
-import type { IpcMain } from "electron";
+import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import {
   FILES_IPC_CHANNELS,
   type ClipboardFileInput,
@@ -10,6 +10,11 @@ import {
   type FilePickerOptions,
 } from "../../../shared/files";
 import { fileService } from "./file-service";
+import { emitChatFilesChanged } from "../chat-files-event-emitter";
+
+function profileOrDefault(profile?: string): string {
+  return profile?.trim() || "default";
+}
 
 /** Register `files:*` IPC handlers against the given ipcMain. */
 export function registerFilesIpcHandlers(ipcMain: IpcMain): void {
@@ -75,11 +80,27 @@ export function registerFilesIpcHandlers(ipcMain: IpcMain): void {
   );
   ipcMain.handle(
     FILES_IPC_CHANNELS.addToSessionContext,
-    (_e, input) => fileService.addToSessionContext(input),
+    async (event: IpcMainInvokeEvent, input) => {
+      await fileService.addToSessionContext(input);
+      emitChatFilesChanged(event.sender, {
+        profileId: profileOrDefault(input.profile),
+        sessionId: input.sessionId,
+        reason: "context_added",
+        fileId: input.fileId,
+      });
+    },
   );
   ipcMain.handle(
     FILES_IPC_CHANNELS.removeFromSessionContext,
-    (_e, input) => fileService.removeFromSessionContext(input),
+    async (event: IpcMainInvokeEvent, input) => {
+      await fileService.removeFromSessionContext(input);
+      emitChatFilesChanged(event.sender, {
+        profileId: profileOrDefault(input.profile),
+        sessionId: input.sessionId,
+        reason: "context_removed",
+        fileId: input.fileId,
+      });
+    },
   );
   ipcMain.handle(
     FILES_IPC_CHANNELS.searchSessionFiles,

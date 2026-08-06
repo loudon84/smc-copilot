@@ -244,32 +244,33 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 ---
 
-## Chat Runtime（v8.0 / v8.0.1 runId 隔离 · v8.0.4 turnId）
+## Chat Runtime（v8.0 / v8.0.1 runId · v8.0.4 turnId · v8.0.5 Command）
 
 **Preload**：`window.chatRuntime`（`src/preload/chat-runtime-api.ts`）  
-**Main**：`src/main/chat-runtime/`（`activeRuns` Map；abort 走互斥 `finishCompleted` / `finishFailed` / `finishCancelled`；与 legacy `hermes-chat:send-message` / 全局 `chat-*` **并存**供灰度）  
+**Main**：`src/main/chat-runtime/`（`activeRuns` Map；`chat-interaction-registry` + `hermes-chat-command-adapter`；abort 走互斥 finish；与 legacy `hermes-chat:*` **并存**供灰度）  
 **契约**：`src/shared/chat-runtime/`
 
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
 | `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / **`turnId`** / `profileId` / `invocationSource`；可选 `permissionMode` 独立于 `workMode`） | `ChatSubmitResult`（含同一 `turnId`） | 复用 `hermes.sendMessage` + expert-run-bridge；事件带同一 `runId`+`turnId`；必带 `history`；`session.started` 每 turn 至多一次 |
 | `chat-runtime:abort` | invoke | `ChatAbortInput \| string`（`runId`） | `{ ok: boolean }` | **仅**取消指定 run；无 id 时 abort all；**保证** submit Promise resolve |
-| `chat-runtime:command` | invoke | `ChatRuntimeCommand`（`clarify.respond` / `approval.approve` / `approval.deny`） | `ChatRuntimeCommandResult` | v8.0.1 Clarify / Approval 响应 |
+| `chat-runtime:command` | invoke | `ChatRuntimeCommand`（必含 `runId`+**`turnId`**+`requestId`；`clarify.respond` / `approval.approve` / `approval.deny`） | `ChatRuntimeCommandResult`（ok 含 `acceptedAt`；失败 `code`：`RUN_NOT_FOUND` / `TURN_MISMATCH` / `REQUEST_NOT_FOUND` / `REQUEST_ALREADY_RESOLVED` / `INVALID_STATE` / `GATEWAY_UNSUPPORTED` / `COMMAND_FAILED` / `INVALID_INPUT`） | **v8.0.5** 登记 pending → Hermes Follow-up Message；**禁止**假 `ok: true`；跨 turn 拒绝 |
 
-**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent` 判别联合（每事件必含 `runId` + **`turnId`**：`session.started` / `message.delta` / `reasoning.delta` / `tool.progress` / `tool.event` / `clarify.requested` / `approval.requested` / `usage` / `completed` / `failed` / `cancelled`）；终态后同 turn 非终态事件丢弃；Preload `chatRuntime.onEvent(cb)` 返回 unsubscribe。SSE 识别 `hermes.session.started` / `hermes.reasoning.delta` / `hermes.tool.event` / `hermes.clarify.requested` / `hermes.approval.requested` 等。
+**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent`（每事件必含 `runId`+**`turnId`**：既有流事件 + **`clarify.resolved` / `approval.resolved` / `interaction.failed`**）；终态后同 turn 非终态事件丢弃；Preload `chatRuntime.onEvent(cb)` 返回 unsubscribe。SSE 入站 `hermes.clarify.requested` / `hermes.approval.requested` 时登记 pending。
 
-**Renderer**：`modules/chat/controller`（`initialSessionId` hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft）+ ports + `adapters/aios/*`；入口 `HermesDefaultChatPage` → `AiosCopilotChatHost`；浮动层 `ChatFloatingRail`；多会话 `ChatWorkspaceProvider`。
+**Renderer**：`modules/chat/controller`（Turn Snapshot Queue/Retry；`submitRuntimeCommand` 等 `*.resolved`）；`ClarifyCard` / `ApprovalCard`；入口 `AiosCopilotChatHost`；`ChatFloatingRail`。
 
 ---
 
-## Chat Files（v8.0.1 persisted index + v8.0.2 File Platform）
+## Chat Files（v8.0.1 index · v8.0.2 File Platform · v8.0.5 changed）
 
-**Preload**：`window.chatFiles`（`src/preload/chat-files-api.ts`）— **不**扩展 `hermesAPI.files`；完整 File Platform 挂在 `window.chatFiles.platform`（`HermesFilesAPI` / `files:*`）  
+**Preload**：`window.chatFiles`（`src/preload/chat-files-api.ts`）— **不**扩展 `hermesAPI.files`；完整 File Platform 挂在 `window.chatFiles.platform`（`HermesFilesAPI` / `files:*`）；**v8.0.5** `chatFiles.onChanged(cb)` → unsubscribe  
 **Main**：
 - `chat-files:*` — `src/main/chat-files/chat-files-ipc.ts` + `chat-files-session-store.ts`（持久化 `~/.hermes/desktop/chat-files-index.json`；Hermes 附件桥）
 - `files:*` — `src/main/chat-files/platform/register-file-ipc.ts` → `file-service.ts`（完整 pick/import/parse/preview/context/FTS）
+- `chat-files-event-emitter.ts` — upload/remove/migrate/context/agent-output 后 emit
 
-**Shared**：`src/shared/chat-files/`（`src/shared/files` 为兼容 re-export）
+**Shared**：`src/shared/chat-files/`（含 `chat-files-events.ts` / `ChatFilesChangedEvent`）
 
 ### `chat-files:*`（Hermes 附件 + 持久化 index）
 
@@ -284,6 +285,7 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 | `chat-files:save-managed-as` | `fileId`, `suggestedName?` | `{ ok, path? }` |
 | `chat-files:save-local-path-as` | `filePath`, `suggestedName?` | `{ ok, path? }` |
 | `chat-files:migrate-draft` | `{ profile?, draftSessionId?, sessionId }` | `{ files }` |
+| `chat-files:changed` | event（Main → Renderer） | `ChatFilesChangedEvent`（`profileId`/`sessionId`/`reason`/`fileId?`；reason：`uploaded`/`removed`/`context_added`/`context_removed`/`agent_output_created`/`draft_migrated`） |
 
 ### `files:*`（File Platform — `FILES_IPC_CHANNELS`）
 
