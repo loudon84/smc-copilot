@@ -1,15 +1,15 @@
 # Current Agent State
 
-- current_stage: done
-- setup-specs: completed
-- pr1-event-driven: completed
-- pr2-durable-store: completed
-- pr3-continuation: completed
-- pr4-ledger-retry-queue: completed
-- pr5-recovery-diagnostics: completed
-- verify-docs: completed
+- current_stage: verify-docs-811
+- setup-specs-811: done
+- pr1-interaction-correctness: done
+- pr2-profile-store: done
+- pr3-snapshot-recovery: done
+- pr4-queue-retry-ui: done
+- pr5-diagnostics-governance: done
+- pr6-electron-e2e: done
+- verify-docs-811: done
 - last_updated: 2026-08-06
 - notes: >
-  v8.1.0 Durable Chat Runtime PR1–PR5 complete.
-  typecheck + chat vitest suites green.
-  Deferred: Playwright E2E (PR6), deprecated API cleanup (PR7).
+  v8.1.1 Durable Runtime Integration Closure PR1–PR6 complete.
+  Deferred: PR7 Deprecated API cleanup / Cutover.

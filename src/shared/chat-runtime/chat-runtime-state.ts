@@ -103,6 +103,7 @@ export type DurableChatTurnSummary = {
 
 export type ChatRuntimeRecoverInput = {
   runId?: string;
+  profileId?: string;
 };
 
 export type ChatRuntimeRecoverResult =
@@ -115,3 +116,54 @@ export type ChatRuntimeRecoverResult =
       code: string;
       error: string;
     };
+
+/** v8.1.1 — snapshot for renderer recovery after reload. */
+export type ChatRuntimeSnapshotEvent = {
+  eventId: string;
+  runId: string;
+  turnId: string;
+  sequence: number;
+  type: string;
+  emittedAt: number;
+  payloadJson: string;
+};
+
+export type ChatRuntimeSnapshot = {
+  runId: string;
+  profileId: string;
+  run: DurableChatRunState | null;
+  turns: DurableChatTurnSummary[];
+  pendingInteractions: PendingInteractionRecord[];
+  queue: DurableChatQueueEntry[];
+  events: ChatRuntimeSnapshotEvent[];
+  lastEventSequence: number;
+  truncated: boolean;
+};
+
+export type ChatRuntimeGetSnapshotInput = {
+  runId: string;
+  profileId?: string;
+  afterSequence?: number;
+  maxEvents?: number;
+};
+
+export type ChatRuntimeGetSnapshotResult =
+  | { ok: true; snapshot: ChatRuntimeSnapshot }
+  | { ok: false; code: string; error: string };
+
+export type ChatRuntimeReplayEventsInput = {
+  runId: string;
+  profileId?: string;
+  afterSequence: number;
+  turnId?: string;
+  limit?: number;
+};
+
+export type ChatRuntimeReplayEventsResult =
+  | {
+      ok: true;
+      events: ChatRuntimeSnapshotEvent[];
+      truncated: boolean;
+      lastSequence: number;
+    }
+  | { ok: false; code: string; error: string };

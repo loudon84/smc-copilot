@@ -13,6 +13,10 @@ import type {
   ChatRuntimeGetStateResult,
   ChatRuntimeRecoverInput,
   ChatRuntimeRecoverResult,
+  ChatRuntimeGetSnapshotInput,
+  ChatRuntimeGetSnapshotResult,
+  ChatRuntimeReplayEventsInput,
+  ChatRuntimeReplayEventsResult,
 } from "@shared/chat-runtime/chat-runtime-state";
 import type { ChatDiagnosticsExport } from "@shared/chat-runtime/chat-runtime-trace";
 
@@ -36,11 +40,25 @@ export const aiosChatRuntimeAdapter: ChatRuntimePort = {
   recover(input?: ChatRuntimeRecoverInput): Promise<ChatRuntimeRecoverResult> {
     return window.chatRuntime.recover(input);
   },
+  getSnapshot(
+    input: ChatRuntimeGetSnapshotInput,
+  ): Promise<ChatRuntimeGetSnapshotResult> {
+    return window.chatRuntime.getSnapshot(input);
+  },
+  replayEvents(
+    input: ChatRuntimeReplayEventsInput,
+  ): Promise<ChatRuntimeReplayEventsResult> {
+    return window.chatRuntime.replayEvents(input);
+  },
   exportDiagnostics(input: {
     runId: string;
   }): Promise<ChatDiagnosticsExport | { ok: false; error: string }> {
     return window.chatRuntime.exportDiagnostics(input);
   },
+  saveDiagnostics(input: { runId: string }) {
+    return window.chatRuntime.saveDiagnostics(input);
+  },
+  queue: window.chatRuntime.queue,
   onEvent(callback: (event: ChatRuntimeEvent) => void): () => void {
     return window.chatRuntime.onEvent(callback);
   },

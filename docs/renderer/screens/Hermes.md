@@ -21,6 +21,7 @@ src/renderer/src/screens/Hermes/
 - **v7.4.2 Chat-first Work Controls**：Chat 恢复默认入口与侧栏首位；`ComposerBar.workControlsSlot` 内嵌 `WorkComposerControls`（Expert / Skill / Permission / Gateway）；`WorkChatContextBar`；Send 双路径（Hermes SSE vs `workExpertGatewayApi.callExpertSkill`）；`tasks` / `workbench` 导航隐藏；`pages/Tasks/**` 源码保留不继续优化
 - **v8.0.3 Chat Workspace Layout**：`ChatRunRecord` per-run 隔离；单一 Header + Content Rail；Composer Context Chip；Tab 状态真实回传；`chat-workspace-state.v1` 持久化
 - **v8.0.4 Chat Turn Lifecycle**：`initialSessionId` 一次性 hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft；`turnId` 终态保护；右侧 `ChatFloatingRail`（Prompt Navigator + Session Files）
+- **v8.1.1 Durable Runtime Closure**：Continuation await completion + Native/Fallback 互斥；profile store；`ChatRuntimeRecoveryBridge`；Queue IPC；Error Card `retryTurn(turnId)`；Diagnostics Save Dialog；Playwright E2E
 - **v8.1.0 Durable Chat Runtime**：`chat-runtime:start` 事件驱动；durable `state.db`；Turn Ledger 精确 Retry；Queue reducer；Recovery/`getState`；Clarify/Approval 流式续跑
 - **v8.0.5 Chat Interaction Loop**：Clarify/Approval 真 Command（Follow-up Message）；Turn Snapshot Queue/Retry；Session Files Badge 走 `useSessionFilesSummary` + `chat-files:changed`（禁止硬编码 0）
 - **v7.4.1 Work 任务 Hotfix**（导航已由 v7.4.2 回退）：`pages/Tasks/` — `WorkTaskStartComposer`、`TaskWindow`、`work-tasks.json` 仍保留供遗留路径

@@ -41,9 +41,9 @@ type Props = {
   onClarifyAnswer?: (requestId: string, answer: string) => void;
   onApproval?: (requestId: string, approve: boolean, reason?: string) => void;
   onSelectSuggestion?: (text: string) => void;
-  onRetry?: (text: string) => void;
-  onEditRetry?: (text: string) => void;
-  onRetryWithCurrentContext?: (text: string) => void;
+  onRetry?: (turnId: string, text: string) => void;
+  onEditRetry?: (turnId: string, text: string) => void;
+  onRetryWithCurrentContext?: (turnId: string, text: string) => void;
   onClarifyRetry?: (requestId: string, answer: string) => void;
   onApprovalRetry?: (requestId: string) => void;
   pendingClarifyRequestId?: string | null;
@@ -221,21 +221,23 @@ export const MessageList = memo(function MessageList({
                 <button
                   type="button"
                   className="chat-error-action"
-                  onClick={() => onRetry?.(lastUserText)}
+                  onClick={() => onRetry?.(msg.turnId || "", lastUserText)}
                 >
                   Retry
                 </button>
                 <button
                   type="button"
                   className="chat-error-action"
-                  onClick={() => onEditRetry?.(lastUserText)}
+                  onClick={() => onEditRetry?.(msg.turnId || "", lastUserText)}
                 >
                   Edit and retry
                 </button>
                 <button
                   type="button"
                   className="chat-error-action"
-                  onClick={() => onRetryWithCurrentContext?.(lastUserText)}
+                  onClick={() =>
+                    onRetryWithCurrentContext?.(msg.turnId || "", lastUserText)
+                  }
                 >
                   Retry with current context
                 </button>

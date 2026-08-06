@@ -14,6 +14,11 @@ import type {
   ChatRuntimeGetStateResult,
   ChatRuntimeRecoverInput,
   ChatRuntimeRecoverResult,
+  ChatRuntimeGetSnapshotInput,
+  ChatRuntimeGetSnapshotResult,
+  ChatRuntimeReplayEventsInput,
+  ChatRuntimeReplayEventsResult,
+  DurableChatQueueEntry,
 } from "../shared/chat-runtime/chat-runtime-state";
 import type { ChatDiagnosticsExport } from "../shared/chat-runtime/chat-runtime-trace";
 
@@ -49,10 +54,87 @@ export const chatRuntimeApi = {
     return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.recover, input);
   },
 
+  getSnapshot(
+    input: ChatRuntimeGetSnapshotInput,
+  ): Promise<ChatRuntimeGetSnapshotResult> {
+    return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.getSnapshot, input);
+  },
+
+  replayEvents(
+    input: ChatRuntimeReplayEventsInput,
+  ): Promise<ChatRuntimeReplayEventsResult> {
+    return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.replayEvents, input);
+  },
+
   exportDiagnostics(
     input: { runId: string },
   ): Promise<ChatDiagnosticsExport | { ok: false; error: string }> {
     return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.exportDiagnostics, input);
+  },
+
+  saveDiagnostics(
+    input: { runId: string },
+  ): Promise<
+    { ok: true; path: string } | { ok: false; error: string; cancelled?: boolean }
+  > {
+    return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.saveDiagnostics, input);
+  },
+
+  queue: {
+    enqueue(input: {
+      runId: string;
+      profileId?: string;
+      snapshotJson: string;
+      position?: number;
+    }): Promise<{ ok: true; entry: DurableChatQueueEntry }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueEnqueue, input);
+    },
+    list(input: {
+      runId: string;
+      profileId?: string;
+    }): Promise<{
+      ok: true;
+      entries: DurableChatQueueEntry[];
+      autoDrain: boolean;
+    }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueList, input);
+    },
+    remove(input: {
+      queueId: string;
+      runId: string;
+      profileId?: string;
+    }): Promise<{ ok: true }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueRemove, input);
+    },
+    move(input: {
+      runId: string;
+      profileId?: string;
+      queueId: string;
+      toPosition: number;
+    }): Promise<{ ok: true; entries: DurableChatQueueEntry[] }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueMove, input);
+    },
+    markRunning(input: {
+      queueId: string;
+      runId: string;
+      profileId?: string;
+    }): Promise<{ ok: true }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueMarkRunning, input);
+    },
+    complete(input: {
+      queueId: string;
+      runId: string;
+      profileId?: string;
+      status?: "completed" | "failed" | "cancelled";
+    }): Promise<{ ok: true }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueComplete, input);
+    },
+    setAutoDrain(input: {
+      runId: string;
+      enabled: boolean;
+    }): Promise<{ ok: true; autoDrain: boolean }> {
+      return ipcRenderer.invoke(CHAT_RUNTIME_CHANNELS.queueSetAutoDrain, input);
+    },
   },
 
   onEvent(callback: (event: ChatRuntimeEvent) => void): () => void {

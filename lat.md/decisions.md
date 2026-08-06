@@ -46,9 +46,17 @@ See [[domain/chat#Interaction loop (Clarify / Approval)]], [[domain/chat#Turn sn
 
 Chat submit is event-driven (`chat-runtime:start` returns immediately). Durable run/turn/pending/queue live in profile `state.db`; transport handles are separate and may end without deleting pending interactions.
 
-Events carry `eventId`+`sequence`+`emittedAt`. Clarify/Approval continue via streaming session continuation. Turn Ledger binds Retry to specific turns (no duplicate user message). Recovery restores waiting cards after reload. Playwright E2E and deprecated cutover remain deferred.
+Events carry `eventId`+`sequence`+`emittedAt`. Clarify/Approval continue via streaming session continuation. Turn Ledger binds Retry to specific turns (no duplicate user message). Recovery restores waiting cards after reload.
 
 See [[domain/chat#Durable runtime (v8.1)]], [[domain/chat#Ordered runtime events]], [[domain/chat#Interaction continuation]], [[domain/chat#Recovery and diagnostics]], [[domain/chat#Turn snapshot queue and retry]], [[domain/chat#Chat runtime isolation]].
+
+## Durable Runtime Closure (v8.1.1)
+
+Production wiring closes v8.1 gaps: Interaction `resolved` only after continuation `completion`; Native vs Fallback are mutually exclusive; capability probe uses tri-state `supported|unsupported|unknown` (unknown must not invent continuation).
+
+Store is profile-routed via [[src/main/utils.ts#stateDbPathForProfile]] with transactional sequence allocate and UNIQUE(run,turn,sequence). Snapshot/replay IPC + RecoveryBridge rebuild UI; Queue IPC is Main-authoritative; Error Cards call `retryTurn(turnId)`; Diagnostics use Main Save Dialog with real `fileIds`. Playwright Electron harness lands; Deprecated cutover remains PR7.
+
+See [[domain/chat#Interaction continuation]], [[domain/chat#Recovery and diagnostics]], [[domain/chat#Turn snapshot queue and retry]].
 
 ## Chat workspace per-run state (v8.0.3)
 

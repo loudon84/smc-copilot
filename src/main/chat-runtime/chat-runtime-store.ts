@@ -1,10 +1,9 @@
 /**
- * v8.1 — Durable Chat Runtime SQLite store on profile state.db.
+ * v8.1.1 — Durable Chat Runtime SQLite store (profile-routed state.db).
  * Only CREATE TABLE IF NOT EXISTS — never mutates hermes-agent owned tables.
  */
 
 import type Database from "better-sqlite3";
-import { getDbConnection } from "../chat-files/platform/db";
 import type {
   ChatQueueEntryStatus,
   ChatTurnStatus,
@@ -14,15 +13,20 @@ import type {
   PendingInteractionRecord,
 } from "../../shared/chat-runtime/chat-runtime-state";
 import type { DurableChatRunStatus } from "../../shared/chat-runtime/chat-runtime-state";
+import {
+  getStoreDb,
+  isSchemaReady,
+  markSchemaReady,
+  normalizeProfileId,
+  __resetStoreRouterForTests,
+} from "./chat-runtime-store-router";
 
-let schemaReady = false;
-let schemaFailed = false;
-const memoryFallback = {
-  runs: new Map<string, DurableChatRunState>(),
-  turns: new Map<string, DurableChatTurnSummary>(),
-  interactions: new Map<string, PendingInteractionRecord>(),
-  queue: new Map<string, DurableChatQueueEntry>(),
-  events: [] as Array<{
+type MemoryBucket = {
+  runs: Map<string, DurableChatRunState>;
+  turns: Map<string, DurableChatTurnSummary>;
+  interactions: Map<string, PendingInteractionRecord>;
+  queue: Map<string, DurableChatQueueEntry>;
+  events: Array<{
     eventId: string;
     runId: string;
     turnId: string;
@@ -30,25 +34,32 @@ const memoryFallback = {
     type: string;
     emittedAt: number;
     payloadJson: string;
-  }>,
+  }>;
 };
 
-function getWritableDb(): Database.Database | null {
-  if (schemaFailed) return null;
-  try {
-    const db = getDbConnection(false);
-    if (!db) return null;
-    ensureSchema(db);
-    return db;
-  } catch (err) {
-    console.warn("[chat-runtime-store] Falling back to memory:", err);
-    schemaFailed = true;
-    return null;
+const memoryByProfile = new Map<string, MemoryBucket>();
+
+function memory(profileId: string): MemoryBucket {
+  const key = normalizeProfileId(profileId);
+  let bucket = memoryByProfile.get(key);
+  if (!bucket) {
+    bucket = {
+      runs: new Map(),
+      turns: new Map(),
+      interactions: new Map(),
+      queue: new Map(),
+      events: [],
+    };
+    memoryByProfile.set(key, bucket);
   }
+  return bucket;
 }
 
-function ensureSchema(db: Database.Database): void {
-  if (schemaReady) return;
+export function ensureChatRuntimeSchema(
+  db: Database.Database,
+  profileId: string,
+): void {
+  if (isSchemaReady(profileId)) return;
   db.exec(`
     CREATE TABLE IF NOT EXISTS chat_runtime_run (
       run_id TEXT PRIMARY KEY,
@@ -112,14 +123,28 @@ function ensureSchema(db: Database.Database): void {
       ON chat_pending_interaction(run_id);
     CREATE INDEX IF NOT EXISTS idx_chat_queue_run
       ON chat_queue_entry(run_id, position);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_runtime_event_seq
+      ON chat_runtime_event(run_id, turn_id, sequence);
   `);
-  schemaReady = true;
+  markSchemaReady(profileId);
+}
+
+function getWritableDb(profileId: string): Database.Database | null {
+  try {
+    const db = getStoreDb(profileId, false);
+    if (!db) return null;
+    ensureChatRuntimeSchema(db, profileId);
+    return db;
+  } catch (err) {
+    console.warn("[chat-runtime-store] Falling back to memory:", err);
+    return null;
+  }
 }
 
 export function upsertRun(state: DurableChatRunState): void {
-  const db = getWritableDb();
+  const db = getWritableDb(state.profileId);
   if (!db) {
-    memoryFallback.runs.set(state.runId, state);
+    memory(state.profileId).runs.set(state.runId, state);
     return;
   }
   db.prepare(
@@ -144,10 +169,28 @@ export function upsertRun(state: DurableChatRunState): void {
   });
 }
 
-export function getRun(runId: string): DurableChatRunState | null {
-  const db = getWritableDb();
+export function getRun(
+  runId: string,
+  profileId?: string,
+): DurableChatRunState | null {
+  if (profileId) {
+    return getRunInProfile(runId, profileId);
+  }
+  // Scan known memory buckets first, then try default profile db.
+  for (const [pid, bucket] of memoryByProfile) {
+    const hit = bucket.runs.get(runId);
+    if (hit) return hit;
+  }
+  return getRunInProfile(runId, "default");
+}
+
+function getRunInProfile(
+  runId: string,
+  profileId: string,
+): DurableChatRunState | null {
+  const db = getWritableDb(profileId);
   if (!db) {
-    return memoryFallback.runs.get(runId) ?? null;
+    return memory(profileId).runs.get(runId) ?? null;
   }
   const row = db
     .prepare(
@@ -173,16 +216,16 @@ export function getRun(runId: string): DurableChatRunState | null {
     profileId: row.profile_id,
     sessionId: row.session_id ?? undefined,
     status: row.status as DurableChatRunStatus,
-    pendingInteractions: listPendingInteractions(runId),
+    pendingInteractions: listPendingInteractions(runId, row.profile_id),
     lastEventSequence: row.last_event_sequence,
     updatedAt: row.updated_at,
   };
 }
 
 export function upsertTurn(turn: DurableChatTurnSummary): void {
-  const db = getWritableDb();
+  const db = getWritableDb(turn.profileId);
   if (!db) {
-    memoryFallback.turns.set(turn.turnId, turn);
+    memory(turn.profileId).turns.set(turn.turnId, turn);
     return;
   }
   db.prepare(
@@ -218,10 +261,27 @@ export function upsertTurn(turn: DurableChatTurnSummary): void {
   });
 }
 
-export function getTurn(turnId: string): DurableChatTurnSummary | null {
-  const db = getWritableDb();
+export function getTurn(
+  turnId: string,
+  profileId?: string,
+): DurableChatTurnSummary | null {
+  if (profileId) {
+    return getTurnInProfile(turnId, profileId);
+  }
+  for (const bucket of memoryByProfile.values()) {
+    const hit = bucket.turns.get(turnId);
+    if (hit) return hit;
+  }
+  return getTurnInProfile(turnId, "default");
+}
+
+function getTurnInProfile(
+  turnId: string,
+  profileId: string,
+): DurableChatTurnSummary | null {
+  const db = getWritableDb(profileId);
   if (!db) {
-    return memoryFallback.turns.get(turnId) ?? null;
+    return memory(profileId).turns.get(turnId) ?? null;
   }
   const row = db
     .prepare(`SELECT * FROM chat_runtime_turn WHERE turn_id = ?`)
@@ -230,10 +290,14 @@ export function getTurn(turnId: string): DurableChatTurnSummary | null {
   return rowToTurn(row);
 }
 
-export function listTurnsForRun(runId: string): DurableChatTurnSummary[] {
-  const db = getWritableDb();
+export function listTurnsForRun(
+  runId: string,
+  profileId?: string,
+): DurableChatTurnSummary[] {
+  const pid = profileId || getRun(runId)?.profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    return [...memoryFallback.turns.values()].filter((t) => t.runId === runId);
+    return [...memory(pid).turns.values()].filter((t) => t.runId === runId);
   }
   const rows = db
     .prepare(
@@ -243,16 +307,34 @@ export function listTurnsForRun(runId: string): DurableChatTurnSummary[] {
   return rows.map(rowToTurn);
 }
 
-export function listIncompleteTurns(): DurableChatTurnSummary[] {
-  const db = getWritableDb();
+export function listIncompleteTurns(
+  profileId?: string,
+): DurableChatTurnSummary[] {
   const open: ChatTurnStatus[] = [
     "starting",
     "streaming",
     "waiting_clarify",
     "waiting_approval",
   ];
+  if (profileId) {
+    return listIncompleteInProfile(profileId, open);
+  }
+  const out: DurableChatTurnSummary[] = [];
+  out.push(...listIncompleteInProfile("default", open));
+  for (const pid of memoryByProfile.keys()) {
+    if (pid === "default") continue;
+    out.push(...listIncompleteInProfile(pid, open));
+  }
+  return out;
+}
+
+function listIncompleteInProfile(
+  profileId: string,
+  open: ChatTurnStatus[],
+): DurableChatTurnSummary[] {
+  const db = getWritableDb(profileId);
   if (!db) {
-    return [...memoryFallback.turns.values()].filter((t) =>
+    return [...memory(profileId).turns.values()].filter((t) =>
       open.includes(t.status),
     );
   }
@@ -287,10 +369,16 @@ function rowToTurn(row: Record<string, unknown>): DurableChatTurnSummary {
 
 export function upsertPendingInteraction(
   record: PendingInteractionRecord,
+  profileId?: string,
 ): void {
-  const db = getWritableDb();
+  const pid =
+    profileId ||
+    getRun(record.runId)?.profileId ||
+    getTurn(record.turnId)?.profileId ||
+    "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    memoryFallback.interactions.set(record.requestId, record);
+    memory(pid).interactions.set(record.requestId, record);
     return;
   }
   db.prepare(
@@ -315,10 +403,25 @@ export function upsertPendingInteraction(
 
 export function getPendingInteraction(
   requestId: string,
+  profileId?: string,
 ): PendingInteractionRecord | null {
-  const db = getWritableDb();
+  if (profileId) {
+    return getPendingInProfile(requestId, profileId);
+  }
+  for (const bucket of memoryByProfile.values()) {
+    const hit = bucket.interactions.get(requestId);
+    if (hit) return hit;
+  }
+  return getPendingInProfile(requestId, "default");
+}
+
+function getPendingInProfile(
+  requestId: string,
+  profileId: string,
+): PendingInteractionRecord | null {
+  const db = getWritableDb(profileId);
   if (!db) {
-    return memoryFallback.interactions.get(requestId) ?? null;
+    return memory(profileId).interactions.get(requestId) ?? null;
   }
   const row = db
     .prepare(`SELECT * FROM chat_pending_interaction WHERE request_id = ?`)
@@ -329,10 +432,12 @@ export function getPendingInteraction(
 
 export function listPendingInteractions(
   runId: string,
+  profileId?: string,
 ): PendingInteractionRecord[] {
-  const db = getWritableDb();
+  const pid = profileId || getRun(runId)?.profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    return [...memoryFallback.interactions.values()].filter(
+    return [...memory(pid).interactions.values()].filter(
       (i) => i.runId === runId && i.status !== "resolved" && i.status !== "failed",
     );
   }
@@ -361,18 +466,22 @@ function rowToInteraction(
   };
 }
 
-export function appendRuntimeEvent(input: {
-  eventId: string;
-  runId: string;
-  turnId: string;
-  sequence: number;
-  type: string;
-  emittedAt: number;
-  payloadJson: string;
-}): void {
-  const db = getWritableDb();
+export function appendRuntimeEvent(
+  input: {
+    eventId: string;
+    runId: string;
+    turnId: string;
+    sequence: number;
+    type: string;
+    emittedAt: number;
+    payloadJson: string;
+  },
+  profileId?: string,
+): void {
+  const pid = profileId || getRun(input.runId)?.profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    memoryFallback.events.push(input);
+    memory(pid).events.push(input);
     return;
   }
   db.prepare(
@@ -385,6 +494,7 @@ export function appendRuntimeEvent(input: {
 export function listRuntimeEvents(
   runId: string,
   turnId?: string,
+  profileId?: string,
 ): Array<{
   eventId: string;
   runId: string;
@@ -394,9 +504,10 @@ export function listRuntimeEvents(
   emittedAt: number;
   payloadJson: string;
 }> {
-  const db = getWritableDb();
+  const pid = profileId || getRun(runId)?.profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    return memoryFallback.events.filter(
+    return memory(pid).events.filter(
       (e) => e.runId === runId && (!turnId || e.turnId === turnId),
     );
   }
@@ -438,10 +549,14 @@ export function listRuntimeEvents(
   }>;
 }
 
-export function upsertQueueEntry(entry: DurableChatQueueEntry): void {
-  const db = getWritableDb();
+export function upsertQueueEntry(
+  entry: DurableChatQueueEntry,
+  profileId?: string,
+): void {
+  const pid = profileId || getRun(entry.runId)?.profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    memoryFallback.queue.set(entry.queueId, entry);
+    memory(pid).queue.set(entry.queueId, entry);
     return;
   }
   db.prepare(
@@ -455,10 +570,14 @@ export function upsertQueueEntry(entry: DurableChatQueueEntry): void {
   ).run(entry);
 }
 
-export function listQueueEntries(runId: string): DurableChatQueueEntry[] {
-  const db = getWritableDb();
+export function listQueueEntries(
+  runId: string,
+  profileId?: string,
+): DurableChatQueueEntry[] {
+  const pid = profileId || getRun(runId)?.profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    return [...memoryFallback.queue.values()]
+    return [...memory(pid).queue.values()]
       .filter((q) => q.runId === runId)
       .sort((a, b) => a.position - b.position);
   }
@@ -476,22 +595,64 @@ export function listQueueEntries(runId: string): DurableChatQueueEntry[] {
   }));
 }
 
-export function deleteQueueEntry(queueId: string): void {
-  const db = getWritableDb();
+export function deleteQueueEntry(
+  queueId: string,
+  profileId?: string,
+): void {
+  const pid = profileId || "default";
+  const db = getWritableDb(pid);
   if (!db) {
-    memoryFallback.queue.delete(queueId);
+    memory(pid).queue.delete(queueId);
     return;
   }
   db.prepare(`DELETE FROM chat_queue_entry WHERE queue_id = ?`).run(queueId);
 }
 
+export function getMaxEventSequence(
+  runId: string,
+  turnId: string,
+  profileId?: string,
+): number {
+  const pid = profileId || getRun(runId)?.profileId || "default";
+  const db = getWritableDb(pid);
+  if (!db) {
+    const events = memory(pid).events.filter(
+      (e) => e.runId === runId && e.turnId === turnId,
+    );
+    return events.reduce((max, e) => Math.max(max, e.sequence), 0);
+  }
+  const row = db
+    .prepare(
+      `SELECT MAX(sequence) as maxSeq FROM chat_runtime_event
+       WHERE run_id = ? AND turn_id = ?`,
+    )
+    .get(runId, turnId) as { maxSeq: number | null } | undefined;
+  return Number(row?.maxSeq ?? 0);
+}
+
+export type RuntimeStoreHealth = {
+  profileId: string;
+  ok: boolean;
+  lastError?: string;
+};
+
+export function getRuntimeStoreHealth(profileId: string): RuntimeStoreHealth {
+  try {
+    const db = getWritableDb(profileId);
+    if (!db) return { profileId, ok: false, lastError: "db unavailable" };
+    db.prepare(`SELECT 1`).get();
+    return { profileId, ok: true };
+  } catch (err) {
+    return {
+      profileId,
+      ok: false,
+      lastError: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /** Test-only reset. */
 export function __resetChatRuntimeStoreForTests(): void {
-  schemaReady = false;
-  schemaFailed = false;
-  memoryFallback.runs.clear();
-  memoryFallback.turns.clear();
-  memoryFallback.interactions.clear();
-  memoryFallback.queue.clear();
-  memoryFallback.events.length = 0;
+  memoryByProfile.clear();
+  __resetStoreRouterForTests();
 }

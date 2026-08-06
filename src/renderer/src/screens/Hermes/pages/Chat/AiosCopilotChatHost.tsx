@@ -42,6 +42,7 @@ import { ExpertSelector } from "./components/work/ExpertSelector";
 import { ExpertSkillSelector } from "./components/work/ExpertSkillSelector";
 import { PermissionSelector } from "./components/work/PermissionSelector";
 import { GatewayStatusBadge } from "./components/work/GatewayStatusBadge";
+import { createAiosChatRunContextAdapter } from "./AiosChatRunContextAdapter";
 import { workExpertGatewayApi } from "../../api/workExpertGatewayApi";
 import type { UseWorkChatContextReturn } from "../../types/work-chat";
 
@@ -86,6 +87,51 @@ export function AiosCopilotChatHost({
   const showWorkControls = !hideWorkControls;
   const profileId = run.identity.profileId || "default";
   const sessionId = run.identity.sessionId;
+
+  const runContext = useMemo(
+    () =>
+      createAiosChatRunContextAdapter({
+        getExpertId: () => workContext.selectedExpert?.expertId,
+        getTeamId: () => run.context.teamId,
+        getSkillName: () =>
+          workContext.selectedSkill?.name || run.context.skillName,
+        getWorkMode: () => workContext.workMode || run.context.workMode,
+        getPermissionMode: () => workContext.permissionMode,
+        getPromptHintMode: () => run.presentation.promptHint?.mode,
+        getModelId: () => run.presentation.selectedModelId ?? null,
+        setExpertId: (id) => {
+          if (!id) workContext.clearContext();
+          else onPatchRun(run.runId, { context: { expertId: id } });
+        },
+        setTeamId: (id) => {
+          onPatchRun(run.runId, { context: { teamId: id } });
+        },
+        setSkillName: (name) => {
+          onPatchRun(run.runId, { context: { skillName: name } });
+        },
+        setWorkMode: (mode) => {
+          if (mode === "ask" || mode === "plan" || mode === "craft") {
+            workContext.setWorkMode(mode);
+          }
+        },
+        setPermissionMode: (mode) => {
+          if (mode === "default" || mode === "ask_each_time") {
+            workContext.setPermissionMode(mode);
+          }
+        },
+        setPromptHintMode: (mode) => {
+          onPatchRun(run.runId, {
+            presentation: { promptHint: { mode: mode || "auto" } },
+          });
+        },
+        setModelId: (id) => {
+          onPatchRun(run.runId, {
+            presentation: { selectedModelId: id ?? undefined },
+          });
+        },
+      }),
+    [onPatchRun, run, workContext],
+  );
 
   const filePreview = useFilePreview();
 
@@ -311,6 +357,7 @@ export function AiosCopilotChatHost({
       models={aiosModelsAdapter}
       navigation={aiosNavigationAdapter}
       commands={aiosCommandAdapter}
+      runContext={runContext}
       profileId={profileId}
       sessionId={sessionId}
       initialDraft={run.presentation.draft || ""}

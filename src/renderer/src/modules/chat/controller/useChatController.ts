@@ -119,6 +119,8 @@ export type UseChatControllerResult = {
   setSelectedModel: (modelId: string | null) => void;
   addAttachments: (files: File[]) => Promise<void>;
   removeAttachment: (id: string) => void;
+  seedLastAppliedSequence: (sequence: number) => void;
+  ingestRuntimeEvent: (event: ChatRuntimeEvent) => void;
 };
 
 function newTurnId(): string {
@@ -325,6 +327,20 @@ export function useChatController(
   );
 
   useChatEvents(runtime, runId, onEvent);
+
+  const seedLastAppliedSequence = useCallback((sequence: number) => {
+    lastAppliedSequenceRef.current = Math.max(
+      lastAppliedSequenceRef.current,
+      sequence,
+    );
+  }, []);
+
+  const ingestRuntimeEvent = useCallback(
+    (event: ChatRuntimeEvent) => {
+      onEvent(event);
+    },
+    [onEvent],
+  );
 
   const submitMessage = useCallback(
     async (
@@ -906,5 +922,7 @@ export function useChatController(
     setSelectedModel,
     addAttachments,
     removeAttachment,
+    seedLastAppliedSequence,
+    ingestRuntimeEvent,
   };
 }

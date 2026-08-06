@@ -28,8 +28,19 @@ import type {
   ChatRuntimeGetStateResult,
   ChatRuntimeRecoverInput,
   ChatRuntimeRecoverResult,
+  ChatRuntimeGetSnapshotInput,
+  ChatRuntimeReplayEventsInput,
 } from "../../shared/chat-runtime/chat-runtime-state";
 import type { ChatDiagnosticsExport } from "../../shared/chat-runtime/chat-runtime-trace";
+import {
+  buildChatDiagnosticsExport,
+  saveChatDiagnosticsWithDialog,
+} from "./chat-diagnostics-service";
+import {
+  getChatRuntimeSnapshot,
+  replayChatRuntimeEvents,
+} from "./chat-event-replay-service";
+import { registerChatQueueIpc } from "./chat-queue-service";
 import type { HermesChatSendPayload } from "../../shared/hermes-default-chat/hermes-default-chat-contract";
 import {
   isRemoteMode,
@@ -79,7 +90,11 @@ import {
   HermesChatCommandFailedError,
   HermesChatCommandUnsupportedError,
 } from "./hermes-chat-command-adapter";
-import { createHermesInteractionContinuationAdapter } from "./hermes-interaction-continuation-adapter";
+import {
+  createHermesInteractionContinuationAdapter,
+  type ChatContinuationResult,
+  type DurableTurnRequestContext,
+} from "./hermes-interaction-continuation-adapter";
 import {
   finalizeSessionReconcile,
   startSessionReconcile,
@@ -192,6 +207,38 @@ const submitWaiters = new Map<string, TerminalWaiter>();
 
 function turnWaitKey(runId: string, turnId: string): string {
   return `${runId}::${turnId}`;
+}
+
+function parseTurnRequestContext(
+  snapshotJson: string | undefined,
+  profileId: string,
+  sessionId: string,
+): DurableTurnRequestContext {
+  let parsed: Partial<ChatTurnRequestPayload> = {};
+  if (snapshotJson) {
+    try {
+      parsed = JSON.parse(snapshotJson) as ChatTurnRequestPayload;
+    } catch {
+      parsed = {};
+    }
+  }
+  const modelId = parsed.model?.modelId;
+  return {
+    profileId: parsed.profileId || profileId,
+    sessionId: parsed.sessionId || sessionId,
+    modelId: modelId || undefined,
+    expertId: parsed.expertId,
+    teamId: parsed.teamId,
+    expertRunId: parsed.expertRunId,
+    workMode: parsed.workMode,
+    permissionMode: parsed.permissionMode,
+    invocationSource: parsed.invocationSource,
+    contextFolder: parsed.contextFolder,
+    attachmentIds: parsed.attachments
+      ?.map((a) => a.id)
+      .filter((id): id is string => Boolean(id)),
+    history: parsed.history,
+  };
 }
 
 async function beginChatTurn(
@@ -931,6 +978,24 @@ export function registerChatRuntimeIpc(
         durable?.sessionId ||
         "";
 
+      if (!sessionId.trim()) {
+        emitChatRuntimeEvent(event.sender, {
+          type: "interaction.failed",
+          runId,
+          turnId,
+          requestId,
+          error: {
+            code: "COMMAND_FAILED",
+            message: "sessionId is required for interaction continuation",
+          },
+        });
+        return {
+          ok: false,
+          code: "COMMAND_FAILED",
+          error: "sessionId is required for interaction continuation",
+        };
+      }
+
       try {
         emitChatRuntimeEvent(event.sender, {
           type: "interaction.accepted",
@@ -950,16 +1015,65 @@ export function registerChatRuntimeIpc(
           createdAt: storePending?.createdAt || Date.now(),
         });
 
+        const turnRecord = getTurn(turnId);
+        const context = parseTurnRequestContext(
+          turnRecord?.requestSnapshotJson,
+          profileId,
+          sessionId,
+        );
+
+        upsertPendingInteraction({
+          requestId,
+          runId,
+          turnId,
+          interactionType: expectKind,
+          payloadJson: storePending?.payloadJson || "{}",
+          status: "continuing",
+          createdAt: storePending?.createdAt || Date.now(),
+        });
+
+        let completionResult: ChatContinuationResult;
+
         if (command.type === "clarify.respond") {
-          await continuationAdapter.continueClarify({
+          const execution = await continuationAdapter.continueClarify({
             runId,
             turnId,
             profileId,
             sessionId,
             requestId,
             answer: command.answer,
+            modelId: context.modelId,
+            context,
             sender: event.sender,
           });
+          completionResult = await execution.completion;
+          if (!completionResult.ok) {
+            upsertPendingInteraction({
+              requestId,
+              runId,
+              turnId,
+              interactionType: "clarify",
+              payloadJson: storePending?.payloadJson || "{}",
+              status: "failed",
+              createdAt: storePending?.createdAt || Date.now(),
+              resolvedAt: Date.now(),
+            });
+            emitChatRuntimeEvent(event.sender, {
+              type: "interaction.failed",
+              runId,
+              turnId,
+              requestId,
+              error: {
+                code: completionResult.code,
+                message: completionResult.error,
+              },
+            });
+            return {
+              ok: false,
+              code: completionResult.code as import("../../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommandErrorCode,
+              error: completionResult.error,
+            };
+          }
           upsertPendingInteraction({
             requestId,
             runId,
@@ -986,53 +1100,51 @@ export function registerChatRuntimeIpc(
             interactionType: "clarify",
             answer: command.answer,
           });
-        } else if (command.type === "approval.approve") {
-          await continuationAdapter.continueApproval({
-            runId,
-            turnId,
-            profileId,
-            sessionId,
-            requestId,
-            decision: "approved",
-            sender: event.sender,
-          });
-          upsertPendingInteraction({
-            requestId,
-            runId,
-            turnId,
-            interactionType: "approval",
-            payloadJson: storePending?.payloadJson || "{}",
-            status: "resolved",
-            createdAt: storePending?.createdAt || Date.now(),
-            resolvedAt: Date.now(),
-          });
-          memoryRun?.pendingInteractions.delete(requestId);
-          emitChatRuntimeEvent(event.sender, {
-            type: "approval.resolved",
-            runId,
-            turnId,
-            requestId,
-            decision: "approved",
-          });
-          emitChatRuntimeEvent(event.sender, {
-            type: "interaction.resolved",
-            runId,
-            turnId,
-            requestId,
-            interactionType: "approval",
-            decision: "approved",
-          });
         } else {
-          await continuationAdapter.continueApproval({
+          const decision =
+            command.type === "approval.approve" ? "approved" : "denied";
+          const reason =
+            command.type === "approval.deny" ? command.reason : undefined;
+          const execution = await continuationAdapter.continueApproval({
             runId,
             turnId,
             profileId,
             sessionId,
             requestId,
-            decision: "denied",
-            reason: command.reason,
+            decision,
+            reason,
+            modelId: context.modelId,
+            context,
             sender: event.sender,
           });
+          completionResult = await execution.completion;
+          if (!completionResult.ok) {
+            upsertPendingInteraction({
+              requestId,
+              runId,
+              turnId,
+              interactionType: "approval",
+              payloadJson: storePending?.payloadJson || "{}",
+              status: "failed",
+              createdAt: storePending?.createdAt || Date.now(),
+              resolvedAt: Date.now(),
+            });
+            emitChatRuntimeEvent(event.sender, {
+              type: "interaction.failed",
+              runId,
+              turnId,
+              requestId,
+              error: {
+                code: completionResult.code,
+                message: completionResult.error,
+              },
+            });
+            return {
+              ok: false,
+              code: completionResult.code as import("../../shared/chat-runtime/chat-runtime-contract").ChatRuntimeCommandErrorCode,
+              error: completionResult.error,
+            };
+          }
           upsertPendingInteraction({
             requestId,
             runId,
@@ -1049,8 +1161,8 @@ export function registerChatRuntimeIpc(
             runId,
             turnId,
             requestId,
-            decision: "denied",
-            reason: command.reason,
+            decision,
+            reason,
           });
           emitChatRuntimeEvent(event.sender, {
             type: "interaction.resolved",
@@ -1058,8 +1170,8 @@ export function registerChatRuntimeIpc(
             turnId,
             requestId,
             interactionType: "approval",
-            decision: "denied",
-            reason: command.reason,
+            decision,
+            reason,
           });
         }
       } catch (err) {
@@ -1070,6 +1182,16 @@ export function registerChatRuntimeIpc(
               ? "COMMAND_FAILED"
               : "COMMAND_FAILED";
         const message = err instanceof Error ? err.message : String(err);
+        upsertPendingInteraction({
+          requestId,
+          runId,
+          turnId,
+          interactionType: expectKind,
+          payloadJson: storePending?.payloadJson || "{}",
+          status: "failed",
+          createdAt: storePending?.createdAt || Date.now(),
+          resolvedAt: Date.now(),
+        });
         emitChatRuntimeEvent(event.sender, {
           type: "interaction.failed",
           runId,
@@ -1135,58 +1257,29 @@ export function registerChatRuntimeIpc(
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.exportDiagnostics,
     (_event, input: { runId: string }): ChatDiagnosticsExport | { ok: false; error: string } => {
-      const runId = input?.runId?.trim();
-      if (!runId) return { ok: false, error: "runId required" };
-      const run = getRun(runId);
-      if (!run) return { ok: false, error: `No run ${runId}` };
-      const events = listRuntimeEvents(runId);
-      const turns = listTurnsForRun(runId);
-      return {
-        exportedAt: Date.now(),
-        runId,
-        profileId: run.profileId,
-        sessionId: run.sessionId,
-        runtimeMetadata: {
-          status: run.status,
-          activeTurnId: run.activeTurnId,
-          lastEventSequence: run.lastEventSequence,
-          updatedAt: run.updatedAt,
-        },
-        eventTimeline: events.map((e) => ({
-          eventId: e.eventId,
-          turnId: e.turnId,
-          sequence: e.sequence,
-          type: e.type,
-          emittedAt: e.emittedAt,
-        })),
-        toolTimeline: events
-          .filter((e) => e.type === "tool.event")
-          .map((e) => {
-            try {
-              const payload = JSON.parse(e.payloadJson) as {
-                event?: { callId?: string; name?: string; status?: string };
-              };
-              return {
-                callId: payload.event?.callId || "",
-                name: payload.event?.name || "",
-                status: payload.event?.status || "",
-                turnId: e.turnId,
-              };
-            } catch {
-              return { callId: "", name: "", status: "", turnId: e.turnId };
-            }
-          }),
-        errors: turns
-          .filter((t) => t.errorCode || t.errorMessage)
-          .map((t) => ({
-            turnId: t.turnId,
-            code: t.errorCode || "UNKNOWN",
-            message: t.errorMessage || "",
-          })),
-        fileIds: [],
-      };
+      return buildChatDiagnosticsExport(input);
     },
   );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.saveDiagnostics,
+    async (_event, input: { runId: string }) => {
+      return saveChatDiagnosticsWithDialog(input);
+    },
+  );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.getSnapshot,
+    (_event, input: ChatRuntimeGetSnapshotInput) => getChatRuntimeSnapshot(input),
+  );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.replayEvents,
+    (_event, input: ChatRuntimeReplayEventsInput) =>
+      replayChatRuntimeEvents(input),
+  );
+
+  registerChatQueueIpc();
 }
 
 export function shutdownChatRuntimeIpc(): void {

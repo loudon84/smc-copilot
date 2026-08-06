@@ -23,6 +23,10 @@ export type ChatDiagnosticsExport = {
     activeTurnId?: string;
     lastEventSequence: number;
     updatedAt: number;
+    /** Optional diagnostics enrichment (v8.1.1). */
+    storeHealth?: unknown;
+    storeProbe?: unknown;
+    retention?: unknown;
   };
   eventTimeline: Array<{
     eventId: string;

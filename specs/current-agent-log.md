@@ -13,3 +13,15 @@
 - Docs: API_CONTRACTS, AGENTS, INDEX, Hermes.md, lat.md updated.
 - Deferred PR6/PR7.
 
+## 2026-08-06 v8.1.1
+
+- Started v8.1.1 PR1–PR6 implementation.
+- Scope: Interaction correctness, profile store, snapshot recovery, queue/retry UI, diagnostics, Electron E2E.
+- Deferred: PR7 deprecated cleanup.
+
+## 2026-08-06 v8.1.1 closure
+
+- PR1–PR6 done: interaction correctness, profile store, snapshot/recovery, queue/retry UI, diagnostics, Playwright E2E.
+- Verification: typecheck node+web, v811 vitests, e2e structural; lat check passed; docs synced (API_CONTRACTS/AGENTS/INDEX/Hermes).
+- Deferred: PR7 deprecated cutover.
+

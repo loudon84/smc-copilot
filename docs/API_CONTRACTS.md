@@ -244,25 +244,29 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 ---
 
-## Chat Runtime（v8.0–v8.1 Durable Runtime）
+## Chat Runtime（v8.0–v8.1.1 Durable Runtime Closure）
 
 **Preload**：`window.chatRuntime`（`src/preload/chat-runtime-api.ts`）  
-**Main**：`src/main/chat-runtime/`（`chat-runtime:start` 事件驱动；`chat-runtime-store` 写入 profile `state.db`；`chat-transport-registry` 与 durable run 分离；`chat-event-sequencer`；`hermes-interaction-continuation-adapter`；`chat-recovery-coordinator`；与 legacy `hermes-chat:*` **并存**供灰度）  
+**Main**：`src/main/chat-runtime/`（`chat-runtime:start` 事件驱动；**v8.1.1** profile-routed `stateDbPathForProfile` + store router；事务 `allocateAndAppendEvent`；UNIQUE(run,turn,sequence)；`hermes-interaction-continuation-adapter` 返回 `completion` 且 Native/Fallback 互斥；`chat-event-replay-service`；`chat-queue-service`；`chat-diagnostics-service` Save Dialog；与 legacy `hermes-chat:*` **并存**）  
 **契约**：`src/shared/chat-runtime/`（contract / events / state / trace）
 
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
-| `chat-runtime:start` | invoke | `ChatStartInput`（`runId`+`turnId`+`request`） | `ChatStartResult`（`{ok:true, runId, turnId, acceptedAt}` 立即返回） | **v8.1** 主路径；校验后持久化 turn 占位再异步 `sendMessage`；生命周期全部经 `chat-runtime:event` |
-| `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / **`turnId`** / `profileId` / `invocationSource`） | `ChatSubmitResult`（含同一 `turnId`） | **@deprecated** 兼容适配：内部 `start` + 等待终态；生产 Chat 用 `start` |
-| `chat-runtime:abort` | invoke | `ChatAbortInput \| string`（`runId`） | `{ ok: boolean }` | 取消指定 run 的 transport；无 id 时 abort all |
-| `chat-runtime:command` | invoke | `ChatRuntimeCommand`（必含 `runId`+**`turnId`**+`requestId`） | `ChatRuntimeCommandResult` | Pending 优先读 durable store（stream 结束后仍可 Approval）；`interaction.accepted` → streaming continuation → `*.resolved`；失败 `GATEWAY_UNSUPPORTED` 等 |
-| `chat-runtime:get-state` | invoke | `{ runId }` | `ChatRuntimeGetStateResult` | **v8.1** 恢复 run/turns/pending/queue |
-| `chat-runtime:recover` | invoke | `{ runId? }` | `ChatRuntimeRecoverResult` | 扫 incomplete turns → waiting / interrupted（不重放失败 turn） |
-| `chat-runtime:export-diagnostics` | invoke | `{ runId }` | `ChatDiagnosticsExport` | 元数据 / timeline / errors；**不含** prompt/secret 正文 |
+| `chat-runtime:start` | invoke | `ChatStartInput`（`runId`+`turnId`+`request`） | `ChatStartResult`（立即返回） | **v8.1** 主路径；生命周期经 `chat-runtime:event` |
+| `chat-runtime:submit` | invoke | `ChatSubmitInput` | `ChatSubmitResult` | **@deprecated** 兼容适配（PR7 再删） |
+| `chat-runtime:abort` | invoke | `ChatAbortInput \| string` | `{ ok: boolean }` | 取消 transport；durable pending 可保留 |
+| `chat-runtime:command` | invoke | `ChatRuntimeCommand` | `ChatRuntimeCommandResult` | **v8.1.1** `accepted`→`continuing`→**await completion**→`resolved`；缺 sessionId 失败；Native 与 Fallback 互斥 |
+| `chat-runtime:get-state` | invoke | `{ runId }` | `ChatRuntimeGetStateResult` | 恢复 run/turns/pending/queue |
+| `chat-runtime:get-snapshot` | invoke | `{ runId, profileId?, afterSequence?, maxEvents? }` | `ChatRuntimeGetSnapshotResult` | **v8.1.1** 含 events 窗口 + truncated |
+| `chat-runtime:replay-events` | invoke | `{ runId, afterSequence, turnId?, limit? }` | `ChatRuntimeReplayEventsResult` | **v8.1.1** 按 sequence 回放 |
+| `chat-runtime:recover` | invoke | `{ runId?, profileId? }` | `ChatRuntimeRecoverResult` | incomplete turns → waiting / interrupted |
+| `chat-runtime:export-diagnostics` | invoke | `{ runId }` | `ChatDiagnosticsExport` | 元数据 / timeline / **真实 fileIds** / store health |
+| `chat-runtime:save-diagnostics` | invoke | `{ runId }` | `{ ok, path }` | **v8.1.1** Main `dialog.showSaveDialog`（禁止 Renderer `<a download>`） |
+| `chat-runtime:queue-*` | invoke | enqueue/list/remove/move/mark-running/complete/set-auto-drain | typed results | **v8.1.1** Durable Queue（Main 权威源）；Preload `chatRuntime.queue.*` |
 
-**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent`（每事件必含 **`eventId`+`sequence`+`emittedAt`** + `runId`+**`turnId`**；含 `interaction.accepted` / `interaction.continuing` / `interaction.resolved` + 既有流/Clarify/Approval 事件）；SSE 与 Session Reconciler **统一经** `chat-event-sequencer` 出口；Renderer 按 sequence 去重。
+**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent`（必含 **`eventId`+`sequence`+`emittedAt`**）；sequence 跨进程从 DB MAX 续编；Renderer `ChatRuntimeRecoveryBridge` + sequence 去重。
 
-**Renderer**：`modules/chat/controller`（`start` + Turn Ledger + Queue reducer + 精确 Retry / `ChatRunContextPort`）；`useChatRuntimeRecovery`；`ChatDiagnosticsExportButton`；入口 `AiosCopilotChatHost`。
+**Renderer**：**v8.1.1** `ChatRuntimeRecoveryBridge`、`useDurableChatQueue`、Error Card `retryTurn(turnId)`、`AiosChatRunContextAdapter`、Diagnostics Save；E2E：`npm run test:e2e:electron`。
 
 ---
 

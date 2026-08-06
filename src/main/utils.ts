@@ -43,6 +43,12 @@ export function activeStateDbPath(): string {
   return join(profileHome(getActiveProfileNameSync()), "state.db");
 }
 
+/** Profile-scoped `state.db` path (default → ~/.hermes/state.db). */
+export function stateDbPathForProfile(profileId?: string): string {
+  const id = !profileId || profileId === "default" ? undefined : profileId.trim();
+  return join(profileHome(id), "state.db");
+}
+
 /**
  * Escape special regex characters in a string so it can be
  * safely interpolated into a RegExp constructor.

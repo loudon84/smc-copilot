@@ -5,6 +5,7 @@ import type { ChatModelsPort } from "../ports/ChatModelsPort";
 import type { ChatFilesPort } from "../ports/ChatFilesPort";
 import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
 import type { ChatCommandPort } from "../ports/ChatCommandPort";
+import type { ChatRunContextPort } from "../ports/ChatRunContextPort";
 import type { ChatSubmitInput } from "@shared/chat-runtime/chat-runtime-contract";
 import type { ChatUsage } from "@shared/chat-runtime/chat-runtime-events";
 import { useChatController } from "../controller/useChatController";
@@ -14,6 +15,8 @@ import { CopilotChatInput } from "./composer/CopilotChatInput";
 import { ModelPicker, groupChatModels } from "./composer/ModelPicker";
 import { ChatFloatingRail } from "./floating/ChatFloatingRail";
 import { ChatContentRail } from "../layout/ChatContentRail";
+import { ChatRuntimeRecoveryBridge } from "../recovery/ChatRuntimeRecoveryBridge";
+import { ChatDiagnosticsExportButton } from "./diagnostics/ChatDiagnosticsExportButton";
 import "../styles/copilot-chat.css";
 
 export type ControllerStateChangeSnapshot = {
@@ -60,6 +63,7 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   files?: ChatFilesPort;
   navigation?: ChatNavigationPort;
   commands?: ChatCommandPort;
+  runContext?: ChatRunContextPort;
   profileId: string;
   /** Mount-time session id for one-shot history hydrate (not runtime bind). */
   sessionId?: string | null;
@@ -94,6 +98,7 @@ export function ChatSurface({
   files,
   navigation,
   commands,
+  runContext,
   profileId,
   sessionId,
   initialDraft,
@@ -133,14 +138,19 @@ export function ChatSurface({
     submitPayload,
     submitRuntimeCommand,
     retryLastTurn,
+    retryTurn,
     editAndRetryLastTurn,
+    editAndRetryTurn,
     retryLastTurnWithCurrentContext,
+    retryTurnWithCurrentContext,
     abort,
     openWeb,
     setSelectedModel,
     addAttachments,
     removeAttachment,
     queue,
+    seedLastAppliedSequence,
+    ingestRuntimeEvent,
   } = useChatController({
     runtime,
     session,
@@ -159,6 +169,7 @@ export function ChatSurface({
     permissionMode,
     promptHintMode,
     invocationSource,
+    runContext,
     onSessionIdChange,
     onDraftChange: onInputChange,
     composeMessage,
@@ -296,9 +307,22 @@ export function ChatSurface({
 
   return (
     <div className={`copilot-chat-root ${className || ""}`.trim()}>
+      <ChatRuntimeRecoveryBridge
+        runtime={runtime}
+        runId={state.activeRunId || runIdProp || ""}
+        profileId={profileId}
+        onReplayEvent={ingestRuntimeEvent}
+        onSeedSequence={seedLastAppliedSequence}
+      />
       {activeExpertSlot}
       {statusNode}
       {contextBarSlot}
+      <div className="chat-diagnostics-bar">
+        <ChatDiagnosticsExportButton
+          runtime={runtime}
+          runId={state.activeRunId || runIdProp || ""}
+        />
+      </div>
       <div className="chat-body">
         <div className="chat-main">
           <div className="chat-messages-scroll">
@@ -310,11 +334,18 @@ export function ChatSurface({
                 runId={state.activeRunId}
                 emptyContext={emptyContext}
                 onSelectSuggestion={handleSuggestion}
-                onRetry={() => void retryLastTurn()}
-                onEditRetry={() => editAndRetryLastTurn()}
-                onRetryWithCurrentContext={() =>
-                  void retryLastTurnWithCurrentContext()
-                }
+                onRetry={(turnId) => {
+                  if (turnId) void retryTurn(turnId);
+                  else void retryLastTurn();
+                }}
+                onEditRetry={(turnId) => {
+                  if (turnId) void editAndRetryTurn(turnId);
+                  else editAndRetryLastTurn();
+                }}
+                onRetryWithCurrentContext={(turnId) => {
+                  if (turnId) void retryTurnWithCurrentContext(turnId);
+                  else void retryLastTurnWithCurrentContext();
+                }}
                 pendingClarifyRequestId={
                   pendingClarify?.kind === "clarify"
                     ? pendingClarify.request.requestId

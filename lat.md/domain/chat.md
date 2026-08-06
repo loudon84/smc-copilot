@@ -26,15 +26,15 @@ All SSE and Session Reconciler drafts must exit through the per-turn sequencer �
 
 ## Interaction continuation
 
-Clarify/Approval must stream continuation results into the same Chat run — not HTTP 2xx with an empty body.
+Clarify/Approval continues with Native or Fallback exclusively, awaiting `completion` before Main emits `resolved`.
 
-[[src/main/chat-runtime/hermes-interaction-continuation-adapter.ts#createHermesInteractionContinuationAdapter]] probes Gateway capabilities, prefers native interaction endpoints when present, otherwise resumes with streaming [[src/main/hermes.ts#sendMessage]] (same session/profile). Unsupported gateways throw `GATEWAY_UNSUPPORTED` (no fake success). Event ladder: `interaction.accepted` → `interaction.continuing` → `clarify.resolved` / `approval.resolved` / `interaction.resolved`. Prefix helpers remain in [[src/main/chat-runtime/hermes-chat-command-adapter.ts#createHermesChatCommandAdapter]]. Parent: [[domain/chat#Durable runtime (v8.1)]].
+Capability probe uses tri-state `supported|unsupported|unknown`; unknown fails loudly. Turn snapshots restore expert/team/work/history for Fallback. Adapter: [[src/main/chat-runtime/hermes-interaction-continuation-adapter.ts#createHermesInteractionContinuationAdapter]]. Event ladder: `interaction.accepted` → `interaction.continuing` → `*.resolved`. Decisions: [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Durable Runtime Closure (v8.1.1)]]. Parent: [[domain/chat#Durable runtime (v8.1)]].
 
 ## Recovery and diagnostics
 
 App restart and Renderer reload restore durable waiting state without auto-replaying failed turns.
 
-[[src/main/chat-runtime/chat-recovery-coordinator.ts#recoverIncompleteTurns]] maps incomplete turns to `waiting_*` (pending present) or `interrupted` (transport gone). IPC: `chat-runtime:get-state` / `chat-runtime:recover` / `chat-runtime:export-diagnostics`. Hook: [[src/renderer/src/modules/chat/hooks/useChatRuntimeRecovery.ts#useChatRuntimeRecovery]]. Trace/export types: [[src/shared/chat-runtime/chat-runtime-trace.ts#ChatRuntimeTrace]] / [[src/shared/chat-runtime/chat-runtime-trace.ts#ChatDiagnosticsExport]]. UI: [[src/renderer/src/modules/chat/components/diagnostics/ChatDiagnosticsExportButton.tsx#ChatDiagnosticsExportButton]] (no prompt/secret bodies). Parent: [[domain/chat#Durable runtime (v8.1)]].
+[[src/main/chat-runtime/chat-recovery-coordinator.ts#recoverIncompleteTurns]] maps incomplete turns to `waiting_*` (pending present) or `interrupted`. **v8.1.1** adds [[src/main/chat-runtime/chat-event-replay-service.ts#getChatRuntimeSnapshot]] / replay IPC and [[src/renderer/src/modules/chat/recovery/ChatRuntimeRecoveryBridge.tsx#ChatRuntimeRecoveryBridge]]. Diagnostics: [[src/main/chat-runtime/chat-diagnostics-service.ts#buildChatDiagnosticsExport]] + Save Dialog. Hook: [[src/renderer/src/modules/chat/hooks/useChatRuntimeRecovery.ts#useChatRuntimeRecovery]]. Parent: [[domain/chat#Durable runtime (v8.1)]].
 
 ## Session hydrate vs bind
 
