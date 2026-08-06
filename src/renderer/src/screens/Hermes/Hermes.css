@@ -189,6 +189,120 @@
   flex-direction: column;
 }
 
+.hermes-center-scroll--relative {
+  position: relative;
+}
+
+/* v8.2 — Chat workspace stays mounted; menu only toggles visibility */
+.chat-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-workspace--visible {
+  position: relative;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.chat-workspace--hidden {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.hermes-session-list__item {
+  position: relative;
+}
+
+.hermes-session-list__menu-wrap {
+  position: relative;
+}
+
+.hermes-session-list__menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+}
+
+.hermes-session-list__menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.hermes-session-list__menu button:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.session-catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.session-catalog-filters__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.session-catalog-filters__check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.session-catalog-drafts {
+  margin-bottom: 16px;
+}
+
+.session-catalog-drafts__title {
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+
+.session-catalog-drafts__hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+
+.chat-workspace-restoring {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
 /* —— Right panel —— */
 .hermes-right-panel {
   width: var(--hermes-right-width, 340px);

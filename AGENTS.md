@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 0.3.6（… + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
+| 版本 | 0.3.6（… + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
 | 后端 | Hermes Python Gateway，`http://127.0.0.1:8642`（default Profile） |
 
@@ -79,6 +79,8 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 | `window.copilotServe` | `src/preload/copilot-serve-api.ts` | **V1.3** 本地 `copilot-serve` 生命周期（:get-connection / start / stop / logs）；**不含**任务业务 API |
 | `window.workspaceChat` | `src/preload/workspace-chat-api.ts` | **team_v1.8** Workspaces Chat（resolve / 模型 / 附件 / send SSE）；见 `docs/API_CONTRACTS.md` § Workspace Chat |
 | `window.chatRuntime` | `src/preload/chat-runtime-api.ts` | **v8.1.1** `start`/`abort`/`command`/`getState`/`getSnapshot`/`replayEvents`/`recover`/`exportDiagnostics`/`saveDiagnostics` + `queue.*` + ordered event；Continuation `completion`；profile store；`submit` 兼容（PR7 再删） |
+| `window.chatWorkspace` | `src/preload/chat-workspace-api.ts` | **v8.2** Chat Tab/Draft 持久化：`getSnapshot`/`open`/`openSession`/`patchRun`/`closeRun`/`setActive`/`reorder`/`migrateV1` + `onChanged`；Main `chat-workspace.db` |
+| `window.sessionCatalog` | `src/preload/session-catalog-api.ts` | **v8.2** Profile-aware Session 目录：`list`/`rename`/`archive`/`delete`/`pin` + `onChanged`；直读 profile `state.db`（非 `sessions.json`） |
 | `window.chatFiles` | `src/preload/chat-files-api.ts` | **v8.0.5** Chat Files + File Platform + `onChanged`（`chat-files:changed` 驱动 Session Files Badge；不扩展 `hermesAPI.files`） |
 | `window.webOperatorTaskSession` | `src/preload/web-operator-task-session-api.ts` | **V5.7.5** WebOperator Page→Hermes 任务会话（`task_session` SQLite） |
 | `window.aiosRuntime` | `src/preload/aios-api.ts` | Portal Runtime 启停/Doctor/日志；**V5.3.4** `getPortalInfo()` 展示 monorepo 安装路径 |
@@ -190,7 +192,7 @@ Chat.tsx
 
 **v5.6.4（Hermes Chat 多模型 hotfix）：** Models 页维护 `models.json` + `config.yaml` `custom_providers`（`hermes-config-yaml.ts`）；**Set Default** 走 `hermes-chat:set-model-config`；Chat 下拉为 **session 级**（`session-models.json` + `hermes-chat:get/set-session-model`）；普通发送**不**写 `config.yaml`、**不** restart Gateway；Chat **无** Save as Default。
 **v5.6.2（Local Hermes WebChat Surface）：** `screens/Hermes/pages/Chat/*` 通过 `window.hermesDefaultChat`；事件复用全局 `chat-*`。
-**v8.0 / v8.0.1 / v8.0.2 / v8.0.3 / v8.0.4 / v8.0.5 / v8.1.0（Copilot Chat Module）：** 默认入口 `HermesDefaultChatPage` → `MultiRunChatShell`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）→ `AiosCopilotChatHost` → `modules/chat` `ChatSurface` + Composer / Messages / **`ChatFloatingRail`**；Runtime 走 `window.chatRuntime`（**v8.1** `start` 立即 accept + ordered events；durable `state.db`；Turn Ledger 精确 Retry；Queue reducer；Recovery/`getState`）；Files 走 `window.chatFiles` + `onChanged`；**v8.0.5** Clarify/Approval + Snapshot Queue；**v8.0.4** hydrate vs bind；持久化 `chat-workspace-state.v1`。
+**v8.0 / v8.0.1 / v8.0.2 / v8.0.3 / v8.0.4 / v8.0.5 / v8.1.0 / v8.1.1 / v8.2.0（Copilot Chat Module）：** 默认入口常驻 `HermesPersistentChatWorkspace` → `MultiRunChatShell`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）→ `AiosCopilotChatHost` → `modules/chat` `ChatSurface`；**v8.2** `ChatWorkspaceProvider` 提升至 `HermesScreen`，Main `chat-workspace.db` 权威持久化（localStorage v1 仅迁移）；Sessions 页走 `window.sessionCatalog` 直读 profile `state.db` + `openSession` 联动；Runtime 走 `window.chatRuntime`；Files 走 `window.chatFiles`。
 
 ### 单 Gateway（legacy default）
 
@@ -558,6 +560,7 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 | **v8.0.1** | **Chat 迁移闭环**：Controller Session/History、Abort Promise、Work 参数、SSE 事件、Prompt Hint、`chat-runtime:command`、持久化 File index、ChatRunRegistry、`typecheck:chat` | `prd_work/v8.0.1_migrate.md`, `modules/chat/controller/`, `chat-files-session-store.ts`, `workspace/chatRunRegistry.ts` |
 | **v8.0.2** | **Chat Full Integration**：完整 MessageList/Composer/ModelPicker、File Platform `chat-files/platform`（`files:*`）、PromptNavigator、多 Chat 后台并行、删除 `source/**` 与 `_upstream/**` | `prd_work/v8.0.2_chat-full-integrated.md`, `modules/chat/components/**`, `src/main/chat-files/platform/`, `MultiRunChatShell.tsx` |
 | **v8.0.3** | **Chat Workspace Layout**：`ChatRunRecord` per-run 隔离、单一 `ChatRunHeader`、Content Rail 统一宽度、Composer Context Chip、Run 状态回传 Tab、`chat-workspace-state.v1` 持久化 | `prd_work/v8.0.3_chat-workspace-layout.md`, `modules/chat/workspace/ChatRunRecord.ts`, `chatWorkspaceReducer.ts`, `ChatRunHeader.tsx`, `AiosCopilotChatHost.tsx` |
+| **v8.2.0** | **Persistent Chat Workspace + Session Catalog**：Chat 常驻挂载、`chat-workspace.db`、Draft/Session 区分、Sessions 直读 `state.db`、`openSession` 去重、强制 Electron E2E | `prd_work/v8.2_persistent-chat-session.md`, `src/main/chat-workspace/`, `src/main/session-catalog/`, `HermesPersistentChatWorkspace.tsx`, `tests/e2e/chat/persistent-workspace.spec.ts` |
 | **v8.1.1** | **Durable Runtime Closure**：Continuation completion 互斥、profile store+事务 sequence、Snapshot/RecoveryBridge、Queue IPC/UI、turnId Retry、Diagnostics Save、Playwright E2E（PR7 Deprecated 顺延） | `prd_work/v8.1.1_runtime-infrastructure.md`, `hermes-interaction-continuation-adapter.ts`, `chat-runtime-store-router.ts`, `chat-event-replay-service.ts`, `chat-queue-service.ts`, `chat-diagnostics-service.ts`, `tests/e2e/chat/` |
 | **v8.1.0** | **Durable Chat Runtime**：事件驱动 `start`、state.db 持久化、Transport/State 分离、Interaction 流式续跑、Turn Ledger/Retry/Queue、Recovery+Diagnostics | `prd_work/v8.1_chat-interaction-contract.md`, `chat-runtime-store.ts`, `chat-event-sequencer.ts`, `hermes-interaction-continuation-adapter.ts`, `chatTurnLedger.ts`, `useChatRuntimeRecovery.ts` |
 | **v8.0.5** | **Chat Interaction Loop**：Command+`turnId` 契约、Hermes Interaction Bridge、Turn Snapshot Queue/Retry、Session Files live Badge | `prd_work/v8.0.5_chat-interaction-loop.md`, `hermes-chat-command-adapter.ts`, `chat-interaction-registry.ts`, `chatTurnSnapshot.ts`, `useSessionFilesSummary.ts`, `ApprovalCard.tsx` |

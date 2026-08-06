@@ -714,6 +714,8 @@ type WorkspaceChatAPI = typeof import("./workspace-chat-api").workspaceChatApi;
 type HermesDefaultChatAPI = typeof import("./hermes-default-chat-api").hermesDefaultChatApi;
 type ChatRuntimeAPI = typeof import("./chat-runtime-api").chatRuntimeApi;
 type ChatFilesAPI = typeof import("./chat-files-api").chatFilesApi;
+type ChatWorkspaceAPI = typeof import("./chat-workspace-api").chatWorkspaceApi;
+type SessionCatalogAPI = typeof import("./session-catalog-api").sessionCatalogApi;
 type WebOperatorTaskSessionAPI =
   import("../shared/web-operator/web-operator-task-session-contract").WebOperatorTaskSessionAPI;
 
@@ -725,6 +727,8 @@ declare global {
     hermesDefaultChat: HermesDefaultChatAPI;
     chatRuntime: ChatRuntimeAPI;
     chatFiles: ChatFilesAPI;
+    chatWorkspace: ChatWorkspaceAPI;
+    sessionCatalog: SessionCatalogAPI;
     webOperatorTaskSession: WebOperatorTaskSessionAPI;
     hermesAPI: HermesAPI;
     aiosBrowser: AiosBrowserAPI;

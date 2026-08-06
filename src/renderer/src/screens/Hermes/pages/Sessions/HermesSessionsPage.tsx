@@ -1,100 +1,147 @@
-import { useState } from "react";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import type {
+  SessionCatalogDraftItem,
+  SessionCatalogItem,
+} from "@shared/session-catalog/session-catalog-contract";
+import { useChatWorkspace } from "@renderer/modules/chat/workspace/ChatWorkspaceProvider";
 import { useHermesDefault } from "../../context/HermesDefaultContext";
+import { DraftRunsSection } from "./DraftRunsSection";
+import { SessionCatalogFilters } from "./SessionCatalogFilters";
+import { SessionCatalogList } from "./SessionCatalogList";
+import { useSessionCatalog } from "./useSessionCatalog";
 
+// @lat: [[domain/chat#Persistent mount and session catalog]]
 export default function HermesSessionsPage() {
   const { t } = useTranslation();
-  const { sessions, setActiveSessionId, setActiveNavItem } = useHermesDefault();
-  const [query, setQuery] = useState("");
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
+  const { setActiveNavItem } = useHermesDefault();
+  const { openSession, setActiveRunId } = useChatWorkspace();
+  const { filters, setFilters, view, refresh } = useSessionCatalog();
 
-  const commitRename = async (sessionId: string) => {
-    const title = renameDraft.trim();
-    if (title) await sessions.rename(sessionId, title);
-    setRenamingId(null);
-    setRenameDraft("");
-  };
+  const navigateToChat = useCallback(() => {
+    setActiveNavItem("chat");
+  }, [setActiveNavItem]);
+
+  const handleOpen = useCallback(
+    async (item: SessionCatalogItem, forceNewTab = false) => {
+      await openSession({
+        profileId: item.profileId,
+        sessionId: item.sessionId,
+        title: item.title,
+        forceNewTab,
+      });
+      navigateToChat();
+    },
+    [navigateToChat, openSession],
+  );
+
+  const handleOpenDraft = useCallback(
+    (draft: SessionCatalogDraftItem) => {
+      setActiveRunId(draft.runId);
+      navigateToChat();
+    },
+    [navigateToChat, setActiveRunId],
+  );
+
+  const handleRename = useCallback(
+    async (item: SessionCatalogItem, title: string) => {
+      if (!title || !window.sessionCatalog) return;
+      await window.sessionCatalog.rename({
+        profileId: item.profileId,
+        sessionId: item.sessionId,
+        title,
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const handleArchive = useCallback(
+    async (item: SessionCatalogItem, archived: boolean) => {
+      if (!window.sessionCatalog) return;
+      await window.sessionCatalog.archive({
+        profileId: item.profileId,
+        sessionId: item.sessionId,
+        archived,
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const handleDelete = useCallback(
+    async (item: SessionCatalogItem) => {
+      if (!window.sessionCatalog) return;
+      await window.sessionCatalog.delete({
+        profileId: item.profileId,
+        sessionId: item.sessionId,
+        soft: true,
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const handlePin = useCallback(
+    async (item: SessionCatalogItem, pinned: boolean) => {
+      if (!window.sessionCatalog) return;
+      await window.sessionCatalog.pin({
+        profileId: item.profileId,
+        sessionId: item.sessionId,
+        pinned,
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const emptyMessage = (() => {
+    if (view.error?.includes("unavailable") || view.profilesUnavailable.length > 0) {
+      if (view.items.length === 0) {
+        return t("workspaces.hermes.sessions.dbUnavailable");
+      }
+    }
+    if (filters.search.trim()) {
+      return t("workspaces.hermes.sessions.emptySearch");
+    }
+    if (filters.profileId !== "all") {
+      return t("workspaces.hermes.sessions.emptyProfile");
+    }
+    return t("workspaces.hermes.sessions.empty");
+  })();
 
   return (
-    <div className="hermes-page">
+    <div className="hermes-page hermes-sessions-page" data-testid="hermes-sessions-page">
       <header className="hermes-page__header">
         <h2>{t("workspaces.hermes.sessions.title")}</h2>
-        <div className="hermes-page__actions">
-          <input
-            className="hermes-input"
-            placeholder={t("workspaces.hermes.sessions.search")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void sessions.search(query);
-            }}
-          />
-          <button type="button" className="hermes-btn-primary" onClick={() => void sessions.sync()}>
-            {t("workspaces.hermes.sessions.sync")}
-          </button>
-          <button type="button" className="hermes-btn-ghost" onClick={() => void sessions.refresh()}>
-            {t("workspaces.hermes.sessions.refresh")}
-          </button>
-        </div>
+        <SessionCatalogFilters
+          filters={filters}
+          knownProfiles={view.knownProfiles}
+          onChange={(patch) => {
+            setFilters((f) => ({ ...f, ...patch }));
+            void refresh(patch);
+          }}
+          onRefresh={() => void refresh()}
+        />
       </header>
-      {sessions.error ? <p className="hermes-page__error">{sessions.error}</p> : null}
-      {sessions.loading ? (
-        <p>{t("workspaces.hermes.common.loading")}</p>
+      {view.error ? <p className="hermes-page__error">{view.error}</p> : null}
+      {view.loading ? (
+        <p className="hermes-page__loading">{t("workspaces.hermes.common.loading")}</p>
       ) : (
-        <ul className="hermes-session-list">
-          {sessions.sessions.map((s) => (
-            <li key={s.id} className="hermes-session-list__item">
-              {renamingId === s.id ? (
-                <div className="hermes-session-list__rename">
-                  <input
-                    className="hermes-input"
-                    value={renameDraft}
-                    autoFocus
-                    onChange={(e) => setRenameDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") void commitRename(s.id);
-                      if (e.key === "Escape") {
-                        setRenamingId(null);
-                        setRenameDraft("");
-                      }
-                    }}
-                    onBlur={() => void commitRename(s.id)}
-                  />
-                </div>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="hermes-session-list__open"
-                    onClick={() => {
-                      setActiveSessionId(s.id);
-                      setActiveNavItem("chat");
-                    }}
-                  >
-                    <strong>{s.title || s.id}</strong>
-                    <span>
-                      {s.messageCount} msgs · {new Date(s.startedAt * 1000).toLocaleString()}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="hermes-btn-ghost hermes-session-list__rename-btn"
-                    onClick={() => {
-                      setRenamingId(s.id);
-                      setRenameDraft(s.title || s.id);
-                    }}
-                  >
-                    {t("workspaces.sessions.rename")}
-                  </button>
-                </>
-              )}
-            </li>
-          ))}
-          {sessions.sessions.length === 0 ? (
-            <li>{t("workspaces.hermes.sessions.empty")}</li>
+        <>
+          {filters.showDrafts ? (
+            <DraftRunsSection drafts={view.drafts} onOpen={handleOpenDraft} />
           ) : null}
-        </ul>
+          <SessionCatalogList
+            items={view.items}
+            emptyMessage={emptyMessage}
+            onOpen={handleOpen}
+            onRename={handleRename}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onPin={handlePin}
+          />
+        </>
       )}
     </div>
   );

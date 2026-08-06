@@ -27,4 +27,5 @@ Top-level concept files in this folder. Start with architecture and decisions, t
 - [[prompt-navigator]] — Conversation prompt navigator concept
 - [[prompt-navigator-tests]] — Prompt navigator test specifications
 - [[durable-chat-runtime-tests]] — v8.1 Durable Chat Runtime test specifications
+- [[persistent-chat-workspace-tests]] — v8.2 Persistent Chat Workspace + Session Catalog test specifications
 - [[remote-dashboard-oauth]] — Remote dashboard OAuth transport guarantees

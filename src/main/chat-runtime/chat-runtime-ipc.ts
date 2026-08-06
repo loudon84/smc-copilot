@@ -108,6 +108,10 @@ import {
   setTransportHandle,
 } from "./chat-transport-registry";
 import {
+  bindSessionToRun,
+} from "../chat-workspace/chat-workspace-service";
+import { notifyChanged as notifySessionCatalogChanged } from "../session-catalog/session-catalog-service";
+import {
   getPendingInteraction,
   getRun,
   getTurn,
@@ -321,6 +325,16 @@ async function runChatTurnAsync(
   const emitSessionStartedOnce = (sessionId: string): void => {
     if (sessionStartedEmitted || !sessionId || turnTerminal) return;
     sessionStartedEmitted = true;
+    try {
+      bindSessionToRun(runId, sessionId);
+    } catch (err) {
+      console.warn("[chat-runtime] bindSessionToRun failed:", err);
+    }
+    try {
+      notifySessionCatalogChanged(profile, "session.started");
+    } catch (err) {
+      console.warn("[chat-runtime] session-catalog notify failed:", err);
+    }
     void emitTurnEvent({
       type: "session.started",
       runId,
@@ -617,6 +631,11 @@ async function runChatTurnAsync(
             sessionId: resolvedSessionId,
           });
           persistRunStatus("completed", "completed");
+          try {
+            notifySessionCatalogChanged(profile, "turn.completed");
+          } catch {
+            /* ignore */
+          }
         } else {
           persistRunStatus(
             pending[0].interactionType === "clarify"

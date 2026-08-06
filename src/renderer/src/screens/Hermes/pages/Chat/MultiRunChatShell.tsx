@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import {
-  ChatWorkspaceProvider,
-  useChatWorkspace,
-} from "@renderer/modules/chat/workspace/ChatWorkspaceProvider";
+import { useChatWorkspace } from "@renderer/modules/chat/workspace/ChatWorkspaceProvider";
 import {
   BackgroundRunIndicator,
   ChatRunHost,
@@ -15,11 +12,16 @@ function newRunId(): string {
   return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function MultiRunChatShellInner({
+/**
+ * Multi-chat workspace body — consumes ambient ChatWorkspaceProvider.
+ * Keeps multiple AiosCopilotChatHost mounts alive for background streaming.
+ */
+// @lat: [[domain/chat#Host and navigation seeding]]
+export function MultiRunChatShellInner({
   hideActiveExpertBar,
 }: {
   hideActiveExpertBar?: boolean;
-}): React.JSX.Element {
+} = {}): React.JSX.Element {
   const hermes = useHermesWorkspace();
   const {
     runs,
@@ -142,15 +144,12 @@ function MultiRunChatShellInner({
 /**
  * Multi-chat workspace — keeps multiple AiosCopilotChatHost mounts alive
  * for background streaming; switches visibility via ChatRunHost.
+ * Requires ambient ChatWorkspaceProvider (hoisted at HermesScreen).
  */
 export function MultiRunChatShell(
   props: { hideActiveExpertBar?: boolean } = {},
 ): React.JSX.Element {
-  return (
-    <ChatWorkspaceProvider>
-      <MultiRunChatShellInner {...props} />
-    </ChatWorkspaceProvider>
-  );
+  return <MultiRunChatShellInner {...props} />;
 }
 
 export default MultiRunChatShell;

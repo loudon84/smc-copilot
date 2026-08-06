@@ -66,6 +66,12 @@ Multi-run UI state lives in `ChatWorkspaceProvider`. Return Default clears only 
 
 See [[domain/chat#Chat workspace per-run state]], [[domain/chat#Host and navigation seeding]], [[domain/chat#Unified header and content rail]], [[domain/chat#Composer context chip]], [[domain/chat#Run tabs and titles]], [[domain/chat#Workspace persistence]].
 
+## Persistent Chat Workspace and Session Catalog (v8.2.0)
+
+Chat Workspace must stay mounted across Hermes menu switches; Main owns `chat-workspace.db` metadata. Sessions catalog reads profile `state.db` directly — never `sessions.json` as the source of truth.
+
+`sessionId == null` is a draft run; binding happens on `session.started`. Opening history uses `chatWorkspace.openSession` with dedupe. Decision parents: [[domain/chat#Workspace persistence]], [[domain/chat#Persistent mount and session catalog]].
+
 ## Chat must not bypass Hermes MCP host mode
 
 After v7.6, Chat business paths use Hermes Agent MCP host mode (`hermesDefaultChat` + prompt hints). Chat must not call `nodeskclaw` Runtime Skill or `hermesExperts.callCatalogSkill` for ordinary sends.

@@ -1,8 +1,8 @@
 # Chat
 
-Chat spans Local Hermes surfaces, Workspaces, and Web Operator panels. v8 Copilot Chat Module isolates concurrent turns by `runId`+`turnId` and persists files via `chatFiles`.
+Chat spans Local Hermes surfaces, Workspaces, and Web Operator panels. v8 Copilot Chat isolates turns by `runId`+`turnId`; v8.2 keeps Chat Workspace mounted and catalogs Sessions from real profile DBs.
 
-Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat turn lifecycle (v8.0.4)]], [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Durable Chat Runtime (v8.1.0)]], [[decisions#Chat must not bypass Hermes MCP host mode]], [[decisions#Chat workspace per-run state (v8.0.3)]]. File platform detail: [[file-platform#File Platform]].
+Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat turn lifecycle (v8.0.4)]], [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Durable Chat Runtime (v8.1.0)]], [[decisions#Persistent Chat Workspace and Session Catalog (v8.2.0)]], [[decisions#Chat must not bypass Hermes MCP host mode]], [[decisions#Chat workspace per-run state (v8.0.3)]]. File platform detail: [[file-platform#File Platform]]. Tests: [[persistent-chat-workspace-tests#Persistent Chat Workspace tests]].
 
 ## Chat runtime isolation
 
@@ -40,7 +40,7 @@ App restart and Renderer reload restore durable waiting state without auto-repla
 
 Mount-time history restore uses `initialSessionId` once ([[src/renderer/src/modules/chat/controller/useChatController.ts#useChatController]]). Runtime `session.started` only dispatches `BIND_SESSION` in [[src/renderer/src/modules/chat/controller/chatReducer.ts#chatReducer]] — it must not `LOAD_HISTORY` or force `idle`.
 
-`HYDRATE_SESSION` applies only when idle/cancelled/failed with an empty transcript. Busy `LOAD_HISTORY` / late hydrate is a no-op (requestId invalidated on submit, run switch, or unmount). Host must not feed a runtime-bound `sessionId` back as a hydrate source. Main emits `session.started` at most once per turn from `onSessionStarted`/`onDone` inside [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]].
+`HYDRATE_SESSION` applies only when idle/cancelled/failed with an empty transcript. Busy `LOAD_HISTORY` / late hydrate is a no-op (requestId invalidated on submit, run switch, or unmount). Host must not feed a runtime-bound `sessionId` back as a hydrate source. Main emits `session.started` at most once per turn from `onSessionStarted`/`onDone` inside [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]], and **v8.2** also [[src/main/chat-workspace/chat-workspace-service.ts#bindSessionToRun]] + session-catalog notify.
 
 ## Turn lifecycle
 
@@ -78,7 +78,7 @@ Send must clear Input, Draft, and pending attachments synchronously before netwo
 
 v8.0.3 makes each Chat Run own Session, Expert, Skill, Permission, Work Mode, Model, draft, and panel visibility via [[src/renderer/src/modules/chat/workspace/ChatRunRecord.ts#ChatRunRecord]].
 
-[[src/renderer/src/modules/chat/workspace/ChatWorkspaceProvider.tsx#ChatWorkspaceProvider]] is the single workspace store (reducer: [[src/renderer/src/modules/chat/workspace/chatWorkspaceReducer.ts#chatWorkspaceReducer]]). Hosts must not write global `HermesWorkspaceContext.activeSessionId` for run isolation.
+[[src/renderer/src/modules/chat/workspace/ChatWorkspaceProvider.tsx#ChatWorkspaceProvider]] is the Renderer view cache (reducer: [[src/renderer/src/modules/chat/workspace/chatWorkspaceReducer.ts#chatWorkspaceReducer]]); **v8.2** Main `chat-workspace.db` is authoritative (see [[domain/chat#Workspace persistence]]). Hosts must not write global `HermesWorkspaceContext.activeSessionId` for run isolation.
 
 Copilot Host uses [[src/renderer/src/modules/chat/workspace/useRunWorkContext.ts#useRunWorkContext]] per `runId`. Header Expert, Prompt Hint, and Runtime `expertId` must all read the same `run.context`. Return Default clears only that run. Decision: [[decisions#Chat workspace per-run state (v8.0.3)]].
 
@@ -86,7 +86,7 @@ Copilot Host uses [[src/renderer/src/modules/chat/workspace/useRunWorkContext.ts
 
 [[src/renderer/src/screens/Hermes/pages/Chat/AiosCopilotChatHost.tsx#AiosCopilotChatHost]] takes `{ run, active, onPatchRun }` and must not mutate shared Hermes session fields for multi-run isolation.
 
-[[src/renderer/src/screens/Hermes/pages/Chat/MultiRunChatShell.tsx#MultiRunChatShell]] may seed the first run from Expert/Team navigation on `HermesWorkspaceContext`, then treats that context as navigation-only. Further Session/Expert/Skill changes stay on the `ChatRunRecord`. Host passes mount-time `sessionId` / `initialDraft` into [[src/renderer/src/modules/chat/components/ChatSurface.tsx#ChatSurface]] and patches identity/draft from controller callbacks only.
+Provider is hoisted via [[src/renderer/src/screens/Hermes/index.tsx#HermesScreen]]; shell body is [[src/renderer/src/screens/Hermes/pages/Chat/MultiRunChatShell.tsx#MultiRunChatShellInner]] (no internal Provider). First empty seed may still read Expert/Team navigation from `HermesWorkspaceContext`, then treats that context as navigation-only. Host passes mount-time `sessionId` / `initialDraft` into [[src/renderer/src/modules/chat/components/ChatSurface.tsx#ChatSurface]] and patches identity/draft from controller callbacks only.
 
 ## Unified header and content rail
 
@@ -116,13 +116,25 @@ Tab titles use [[src/renderer/src/modules/chat/workspace/ChatRunRecord.ts#derive
 
 ## Workspace persistence
 
-[[src/renderer/src/modules/chat/workspace/chatWorkspacePersistence.ts#loadChatWorkspaceState]] restores `chat-workspace-state.v1` UI metadata (order, active run, context, title, model, panels, draft).
+**v8.2** Main owns desktop SQLite `~/.hermes/desktop/chat-workspace.db` via `window.chatWorkspace`. Renderer caches snapshots; localStorage `chat-workspace-state.v1` is migration-only.
 
-Streaming content, tool events, and approvals are not in that UI blob. Main durable store ([[domain/chat#Durable runtime (v8.1)]]) separately persists run/turn/pending/queue for restart recovery. Busy UI runs become `interrupted` on workspace restore and must not auto-resume. After Send, `presentation.draft` must be empty so restore cannot revive a submitted prompt.
+Schema/open: [[src/main/chat-workspace/chat-workspace-db.ts#getChatWorkspaceDb]]. Domains: [[src/main/chat-workspace/chat-workspace-service.ts#openRun]], [[src/main/chat-workspace/chat-workspace-service.ts#patchRun]], [[src/main/chat-workspace/chat-workspace-service.ts#closeRun]], [[src/main/chat-workspace/chat-workspace-service.ts#getSnapshot]], [[src/main/chat-workspace/chat-workspace-service.ts#migrateFromV1]]. IPC: [[src/main/chat-workspace/chat-workspace-ipc.ts#registerChatWorkspaceIpc]]. Contract/channels: [[src/shared/chat-workspace/chat-workspace-contract.ts#CHAT_WORKSPACE_CHANNELS]] / [[src/shared/chat-workspace/chat-workspace-contract.ts#ChatWorkspaceSnapshot]]. Preload: [[src/preload/chat-workspace-api.ts#chatWorkspaceApi]]. Hydrate: [[src/renderer/src/modules/chat/workspace/usePersistentChatWorkspace.ts#loadPersistentChatWorkspace]]. Bind on `session.started`: [[src/main/chat-workspace/chat-workspace-service.ts#bindSessionToRun]]. Streaming/approvals stay in durable runtime ([[domain/chat#Durable runtime (v8.1)]]). Busy UI runs restore as `interrupted` and must not auto-resume. Decision: [[decisions#Persistent Chat Workspace and Session Catalog (v8.2.0)]].
+
+## Draft versus session runs
+
+A workspace run is a draft while `sessionId` is null; after Hermes binds a session it becomes a session run.
+
+Kind helper: [[src/shared/chat-workspace/chat-workspace-contract.ts#runKindFromSessionId]]. Drafts appear in Chat Tabs and Sessions Drafts section, not as Hermes `sessions` rows. Session runs may `linkedRunId`-dedupe via [[src/main/chat-workspace/chat-workspace-service.ts#openSession]]. Parent: [[domain/chat#Workspace persistence]].
+
+## Persistent mount and session catalog
+
+Chat menu switches must not unmount Chat — only `visible` / `hidden`. Sessions catalog reads profile `state.db`, not `sessions.json`.
+
+Always-mounted host: [[src/renderer/src/screens/Hermes/pages/Chat/HermesPersistentChatWorkspace.tsx#HermesPersistentChatWorkspace]] under [[src/renderer/src/screens/Hermes/panels/HermesShell.tsx#HermesShell]]. Catalog: [[src/main/session-catalog/session-catalog-profile-reader.ts#readSessionsForProfile]] + [[src/main/session-catalog/session-catalog-service.ts#listSessions]]; metadata in [[src/main/session-catalog/session-catalog-store.ts#upsertSessionMetadata]]; events via [[src/main/session-catalog/session-catalog-events.ts#emitSessionCatalogChanged]]; IPC [[src/main/session-catalog/session-catalog-ipc.ts#registerSessionCatalogIpc]]; contract [[src/shared/session-catalog/session-catalog-contract.ts#SESSION_CATALOG_CHANNELS]]; Preload [[src/preload/session-catalog-api.ts#sessionCatalogApi]]. Sessions UI: [[src/renderer/src/screens/Hermes/pages/Sessions/HermesSessionsPage.tsx#HermesSessionsPage]]. Opening history: [[src/main/chat-workspace/chat-workspace-service.ts#openSession]]. Paths: [[src/main/utils.ts#stateDbPathForProfile]]. Decision: [[decisions#Persistent Chat Workspace and Session Catalog (v8.2.0)]].
 
 ## Chat surfaces and engines
 
-Default Local Hermes chat uses `modules/chat` (`ChatSurface` + controller) inside [[src/renderer/src/screens/Hermes/pages/Chat/MultiRunChatShell.tsx#MultiRunChatShell]]. Legacy engine is opt-in via env.
+Default Local Hermes chat uses `modules/chat` (`ChatSurface` + controller) inside [[src/renderer/src/screens/Hermes/pages/Chat/MultiRunChatShell.tsx#MultiRunChatShellInner]]. Legacy engine is opt-in via env.
 
 `VITE_CHAT_ENGINE=legacy` falls back to the older Hermes webchat surface (`useWorkChatContext`). Copilot Host binds Work context through `useRunWorkContext` instead.
 

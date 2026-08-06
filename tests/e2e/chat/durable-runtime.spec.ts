@@ -61,10 +61,23 @@ test.describe("chat durable runtime e2e (v8.1.1)", () => {
   });
 
   test("electron window smoke", async () => {
-    test.skip(
-      !hasBuiltApp || process.env.E2E_ELECTRON_WINDOW !== "1",
-      "Set E2E_ELECTRON_WINDOW=1 after a runnable Electron build with UI",
-    );
+    const required = process.env.E2E_ELECTRON_REQUIRED === "1";
+    if (!hasBuiltApp) {
+      if (required) {
+        throw new Error(
+          "Built Electron app missing (out/main/index.js). Run npm run build first.",
+        );
+      }
+      test.skip(true, "Build the app before Electron window smoke");
+      return;
+    }
+    if (process.env.E2E_ELECTRON_WINDOW !== "1" && !required) {
+      test.skip(
+        true,
+        "Set E2E_ELECTRON_WINDOW=1 after a runnable Electron build with UI",
+      );
+      return;
+    }
     const harness = await launchElectronApp();
     try {
       await expect(harness.page).toHaveTitle(/SMC|Copilot|Hermes|Desktop/i);

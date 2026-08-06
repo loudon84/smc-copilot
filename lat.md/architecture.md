@@ -10,7 +10,7 @@ Renderer may only call `window.*` Preload APIs. Preload is the sole security bri
 
 ```text
 Renderer (React)
-  → window.hermesAPI / smcShell / desktopAuth / chatRuntime / …
+  → window.hermesAPI / smcShell / desktopAuth / chatRuntime / chatWorkspace / sessionCatalog / …
        ↓ ipcRenderer.invoke
 Preload (contextBridge)
        ↓ IPC
@@ -39,6 +39,8 @@ Primary surfaces:
 | `smcShell` | Startup gate, window controls |
 | `desktopAuth` / `desktopUserConfig` | Portal login + bootstrap (no tokens in Renderer) |
 | `chatRuntime` / `chatFiles` | v8 runId-isolated chat + file index |
+| `chatWorkspace` | v8.2 Chat Tab/Draft persistence (`chat-workspace.db`) |
+| `sessionCatalog` | v8.2 profile-aware Sessions list (reads `state.db`) |
 | `profileRuntime` | Multi-profile gateway control plane |
 | `aiosBrowser` | Web Operator browser control |
 | `mcpSkillGatewayRuntime` / `genehubRuntime` | MCP proxy + GeneHub sync |
@@ -49,7 +51,7 @@ IPC channel names must not be invented in Renderer; the Preload file is authorit
 
 Main is the privileged control plane. Domain logic lives in `src/main/<domain>.ts` (or `*-ipc.ts`); `src/main/index.ts` registers handlers thinly via `setupIPC()`.
 
-Notable domains: Gateway (`hermes.ts`), installer, config, sessions, profile-runtime, browser/Web Operator, auth, chat-runtime, chat-files, MCP, GeneHub, hermes-experts, enterprise install.
+Notable domains: Gateway (`hermes.ts`), installer, config, sessions, profile-runtime, browser/Web Operator, auth, chat-runtime, chat-files, chat-workspace, session-catalog, MCP, GeneHub, hermes-experts, enterprise install.
 
 ## Primary Main code anchors
 
@@ -66,6 +68,10 @@ These Main exports carry `@lat:` comments back to domain sections. Keep both sid
 | [[src/main/chat-runtime/chat-event-sequencer.ts#stampChatRuntimeEvent]] | [[domain/chat#Ordered runtime events]] |
 | [[src/main/chat-runtime/hermes-interaction-continuation-adapter.ts#createHermesInteractionContinuationAdapter]] | [[domain/chat#Interaction continuation]] |
 | [[src/main/chat-runtime/chat-recovery-coordinator.ts#recoverIncompleteTurns]] | [[domain/chat#Recovery and diagnostics]] |
+| [[src/main/chat-workspace/chat-workspace-ipc.ts#registerChatWorkspaceIpc]] | [[domain/chat#Workspace persistence]] |
+| [[src/main/chat-workspace/chat-workspace-service.ts#bindSessionToRun]] | [[domain/chat#Draft versus session runs]] |
+| [[src/main/session-catalog/session-catalog-ipc.ts#registerSessionCatalogIpc]] | [[domain/chat#Persistent mount and session catalog]] |
+| [[src/main/session-catalog/session-catalog-service.ts#listSessions]] | [[domain/chat#Persistent mount and session catalog]] |
 
 ## External runtimes
 

@@ -19,15 +19,16 @@ src/renderer/src/screens/Hermes/
 - **V7.1** Hermes Experts Workspace：专家广场 / 专家团队 / 专家运行 + profile-aware Chat
 - **V7.1.1** E2E：Chat↔Run 事件桥接、Tools&MCP Inspector、Desktop register/heartbeat
 - **v7.4.2 Chat-first Work Controls**：Chat 恢复默认入口与侧栏首位；`ComposerBar.workControlsSlot` 内嵌 `WorkComposerControls`（Expert / Skill / Permission / Gateway）；`WorkChatContextBar`；Send 双路径（Hermes SSE vs `workExpertGatewayApi.callExpertSkill`）；`tasks` / `workbench` 导航隐藏；`pages/Tasks/**` 源码保留不继续优化
-- **v8.0.3 Chat Workspace Layout**：`ChatRunRecord` per-run 隔离；单一 Header + Content Rail；Composer Context Chip；Tab 状态真实回传；`chat-workspace-state.v1` 持久化
-- **v8.0.4 Chat Turn Lifecycle**：`initialSessionId` 一次性 hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft；`turnId` 终态保护；右侧 `ChatFloatingRail`（Prompt Navigator + Session Files）
+- **v8.2.0 Persistent Chat Workspace + Session Catalog**：`ChatWorkspaceProvider` 提升至 `HermesScreen`；`HermesPersistentChatWorkspace` 常驻挂载（菜单只切 visible）；Main `chat-workspace.db` + `window.chatWorkspace`；Sessions 页走 `window.sessionCatalog` 直读 profile `state.db`，`openSession` 去重激活/创建 Tab
 - **v8.1.1 Durable Runtime Closure**：Continuation await completion + Native/Fallback 互斥；profile store；`ChatRuntimeRecoveryBridge`；Queue IPC；Error Card `retryTurn(turnId)`；Diagnostics Save Dialog；Playwright E2E
 - **v8.1.0 Durable Chat Runtime**：`chat-runtime:start` 事件驱动；durable `state.db`；Turn Ledger 精确 Retry；Queue reducer；Recovery/`getState`；Clarify/Approval 流式续跑
 - **v8.0.5 Chat Interaction Loop**：Clarify/Approval 真 Command（Follow-up Message）；Turn Snapshot Queue/Retry；Session Files Badge 走 `useSessionFilesSummary` + `chat-files:changed`（禁止硬编码 0）
+- **v8.0.4 Chat Turn Lifecycle**：`initialSessionId` 一次性 hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft；`turnId` 终态保护；右侧 `ChatFloatingRail`（Prompt Navigator + Session Files）
+- **v8.0.3 Chat Workspace Layout**：`ChatRunRecord` per-run 隔离；单一 Header + Content Rail；Composer Context Chip；Tab 状态真实回传；localStorage `chat-workspace-state.v1`（**v8.2** 起仅作迁移源）
 - **v7.4.1 Work 任务 Hotfix**（导航已由 v7.4.2 回退）：`pages/Tasks/` — `WorkTaskStartComposer`、`TaskWindow`、`work-tasks.json` 仍保留供遗留路径
 - **v1.4 Work 任务窗口**（已由 v7.4.1 取代主路径）：~~TaskStream mock SSE~~
 - 左栏 Sidebar：**三段分组**（主流程含 **chat**（默认）/ experts / expertTeams …；`tasks` / `workbench` **v7.4.2 隐藏**；能力管理 / 高级设置，后两组默认折叠）；**v1.3 Phase 6** `requiresGateway` 离线门控（disabled + tooltip）；窄栏仅显示主流程 icon
-- 中栏：当前选中页面内容
+- 中栏：当前选中页面内容（**v8.2** Chat 始终挂载于 `HermesShell`，非 chat 页时 `visibility:hidden`）
 - 右栏：Right Panel（Runtime / Inspector）
 - 固定使用 `default` profile 做本地 Chat；远端专家 `profileId: remote`
 - 与 Workspaces / copilot-serve 隔离
@@ -36,7 +37,10 @@ src/renderer/src/screens/Hermes/
 
 | 文件 | 作用 |
 |---|---|
-| `index.tsx` | 导出入口 + `useRemoteExpertContextBridge` |
+| `index.tsx` | 导出入口 + `ChatWorkspaceProvider` 提升 + `useRemoteExpertContextBridge` |
+| `panels/HermesShell.tsx` | **v8.2** 常驻 `HermesPersistentChatWorkspace` + 非 chat 页 `HermesPageLoader` |
+| `pages/Chat/HermesPersistentChatWorkspace.tsx` | **v8.2** Chat 常驻挂载（visible/hidden） |
+| `pages/Sessions/HermesSessionsPage.tsx` | **v8.2** `sessionCatalog.list` + Drafts + `openSession` |
 | `api/hermesDefaultApi.ts` | 封装 `window.hermesAPI` |
 | `constants.ts` | 导航项（**v7.4.2**：`chat` 首位可见；`tasks`/`workbench` hidden） |
 | `context/HermesDefaultContext.tsx` | 默认页 **chat**（v7.4.2）；历史 `tasks`/`workbench` localStorage 迁移至 `chat` |

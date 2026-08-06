@@ -5,6 +5,7 @@ import { HermesPageErrorBoundary } from "../components/HermesPageErrorBoundary";
 import { HermesPageSkeleton } from "../components/HermesPageSkeleton";
 import { useHermesDefault } from "../context/HermesDefaultContext";
 import { useGatewayNavGate } from "../features/nav/useGatewayNavGate";
+import { HermesPersistentChatWorkspace } from "../pages/Chat/HermesPersistentChatWorkspace";
 import { HERMES_PAGE_REGISTRY, type HermesPageKey } from "../registry/hermes-pages";
 import { HermesRightPanel } from "./HermesRightPanel";
 import { HermesRightPanelRail } from "./HermesRightPanelRail";
@@ -27,6 +28,7 @@ function HermesPageLoader({ pageKey }: { pageKey: HermesPageKey }) {
   );
 }
 
+// @lat: [[domain/chat#Persistent mount and session catalog]]
 export function HermesShell({
   activePanel,
   onPanelChange,
@@ -42,6 +44,7 @@ export function HermesShell({
   const { gatewayOnline, loading: gatewayLoading } = useGatewayNavGate();
 
   const pageKey = ((activePanel as HermesNavItemKey | undefined) ?? activeNavItem) as HermesPageKey;
+  const chatVisible = pageKey === "chat";
 
   const activeNavDefinition = useMemo(
     () => navItems.find((item) => item.key === pageKey),
@@ -77,7 +80,7 @@ export function HermesShell({
 
   return (
     <div className="hermes-screen">
-      <div className="hermes-shell">       
+      <div className="hermes-shell">
         <div
           className="hermes-body"
           style={
@@ -90,8 +93,9 @@ export function HermesShell({
           <HermesSidebar activePanel={activePanel} onPanelChange={onPanelChange} />
 
           <main className="hermes-center">
-            <div className="hermes-center-scroll">
-              <HermesPageLoader pageKey={pageKey} />
+            <div className="hermes-center-scroll hermes-center-scroll--relative">
+              <HermesPersistentChatWorkspace visible={chatVisible} />
+              {!chatVisible ? <HermesPageLoader pageKey={pageKey} /> : null}
             </div>
           </main>
 

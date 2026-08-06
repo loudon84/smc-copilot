@@ -188,6 +188,8 @@ import {
   shutdownChatRuntimeIpc,
 } from "./chat-runtime/chat-runtime-ipc";
 import { registerChatFilesIpc } from "./chat-files/chat-files-ipc";
+import { registerChatWorkspaceIpc } from "./chat-workspace/chat-workspace-ipc";
+import { registerSessionCatalogIpc } from "./session-catalog/session-catalog-ipc";
 import { registerFilesIpcHandlers } from "./chat-files/platform/register-file-ipc";
 import { registerWebOperatorTaskSessionIpc } from "./web-operator-task-session-ipc";
 import { setupProfileRoleIPC } from "./profile-role-ipc";
@@ -476,6 +478,8 @@ function setupIPC(): void {
       },
     });
     registerChatRuntimeIpc(() => mainWindow);
+    registerChatWorkspaceIpc(() => mainWindow);
+    registerSessionCatalogIpc(() => mainWindow);
     registerChatFilesIpc();
     registerFilesIpcHandlers(ipcMain);
     registerMcpIpc(() => mainWindow);

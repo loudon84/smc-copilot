@@ -268,6 +268,50 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 **Renderer**：**v8.1.1** `ChatRuntimeRecoveryBridge`、`useDurableChatQueue`、Error Card `retryTurn(turnId)`、`AiosChatRunContextAdapter`、Diagnostics Save；E2E：`npm run test:e2e:electron`。
 
+**v8.2 联动**：`session.started` / turn `completed` 时 Main 调用 `bindSessionToRun` + `session-catalog:changed` 广播（见下节 Chat Workspace / Session Catalog）。
+
+---
+
+## Chat Workspace（v8.2 Persistent Workspace）
+
+**Preload**：`window.chatWorkspace`（`src/preload/chat-workspace-api.ts`）  
+**Main**：`src/main/chat-workspace/`（桌面库 `~/.hermes/desktop/chat-workspace.db`；**不是** profile `state.db`）  
+**契约**：`src/shared/chat-workspace/chat-workspace-contract.ts`
+
+| Channel | Direction | Args | Returns | Notes |
+|---------|-----------|------|---------|-------|
+| `chat-workspace:get-snapshot` | invoke | `workspaceId?` | `ChatWorkspaceSnapshot` | 权威 Tab/Draft/Active 元数据 |
+| `chat-workspace:list` | invoke | `workspaceId?` | `ChatWorkspaceRunRow[]` | 未关闭 runs |
+| `chat-workspace:open` | invoke | `ChatWorkspaceOpenInput` | `ChatWorkspaceSnapshot` | 创建/更新 draft 或 session run |
+| `chat-workspace:open-session` | invoke | `ChatWorkspaceOpenSessionInput` | `{ runId, created, workspaceId, snapshot }` | 同 session 默认去重激活 |
+| `chat-workspace:patch-run` | invoke | `ChatWorkspacePatchRunInput` | `ChatWorkspaceSnapshot` | 元数据补丁 |
+| `chat-workspace:close-run` | invoke | `ChatWorkspaceCloseRunInput` | `ChatWorkspaceSnapshot` | soft close（`closed_at`） |
+| `chat-workspace:set-active` | invoke | `ChatWorkspaceSetActiveInput` | `ChatWorkspaceSnapshot` | |
+| `chat-workspace:reorder` | invoke | `ChatWorkspaceReorderInput` | `ChatWorkspaceSnapshot` | |
+| `chat-workspace:migrate-v1` | invoke | `ChatWorkspaceMigrateV1Input` | `ChatWorkspaceSnapshot` | localStorage `chat-workspace-state.v1` → db |
+| `chat-workspace:changed` | event | — | `ChatWorkspaceSnapshot` | Main → Renderer；Provider 合并视图缓存 |
+
+**Renderer**：`ChatWorkspaceProvider` 提升至 `HermesScreen`；`HermesPersistentChatWorkspace` 常驻挂载（menu 只切 visible）；`sessionId==null` = draft。
+
+---
+
+## Session Catalog（v8.2 Unified Catalog）
+
+**Preload**：`window.sessionCatalog`（`src/preload/session-catalog-api.ts`）  
+**Main**：`src/main/session-catalog/`（profile-aware `stateDbPathForProfile` 直读 `sessions`/`messages`；metadata 表 `chat_session_metadata` 在 `chat-workspace.db`）  
+**契约**：`src/shared/session-catalog/session-catalog-contract.ts`
+
+| Channel | Direction | Args | Returns | Notes |
+|---------|-----------|------|---------|-------|
+| `session-catalog:list` | invoke | `SessionCatalogQuery` | `SessionCatalogListResult` | **不再**依赖 `sessions.json` 作为主数据源 |
+| `session-catalog:rename` | invoke | `{ profileId, sessionId, title }` | `SessionCatalogItem \| null` | 写 metadata + 同步 workspace run title |
+| `session-catalog:archive` | invoke | `{ profileId, sessionId, archived }` | `{ ok }` | soft archive |
+| `session-catalog:delete` | invoke | `{ profileId, sessionId, soft? }` | `{ ok }` | 默认 soft |
+| `session-catalog:pin` | invoke | `{ profileId, sessionId, pinned }` | `{ ok }` | |
+| `session-catalog:changed` | event | — | `SessionCatalogChangedPayload` | `session.started` / `turn.completed` / rename / archive 等 |
+
+**Renderer**：`HermesSessionsPage` → `sessionCatalog.list` + `openSession` 导航 Chat；空状态区分 No sessions / profile / search / db unavailable。
+
 ---
 
 ## Chat Files（v8.0.1 index · v8.0.2 File Platform · v8.0.5 changed）

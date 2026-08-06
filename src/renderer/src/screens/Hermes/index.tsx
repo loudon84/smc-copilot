@@ -1,4 +1,5 @@
 import "./Hermes.css";
+import { ChatWorkspaceProvider } from "@renderer/modules/chat/workspace/ChatWorkspaceProvider";
 import { HermesDefaultProvider } from "./context/HermesDefaultContext";
 import { HermesExpertsProvider } from "./context/HermesExpertsContext";
 import { HermesWorkspaceProvider } from "./context/HermesWorkspaceContext";
@@ -31,11 +32,13 @@ export function HermesScreen({
     <HermesDefaultProvider>
       <HermesWorkspaceProvider>
         <HermesExpertsProvider>
-          <HermesScreenInner
-            activePanel={activePanel}
-            onPanelChange={onPanelChange}
-            onOpenRuntimeSettings={onOpenRuntimeSettings}
-          />
+          <ChatWorkspaceProvider>
+            <HermesScreenInner
+              activePanel={activePanel}
+              onPanelChange={onPanelChange}
+              onOpenRuntimeSettings={onOpenRuntimeSettings}
+            />
+          </ChatWorkspaceProvider>
         </HermesExpertsProvider>
       </HermesWorkspaceProvider>
     </HermesDefaultProvider>
