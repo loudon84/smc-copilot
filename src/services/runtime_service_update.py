@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,9 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import Settings
 from core.runtime_errors import RuntimeServiceError
 from db.models.runtime import RuntimeServiceVersion
+from local_service.runtime_maintenance import apply_maintenance
+from runtime.archive_policy import ArchivePolicy
 from runtime.artifact_downloader import ArtifactDownloader
 from runtime.artifact_signature import ArtifactSignatureVerifier
-from runtime.archive_policy import ArchivePolicy
 from runtime.checksum_verifier import ChecksumVerifier
 from runtime.platform_paths import RuntimeLayout
 from version import __version__
@@ -124,22 +127,40 @@ class RuntimeServiceUpdateService:
                 _step(name, "skipped", "dry_run")
             return {"version": target_version, "dryRun": True, "steps": steps}
 
-        _step("stop_daemon", "stub", "Maintenance process would stop UserDaemon")
-        _step("backup_db", "stub", f"Would backup {self._layout.db_path}")
-        _step("replace", "stub", f"Would replace service bundle from {artifact}")
-        _step("alembic", "stub", "Would run alembic upgrade head")
-        _step("start", "stub", "Would start UserDaemon")
-        _step("health", "stub", "Would poll /health until ready")
+        install_dir = self._settings.resolved_copilot_runtime_dir() or (self._layout.root / "install")
+        backup_dir = self._layout.backups
+        port = int(self._settings.runtime_port)
+
+        # Prefer in-process maintenance (same as runtime-maintenance CLI / exe entry).
+        result = await asyncio.to_thread(
+            apply_maintenance,
+            artifact=artifact,
+            install_dir=install_dir,
+            db_path=self._layout.db_path,
+            backup_dir=backup_dir,
+            port=port,
+            health_url=f"http://127.0.0.1:{port}/api/v1/health",
+            python_exe=sys.executable,
+        )
+        for s in result.get("steps") or []:
+            if isinstance(s, dict) and "step" in s:
+                steps.append(s)
+
+        if not result.get("ok"):
+            raise RuntimeServiceError(
+                f"Maintenance apply failed: {result.get('error')}",
+                code="maintenance_failed",
+            )
 
         row.status = "applied"
         row.applied_at = datetime.now(UTC)
         await self._session.commit()
         return {
             "version": target_version,
-            "applied": False,
-            "maintenanceRequired": True,
+            "applied": True,
+            "maintenanceRequired": False,
             "steps": steps,
-            "note": "Apply orchestration is stubbed; invoke maintenance executable for real replace/restart.",
+            "maintenance": result,
         }
 
     async def _fetch_latest_release(self, channel: str) -> dict[str, Any] | None:

@@ -1,13 +1,14 @@
-# Runtime Windows CI (FR-25)
+# Runtime Windows CI (PRD v1.5 FR-04 / FR-05)
 #
 # Channels: dev → beta → stable (stable promotes verified artifacts; does not rebuild).
-# Authenticode signing requires repository secrets (not available in all environments).
+# Authenticode signing requires repository secrets.
+# Stable builds fail hard on missing WiX / MSI / signing — no continue-on-error.
 
 name: runtime-windows
 
 on:
   push:
-    branches: [main, "feature/runtime-v1.4-*"]
+    branches: [main, "feature/runtime-v1.4-*", "feature/runtime-v1.5-*"]
     tags: ["runtime-v*"]
   pull_request:
     branches: [main]
@@ -34,6 +35,16 @@ jobs:
         run: ruff check src tests
       - name: Pytest
         run: pytest -q --tb=short
+      - name: Gated Windows E2E (when secrets/env set)
+        env:
+          COPILOT_E2E_HERMES: ${{ secrets.COPILOT_E2E_HERMES }}
+          COPILOT_E2E_INSTALLER: ${{ secrets.COPILOT_E2E_INSTALLER }}
+        run: |
+          if ($env:COPILOT_E2E_HERMES -eq "1" -or $env:COPILOT_E2E_INSTALLER -eq "1") {
+            pytest -q tests/test_windows_e2e_gated.py --tb=short
+          } else {
+            Write-Host "E2E gated — set repo secret COPILOT_E2E_HERMES=1 to enable"
+          }
 
   build-bundle:
     runs-on: windows-latest
@@ -47,47 +58,117 @@ jobs:
         run: |
           python -m pip install -U pip build
           python -m build --wheel
+      - name: Download embeddable Python
+        run: |
+          $ver = "3.12.10"
+          $url = "https://www.python.org/ftp/python/$ver/python-$ver-embed-amd64.zip"
+          $out = "$env:RUNNER_TEMP\python-embed.zip"
+          Invoke-WebRequest -Uri $url -OutFile $out
+          echo "RUNTIME_EMBEDDABLE_PYTHON_ZIP=$out" >> $env:GITHUB_ENV
       - name: Build runtime bundle
-        run: powershell -ExecutionPolicy Bypass -File build/runtime-bundle.ps1
+        run: |
+          powershell -ExecutionPolicy Bypass -File build/runtime-bundle.ps1 `
+            -Version 1.5.0 `
+            -EmbeddablePythonZip $env:RUNTIME_EMBEDDABLE_PYTHON_ZIP
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
           name: runtime-bundle-win-x64
-          path: dist/runtime-bundle-win-x64.zip
+          path: |
+            dist/runtime-bundle-1.5.0-win-x64.zip
+            dist/runtime-bundle-win-x64.zip
 
-  # MSI / Setup.exe / Authenticode — gated on secrets
   package-sign:
     runs-on: windows-latest
     needs: build-bundle
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/runtime-v')
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve channel
+        id: channel
+        run: |
+          $channel = "${{ github.event.inputs.channel }}"
+          if (-not $channel) { $channel = "dev" }
+          echo "value=$channel" >> $env:GITHUB_OUTPUT
       - name: Download bundle
         uses: actions/download-artifact@v4
         with:
           name: runtime-bundle-win-x64
           path: dist
-      - name: Build MSI (requires WiX)
-        continue-on-error: true
+      - name: Install WiX
         run: |
-          if (Get-Command wix -ErrorAction SilentlyContinue) {
-            wix build installer/wix/Package.wxs -o dist/SMC-Copilot-Runtime-x64.msi
-          } else {
-            Write-Host "WiX not installed — skipping MSI (scaffold only)"
+          dotnet tool install --global wix --version 5.0.2
+          wix --version
+      - name: Build MSI
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          # Payload binder: extract launcher stub for WiX File source
+          $zip = Get-ChildItem dist -Filter "runtime-bundle*.zip" | Select-Object -First 1
+          if (-not $zip) { throw "runtime bundle zip missing" }
+          Expand-Archive -Path $zip.FullName -DestinationPath build/bundle -Force
+          # WiX requires an exe keypath — copy cmd wrapper as CopilotRuntime.exe placeholder via powershell host
+          Copy-Item (Join-Path $PSScriptRoot "..\..") -ErrorAction SilentlyContinue
+          @"
+          @echo off
+          cd /d "%~dp0"
+          call runtime-launcher.cmd %*
+          "@ | Set-Content -Path build/CopilotRuntime.exe.cmd -Encoding ASCII
+          Copy-Item build/CopilotRuntime.exe.cmd build/CopilotRuntime.exe -Force
+          wix build installer/wix/Package.wxs -o dist/SMC-Copilot-Runtime-1.5.0-x64.msi -b build
+          if (-not (Test-Path dist/SMC-Copilot-Runtime-1.5.0-x64.msi)) {
+            throw "MSI build failed"
+          }
+      - name: Build Burn Setup (optional when Bootstrapper present)
+        run: |
+          if (Test-Path installer/bootstrapper/Bootstrapper.wxs) {
+            wix build installer/bootstrapper/Bootstrapper.wxs -o dist/SMC-Copilot-Runtime-Setup-1.5.0.exe -b dist
+          }
+          if ("${{ steps.channel.outputs.value }}" -eq "stable") {
+            if (-not (Test-Path dist/SMC-Copilot-Runtime-Setup-1.5.0.exe) -and -not (Test-Path dist/SMC-Copilot-Runtime-1.5.0-x64.msi)) {
+              throw "Stable requires MSI or Setup.exe"
+            }
           }
       - name: Authenticode sign
-        # Requires secrets: CODE_SIGNING_CERT_PFX (base64), CODE_SIGNING_CERT_PASSWORD
-        if: ${{ secrets.CODE_SIGNING_CERT_PFX != '' }}
         env:
           CODE_SIGNING_CERT_PFX: ${{ secrets.CODE_SIGNING_CERT_PFX }}
           CODE_SIGNING_CERT_PASSWORD: ${{ secrets.CODE_SIGNING_CERT_PASSWORD }}
         run: |
+          $channel = "${{ steps.channel.outputs.value }}"
+          if (-not $env:CODE_SIGNING_CERT_PFX) {
+            if ($channel -eq "stable") { throw "Stable channel requires CODE_SIGNING_CERT_PFX" }
+            Write-Host "No signing cert — skipping for channel=$channel"
+            exit 0
+          }
           $bytes = [Convert]::FromBase64String($env:CODE_SIGNING_CERT_PFX)
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", $bytes)
           Get-ChildItem dist -Include *.msi,*.exe -Recurse | ForEach-Object {
             signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGNING_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed for $($_.Name)" }
           }
-      - name: Publish manifest placeholder
+      - name: Publish release manifest
         run: |
-          $channel = "${{ github.event.inputs.channel || 'dev' }}"
-          Write-Host "Would publish signed artifacts to channel=$channel"
+          $channel = "${{ steps.channel.outputs.value }}"
+          $items = Get-ChildItem dist -Include *.msi,*.exe,*.zip -Recurse | ForEach-Object {
+            @{
+              name = $_.Name
+              sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              size = $_.Length
+            }
+          }
+          $manifest = @{
+            channel = $channel
+            version = "1.5.0"
+            builtAt = (Get-Date).ToUniversalTime().ToString("o")
+            artifacts = @($items)
+          } | ConvertTo-Json -Depth 6
+          Set-Content -Path dist/runtime-release-manifest.json -Value $manifest -Encoding UTF8
+          Write-Host "Published local manifest for channel=$channel"
+          Get-Content dist/runtime-release-manifest.json
+      - name: Upload signed packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-windows-packages-1.5.0
+          path: |
+            dist/*.msi
+            dist/*.exe
+            dist/runtime-release-manifest.json

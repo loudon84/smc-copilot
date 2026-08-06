@@ -1,6 +1,6 @@
 [project]
 name = "smc-copilot-serve"
-version = "1.4.0"
+version = "1.5.0"
 description = "smc-copilot-desktop local control plane — Hermes profiles, gateway supervisor"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -34,6 +34,7 @@ service = [
 [project.scripts]
 smc-copilot-serve = "main:main"
 ai-copilot-service = "local_service.service_cli:main"
+runtime-maintenance = "local_service.runtime_maintenance:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -48,7 +49,7 @@ dev-mode-dirs = ["src"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 
 [tool.ruff]
 line-length = 120

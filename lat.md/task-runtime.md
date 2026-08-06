@@ -1,8 +1,8 @@
 # 任务运行时
 
-任务来自本地或 Team Hub，经状态机流转、路由绑定 Profile、审批门控后在目标 Gateway 上执行 Hermes Run，并通过 Sync Outbox 回写远端。所有状态迁移受状态机约束，事件以 SSE 暴露。任务模型见 [[src/db/models/local_task.py#LocalTask]]。
+任务来自本地、旧 Team Hub（兼容）或 v1.5 Remote Task Assignment v2（主路径）。经状态机/审批/Workspace Guard 后在 Instance Gateway 执行，并通过 Outbox 回传。远程任务企业协议见 [[endpoint-sync#Remote Task v2]]。
 
-相关：[[approval-workspace#审批与工作空间]]、[[gateway-supervisor#Gateway 监管]]、[[data-model#Profile 与任务表]]。
+相关：[[approval-workspace#审批与工作空间]]、[[gateway-supervisor#Gateway 监管]]、[[data-model#Profile 与任务表]]、[[endpoint-sync#Endpoint Sync]]。
 
 ## 任务状态机
 
@@ -14,11 +14,11 @@
 
 ## Team Hub 集成
 
-[[src/integrations/team_hub/client.py#TeamHubClient]] 为 Protocol，`StubTeamHubClient`（默认）与 `HttpTeamHubClient`（占位 REST）两实现。`ingest_assignment` 先查 `TeamTaskBinding` 去重，再 `claim_assignment`，创建 `LocalTask` + binding，记事件/审计/Outbox，然后路由。Hub 选择在 [[src/core/lifecycle.py#lifespan]] `_hub_factory`：无 base_url 或 `AIOS_TEAM_HUB_USE_STUB` 用 Stub。
+[[src/integrations/team_hub/client.py#TeamHubClient]] 为遗留 Protocol；`HttpTeamHubClient` 已标记 Deprecated。新远程任务走 Service Center + [[endpoint-sync#Remote Task v2]]。`StubTeamHubClient` 仍供旧 `/team-tasks` 与 v1.2 测试。`ingest_assignment` 先查 `TeamTaskBinding` 去重，再 claim 并创建 `LocalTask`。Hub 选择在 [[src/core/lifecycle.py#lifespan]] `_hub_factory`。
 
 ## Sync Outbox
 
-[[src/services/task_sync_service.py#TaskSyncService]] `enqueue` 将事件写入 `sync_outbox`。[[src/workers/v12_workers.py#SyncOutboxWorker]] 周期推送 pending 行到 Hub，成功置 `sent` 并在 `task_completed` 时将任务迁移到 `synced`；失败累计 `retry_count`，超 `AIOS_SYNC_OUTBOX_MAX_RETRIES` 置 `failed`。状态见 [[src/core/enums.py#OutboxStatus]]。
+v1.2 [[src/services/task_sync_service.py#TaskSyncService]] 仍写 `sync_outbox`，由 [[src/workers/v12_workers.py#SyncOutboxWorker]] 推 Team Hub。v1.5 企业交付改用 [[src/db/models/endpoint_sync.py#DeliveryOutbox]]（状态含 dead_letter），由 [[src/workers/delivery_outbox_worker.py#DeliveryOutboxWorker]] 批量推 Service Center；迁移时拷贝未发送 `sync_outbox` 行。状态见 [[src/core/enums.py#OutboxStatus]] / [[src/core/enums.py#DeliveryOutboxStatus]]。
 
 ## 执行与取消
 
@@ -26,4 +26,4 @@
 
 ## 后台 Worker
 
-[[src/workers/v12_workers.py#TaskListenerWorker]] 轮询 Hub 拉取并 ingest assignment；`RunEventWorker` 轮询运行中任务的 Run 状态与事件（用 SHA256 指纹去重，上限 2000），完成/失败时迁移状态并写 Outbox。三者均 `run_forever` 循环、捕获 `CancelledError` 重抛、其它异常仅记日志，在 [[src/core/lifecycle.py#lifespan]] 关闭期统一 cancel（见 [[architecture#生命周期与后台循环]]）。
+v1.2：[[src/workers/v12_workers.py#TaskListenerWorker]] / `RunEventWorker` / `SyncOutboxWorker`。v1.5 另启 Endpoint Sync workers（见 [[endpoint-sync#Workers]]）。均 `run_forever`、捕获 `CancelledError` 重抛，在 [[src/core/lifecycle.py#lifespan]] 关闭期统一 cancel。

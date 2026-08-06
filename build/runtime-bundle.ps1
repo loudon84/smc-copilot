@@ -1,9 +1,13 @@
-# Build self-contained Runtime bundle (FR-14).
-# Output: runtime-bundle-win-x64.zip
+# Build self-contained Runtime bundle (PRD v1.5 FR-01).
+# Output: runtime-bundle-<version>-win-x64.zip
+# Refuses placeholder python/site-packages — Stable must ship real embeddable Python.
 param(
     [string]$RepoRoot = "",
     [string]$OutputDir = "",
-    [string]$Version = "0.0.0-dev"
+    [string]$Version = "1.5.0",
+    [string]$EmbeddablePythonZip = "",
+    [string]$SitePackagesSource = "",
+    [switch]$AllowDevPlaceholder
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,43 +46,76 @@ Get-ChildItem -Path (Join-Path $RepoRoot "scripts") -File | Copy-Item -Destinati
 $migrationsDest = Join-Path $bundleRoot "migrations"
 Copy-Item -Path (Join-Path $RepoRoot "migrations\*") -Destination $migrationsDest -Recurse -Force
 
-# config placeholder
+# config
 $configDest = Join-Path $bundleRoot "config"
-@"
-# Runtime bundle config
-# Copy .env.example values here for enterprise installs.
-"@ | Set-Content -Path (Join-Path $configDest "README.md") -Encoding UTF8
 if (Test-Path (Join-Path $RepoRoot ".env.example")) {
     Copy-Item -Path (Join-Path $RepoRoot ".env.example") -Destination (Join-Path $configDest ".env.example") -Force
 }
 
-# site-packages placeholder (CI may populate via pip install --target)
+# --- Embeddable Python (required for Stable) ---
+$pythonDir = Join-Path $bundleRoot "python"
+if ($EmbeddablePythonZip -and (Test-Path $EmbeddablePythonZip)) {
+    Write-Host "Extracting embeddable Python from $EmbeddablePythonZip"
+    Expand-Archive -Path $EmbeddablePythonZip -DestinationPath $pythonDir -Force
+} elseif ($env:RUNTIME_EMBEDDABLE_PYTHON_ZIP -and (Test-Path $env:RUNTIME_EMBEDDABLE_PYTHON_ZIP)) {
+    Write-Host "Extracting embeddable Python from `$env:RUNTIME_EMBEDDABLE_PYTHON_ZIP"
+    Expand-Archive -Path $env:RUNTIME_EMBEDDABLE_PYTHON_ZIP -DestinationPath $pythonDir -Force
+} elseif ($AllowDevPlaceholder) {
+    Write-Warning "AllowDevPlaceholder: copying host python layout markers only (NOT for Stable)"
+    @"
+# DEV PLACEHOLDER — not a shippable runtime
+"@ | Set-Content -Path (Join-Path $pythonDir "DEV_PLACEHOLDER") -Encoding UTF8
+} else {
+    throw "Embeddable Python zip required (pass -EmbeddablePythonZip or set RUNTIME_EMBEDDABLE_PYTHON_ZIP). Refuse placeholder README."
+}
+
+$pythonExe = Join-Path $pythonDir "python.exe"
+if (-not (Test-Path $pythonExe) -and -not $AllowDevPlaceholder) {
+    throw "python\python.exe missing after extract — aborting bundle"
+}
+
+# --- site-packages ---
+$siteDest = Join-Path $bundleRoot "site-packages"
+if ($SitePackagesSource -and (Test-Path $SitePackagesSource)) {
+    Copy-Item -Path (Join-Path $SitePackagesSource "*") -Destination $siteDest -Recurse -Force
+} elseif ($env:RUNTIME_SITE_PACKAGES_DIR -and (Test-Path $env:RUNTIME_SITE_PACKAGES_DIR)) {
+    Copy-Item -Path (Join-Path $env:RUNTIME_SITE_PACKAGES_DIR "*") -Destination $siteDest -Recurse -Force
+} elseif ($AllowDevPlaceholder) {
+    Write-Warning "AllowDevPlaceholder: empty site-packages (NOT for Stable)"
+} else {
+    # Install project into target using host pip
+    Write-Host "Installing project deps into site-packages via pip --target"
+    & python -m pip install --upgrade pip
+    & python -m pip install --target $siteDest (Join-Path $RepoRoot ".")
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip install --target site-packages failed"
+    }
+}
+
+$pyFiles = Get-ChildItem -Path $siteDest -Recurse -Filter "*.py" -ErrorAction SilentlyContinue
+if (-not $pyFiles -and -not $AllowDevPlaceholder) {
+    throw "site-packages appears empty — refuse README-only placeholder"
+}
+
+# runtime-launcher shim (PowerShell entry used until PyInstaller exe is wired)
+$launcherPs1 = Join-Path $bundleRoot "runtime-launcher.ps1"
 @"
-# site-packages
-#
-# CI should populate this directory with wheel-installed dependencies
-# (pip install --target site-packages -r requirements.lock).
-"@ | Set-Content -Path (Join-Path $bundleRoot "site-packages\README.md") -Encoding UTF8
+# Runtime launcher (v1.5)
+param([Parameter(ValueFromRemainingArguments=`$true)][string[]]`$ArgsRest)
+`$ErrorActionPreference = 'Stop'
+`$Root = Split-Path -Parent `$MyInvocation.MyCommand.Path
+`$Py = Join-Path `$Root 'python\python.exe'
+`$Env:PYTHONPATH = (Join-Path `$Root 'runtime\src') + [IO.Path]::PathSeparator + (Join-Path `$Root 'site-packages')
+if (-not (Test-Path `$Py)) { throw 'python\python.exe not found in bundle' }
+& `$Py -m main @ArgsRest
+exit `$LASTEXITCODE
+"@ | Set-Content -Path $launcherPs1 -Encoding UTF8
 
-# python: embeddable CPython placeholder (CI replaces with real embeddable Python)
-$pythonReadme = @"
-# Embeddable Python (win-amd64)
-
-This folder is a placeholder. CI must replace it with the official
-Windows embeddable Python 3.12 package:
-
-  https://www.python.org/downloads/windows/
-
-Extract embeddable zip contents here so that:
-
-  python\python.exe
-  python\python312._pth
-
-exist before shipping runtime-bundle-win-x64.zip.
-
-Employees should not need a system Python install when this bundle is complete.
-"@
-Set-Content -Path (Join-Path $bundleRoot "python\README.md") -Value $pythonReadme -Encoding UTF8
+# Also expose a .cmd for Windows double-click / installer
+@"
+@echo off
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0runtime-launcher.ps1" %*
+"@ | Set-Content -Path (Join-Path $bundleRoot "runtime-launcher.cmd") -Encoding ASCII
 
 $manifest = @{
     name = "runtime-bundle"
@@ -87,21 +124,31 @@ $manifest = @{
     architecture = "x86_64"
     artifactType = "runtime-bundle"
     builtAt = (Get-Date).ToUniversalTime().ToString("o")
+    placeholder = [bool]$AllowDevPlaceholder
     layout = @{
         runtime = "Application source (src/, pyproject.toml)"
-        python = "Embeddable CPython 3.12 (CI-populated)"
+        python = "Embeddable CPython 3.12"
         sitePackages = "Pre-installed Python dependencies"
         scripts = "Windows provisioning and service scripts"
         migrations = "Alembic migrations"
         config = "Enterprise config templates"
+        launcher = "runtime-launcher.ps1 / runtime-launcher.cmd"
     }
 } | ConvertTo-Json -Depth 6
 Set-Content -Path (Join-Path $bundleRoot "manifest.json") -Value $manifest -Encoding UTF8
 
-$zipName = "runtime-bundle-win-x64.zip"
+if ($AllowDevPlaceholder) {
+    Write-Warning "Bundle marked placeholder=true — must not enter Stable channel"
+}
+
+$zipName = "runtime-bundle-$Version-win-x64.zip"
 $zipPath = Join-Path $OutputDir $zipName
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $bundleRoot "*") -DestinationPath $zipPath -Force
+
+# Compatibility alias used by older CI
+$aliasPath = Join-Path $OutputDir "runtime-bundle-win-x64.zip"
+Copy-Item -Path $zipPath -Destination $aliasPath -Force
 
 Remove-Item -Path $staging -Recurse -Force -ErrorAction SilentlyContinue
 

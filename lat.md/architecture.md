@@ -16,9 +16,10 @@
 | `db/repositories/` | 数据访问 | 调 Gateway / Shell / Team Hub |
 | `services/` | 业务编排与状态迁移 | 跨层直访外部系统 |
 | `integrations/hermes/` | Gateway HTTP、配置、Profile 加载、角色编译 | — |
-| `integrations/team_hub/` | 远程 Team Task Hub 同步 | — |
-| `runtime/` | 进程注册、端口分配、Gateway 子进程、环境探测 | — |
-| `workers/` | 可取消后台循环（监听/同步/事件采集） | 阻塞事件循环 |
+| `integrations/team_hub/` | 旧 Team Task Hub（Deprecated 兼容 Adapter） | 新远程任务主路径 |
+| `integrations/service_center/` | Work Copilot Service Center 出站 Client（Stub/HTTPS） | — |
+| `runtime/` | 进程注册、端口、Gateway 子进程、环境探测、同步协议 | — |
+| `workers/` | 可取消后台循环（任务/Hub Outbox + Endpoint Sync） | 阻塞事件循环 |
 
 仓储层只做 DB 操作；外部调用必须经 `integrations/` 适配器；进程与端口经 `runtime/`；后台循环经 `workers/` 且必须可取消、受生命周期管理（见 [[task-runtime#后台 Worker]]）。
 
@@ -30,6 +31,6 @@
 
 ## 生命周期与后台循环
 
-[[src/core/lifecycle.py#lifespan]] 启动：日志、引擎、Supervisor、JobService（注册 install/update/rollback/doctor）、recover jobs，再按 FR-06 顺序 reconcile/autostart Instance 与 legacy Profile，最后启 worker。
+[[src/core/lifecycle.py#lifespan]] 启动：日志、引擎、Supervisor、Service Center Client、JobService（注册 install/update/rollback/doctor）、recover jobs，再按 FR-06 reconcile/autostart Instance 与 legacy Profile，最后启 v1.2 与 v1.5 Endpoint Sync workers。
 
-关闭：停 Job worker 与后台 Worker → `shutdown_all_instances` → `shutdown_all_legacy_profiles` → dispose 引擎。绑定地址用 `settings.bind_host`/`bind_port`（`RUNTIME_*` 优先于 `COPILOT_*`）。测试经 `app.state._test_*` 注入并禁用自启/worker。详见 [[gateway-supervisor#启动时重协调]]。
+关闭：停 Job worker 与后台 Worker → `shutdown_all_instances` → `shutdown_all_legacy_profiles` → dispose 引擎。绑定地址用 `settings.bind_host`/`bind_port`（`RUNTIME_*` 优先于 `COPILOT_*`）。测试经 `app.state._test_*`（含 `_test_service_center`）注入并禁用自启/worker。详见 [[gateway-supervisor#启动时重协调]]、[[endpoint-sync#Workers]]。

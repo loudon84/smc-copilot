@@ -8,6 +8,8 @@
 
 **依赖：** 附件上传需安装 `python-multipart`（见 `pyproject.toml`）
 
+**API Version：** `1.2`（`GET /api/v1/runtime/capabilities`）。v1.5 新增 Endpoint / Sync / Remote Tasks / Experience，见下文。
+
 ---
 
 ## 鉴权与 CORS
@@ -349,6 +351,22 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 
 1. `GET /desktop/task-workbench/summary`  
 2. `GET /tasks/{id}/events/stream` 有事件流  
+
+**V1.5 Endpoint Sync（Stub Service Center）**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/endpoint/status` | 注册与 sync 状态 |
+| POST | `/api/v1/endpoint/enrollment/start` | 开始 enrollment，生成设备密钥 |
+| POST | `/api/v1/endpoint/enrollment/complete` | 完成注册 |
+| POST | `/api/v1/endpoint/enrollment/revoke` | 吊销（不停本地 Chat） |
+| GET | `/api/v1/endpoint/inventory` | 脱敏库存 |
+| GET/POST | `/api/v1/sync/status`、`/sync/now` | 同步状态 / 立即拉取 |
+| GET | `/api/v1/sync/channels`、`/resources`、`/conflicts`、`/dead-letters` | 渠道与资源 |
+| GET/POST | `/api/v1/remote-tasks`、`/{id}/accept|reject|cancel` | Remote Task v2 |
+| GET/POST | `/api/v1/experience/evidence`、`/candidates`、`/{id}/submit` | 经验证据与 StaffDeck 提交 |
+
+默认 `AIOS_SERVICE_CENTER_USE_STUB=true`。Capability 含 `endpoint.enrollment`、`sync.desired-state`、`tasks.remote.v2`、`experience.staffdeck.submit` 等（apiVersion `1.2`）。
 
 ---
 

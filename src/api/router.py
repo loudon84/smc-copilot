@@ -10,6 +10,8 @@ from api.v1 import (
     configurations,
     desktop_workbench,
     diagnostics,
+    endpoint,
+    experience,
     gateways,
     health,
     hermes_runs,
@@ -18,11 +20,13 @@ from api.v1 import (
     pairings,
     profiles,
     bootstrap,
+    remote_tasks,
     role_library,
     runtime,
     secrets,
     service,
     sessions,
+    sync,
     system,
     task_routing,
     tasks,
@@ -51,6 +55,10 @@ api_router.include_router(gateways.router)
 api_router.include_router(hermes_runs.router)
 api_router.include_router(tasks.router)
 api_router.include_router(team_tasks.router)
+api_router.include_router(endpoint.router)
+api_router.include_router(sync.router)
+api_router.include_router(remote_tasks.router)
+api_router.include_router(experience.router)
 api_router.include_router(workspaces.router)
 api_router.include_router(approvals.router)
 api_router.include_router(task_routing.router)

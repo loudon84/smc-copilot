@@ -148,6 +148,102 @@ Runtime 状态机含 `starting`/`ready`/`degraded`/`maintenance`/`failed`（FR-2
 
 当某检查项为 `failed` 或 `degraded`（如 defaultInstance）但数据库仍可用时，聚合状态为 `degraded`。
 
+## Runtime Service Update
+
+Runtime maintenance / service bundle apply（v1.5 FR-03）。
+
+### Maintenance apply replaces bundle
+
+`apply_maintenance` 解压制品、替换安装目录并返回 applied 步骤。
+
+## Endpoint Sync
+
+v1.5 Endpoint 身份、Sync、Desired State、Remote Task v2、Experience 的 Stub 驱动测试，见 [[endpoint-sync#Endpoint Sync]]。
+
+### Enrollment start and complete
+
+验证 enrollment start 生成公钥并 pending，complete 后 credential 激活且 syncEnabled。
+
+### Enrollment revoke keeps local usable
+
+吊销后 syncEnabled=false，本地 status 为 revoked。
+
+### Device key sign verify
+
+Ed25519 签名可验证，篡改消息后失败。
+
+### Inventory endpoint
+
+库存 API 不含 MAC 等禁止字段。
+
+### Envelope build and verify
+
+消息信封签名可验证，篡改 payload 后失败。
+
+### Payload hash stable
+
+同内容不同键序的 payload_hash 一致。
+
+### Backoff and dead letter
+
+指数退避递增；达到 max retries 进入 dead letter。
+
+### Sync now pulls desired state
+
+sync/now 拉 desired_state 入 inbox，二次拉取不再重复计数。
+
+### Reconciliation plan install upgrade remove
+
+对比 desired/installed 产出 install/upgrade/remove 且 profile 需重启。
+
+### Desired state apply via sync
+
+Stub 下发 revision 后 apply 写入 resource_installations。
+
+### Desired state checksum failure
+
+坏 checksum 资源 apply 抛 ConflictError。
+
+### Remote task ingest idempotent
+
+同 assignmentId+version 重复下发只保留一条。
+
+### Remote task accept claim deliver
+
+accept 后 claim/complete，状态 delivered 且有事件。
+
+### Remote task cancel
+
+中心 cancel 控制消息后本地 assignment 为 cancelled。
+
+### Experience redaction
+
+脱敏移除 apiKey/prompt 并对本机路径打标。
+
+### Evidence and candidate submit
+
+证据脱敏入库；candidate 经用户审核路径提交后 status=submitted，不可改 published。
+
+## Remote Tasks
+
+Remote Task v2 补充用例（若与 Endpoint Sync 重叠则以 Stub Center 为准）。
+
+### Assignment idempotent ingest
+
+重复 assignment 版本不创建第二条本地记录。
+
+### Reject assignment
+
+本地 reject 后状态为 rejected。
+
 ## 验收
 
 `tests/test_v1_acceptance.py` 是 v1.3 验收用例集；v1.3.1 另以真实 Hermes/Gateway smoke（`scripts/runtime-smoke-test-windows.ps1 -RequireHermes`）为准。v1.4 另有 gated E2E（见 `tests/test_windows_e2e_gated.py`，需真实 Artifact）。
+
+### Gated Windows Hermes E2E
+
+门控 Hermes 安装与 Gateway 健康 smoke（需真实制品与环境变量）。
+
+### Gated Windows Installer E2E
+
+门控 MSI/Burn 安装器静默安装与卸载验收。

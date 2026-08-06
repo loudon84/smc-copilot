@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  WiX Toolset 5 scaffold for SMC Copilot Runtime (FR-16).
+  WiX Toolset 5 package for SMC Copilot Runtime (PRD v1.5 FR-04).
   Default install scope: per-user under %LOCALAPPDATA%\Programs\SMC\CopilotRuntime.
-  Build tools (wix build) are optional for Python-side validation.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
     Name="SMC Copilot Runtime"
     Manufacturer="SMC"
-    Version="!(bind.FileVersion.CopilotRuntime.exe)"
+    Version="1.5.0.0"
     UpgradeCode="A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
     Scope="perUser"
     InstallerVersion="500"
@@ -17,7 +16,9 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of SMC Copilot Runtime is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-  <!-- User-level Programs root: %LOCALAPPDATA%\Programs\SMC\CopilotRuntime -->
+    <Property Id="CHANNEL" Value="stable" />
+    <Property Id="BOOTSTRAPCONFIG" Value="" />
+
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="SMCProgramsFolder" Name="Programs">
         <Directory Id="SMCVendorFolder" Name="SMC">
@@ -30,34 +31,26 @@
       <ComponentGroupRef Id="CopilotRuntimeComponents" />
     </Feature>
 
-    <!--
-      Task Scheduler ONLOGON registration (concept):
-      Deferred custom action invokes windows_user_daemon install after files land.
-      /RL LIMITED, current user, no elevation required.
-    -->
     <CustomAction
       Id="RegisterUserDaemon"
       Directory="INSTALLFOLDER"
-      ExeCommand="[INSTALLFOLDER]python.exe -m local_service.windows_user_daemon install --replace"
+      ExeCommand="[INSTALLFOLDER]python\python.exe -m local_service.windows_user_daemon install --replace"
       Execute="deferred"
       Impersonate="yes"
       Return="check" />
 
     <InstallExecuteSequence>
-      <Custom Action="RegisterUserDaemon" After="InstallFiles" Condition="NOT Installed" />
+      <Custom Action="RegisterUserDaemon" After="InstallFiles" Condition="NOT Installed AND NOT REMOVE" />
     </InstallExecuteSequence>
-
-    <!-- Standard exit codes (documented in README.md):
-         0=success, 10=unsupported, 11=port conflict, 12=runtime install failed,
-         13=hermes install failed, 14=gateway verify failed, 15=auth init failed,
-         16=signature verify failed, 17=repair failed -->
   </Package>
 
   <Fragment>
     <ComponentGroup Id="CopilotRuntimeComponents" Directory="INSTALLFOLDER">
-      <!-- Placeholder: bind payload from build/runtime-bundle.ps1 output -->
       <Component Id="CopilotRuntimePayload" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
         <File Id="CopilotRuntime.exe" Source="!(bindpath.build)\CopilotRuntime.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="RuntimeLauncherCmd" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+        <File Id="RuntimeLauncherCmd" Source="!(bindpath.build)\bundle\runtime-launcher.cmd" />
       </Component>
     </ComponentGroup>
   </Fragment>

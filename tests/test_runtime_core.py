@@ -26,13 +26,13 @@ async def test_runtime_status_and_capabilities(app_client) -> None:
     assert body["status"] in ("ready", "degraded", "starting")
     assert "features" in body
     assert "checks" in body
-    assert body["apiVersion"] == "1.1"
+    assert body["apiVersion"] == "1.2"
     assert "gateway.auth.internal" in body["features"]
 
     caps = await client.get("/api/v1/runtime/capabilities")
     assert caps.status_code == 200
     assert "runtime.install" in caps.json()["features"]
-    assert caps.json()["apiVersion"] == "1.1"
+    assert caps.json()["apiVersion"] == "1.2"
 
 
 @pytest.mark.asyncio
@@ -57,8 +57,8 @@ async def test_runtime_write_job_lock(app_client, test_settings: Settings) -> No
     client, supervisor, settings, stub_hub, app = app_client
     jobs: RuntimeJobService = app.state.runtime_job_service
 
-    async def slow_handler(job, request, progress):
-        await asyncio.sleep(0.5)
+    async def slow_handler(job, request, progress, token=None):
+        await asyncio.sleep(2.0)
         await progress("slow", progress_value=1.0)
         return {"ok": True}
 

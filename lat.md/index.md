@@ -1,6 +1,6 @@
 # 项目概览
 
-`smc-copilot-serve` 是面向 `smc-copilot-desktop` 的本机常驻 **Hermes Runtime Service**：负责 Hermes Agent 安装/更新/回滚、Instance/Gateway 监管、Profile 与角色、配置与 MCP、Workspace Chat、本地与团队任务、审批门控、工作空间安全策略、设备配对与本地鉴权。默认监听 `http://127.0.0.1:8765`，前缀 `/api/v1`。
+`smc-copilot-serve` 是 Desktop 的本机 Hermes Runtime 控制面，并在 v1.5 承担企业终端 Endpoint Sync。默认监听 `http://127.0.0.1:8765`，API 前缀 `/api/v1`。
 
 本知识图谱描述项目「做什么」与「为什么」，不重复源码。各节用 `[[wiki link]]` 互引并锚定到源码符号，源码可用 `// @lat:` 反向引用。详见 [[index#文档导航]]。
 
@@ -10,9 +10,9 @@
 
 ```text
 copilot-desktop（UI / 登录 / 连接 Runtime）
-  → smc-copilot-serve（本仓库：Runtime 控制面）
+  → smc-copilot-serve（本仓库：Runtime 控制面 + Endpoint Sync）
   → hermes-agent（Gateway 执行引擎，按 Profile 端口）
-  → Team Task Hub / Workspace / 本地工具（经 Guard + Approval）
+  → Work Copilot Service Center（Stub/HTTPS）/ Team Hub（Deprecated）/ Workspace
 ```
 
 本服务**不负责**：LLM 推理实现、Gateway 进程内部逻辑、Electron UI 渲染。Hermes 始终被视为外部运行时（见 [[design-decisions#Hermes 视为外部运行时]]）。
@@ -37,6 +37,7 @@ Python 3.12、FastAPI + Uvicorn、Pydantic v2 + pydantic-settings、SQLAlchemy 2
 | [[chat-sessions#Workspace Chat]] | Chat SSE、附件、Session |
 | [[deployment#部署形态]] | Provision、UserDaemon、目录约束 |
 | [[data-model#数据模型]] | 表、迁移链 |
+| [[endpoint-sync#Endpoint Sync]] | Endpoint 身份、Sync、Desired State、Remote Task v2、Experience |
 | [[design-decisions#关键设计决策]] | 本地优先、隔离、失败不破坏现状 |
 | [[tests#测试规范]] | 真实安装、Instance Gateway、bootstrap |
 源码根为扁平 `src/`（`PYTHONPATH=src` 或 `--app-dir src`），不再使用 `src/copilot_serve/` 包前缀。

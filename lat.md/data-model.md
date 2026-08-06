@@ -1,6 +1,6 @@
 # 数据模型
 
-使用 SQLAlchemy 2.x async + SQLite（aiosqlite），生产仅经 Alembic 迁移建表，应用启动不 `create_all`（测试在 `conftest` 用 `init_db`）。模型分两组：Runtime Core 表与 v1.2 Profile/任务表。
+使用 SQLAlchemy 2.x async + SQLite（aiosqlite），生产仅经 Alembic 迁移建表。模型含 Runtime Core、v1.2 Profile/任务表，以及 v1.5 Endpoint Sync 表（见 [[data-model#数据模型#Endpoint Sync 表]]）。
 
 相关：[[runtime-service#版本管理]]、[[profiles-instances#Profile 与 Instance]]、[[task-runtime#任务运行时]]。
 
@@ -33,5 +33,14 @@ Profile 与任务相关表及枚举。
 | `005_v14_mcp_tables` | `mcp_servers`/`mcp_secret_refs`/`mcp_test_results` |
 | `006_v14_bootstrap_sessions` | `bootstrap_sessions` 一次性安装令牌 |
 | `007_v14_merge_heads` | 合并 bootstrap 与 artifact/service-update 两条分支，收敛为单一 head |
+| `008_v15_endpoint_sync` | Endpoint Sync 全表 + pending `sync_outbox` → `delivery_outbox` 数据拷贝 |
 
 生产启动前 `alembic upgrade head`。新增表必须配 Alembic 迁移。
+
+## Endpoint Sync 表
+
+v1.5 新增终端身份与企业同步表，模型见 [[src/db/models/endpoint_sync.py#EndpointEnrollment]] 等，仓储 [[src/db/repositories/endpoint_sync_repo.py#EndpointSyncRepository]]。
+
+包含：`endpoint_enrollments`、`endpoint_credentials`、`sync_channels`/`sync_cursors`/`sync_inbox`、`delivery_outbox`、`desired_state_revisions`/`desired_state_resources`、`resource_installations`/`resource_conflicts`、`remote_task_assignments`/`task_leases`/`task_delivery_records`/`result_artifacts`、`endpoint_inventory_snapshots`、`experience_evidence`/`experience_candidates`/`experience_submission_records`。旧 `sync_outbox` 表保留兼容；迁移时拷贝 pending 行到 `delivery_outbox`。
+
+详见 [[endpoint-sync#Endpoint Sync]]。

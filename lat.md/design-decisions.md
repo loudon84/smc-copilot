@@ -10,7 +10,7 @@
 
 ## 服务态与程序目录隔离
 
-企业 Windows 下程序（仓库、serve venv、Hermes 版本、Agent venv）必须在 `D:\Programs` 下；服务态（DB/日志/downloads/staging）用 `%LOCALAPPDATA%\HermesRuntime`，与程序目录分离。这样升级/卸载程序不会误删服务态与 `~/.hermes` 用户数据。强制点见 [[deployment#程序目录约束]]。
+Windows 默认程序根为 `%LOCALAPPDATA%\Programs\SMC\{CopilotRuntime,HermesAgent}`（不再强制 `D:\Programs`）；服务态（DB/日志/downloads/staging）用 `%LOCALAPPDATA%\HermesRuntime`，与程序目录分离，避免升级/卸载误删服务态与 `~/.hermes`。详见 [[deployment#程序目录约束]]。
 
 ## Hermes 视为外部运行时
 

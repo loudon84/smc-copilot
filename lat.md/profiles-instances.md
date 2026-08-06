@@ -24,4 +24,4 @@ Profile 是 Hermes Gateway 运行单元；Instance 将 Profile/Gateway/RuntimeVe
 
 ## 能力协商
 
-[[src/core/capabilities.py#CapabilityRegistry]] 暴露 `apiVersion` 与 `features` 列表（`runtime.install`、`instances.multiple`、`chat.stream`、`mcp.crud`、`pairing.device` 等），供 Desktop 在 `/runtime/capabilities` 与 `/runtime/compatibility` 协商。状态聚合见 [[src/services/runtime_status_service.py#RuntimeStatusService]]。
+[[src/core/capabilities.py#CapabilityRegistry]] 暴露 `apiVersion`（现为 `1.2`）与 `features`（含 v1.4 控制面与 v1.5 Endpoint Sync 能力，见 [[endpoint-sync#Capability]] / [[src/core/capabilities.py#DEFAULT_FEATURES]]），供 Desktop 在 `/runtime/capabilities` 与 `/runtime/compatibility` 协商。状态聚合见 [[src/services/runtime_status_service.py#RuntimeStatusService]]。

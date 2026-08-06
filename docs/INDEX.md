@@ -177,6 +177,10 @@ copilot-serve/
 | Approvals | `approvals.py` | `/api/v1/approvals` | `approvals` |
 | Workspaces | `workspaces.py` | `/api/v1/workspaces` + validate | `workspaces` |
 | Desktop workbench | `desktop_workbench.py` | `/api/v1/desktop/task-workbench/*` | 聚合 + SSE |
+| Endpoint (v1.5) | `endpoint.py` | `/api/v1/endpoint/*` | `endpoint_*`；Service Center |
+| Sync (v1.5) | `sync.py` | `/api/v1/sync/*` | sync_* / delivery_outbox / desired_state_* |
+| Remote tasks (v1.5) | `remote_tasks.py` | `/api/v1/remote-tasks/*` | `remote_task_*`；Task Hub Deprecated |
+| Experience (v1.5) | `experience.py` | `/api/v1/experience/*` | experience_*；StaffDeck via Center |
 
 ---
 

@@ -13,6 +13,7 @@ from core.config import Settings, get_settings
 from core.lifecycle import lifespan
 from db.session import create_engine, create_sessionmaker, init_db
 from integrations.team_hub.client import StubTeamHubClient
+from integrations.service_center.client import StubServiceCenterClient
 from runtime.gateway_process import GatewayProcessManager
 from services.gateway_supervisor import GatewaySupervisor
 
@@ -40,6 +41,7 @@ def test_settings(tmp_data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Settin
     monkeypatch.setenv("RUNTIME_REQUIRE_AUTH", "false")
     monkeypatch.setenv("COPILOT_REQUIRE_TOKEN", "false")
     monkeypatch.setenv("RUNTIME_ALLOW_INSECURE_SECRET_STORE", "true")
+    monkeypatch.setenv("AIOS_SERVICE_CENTER_USE_STUB", "true")
     import core.config as config_mod
 
     config_mod._settings = None
@@ -62,11 +64,13 @@ async def app_client(
         process_manager=process_manager,
     )
     stub_hub = StubTeamHubClient()
+    stub_center = StubServiceCenterClient()
 
     app = create_app()
     app.state._test_engine = engine
     app.state._test_gateway_supervisor = supervisor
     app.state._test_team_hub = stub_hub
+    app.state._test_service_center = stub_center
     app.state._disable_workers = True
     app.state._disable_gateway_autostart = True
 
@@ -78,3 +82,22 @@ async def app_client(
     import core.config as config_mod
 
     config_mod._settings = None
+
+
+@pytest_asyncio.fixture
+async def enrolled_client(
+    app_client: tuple[AsyncClient, GatewaySupervisor, Settings, StubTeamHubClient, object],
+) -> AsyncIterator[tuple[AsyncClient, object, StubServiceCenterClient]]:
+    client, _supervisor, _settings, _hub, app = app_client
+    center: StubServiceCenterClient = app.state.service_center
+    start = await client.post(
+        "/api/v1/endpoint/enrollment/start",
+        json={"enrollmentCode": "TEST-CODE-123"},
+    )
+    assert start.status_code == 200
+    complete = await client.post(
+        "/api/v1/endpoint/enrollment/complete",
+        json={"enrollmentCode": "TEST-CODE-123", "enrollmentId": start.json()["enrollmentId"]},
+    )
+    assert complete.status_code == 200
+    yield client, app, center

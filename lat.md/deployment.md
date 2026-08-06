@@ -10,11 +10,9 @@ v1.3 生产默认连接常驻 Runtime；v1.3.1 补齐 Windows 真实 Hermes 闭�
 
 CLI：`python -m local_service.windows_user_daemon install|install --replace|uninstall|status|status --json|check-port|start|stop|restart|repair`。
 
-## Windows Installer（脚手架）
+## Windows Installer（生产门禁）
 
-`installer/wix/`（WiX 5 MSI）与 `installer/bootstrapper/`（Burn）为 FR-16 构建脚手架：默认安装到 `%LOCALAPPDATA%\Programs\SMC\CopilotRuntime`，标准退出码 0/10–17，ONLOGON 任务注册概念见 WiX README。Python 侧无需安装 WiX 即可开发与测试。
-
-Bootstrap 安装器参数：`/quiet /channel=stable /installScope=user /bootstrapConfig=<path> /norestart /log=<path>`。示例配置见 `config/bootstrap.example.json`。
+v1.5 FR-04：`installer/wix/` 与 `installer/bootstrapper/` 产出 MSI/`Setup.exe`（版本 1.5.0）。Stable 通道构建缺少 WiX/MSI/签名必须失败。维护进程见 [[src/local_service/runtime_maintenance.py#apply_maintenance]]，由 [[src/services/runtime_service_update.py#RuntimeServiceUpdateService]] `apply()` 调度。
 
 ## Windows Provision
 

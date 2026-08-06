@@ -28,15 +28,34 @@ DEFAULT_FEATURES: tuple[str, ...] = (
     "mcp.compile",
     "diagnostics.bundle",
     "artifact.signature",
+    # PRD v1.5 §21
+    "endpoint.enrollment",
+    "endpoint.inventory",
+    "sync.cursor",
+    "sync.desired-state",
+    "sync.resources",
+    "sync.offline-outbox",
+    "sync.dead-letter",
+    "tasks.remote.v2",
+    "tasks.lease",
+    "tasks.result.delivery",
+    "artifacts.presigned-upload",
+    "experience.capture",
+    "experience.local-review",
+    "experience.staffdeck.submit",
+    "runtime.release.production",
+    "runtime.maintenance.apply",
+    "installer.windows.production",
 )
 
 
 # @lat: [[profiles-instances#能力协商]]
+# @lat: [[endpoint-sync#Capability]]
 @dataclass
 class CapabilityRegistry:
     """Capability negotiation for Desktop (PRD §5.5 / §7.1)."""
 
-    api_version: str = "1.1"
+    api_version: str = "1.2"
     features: list[str] = field(default_factory=lambda: list(DEFAULT_FEATURES))
 
     def list_features(self) -> list[str]:

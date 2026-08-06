@@ -1,6 +1,6 @@
 # smc-copilot-serve（Hermes Runtime Service）
 
-本机常驻的 **Hermes Runtime Service**：负责 Hermes Agent 安装/更新/回滚、Instance/Gateway 监管、配置与 MCP、设备配对与本地鉴权。Desktop 通过 `http://127.0.0.1:8765` 访问本服务，不再直接安装或启动 Hermes。
+本机常驻的 **Hermes Runtime Service**：负责 Hermes Agent 安装/更新/回滚、Instance/Gateway 监管、配置与 MCP、设备配对与本地鉴权，以及 v1.5 企业终端 Endpoint Sync（Desired State / Remote Task / Experience）。Desktop 通过 `http://127.0.0.1:8765` 访问本服务。
 
 | 组件 | 职责 |
 |------|------|
@@ -23,10 +23,10 @@
 
 ## 安装约定（Windows 企业）
 
-1. 工程师手工安装 Python 3.12、Node、Git（及 uv），并配置 PATH。
-2. 将本仓库 clone 到 `D:\Programs\copilot-serve`（源码与 serve `.venv` 必须在 `D:\Programs` 下）。
-3. Hermes Agent 版本与其 venv 安装到 `D:\Programs\HermesAgent\`（默认；可用 `HERMES_INSTALL_DIR` 覆盖，仍须在 `D:\Programs` 下）。
-4. **Runtime 服务态**（DB / 日志 / downloads / staging）继续使用 `%LOCALAPPDATA%\HermesRuntime`，**不改动**，与程序目录分离。
+1. 推荐使用签名的 `SMC-Copilot-Runtime-Setup-1.5.0.exe` / MSI 静默安装（`/quiet`），由 Bundle 携带嵌入式 Python，员工机无需预装 Python/Node/Git。
+2. 开发态可将仓库放在任意目录；默认程序根为 `%LOCALAPPDATA%\Programs\SMC\{CopilotRuntime,HermesAgent}`。
+3. Hermes Agent 版本与其 venv 安装到 `HERMES_INSTALL_DIR`（Windows 默认上述 SMC 路径）。
+4. **Runtime 服务态**（DB / 日志 / downloads / staging）继续使用 `%LOCALAPPDATA%\HermesRuntime`，与程序目录分离。
 
 允许例外：`%USERPROFILE%\.hermes`（Hermes 用户数据）、`%LOCALAPPDATA%\HermesRuntime`（服务态）。
 
@@ -37,8 +37,8 @@
 | 用途 | Windows | macOS / Linux |
 |------|---------|---------------|
 | Runtime **服务态**（DB/日志/staging） | `%LOCALAPPDATA%\HermesRuntime\` | `~/.hermes-runtime/` |
-| 本仓库 / serve `.venv` | `D:\Programs\copilot-serve\` | 任意工作目录 |
-| Hermes 版本与 Agent venv | `D:\Programs\HermesAgent\<version>\` | `HERMES_INSTALL_DIR` 或 Runtime `versions/` |
+| 本仓库 / serve `.venv` | `%LOCALAPPDATA%\Programs\SMC\CopilotRuntime\`（或开发工作目录） | 任意工作目录 |
+| Hermes Agent 版本 / venv | `%LOCALAPPDATA%\Programs\SMC\HermesAgent\<version>\` | `HERMES_INSTALL_DIR` 或 Runtime `versions/` |
 | Hermes 用户数据 | `%USERPROFILE%\.hermes\` | `~/.hermes/` |
 
 服务态与程序目录必须隔离：升级或卸载程序时默认 **不得**删除 `~/.hermes`；服务态仅在显式 `-RemoveRuntimeData` 时清理。

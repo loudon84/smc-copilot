@@ -48,6 +48,10 @@ def get_team_hub(request: Request) -> TeamHubClient:
     return request.app.state.team_hub
 
 
+def get_service_center(request: Request):
+    return request.app.state.service_center
+
+
 def get_task_routing_registry(request: Request) -> TaskRoutingRegistry:
     return request.app.state.task_routing_registry
 

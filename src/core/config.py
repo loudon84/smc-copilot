@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     toolchain_venv_dir: str = Field(default="", alias="TOOLCHAIN_VENV_DIR")
     hermes_install_dir: str = Field(default="", alias="HERMES_INSTALL_DIR")
 
-    # Team Task Hub (stub / HTTP placeholder)
+    # Team Task Hub (stub / HTTP placeholder) — deprecated; prefer Service Center
     team_hub_base_url: str = Field(default="", alias="AIOS_TEAM_HUB_BASE_URL")
     team_hub_token: str = Field(default="", alias="AIOS_TEAM_HUB_TOKEN")
     device_id: str = Field(default="local-device", alias="AIOS_DEVICE_ID")
@@ -108,6 +108,23 @@ class Settings(BaseSettings):
     task_poll_interval_seconds: float = Field(default=10.0, alias="AIOS_TASK_POLL_INTERVAL_SECONDS")
     team_hub_use_stub: bool = Field(default=True, alias="AIOS_TEAM_HUB_USE_STUB")
     task_reject_sets_cancelled: bool = Field(default=False, alias="AIOS_TASK_REJECT_SETS_CANCELLED")
+
+    # Work Copilot Service Center (PRD v1.5)
+    service_center_base_url: str = Field(default="", alias="AIOS_SERVICE_CENTER_BASE_URL")
+    service_center_use_stub: bool = Field(default=True, alias="AIOS_SERVICE_CENTER_USE_STUB")
+    service_center_domain_allowlist: str = Field(
+        default="",
+        alias="AIOS_SERVICE_CENTER_DOMAIN_ALLOWLIST",
+        description="Comma-separated allowed Service Center hostnames",
+    )
+    endpoint_heartbeat_interval_seconds: float = Field(
+        default=300.0, alias="AIOS_ENDPOINT_HEARTBEAT_INTERVAL_SECONDS"
+    )
+    sync_poll_interval_seconds: float = Field(default=15.0, alias="AIOS_SYNC_POLL_INTERVAL_SECONDS")
+    delivery_outbox_interval_seconds: float = Field(
+        default=5.0, alias="AIOS_DELIVERY_OUTBOX_INTERVAL_SECONDS"
+    )
+    delivery_outbox_max_retries: int = Field(default=20, alias="AIOS_DELIVERY_OUTBOX_MAX_RETRIES")
 
     # Workers
     run_event_poll_interval_seconds: float = Field(default=2.0, alias="AIOS_RUN_EVENT_POLL_INTERVAL_SECONDS")

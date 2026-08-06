@@ -1,35 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  WiX Burn bootstrapper scaffold (FR-16).
-  Chains SMC-Copilot-Runtime MSI and forwards /quiet /channel /installScope /bootstrapConfig /norestart /log.
+  WiX Burn bootstrapper (PRD v1.5 FR-04).
+  Chains SMC-Copilot-Runtime MSI; forwards quiet install variables.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
 
   <Bundle
     Name="SMC Copilot Runtime Setup"
-    Version="1.4.0.0"
+    Version="1.5.0.0"
     Manufacturer="SMC"
-    UpgradeCode="C3D4E5F6-A7B8-9012-CDEF-123456789012"
-    IconSourceFile="!(bindpath.assets)\copilot-runtime.ico">
+    UpgradeCode="C3D4E5F6-A7B8-9012-CDEF-123456789012">
 
-    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense" />
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        LicenseUrl=""
+        Theme="hyperlinkLicense" />
+    </BootstrapperApplication>
+
+    <Variable Name="Channel" Type="string" Value="stable" bal:Overridable="yes" />
+    <Variable Name="InstallScope" Type="string" Value="user" bal:Overridable="yes" />
+    <Variable Name="BootstrapConfig" Type="string" Value="" bal:Overridable="yes" />
 
     <Chain>
       <MsiPackage
         Id="CopilotRuntimeMsi"
-        SourceFile="!(bindpath.build)\SMC-Copilot-Runtime-x64.msi"
+        SourceFile="!(bindpath.build)\SMC-Copilot-Runtime-1.5.0-x64.msi"
         Vital="yes"
         Compressed="yes"
-        DisplayInternalUI="no" />
+        DisplayInternalUI="no">
+        <MsiProperty Name="CHANNEL" Value="[Channel]" />
+        <MsiProperty Name="BOOTSTRAPCONFIG" Value="[BootstrapConfig]" />
+      </MsiPackage>
     </Chain>
-
-    <!--
-      Variable forwarding (concept — implement in BA/custom theme):
-        WixBundleLog      -> /log=
-        BootstrapChannel  -> /channel=
-        InstallScope      -> /installScope=
-        BootstrapConfig   -> /bootstrapConfig=
-    -->
   </Bundle>
 </Wix>

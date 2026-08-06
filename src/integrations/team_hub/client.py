@@ -1,4 +1,12 @@
-﻿from __future__ import annotations
+﻿"""Team Task Hub client.
+
+DEPRECATED: Prefer ``integrations.service_center`` (Work Copilot Service Center) for
+endpoint enrollment, desired-state sync, remote task v2, and experience delivery.
+This module remains as a compatibility adapter for legacy Team Hub poll/claim/push
+flows during the v1.5 migration window.
+"""
+
+from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
@@ -19,7 +27,10 @@ class TeamHubClient(Protocol):
 
 
 class StubTeamHubClient:
-    """Returns staged assignments; records push calls for tests."""
+    """Returns staged assignments; records push calls for tests.
+
+    Deprecated compatibility stub — new code should use StubServiceCenterClient.
+    """
 
     def __init__(self) -> None:
         self._queued: list[RemoteAssignmentDTO] = []
@@ -47,7 +58,11 @@ class StubTeamHubClient:
 
 
 class HttpTeamHubClient:
-    """Placeholder REST client; paths are convention until real Hub ships."""
+    """Deprecated compatibility adapter.
+
+    Prefer ``integrations.service_center`` / Remote Task Assignment v2.
+    Paths remain placeholder until legacy Hub is retired.
+    """
 
     def __init__(self, base_url: str, token: str, device_id: str, agent_id: str) -> None:
         self._base = base_url.rstrip("/")

@@ -10,11 +10,17 @@ from fastapi import FastAPI
 from core.config import get_settings
 from core.logging import configure_logging, get_logger
 from db.session import create_engine, create_sessionmaker
+from integrations.service_center import create_service_center_client
 from integrations.team_hub.client import HttpTeamHubClient, StubTeamHubClient
 from local_service.service_state import mark_service_boot
 from services.gateway_supervisor import GatewaySupervisor
 from services.runtime_job_service import RuntimeJobService
 from services.task_routing_registry import TaskRoutingRegistry
+from workers.assignment_worker import AssignmentWorker
+from workers.delivery_outbox_worker import DeliveryOutboxWorker
+from workers.desired_state_worker import DesiredStateWorker
+from workers.endpoint_heartbeat_worker import EndpointHeartbeatWorker
+from workers.staffdeck_review_worker import StaffDeckReviewWorker
 from workers.v12_workers import RunEventWorker, SyncOutboxWorker, TaskListenerWorker
 
 logger = get_logger(__name__)
@@ -29,6 +35,22 @@ def _hub_factory(settings) -> StubTeamHubClient | HttpTeamHubClient:
         settings.device_id,
         settings.agent_id,
     )
+
+
+async def _endpoint_workers_enabled(settings, session_maker, center) -> bool:
+    """Start endpoint workers when stub mode or an active enrollment exists."""
+    if settings.service_center_use_stub:
+        return True
+    try:
+        from db.repositories.endpoint_sync_repo import EndpointSyncRepository
+
+        async with session_maker() as session:
+            repo = EndpointSyncRepository(session)
+            cred = await repo.get_credential()
+            return bool(cred and cred.status == "active")
+    except Exception:
+        logger.exception("endpoint_worker_gate_failed")
+        return False
 
 
 def _register_runtime_handlers(job_service: RuntimeJobService, settings, session_maker) -> None:
@@ -81,6 +103,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     injected_hub = getattr(app.state, "_test_team_hub", None)
     hub = injected_hub if injected_hub is not None else _hub_factory(settings)
 
+    injected_center = getattr(app.state, "_test_service_center", None)
+    center = injected_center if injected_center is not None else create_service_center_client(settings)
+
     job_service = getattr(app.state, "_test_runtime_job_service", None)
     if job_service is None:
         job_service = RuntimeJobService(settings, session_maker)
@@ -90,6 +115,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.session_maker = session_maker
     app.state.gateway_supervisor = supervisor
     app.state.team_hub = hub
+    app.state.service_center = center
     app.state.task_routing_registry = registry
     app.state.runtime_job_service = job_service
 
@@ -130,6 +156,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             asyncio.create_task(syncer.run_forever()),
             asyncio.create_task(run_ev.run_forever()),
         ]
+        if await _endpoint_workers_enabled(settings, session_maker, center):
+            bg_tasks.extend(
+                [
+                    asyncio.create_task(
+                        EndpointHeartbeatWorker(
+                            settings=settings, session_maker=session_maker, center=center
+                        ).run_forever()
+                    ),
+                    asyncio.create_task(
+                        DeliveryOutboxWorker(
+                            settings=settings, session_maker=session_maker, center=center
+                        ).run_forever()
+                    ),
+                    asyncio.create_task(
+                        DesiredStateWorker(
+                            settings=settings, session_maker=session_maker, center=center
+                        ).run_forever()
+                    ),
+                    asyncio.create_task(
+                        AssignmentWorker(
+                            settings=settings, session_maker=session_maker, center=center
+                        ).run_forever()
+                    ),
+                    asyncio.create_task(
+                        StaffDeckReviewWorker(
+                            settings=settings, session_maker=session_maker, center=center
+                        ).run_forever()
+                    ),
+                ]
+            )
 
     logger.info(
         "copilot_serve_started",

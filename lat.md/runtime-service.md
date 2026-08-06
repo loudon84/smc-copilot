@@ -60,11 +60,11 @@ Job 状态机见 [[src/core/runtime_enums.py#RuntimeJobStatus]]：`pending → r
 
 ## 离线 Wheelhouse 安装
 
-FR-15：Hermes Artifact 含 `wheelhouse/` 时，[[src/services/installation_service.py#InstallationService]] `_pip_install` 使用 `pip install --no-index --find-links wheelhouse <whl>`，禁止安装期访问 PyPI。构建见 `build/hermes-wheelhouse.ps1`。
+v1.5 FR-02：Hermes Artifact 含真实 wheel + hashed `requirements.lock` + SBOM；`build/hermes-wheelhouse.ps1` 在无真实包时必须失败（Stable 禁止 placeholder wheel）。安装时 [[src/services/installation_service.py#InstallationService]] `_pip_install` 使用 `--no-index --find-links wheelhouse`。
 
 ## Runtime Bundle
 
-FR-14：`build/runtime-bundle.ps1` 产出 `runtime-bundle-win-x64.zip`（`runtime/`、`python/`、`site-packages/`、`scripts/`、`migrations/`、`config/`、`manifest.json`），供无预装 Python/uv/Git/Node 的企业部署。
+v1.5 FR-01：`build/runtime-bundle.ps1` 产出 `runtime-bundle-<version>-win-x64.zip`，须含真实 embeddable `python/` 与可导入 `site-packages/`（Stable 禁止 README 占位）。另带 `runtime-launcher` 入口与 `manifest.json`（`placeholder=true` 不得进 Stable）。
 
 ## Artifact 签名
 
@@ -76,7 +76,9 @@ FR-24：[[src/runtime/archive_policy.py#ArchivePolicy]] 强制 HTTPS、域名白
 
 ## Runtime Service 更新
 
-FR-21/22：Runtime 版本与 Hermes 分离（`serviceVersion` 1.4.0）。[[src/services/runtime_service_update.py#RuntimeServiceUpdateService]] 提供 check/download/apply；表 `runtime_service_versions` 记录下载与应用状态。API：`GET/POST /api/v1/service/update/*`。
+v1.5 FR-03：Runtime 自更新与 Hermes 版本分离（`serviceVersion` 1.5.0），`apply()` 走真实维护而非 stub。
+
+[[src/services/runtime_service_update.py#RuntimeServiceUpdateService]] check/download 后调度 [[src/local_service/runtime_maintenance.py#apply_maintenance]]（停 daemon→备份 DB→解压切换→Alembic→启动→健康检查；失败回滚）。CLI：`runtime-maintenance` / `scripts/runtime-maintenance.cmd`。表 `runtime_service_versions`；API：`GET/POST /api/v1/service/update/*`。
 
 ## 诊断包
 

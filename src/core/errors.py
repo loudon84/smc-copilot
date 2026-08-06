@@ -33,6 +33,11 @@ class TeamHubError(CopilotError):
         super().__init__(message, code="team_hub_error")
 
 
+class ServiceCenterError(CopilotError):
+    def __init__(self, message: str, *, code: str = "service_center_error") -> None:
+        super().__init__(message, code=code)
+
+
 class PolicyError(CopilotError):
     def __init__(self, message: str) -> None:
         super().__init__(message, code="policy_denied")

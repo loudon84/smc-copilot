@@ -41,6 +41,50 @@ class OutboxStatus(StrEnum):
     FAILED = "failed"
 
 
+class DeliveryOutboxStatus(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    ACKNOWLEDGED = "acknowledged"
+    RETRY = "retry"
+    DEAD_LETTER = "dead_letter"
+    CANCELLED = "cancelled"
+
+
+class EnrollmentStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    REVOKED = "revoked"
+    FAILED = "failed"
+
+
+class RemoteAssignmentStatus(StrEnum):
+    RECEIVED = "received"
+    VALIDATING = "validating"
+    READY = "ready"
+    CLAIMING = "claiming"
+    CLAIMED = "claimed"
+    RUNNING = "running"
+    WAITING_APPROVAL = "waiting_approval"
+    COMPLETED = "completed"
+    DELIVERING = "delivering"
+    DELIVERED = "delivered"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+    EXPIRED = "expired"
+    DELIVERY_FAILED = "delivery_failed"
+
+
+class ExperienceCandidateStatus(StrEnum):
+    DRAFT = "draft"
+    LOCAL_REVIEW = "local_review"
+    APPROVED_FOR_SUBMIT = "approved_for_submit"
+    SUBMITTED = "submitted"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    PUBLISHED = "published"
+
+
 class TaskType(StrEnum):
     CODING_TASK = "coding_task"
     REVIEW_TASK = "review_task"
