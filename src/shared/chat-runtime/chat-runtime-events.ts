@@ -1,4 +1,4 @@
-/** v8.0 Chat Runtime — runId + turnId scoped discriminative event union. */
+/** v8.0 / v8.1 Chat Runtime — runId + turnId scoped discriminative event union. */
 
 export type ChatToolEvent = {
   callId: string;
@@ -42,9 +42,13 @@ export type ChatRuntimeError = {
   message: string;
 };
 
+/** v8.1 — every runtime event carries identity + ordering. */
 export type ChatRuntimeEventBase = {
+  eventId: string;
   runId: string;
   turnId: string;
+  sequence: number;
+  emittedAt: number;
 };
 
 export type ChatRuntimeEvent =
@@ -63,6 +67,24 @@ export type ChatRuntimeEvent =
   | (ChatRuntimeEventBase & {
       type: "approval.requested";
       request: ApprovalRequest;
+    })
+  | (ChatRuntimeEventBase & {
+      type: "interaction.accepted";
+      requestId: string;
+      interactionType: "clarify" | "approval";
+    })
+  | (ChatRuntimeEventBase & {
+      type: "interaction.continuing";
+      requestId: string;
+      interactionType: "clarify" | "approval";
+    })
+  | (ChatRuntimeEventBase & {
+      type: "interaction.resolved";
+      requestId: string;
+      interactionType: "clarify" | "approval";
+      decision?: "approved" | "denied";
+      answer?: string;
+      reason?: string;
     })
   | (ChatRuntimeEventBase & {
       type: "clarify.resolved";
@@ -85,13 +107,29 @@ export type ChatRuntimeEvent =
   | (ChatRuntimeEventBase & { type: "failed"; error: ChatRuntimeError })
   | (ChatRuntimeEventBase & { type: "cancelled" });
 
+/** Payload shape before sequencer stamps eventId / sequence / emittedAt. */
+export type ChatRuntimeEventDraft = {
+  [K in ChatRuntimeEvent["type"]]: Omit<
+    Extract<ChatRuntimeEvent, { type: K }>,
+    "eventId" | "sequence" | "emittedAt"
+  >;
+}[ChatRuntimeEvent["type"]];
+
 export function isChatRuntimeEvent(value: unknown): value is ChatRuntimeEvent {
   if (!value || typeof value !== "object") return false;
-  const event = value as { type?: unknown; runId?: unknown; turnId?: unknown };
+  const event = value as {
+    type?: unknown;
+    runId?: unknown;
+    turnId?: unknown;
+    eventId?: unknown;
+    sequence?: unknown;
+  };
   return (
     typeof event.type === "string" &&
     typeof event.runId === "string" &&
-    typeof event.turnId === "string"
+    typeof event.turnId === "string" &&
+    typeof event.eventId === "string" &&
+    typeof event.sequence === "number"
   );
 }
 
@@ -105,6 +143,9 @@ export const CHAT_TURN_NON_TERMINAL_EVENTS = new Set([
   "usage",
   "clarify.requested",
   "approval.requested",
+  "interaction.accepted",
+  "interaction.continuing",
+  "interaction.resolved",
   "clarify.resolved",
   "approval.resolved",
   "interaction.failed",

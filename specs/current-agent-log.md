@@ -1,16 +1,15 @@
-﻿# Current Agent Log
+﻿# Current Agent Log — v8.1.0 Durable Chat Runtime
 
-## 2026-08-06 — Chat Interaction Loop v8.0.5 (PR1–PR4)
+## 2026-08-06
 
-### Done
-- PR1: ChatRuntimeCommand + turnId/requestId; Result codes; clarify/approval.resolved + interaction.failed
-- PR2: pending registry + hermes-chat-command-adapter (follow-up message); ClarifyCard/ApprovalCard state machine
-- PR3: ChatTurnRequestSnapshot + queue + Retry/Edit/Retry-with-current-context
-- PR4: chat-files:changed + useSessionFilesSummary; Host badge uses live total
-- Tests: chat-runtime-command-v805 / chat-turn-snapshot-queue-v805 / session-files-summary-v805 (17 passed)
-- Verify: typecheck:chat, typecheck, check:chat-boundaries, check:no-reference-imports, build, lat check
-- Docs: AGENTS, INDEX, API_CONTRACTS, Hermes.md, lat.md domain/chat + decisions
+- Started v8.1.0 implementation (PR1–PR5).
+- Initialized specs task/state/log.
+- Scope confirmed: state.db persistence; PR6/PR7 deferred.
 
-### Deferred
-- PR5 Playwright E2E
-- PR6 deprecated API cleanup (forcedSessionId / send / filesToggleSlot)
+## 2026-08-06 (continue)
+
+- PR1–PR5 implemented: start IPC, durable store, continuation adapter, turn ledger/queue, recovery/diagnostics.
+- typecheck OK; chat-* vitest suites OK.
+- Docs: API_CONTRACTS, AGENTS, INDEX, Hermes.md, lat.md updated.
+- Deferred PR6/PR7.
+

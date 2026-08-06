@@ -107,6 +107,28 @@ export function chatRuntimeEventToActions(
     case "usage":
       return [{ type: "SET_USAGE", usage: event.usage }];
 
+    case "interaction.accepted":
+    case "interaction.continuing":
+      return [
+        {
+          type: "INTERACTION_SUBMIT",
+          requestId: event.requestId,
+          turnId: event.turnId,
+          interactionType: event.interactionType,
+        },
+      ];
+
+    case "interaction.resolved":
+      return [
+        {
+          type: "INTERACTION_RESOLVED",
+          requestId: event.requestId,
+          answer: event.answer,
+          decision: event.decision,
+          reason: event.reason,
+        },
+      ];
+
     case "clarify.resolved":
       return [
         {

@@ -26,4 +26,5 @@ Top-level concept files in this folder. Start with architecture and decisions, t
 - [[chat-performance]] — Composer performance constraints
 - [[prompt-navigator]] — Conversation prompt navigator concept
 - [[prompt-navigator-tests]] — Prompt navigator test specifications
+- [[durable-chat-runtime-tests]] — v8.1 Durable Chat Runtime test specifications
 - [[remote-dashboard-oauth]] — Remote dashboard OAuth transport guarantees

@@ -1,4 +1,4 @@
-/** v8.0 Chat Runtime — shared submit / model / attachment / command contracts. */
+/** v8.0 / v8.1 Chat Runtime — shared start / submit / model / attachment / command contracts. */
 
 export type ChatInvocationSource =
   | "default_chat"
@@ -26,6 +26,46 @@ export type ChatModelOverride = {
   baseUrl?: string;
 };
 
+/** Full turn request payload used by start / submit. */
+export type ChatTurnRequestPayload = {
+  profileId: string;
+  sessionId?: string;
+  message: string;
+  history: ChatHistoryMessage[];
+  attachments?: ChatAttachmentRef[];
+  contextFolder?: string;
+  model?: ChatModelOverride;
+  expertId?: string;
+  teamId?: string;
+  expertRunId?: string;
+  workMode?: "ask" | "plan" | "craft" | string;
+  permissionMode?: "default" | "ask_each_time";
+  invocationSource: ChatInvocationSource;
+};
+
+/** v8.1 — event-driven start (returns immediately). */
+export type ChatStartInput = {
+  runId: string;
+  turnId: string;
+  request: ChatTurnRequestPayload;
+};
+
+export type ChatStartResult =
+  | {
+      ok: true;
+      runId: string;
+      turnId: string;
+      acceptedAt: number;
+    }
+  | {
+      ok: false;
+      code: string;
+      error: string;
+    };
+
+/**
+ * @deprecated Prefer ChatStartInput + chat-runtime:start. Kept as compatibility adapter.
+ */
 export type ChatSubmitInput = {
   runId: string;
   /** Isolates concurrent turns within the same run (v8.0.4). */
@@ -48,6 +88,9 @@ export type ChatSubmitInput = {
   invocationSource: ChatInvocationSource;
 };
 
+/**
+ * @deprecated Prefer event-driven start; submit waits for full turn completion.
+ */
 export type ChatSubmitResult =
   | {
       ok: true;
@@ -140,9 +183,38 @@ export type ChatRuntimeCommandResult =
     };
 
 export const CHAT_RUNTIME_CHANNELS = {
+  /** @deprecated Prefer start — kept one version as compatibility adapter. */
   submit: "chat-runtime:submit",
+  start: "chat-runtime:start",
   abort: "chat-runtime:abort",
+  command: "chat-runtime:command",
+  state: "chat-runtime:get-state",
+  recover: "chat-runtime:recover",
+  exportDiagnostics: "chat-runtime:export-diagnostics",
   event: "chat-runtime:event",
   reconcile: "chat-runtime:reconcile-session",
-  command: "chat-runtime:command",
 } as const;
+
+export function submitInputToStartInput(
+  input: ChatSubmitInput,
+): ChatStartInput {
+  return {
+    runId: input.runId,
+    turnId: input.turnId,
+    request: {
+      profileId: input.profileId,
+      sessionId: input.sessionId,
+      message: input.message,
+      history: input.history,
+      attachments: input.attachments,
+      contextFolder: input.contextFolder,
+      model: input.model,
+      expertId: input.expertId,
+      teamId: input.teamId,
+      expertRunId: input.expertRunId,
+      workMode: input.workMode,
+      permissionMode: input.permissionMode,
+      invocationSource: input.invocationSource,
+    },
+  };
+}

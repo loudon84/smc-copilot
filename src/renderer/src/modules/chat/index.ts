@@ -53,3 +53,5 @@ export {
 } from "./workspace/chatRunRegistry";
 /** @deprecated Use ChatWorkspaceProvider (v8.0.3). */
 export { useChatWorkspaceManager } from "./workspace/useChatWorkspaceManager";
+export { ChatDiagnosticsExportButton } from "./components/diagnostics/ChatDiagnosticsExportButton";
+export { useChatRuntimeRecovery } from "./hooks/useChatRuntimeRecovery";

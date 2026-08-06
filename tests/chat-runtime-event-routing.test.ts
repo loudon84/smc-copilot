@@ -40,7 +40,11 @@ describe("chat-runtime event routing", () => {
     const clarify = chatRuntimeEventToActions(
       {
         type: "clarify.requested",
+        eventId: "e1",
+        sequence: 1,
+        emittedAt: 1,
         runId: "r1",
+        turnId: "t1",
         request: { requestId: "c1", question: "Q?" },
       },
       null,
@@ -50,7 +54,11 @@ describe("chat-runtime event routing", () => {
     const approval = chatRuntimeEventToActions(
       {
         type: "approval.requested",
+        eventId: "e2",
+        sequence: 2,
+        emittedAt: 2,
         runId: "r1",
+        turnId: "t1",
         request: { requestId: "a1", toolName: "x", summary: "y" },
       },
       null,

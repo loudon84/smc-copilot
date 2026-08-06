@@ -1,11 +1,18 @@
 import { getSessionMessages, type SessionMessage } from "../sessions";
-import type { ChatRuntimeEvent } from "../../shared/chat-runtime/chat-runtime-events";
+import type { ChatRuntimeEventDraft } from "../../shared/chat-runtime/chat-runtime-events";
+
+export type ReconcileEventDraft = {
+  type: "tool.progress";
+  tool: string;
+  runId?: string;
+  turnId?: string;
+};
 
 export type ChatSessionReconcileDiff = {
   sessionId: string;
   newMessages: SessionMessage[];
-  /** Structured events derived from new DB rows (no full assistant replay — avoids streaming duplicates). */
-  events: Array<Omit<ChatRuntimeEvent, "runId" | "turnId"> & { runId?: string; turnId?: string }>;
+  /** Structured drafts — stamped by event sequencer when emitted. */
+  events: ReconcileEventDraft[];
 };
 
 const POLL_MS = 750;
@@ -26,25 +33,31 @@ const polls = new Map<string, PollHandle>();
  */
 export function buildReconcileEvents(
   messages: SessionMessage[],
-): Array<Omit<ChatRuntimeEvent, "runId" | "turnId"> & { runId?: string; turnId?: string }> {
-  const events: Array<
-    Omit<ChatRuntimeEvent, "runId" | "turnId"> & { runId?: string; turnId?: string }
-  > = [];
+): ReconcileEventDraft[] {
+  const events: ReconcileEventDraft[] = [];
   for (const msg of messages) {
     if (msg.role === "tool") {
-      const evt: Extract<ChatRuntimeEvent, { type: "tool.progress" }> = {
+      events.push({
         type: "tool.progress",
-        runId: "",
-        turnId: "",
         tool: msg.content.slice(0, 200),
-      };
-      const { runId: _unused, turnId: _turn, ...rest } = evt;
-      void _unused;
-      void _turn;
-      events.push(rest);
+      });
     }
   }
   return events;
+}
+
+/** Narrow helper for IPC cast. */
+export function asRuntimeDraft(
+  evt: ReconcileEventDraft,
+  runId: string,
+  turnId: string,
+): ChatRuntimeEventDraft {
+  return {
+    type: "tool.progress",
+    runId,
+    turnId,
+    tool: evt.tool,
+  };
 }
 
 /**

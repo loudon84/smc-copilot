@@ -1,12 +1,15 @@
 # Current Agent State
 
 - current_stage: done
-- pr1-command-contract: completed
-- pr2-interaction-bridge: completed
-- pr3-snapshot-queue-retry: completed
-- pr4-files-badge: completed
-- tests-docs-v805: completed
+- setup-specs: completed
+- pr1-event-driven: completed
+- pr2-durable-store: completed
+- pr3-continuation: completed
+- pr4-ledger-retry-queue: completed
+- pr5-recovery-diagnostics: completed
+- verify-docs: completed
 - last_updated: 2026-08-06
 - notes: >
-  v8.0.5 Chat Interaction Loop PR1–PR4 complete. Verify + build + lat check OK.
-  Deferred: Playwright E2E (PR5), deprecated API cleanup (PR6).
+  v8.1.0 Durable Chat Runtime PR1–PR5 complete.
+  typecheck + chat vitest suites green.
+  Deferred: Playwright E2E (PR6), deprecated API cleanup (PR7).

@@ -40,7 +40,15 @@ describe("chat controller — multi-turn session / history", () => {
       ],
     });
     for (const action of chatRuntimeEventToActions(
-      { type: "session.started", runId: "run-1", sessionId: "sess-abc" },
+      {
+        type: "session.started",
+        eventId: "e1",
+        runId: "run-1",
+        turnId: "turn-1",
+        sequence: 1,
+        emittedAt: 1,
+        sessionId: "sess-abc",
+      },
       "a1",
     )) {
       state = chatReducer(state, action);
@@ -48,7 +56,15 @@ describe("chat controller — multi-turn session / history", () => {
     expect(state.activeSessionId).toBe("sess-abc");
 
     for (const action of chatRuntimeEventToActions(
-      { type: "completed", runId: "run-1", sessionId: "sess-abc" },
+      {
+        type: "completed",
+        eventId: "e2",
+        runId: "run-1",
+        turnId: "turn-1",
+        sequence: 2,
+        emittedAt: 2,
+        sessionId: "sess-abc",
+      },
       "a1",
     )) {
       state = chatReducer(state, action);

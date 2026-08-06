@@ -2,15 +2,39 @@
 
 Chat spans Local Hermes surfaces, Workspaces, and Web Operator panels. v8 Copilot Chat Module isolates concurrent turns by `runId`+`turnId` and persists files via `chatFiles`.
 
-Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat turn lifecycle (v8.0.4)]], [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Chat must not bypass Hermes MCP host mode]], [[decisions#Chat workspace per-run state (v8.0.3)]]. File platform detail: [[file-platform#File Platform]].
+Related decisions: [[decisions#Chat runId isolation (v8)]], [[decisions#Chat turn lifecycle (v8.0.4)]], [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Durable Chat Runtime (v8.1.0)]], [[decisions#Chat must not bypass Hermes MCP host mode]], [[decisions#Chat workspace per-run state (v8.0.3)]]. File platform detail: [[file-platform#File Platform]].
 
 ## Chat runtime isolation
 
-[[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]] registers per-`runId` abort handles. `window.chatRuntime` submit/abort/command and `chat-runtime:event` stay scoped to that run and turn.
+[[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]] registers per-`runId` memory handles. Production turns start via `chat-runtime:start` on `window.chatRuntime`; `submit` stays a compatibility waiter.
 
-Abort must resolve cleanly so UI does not hang on cancelled turns. Session reconcile heals history after reconnects without mixing run streams. Decision: [[decisions#Chat runId isolation (v8)]].
+Abort and `chat-runtime:event` stay scoped to that run and turn. Session reconcile heals history after reconnects without mixing run streams. Decision: [[decisions#Chat runId isolation (v8)]].
 
-Shared wire contracts: [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatSubmitInput]] (required `turnId`) and [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEvent]] (every event carries `runId`+`turnId`). Commands use [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommand]] / [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommandResult]] (required `runId`+`turnId`+`requestId`). Main registration: [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]]. Run handle fields: [[src/main/chat-runtime/chat-runtime-manager.ts#ChatRunHandle]] (`pendingInteractions`, `respondClarify` / `approve` / `deny`).
+Shared wire contracts: [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatStartInput]] / [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatStartResult]] (immediate accept), deprecated [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatSubmitInput]], channels in [[src/shared/chat-runtime/chat-runtime-contract.ts#CHAT_RUNTIME_CHANNELS]], and [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEvent]] (`eventId`+`sequence`+`emittedAt`+`runId`+`turnId`). Commands: [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommand]]. Main: [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]]. Durable status model: [[src/shared/chat-runtime/chat-runtime-state.ts#DurableChatRunState]].
+
+## Durable runtime (v8.1)
+
+Event-driven start returns accepted before the Agent turn finishes. Durable run/turn/pending/queue rows live in profile `state.db`; transport may end without wiping pending interactions.
+
+Store API: [[src/main/chat-runtime/chat-runtime-store.ts#upsertRun]] / [[src/main/chat-runtime/chat-runtime-store.ts#upsertTurn]] / [[src/main/chat-runtime/chat-runtime-store.ts#upsertPendingInteraction]] / [[src/main/chat-runtime/chat-runtime-store.ts#upsertQueueEntry]] (CREATE TABLE IF NOT EXISTS only; write failure falls back to memory). Transport: [[src/main/chat-runtime/chat-transport-registry.ts#setTransportHandle]] / [[src/main/chat-runtime/chat-transport-registry.ts#clearTransportHandle]]. Emit path stamps then persists then sends: [[src/main/chat-runtime/chat-event-emitter.ts#emitChatRuntimeEvent]]. Decision: [[decisions#Durable Chat Runtime (v8.1.0)]].
+
+## Ordered runtime events
+
+All SSE and Session Reconciler drafts must exit through the per-turn sequencer — never bypass `sender.send` with unstamped events.
+
+[[src/main/chat-runtime/chat-event-sequencer.ts#stampChatRuntimeEvent]] assigns monotonic `sequence` and unique `eventId`. Draft shape: [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEventDraft]]. Renderer [[src/renderer/src/modules/chat/controller/useChatController.ts#useChatController]] drops `sequence <= lastAppliedSequence`. Reconciler emits only stamped drafts via IPC (`tool.progress` narrow form in [[src/main/chat-runtime/chat-session-reconciler.ts#buildReconcileEvents]]). Parent: [[domain/chat#Durable runtime (v8.1)]].
+
+## Interaction continuation
+
+Clarify/Approval must stream continuation results into the same Chat run — not HTTP 2xx with an empty body.
+
+[[src/main/chat-runtime/hermes-interaction-continuation-adapter.ts#createHermesInteractionContinuationAdapter]] probes Gateway capabilities, prefers native interaction endpoints when present, otherwise resumes with streaming [[src/main/hermes.ts#sendMessage]] (same session/profile). Unsupported gateways throw `GATEWAY_UNSUPPORTED` (no fake success). Event ladder: `interaction.accepted` → `interaction.continuing` → `clarify.resolved` / `approval.resolved` / `interaction.resolved`. Prefix helpers remain in [[src/main/chat-runtime/hermes-chat-command-adapter.ts#createHermesChatCommandAdapter]]. Parent: [[domain/chat#Durable runtime (v8.1)]].
+
+## Recovery and diagnostics
+
+App restart and Renderer reload restore durable waiting state without auto-replaying failed turns.
+
+[[src/main/chat-runtime/chat-recovery-coordinator.ts#recoverIncompleteTurns]] maps incomplete turns to `waiting_*` (pending present) or `interrupted` (transport gone). IPC: `chat-runtime:get-state` / `chat-runtime:recover` / `chat-runtime:export-diagnostics`. Hook: [[src/renderer/src/modules/chat/hooks/useChatRuntimeRecovery.ts#useChatRuntimeRecovery]]. Trace/export types: [[src/shared/chat-runtime/chat-runtime-trace.ts#ChatRuntimeTrace]] / [[src/shared/chat-runtime/chat-runtime-trace.ts#ChatDiagnosticsExport]]. UI: [[src/renderer/src/modules/chat/components/diagnostics/ChatDiagnosticsExportButton.tsx#ChatDiagnosticsExportButton]] (no prompt/secret bodies). Parent: [[domain/chat#Durable runtime (v8.1)]].
 
 ## Session hydrate vs bind
 
@@ -20,9 +44,9 @@ Mount-time history restore uses `initialSessionId` once ([[src/renderer/src/modu
 
 ## Turn lifecycle
 
-Every submit carries a `turnId`; Main and Controller ignore late non-terminal events after that turn completes. Per-turn `startedAt` resets when a run leaves terminal/idle into busy. Decision: [[decisions#Chat turn lifecycle (v8.0.4)]].
+Every turn carries a `turnId`; Main and Controller ignore late non-terminal events after that turn completes. Controllers prefer `runtime.start` so completion arrives only via ordered events.
 
-Controller `BEGIN_TURN` sets `activeTurnId` and clears per-turn usage. Event intake requires `event.runId` and `event.turnId` to match the active turn. Terminal guards use [[src/shared/chat-runtime/chat-runtime-events.ts#CHAT_TURN_NON_TERMINAL_EVENTS]] / [[src/shared/chat-runtime/chat-runtime-events.ts#isChatTurnTerminalEventType]]. Workspace [[src/renderer/src/modules/chat/workspace/chatWorkspaceReducer.ts#chatWorkspaceReducer]] resets `startedAt` on each busy entry; [[src/renderer/src/modules/chat/components/header/ChatRunStatus.tsx#ChatRunStatus]] refreshes duration every second.
+Controller `BEGIN_TURN` sets `activeTurnId` and clears per-turn usage. Event intake requires matching `runId`/`turnId` plus sequence dedup (see [[domain/chat#Ordered runtime events]]). Terminal guards use [[src/shared/chat-runtime/chat-runtime-events.ts#CHAT_TURN_NON_TERMINAL_EVENTS]] / [[src/shared/chat-runtime/chat-runtime-events.ts#isChatTurnTerminalEventType]]. Workspace [[src/renderer/src/modules/chat/workspace/chatWorkspaceReducer.ts#chatWorkspaceReducer]] resets `startedAt` on each busy entry; [[src/renderer/src/modules/chat/components/header/ChatRunStatus.tsx#ChatRunStatus]] refreshes duration every second. Decision: [[decisions#Chat turn lifecycle (v8.0.4)]].
 
 ## Interaction loop (Clarify / Approval)
 
@@ -30,13 +54,13 @@ Clarify and Approval cards must wait for Main-resolved events — never optimism
 
 UI drafts use [[src/shared/chat-runtime/chat-runtime-contract.ts#ChatRuntimeCommandDraft]]; Controller [[src/renderer/src/modules/chat/controller/useChatController.ts#useChatController]] `submitRuntimeCommand` fills `runId`/`turnId` and dispatches `INTERACTION_SUBMIT` / resolves only on events. Pending state lives on [[src/renderer/src/modules/chat/controller/chatViewTypes.ts#ChatPendingInteractionState]] + clarify/approval rows in [[src/renderer/src/modules/chat/controller/chatReducer.ts#chatReducer]].
 
-SSE `hermes.clarify.requested` / `hermes.approval.requested` register pending via [[src/main/chat-runtime/chat-interaction-registry.ts#createPendingClarify]] / [[src/main/chat-runtime/chat-interaction-registry.ts#createPendingApproval]]. [[src/main/chat-runtime/chat-interaction-registry.ts#validatePendingInteraction]] rejects turn/request/kind mismatches. [[src/main/chat-runtime/hermes-chat-command-adapter.ts#createHermesChatCommandAdapter]] prefers structured follow-up messages (`[[hermes.clarify.response]]` / `[[hermes.approval.response]]`); unsupported gateways return `GATEWAY_UNSUPPORTED` (no fake `ok: true`). Events: `clarify.resolved` / `approval.resolved` / `interaction.failed` on [[src/shared/chat-runtime/chat-runtime-events.ts#ChatRuntimeEvent]]. UI: [[src/renderer/src/modules/chat/components/clarify/ClarifyCard.tsx#ClarifyCard]], [[src/renderer/src/modules/chat/components/approval/ApprovalCard.tsx#ApprovalCard]] (high-risk confirm + deny reason). Distinct from slash routing in [[chat-commands#Chat Commands]]. Decision: [[decisions#Chat interaction loop (v8.0.5)]].
+SSE `hermes.clarify.requested` / `hermes.approval.requested` register pending via [[src/main/chat-runtime/chat-interaction-registry.ts#createPendingClarify]] / [[src/main/chat-runtime/chat-interaction-registry.ts#createPendingApproval]] and durable [[src/main/chat-runtime/chat-runtime-store.ts#upsertPendingInteraction]]. [[src/main/chat-runtime/hermes-interaction-continuation-adapter.ts#createHermesInteractionContinuationAdapter]] continues with streaming (events `interaction.accepted` / `interaction.continuing` / `*.resolved`). Legacy [[src/main/chat-runtime/hermes-chat-command-adapter.ts#createHermesChatCommandAdapter]] remains as message-prefix helper. UI: [[src/renderer/src/modules/chat/components/clarify/ClarifyCard.tsx#ClarifyCard]], [[src/renderer/src/modules/chat/components/approval/ApprovalCard.tsx#ApprovalCard]]. Decision: [[decisions#Chat interaction loop (v8.0.5)]], [[decisions#Durable Chat Runtime (v8.1.0)]].
 
 ## Turn snapshot queue and retry
 
-Busy sends enqueue a full [[src/renderer/src/modules/chat/controller/chatTurnSnapshot.ts#ChatTurnRequestSnapshot]] (text, attachments, model, expert/skill, work mode). Drain replays the snapshot into `runtime.submit`.
+Busy sends enqueue a full [[src/renderer/src/modules/chat/controller/chatTurnSnapshot.ts#ChatTurnRequestSnapshot]]. Drain uses Queue reducer `peekQueued` + `mark_running` — never return dequeue values from a React setState updater.
 
-[[src/renderer/src/modules/chat/controller/chatTurnSnapshot.ts#createTurnSnapshot]] builds the snapshot at `BEGIN_TURN`; busy enqueue uses [[src/renderer/src/modules/chat/hooks/useChatQueue.ts#useChatQueue]] (`QueuedChatTurn`). Retry APIs on the controller: `retryLastTurn` (exact snapshot), `editAndRetryLastTurn` (restore composer, no auto-send), `retryLastTurnWithCurrentContext` (original text+attachments, live model/expert). Avoid double-appending the same user row on replay. Decision: [[decisions#Chat interaction loop (v8.0.5)]].
+[[src/renderer/src/modules/chat/controller/chatTurnLedger.ts#upsertTurnRecord]] maps `turnId` → snapshot/message ids (multi-fail Retry stays turn-accurate). Helpers: [[src/renderer/src/modules/chat/controller/chatRetryService.ts#planRetryTurn]] / [[src/renderer/src/modules/chat/controller/chatRetryService.ts#planEditAndRetry]] / [[src/renderer/src/modules/chat/controller/chatRetryService.ts#planRetryWithCurrentContext]] always set `skipAppendUser`. Edit-and-Retry restores Work Context via [[src/renderer/src/modules/chat/ports/ChatRunContextPort.ts#ChatRunContextPort]]. Queue reducer: [[src/renderer/src/modules/chat/hooks/useChatQueue.ts#useChatQueue]] / [[src/renderer/src/modules/chat/hooks/useChatQueue.ts#queueReducer]]. View items may carry `turnId` ([[src/renderer/src/modules/chat/controller/chatViewTypes.ts#ChatViewItem]]). Decision: [[decisions#Durable Chat Runtime (v8.1.0)]].
 
 ## Session files live summary
 
@@ -92,9 +116,9 @@ Tab titles use [[src/renderer/src/modules/chat/workspace/ChatRunRecord.ts#derive
 
 ## Workspace persistence
 
-[[src/renderer/src/modules/chat/workspace/chatWorkspacePersistence.ts#loadChatWorkspaceState]] restores `chat-workspace-state.v1` metadata (order, active run, context, title, model, panels, draft).
+[[src/renderer/src/modules/chat/workspace/chatWorkspacePersistence.ts#loadChatWorkspaceState]] restores `chat-workspace-state.v1` UI metadata (order, active run, context, title, model, panels, draft).
 
-Streaming content, tool events, and approvals are not persisted. Busy runs become `interrupted` on restore and must not auto-resume. After Send, `presentation.draft` must be empty so restore cannot revive a submitted prompt.
+Streaming content, tool events, and approvals are not in that UI blob. Main durable store ([[domain/chat#Durable runtime (v8.1)]]) separately persists run/turn/pending/queue for restart recovery. Busy UI runs become `interrupted` on workspace restore and must not auto-resume. After Send, `presentation.draft` must be empty so restore cannot revive a submitted prompt.
 
 ## Chat surfaces and engines
 

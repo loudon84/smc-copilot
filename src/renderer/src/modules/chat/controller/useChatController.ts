@@ -20,6 +20,7 @@ import type { ChatSessionPort } from "../ports/ChatSessionPort";
 import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
 import type { ChatFilesPort } from "../ports/ChatFilesPort";
 import type { ChatModelsPort } from "../ports/ChatModelsPort";
+import type { ChatRunContextPort } from "../ports/ChatRunContextPort";
 import { useChatEvents } from "../hooks/useChatEvents";
 import { useChatQueue, type QueuedChatTurn } from "../hooks/useChatQueue";
 import {
@@ -37,6 +38,16 @@ import {
   createTurnSnapshot,
   type ChatTurnRequestSnapshot,
 } from "./chatTurnSnapshot";
+import {
+  createEmptyTurnLedger,
+  upsertTurnRecord,
+  type ChatTurnLedger,
+} from "./chatTurnLedger";
+import {
+  planEditAndRetry,
+  planRetryTurn,
+  planRetryWithCurrentContext,
+} from "./chatRetryService";
 import type {
   ChatAttachmentState,
   ChatControllerState,
@@ -48,6 +59,7 @@ export type UseChatControllerOptions = {
   models?: ChatModelsPort;
   files?: ChatFilesPort;
   navigation?: ChatNavigationPort;
+  runContext?: ChatRunContextPort;
   profileId: string;
   initialSessionId?: string | null;
   /** @deprecated Use initialSessionId */
@@ -85,12 +97,19 @@ export type UseChatControllerResult = {
   queueLength: number;
   queue: QueuedChatTurn[];
   lastTurnSnapshot: ChatTurnRequestSnapshot | null;
+  turnLedger: ChatTurnLedger;
   submitComposer: () => Promise<void>;
   submitPayload: (payload: SubmitPayload) => Promise<void>;
   submitRuntimeCommand: (command: ChatRuntimeCommandDraft) => Promise<void>;
   retryLastTurn: () => Promise<void>;
+  retryTurn: (turnId: string) => Promise<void>;
   editAndRetryLastTurn: () => void;
+  editAndRetryTurn: (turnId: string) => Promise<void>;
   retryLastTurnWithCurrentContext: () => Promise<void>;
+  retryTurnWithCurrentContext: (turnId: string) => Promise<void>;
+  removeQueued: (queueId: string) => void;
+  moveQueued: (from: number, to: number) => void;
+  setQueueAutoDrain: (enabled: boolean) => void;
   /** @deprecated Prefer submitComposer / submitPayload. */
   send: (text?: string) => Promise<void>;
   abort: () => Promise<void>;
@@ -114,6 +133,7 @@ export function useChatController(
     session,
     files,
     navigation,
+    runContext,
     profileId,
     initialSessionId: initialSessionIdProp,
     forcedSessionId,
@@ -156,7 +176,18 @@ export function useChatController(
   );
   const setInput = commitInput;
 
-  const { queue, enqueue, dequeue, clear: clearQueue } = useChatQueue();
+  const {
+    queue,
+    autoDrain,
+    enqueue,
+    remove: removeQueued,
+    move: moveQueued,
+    markRunning,
+    complete: completeQueued,
+    peekQueued,
+    setAutoDrain: setQueueAutoDrain,
+    clear: clearQueue,
+  } = useChatQueue();
   const drainLockRef = useRef(false);
 
   /** Capture mount-time hydrate target once (never re-hydrate from runtime bind). */
@@ -170,6 +201,10 @@ export function useChatController(
   const lastTurnSnapshotRef = useRef<ChatTurnRequestSnapshot | null>(null);
   const [lastTurnSnapshot, setLastTurnSnapshot] =
     useState<ChatTurnRequestSnapshot | null>(null);
+  const turnLedgerRef = useRef<ChatTurnLedger>(createEmptyTurnLedger());
+  const [turnLedger, setTurnLedger] = useState<ChatTurnLedger>(() =>
+    createEmptyTurnLedger(),
+  );
 
   useEffect(() => {
     if (state.activeRunId !== runId) {
@@ -245,11 +280,24 @@ export function useChatController(
     hydrateRequestIdRef.current += 1;
   }, [runId]);
 
+  const lastAppliedSequenceRef = useRef(0);
+
   const onEvent = useCallback(
     (event: ChatRuntimeEvent) => {
       if (event.runId !== runId) return;
       const turnId = activeTurnIdRef.current;
       if (turnId && event.turnId !== turnId) return;
+
+      // v8.1 — drop duplicates / late events by sequence
+      if (
+        typeof event.sequence === "number" &&
+        event.sequence <= lastAppliedSequenceRef.current
+      ) {
+        return;
+      }
+      if (typeof event.sequence === "number") {
+        lastAppliedSequenceRef.current = event.sequence;
+      }
 
       if (
         isTerminalRunState(stateRef.current.runState) &&
@@ -294,9 +342,9 @@ export function useChatController(
           ? history.slice(0, -1)
           : history;
 
-      const result = await runtime.submit({
-        runId,
-        turnId,
+      lastAppliedSequenceRef.current = 0;
+
+      const request = {
         profileId: snap.profileId,
         sessionId: snap.sessionId || undefined,
         message: text,
@@ -318,6 +366,32 @@ export function useChatController(
           | "ask_each_time"
           | undefined,
         invocationSource: snap.invocationSource,
+      };
+
+      // v8.1 — prefer event-driven start (immediate accept).
+      if (runtime.start) {
+        const result = await runtime.start({ runId, turnId, request });
+        if (!result.ok) {
+          if (
+            stateRef.current.runState === "streaming" &&
+            stateRef.current.activeTurnId === turnId
+          ) {
+            dispatch({
+              type: "FAIL",
+              error: result.error,
+              code: result.code,
+              turnId,
+            });
+          }
+        }
+        // Completion / session bind arrive via onEvent.
+        return;
+      }
+
+      const result = await runtime.submit({
+        runId,
+        turnId,
+        ...request,
       });
 
       if (result.ok && result.sessionId) {
@@ -475,6 +549,18 @@ export function useChatController(
         text: a.text,
       }));
 
+      const ledgerNext = upsertTurnRecord(turnLedgerRef.current, {
+        turnId,
+        runId,
+        request: snap,
+        userMessageId: userId,
+        assistantMessageId: agentId,
+        status: "streaming",
+        startedAt: Date.now(),
+      });
+      turnLedgerRef.current = ledgerNext;
+      setTurnLedger(ledgerNext);
+
       dispatch({ type: "BEGIN_TURN", turnId });
       if (!payload.skipAppendUser) {
         dispatch({
@@ -484,13 +570,28 @@ export function useChatController(
               id: userId,
               kind: "user",
               content: text,
+              turnId,
               attachments: attachmentPayload.length
                 ? attachmentPayload
                 : undefined,
             },
-            { id: agentId, kind: "assistant", content: "", pending: true },
+            {
+              id: agentId,
+              kind: "assistant",
+              content: "",
+              pending: true,
+              turnId,
+            },
           ],
         });
+        dispatch({
+          type: "UPSERT_STREAMING_ASSISTANT",
+          id: agentId,
+          content: "",
+          append: false,
+        });
+      } else {
+        // Retry path: replace failed assistant with a fresh pending one.
         dispatch({
           type: "UPSERT_STREAMING_ASSISTANT",
           id: agentId,
@@ -582,55 +683,124 @@ export function useChatController(
     [runtime, runId],
   );
 
+  const retryTurn = useCallback(
+    async (turnId: string) => {
+      const plan = planRetryTurn(turnLedgerRef.current, turnId);
+      if (!plan.ok) return;
+      await submitPayload({
+        text: plan.snapshot.rawText,
+        snapshot: plan.snapshot,
+        source: "retry",
+        skipAppendUser: true,
+      });
+    },
+    [submitPayload],
+  );
+
   const retryLastTurn = useCallback(async () => {
     const snap = lastTurnSnapshotRef.current;
     if (!snap) return;
-    await submitPayload({
-      text: snap.rawText,
-      snapshot: snap,
-      source: "retry",
-    });
-  }, [submitPayload]);
+    await retryTurn(snap.turnId);
+  }, [retryTurn]);
+
+  const editAndRetryTurn = useCallback(
+    async (turnId: string) => {
+      const plan = planEditAndRetry(turnLedgerRef.current, turnId);
+      if (!plan.ok) return;
+      commitInput(plan.snapshot.rawText);
+      dispatch({
+        type: "SET_ATTACHMENTS",
+        attachments: plan.snapshot.attachments,
+      });
+      if (plan.snapshot.modelId) {
+        dispatch({ type: "SET_MODEL", modelId: plan.snapshot.modelId });
+      }
+      if (plan.contextRestore && runContext) {
+        await runContext.restoreContext(runId, plan.contextRestore);
+      }
+    },
+    [commitInput, runContext, runId],
+  );
 
   const editAndRetryLastTurn = useCallback(() => {
     const snap = lastTurnSnapshotRef.current;
     if (!snap) return;
-    commitInput(snap.rawText);
-    dispatch({ type: "SET_ATTACHMENTS", attachments: snap.attachments });
-    if (snap.modelId) {
-      dispatch({ type: "SET_MODEL", modelId: snap.modelId });
-    }
-  }, [commitInput]);
+    void editAndRetryTurn(snap.turnId);
+  }, [editAndRetryTurn]);
+
+  const retryTurnWithCurrentContext = useCallback(
+    async (turnId: string) => {
+      const current = runContext?.getContext(runId) ?? {
+        expertId,
+        teamId,
+        skillName,
+        workMode,
+        permissionMode,
+        promptHintMode,
+        modelId: stateRef.current.selectedModelId,
+      };
+      const plan = planRetryWithCurrentContext(
+        turnLedgerRef.current,
+        turnId,
+        current,
+      );
+      if (!plan.ok) return;
+      await submitPayload({
+        text: plan.snapshot.rawText,
+        snapshot: plan.snapshot,
+        source: "retry_current",
+        skipAppendUser: true,
+      });
+    },
+    [
+      submitPayload,
+      runContext,
+      runId,
+      expertId,
+      teamId,
+      skillName,
+      workMode,
+      permissionMode,
+      promptHintMode,
+    ],
+  );
 
   const retryLastTurnWithCurrentContext = useCallback(async () => {
     const snap = lastTurnSnapshotRef.current;
     if (!snap) return;
-    await submitPayload({
-      text: snap.rawText,
-      snapshot: snap,
-      source: "retry_current",
-    });
-  }, [submitPayload]);
+    await retryTurnWithCurrentContext(snap.turnId);
+  }, [retryTurnWithCurrentContext]);
 
-  // Drain queue when idle / terminal
+  // Drain queue when idle / terminal — reducer-safe peek + mark_running
   useEffect(() => {
     const idle =
       state.runState === "idle" ||
       state.runState === "completed" ||
       state.runState === "failed" ||
       state.runState === "cancelled";
-    if (!idle || drainLockRef.current) return;
-    const next = dequeue();
+    if (!idle || !autoDrain || drainLockRef.current) return;
+    const next = peekQueued();
     if (!next) return;
     drainLockRef.current = true;
+    markRunning(next.id);
     void submitPayload({
       text: next.snapshot.rawText,
       snapshot: next.snapshot,
       source: "queue",
-    }).finally(() => {
-      drainLockRef.current = false;
-    });
-  }, [state.runState, dequeue, submitPayload]);
+    })
+      .then(() => completeQueued(next.id))
+      .catch(() => completeQueued(next.id))
+      .finally(() => {
+        drainLockRef.current = false;
+      });
+  }, [
+    state.runState,
+    autoDrain,
+    peekQueued,
+    markRunning,
+    completeQueued,
+    submitPayload,
+  ]);
 
   const abort = useCallback(async () => {
     await runtime.abort(runId);
@@ -715,12 +885,19 @@ export function useChatController(
     queueLength: queue.length,
     queue,
     lastTurnSnapshot,
+    turnLedger,
     submitComposer,
     submitPayload,
     submitRuntimeCommand,
     retryLastTurn,
+    retryTurn,
     editAndRetryLastTurn,
+    editAndRetryTurn,
     retryLastTurnWithCurrentContext,
+    retryTurnWithCurrentContext,
+    removeQueued,
+    moveQueued,
+    setQueueAutoDrain,
     send,
     abort,
     reset,

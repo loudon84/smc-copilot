@@ -24,6 +24,7 @@ export type ChatViewItem =
       id: string;
       kind: "user";
       content: string;
+      turnId?: string;
       timestamp?: number;
       pending?: boolean;
       attachments?: ChatAttachment[];
@@ -32,6 +33,7 @@ export type ChatViewItem =
       id: string;
       kind: "assistant";
       content: string;
+      turnId?: string;
       timestamp?: number;
       pending?: boolean;
       attachments?: ChatAttachment[];
@@ -42,6 +44,7 @@ export type ChatViewItem =
       id: string;
       kind: "reasoning";
       content: string;
+      turnId?: string;
       pending?: boolean;
     }
   | {
@@ -51,6 +54,7 @@ export type ChatViewItem =
       name: string;
       args: string;
       status: "running" | "completed" | "failed";
+      turnId?: string;
     }
   | {
       id: string;
@@ -58,6 +62,7 @@ export type ChatViewItem =
       callId: string;
       name: string;
       content: string;
+      turnId?: string;
       attachments?: ChatAttachment[];
     }
   | {
@@ -66,6 +71,7 @@ export type ChatViewItem =
       request: ClarifyRequest;
       answer?: string;
       resolved?: boolean;
+      turnId?: string;
       interactionStatus?: ChatPendingInteractionStatus;
       interactionError?: string;
     }
@@ -76,6 +82,7 @@ export type ChatViewItem =
       resolved?: boolean;
       decision?: "approved" | "denied";
       denyReason?: string;
+      turnId?: string;
       interactionStatus?: ChatPendingInteractionStatus;
       interactionError?: string;
     }

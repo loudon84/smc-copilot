@@ -42,6 +42,14 @@ Gateway bridge uses structured follow-up messages; never fake success. Cross-tur
 
 See [[domain/chat#Interaction loop (Clarify / Approval)]], [[domain/chat#Turn snapshot queue and retry]], [[domain/chat#Session files live summary]], [[file-platform#Chat files changed events]], [[session-file-context#Session Files Panel]].
 
+## Durable Chat Runtime (v8.1.0)
+
+Chat submit is event-driven (`chat-runtime:start` returns immediately). Durable run/turn/pending/queue live in profile `state.db`; transport handles are separate and may end without deleting pending interactions.
+
+Events carry `eventId`+`sequence`+`emittedAt`. Clarify/Approval continue via streaming session continuation. Turn Ledger binds Retry to specific turns (no duplicate user message). Recovery restores waiting cards after reload. Playwright E2E and deprecated cutover remain deferred.
+
+See [[domain/chat#Durable runtime (v8.1)]], [[domain/chat#Ordered runtime events]], [[domain/chat#Interaction continuation]], [[domain/chat#Recovery and diagnostics]], [[domain/chat#Turn snapshot queue and retry]], [[domain/chat#Chat runtime isolation]].
+
 ## Chat workspace per-run state (v8.0.3)
 
 Each Chat Run owns Session/Expert/Skill/WorkMode in `ChatRunRecord`; do not share them via `HermesWorkspaceContext`.

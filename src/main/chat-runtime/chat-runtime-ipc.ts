@@ -1,15 +1,35 @@
+/**
+ * v8.1 Chat Runtime IPC — event-driven start + durable run state + interaction continuation.
+ */
+
 import { ipcMain, Notification, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import type {
   ChatAbortInput,
+  ChatStartInput,
+  ChatStartResult,
   ChatSubmitInput,
   ChatSubmitResult,
+  ChatTurnRequestPayload,
 } from "../../shared/chat-runtime/chat-runtime-contract";
-import { CHAT_RUNTIME_CHANNELS } from "../../shared/chat-runtime/chat-runtime-contract";
-import { isChatTurnTerminalEventType } from "../../shared/chat-runtime/chat-runtime-events";
+import {
+  CHAT_RUNTIME_CHANNELS,
+  submitInputToStartInput,
+} from "../../shared/chat-runtime/chat-runtime-contract";
+import {
+  isChatTurnTerminalEventType,
+  type ChatRuntimeEventDraft,
+} from "../../shared/chat-runtime/chat-runtime-events";
 import {
   ChatRuntimeErrorCode,
   chatRuntimeError,
 } from "../../shared/chat-runtime/chat-runtime-errors";
+import type {
+  ChatRuntimeGetStateInput,
+  ChatRuntimeGetStateResult,
+  ChatRuntimeRecoverInput,
+  ChatRuntimeRecoverResult,
+} from "../../shared/chat-runtime/chat-runtime-state";
+import type { ChatDiagnosticsExport } from "../../shared/chat-runtime/chat-runtime-trace";
 import type { HermesChatSendPayload } from "../../shared/hermes-default-chat/hermes-default-chat-contract";
 import {
   isRemoteMode,
@@ -47,6 +67,7 @@ import {
   abortRun,
   clearActiveRun,
   getActiveRun,
+  patchActiveRun,
   setActiveRun,
 } from "./chat-runtime-manager";
 import {
@@ -55,42 +76,64 @@ import {
   validatePendingInteraction,
 } from "./chat-interaction-registry";
 import {
-  createHermesChatCommandAdapter,
   HermesChatCommandFailedError,
   HermesChatCommandUnsupportedError,
 } from "./hermes-chat-command-adapter";
+import { createHermesInteractionContinuationAdapter } from "./hermes-interaction-continuation-adapter";
 import {
   finalizeSessionReconcile,
   startSessionReconcile,
   stopAllSessionReconciles,
   stopSessionReconcile,
 } from "./chat-session-reconciler";
+import {
+  abortAllTransports,
+  abortTransport,
+  clearTransportHandle,
+  setTransportHandle,
+} from "./chat-transport-registry";
+import {
+  getPendingInteraction,
+  getRun,
+  getTurn,
+  listPendingInteractions,
+  listQueueEntries,
+  listRuntimeEvents,
+  listTurnsForRun,
+  upsertPendingInteraction,
+  upsertRun,
+  upsertTurn,
+} from "./chat-runtime-store";
+import { recoverIncompleteTurns } from "./chat-recovery-coordinator";
+import { getTurnLastSequence } from "./chat-event-sequencer";
 
-const hermesCommandAdapter = createHermesChatCommandAdapter();
+const continuationAdapter = createHermesInteractionContinuationAdapter();
 
-function toHermesPayload(input: ChatSubmitInput): HermesChatSendPayload {
+function toHermesPayload(
+  request: ChatTurnRequestPayload,
+): HermesChatSendPayload {
   return {
-    message: input.message,
-    profile: input.profileId === "default" ? undefined : input.profileId,
-    resumeSessionId: input.sessionId,
-    history: input.history,
-    attachment_ids: input.attachments?.map((a) => a.id),
-    attachment_metas: input.attachments?.map((a) => ({
+    message: request.message,
+    profile: request.profileId === "default" ? undefined : request.profileId,
+    resumeSessionId: request.sessionId,
+    history: request.history,
+    attachment_ids: request.attachments?.map((a) => a.id),
+    attachment_metas: request.attachments?.map((a) => ({
       id: a.id,
-      profile_id: input.profileId,
-      session_id: input.sessionId || HERMES_DRAFT_SESSION_ID,
+      profile_id: request.profileId,
+      session_id: request.sessionId || HERMES_DRAFT_SESSION_ID,
       name: a.name,
       mime_type: a.mime_type || "application/octet-stream",
       size_bytes: a.size_bytes ?? 0,
       storage_path: a.storage_path || "",
       text_preview: a.text_preview ?? null,
     })),
-    model_id: input.model?.modelId,
-    expert_id: input.expertId,
-    team_id: input.teamId,
-    expert_run_id: input.expertRunId,
-    work_mode: input.workMode as HermesChatSendPayload["work_mode"],
-    invocation_source: input.invocationSource,
+    model_id: request.model?.modelId,
+    expert_id: request.expertId,
+    team_id: request.teamId,
+    expert_run_id: request.expertRunId,
+    work_mode: request.workMode as HermesChatSendPayload["work_mode"],
+    invocation_source: request.invocationSource,
   };
 }
 
@@ -128,434 +171,666 @@ function resolveSendModelId(payload: HermesChatSendPayload): {
   return { modelId: undefined, saved: null };
 }
 
-function validateSubmit(input: ChatSubmitInput): string | null {
+function validateStart(input: ChatStartInput): string | null {
   if (!input?.runId?.trim()) return "runId is required";
   if (!input?.turnId?.trim()) return "turnId is required";
-  if (!input.profileId?.trim()) return "profileId is required";
-  if (!input.message?.trim() && !(input.attachments && input.attachments.length > 0)) {
+  const req = input.request;
+  if (!req?.profileId?.trim()) return "profileId is required";
+  if (!req.message?.trim() && !(req.attachments && req.attachments.length > 0)) {
     return "message or attachments required";
   }
-  if (!input.invocationSource) return "invocationSource is required";
+  if (!req.invocationSource) return "invocationSource is required";
   return null;
 }
 
-export function registerChatRuntimeIpc(
+type TerminalWaiter = {
+  resolve: (result: ChatSubmitResult) => void;
+  fullResponse: { value: string };
+};
+
+const submitWaiters = new Map<string, TerminalWaiter>();
+
+function turnWaitKey(runId: string, turnId: string): string {
+  return `${runId}::${turnId}`;
+}
+
+async function beginChatTurn(
+  event: IpcMainInvokeEvent,
+  input: ChatStartInput,
   getMainWindow: () => BrowserWindow | null,
-): void {
-  ipcMain.handle(
-    CHAT_RUNTIME_CHANNELS.submit,
-    async (event: IpcMainInvokeEvent, input: ChatSubmitInput): Promise<ChatSubmitResult> => {
-      const invalid = validateSubmit(input);
-      if (invalid) {
-        return {
-          ok: false,
-          runId: input?.runId || "",
-          turnId: input?.turnId || "",
-          errorCode: ChatRuntimeErrorCode.INVALID_INPUT,
-          error: invalid,
-        };
+): Promise<ChatStartResult> {
+  const invalid = validateStart(input);
+  if (invalid) {
+    return { ok: false, code: ChatRuntimeErrorCode.INVALID_INPUT, error: invalid };
+  }
+
+  const runId = input.runId.trim();
+  const turnId = input.turnId.trim();
+  const request = input.request;
+  const payload = toHermesPayload(request);
+  const profile = payload.profile;
+  const acceptedAt = Date.now();
+
+  upsertRun({
+    runId,
+    activeTurnId: turnId,
+    profileId: request.profileId,
+    sessionId: request.sessionId,
+    status: "starting",
+    pendingInteractions: listPendingInteractions(runId),
+    lastEventSequence: 0,
+    updatedAt: acceptedAt,
+  });
+  upsertTurn({
+    turnId,
+    runId,
+    sessionId: request.sessionId,
+    profileId: request.profileId,
+    status: "starting",
+    rawText: request.message,
+    effectiveText: request.message,
+    requestSnapshotJson: JSON.stringify(request),
+    startedAt: acceptedAt,
+    lastSequence: 0,
+  });
+
+  // Kick off async work — do not await completion.
+  void runChatTurnAsync(event, input, getMainWindow).catch((err) => {
+    console.error("[chat-runtime] turn async failed:", err);
+  });
+
+  return { ok: true, runId, turnId, acceptedAt };
+}
+
+async function runChatTurnAsync(
+  event: IpcMainInvokeEvent,
+  input: ChatStartInput,
+  getMainWindow: () => BrowserWindow | null,
+): Promise<void> {
+  const runId = input.runId.trim();
+  const turnId = input.turnId.trim();
+  const request = input.request;
+  const payload = toHermesPayload(request);
+  const profile = payload.profile;
+
+  let turnTerminal = false;
+  let sessionStartedEmitted = false;
+  let fullResponse = "";
+  let resolvedSessionId: string | undefined = request.sessionId;
+  const chatStartTime = Date.now();
+  let cancelled = false;
+  let finished = false;
+
+  const emitTurnEvent = (draft: ChatRuntimeEventDraft): boolean => {
+    if (turnTerminal && !isChatTurnTerminalEventType(draft.type)) {
+      return true;
+    }
+    if (isChatTurnTerminalEventType(draft.type)) {
+      turnTerminal = true;
+    }
+    return emitChatRuntimeEvent(event.sender, { ...draft, runId, turnId });
+  };
+
+  const emitSessionStartedOnce = (sessionId: string): void => {
+    if (sessionStartedEmitted || !sessionId || turnTerminal) return;
+    sessionStartedEmitted = true;
+    void emitTurnEvent({
+      type: "session.started",
+      runId,
+      turnId,
+      sessionId,
+    });
+  };
+
+  const finishTransport = (): void => {
+    clearTransportHandle(runId, turnId);
+    stopSessionReconcile(runId);
+  };
+
+  const persistRunStatus = (
+    status: import("../../shared/chat-runtime/chat-runtime-state").DurableChatRunStatus,
+    turnStatus: import("../../shared/chat-runtime/chat-runtime-state").ChatTurnStatus,
+    extras?: { errorCode?: string; errorMessage?: string },
+  ): void => {
+    const pending = listPendingInteractions(runId);
+    const effectiveStatus =
+      pending.length > 0 && (status === "completed" || status === "streaming")
+        ? pending[0].interactionType === "clarify"
+          ? "waiting_clarify"
+          : "waiting_approval"
+        : status;
+    const effectiveTurnStatus =
+      pending.length > 0 && (turnStatus === "completed" || turnStatus === "streaming")
+        ? pending[0].interactionType === "clarify"
+          ? "waiting_clarify"
+          : "waiting_approval"
+        : turnStatus;
+
+    upsertRun({
+      runId,
+      activeTurnId: turnId,
+      profileId: request.profileId,
+      sessionId: resolvedSessionId,
+      status: effectiveStatus,
+      pendingInteractions: pending,
+      lastEventSequence: getTurnLastSequence(runId, turnId),
+      updatedAt: Date.now(),
+    });
+    upsertTurn({
+      turnId,
+      runId,
+      sessionId: resolvedSessionId,
+      profileId: request.profileId,
+      status: effectiveTurnStatus,
+      rawText: request.message,
+      effectiveText: request.message,
+      requestSnapshotJson: JSON.stringify(request),
+      startedAt: chatStartTime,
+      completedAt:
+        effectiveTurnStatus === "completed" ||
+        effectiveTurnStatus === "failed" ||
+        effectiveTurnStatus === "cancelled"
+          ? Date.now()
+          : undefined,
+      errorCode: extras?.errorCode,
+      errorMessage: extras?.errorMessage,
+      lastSequence: getTurnLastSequence(runId, turnId),
+    });
+  };
+
+  const resolveSubmitWaiter = (result: ChatSubmitResult): void => {
+    const waiter = submitWaiters.get(turnWaitKey(runId, turnId));
+    if (waiter) {
+      submitWaiters.delete(turnWaitKey(runId, turnId));
+      waiter.resolve(result);
+    }
+  };
+
+  const finishOnce = (result: ChatSubmitResult): void => {
+    if (finished) return;
+    finished = true;
+    finishTransport();
+    // Keep durable run / pending interactions — do NOT clearActiveRun when waiting.
+    const pending = listPendingInteractions(runId);
+    if (pending.length === 0) {
+      // Soft-clear memory handle abort hooks but retain run id lookup via store.
+      clearActiveRun(runId);
+    }
+    resolveSubmitWaiter(result);
+  };
+
+  const block = await beforeExpertChatSend(payload);
+  if (block) {
+    emitTurnEvent({
+      type: "failed",
+      runId,
+      turnId,
+      error: chatRuntimeError(ChatRuntimeErrorCode.EXPERT_BLOCKED, block.message),
+    });
+    persistRunStatus("failed", "failed", {
+      errorCode: block.errorCode || ChatRuntimeErrorCode.EXPERT_BLOCKED,
+      errorMessage: block.message,
+    });
+    finishOnce({
+      ok: false,
+      runId,
+      turnId,
+      errorCode: block.errorCode || ChatRuntimeErrorCode.EXPERT_BLOCKED,
+      error: block.message,
+    });
+    return;
+  }
+
+  if (!isRemoteMode() && !isGatewayRunning(profile)) {
+    startGateway(profile);
+  }
+
+  await ensureSshTunnelIfNeeded();
+  const conn = getConnectionConfig();
+  if (conn.mode === "ssh" && conn.ssh) {
+    const gatewayRunning = await sshGatewayStatus(conn.ssh);
+    const tunnelHealthy = await isSshTunnelHealthy();
+    if (!gatewayRunning || !tunnelHealthy) {
+      await sshStartGateway(conn.ssh);
+      await startSshTunnel(conn.ssh);
+      const key = await sshReadRemoteApiKey(conn.ssh);
+      setSshRemoteApiKey(key);
+    }
+  }
+
+  const { modelId, saved } = resolveSendModelId(payload);
+  const requestSessionKey =
+    payload.resumeSessionId?.trim() || HERMES_DRAFT_SESSION_ID;
+
+  let chatHandle: { abort: () => void } | null = null;
+
+  setActiveRun(runId, {
+    abort: () => {
+      if (finished || cancelled) return;
+      cancelled = true;
+      try {
+        chatHandle?.abort();
+      } catch {
+        /* best effort */
       }
-
-      const runId = input.runId.trim();
-      const turnId = input.turnId.trim();
-      const payload = toHermesPayload(input);
-      const profile = payload.profile;
-
-      /** Drop non-terminal events after the turn has finished. */
-      let turnTerminal = false;
-      let sessionStartedEmitted = false;
-
-      const emitTurnEvent = (
-        evt: Parameters<typeof emitChatRuntimeEvent>[1],
-      ): boolean => {
-        if (turnTerminal && !isChatTurnTerminalEventType(evt.type)) {
-          return true;
-        }
-        if (isChatTurnTerminalEventType(evt.type)) {
-          turnTerminal = true;
-        }
-        return emitChatRuntimeEvent(event.sender, { ...evt, runId, turnId });
-      };
-
-      const emitSessionStartedOnce = (sessionId: string): void => {
-        if (sessionStartedEmitted || !sessionId || turnTerminal) return;
-        sessionStartedEmitted = true;
-        void emitTurnEvent({
-          type: "session.started",
-          runId,
-          turnId,
-          sessionId,
-        });
-      };
-
-      const block = await beforeExpertChatSend(payload);
-      if (block) {
-        emitTurnEvent({
-          type: "failed",
-          runId,
-          turnId,
-          error: chatRuntimeError(ChatRuntimeErrorCode.EXPERT_BLOCKED, block.message),
-        });
-        return {
-          ok: false,
-          runId,
-          turnId,
-          errorCode: block.errorCode || ChatRuntimeErrorCode.EXPERT_BLOCKED,
-          error: block.message,
-        };
-      }
-
-      if (!isRemoteMode() && !isGatewayRunning(profile)) {
-        startGateway(profile);
-      }
-
-      await ensureSshTunnelIfNeeded();
-      const conn = getConnectionConfig();
-      if (conn.mode === "ssh" && conn.ssh) {
-        const gatewayRunning = await sshGatewayStatus(conn.ssh);
-        const tunnelHealthy = await isSshTunnelHealthy();
-        if (!gatewayRunning || !tunnelHealthy) {
-          await sshStartGateway(conn.ssh);
-          await startSshTunnel(conn.ssh);
-          const key = await sshReadRemoteApiKey(conn.ssh);
-          setSshRemoteApiKey(key);
-        }
-      }
-
-      const { modelId, saved } = resolveSendModelId(payload);
-      const requestSessionKey =
-        payload.resumeSessionId?.trim() || HERMES_DRAFT_SESSION_ID;
-
-      let fullResponse = "";
-      let resolvedSessionId: string | undefined;
-      const chatStartTime = Date.now();
-      let cancelled = false;
-      let finished = false;
-
-      let resolveChat: (v: ChatSubmitResult) => void;
-      const promise = new Promise<ChatSubmitResult>((res) => {
-        resolveChat = res;
+      emitTurnEvent({ type: "cancelled", runId, turnId });
+      persistRunStatus("cancelled", "cancelled");
+      finishOnce({
+        ok: false,
+        runId,
+        turnId,
+        errorCode: ChatRuntimeErrorCode.CANCELLED,
+        error: "Run cancelled",
       });
+    },
+    profileId: request.profileId,
+    sessionId: request.sessionId,
+    turnId,
+    startedAt: Date.now(),
+    pendingInteractions: new Map(),
+  });
 
-      const finishOnce = (result: ChatSubmitResult): void => {
+  setTransportHandle({
+    runId,
+    turnId,
+    abort: () => {
+      try {
+        chatHandle?.abort();
+      } catch {
+        /* best effort */
+      }
+    },
+  });
+
+  upsertRun({
+    runId,
+    activeTurnId: turnId,
+    profileId: request.profileId,
+    sessionId: request.sessionId,
+    status: "streaming",
+    pendingInteractions: [],
+    lastEventSequence: 0,
+    updatedAt: Date.now(),
+  });
+  upsertTurn({
+    turnId,
+    runId,
+    sessionId: request.sessionId,
+    profileId: request.profileId,
+    status: "streaming",
+    rawText: request.message,
+    effectiveText: request.message,
+    requestSnapshotJson: JSON.stringify(request),
+    startedAt: chatStartTime,
+    lastSequence: 0,
+  });
+
+  const ensureReconcile = (sessionId: string): void => {
+    startSessionReconcile(runId, sessionId, (payloadDiff) => {
+      for (const evt of payloadDiff.events) {
+        emitTurnEvent({
+          type: "tool.progress",
+          runId,
+          turnId,
+          tool: evt.tool,
+        });
+      }
+    });
+  };
+
+  const emitReconcileDiff = (
+    payloadDiff: import("./chat-session-reconciler").ChatSessionReconcileDiff,
+  ): void => {
+    for (const evt of payloadDiff.events) {
+      emitTurnEvent({
+        type: "tool.progress",
+        runId,
+        turnId,
+        tool: evt.tool,
+      });
+    }
+  };
+
+  const handle = await sendMessage(
+    payload.message,
+    {
+      onChunk: (chunk) => {
+        if (finished || cancelled) return;
+        fullResponse += chunk;
+        const waiter = submitWaiters.get(turnWaitKey(runId, turnId));
+        if (waiter) waiter.fullResponse.value = fullResponse;
+        if (
+          !emitTurnEvent({
+            type: "message.delta",
+            runId,
+            turnId,
+            content: chunk,
+          })
+        ) {
+          cancelled = true;
+          chatHandle?.abort();
+          persistRunStatus("cancelled", "cancelled");
+          finishOnce({
+            ok: false,
+            runId,
+            turnId,
+            errorCode: ChatRuntimeErrorCode.CANCELLED,
+            error: "Run cancelled",
+          });
+        }
+      },
+      onSessionStarted: (sessionId) => {
+        if (finished || cancelled || !sessionId) return;
+        resolvedSessionId = sessionId;
+        migrateSessionModelBinding(requestSessionKey, sessionId, profile);
+        patchActiveRun(runId, { sessionId });
+        emitSessionStartedOnce(sessionId);
+        ensureReconcile(sessionId);
+      },
+      onDone: (sessionId) => {
         if (finished) return;
-        finished = true;
-        stopSessionReconcile(runId);
-        clearActiveRun(runId);
-        resolveChat(result);
-      };
+        if (cancelled) {
+          persistRunStatus("cancelled", "cancelled");
+          finishOnce({
+            ok: false,
+            runId,
+            turnId,
+            errorCode: ChatRuntimeErrorCode.CANCELLED,
+            error: "Run cancelled",
+          });
+          return;
+        }
+        resolvedSessionId = sessionId || resolvedSessionId;
+        void afterExpertChatComplete({
+          runId: payload.expert_run_id,
+          profile,
+          response: fullResponse,
+          sessionId: resolvedSessionId,
+        });
+        if (resolvedSessionId) {
+          migrateSessionModelBinding(
+            requestSessionKey,
+            resolvedSessionId,
+            profile,
+          );
+          emitSessionStartedOnce(resolvedSessionId);
+          finalizeSessionReconcile(
+            runId,
+            resolvedSessionId,
+            emitReconcileDiff,
+          );
+        }
 
-      const finishCompleted = (sessionId?: string): void => {
+        const pending = listPendingInteractions(runId);
+        if (pending.length === 0) {
+          emitTurnEvent({
+            type: "completed",
+            runId,
+            turnId,
+            sessionId: resolvedSessionId,
+          });
+          persistRunStatus("completed", "completed");
+        } else {
+          persistRunStatus(
+            pending[0].interactionType === "clarify"
+              ? "waiting_clarify"
+              : "waiting_approval",
+            pending[0].interactionType === "clarify"
+              ? "waiting_clarify"
+              : "waiting_approval",
+          );
+        }
         finishOnce({
           ok: true,
           runId,
           turnId,
           response: fullResponse,
-          sessionId,
+          sessionId: resolvedSessionId,
         });
-      };
 
-      const finishFailed = (code: string, message: string): void => {
-        finishOnce({
-          ok: false,
-          runId,
-          turnId,
-          errorCode: code,
-          error: message,
-        });
-      };
-
-      const finishCancelled = (): void => {
-        emitTurnEvent({ type: "cancelled", runId, turnId });
-        finishOnce({
-          ok: false,
-          runId,
-          turnId,
-          errorCode: ChatRuntimeErrorCode.CANCELLED,
-          error: "Run cancelled",
-        });
-      };
-
-      const ensureReconcile = (sessionId: string): void => {
-        startSessionReconcile(runId, sessionId, (payload) => {
-          for (const evt of payload.events) {
-            emitTurnEvent({
-              ...evt,
-              runId,
-              turnId,
-            } as Parameters<typeof emitChatRuntimeEvent>[1]);
-          }
-        });
-      };
-
-      const emitReconcileDiff = (
-        payload: import("./chat-session-reconciler").ChatSessionReconcileDiff,
-      ): void => {
-        for (const evt of payload.events) {
-          emitTurnEvent({
-            ...evt,
+        const mainWindow = getMainWindow();
+        if (
+          mainWindow &&
+          !mainWindow.isFocused() &&
+          Date.now() - chatStartTime > 10000 &&
+          pending.length === 0
+        ) {
+          const preview = fullResponse
+            .replace(/[#*_`~\n]+/g, " ")
+            .trim()
+            .slice(0, 80);
+          new Notification({
+            title: "Hermes Agent",
+            body: preview || "Response ready",
+          }).show();
+        }
+      },
+      onError: (error) => {
+        if (finished) return;
+        if (cancelled) {
+          persistRunStatus("cancelled", "cancelled");
+          finishOnce({
+            ok: false,
             runId,
             turnId,
-          } as Parameters<typeof emitChatRuntimeEvent>[1]);
+            errorCode: ChatRuntimeErrorCode.CANCELLED,
+            error: "Run cancelled",
+          });
+          return;
         }
-      };
+        void afterExpertChatComplete({
+          runId: payload.expert_run_id,
+          profile,
+          response: fullResponse,
+          error,
+        });
+        emitTurnEvent({
+          type: "failed",
+          runId,
+          turnId,
+          error: chatRuntimeError(ChatRuntimeErrorCode.SEND_FAILED, error),
+        });
+        persistRunStatus("failed", "failed", {
+          errorCode: ChatRuntimeErrorCode.SEND_FAILED,
+          errorMessage: error,
+        });
+        finishOnce({
+          ok: false,
+          runId,
+          turnId,
+          errorCode: ChatRuntimeErrorCode.SEND_FAILED,
+          error,
+        });
 
-      let chatHandle: { abort: () => void } | null = null;
+        const mainWindow = getMainWindow();
+        if (mainWindow && !mainWindow.isFocused()) {
+          new Notification({
+            title: "Hermes Agent — Error",
+            body: error.slice(0, 100),
+          }).show();
+        }
+      },
+      onToolProgress: (tool) => {
+        if (finished || cancelled) return;
+        bridgeChatToolProgress({
+          runId: payload.expert_run_id,
+          profile,
+          expertId: payload.expert_id,
+          toolLabel: tool,
+        });
+        emitTurnEvent({
+          type: "tool.progress",
+          runId,
+          turnId,
+          tool,
+        });
+      },
+      onReasoningDelta: (content) => {
+        if (finished || cancelled) return;
+        emitTurnEvent({
+          type: "reasoning.delta",
+          runId,
+          turnId,
+          content,
+        });
+      },
+      onToolEvent: (toolEvent) => {
+        if (finished || cancelled) return;
+        emitTurnEvent({
+          type: "tool.event",
+          runId,
+          turnId,
+          event: toolEvent,
+        });
+      },
+      onClarifyRequested: (req) => {
+        if (cancelled) return;
+        const run = getActiveRun(runId);
+        if (run) {
+          run.pendingInteractions.set(
+            req.requestId,
+            createPendingClarify(req.requestId, turnId),
+          );
+        }
+        upsertPendingInteraction({
+          requestId: req.requestId,
+          runId,
+          turnId,
+          interactionType: "clarify",
+          payloadJson: JSON.stringify(req),
+          status: "pending",
+          createdAt: Date.now(),
+        });
+        persistRunStatus("waiting_clarify", "waiting_clarify");
+        emitTurnEvent({
+          type: "clarify.requested",
+          runId,
+          turnId,
+          request: req,
+        });
+      },
+      onApprovalRequested: (req) => {
+        if (cancelled) return;
+        const run = getActiveRun(runId);
+        if (run) {
+          run.pendingInteractions.set(
+            req.requestId,
+            createPendingApproval(req.requestId, turnId, req.toolName),
+          );
+        }
+        upsertPendingInteraction({
+          requestId: req.requestId,
+          runId,
+          turnId,
+          interactionType: "approval",
+          payloadJson: JSON.stringify(req),
+          status: "pending",
+          createdAt: Date.now(),
+        });
+        persistRunStatus("waiting_approval", "waiting_approval");
+        emitTurnEvent({
+          type: "approval.requested",
+          runId,
+          turnId,
+          request: req,
+        });
+      },
+      onUsage: (usage) => {
+        if (finished || cancelled) return;
+        emitTurnEvent({
+          type: "usage",
+          runId,
+          turnId,
+          usage: {
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+            totalTokens: usage.totalTokens,
+            cost: usage.cost,
+            rateLimitRemaining: usage.rateLimitRemaining,
+            rateLimitReset: usage.rateLimitReset,
+          },
+        });
+      },
+    },
+    profile,
+    payload.resumeSessionId,
+    payload.history,
+    {
+      attachmentIds: payload.attachment_ids,
+      attachmentMetas: payload.attachment_metas,
+      modelId,
+      sessionId: payload.resumeSessionId,
+      selectedModel: saved?.model,
+      selectedBaseUrl: saved?.baseUrl,
+    },
+  );
 
-      // Register before sendMessage so mid-stream clarify/approval can attach pending.
-      setActiveRun(runId, {
-        abort: () => {
-          if (finished || cancelled) return;
-          cancelled = true;
-          try {
-            chatHandle?.abort();
-          } catch {
-            /* best effort */
-          }
-          finishCancelled();
-        },
-        profileId: input.profileId,
-        sessionId: input.sessionId,
-        turnId,
-        startedAt: Date.now(),
-        pendingInteractions: new Map(),
-        respondClarify: async (requestId, answer) => {
-          await hermesCommandAdapter.respondClarify({
-            profileId: input.profileId,
-            sessionId: resolvedSessionId || input.sessionId,
-            requestId,
-            answer,
-          });
-        },
-        approve: async (requestId) => {
-          await hermesCommandAdapter.approve({
-            profileId: input.profileId,
-            sessionId: resolvedSessionId || input.sessionId,
-            requestId,
-          });
-        },
-        deny: async (requestId, reason) => {
-          await hermesCommandAdapter.deny({
-            profileId: input.profileId,
-            sessionId: resolvedSessionId || input.sessionId,
-            requestId,
-            reason,
-          });
-        },
-      });
+  chatHandle = handle;
+  setTransportHandle({
+    runId,
+    turnId,
+    abort: () => {
+      try {
+        chatHandle?.abort();
+      } catch {
+        /* best effort */
+      }
+    },
+  });
 
-      const handle = await sendMessage(
-        payload.message,
-        {
-          onChunk: (chunk) => {
-            if (finished || cancelled) return;
-            fullResponse += chunk;
-            if (
-              !emitTurnEvent({
-                type: "message.delta",
-                runId,
-                turnId,
-                content: chunk,
-              })
-            ) {
-              cancelled = true;
-              chatHandle?.abort();
-              finishCancelled();
-            }
-          },
-          onSessionStarted: (sessionId) => {
-            if (finished || cancelled || !sessionId) return;
-            resolvedSessionId = sessionId;
-            migrateSessionModelBinding(requestSessionKey, sessionId, profile);
-            const run = getActiveRun(runId);
-            if (run) run.sessionId = sessionId;
-            emitSessionStartedOnce(sessionId);
-            ensureReconcile(sessionId);
-          },
-          onDone: (sessionId) => {
-            if (finished) return;
-            if (cancelled) {
-              finishCancelled();
-              return;
-            }
-            resolvedSessionId = sessionId || resolvedSessionId;
-            void afterExpertChatComplete({
-              runId: payload.expert_run_id,
-              profile,
-              response: fullResponse,
-              sessionId: resolvedSessionId,
-            });
-            if (resolvedSessionId) {
-              migrateSessionModelBinding(
-                requestSessionKey,
-                resolvedSessionId,
-                profile,
-              );
-              emitSessionStartedOnce(resolvedSessionId);
-              finalizeSessionReconcile(
-                runId,
-                resolvedSessionId,
-                emitReconcileDiff,
-              );
-            }
-            emitTurnEvent({
-              type: "completed",
-              runId,
-              turnId,
-              sessionId: resolvedSessionId,
-            });
-            finishCompleted(resolvedSessionId);
+  if (request.sessionId) {
+    ensureReconcile(request.sessionId);
+  }
+}
 
-            const mainWindow = getMainWindow();
-            if (
-              mainWindow &&
-              !mainWindow.isFocused() &&
-              Date.now() - chatStartTime > 10000
-            ) {
-              const preview = fullResponse
-                .replace(/[#*_`~\n]+/g, " ")
-                .trim()
-                .slice(0, 80);
-              new Notification({
-                title: "Hermes Agent",
-                body: preview || "Response ready",
-              }).show();
-            }
-          },
-          onError: (error) => {
-            if (finished) return;
-            if (cancelled) {
-              finishCancelled();
-              return;
-            }
-            void afterExpertChatComplete({
-              runId: payload.expert_run_id,
-              profile,
-              response: fullResponse,
-              error,
-            });
-            emitTurnEvent({
-              type: "failed",
-              runId,
-              turnId,
-              error: chatRuntimeError(ChatRuntimeErrorCode.SEND_FAILED, error),
-            });
-            finishFailed(ChatRuntimeErrorCode.SEND_FAILED, error);
+export function registerChatRuntimeIpc(
+  getMainWindow: () => BrowserWindow | null,
+): void {
+  // @lat: [[domain/chat#Durable runtime (v8.1)]]
+  // Best-effort recovery of incomplete turns from prior session.
+  void recoverIncompleteTurns().catch((err) => {
+    console.warn("[chat-runtime] startup recover failed:", err);
+  });
 
-            const mainWindow = getMainWindow();
-            if (mainWindow && !mainWindow.isFocused()) {
-              new Notification({
-                title: "Hermes Agent — Error",
-                body: error.slice(0, 100),
-              }).show();
-            }
-          },
-          onToolProgress: (tool) => {
-            if (finished || cancelled) return;
-            bridgeChatToolProgress({
-              runId: payload.expert_run_id,
-              profile,
-              expertId: payload.expert_id,
-              toolLabel: tool,
-            });
-            emitTurnEvent({
-              type: "tool.progress",
-              runId,
-              turnId,
-              tool,
-            });
-          },
-          onReasoningDelta: (content) => {
-            if (finished || cancelled) return;
-            emitTurnEvent({
-              type: "reasoning.delta",
-              runId,
-              turnId,
-              content,
-            });
-          },
-          onToolEvent: (toolEvent) => {
-            if (finished || cancelled) return;
-            emitTurnEvent({
-              type: "tool.event",
-              runId,
-              turnId,
-              event: toolEvent,
-            });
-          },
-          onClarifyRequested: (request) => {
-            if (finished || cancelled) return;
-            const run = getActiveRun(runId);
-            if (run) {
-              run.pendingInteractions.set(
-                request.requestId,
-                createPendingClarify(request.requestId, turnId),
-              );
-            }
-            emitTurnEvent({
-              type: "clarify.requested",
-              runId,
-              turnId,
-              request,
-            });
-          },
-          onApprovalRequested: (request) => {
-            if (finished || cancelled) return;
-            const run = getActiveRun(runId);
-            if (run) {
-              run.pendingInteractions.set(
-                request.requestId,
-                createPendingApproval(
-                  request.requestId,
-                  turnId,
-                  request.toolName,
-                ),
-              );
-            }
-            emitTurnEvent({
-              type: "approval.requested",
-              runId,
-              turnId,
-              request,
-            });
-          },
-          onUsage: (usage) => {
-            if (finished || cancelled) return;
-            emitTurnEvent({
-              type: "usage",
-              runId,
-              turnId,
-              usage: {
-                promptTokens: usage.promptTokens,
-                completionTokens: usage.completionTokens,
-                totalTokens: usage.totalTokens,
-                cost: usage.cost,
-                rateLimitRemaining: usage.rateLimitRemaining,
-                rateLimitReset: usage.rateLimitReset,
-              },
-            });
-          },
-        },
-        profile,
-        payload.resumeSessionId,
-        payload.history,
-        {
-          attachmentIds: payload.attachment_ids,
-          attachmentMetas: payload.attachment_metas,
-          modelId,
-          sessionId: payload.resumeSessionId,
-          selectedModel: saved?.model,
-          selectedBaseUrl: saved?.baseUrl,
-        },
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.start,
+    async (
+      event: IpcMainInvokeEvent,
+      input: ChatStartInput,
+    ): Promise<ChatStartResult> => beginChatTurn(event, input, getMainWindow),
+  );
+
+  /** Compatibility adapter — waits for terminal event. Prefer start. */
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.submit,
+    async (
+      event: IpcMainInvokeEvent,
+      input: ChatSubmitInput,
+    ): Promise<ChatSubmitResult> => {
+      const startInput = submitInputToStartInput(input);
+      const fullResponse = { value: "" };
+      const waitKey = turnWaitKey(
+        startInput.runId.trim(),
+        startInput.turnId.trim(),
       );
 
-      chatHandle = handle;
+      const resultPromise = new Promise<ChatSubmitResult>((resolve) => {
+        submitWaiters.set(waitKey, { resolve, fullResponse });
+      });
 
-      if (input.sessionId) {
-        ensureReconcile(input.sessionId);
+      const started = await beginChatTurn(event, startInput, getMainWindow);
+      if (!started.ok) {
+        submitWaiters.delete(waitKey);
+        return {
+          ok: false,
+          runId: startInput.runId,
+          turnId: startInput.turnId,
+          errorCode: started.code,
+          error: started.error,
+        };
       }
 
-      return promise;
+      return resultPromise;
     },
   );
 
@@ -565,10 +840,13 @@ export function registerChatRuntimeIpc(
       const runId = typeof input === "string" ? input : input?.runId;
       if (!runId?.trim()) {
         abortRun();
+        abortAllTransports();
         return { ok: true as const };
       }
-      const ok = abortRun(runId.trim());
-      stopSessionReconcile(runId.trim());
+      const id = runId.trim();
+      abortTransport(id);
+      const ok = abortRun(id);
+      stopSessionReconcile(id);
       return { ok };
     },
   );
@@ -597,27 +875,42 @@ export function registerChatRuntimeIpc(
       const runId = command.runId.trim();
       const turnId = command.turnId.trim();
       const requestId = command.requestId.trim();
-      const run = getActiveRun(runId);
-      if (!run) {
+
+      const durable = getRun(runId);
+      const memoryRun = getActiveRun(runId);
+      if (!durable && !memoryRun) {
         return {
           ok: false,
           code: "RUN_NOT_FOUND",
-          error: `No active run ${runId}`,
-        };
-      }
-      if (run.turnId && run.turnId !== turnId) {
-        return {
-          ok: false,
-          code: "TURN_MISMATCH",
-          error: `Command turn ${turnId} does not match active turn ${run.turnId}`,
+          error: `No durable run ${runId}`,
         };
       }
 
+      const storePending = getPendingInteraction(requestId);
+      const memoryPending = memoryRun?.pendingInteractions.get(requestId);
+      const pendingForValidate = memoryPending
+        ? memoryPending
+        : storePending
+          ? {
+              type: storePending.interactionType,
+              requestId: storePending.requestId,
+              turnId: storePending.turnId,
+              createdAt: storePending.createdAt,
+              resolved: storePending.status === "resolved",
+              toolName:
+                storePending.interactionType === "approval"
+                  ? (JSON.parse(storePending.payloadJson) as { toolName?: string })
+                      .toolName || ""
+                  : undefined,
+            }
+          : undefined;
+
       const expectKind =
         command.type === "clarify.respond" ? "clarify" : "approval";
-      const pending = run.pendingInteractions.get(requestId);
       const invalid = validatePendingInteraction({
-        pending,
+        pending: pendingForValidate as
+          | import("./chat-interaction-registry").PendingInteraction
+          | undefined,
         commandTurnId: turnId,
         commandType: command.type,
         expectKind,
@@ -630,12 +923,54 @@ export function registerChatRuntimeIpc(
         };
       }
 
+      const profileId =
+        memoryRun?.profileId || durable?.profileId || "default";
+      const sessionId =
+        command.sessionId ||
+        memoryRun?.sessionId ||
+        durable?.sessionId ||
+        "";
+
       try {
+        emitChatRuntimeEvent(event.sender, {
+          type: "interaction.accepted",
+          runId,
+          turnId,
+          requestId,
+          interactionType: expectKind,
+        });
+
+        upsertPendingInteraction({
+          requestId,
+          runId,
+          turnId,
+          interactionType: expectKind,
+          payloadJson: storePending?.payloadJson || "{}",
+          status: "accepted",
+          createdAt: storePending?.createdAt || Date.now(),
+        });
+
         if (command.type === "clarify.respond") {
-          await run.respondClarify?.(requestId, command.answer);
-          const entry = run.pendingInteractions.get(requestId);
-          if (entry) entry.resolved = true;
-          run.pendingInteractions.delete(requestId);
+          await continuationAdapter.continueClarify({
+            runId,
+            turnId,
+            profileId,
+            sessionId,
+            requestId,
+            answer: command.answer,
+            sender: event.sender,
+          });
+          upsertPendingInteraction({
+            requestId,
+            runId,
+            turnId,
+            interactionType: "clarify",
+            payloadJson: storePending?.payloadJson || "{}",
+            status: "resolved",
+            createdAt: storePending?.createdAt || Date.now(),
+            resolvedAt: Date.now(),
+          });
+          memoryRun?.pendingInteractions.delete(requestId);
           emitChatRuntimeEvent(event.sender, {
             type: "clarify.resolved",
             runId,
@@ -643,9 +978,35 @@ export function registerChatRuntimeIpc(
             requestId,
             answer: command.answer,
           });
+          emitChatRuntimeEvent(event.sender, {
+            type: "interaction.resolved",
+            runId,
+            turnId,
+            requestId,
+            interactionType: "clarify",
+            answer: command.answer,
+          });
         } else if (command.type === "approval.approve") {
-          await run.approve?.(requestId);
-          run.pendingInteractions.delete(requestId);
+          await continuationAdapter.continueApproval({
+            runId,
+            turnId,
+            profileId,
+            sessionId,
+            requestId,
+            decision: "approved",
+            sender: event.sender,
+          });
+          upsertPendingInteraction({
+            requestId,
+            runId,
+            turnId,
+            interactionType: "approval",
+            payloadJson: storePending?.payloadJson || "{}",
+            status: "resolved",
+            createdAt: storePending?.createdAt || Date.now(),
+            resolvedAt: Date.now(),
+          });
+          memoryRun?.pendingInteractions.delete(requestId);
           emitChatRuntimeEvent(event.sender, {
             type: "approval.resolved",
             runId,
@@ -653,14 +1014,50 @@ export function registerChatRuntimeIpc(
             requestId,
             decision: "approved",
           });
+          emitChatRuntimeEvent(event.sender, {
+            type: "interaction.resolved",
+            runId,
+            turnId,
+            requestId,
+            interactionType: "approval",
+            decision: "approved",
+          });
         } else {
-          await run.deny?.(requestId, command.reason);
-          run.pendingInteractions.delete(requestId);
+          await continuationAdapter.continueApproval({
+            runId,
+            turnId,
+            profileId,
+            sessionId,
+            requestId,
+            decision: "denied",
+            reason: command.reason,
+            sender: event.sender,
+          });
+          upsertPendingInteraction({
+            requestId,
+            runId,
+            turnId,
+            interactionType: "approval",
+            payloadJson: storePending?.payloadJson || "{}",
+            status: "resolved",
+            createdAt: storePending?.createdAt || Date.now(),
+            resolvedAt: Date.now(),
+          });
+          memoryRun?.pendingInteractions.delete(requestId);
           emitChatRuntimeEvent(event.sender, {
             type: "approval.resolved",
             runId,
             turnId,
             requestId,
+            decision: "denied",
+            reason: command.reason,
+          });
+          emitChatRuntimeEvent(event.sender, {
+            type: "interaction.resolved",
+            runId,
+            turnId,
+            requestId,
+            interactionType: "approval",
             decision: "denied",
             reason: command.reason,
           });
@@ -692,9 +1089,111 @@ export function registerChatRuntimeIpc(
       };
     },
   );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.state,
+    (_event, input: ChatRuntimeGetStateInput): ChatRuntimeGetStateResult => {
+      if (!input?.runId?.trim()) {
+        return { ok: false, code: "INVALID_INPUT", error: "runId required" };
+      }
+      const runId = input.runId.trim();
+      const run = getRun(runId);
+      if (!run) {
+        return { ok: false, code: "RUN_NOT_FOUND", error: `No run ${runId}` };
+      }
+      return {
+        ok: true,
+        run: {
+          ...run,
+          pendingInteractions: listPendingInteractions(runId),
+        },
+        turns: listTurnsForRun(runId),
+        queue: listQueueEntries(runId),
+      };
+    },
+  );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.recover,
+    async (
+      _event,
+      input?: ChatRuntimeRecoverInput,
+    ): Promise<ChatRuntimeRecoverResult> => {
+      try {
+        const recovered = await recoverIncompleteTurns(input?.runId);
+        return { ok: true, recoveredRuns: recovered };
+      } catch (err) {
+        return {
+          ok: false,
+          code: "RECOVER_FAILED",
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHAT_RUNTIME_CHANNELS.exportDiagnostics,
+    (_event, input: { runId: string }): ChatDiagnosticsExport | { ok: false; error: string } => {
+      const runId = input?.runId?.trim();
+      if (!runId) return { ok: false, error: "runId required" };
+      const run = getRun(runId);
+      if (!run) return { ok: false, error: `No run ${runId}` };
+      const events = listRuntimeEvents(runId);
+      const turns = listTurnsForRun(runId);
+      return {
+        exportedAt: Date.now(),
+        runId,
+        profileId: run.profileId,
+        sessionId: run.sessionId,
+        runtimeMetadata: {
+          status: run.status,
+          activeTurnId: run.activeTurnId,
+          lastEventSequence: run.lastEventSequence,
+          updatedAt: run.updatedAt,
+        },
+        eventTimeline: events.map((e) => ({
+          eventId: e.eventId,
+          turnId: e.turnId,
+          sequence: e.sequence,
+          type: e.type,
+          emittedAt: e.emittedAt,
+        })),
+        toolTimeline: events
+          .filter((e) => e.type === "tool.event")
+          .map((e) => {
+            try {
+              const payload = JSON.parse(e.payloadJson) as {
+                event?: { callId?: string; name?: string; status?: string };
+              };
+              return {
+                callId: payload.event?.callId || "",
+                name: payload.event?.name || "",
+                status: payload.event?.status || "",
+                turnId: e.turnId,
+              };
+            } catch {
+              return { callId: "", name: "", status: "", turnId: e.turnId };
+            }
+          }),
+        errors: turns
+          .filter((t) => t.errorCode || t.errorMessage)
+          .map((t) => ({
+            turnId: t.turnId,
+            code: t.errorCode || "UNKNOWN",
+            message: t.errorMessage || "",
+          })),
+        fileIds: [],
+      };
+    },
+  );
 }
 
 export function shutdownChatRuntimeIpc(): void {
   abortRun();
+  abortAllTransports();
   stopAllSessionReconciles();
 }
+
+// Re-export for tests that poke store via getTurn
+export { getTurn, getRun };

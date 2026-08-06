@@ -1,3 +1,5 @@
+/** v8.0 / v8.1 Chat Runtime shared exports. */
+
 export type {
   ChatAbortInput,
   ChatAttachmentRef,
@@ -6,17 +8,26 @@ export type {
   ChatModelOverride,
   ChatRuntimeCommand,
   ChatRuntimeCommandBase,
+  ChatRuntimeCommandDraft,
   ChatRuntimeCommandErrorCode,
   ChatRuntimeCommandResult,
+  ChatStartInput,
+  ChatStartResult,
   ChatSubmitInput,
   ChatSubmitResult,
+  ChatTurnRequestPayload,
 } from "./chat-runtime-contract";
-export { CHAT_RUNTIME_CHANNELS } from "./chat-runtime-contract";
+export {
+  CHAT_RUNTIME_CHANNELS,
+  submitInputToStartInput,
+} from "./chat-runtime-contract";
 
 export type {
   ApprovalRequest,
   ChatRuntimeError,
   ChatRuntimeEvent,
+  ChatRuntimeEventBase,
+  ChatRuntimeEventDraft,
   ChatToolEvent,
   ChatUsage,
   ClarifyRequest,
@@ -26,6 +37,26 @@ export {
   isChatRuntimeEvent,
   isChatTurnTerminalEventType,
 } from "./chat-runtime-events";
+
+export type {
+  ChatDiagnosticsExport,
+  ChatRuntimeTrace,
+} from "./chat-runtime-trace";
+
+export type {
+  ChatQueueEntryStatus,
+  ChatRuntimeGetStateInput,
+  ChatRuntimeGetStateResult,
+  ChatRuntimeRecoverInput,
+  ChatRuntimeRecoverResult,
+  ChatTransportHandle,
+  ChatTurnStatus,
+  DurableChatQueueEntry,
+  DurableChatRunState,
+  DurableChatRunStatus,
+  DurableChatTurnSummary,
+  PendingInteractionRecord,
+} from "./chat-runtime-state";
 
 export {
   ChatRuntimeErrorCode,

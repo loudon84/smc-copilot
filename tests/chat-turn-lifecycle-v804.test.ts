@@ -46,8 +46,11 @@ describe("first-turn session hydrate vs bind", () => {
   it("session.started maps to BIND_SESSION not LOAD_HISTORY", () => {
     const event: ChatRuntimeEvent = {
       type: "session.started",
+      eventId: "e1",
       runId: "run-1",
       turnId: "turn-1",
+      sequence: 1,
+      emittedAt: 1,
       sessionId: "sess-1",
     };
     const actions = chatRuntimeEventToActions(event, null);

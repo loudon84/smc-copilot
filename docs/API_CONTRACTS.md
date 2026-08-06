@@ -244,21 +244,25 @@ Hermes Gateway **忽略** HTTP body 中的 `provider` / `base_url` / `api_key` �
 
 ---
 
-## Chat Runtime（v8.0 / v8.0.1 runId · v8.0.4 turnId · v8.0.5 Command）
+## Chat Runtime（v8.0–v8.1 Durable Runtime）
 
 **Preload**：`window.chatRuntime`（`src/preload/chat-runtime-api.ts`）  
-**Main**：`src/main/chat-runtime/`（`activeRuns` Map；`chat-interaction-registry` + `hermes-chat-command-adapter`；abort 走互斥 finish；与 legacy `hermes-chat:*` **并存**供灰度）  
-**契约**：`src/shared/chat-runtime/`
+**Main**：`src/main/chat-runtime/`（`chat-runtime:start` 事件驱动；`chat-runtime-store` 写入 profile `state.db`；`chat-transport-registry` 与 durable run 分离；`chat-event-sequencer`；`hermes-interaction-continuation-adapter`；`chat-recovery-coordinator`；与 legacy `hermes-chat:*` **并存**供灰度）  
+**契约**：`src/shared/chat-runtime/`（contract / events / state / trace）
 
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
-| `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / **`turnId`** / `profileId` / `invocationSource`；可选 `permissionMode` 独立于 `workMode`） | `ChatSubmitResult`（含同一 `turnId`） | 复用 `hermes.sendMessage` + expert-run-bridge；事件带同一 `runId`+`turnId`；必带 `history`；`session.started` 每 turn 至多一次 |
-| `chat-runtime:abort` | invoke | `ChatAbortInput \| string`（`runId`） | `{ ok: boolean }` | **仅**取消指定 run；无 id 时 abort all；**保证** submit Promise resolve |
-| `chat-runtime:command` | invoke | `ChatRuntimeCommand`（必含 `runId`+**`turnId`**+`requestId`；`clarify.respond` / `approval.approve` / `approval.deny`） | `ChatRuntimeCommandResult`（ok 含 `acceptedAt`；失败 `code`：`RUN_NOT_FOUND` / `TURN_MISMATCH` / `REQUEST_NOT_FOUND` / `REQUEST_ALREADY_RESOLVED` / `INVALID_STATE` / `GATEWAY_UNSUPPORTED` / `COMMAND_FAILED` / `INVALID_INPUT`） | **v8.0.5** 登记 pending → Hermes Follow-up Message；**禁止**假 `ok: true`；跨 turn 拒绝 |
+| `chat-runtime:start` | invoke | `ChatStartInput`（`runId`+`turnId`+`request`） | `ChatStartResult`（`{ok:true, runId, turnId, acceptedAt}` 立即返回） | **v8.1** 主路径；校验后持久化 turn 占位再异步 `sendMessage`；生命周期全部经 `chat-runtime:event` |
+| `chat-runtime:submit` | invoke | `ChatSubmitInput`（必含 `runId` / **`turnId`** / `profileId` / `invocationSource`） | `ChatSubmitResult`（含同一 `turnId`） | **@deprecated** 兼容适配：内部 `start` + 等待终态；生产 Chat 用 `start` |
+| `chat-runtime:abort` | invoke | `ChatAbortInput \| string`（`runId`） | `{ ok: boolean }` | 取消指定 run 的 transport；无 id 时 abort all |
+| `chat-runtime:command` | invoke | `ChatRuntimeCommand`（必含 `runId`+**`turnId`**+`requestId`） | `ChatRuntimeCommandResult` | Pending 优先读 durable store（stream 结束后仍可 Approval）；`interaction.accepted` → streaming continuation → `*.resolved`；失败 `GATEWAY_UNSUPPORTED` 等 |
+| `chat-runtime:get-state` | invoke | `{ runId }` | `ChatRuntimeGetStateResult` | **v8.1** 恢复 run/turns/pending/queue |
+| `chat-runtime:recover` | invoke | `{ runId? }` | `ChatRuntimeRecoverResult` | 扫 incomplete turns → waiting / interrupted（不重放失败 turn） |
+| `chat-runtime:export-diagnostics` | invoke | `{ runId }` | `ChatDiagnosticsExport` | 元数据 / timeline / errors；**不含** prompt/secret 正文 |
 
-**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent`（每事件必含 `runId`+**`turnId`**：既有流事件 + **`clarify.resolved` / `approval.resolved` / `interaction.failed`**）；终态后同 turn 非终态事件丢弃；Preload `chatRuntime.onEvent(cb)` 返回 unsubscribe。SSE 入站 `hermes.clarify.requested` / `hermes.approval.requested` 时登记 pending。
+**Event（Main → Renderer）**：`chat-runtime:event` → `ChatRuntimeEvent`（每事件必含 **`eventId`+`sequence`+`emittedAt`** + `runId`+**`turnId`**；含 `interaction.accepted` / `interaction.continuing` / `interaction.resolved` + 既有流/Clarify/Approval 事件）；SSE 与 Session Reconciler **统一经** `chat-event-sequencer` 出口；Renderer 按 sequence 去重。
 
-**Renderer**：`modules/chat/controller`（Turn Snapshot Queue/Retry；`submitRuntimeCommand` 等 `*.resolved`）；`ClarifyCard` / `ApprovalCard`；入口 `AiosCopilotChatHost`；`ChatFloatingRail`。
+**Renderer**：`modules/chat/controller`（`start` + Turn Ledger + Queue reducer + 精确 Retry / `ChatRunContextPort`）；`useChatRuntimeRecovery`；`ChatDiagnosticsExportButton`；入口 `AiosCopilotChatHost`。
 
 ---
 

@@ -25,7 +25,7 @@ Hard rules:
 - Renderer must never call `ipcRenderer` directly.
 - New capabilities follow Main module → IPC registration → Preload wrapper → `index.d.ts` → `docs/API_CONTRACTS.md`.
 
-Core entry points: [[src/main/utils.ts#profileHome]], [[src/main/hermes.ts#startGateway]], [[src/main/startup/startup-decision.ts#resolveStartupDecision]], [[src/main/auth/token-header-injector.ts#installTokenHeaderInjector]], [[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]].
+Core entry points: [[src/main/utils.ts#profileHome]], [[src/main/hermes.ts#startGateway]], [[src/main/startup/startup-decision.ts#resolveStartupDecision]], [[src/main/auth/token-header-injector.ts#installTokenHeaderInjector]], [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]], [[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]].
 
 ## Preload bridge contract
 
@@ -62,6 +62,10 @@ These Main exports carry `@lat:` comments back to domain sections. Keep both sid
 | [[src/main/startup/startup-decision.ts#resolveStartupDecision]] | [[domain/auth#Startup gate]] |
 | [[src/main/auth/token-header-injector.ts#installTokenHeaderInjector]] | [[domain/auth#Token vault and injection]] |
 | [[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]] | [[domain/chat#Chat runtime isolation]] |
+| [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]] | [[domain/chat#Durable runtime (v8.1)]] |
+| [[src/main/chat-runtime/chat-event-sequencer.ts#stampChatRuntimeEvent]] | [[domain/chat#Ordered runtime events]] |
+| [[src/main/chat-runtime/hermes-interaction-continuation-adapter.ts#createHermesInteractionContinuationAdapter]] | [[domain/chat#Interaction continuation]] |
+| [[src/main/chat-runtime/chat-recovery-coordinator.ts#recoverIncompleteTurns]] | [[domain/chat#Recovery and diagnostics]] |
 
 ## External runtimes
 
