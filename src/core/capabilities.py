@@ -46,6 +46,35 @@ DEFAULT_FEATURES: tuple[str, ...] = (
     "runtime.release.production",
     "runtime.maintenance.apply",
     "installer.windows.production",
+    # PRD v1.6 §21
+    "deployment.production-mode",
+    "service-center.http.production",
+    "service-center.device-signature",
+    "service-center.circuit-breaker",
+    "sync.ack-outbox",
+    "sync.signature-verification",
+    "sync.sequence-gap",
+    "sync.poison-message",
+    "resources.real-apply",
+    "resources.revision-rollback",
+    "resources.actual-state-probe",
+    "resources.artifact-cache-v2",
+    "tasks.local-control-plane",
+    "tasks.hermes-execution",
+    "tasks.event-store",
+    "tasks.event-replay",
+    "tasks.cancel",
+    "tasks.recovery",
+    "tasks.scheduler",
+    "approvals.task-scoped",
+    "policies.effective-policy",
+    "artifacts.streaming-upload",
+    "artifacts.multipart-resume",
+    "artifacts.encrypted-spool",
+    "workers.supervisor",
+    "observability.metrics",
+    "observability.slo",
+    "experience.auto-evidence",
 )
 
 
@@ -53,9 +82,9 @@ DEFAULT_FEATURES: tuple[str, ...] = (
 # @lat: [[endpoint-sync#Capability]]
 @dataclass
 class CapabilityRegistry:
-    """Capability negotiation for Desktop (PRD §5.5 / §7.1)."""
+    """Capability negotiation for Desktop (PRD §5.5 / §7.1 / v1.6 §21)."""
 
-    api_version: str = "1.2"
+    api_version: str = "1.3"
     features: list[str] = field(default_factory=lambda: list(DEFAULT_FEATURES))
 
     def list_features(self) -> list[str]:

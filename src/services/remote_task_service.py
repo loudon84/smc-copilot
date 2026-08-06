@@ -1,22 +1,24 @@
-"""Remote Task Assignment v2 (PRD FR-23–FR-29)."""
+"""Remote Task Assignment v2 — delegates to WorkTask execution (PRD FR-23–FR-29, v1.6 M4)."""
 
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
-from core.enums import RemoteAssignmentStatus
+from core.enums import RemoteAssignmentStatus, WorkTaskStatus
 from core.errors import ConflictError, CopilotError, NotFoundError
 from db.models.endpoint_sync import RemoteTaskAssignment, TaskDeliveryRecord, TaskLease
 from db.repositories.endpoint_sync_repo import EndpointSyncRepository
+from db.repositories.work_task_repo import WorkTaskRepository
 from integrations.service_center.protocol import ServiceCenterClient
 from runtime.experience_redactor import redact_payload
 from services.endpoint_enrollment_service import EndpointEnrollmentService
+from services.gateway_supervisor import GatewaySupervisor
+from services.work_task_service import WorkTaskService
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -35,12 +37,20 @@ class RemoteTaskService:
         settings: Settings,
         session: AsyncSession,
         center: ServiceCenterClient,
+        supervisor: GatewaySupervisor | None = None,
     ) -> None:
         self._settings = settings
         self._repo = EndpointSyncRepository(session)
         self._center = center
         self._enrollment = EndpointEnrollmentService(settings, session, center)
         self._session = session
+        self._work_tasks = WorkTaskRepository(session)
+        self._supervisor = supervisor
+
+    def _work_service(self) -> WorkTaskService:
+        if self._supervisor is None:
+            raise CopilotError("gateway supervisor required", code="supervisor_missing")
+        return WorkTaskService(self._settings, self._session, self._center, self._supervisor)
 
     def _to_dict(self, row: RemoteTaskAssignment) -> dict[str, Any]:
         return {
@@ -54,6 +64,7 @@ class RemoteTaskService:
             "leaseSeconds": row.lease_seconds,
             "blockReason": row.block_reason,
             "localTaskId": row.local_task_id,
+            "workTaskId": row.work_task_id,
             "createdAt": row.created_at.isoformat() if row.created_at else None,
         }
 
@@ -65,7 +76,6 @@ class RemoteTaskService:
 
         existing = await self._repo.get_assignment_by_version(assignment_id, version)
         if existing is not None:
-            # Idempotent: duplicate delivery ignored
             return existing
 
         row = RemoteTaskAssignment(
@@ -101,10 +111,13 @@ class RemoteTaskService:
         if row is None:
             return
         if action == "cancel":
-            row.status = RemoteAssignmentStatus.CANCELLED.value
-            lease = await self._repo.get_active_lease(assignment_id)
-            if lease:
-                lease.status = "cancelled"
+            if row.work_task_id:
+                await self._work_service().cancel(row.work_task_id)
+            else:
+                row.status = RemoteAssignmentStatus.CANCELLED.value
+                lease = await self._repo.get_active_lease(assignment_id)
+                if lease:
+                    lease.status = "cancelled"
         elif action == "pause":
             row.block_reason = "paused_by_center"
         elif action == "resume":
@@ -135,36 +148,13 @@ class RemoteTaskService:
         }:
             raise ConflictError(f"cannot accept assignment in status {row.status}")
 
-        # Preflight: require enrolled endpoint
-        cred = await self._enrollment.ensure_access_token()
-        row.status = RemoteAssignmentStatus.CLAIMING.value
-        lease_resp = await self._center.claim(row.assignment_id, endpoint_id=cred.endpoint_id)
-        expires = _parse_dt(lease_resp.expires_at) or (datetime.now(UTC) + timedelta(seconds=row.lease_seconds))
-        await self._repo.add_lease(
-            TaskLease(
-                assignment_row_id=row.id,
-                assignment_id=row.assignment_id,
-                lease_id=lease_resp.lease_id,
-                expires_at=expires,
-                heartbeat_interval_seconds=lease_resp.heartbeat_interval_seconds,
-                status="active",
-            )
-        )
-        row.status = RemoteAssignmentStatus.CLAIMED.value
-        # Execute via Instance path simulation (offline-safe without Hermes)
-        row.status = RemoteAssignmentStatus.RUNNING.value
-        await self._record_event(
-            row.assignment_id,
-            "task.run.started",
-            {"assignmentId": row.assignment_id, "instancePath": True},
-        )
-        # Minimal success path for stub: mark completed; delivery handled separately
-        result_manifest = {
-            "assignmentId": row.assignment_id,
-            "status": "succeeded",
-            "summary": "completed via instance control plane",
-        }
-        await self._finish_success(row, result_manifest)
+        work_svc = self._work_service()
+        task = await work_svc.create_from_assignment(row, claim=True)
+        await work_svc.start(task.id)
+        await self._session.flush()
+        refreshed = await self._repo.get_assignment_by_assignment_id(row.assignment_id)
+        if refreshed is not None:
+            row = refreshed
         return self._to_dict(row)
 
     async def reject(self, row_id: str, *, reason: str | None = None) -> dict[str, Any]:
@@ -183,11 +173,15 @@ class RemoteTaskService:
         )
         if row is None:
             raise NotFoundError("assignment not found")
-        row.status = RemoteAssignmentStatus.CANCELLED.value
-        lease = await self._repo.get_active_lease(row.assignment_id)
-        if lease:
-            lease.status = "cancelled"
-        await self._record_event(row.assignment_id, "task.cancelled", {"assignmentId": row.assignment_id})
+        if row.work_task_id:
+            await self._work_service().cancel(row.work_task_id)
+        else:
+            row.status = RemoteAssignmentStatus.CANCELLED.value
+            lease = await self._repo.get_active_lease(row.assignment_id)
+            if lease:
+                lease.status = "cancelled"
+            await self._record_legacy_event(row.assignment_id, "task.cancelled", {"assignmentId": row.assignment_id})
+        row = await self._repo.get_assignment_row(row.id) or row
         return self._to_dict(row)
 
     async def list_events(self, row_id: str) -> list[dict[str, Any]]:
@@ -196,6 +190,20 @@ class RemoteTaskService:
         )
         if row is None:
             raise NotFoundError("assignment not found")
+
+        if row.work_task_id:
+            events = await self._work_tasks.list_events(row.work_task_id)
+            return [
+                {
+                    "eventId": str(e.sequence),
+                    "eventType": e.event_type,
+                    "status": "persisted",
+                    "payload": json.loads(e.payload_json or "{}"),
+                    "createdAt": e.created_at.isoformat() if e.created_at else None,
+                }
+                for e in events
+            ]
+
         records = await self._repo.list_delivery_records(row.assignment_id)
         return [
             {
@@ -215,38 +223,21 @@ class RemoteTaskService:
         except CopilotError:
             return 0
         count = 0
+        work_svc = self._work_service()
         for row in await self._repo.list_assignments(limit=50):
             if row.status != RemoteAssignmentStatus.READY.value:
                 continue
             if count >= limit:
                 break
-            await self.accept(row.id)
+            task = await work_svc.create_from_assignment(row, claim=True)
+            row.status = RemoteAssignmentStatus.RUNNING.value
+            await work_svc.start(task.id)
             count += 1
         return count
 
-    async def _finish_success(self, row: RemoteTaskAssignment, result: dict[str, Any]) -> None:
-        lease = await self._repo.get_active_lease(row.assignment_id)
-        if lease is None or lease.status != "active":
-            row.status = RemoteAssignmentStatus.EXPIRED.value
-            row.block_reason = "lease_missing_or_expired"
-            return
-        now = datetime.now(UTC)
-        expires = lease.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=UTC)
-        if expires < now:
-            lease.status = "expired"
-            row.status = RemoteAssignmentStatus.EXPIRED.value
-            row.block_reason = "lease_expired"
-            return
+    async def _record_legacy_event(self, assignment_id: str, event_type: str, payload: dict[str, Any]) -> None:
+        from uuid import uuid4
 
-        redacted = redact_payload(result)
-        await self._record_event(row.assignment_id, "task.result.ready", redacted)
-        await self._center.complete(row.assignment_id, lease_id=lease.lease_id, result=redacted)
-        row.status = RemoteAssignmentStatus.DELIVERED.value
-        lease.status = "released"
-
-    async def _record_event(self, assignment_id: str, event_type: str, payload: dict[str, Any]) -> None:
         await self._repo.add_delivery_record(
             TaskDeliveryRecord(
                 assignment_id=assignment_id,

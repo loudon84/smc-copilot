@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.enums import DeliveryOutboxStatus
+from core.enums import DeliveryOutboxStatus, SyncAckOutboxStatus
 from db.models.endpoint_sync import (
     DeliveryOutbox,
     DesiredStateResource,
@@ -22,9 +22,12 @@ from db.models.endpoint_sync import (
     ResourceConflict,
     ResourceInstallation,
     ResultArtifact,
+    SyncAckOutbox,
     SyncChannel,
     SyncCursor,
     SyncInbox,
+    SyncPoisonMessage,
+    SyncReplayNonce,
     TaskDeliveryRecord,
     TaskLease,
 )
@@ -132,6 +135,70 @@ class EndpointSyncRepository:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def get_last_processed_sequence(self, channel: str) -> int | None:
+        result = await self._s.execute(
+            select(SyncInbox.sequence)
+            .where(
+                SyncInbox.channel == channel,
+                SyncInbox.sequence.is_not(None),
+                SyncInbox.status.in_(("processed", "ignored", "quarantined")),
+            )
+            .order_by(SyncInbox.sequence.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def has_replay_nonce(self, nonce: str) -> bool:
+        result = await self._s.execute(select(SyncReplayNonce.nonce).where(SyncReplayNonce.nonce == nonce))
+        return result.scalar_one_or_none() is not None
+
+    async def add_replay_nonce(self, row: SyncReplayNonce) -> SyncReplayNonce:
+        self._s.add(row)
+        await self._s.flush()
+        return row
+
+    async def add_ack_outbox(self, row: SyncAckOutbox) -> SyncAckOutbox:
+        self._s.add(row)
+        await self._s.flush()
+        await self._s.refresh(row)
+        return row
+
+    async def get_ack_outbox_by_message_id(self, message_id: str) -> SyncAckOutbox | None:
+        result = await self._s.execute(
+            select(SyncAckOutbox).where(SyncAckOutbox.message_id == message_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_due_ack_outbox(self, *, limit: int = 100) -> list[SyncAckOutbox]:
+        now = datetime.now(UTC)
+        result = await self._s.execute(
+            select(SyncAckOutbox)
+            .where(
+                SyncAckOutbox.status.in_(
+                    (
+                        SyncAckOutboxStatus.PENDING.value,
+                        SyncAckOutboxStatus.RETRY.value,
+                    )
+                ),
+                or_(SyncAckOutbox.next_attempt_at.is_(None), SyncAckOutbox.next_attempt_at <= now),
+            )
+            .order_by(SyncAckOutbox.created_at)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def add_poison_message(self, row: SyncPoisonMessage) -> SyncPoisonMessage:
+        self._s.add(row)
+        await self._s.flush()
+        await self._s.refresh(row)
+        return row
+
+    async def get_poison_by_message_id(self, message_id: str) -> SyncPoisonMessage | None:
+        result = await self._s.execute(
+            select(SyncPoisonMessage).where(SyncPoisonMessage.message_id == message_id)
+        )
+        return result.scalar_one_or_none()
 
     # --- delivery outbox ---
 
@@ -306,6 +373,12 @@ class EndpointSyncRepository:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def list_active_leases(self) -> list[TaskLease]:
+        result = await self._s.execute(
+            select(TaskLease).where(TaskLease.status == "active").order_by(TaskLease.created_at)
+        )
+        return list(result.scalars().all())
 
     async def add_delivery_record(self, row: TaskDeliveryRecord) -> TaskDeliveryRecord:
         self._s.add(row)

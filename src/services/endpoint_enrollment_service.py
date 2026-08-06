@@ -202,6 +202,14 @@ class EndpointEnrollmentService:
         if expires is not None and expires.tzinfo is None:
             expires = expires.replace(tzinfo=UTC)
         if cred.access_token and expires and expires > now + __import__("datetime").timedelta(minutes=1):
+            set_token = getattr(self._center, "set_access_token", None)
+            if callable(set_token):
+                set_token(cred.access_token)
+            configure = getattr(self._center, "configure_device_auth", None)
+            if callable(configure) and cred.private_key_storage_key:
+                private_key = self._keys.load_private_key(cred.private_key_storage_key)
+                if private_key:
+                    configure(endpoint_id=cred.endpoint_id, private_key_b64=private_key)
             return cred
 
         if not cred.refresh_credential_storage_key:
@@ -210,6 +218,10 @@ class EndpointEnrollmentService:
         private_key = self._keys.load_private_key(cred.private_key_storage_key)
         if not refresh or not private_key:
             raise CopilotError("credential material missing", code="credential_missing")
+
+        configure = getattr(self._center, "configure_device_auth", None)
+        if callable(configure):
+            configure(endpoint_id=cred.endpoint_id, private_key_b64=private_key)
 
         sig = sign_message(private_key, f"refresh:{cred.endpoint_id}".encode())
         refreshed = await self._center.token_refresh(
@@ -221,6 +233,9 @@ class EndpointEnrollmentService:
         cred.access_token_expires_at = _parse_expires(refreshed.access_token_expires_at)
         if refreshed.refresh_credential:
             self._keys.store_refresh_credential(cred.endpoint_id, refreshed.refresh_credential)
+        set_token = getattr(self._center, "set_access_token", None)
+        if callable(set_token):
+            set_token(cred.access_token)
         await self._repo.save_credential(cred)
         return cred
 

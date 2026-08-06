@@ -34,13 +34,23 @@ Profile 与任务相关表及枚举。
 | `006_v14_bootstrap_sessions` | `bootstrap_sessions` 一次性安装令牌 |
 | `007_v14_merge_heads` | 合并 bootstrap 与 artifact/service-update 两条分支，收敛为单一 head |
 | `008_v15_endpoint_sync` | Endpoint Sync 全表 + pending `sync_outbox` → `delivery_outbox` 数据拷贝 |
+| `009_v16_reliable_sync` | `sync_ack_outbox`、`sync_replay_nonces`、`sync_poison_messages` |
+| `009_v16_resource_apply` | `resource_apply_runs`/`resource_apply_operations`/`resource_snapshots` |
+| `010_v16_merge_heads` | 合并 reliable_sync 与 resource_apply 分支 |
+| `011_v16_work_tasks` | `work_tasks`/`task_runs`/`task_run_events` 等；未完成 assignment 迁移为 `migration_pending_review` |
 
 生产启动前 `alembic upgrade head`。新增表必须配 Alembic 迁移。
+
+## Work Task 表
+
+v1.6 真实任务执行表，模型 [[src/db/models/work_tasks.py#WorkTask]] 等，仓储 [[src/db/repositories/work_task_repo.py#WorkTaskRepository]]。
+
+包含：`work_tasks`、`task_runs`、`task_run_events`（`UNIQUE(run_id, sequence)`）、`task_run_checkpoints`、`task_approvals`、`task_artifacts`、`task_resource_locks`；`remote_task_assignments.work_task_id`、`task_leases.work_task_id` 关联字段。
 
 ## Endpoint Sync 表
 
 v1.5 新增终端身份与企业同步表，模型见 [[src/db/models/endpoint_sync.py#EndpointEnrollment]] 等，仓储 [[src/db/repositories/endpoint_sync_repo.py#EndpointSyncRepository]]。
 
-包含：`endpoint_enrollments`、`endpoint_credentials`、`sync_channels`/`sync_cursors`/`sync_inbox`、`delivery_outbox`、`desired_state_revisions`/`desired_state_resources`、`resource_installations`/`resource_conflicts`、`remote_task_assignments`/`task_leases`/`task_delivery_records`/`result_artifacts`、`endpoint_inventory_snapshots`、`experience_evidence`/`experience_candidates`/`experience_submission_records`。旧 `sync_outbox` 表保留兼容；迁移时拷贝 pending 行到 `delivery_outbox`。
+包含：`endpoint_enrollments`、`endpoint_credentials`、`sync_channels`/`sync_cursors`/`sync_inbox`、`sync_ack_outbox`/`sync_replay_nonces`/`sync_poison_messages`、`delivery_outbox`、`desired_state_revisions`/`desired_state_resources`、`resource_installations`/`resource_conflicts`、`resource_apply_runs`/`resource_apply_operations`/`resource_snapshots`、`remote_task_assignments`/`task_leases`/`task_delivery_records`/`result_artifacts`、`endpoint_inventory_snapshots`、`experience_evidence`/`experience_candidates`/`experience_submission_records`、`experience_evidence_links`/`experience_fingerprints`、`artifact_upload_sessions`/`artifact_upload_parts`、`worker_states`/`worker_incidents`。旧 `sync_outbox` 表保留兼容；迁移时拷贝 pending 行到 `delivery_outbox`。
 
 详见 [[endpoint-sync#Endpoint Sync]]。

@@ -8,7 +8,7 @@
 
 **依赖：** 附件上传需安装 `python-multipart`（见 `pyproject.toml`）
 
-**API Version：** `1.2`（`GET /api/v1/runtime/capabilities`）。v1.5 新增 Endpoint / Sync / Remote Tasks / Experience，见下文。
+**API Version：** `1.3`（`GET /api/v1/runtime/capabilities`）。v1.6 新增生产 Deployment Mode、可靠 Sync（ACK Outbox）、真实资源 Apply、Work Tasks / Hermes 执行、Worker Supervisor、Metrics 与自动 Experience Evidence；v1.2 旧 `/remote-tasks` 保留一版本兼容。
 
 ---
 
@@ -366,7 +366,7 @@ Scope 校验：客户端应比对 `stream_id` + `profile_id` + `workspace_id` + 
 | GET/POST | `/api/v1/remote-tasks`、`/{id}/accept|reject|cancel` | Remote Task v2 |
 | GET/POST | `/api/v1/experience/evidence`、`/candidates`、`/{id}/submit` | 经验证据与 StaffDeck 提交 |
 
-默认 `AIOS_SERVICE_CENTER_USE_STUB=true`。Capability 含 `endpoint.enrollment`、`sync.desired-state`、`tasks.remote.v2`、`experience.staffdeck.submit` 等（apiVersion `1.2`）。
+默认开发模式 `AIOS_DEPLOYMENT_MODE=development_stub` 且 `AIOS_SERVICE_CENTER_USE_STUB=true`。`staging_http`/`production_http` 禁止 Stub。Capability 含 v1.6 全量（apiVersion `1.3`）。
 
 ---
 

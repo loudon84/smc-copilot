@@ -1,6 +1,6 @@
 [project]
 name = "smc-copilot-serve"
-version = "1.5.0"
+version = "1.6.0"
 description = "smc-copilot-desktop local control plane — Hermes profiles, gateway supervisor"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

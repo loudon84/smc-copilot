@@ -19,6 +19,10 @@ from services.task_runtime import TaskRuntimeService
 
 AUTH_WHITELIST = {
     "/api/v1/health",
+    "/api/v1/health/live",
+    "/api/v1/health/ready",
+    "/api/v1/health/details",
+    "/api/v1/metrics",
     "/api/v1/pairings/start",
     "/docs",
     "/openapi.json",

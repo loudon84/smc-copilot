@@ -9,6 +9,7 @@ from integrations.service_center.dto import (
     ClaimResponse,
     EnrollRequest,
     EnrollResponse,
+    EventsBatchResponse,
     ExperienceReviewItem,
     TokenRefreshResponse,
     UploadRequestResponse,
@@ -41,7 +42,7 @@ class ServiceCenterClient(Protocol):
 
     async def acks(self, endpoint_id: str, message_ids: list[str]) -> None: ...
 
-    async def events_batch(self, endpoint_id: str, events: list[dict[str, Any]]) -> None: ...
+    async def events_batch(self, endpoint_id: str, events: list[dict[str, Any]]) -> EventsBatchResponse: ...
 
     async def claim(self, assignment_id: str, *, endpoint_id: str) -> ClaimResponse: ...
 

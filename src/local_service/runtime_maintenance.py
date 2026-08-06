@@ -12,12 +12,18 @@ import shutil
 import subprocess
 import sys
 import time
-import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
 from urllib.request import urlopen
+
+from runtime.bundle_security import (
+    BundleLimits,
+    BundleSecurityError,
+    safe_extract_zip,
+    verify_bundle_artifact,
+)
 
 
 def _step(steps: list[dict[str, Any]], name: str, status: str, detail: str | None = None) -> None:
@@ -51,6 +57,10 @@ def apply_maintenance(
     port: int = 8765,
     health_url: str | None = None,
     python_exe: str | None = None,
+    expected_sha256: str | None = None,
+    signature_b64: str | None = None,
+    public_key: str | None = None,
+    expected_version: str | None = None,
 ) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     health = health_url or f"http://127.0.0.1:{port}/api/v1/health"
@@ -63,7 +73,19 @@ def apply_maintenance(
         _step(steps, "verify", "failed", f"missing {artifact}")
         return {"ok": False, "applied": False, "steps": steps, "error": "artifact_missing"}
 
-    _step(steps, "verify", "ok", f"artifact={artifact.name}")
+    try:
+        manifest = verify_bundle_artifact(
+            artifact,
+            expected_sha256=expected_sha256,
+            signature_b64=signature_b64,
+            public_key=public_key,
+            expected_version=expected_version,
+            limits=BundleLimits(),
+        )
+        _step(steps, "verify", "ok", f"artifact={artifact.name}; version={manifest.get('version')}")
+    except BundleSecurityError as exc:
+        _step(steps, "verify", "failed", str(exc))
+        return {"ok": False, "applied": False, "steps": steps, "error": exc.code}
 
     # Stop UserDaemon / uvicorn on port
     stop = _run([sys.executable, "-m", "local_service.windows_user_daemon", "stop", "--port", str(port)])
@@ -95,8 +117,7 @@ def apply_maintenance(
     staging.mkdir(parents=True, exist_ok=True)
 
     try:
-        with zipfile.ZipFile(artifact, "r") as zf:
-            zf.extractall(staging)
+        safe_extract_zip(artifact, staging, limits=BundleLimits())
         _step(steps, "extract", "ok", str(staging))
 
         # Atomic-ish switch: move old aside, promote staging
@@ -109,14 +130,15 @@ def apply_maintenance(
         if retired.exists():
             shutil.rmtree(retired, ignore_errors=True)
         _step(steps, "replace", "ok", str(install_dir))
-    except (OSError, zipfile.BadZipFile) as exc:
+    except (OSError, BundleSecurityError) as exc:
         _step(steps, "replace", "failed", str(exc))
         if previous and previous.exists():
             if install_dir.exists():
                 shutil.rmtree(install_dir, ignore_errors=True)
             shutil.copytree(previous, install_dir)
             _step(steps, "rollback_install", "ok", str(previous))
-        return {"ok": False, "applied": False, "steps": steps, "error": "replace_failed"}
+        err = exc.code if isinstance(exc, BundleSecurityError) else "replace_failed"
+        return {"ok": False, "applied": False, "steps": steps, "error": err}
 
     # Alembic
     py = python_exe or sys.executable

@@ -1,6 +1,6 @@
 # smc-copilot-serve（Hermes Runtime Service）
 
-本机常驻的 **Hermes Runtime Service**：负责 Hermes Agent 安装/更新/回滚、Instance/Gateway 监管、配置与 MCP、设备配对与本地鉴权，以及 v1.5 企业终端 Endpoint Sync（Desired State / Remote Task / Experience）。Desktop 通过 `http://127.0.0.1:8765` 访问本服务。
+本机常驻的 **Hermes Runtime Service**：负责 Hermes Agent 安装/更新/回滚、Instance/Gateway 监管、配置与 MCP、设备配对与本地鉴权，以及 v1.5/v1.6 企业终端 Endpoint Sync（Desired State 真实资源安装 / 真实 Hermes 任务执行 / Experience）。Desktop 通过 `http://127.0.0.1:8765` 访问本服务（Runtime API **1.3**）。
 
 | 组件 | 职责 |
 |------|------|
@@ -23,10 +23,11 @@
 
 ## 安装约定（Windows 企业）
 
-1. 推荐使用签名的 `SMC-Copilot-Runtime-Setup-1.5.0.exe` / MSI 静默安装（`/quiet`），由 Bundle 携带嵌入式 Python，员工机无需预装 Python/Node/Git。
+1. 推荐使用签名的 `SMC-Copilot-Runtime-Setup-1.6.0.exe` / MSI 静默安装（`/quiet`），由 Bundle 携带嵌入式 Python 与真实 `CopilotRuntime.exe` Launcher，员工机无需预装 Python/Node/Git。
 2. 开发态可将仓库放在任意目录；默认程序根为 `%LOCALAPPDATA%\Programs\SMC\{CopilotRuntime,HermesAgent}`。
 3. Hermes Agent 版本与其 venv 安装到 `HERMES_INSTALL_DIR`（Windows 默认上述 SMC 路径）。
 4. **Runtime 服务态**（DB / 日志 / downloads / staging）继续使用 `%LOCALAPPDATA%\HermesRuntime`，与程序目录分离。
+5. 部署模式：`AIOS_DEPLOYMENT_MODE=development_stub|staging_http|production_http`；Stable 安装包默认 `production_http`，禁止 Stub。
 
 允许例外：`%USERPROFILE%\.hermes`（Hermes 用户数据）、`%LOCALAPPDATA%\HermesRuntime`（服务态）。
 
@@ -128,12 +129,16 @@ pytest
 
 ### 3. Windows 部署
 
-#### 3.0 一键 Provision（推荐，v1.3.1）
+#### 3.0 正式安装（推荐，v1.6）
 
-Restricted 策略下用 `.cmd`（仅进程级 Bypass）：
+使用签名的 `SMC-Copilot-Runtime-Setup-1.6.0.exe` / MSI；Bundle 含嵌入式 Python 与真实 `CopilotRuntime.exe`。Stable 通道强制 E2E，禁止占位 Launcher。
+
+#### 3.0b Legacy / Developer Installation（v1.3.1 Provision）
+
+开发机可选用一键 Provision（不作为正式员工机推荐路径）：
 
 ```cmd
-cd /d D:\Programs\copilot-serve
+cd /d <repo-root>
 scripts\runtime-provision-windows.cmd -PythonPath C:\Python312\python.exe
 ```
 

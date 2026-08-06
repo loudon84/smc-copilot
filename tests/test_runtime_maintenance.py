@@ -19,8 +19,19 @@ def test_maintenance_apply_replaces_bundle(tmp_path: Path, monkeypatch) -> None:
     staging_content.mkdir()
     (staging_content / "runtime").mkdir()
     (staging_content / "runtime" / "new.txt").write_text("new", encoding="utf-8")
+    import json
+
+    manifest = {
+        "name": "runtime-bundle",
+        "version": "1.6.0",
+        "platform": "windows",
+        "architecture": "x86_64",
+        "placeholder": False,
+    }
+    (staging_content / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     with zipfile.ZipFile(artifact, "w") as zf:
         zf.write(staging_content / "runtime" / "new.txt", arcname="runtime/new.txt")
+        zf.write(staging_content / "manifest.json", arcname="manifest.json")
 
     db_path = tmp_path / "runtime.db"
     db_path.write_bytes(b"sqlite")

@@ -156,6 +156,14 @@ Runtime maintenance / service bundle apply（v1.5 FR-03）。
 
 `apply_maintenance` 解压制品、替换安装目录并返回 applied 步骤。
 
+### Rejects zip slip on maintenance extract
+
+Bundle 安全扫描拒绝 `../` 路径穿越成员。
+
+### Rejects ADS and symlink members
+
+Bundle 安全扫描拒绝 NTFS ADS 与 symlink 成员。
+
 ## Endpoint Sync
 
 v1.5 Endpoint 身份、Sync、Desired State、Remote Task v2、Experience 的 Stub 驱动测试，见 [[endpoint-sync#Endpoint Sync]]。
@@ -163,6 +171,10 @@ v1.5 Endpoint 身份、Sync、Desired State、Remote Task v2、Experience 的 St
 ### Enrollment start and complete
 
 验证 enrollment start 生成公钥并 pending，complete 后 credential 激活且 syncEnabled。
+
+### Production mode forbids stub
+
+`production_http` 部署模式禁止启用 Service Center Stub。
 
 ### Enrollment revoke keeps local usable
 
@@ -192,6 +204,26 @@ Ed25519 签名可验证，篡改消息后失败。
 
 sync/now 拉 desired_state 入 inbox，二次拉取不再重复计数。
 
+### Commit before ack
+
+sync/now 不直接调用 Center `acks`；本地 commit 后写入 ack outbox，由 Ack worker flush 才发送 ACK。
+
+### Sequence gap detection
+
+Channel 出现 sequence 缺口时 `status=sequence_gap`，不推进 cursor、不 ACK。
+
+### Replay rejected
+
+重复 messageId 或已见 nonce 标记 `replay_rejected`，不再次 dispatch。
+
+### Poison quarantine allows next sequence
+
+单条消息 dispatch 连续失败 3 次进入 poison 隔离后，后续 sequence 可继续处理。
+
+### Partial event ack on outbox
+
+events_batch 返回 accepted/duplicate/rejected 时按单条 event 更新 delivery_outbox 状态。
+
 ### Reconciliation plan install upgrade remove
 
 对比 desired/installed 产出 install/upgrade/remove 且 profile 需重启。
@@ -202,7 +234,7 @@ Stub 下发 revision 后 apply 写入 resource_installations。
 
 ### Desired state checksum failure
 
-坏 checksum 资源 apply 抛 ConflictError。
+`bad:` 等测试哨兵 checksum 在 apply 时拒绝并 revision 标记 `rolled_back`。
 
 ### Remote task ingest idempotent
 
@@ -216,6 +248,42 @@ accept 后 claim/complete，状态 delivered 且有事件。
 
 中心 cancel 控制消息后本地 assignment 为 cancelled。
 
+## Work Task Execution
+
+`tests/test_work_tasks.py` 覆盖 v1.6 FR-401–507：事件序列、SSE 重放、取消、恢复、调度并发与 Mock Hermes 执行路径。
+
+### Event sequence uniqueness
+
+同一 `run_id` 下事件 `sequence` 单调且 `UNIQUE(run_id, sequence)` 不冲突。
+
+### SSE replay from Last-Event-ID
+
+`GET /work-tasks/{id}/events` 支持 `after_sequence`；流式接口用 sequence 作为 SSE id 补发。
+
+### Cancel marks cancelled
+
+`POST /work-tasks/{id}/cancel` 将 WorkTask 与事件流标记 `task.cancelled`。
+
+### Recovery marks orphaned
+
+启动恢复在 Gateway 不可达时将 in-flight 任务标为 `orphaned` 并写 `runtime.recovery.completed`。
+
+### Scheduler concurrency
+
+Endpoint 并发上限与 Instance 互斥：满负载时后续任务不得 acquire。
+
+### Executor uses Hermes adapter
+
+Executor 经 MockHermesRuntimeAdapter 产出 `agent.message.delta`，不得返回固定 stub 成功文案。
+
+### Large payload becomes artifact
+
+事件 inline payload 超过 64KB 时写入 `task_artifacts` 并在事件中引用 `payload_artifact_id`。
+
+## Experience redaction and candidates
+
+`tests/test_experience.py` 验证 Experience 脱敏与 candidate 提交路径。
+
 ### Experience redaction
 
 脱敏移除 apiKey/prompt 并对本机路径打标。
@@ -223,6 +291,38 @@ accept 后 claim/complete，状态 delivered 且有事件。
 ### Evidence and candidate submit
 
 证据脱敏入库；candidate 经用户审核路径提交后 status=submitted，不可改 published。
+
+### Experience fingerprint is stable
+
+同证据特征生成相同 fingerprint，步骤变化则不同。
+
+### Auto evidence deduplicates by fingerprint
+
+相同 fingerprint 的自动 Evidence 合并计数，不重复创建 Candidate。
+
+## Resource Apply
+
+v1.6 FR-301–308：真实资源 Adapter、artifact 下载校验、revision 级事务回滚与探针。
+
+### Adapter stage apply rollback
+
+Skill adapter 可 stage/apply/verify/rollback 版本目录与 `SKILL.md`。
+
+### MCP missing secret blocked
+
+MCP 缺 `requiredSecretNames` 时 `status=blocked`、`conflict=missing_secret`，不得写入 installed。
+
+### Checksum failure rejects download
+
+`bad:` 等哨兵 checksum 在下载前拒绝，不进入 cache。
+
+### Revision rollback reverses completed ops
+
+Revision apply 中途失败时逆序 rollback 已完成 op 并 `status=rolled_back`。
+
+### Resource sync apply metadata only
+
+无 artifact URL 的 policy 等资源可 metadata-only apply 并通过 probe 验证文件系统态。
 
 ## Remote Tasks
 
@@ -236,9 +336,65 @@ Remote Task v2 补充用例（若与 Endpoint Sync 重叠则以 Stub Center 为�
 
 本地 reject 后状态为 rejected。
 
+## Artifact Streaming
+
+流式 Hash 与分块续传回归，确保大文件不经 `read_bytes` 全量加载。
+
+### Large file hashed without read_bytes
+
+`hash_file_streaming` 对多 MB 文件分块计算 SHA-256，且不得调用 `Path.read_bytes`。
+
+### Multipart resume
+
+`MultipartUploader` 持久化 Part ETag，重启后跳过已上传分块。
+
+## Worker Supervisor
+
+Backoff、熔断与单实例 Process Lock 回归。
+
+### Circuit opens after failures
+
+连续 tick 失败后 Worker 进入 `circuit_open` 或 `backing_off`。
+
+### Backoff increases delay
+
+失败 tick 递增 `consecutive_failures` 并设置 `next_run_at`。
+
+### Single instance lock
+
+同一数据目录第二个 `ProcessLock.acquire` 抛出 `runtime_already_running`。
+
+## Effective Policy
+
+Center 不得放宽 Local 拒绝规则的 EffectivePolicy 合并回归。
+
+### Center cannot loosen local deny
+
+Local `tools.deny` 中的规则在 Center 下发 `allow` 后仍保留。
+
+## Workspace Guard v2
+
+路径穿越、UNC 与非授权盘符等扩展拒绝规则的回归。
+
+### Dotdot rejected
+
+相对路径含 `..` 时抛 `PolicyError`。
+
+### UNC rejected
+
+Windows UNC 路径被拒绝。
+
+### Unauthorized drive rejected
+
+未授权盘符访问被拒绝。
+
 ## 验收
 
 `tests/test_v1_acceptance.py` 是 v1.3 验收用例集；v1.3.1 另以真实 Hermes/Gateway smoke（`scripts/runtime-smoke-test-windows.ps1 -RequireHermes`）为准。v1.4 另有 gated E2E（见 `tests/test_windows_e2e_gated.py`，需真实 Artifact）。
+
+### Runtime launcher resolves install root
+
+`runtime-launcher` 支持 `--version`、显式 install root 解析与 Python 定位。
 
 ### Gated Windows Hermes E2E
 

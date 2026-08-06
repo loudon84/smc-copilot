@@ -1,4 +1,5 @@
-﻿from db.models.chat_attachment import ChatAttachment
+﻿from db.models.experience_v2 import ExperienceEvidenceLink, ExperienceFingerprint
+from db.models.chat_attachment import ChatAttachment
 from db.models.chat_settings import ProfileChatSettings
 from db.models.endpoint_sync import (
     DeliveryOutbox,
@@ -13,14 +14,34 @@ from db.models.endpoint_sync import (
     RemoteTaskAssignment,
     ResourceConflict,
     ResourceInstallation,
+    ResourceApplyOperation,
+    ResourceApplyRun,
+    ResourceSnapshot,
     ResultArtifact,
+    SyncAckOutbox,
     SyncChannel,
     SyncCursor,
     SyncInbox,
+    SyncPoisonMessage,
+    SyncReplayNonce,
     TaskDeliveryRecord,
     TaskLease,
 )
-from db.models.local_task import LocalTask
+from db.models.artifact_worker import (
+    ArtifactUploadPart,
+    ArtifactUploadSession,
+    WorkerIncident,
+    WorkerStateRow,
+)
+from db.models.work_tasks import (
+    TaskApproval,
+    TaskArtifact,
+    TaskResourceLock,
+    TaskRun,
+    TaskRunCheckpoint,
+    TaskRunEvent,
+    WorkTask,
+)
 from db.models.profile import Profile
 from db.models.role_spec import ProfileRoleSpec
 from db.models.runtime import (
@@ -45,6 +66,8 @@ from db.models.workspace_db import Workspace
 
 __all__ = [
     "Approval",
+    "ArtifactUploadPart",
+    "ArtifactUploadSession",
     "AuditLog",
     "BootstrapSession",
     "ChatAttachment",
@@ -59,6 +82,8 @@ __all__ = [
     "EndpointInventorySnapshot",
     "ExperienceCandidate",
     "ExperienceEvidence",
+    "ExperienceEvidenceLink",
+    "ExperienceFingerprint",
     "ExperienceSubmissionRecord",
     "HermesInstance",
     "LocalTask",
@@ -69,8 +94,11 @@ __all__ = [
     "ProfileChatSettings",
     "ProfileRoleSpec",
     "RemoteTaskAssignment",
+    "ResourceApplyOperation",
+    "ResourceApplyRun",
     "ResourceConflict",
     "ResourceInstallation",
+    "ResourceSnapshot",
     "ResultArtifact",
     "RuntimeAuditLog",
     "RuntimeJob",
@@ -79,13 +107,23 @@ __all__ = [
     "RuntimeUpdatePlan",
     "RuntimeVersion",
     "SecretReference",
+    "SyncAckOutbox",
     "SyncChannel",
     "SyncCursor",
     "SyncInbox",
+    "SyncPoisonMessage",
+    "SyncReplayNonce",
     "SyncOutbox",
+    "TaskApproval",
+    "TaskArtifact",
     "TaskDeliveryRecord",
     "TaskEvent",
     "TaskLease",
+    "TaskResourceLock",
+    "TaskRun",
+    "TaskRunCheckpoint",
+    "TaskRunEvent",
+    "WorkTask",
     "TeamTaskBinding",
     "Workspace",
 ]

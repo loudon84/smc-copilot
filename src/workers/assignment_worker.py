@@ -24,10 +24,12 @@ class AssignmentWorker:
         settings: Settings,
         session_maker: async_sessionmaker[AsyncSession],
         center: ServiceCenterClient,
+        supervisor,
     ) -> None:
         self._settings = settings
         self._session_maker = session_maker
         self._center = center
+        self._supervisor = supervisor
 
     async def run_forever(self) -> None:
         while True:
@@ -44,7 +46,7 @@ class AssignmentWorker:
         try:
             sync = RuntimeSyncService(self._settings, session, self._center)
             await sync.sync_now()
-            remote = RemoteTaskService(self._settings, session, self._center)
+            remote = RemoteTaskService(self._settings, session, self._center, self._supervisor)
             await remote.process_ready_assignments()
             await session.commit()
         except CopilotError as exc:

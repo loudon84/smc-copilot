@@ -7,7 +7,7 @@ import pytest
 from runtime.experience_redactor import redact_payload
 
 
-# @lat: [[tests#Endpoint Sync#Experience redaction]]
+# @lat: [[tests#Experience redaction and candidates#Experience redaction]]
 def test_experience_redaction() -> None:
     redacted = redact_payload(
         {
@@ -23,7 +23,7 @@ def test_experience_redaction() -> None:
     assert redacted["summary"] == "ok step"
 
 
-# @lat: [[tests#Endpoint Sync#Evidence and candidate submit]]
+# @lat: [[tests#Experience redaction and candidates#Evidence and candidate submit]]
 @pytest.mark.asyncio
 async def test_experience_candidate_submit(enrolled_client) -> None:
     client, app, center = enrolled_client

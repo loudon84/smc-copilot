@@ -4,9 +4,10 @@
 param(
     [string]$RepoRoot = "",
     [string]$OutputDir = "",
-    [string]$Version = "1.5.0",
+    [string]$Version = "1.6.0",
     [string]$EmbeddablePythonZip = "",
     [string]$SitePackagesSource = "",
+    [string]$LauncherExe = "",
     [switch]$AllowDevPlaceholder
 )
 
@@ -97,13 +98,25 @@ if (-not $pyFiles -and -not $AllowDevPlaceholder) {
     throw "site-packages appears empty — refuse README-only placeholder"
 }
 
-# runtime-launcher shim (PowerShell entry used until PyInstaller exe is wired)
+# runtime-launcher: prefer real PyInstaller CopilotRuntime.exe (PRD v1.6 FR-002)
+if ($LauncherExe -and (Test-Path $LauncherExe)) {
+    Copy-Item -Path $LauncherExe -Destination (Join-Path $bundleRoot "CopilotRuntime.exe") -Force
+    Write-Host "Bundled real launcher: $LauncherExe"
+} elseif ($env:RUNTIME_LAUNCHER_EXE -and (Test-Path $env:RUNTIME_LAUNCHER_EXE)) {
+    Copy-Item -Path $env:RUNTIME_LAUNCHER_EXE -Destination (Join-Path $bundleRoot "CopilotRuntime.exe") -Force
+}
+
 $launcherPs1 = Join-Path $bundleRoot "runtime-launcher.ps1"
 @"
-# Runtime launcher (v1.5)
+# Runtime launcher shim (v1.6) — prefer CopilotRuntime.exe when present
 param([Parameter(ValueFromRemainingArguments=`$true)][string[]]`$ArgsRest)
 `$ErrorActionPreference = 'Stop'
 `$Root = Split-Path -Parent `$MyInvocation.MyCommand.Path
+`$Exe = Join-Path `$Root 'CopilotRuntime.exe'
+if (Test-Path `$Exe) {
+  & `$Exe --install-root `$Root @ArgsRest
+  exit `$LASTEXITCODE
+}
 `$Py = Join-Path `$Root 'python\python.exe'
 `$Env:PYTHONPATH = (Join-Path `$Root 'runtime\src') + [IO.Path]::PathSeparator + (Join-Path `$Root 'site-packages')
 if (-not (Test-Path `$Py)) { throw 'python\python.exe not found in bundle' }
@@ -111,9 +124,13 @@ if (-not (Test-Path `$Py)) { throw 'python\python.exe not found in bundle' }
 exit `$LASTEXITCODE
 "@ | Set-Content -Path $launcherPs1 -Encoding UTF8
 
-# Also expose a .cmd for Windows double-click / installer
+# Also expose a .cmd for Windows double-click / installer (fallback only)
 @"
 @echo off
+if exist "%~dp0CopilotRuntime.exe" (
+  "%~dp0CopilotRuntime.exe" --install-root "%~dp0." %*
+  exit /b %ERRORLEVEL%
+)
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0runtime-launcher.ps1" %*
 "@ | Set-Content -Path (Join-Path $bundleRoot "runtime-launcher.cmd") -Encoding ASCII
 
@@ -132,7 +149,7 @@ $manifest = @{
         scripts = "Windows provisioning and service scripts"
         migrations = "Alembic migrations"
         config = "Enterprise config templates"
-        launcher = "runtime-launcher.ps1 / runtime-launcher.cmd"
+        launcher = "CopilotRuntime.exe / runtime-launcher.ps1 / runtime-launcher.cmd"
     }
 } | ConvertTo-Json -Depth 6
 Set-Content -Path (Join-Path $bundleRoot "manifest.json") -Value $manifest -Encoding UTF8

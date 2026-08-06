@@ -106,16 +106,47 @@ class Settings(BaseSettings):
     device_id: str = Field(default="local-device", alias="AIOS_DEVICE_ID")
     agent_id: str = Field(default="hermes-local-agent", alias="AIOS_AGENT_ID")
     task_poll_interval_seconds: float = Field(default=10.0, alias="AIOS_TASK_POLL_INTERVAL_SECONDS")
-    team_hub_use_stub: bool = Field(default=True, alias="AIOS_TEAM_HUB_USE_STUB")
+    team_hub_use_stub: bool = Field(default=False, alias="AIOS_TEAM_HUB_USE_STUB")
     task_reject_sets_cancelled: bool = Field(default=False, alias="AIOS_TASK_REJECT_SETS_CANCELLED")
 
-    # Work Copilot Service Center (PRD v1.5)
+    # Work Copilot Service Center (PRD v1.5 / v1.6)
+    deployment_mode: str = Field(
+        default="development_stub",
+        alias="AIOS_DEPLOYMENT_MODE",
+        description="development_stub | staging_http | production_http",
+    )
     service_center_base_url: str = Field(default="", alias="AIOS_SERVICE_CENTER_BASE_URL")
     service_center_use_stub: bool = Field(default=True, alias="AIOS_SERVICE_CENTER_USE_STUB")
     service_center_domain_allowlist: str = Field(
         default="",
         alias="AIOS_SERVICE_CENTER_DOMAIN_ALLOWLIST",
         description="Comma-separated allowed Service Center hostnames",
+    )
+    service_center_center_public_key: str = Field(
+        default="",
+        alias="AIOS_SERVICE_CENTER_PUBLIC_KEY",
+        description="Base64 Ed25519 public key for Center response / envelope verification",
+    )
+    service_center_verify_responses: bool = Field(
+        default=False,
+        alias="AIOS_SERVICE_CENTER_VERIFY_RESPONSES",
+    )
+    service_center_connect_timeout_seconds: float = Field(
+        default=10.0, alias="AIOS_SERVICE_CENTER_CONNECT_TIMEOUT_SECONDS"
+    )
+    service_center_read_timeout_seconds: float = Field(
+        default=30.0, alias="AIOS_SERVICE_CENTER_READ_TIMEOUT_SECONDS"
+    )
+    service_center_max_response_bytes: int = Field(
+        default=2_000_000, alias="AIOS_SERVICE_CENTER_MAX_RESPONSE_BYTES"
+    )
+    endpoint_max_concurrent_runs: int = Field(default=2, alias="AIOS_ENDPOINT_MAX_CONCURRENT_RUNS")
+    instance_max_concurrent_runs: int = Field(default=1, alias="AIOS_INSTANCE_MAX_CONCURRENT_RUNS")
+    task_event_inline_payload_max_bytes: int = Field(
+        default=65536, alias="AIOS_TASK_EVENT_INLINE_PAYLOAD_MAX_BYTES"
+    )
+    artifact_multipart_threshold_bytes: int = Field(
+        default=8_000_000, alias="AIOS_ARTIFACT_MULTIPART_THRESHOLD_BYTES"
     )
     endpoint_heartbeat_interval_seconds: float = Field(
         default=300.0, alias="AIOS_ENDPOINT_HEARTBEAT_INTERVAL_SECONDS"
@@ -125,11 +156,14 @@ class Settings(BaseSettings):
         default=5.0, alias="AIOS_DELIVERY_OUTBOX_INTERVAL_SECONDS"
     )
     delivery_outbox_max_retries: int = Field(default=20, alias="AIOS_DELIVERY_OUTBOX_MAX_RETRIES")
+    lease_renewal_poll_seconds: float = Field(default=10.0, alias="AIOS_LEASE_RENEWAL_POLL_SECONDS")
 
     # Workers
     run_event_poll_interval_seconds: float = Field(default=2.0, alias="AIOS_RUN_EVENT_POLL_INTERVAL_SECONDS")
     sync_outbox_interval_seconds: float = Field(default=5.0, alias="AIOS_SYNC_OUTBOX_INTERVAL_SECONDS")
     sync_outbox_max_retries: int = Field(default=20, alias="AIOS_SYNC_OUTBOX_MAX_RETRIES")
+    lease_renewal_interval_seconds: float = Field(default=30.0, alias="AIOS_LEASE_RENEWAL_INTERVAL_SECONDS")
+    retention_interval_seconds: float = Field(default=3600.0, alias="AIOS_RETENTION_INTERVAL_SECONDS")
 
     task_routing_json: str = Field(
         default="",

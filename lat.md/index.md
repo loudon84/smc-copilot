@@ -4,6 +4,8 @@
 
 本知识图谱描述项目「做什么」与「为什么」，不重复源码。各节用 `[[wiki link]]` 互引并锚定到源码符号，源码可用 `// @lat:` 反向引用。详见 [[index#文档导航]]。
 
+v1.6 在 Endpoint Sync 之上补齐生产执行面：真实 Hermes 任务、真实资源安装、可靠 Sync、Worker Supervisor 与 API 1.3。
+
 ## 系统边界
 
 控制面位于 Desktop 与 Hermes Agent 之间，三者职责分离：

@@ -44,6 +44,13 @@ class ChangesResponse:
 
 
 @dataclass
+class EventsBatchResponse:
+    accepted: list[str] = field(default_factory=list)
+    duplicate: list[str] = field(default_factory=list)
+    rejected: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class ClaimResponse:
     lease_id: str
     expires_at: str

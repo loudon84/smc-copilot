@@ -73,6 +73,13 @@ async def app_client(
     app.state._test_service_center = stub_center
     app.state._disable_workers = True
     app.state._disable_gateway_autostart = True
+    app.state._skip_process_lock = True
+
+    from runtime.tasks.registry import reset_task_scheduler, set_test_hermes_adapter
+    from tests.support.mock_hermes_adapter import MockHermesRuntimeAdapter
+
+    reset_task_scheduler()
+    set_test_hermes_adapter(MockHermesRuntimeAdapter())
 
     async with lifespan(app):
         transport = ASGITransport(app=app)
@@ -80,7 +87,10 @@ async def app_client(
             yield client, supervisor, test_settings, stub_hub, app
 
     import core.config as config_mod
+    from runtime.tasks.registry import reset_task_scheduler, set_test_hermes_adapter
 
+    set_test_hermes_adapter(None)
+    reset_task_scheduler()
     config_mod._settings = None
 
 

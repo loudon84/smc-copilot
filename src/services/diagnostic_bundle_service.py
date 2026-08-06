@@ -123,6 +123,13 @@ class DiagnosticBundleService:
             encoding="utf-8",
         )
 
+        supervisor = getattr(self._app_state, "worker_supervisor", None) if self._app_state else None
+        if supervisor is not None:
+            (staging / "worker-states.json").write_text(
+                json.dumps(supervisor.snapshot(), indent=2, default=str),
+                encoding="utf-8",
+            )
+
         # Log tails — strip lines that look like secrets
         logs_dir = staging / "logs"
         logs_dir.mkdir(exist_ok=True)
@@ -135,7 +142,18 @@ class DiagnosticBundleService:
                     for ln in lines
                     if not any(
                         tok in ln.upper()
-                        for tok in ("API_KEY", "API_SERVER_KEY", "BEARER ", "PASSWORD", ".ENV")
+                        for tok in (
+                            "API_KEY",
+                            "API_SERVER_KEY",
+                            "BEARER ",
+                            "PASSWORD",
+                            ".ENV",
+                            "SECRET",
+                            "TOKEN",
+                            "PRIVATE_KEY",
+                            "REFRESH_",
+                            "CREDENTIAL",
+                        )
                     )
                 ]
                 (logs_dir / log_file.name).write_text("\n".join(safe), encoding="utf-8")

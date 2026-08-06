@@ -34,3 +34,7 @@
 [[src/core/lifecycle.py#lifespan]] 启动：日志、引擎、Supervisor、Service Center Client、JobService（注册 install/update/rollback/doctor）、recover jobs，再按 FR-06 reconcile/autostart Instance 与 legacy Profile，最后启 v1.2 与 v1.5 Endpoint Sync workers。
 
 关闭：停 Job worker 与后台 Worker → `shutdown_all_instances` → `shutdown_all_legacy_profiles` → dispose 引擎。绑定地址用 `settings.bind_host`/`bind_port`（`RUNTIME_*` 优先于 `COPILOT_*`）。测试经 `app.state._test_*`（含 `_test_service_center`）注入并禁用自启/worker。详见 [[gateway-supervisor#启动时重协调]]、[[endpoint-sync#Workers]]。
+
+## Worker Supervisor
+
+v1.6 FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 在 `lifespan` 中统一注册后台 Worker，提供 Backoff、熔断、Tick Timeout、手动重启与 Critical Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 防止双实例重复消费。

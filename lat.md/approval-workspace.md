@@ -16,6 +16,18 @@
 
 `TaskRuntimeService._ensure_workspace_allowed` 在执行前对启用的工作空间校验任务 payload 中的相对路径。路径逃逸抛 `PolicyError`。
 
+## Effective Policy
+
+FR-601：[[src/runtime/policy/effective_policy.py#EffectivePolicy]] 合并 Center ∩ Local ∩ Profile ∩ Task ∩ User 策略；Center 不得放宽 Local 拒绝规则。
+
+## Approval Token
+
+FR-603：[[src/runtime/policy/approval_token.py#ApprovalTokenService]] 审批通过后签发一次性 Token，绑定 task/run/tool_call 与参数 Hash，参数变化后失效。
+
+## Workspace Guard v2
+
+FR-604：[[src/runtime/policy/workspace_guard_v2.py#WorkspaceGuardV2]] 扩展拒绝 `..`、Symlink/Junction 逃逸、UNC、非授权盘符、临时目录绕过与大小写路径技巧。
+
 ## 可执行策略
 
 [[src/runtime/executable_policy.py#ExecutablePolicy]] `validate_command` 用于 MCP stdio 与进程命令：禁止 shell 元字符（`;|&\`回车换行`）、禁止 shell 入口（cmd/powershell/pwsh/bash/sh 等）、禁止 `/c`/`-Command`/`-EncodedCommand` 等危险参数。这是 PRD §7.10 的执行策略闸门，防止命令注入。

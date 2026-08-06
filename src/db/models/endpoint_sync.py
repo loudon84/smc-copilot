@@ -97,8 +97,50 @@ class SyncInbox(Base):
     sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="received", index=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SyncAckOutbox(Base):
+    __tablename__ = "sync_ack_outbox"
+    __table_args__ = (UniqueConstraint("message_id", name="uq_sync_ack_outbox_message_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    endpoint_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    message_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    cursor: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SyncReplayNonce(Base):
+    __tablename__ = "sync_replay_nonces"
+
+    nonce: Mapped[str] = mapped_column(String(256), primary_key=True)
+    message_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SyncPoisonMessage(Base):
+    __tablename__ = "sync_poison_messages"
+    __table_args__ = (UniqueConstraint("message_id", name="uq_sync_poison_message_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    message_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    channel: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="quarantined")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quarantined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class DeliveryOutbox(Base):
@@ -197,6 +239,58 @@ class ResourceConflict(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ResourceApplyRun(Base):
+    __tablename__ = "resource_apply_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
+    config_snapshot_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ResourceApplyOperation(Base):
+    __tablename__ = "resource_apply_operations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("resource_apply_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    from_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    to_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    snapshot_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ResourceSnapshot(Base):
+    __tablename__ = "resource_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("resource_apply_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    operation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    local_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    meta_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pointer_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class RemoteTaskAssignment(Base):
     __tablename__ = "remote_task_assignments"
     __table_args__ = (
@@ -217,6 +311,7 @@ class RemoteTaskAssignment(Base):
     lease_seconds: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     local_task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    work_task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     block_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -236,6 +331,7 @@ class TaskLease(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     heartbeat_interval_seconds: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    work_task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -289,12 +385,15 @@ class ExperienceEvidence(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     endpoint_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     task_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     evidence_type: Mapped[str] = mapped_column(String(64), nullable=False)
     source_refs_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     redacted_payload_json: Mapped[str] = mapped_column(Text, nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     sensitivity: Mapped[str] = mapped_column(String(32), nullable=False, default="internal")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

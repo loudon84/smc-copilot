@@ -17,10 +17,12 @@ from api.v1 import (
     hermes_runs,
     instance_chat,
     instances,
+    metrics,
     pairings,
     profiles,
     bootstrap,
     remote_tasks,
+    resources,
     role_library,
     runtime,
     secrets,
@@ -31,7 +33,10 @@ from api.v1 import (
     task_routing,
     tasks,
     team_tasks,
+    work_tasks,
+    workers,
     workspaces,
+    service_center,
 )
 
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_desktop_token)])
@@ -57,9 +62,14 @@ api_router.include_router(tasks.router)
 api_router.include_router(team_tasks.router)
 api_router.include_router(endpoint.router)
 api_router.include_router(sync.router)
+api_router.include_router(resources.router)
 api_router.include_router(remote_tasks.router)
+api_router.include_router(work_tasks.router)
 api_router.include_router(experience.router)
 api_router.include_router(workspaces.router)
 api_router.include_router(approvals.router)
 api_router.include_router(task_routing.router)
 api_router.include_router(desktop_workbench.router)
+api_router.include_router(metrics.router)
+api_router.include_router(workers.router)
+api_router.include_router(service_center.router)

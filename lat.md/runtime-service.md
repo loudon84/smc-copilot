@@ -72,7 +72,11 @@ FR-23：[[src/runtime/artifact_signature.py#ArtifactSignatureVerifier]] 校验 E
 
 ## Artifact 下载策略
 
-FR-24：[[src/runtime/archive_policy.py#ArchivePolicy]] 强制 HTTPS、域名白名单、大小/超时、重定向校验、Archive 文件数与解压总量限制、路径穿越拒绝、partial 清理；[[src/runtime/artifact_downloader.py#ArtifactDownloader]] 接入该策略。
+FR-24：[[src/runtime/archive_policy.py#ArchivePolicy]] 强制 HTTPS、域名白名单、大小/超时、重定向校验、Archive 文件数与解压总量限制、路径穿越拒绝、partial 清理；[[src/runtime/artifact_downloader.py#ArtifactDownloader]] 接入该策略。Desired State 资源制品另经 [[src/runtime/resources/artifact_cache.py#ArtifactCache]] 流式 SHA-256 与 [[src/runtime/bundle_security.py#safe_extract_zip]] 安全解压。
+
+## Resource Apply Adapters
+
+v1.6 FR-301–306：[[src/runtime/resources/base.py#ResourceAdapter]] 定义 validate/stage/apply/verify/rollback/remove；实现 profile/expert/skill/plugin/mcp/policy（[[src/runtime/resources/registry.py#build_adapter_registry]]）。Hermes CLI 可用时调用 `config check`/`skills`/`plugins`/`mcp test`；缺失时记录将执行的命令并以文件系统探针为主。MCP 缺 Secret 标记 `blocked` + `missing_secret` 冲突。
 
 ## Runtime Service 更新
 
@@ -83,6 +87,38 @@ v1.5 FR-03：Runtime 自更新与 Hermes 版本分离（`serviceVersion` 1.5.0�
 ## 诊断包
 
 FR-28：[[src/services/diagnostic_bundle_service.py#DiagnosticBundleService]] 生成 ZIP（版本、状态、Job 摘要、日志尾部、环境与配置结构、Manifest 元数据）；禁止 Secret、Token、`.env`、Chat 正文。`POST /api/v1/diagnostics/bundle`。
+
+## Artifact 交付
+
+FR-33/FR-702：[[src/services/artifact_delivery_service.py#ArtifactDeliveryService]] 经 spool 入队、流式 SHA-256 与可选分块上传，将结果制品交付至 Service Center。
+
+## Artifact Spool
+
+v1.6 FR-701：[[src/runtime/artifacts/spool.py#ArtifactSpool]] 在 `%LOCALAPPDATA%\HermesRuntime\artifact-spool` 管理制品状态机（created→queued→uploading→uploaded→failed→expired→deleted）。
+
+## Artifact 流式 Hash
+
+FR-702：[[src/runtime/artifacts/streaming_hash.py#StreamingHasher]] 分块读文件并增量 SHA-256，禁止 `path.read_bytes()` 全量加载。
+
+## Artifact 分块上传
+
+FR-703：[[src/runtime/artifacts/multipart_upload.py#MultipartUploader]] 超过 `AIOS_ARTIFACT_MULTIPART_THRESHOLD_BYTES` 时分块上传、持久化 Part ETag 并支持重启续传。
+
+## Artifact 本地加密
+
+FR-704：[[src/runtime/artifacts/encryption.py#ArtifactEncryption]] 敏感 spool 使用 DPAPI 包装数据密钥 + AES-GCM；日志不记录绝对路径。
+
+## Artifact 保留策略
+
+[[src/runtime/artifacts/retention.py#ArtifactRetention]] 清理 uploaded/expired spool 条目。
+
+## Metrics
+
+FR-902：[[src/services/metrics_service.py#MetricsService]] 内存指标；`GET /api/v1/metrics` 导出 Prometheus 文本。
+
+## Worker Supervisor
+
+FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 统一注册后台 Worker，支持 Backoff/Jitter/熔断/Tick Timeout/手动重启/Critical 标识与 Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 单实例锁（`runtime_already_running`）。API：`GET/POST /api/v1/workers/*`；健康：`/health/live`、`/health/ready`、`/health/details`。
 
 ## 目录布局
 

@@ -50,11 +50,61 @@ class DeliveryOutboxStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class SyncAckOutboxStatus(StrEnum):
+    PENDING = "pending"
+    SENDING = "sending"
+    ACKNOWLEDGED = "acknowledged"
+    RETRY = "retry"
+    DEAD_LETTER = "dead_letter"
+
+
+class SyncInboxStatus(StrEnum):
+    RECEIVED = "received"
+    PROCESSING = "processing"
+    RETRY = "retry"
+    QUARANTINED = "quarantined"
+    PROCESSED = "processed"
+    IGNORED = "ignored"
+    REPLAY_REJECTED = "replay_rejected"
+
+
 class EnrollmentStatus(StrEnum):
     PENDING = "pending"
     COMPLETED = "completed"
     REVOKED = "revoked"
     FAILED = "failed"
+
+
+class WorkTaskStatus(StrEnum):
+    PENDING = "pending"
+    VALIDATING = "validating"
+    READY = "ready"
+    QUEUED = "queued"
+    CLAIMING = "claiming"
+    STARTING = "starting"
+    RUNNING = "running"
+    WAITING_APPROVAL = "waiting_approval"
+    FINALIZING = "finalizing"
+    DELIVERING = "delivering"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+    ORPHANED = "orphaned"
+    LEASE_AT_RISK = "lease_at_risk"
+    MIGRATION_PENDING_REVIEW = "migration_pending_review"
+
+
+class TaskRunStatus(StrEnum):
+    STARTING = "starting"
+    RUNNING = "running"
+    WAITING_APPROVAL = "waiting_approval"
+    FINALIZING = "finalizing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    ORPHANED = "orphaned"
+    EXPIRED = "expired"
 
 
 class RemoteAssignmentStatus(StrEnum):
