@@ -1,5 +1,5 @@
 import type { components } from "../generated/schema";
-import type { RuntimeTransport } from "../transport/types";
+import type { RuntimeSseMessage, RuntimeTransport } from "../transport/types";
 
 export type RuntimeStatus = components["schemas"]["RuntimeStatusResponse"];
 export type RuntimeCapabilities = components["schemas"]["RuntimeCapabilitiesResponse"];
@@ -9,7 +9,7 @@ export interface RuntimeDomain {
   getCapabilities(signal?: AbortSignal): Promise<RuntimeCapabilities>;
   getCompatibility(signal?: AbortSignal): Promise<Record<string, unknown>>;
   getHealth(signal?: AbortSignal): Promise<Record<string, unknown>>;
-  getJobEvents(jobId: string, signal?: AbortSignal): AsyncIterable<{ data: string; id?: string; event?: string }>;
+  getJobEvents(jobId: string, signal?: AbortSignal): AsyncIterable<RuntimeSseMessage>;
 }
 
 export function createRuntimeDomain(transport: RuntimeTransport): RuntimeDomain {

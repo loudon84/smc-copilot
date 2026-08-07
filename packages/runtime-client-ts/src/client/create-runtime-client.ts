@@ -3,6 +3,7 @@ import { RuntimeApiError } from "./error-normalizer";
 import { createDefaultFetchTransport } from "../transport/default-fetch-transport";
 import type { RuntimeTransport } from "../transport/types";
 import { createRuntimeDomain, type RuntimeCapabilities, type RuntimeStatus } from "../domains/runtime";
+import type { RuntimeSseMessage } from "../transport/types";
 import { createInstanceDomain } from "../domains/instance";
 import {
   createApprovalDomain,
@@ -56,7 +57,7 @@ export interface RuntimeClient {
   /** @deprecated Prefer client.runtime.getCapabilities */
   getCapabilities(signal?: AbortSignal): Promise<RuntimeCapabilities>;
   /** @deprecated Prefer client.runtime.getJobEvents */
-  getJobEvents(jobId: string, signal?: AbortSignal): AsyncGenerator<{ data: string; id?: string; event?: string }>;
+  getJobEvents(jobId: string, signal?: AbortSignal): AsyncGenerator<RuntimeSseMessage>;
 }
 
 export function createRuntimeClient(options: CreateRuntimeClientOptions): RuntimeClient {
