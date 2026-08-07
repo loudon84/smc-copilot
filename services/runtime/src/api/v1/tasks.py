@@ -1,6 +1,8 @@
+"""Legacy `/api/v1/tasks` Compatibility Adapter → WorkTaskService (PRD v1.3 §7)."""
+
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -10,83 +12,118 @@ from api.deps import (
     get_app_settings,
     get_approval_service,
     get_db_session,
+    get_gateway_supervisor,
+    get_service_center,
     get_session_maker,
-    get_task_runtime,
 )
 from core.config import Settings
 from core.errors import NotFoundError
-from db.repositories.v12_repos import TaskEventRepository
+from integrations.service_center.protocol import ServiceCenterClient
 from schemas.v12_tasks import (
     BindProfileBody,
     LocalTaskCreate,
     LocalTaskResponse,
     TaskEventResponse,
 )
+from schemas.work_tasks import WorkTaskAssignBody, WorkTaskCreate
 from services.approval_service import ApprovalService
-from services.sse_helpers import stream_sse_headers
-from services.task_runtime import TaskRuntimeService
-from services.workbench_event_stream import iter_task_timeline_events, resolve_last_event_id
+from services.gateway_supervisor import GatewaySupervisor
+from services.sse_helpers import parse_last_event_id, stream_sse_headers
+from services.task_event_service import TaskEventService
+from services.work_task_service import WorkTaskService
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
+def _work_svc(
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+    center: ServiceCenterClient = Depends(get_service_center),
+    supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
+) -> WorkTaskService:
+    return WorkTaskService(settings, session, center, supervisor)
+
+
+def _to_local_response(task: Any) -> LocalTaskResponse:
+    data = task.model_dump(by_alias=True, mode="json") if hasattr(task, "model_dump") else dict(task)
+    created = data.get("createdAt") or data.get("created_at")
+    updated = data.get("updatedAt") or data.get("updated_at")
+    if created is None or updated is None:
+        raise NotFoundError("work task timestamps missing")
+    return LocalTaskResponse(
+        id=data["id"],
+        title=data["title"],
+        description=data.get("description"),
+        task_type=data.get("taskType") or data.get("task_type") or "coding",
+        source=data.get("source") or "local",
+        remote_task_id=data.get("sourceTaskId") or data.get("source_task_id"),
+        assignment_id=data.get("assignmentId") or data.get("assignment_id"),
+        local_attempt_id=data["id"],
+        target_profile_id=data.get("profileId") or data.get("profile_id"),
+        workspace_id=data.get("workspaceId") or data.get("workspace_id"),
+        status=data["status"],
+        priority=int(data.get("priority") or 0),
+        payload_json=None,
+        result_json=data.get("resultSummary") or data.get("result_summary"),
+        error_message=data.get("errorMessage") or data.get("error_message"),
+        hermes_run_id=data.get("activeRunId") or data.get("active_run_id"),
+        created_at=created,
+        updated_at=updated,
+    )
+
+
 @router.get("", response_model=list[LocalTaskResponse])
 async def list_tasks(
-    rt: TaskRuntimeService = Depends(get_task_runtime),
-    limit: int = 200,
+    svc: WorkTaskService = Depends(_work_svc),
+    limit: int = Query(default=50, ge=1, le=100),
 ) -> list[LocalTaskResponse]:
-    tasks = await rt.list_local_tasks(limit=limit)
-    return [LocalTaskResponse.model_validate(t) for t in tasks]
+    listed = await svc.list_tasks(limit=limit)
+    return [_to_local_response(item) for item in listed.items]
 
 
 @router.post("", response_model=LocalTaskResponse, status_code=201)
 async def create_task(
     body: LocalTaskCreate,
-    rt: TaskRuntimeService = Depends(get_task_runtime),
+    svc: WorkTaskService = Depends(_work_svc),
 ) -> LocalTaskResponse:
-    t = await rt.create_local_task(
-        title=body.title,
-        task_type=body.task_type,
-        payload=body.payload,
-        workspace_id=body.workspace_id,
+    created = await svc.create_task(
+        WorkTaskCreate(
+            title=body.title,
+            description=body.description,
+            taskType=body.task_type,
+            payload=body.payload,
+            workspaceId=body.workspace_id,
+            source="local",
+        )
     )
-    if body.description is not None:
-        t.description = body.description
-        await rt.save_local_task(t)
-    return LocalTaskResponse.model_validate(t)
+    return _to_local_response(created)
 
 
 @router.get("/{task_id}", response_model=LocalTaskResponse)
-async def get_task(
-    task_id: str,
-    rt: TaskRuntimeService = Depends(get_task_runtime),
-) -> LocalTaskResponse:
-    t = await rt.load_local_task(task_id)
-    if t is None:
-        raise NotFoundError("Task not found")
-    return LocalTaskResponse.model_validate(t)
+async def get_task(task_id: str, svc: WorkTaskService = Depends(_work_svc)) -> LocalTaskResponse:
+    return _to_local_response(await svc.get_task(task_id))
 
 
 @router.post("/{task_id}/run", response_model=LocalTaskResponse)
-async def run_task(task_id: str, rt: TaskRuntimeService = Depends(get_task_runtime)) -> LocalTaskResponse:
-    t = await rt.execute_run(task_id)
-    return LocalTaskResponse.model_validate(t)
+async def run_task(task_id: str, svc: WorkTaskService = Depends(_work_svc)) -> LocalTaskResponse:
+    await svc.start(task_id)
+    return _to_local_response(await svc.get_task(task_id))
 
 
 @router.post("/{task_id}/cancel", response_model=LocalTaskResponse)
-async def cancel_task(task_id: str, rt: TaskRuntimeService = Depends(get_task_runtime)) -> LocalTaskResponse:
-    t = await rt.cancel_task(task_id)
-    return LocalTaskResponse.model_validate(t)
+async def cancel_task(task_id: str, svc: WorkTaskService = Depends(_work_svc)) -> LocalTaskResponse:
+    return _to_local_response(await svc.cancel(task_id))
 
 
 @router.post("/{task_id}/bind-profile", response_model=LocalTaskResponse)
 async def bind_profile(
     task_id: str,
     body: BindProfileBody,
-    rt: TaskRuntimeService = Depends(get_task_runtime),
+    svc: WorkTaskService = Depends(_work_svc),
 ) -> LocalTaskResponse:
-    t = await rt.bind_profile(task_id, body.profile_id)
-    return LocalTaskResponse.model_validate(t)
+    return _to_local_response(
+        await svc.assign(task_id, WorkTaskAssignBody(profileId=body.profile_id))
+    )
 
 
 @router.get("/{task_id}/events", response_model=list[TaskEventResponse])
@@ -94,8 +131,19 @@ async def list_events(
     task_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> list[TaskEventResponse]:
-    evs = await TaskEventRepository(session).list_by_task(task_id)
-    return [TaskEventResponse.model_validate(e) for e in evs]
+    events = await TaskEventService(session).list_events(task_id)
+    return [
+        TaskEventResponse(
+            id=e["id"],
+            task_id=e["taskId"],
+            run_id=e.get("runId"),
+            event_type=e["eventType"],
+            message=None,
+            event_payload=str(e.get("payload")) if e.get("payload") is not None else None,
+            created_at=e.get("createdAt"),
+        )
+        for e in events
+    ]
 
 
 @router.post("/{task_id}/request-approval")
@@ -106,6 +154,7 @@ async def request_approval_ep(
     risk_level: str = Query(default="medium"),
     requested_by: str | None = Query(default=None),
 ) -> dict[str, str]:
+    # Keep legacy approval endpoint for LocalTask approval table compatibility during migration.
     ap = await approvals.request_approval(
         task_id, action_type=action_type, risk_level=risk_level, requested_by=requested_by
     )
@@ -119,13 +168,13 @@ async def stream_events(
     settings: Annotated[Settings, Depends(get_app_settings)],
     session_maker: async_sessionmaker[AsyncSession] = Depends(get_session_maker),
 ) -> StreamingResponse:
-    last_id = resolve_last_event_id(request)
+    last_id = parse_last_event_id(request.headers.get("Last-Event-ID"))
 
     async def gen() -> object:
-        async for chunk in iter_task_timeline_events(
+        async for chunk in TaskEventService(session_maker()).iter_sse(
             request,
             session_maker,
-            task_id=task_id,
+            task_id,
             last_event_id=last_id,
         ):
             yield chunk

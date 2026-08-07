@@ -76,6 +76,9 @@ class EnrollmentStatus(StrEnum):
 
 
 class WorkTaskStatus(StrEnum):
+    """Canonical WorkTask statuses (PRD v1.3 §8) plus legacy compatibility values."""
+
+    DRAFT = "draft"
     PENDING = "pending"
     VALIDATING = "validating"
     READY = "ready"
@@ -84,25 +87,42 @@ class WorkTaskStatus(StrEnum):
     STARTING = "starting"
     RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
+    WAITING_INPUT = "waiting_input"
     FINALIZING = "finalizing"
     DELIVERING = "delivering"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
     EXPIRED = "expired"
     ORPHANED = "orphaned"
     LEASE_AT_RISK = "lease_at_risk"
     MIGRATION_PENDING_REVIEW = "migration_pending_review"
 
 
+class WorkTaskType(StrEnum):
+    """Canonical task types (PRD v1.3 §5.3)."""
+
+    CHAT = "chat"
+    EXPERT = "expert"
+    EXPERT_TEAM = "expert_team"
+    WEB = "web"
+    WORKFLOW = "workflow"
+    CODING = "coding"
+    BUSINESS = "business"
+    REMOTE_ASSIGNMENT = "remote_assignment"
+
+
 class TaskRunStatus(StrEnum):
     STARTING = "starting"
     RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
+    WAITING_INPUT = "waiting_input"
     FINALIZING = "finalizing"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    INTERRUPTED = "interrupted"
     ORPHANED = "orphaned"
     EXPIRED = "expired"
 

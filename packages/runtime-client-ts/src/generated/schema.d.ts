@@ -2559,7 +2559,8 @@ export interface paths {
         /** List Work Tasks */
         get: operations["list_work_tasks_api_v1_work_tasks_get"];
         put?: never;
-        post?: never;
+        /** Create Work Task */
+        post: operations["create_work_task_api_v1_work_tasks_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2577,6 +2578,144 @@ export interface paths {
         get: operations["get_work_task_api_v1_work_tasks__task_id__get"];
         put?: never;
         post?: never;
+        /** Delete Work Task */
+        delete: operations["delete_work_task_api_v1_work_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Work Task */
+        patch: operations["patch_work_task_api_v1_work_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Task Approvals */
+        get: operations["list_task_approvals_api_v1_work_tasks__task_id__approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/approvals/{approval_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Task */
+        post: operations["approve_task_api_v1_work_tasks__task_id__approvals__approval_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/approvals/{approval_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Task Approval */
+        post: operations["reject_task_approval_api_v1_work_tasks__task_id__approvals__approval_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Task Artifacts */
+        get: operations["list_task_artifacts_api_v1_work_tasks__task_id__artifacts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/artifacts/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task Artifact */
+        get: operations["get_task_artifact_api_v1_work_tasks__task_id__artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/artifacts/{artifact_id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open Task Artifact */
+        post: operations["open_task_artifact_api_v1_work_tasks__task_id__artifacts__artifact_id__open_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/artifacts/{artifact_id}/save-as": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Task Artifact As */
+        post: operations["save_task_artifact_as_api_v1_work_tasks__task_id__artifacts__artifact_id__save_as_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Assign Work Task */
+        post: operations["assign_work_task_api_v1_work_tasks__task_id__assign_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2634,6 +2773,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-tasks/{task_id}/interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Task Interactions */
+        get: operations["list_task_interactions_api_v1_work_tasks__task_id__interactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/interactions/{interaction_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Task Interaction */
+        post: operations["resolve_task_interaction_api_v1_work_tasks__task_id__interactions__interaction_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/work-tasks/{task_id}/retry": {
         parameters: {
             query?: never;
@@ -2660,6 +2833,23 @@ export interface paths {
         };
         /** List Task Runs */
         get: operations["list_task_runs_api_v1_work_tasks__task_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-tasks/{task_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Task Snapshot */
+        get: operations["get_task_snapshot_api_v1_work_tasks__task_id__snapshot_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4059,7 +4249,7 @@ export interface components {
              */
             apiVersion: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
         };
         /** RuntimeCompatibilityFlags */
         RuntimeCompatibilityFlags: {
@@ -4188,7 +4378,7 @@ export interface components {
             /** Datadir */
             dataDir: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
             /** Hermeshome */
             hermesHome: string;
             /** Hermesinstalled */
@@ -4350,25 +4540,102 @@ export interface components {
             /** Version */
             version: string;
         };
-        /** TaskEventResponse */
-        TaskEventResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Event Payload */
-            event_payload?: string | null;
-            /** Event Type */
-            event_type: string;
+        /** TaskApprovalResponse */
+        TaskApprovalResponse: {
+            /** Createdat */
+            createdAt?: string | null;
             /** Id */
             id: string;
-            /** Message */
-            message?: string | null;
-            /** Run Id */
-            run_id?: string | null;
-            /** Task Id */
-            task_id: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Resolvedat */
+            resolvedAt?: string | null;
+            /** Runid */
+            runId?: string | null;
+            /** Status */
+            status: string;
+            /** Taskid */
+            taskId: string;
+            /** Toolcallid */
+            toolCallId?: string | null;
+        };
+        /** TaskArtifactOpenResult */
+        TaskArtifactOpenResult: {
+            /** Localpath */
+            localPath: string;
+        };
+        /** TaskArtifactResponse */
+        TaskArtifactResponse: {
+            /** Artifacttype */
+            artifactType: string;
+            /** Checksum */
+            checksum?: string | null;
+            /** Contenttype */
+            contentType?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Id */
+            id: string;
+            /** Localpath */
+            localPath?: string | null;
+            /** Remoteurl */
+            remoteUrl?: string | null;
+            /** Runid */
+            runId?: string | null;
+            /** Sizebytes */
+            sizeBytes?: number | null;
+            /** Taskid */
+            taskId: string;
+            /**
+             * Uploadstatus
+             * @default pending
+             */
+            uploadStatus: string;
+        };
+        /** TaskArtifactSaveAsBody */
+        TaskArtifactSaveAsBody: {
+            /** Destinationpath */
+            destinationPath: string;
+        };
+        /** TaskInteractionResolveBody */
+        TaskInteractionResolveBody: {
+            /** Response */
+            response?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** TaskInteractionResponse */
+        TaskInteractionResponse: {
+            /** Createdat */
+            createdAt?: string | null;
+            /** Id */
+            id: string;
+            /** Interactiontype */
+            interactionType: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Prompt */
+            prompt?: {
+                [key: string]: unknown;
+            } | null;
+            /** Resolvedat */
+            resolvedAt?: string | null;
+            /** Response */
+            response?: {
+                [key: string]: unknown;
+            } | null;
+            /** Runid */
+            runId?: string | null;
+            /** Status */
+            status: string;
+            /** Taskid */
+            taskId: string;
+            /** Updatedat */
+            updatedAt?: string | null;
         };
         /** TaskRoutingPatch */
         TaskRoutingPatch: {
@@ -4383,6 +4650,72 @@ export interface components {
             rules: {
                 [key: string]: components["schemas"]["RoutingRuleOut"];
             };
+        };
+        /** TaskRunResponse */
+        TaskRunResponse: {
+            /** Chatrunid */
+            chatRunId?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errordetail */
+            errorDetail?: string | null;
+            /** Exitreason */
+            exitReason?: string | null;
+            /** Finishedat */
+            finishedAt?: string | null;
+            /** Gatewayinstanceid */
+            gatewayInstanceId?: string | null;
+            /** Hermessessionid */
+            hermesSessionId?: string | null;
+            /** Id */
+            id: string;
+            /** Leaseid */
+            leaseId?: string | null;
+            /** Runnumber */
+            runNumber: number;
+            /** Startedat */
+            startedAt?: string | null;
+            /** Status */
+            status: string;
+            /** Taskid */
+            taskId: string;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Usage */
+            usage?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** TaskSnapshotResponse */
+        TaskSnapshotResponse: {
+            activeRun?: components["schemas"]["TaskRunResponse"] | null;
+            /** Approvals */
+            approvals?: components["schemas"]["TaskApprovalResponse"][];
+            /** Artifacts */
+            artifacts?: components["schemas"]["TaskArtifactResponse"][];
+            /** Events */
+            events?: components["schemas"]["schemas__work_tasks__TaskEventResponse"][];
+            /** Interactions */
+            interactions?: components["schemas"]["TaskInteractionResponse"][];
+            /** Runtime */
+            runtime?: {
+                [key: string]: unknown;
+            };
+            task: components["schemas"]["WorkTaskResponse"];
+        };
+        /** TaskStartResult */
+        TaskStartResult: {
+            /** Runid */
+            runId?: string | null;
+            /**
+             * Status
+             * @default queued
+             */
+            status: string;
+            /** Taskid */
+            taskId: string;
         };
         /** TaskWorkbenchSummary */
         TaskWorkbenchSummary: {
@@ -4415,11 +4748,13 @@ export interface components {
             /** Id */
             id: string;
             /** Local Task Id */
-            local_task_id: string;
+            local_task_id?: string | null;
             /** Remote Task Id */
             remote_task_id: string;
             /** Sync Status */
             sync_status: string;
+            /** Work Task Id */
+            work_task_id?: string | null;
         };
         /** ToolchainOverride */
         ToolchainOverride: {
@@ -4451,6 +4786,205 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WorkTaskAssignBody */
+        WorkTaskAssignBody: {
+            /** Instanceid */
+            instanceId?: string | null;
+            /** Profileid */
+            profileId: string;
+        };
+        /** WorkTaskCreate */
+        WorkTaskCreate: {
+            /** Approvalpolicy */
+            approvalPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Assignmentid */
+            assignmentId?: string | null;
+            /** Chatrunid */
+            chatRunId?: string | null;
+            /** Createdby */
+            createdBy?: string | null;
+            /** Datapolicy */
+            dataPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Deadline */
+            deadline?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Instanceid */
+            instanceId?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Parenttaskid */
+            parentTaskId?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Priority
+             * @default 0
+             */
+            priority: number;
+            /** Profileid */
+            profileId?: string | null;
+            /**
+             * Source
+             * @default local
+             */
+            source: string;
+            /** Sourcetaskid */
+            sourceTaskId?: string | null;
+            /**
+             * Tasktype
+             * @default coding
+             * @enum {string}
+             */
+            taskType: "chat" | "expert" | "expert_team" | "web" | "workflow" | "coding" | "business" | "remote_assignment";
+            /** Title */
+            title: string;
+            /** Toolpolicy */
+            toolPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Workspacepolicy */
+            workspacePolicy?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkTaskListResponse */
+        WorkTaskListResponse: {
+            /** Items */
+            items: components["schemas"]["WorkTaskResponse"][];
+            /** Nextcursor */
+            nextCursor?: string | null;
+        };
+        /** WorkTaskPatch */
+        WorkTaskPatch: {
+            /** Approvalpolicy */
+            approvalPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Chatrunid */
+            chatRunId?: string | null;
+            /** Datapolicy */
+            dataPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Deadline */
+            deadline?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Instanceid */
+            instanceId?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Priority */
+            priority?: number | null;
+            /** Profileid */
+            profileId?: string | null;
+            /** Resultsummary */
+            resultSummary?: string | null;
+            /** Tasktype */
+            taskType?: ("chat" | "expert" | "expert_team" | "web" | "workflow" | "coding" | "business" | "remote_assignment") | null;
+            /** Title */
+            title?: string | null;
+            /** Toolpolicy */
+            toolPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Workspacepolicy */
+            workspacePolicy?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkTaskResponse */
+        WorkTaskResponse: {
+            /** Activerunid */
+            activeRunId?: string | null;
+            /** Approvalpolicy */
+            approvalPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Assignedinstanceid */
+            assignedInstanceId?: string | null;
+            /** Assignedprofileid */
+            assignedProfileId?: string | null;
+            /** Assignmentid */
+            assignmentId?: string | null;
+            /** Chatrunid */
+            chatRunId?: string | null;
+            /** Completedat */
+            completedAt?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Createdby */
+            createdBy?: string | null;
+            /** Datapolicy */
+            dataPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Deadline */
+            deadline?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Id */
+            id: string;
+            /** Instanceid */
+            instanceId?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Legacysourceid */
+            legacySourceId?: string | null;
+            /** Parenttaskid */
+            parentTaskId?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Priority */
+            priority: number;
+            /** Profileid */
+            profileId?: string | null;
+            /** Resultsummary */
+            resultSummary?: string | null;
+            /** Source */
+            source: string;
+            /** Sourcetaskid */
+            sourceTaskId?: string | null;
+            /** Status */
+            status: string;
+            /** Tasktype */
+            taskType: string;
+            /** Title */
+            title: string;
+            /** Toolpolicy */
+            toolPolicy?: {
+                [key: string]: unknown;
+            } | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Workspacepolicy */
+            workspacePolicy?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** WorkspaceChatAbortResponse */
         WorkspaceChatAbortResponse: {
@@ -4569,6 +5103,62 @@ export interface components {
         WorkspaceValidatePath: {
             /** Path */
             path: string;
+        };
+        /** TaskEventResponse */
+        schemas__v12_tasks__TaskEventResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Event Payload */
+            event_payload?: string | null;
+            /** Event Type */
+            event_type: string;
+            /** Id */
+            id: string;
+            /** Message */
+            message?: string | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Task Id */
+            task_id: string;
+        };
+        /** TaskEventResponse */
+        schemas__work_tasks__TaskEventResponse: {
+            /** Createdat */
+            createdAt?: string | null;
+            /** Eventtype */
+            eventType: string;
+            /** Id */
+            id: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Payloadartifactid */
+            payloadArtifactId?: string | null;
+            /**
+             * Redactionstatus
+             * @default redacted
+             */
+            redactionStatus: string;
+            /** Runid */
+            runId: string;
+            /**
+             * Schemaversion
+             * @default 1
+             */
+            schemaVersion: string;
+            /** Sequence */
+            sequence: number;
+            /** Taskid */
+            taskId: string;
+            /**
+             * Visibility
+             * @default internal
+             */
+            visibility: string;
         };
     };
     responses: never;
@@ -10296,7 +10886,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TaskEventResponse"][];
+                    "application/json": components["schemas"]["schemas__v12_tasks__TaskEventResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -10594,7 +11184,19 @@ export interface operations {
     };
     list_work_tasks_api_v1_work_tasks_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                status?: string | null;
+                taskType?: string | null;
+                source?: string | null;
+                profileId?: string | null;
+                instanceId?: string | null;
+                workspaceId?: string | null;
+                search?: string | null;
+                createdAfter?: string | null;
+                createdBefore?: string | null;
+            };
             header?: {
                 Authorization?: string | null;
                 "X-Copilot-Desktop-Token"?: string | null;
@@ -10610,9 +11212,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["WorkTaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_work_task_api_v1_work_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkTaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkTaskResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10646,9 +11282,364 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["WorkTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_work_task_api_v1_work_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_work_task_api_v1_work_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkTaskPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkTaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_task_approvals_api_v1_work_tasks__task_id__approvals_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskApprovalResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_task_api_v1_work_tasks__task_id__approvals__approval_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_task_approval_api_v1_work_tasks__task_id__approvals__approval_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskApprovalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_task_artifacts_api_v1_work_tasks__task_id__artifacts_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskArtifactResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_artifact_api_v1_work_tasks__task_id__artifacts__artifact_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskArtifactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    open_task_artifact_api_v1_work_tasks__task_id__artifacts__artifact_id__open_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskArtifactOpenResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_task_artifact_as_api_v1_work_tasks__task_id__artifacts__artifact_id__save_as_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskArtifactSaveAsBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": {
-                        [key: string]: unknown;
+                        [key: string]: string;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_work_task_api_v1_work_tasks__task_id__assign_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkTaskAssignBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkTaskResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10682,9 +11673,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["WorkTaskResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10701,6 +11690,7 @@ export interface operations {
     list_task_events_api_v1_work_tasks__task_id__events_get: {
         parameters: {
             query?: {
+                afterSequence?: number | null;
                 after_sequence?: number | null;
             };
             header?: {
@@ -10720,9 +11710,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["schemas__work_tasks__TaskEventResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -10770,7 +11758,7 @@ export interface operations {
             };
         };
     };
-    retry_work_task_api_v1_work_tasks__task_id__retry_post: {
+    list_task_interactions_api_v1_work_tasks__task_id__interactions_get: {
         parameters: {
             query?: never;
             header?: {
@@ -10790,9 +11778,80 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TaskInteractionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_task_interaction_api_v1_work_tasks__task_id__interactions__interaction_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+                interaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskInteractionResolveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskInteractionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_work_task_api_v1_work_tasks__task_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskStartResult"];
                 };
             };
             /** @description Validation Error */
@@ -10826,9 +11885,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["TaskRunResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_snapshot_api_v1_work_tasks__task_id__snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskSnapshotResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10857,14 +11948,12 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TaskStartResult"];
                 };
             };
             /** @description Validation Error */

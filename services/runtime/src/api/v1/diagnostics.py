@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.deps import get_app_settings, get_db_session
 from core.config import Settings
 from db.models.chat_runtime import ChatEvent, ChatRun, ChatTurn
+from db.models.work_tasks import TaskExecutionQueue, WorkTask
 from runtime.environment_probe import EnvironmentProbe
 from runtime.platform_paths import RuntimeLayout
 from schemas.runtime import BackupCreateRequest
@@ -56,6 +57,33 @@ async def diagnostics_summary(
     ).scalar_one()
     event_count = (await session.execute(select(func.count()).select_from(ChatEvent))).scalar_one()
 
+    queue_depth = (
+        await session.execute(
+            select(TaskExecutionQueue.status, func.count())
+            .select_from(TaskExecutionQueue)
+            .group_by(TaskExecutionQueue.status)
+        )
+    ).all()
+    task_queue_depth = {str(status): int(count) for status, count in queue_depth}
+    active_running_tasks = (
+        await session.execute(
+            select(func.count()).select_from(WorkTask).where(WorkTask.status.in_(("running", "validating", "starting")))
+        )
+    ).scalar_one()
+    waiting_approval = (
+        await session.execute(select(func.count()).select_from(WorkTask).where(WorkTask.status == "waiting_approval"))
+    ).scalar_one()
+    waiting_input = (
+        await session.execute(select(func.count()).select_from(WorkTask).where(WorkTask.status == "waiting_input"))
+    ).scalar_one()
+    failed_tasks_24h = (
+        await session.execute(
+            select(func.count())
+            .select_from(WorkTask)
+            .where(WorkTask.status == "failed", WorkTask.updated_at.is_not(None), WorkTask.updated_at >= since)
+        )
+    ).scalar_one()
+
     return {
         "runtime": status.model_dump(by_alias=True),
         "environment": {
@@ -73,6 +101,15 @@ async def diagnostics_summary(
         "averageTurnDuration": None,
         "chatEventStoreStatus": {"ok": True, "eventCount": int(event_count or 0)},
         "gatewayChatStatus": "unknown",
+        "taskRuntime": {
+            "activeRunningTasks": int(active_running_tasks or 0),
+            "waitingApproval": int(waiting_approval or 0),
+            "waitingInput": int(waiting_input or 0),
+            "failedTasks24h": int(failed_tasks_24h or 0),
+        },
+        "scheduler": {
+            "taskQueueDepth": task_queue_depth,
+        },
     }
 
 

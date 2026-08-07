@@ -248,6 +248,7 @@ import {
 import { registerHermesExpertsIpc, shutdownHermesExpertsIpc } from "./hermes-experts";
 import { registerHermesMcpConfigIpc } from "./hermes-mcp-config/hermes-mcp-config-ipc";
 import { registerWorkIpc } from "./work/work-ipc";
+import { registerWorkTasksIpc, shutdownWorkTasksIpc } from "./work-tasks/work-tasks-ipc";
 
 process.on("uncaughtException", (err) => {
   console.error("[MAIN UNCAUGHT]", err);
@@ -502,6 +503,7 @@ function setupIPC(): void {
     registerHermesExpertsIpc();
     registerHermesMcpConfigIpc();
     registerWorkIpc(() => mainWindow);
+    registerWorkTasksIpc(() => mainWindow);
   } catch { /* profile-runtime not available in early setup */ }
 
   try {
@@ -1763,6 +1765,9 @@ app.on("before-quit", () => {
   } catch { /* best effort */ }
   try {
     shutdownHermesExpertsIpc();
+  } catch { /* best effort */ }
+  try {
+    shutdownWorkTasksIpc();
   } catch { /* best effort */ }
   if (currentChatAbort) {
     currentChatAbort();

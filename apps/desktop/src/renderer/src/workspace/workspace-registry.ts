@@ -31,6 +31,15 @@ export const STATIC_WORKSPACE_MODULES: WorkspaceModule[] = [
     persistable: true,
     source: "hermes",
   },
+  {
+    id: "task-workbench",
+    titleKey: "navigation.taskWorkbench",
+    kind: "react",
+    closeable: false,
+    draggable: false,
+    persistable: true,
+    source: "local",
+  },
 
   /*
   {
@@ -51,15 +60,6 @@ export const STATIC_WORKSPACE_MODULES: WorkspaceModule[] = [
     persistable: true,
     shellLayerId: "portal",
     source: "system",
-  },
-  {
-    id: "task-workbench",
-    titleKey: "navigation.taskWorkbench",
-    kind: "react",
-    closeable: false,
-    draggable: false,
-    persistable: true,
-    source: "local",
   },
   
   {

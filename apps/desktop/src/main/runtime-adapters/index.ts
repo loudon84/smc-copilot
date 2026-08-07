@@ -1,6 +1,7 @@
 /**
  * Phase 2+ runtime adapters. Instance/Config/MCP/Diagnostics are live;
- * Chat is live (Phase 3); Session/Task/Files remain stubs until later phases.
+ * Chat is live (Phase 3); Task WorkTask domain is live (v1.3 Phase 7);
+ * Session/Files remain stubs until later phases.
  */
 export { ServeInstanceAdapter } from "./ServeInstanceAdapter";
 export { ServeConfigurationAdapter } from "./ServeConfigurationAdapter";
@@ -20,7 +21,7 @@ export const ServeResourceAdapter = {
 
 export const ServeTaskAdapter = {
   name: "ServeTaskAdapter" as const,
-  ready: false,
+  ready: true,
 };
 
 export const ServeFilesAdapter = {

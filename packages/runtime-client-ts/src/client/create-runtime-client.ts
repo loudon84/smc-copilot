@@ -16,7 +16,7 @@ import {
   createResourceDomain,
   createSecretDomain,
   createSessionDomain,
-  createTaskDomain,
+  createWorkTaskDomain,
 } from "../domains/index";
 
 export type { RuntimeStatus, RuntimeCapabilities };
@@ -43,6 +43,21 @@ export type {
   ChatApprovalRespondBody,
   ChatInteractionRespondBody,
 } from "../domains/chat";
+export type {
+  WorkTaskDomain,
+  TaskDomain,
+  WorkTaskCreate,
+  WorkTaskPatch,
+  WorkTaskResponse,
+  WorkTaskListResponse,
+  WorkTaskAssignBody,
+  WorkTaskListQuery,
+  WorkTaskEventsQuery,
+  WorkTaskSnapshot,
+  TaskRunResponse,
+  TaskStartResult,
+  TaskEventResponse,
+} from "../domains/work-task";
 
 export interface CreateRuntimeClientOptions extends RuntimeClientAuthOptions {
   baseUrl: string;
@@ -62,7 +77,10 @@ export interface RuntimeClient {
   readonly secrets: ReturnType<typeof createSecretDomain>;
   readonly attachments: ReturnType<typeof createAttachmentDomain>;
   readonly approvals: ReturnType<typeof createApprovalDomain>;
-  readonly tasks: ReturnType<typeof createTaskDomain>;
+  /** Canonical WorkTask domain (alias of workTasks). */
+  readonly tasks: ReturnType<typeof createWorkTaskDomain>;
+  /** Preferred name for WorkTask domain (PRD v1.3). */
+  readonly workTasks: ReturnType<typeof createWorkTaskDomain>;
   readonly resources: ReturnType<typeof createResourceDomain>;
   readonly diagnostics: ReturnType<typeof createDiagnosticsDomain>;
   readonly endpoint: ReturnType<typeof createEndpointDomain>;
@@ -90,6 +108,7 @@ export function createRuntimeClient(options: CreateRuntimeClientOptions): Runtim
     });
 
   const runtime = createRuntimeDomain(transport);
+  const workTasks = createWorkTaskDomain(transport);
   const client: RuntimeClient = {
     transport,
     runtime,
@@ -99,7 +118,8 @@ export function createRuntimeClient(options: CreateRuntimeClientOptions): Runtim
     secrets: createSecretDomain(transport),
     attachments: createAttachmentDomain(transport),
     approvals: createApprovalDomain(transport),
-    tasks: createTaskDomain(transport),
+    tasks: workTasks,
+    workTasks,
     resources: createResourceDomain(transport),
     diagnostics: createDiagnosticsDomain(transport),
     endpoint: createEndpointDomain(transport),

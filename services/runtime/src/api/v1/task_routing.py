@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_task_routing_registry
+from api.deps import get_db_session, get_task_routing_registry
 from core.task_routing import RoutingRule
 from schemas.v12_tasks import RoutingRuleOut, TaskRoutingPatch, TaskRoutingRulesResponse
 from services.task_routing_registry import TaskRoutingRegistry
@@ -29,11 +30,11 @@ async def get_task_routing(
 async def patch_task_routing(
     body: TaskRoutingPatch,
     registry: TaskRoutingRegistry = Depends(get_task_routing_registry),
+    session: AsyncSession = Depends(get_db_session),
 ) -> TaskRoutingRulesResponse:
-    registry.patch_rules(
-        {
-            k: RoutingRule(profile_type=v.profile_type, require_approval=v.require_approval)
-            for k, v in body.rules.items()
-        }
-    )
+    rules = {
+        k: RoutingRule(profile_type=v.profile_type, require_approval=v.require_approval)
+        for k, v in body.rules.items()
+    }
+    await registry.persist_patch(session, rules)
     return _serialize_rules(registry)

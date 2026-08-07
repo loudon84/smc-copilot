@@ -63,6 +63,7 @@ def main() -> int:
         UsageUpdatedEvent,
     )
     from schemas.events import ErrorEnvelope, RuntimeJobSseEvent  # noqa: WPS433
+    from schemas.task_events import TASK_EVENT_TYPES  # noqa: WPS433
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -122,6 +123,46 @@ def main() -> int:
     error_schema["$id"] = "https://smc-copilot.local/contracts/runtime-events/error.schema.json"
     error_schema["title"] = "RuntimeErrorEnvelope"
     _write("error.schema.json", error_schema)
+
+    # PRD v1.3 §14 — durable WorkTask events (type const per variant).
+    task_event_variants: list[dict[str, Any]] = []
+    for event_type in sorted(TASK_EVENT_TYPES):
+        task_event_variants.append(
+            {
+                "title": event_type,
+                "type": "object",
+                "properties": {
+                    "eventId": {"type": "string", "title": "Eventid"},
+                    "taskId": {"type": "string", "title": "Taskid"},
+                    "runId": {"type": "string", "title": "Runid"},
+                    "sequence": {"type": "integer", "title": "Sequence"},
+                    "type": {
+                        "const": event_type,
+                        "default": event_type,
+                        "title": "Type",
+                        "type": "string",
+                    },
+                    "payload": {
+                        "additionalProperties": True,
+                        "title": "Payload",
+                        "type": "object",
+                    },
+                    "timestamp": {
+                        "anyOf": [{"type": "string"}, {"type": "null"}],
+                        "default": None,
+                        "title": "Timestamp",
+                    },
+                },
+                "required": ["eventId", "taskId", "runId", "sequence", "type"],
+            }
+        )
+    task_event_schema: dict[str, Any] = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://smc-copilot.local/contracts/runtime-events/task-event.schema.json",
+        "title": "WorkTaskEvent",
+        "oneOf": task_event_variants,
+    }
+    _write("task-event.schema.json", task_event_schema)
     return 0
 
 

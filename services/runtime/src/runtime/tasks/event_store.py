@@ -16,6 +16,7 @@ from db.models.work_tasks import TaskArtifact, TaskRunEvent
 from db.repositories.endpoint_sync_repo import EndpointSyncRepository
 from db.repositories.work_task_repo import WorkTaskRepository
 from runtime.experience_redactor import redact_payload
+from schemas.task_events import validate_task_event_type
 
 INLINE_PAYLOAD_MAX_BYTES = 64 * 1024
 BroadcastHook = Callable[[TaskRunEvent], None]
@@ -45,6 +46,7 @@ class TaskEventStore:
         payload: dict[str, Any] | None = None,
         assignment_id: str | None = None,
     ) -> TaskRunEvent:
+        validate_task_event_type(event_type)
         sequence = await self._tasks.next_event_sequence(run_id)
         redacted = redact_payload(payload or {})
         payload_json = json.dumps(redacted, ensure_ascii=False)

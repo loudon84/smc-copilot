@@ -1,4 +1,4 @@
-"""Startup recovery for in-flight task runs (FR-507)."""
+"""Startup recovery for in-flight task runs (FR-507 + PRD v1.3 §11)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from db.repositories.endpoint_sync_repo import EndpointSyncRepository
 from db.repositories.work_task_repo import WorkTaskRepository
 from runtime.tasks.event_store import TaskEventStore
 from runtime.tasks.hermes_adapter import HermesRuntimeAdapter
+from runtime.tasks.state_machine import transition
 
 logger = get_logger(__name__)
 
@@ -18,6 +19,8 @@ _RECOVERABLE_TASK = frozenset(
         WorkTaskStatus.STARTING.value,
         WorkTaskStatus.RUNNING.value,
         WorkTaskStatus.WAITING_APPROVAL.value,
+        WorkTaskStatus.WAITING_INPUT.value,
+        WorkTaskStatus.VALIDATING.value,
         WorkTaskStatus.FINALIZING.value,
         WorkTaskStatus.DELIVERING.value,
     }
@@ -28,6 +31,7 @@ _RECOVERABLE_RUN = frozenset(
         TaskRunStatus.STARTING.value,
         TaskRunStatus.RUNNING.value,
         TaskRunStatus.WAITING_APPROVAL.value,
+        TaskRunStatus.WAITING_INPUT.value,
         TaskRunStatus.FINALIZING.value,
     }
 )
@@ -59,7 +63,6 @@ class TaskRecovery:
         if not active_runs:
             return False
 
-        lease = None
         if task.assignment_id:
             lease = await self._sync.get_active_lease(task.assignment_id)
             if lease:
@@ -67,34 +70,23 @@ class TaskRecovery:
                 if expires.tzinfo is None:
                     expires = expires.replace(tzinfo=UTC)
                 if expires < datetime.now(UTC):
-                    task.status = WorkTaskStatus.EXPIRED.value
+                    transition(task, WorkTaskStatus.EXPIRED)
                     for run in active_runs:
                         run.status = TaskRunStatus.EXPIRED.value
                         run.exit_reason = "lease_expired"
                     return True
 
-        profile_id = task.profile_id or "default"
-        healthy = await self._adapter.health(profile_id)
-        if not healthy:
-            task.status = WorkTaskStatus.ORPHANED.value
-            for run in active_runs:
-                run.status = TaskRunStatus.ORPHANED.value
-                run.exit_reason = "gateway_unreachable"
-            await self._events.append(
-                task_id=task.id,
-                run_id=active_runs[-1].id,
-                event_type="runtime.recovery.completed",
-                payload={"status": "orphaned", "taskId": task.id},
-                assignment_id=task.assignment_id,
-            )
-            return True
-
+        # Running tasks that already produced side effects become interrupted (no auto re-exec).
+        transition(task, WorkTaskStatus.INTERRUPTED)
+        for run in active_runs:
+            run.status = TaskRunStatus.INTERRUPTED.value
+            run.exit_reason = "runtime_restarted"
+            run.finished_at = datetime.now(UTC)
         await self._events.append(
             task_id=task.id,
             run_id=active_runs[-1].id,
-            event_type="runtime.recovery.started",
-            payload={"taskId": task.id},
+            event_type="task.interrupted",
+            payload={"taskId": task.id, "reason": "RUNTIME_RESTARTED_DURING_TASK"},
             assignment_id=task.assignment_id,
         )
-        task.status = WorkTaskStatus.QUEUED.value
         return True

@@ -42,7 +42,7 @@ async def test_remote_task_accept(enrolled_client) -> None:
     events = await client.get(f"/api/v1/remote-tasks/{row_id}/events")
     assert events.status_code == 200
     types = [e["eventType"] for e in events.json()]
-    assert "task.run.started" in types or "task.result.ready" in types
+    assert "task.started" in types or "task.completed" in types or "task.updated" in types
 
 
 # @lat: [[tests#Endpoint Sync#Remote task cancel]]

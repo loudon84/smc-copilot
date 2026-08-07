@@ -1,8 +1,24 @@
 # 任务运行时
 
-任务来自本地、旧 Team Hub（兼容）或 v1.5 Remote Task Assignment v2（主路径）。经状态机/审批/Workspace Guard 后在 Instance Gateway 执行，并通过 Outbox 回传。远程任务企业协议见 [[endpoint-sync#Remote Task v2]]。
+任务来自本地、旧 Team Hub（兼容）或 v1.5 Remote Task Assignment v2（主路径）。**v1.3** 起 WorkTask 为执行 SOT：经 durable queue、[[src/runtime/execution/kernel.py#AgentExecutionKernel]] 与 21 类 durable events 驱动；LocalTask 保留于 `/api/v1/tasks`。远程任务企业协议见 [[endpoint-sync#Remote Task v2]]。
 
-相关：[[approval-workspace#审批与工作空间]]、[[gateway-supervisor#Gateway 监管]]、[[data-model#Profile 与任务表]]、[[endpoint-sync#Endpoint Sync]]。
+相关：[[approval-workspace#审批与工作空间]]、[[gateway-supervisor#Gateway 监管]]、[[data-model#Profile 与任务表]]、[[endpoint-sync#Endpoint Sync]]、[[tests#Work Task Runtime E2E]]。
+
+## Work Task Runtime (v1.3)
+
+[[src/services/work_task_service.py#WorkTaskService]] 负责 WorkTask CRUD、assign、start（入队 durable queue）、cancel、snapshot、approvals/artifacts。状态变更必须经 [[src/runtime/tasks/state_machine.py#transition]]。
+
+## Durable Task Scheduler
+
+[[src/runtime/tasks/task_worker.py#TaskWorker]] 原子 claim `task_execution_queue` 行、workspace 资源锁互斥、lease 续期。启动恢复见 [[src/runtime/tasks/task_recovery_service.py#TaskRecoveryService]]：queued 保留、running → interrupted（不重发 Hermes）。
+
+## Agent Execution Kernel
+
+[[src/runtime/execution/kernel.py#AgentExecutionKernel]] 是 runtime/tasks 下访问 Hermes 的唯一执行门面；测试注入 [[tests/support/scenario_hermes_adapter.py#ScenarioHermesRuntimeAdapter]]。禁止在 `runtime/tasks/**` 直接调用 `/v1/chat/completions`（CI：`check:no-task-direct-hermes`）。
+
+## Task Events
+
+21 种 durable 事件定义于 [[src/schemas/task_events.py#TASK_EVENT_TYPES]]，JSON Schema：`contracts/runtime-events/task-event.schema.json`（`runtimeEvents` 2.1.0）。持久化经 [[src/runtime/tasks/event_store.py#TaskEventStore]]。
 
 ## 任务状态机
 

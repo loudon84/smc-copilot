@@ -771,6 +771,8 @@ declare global {
         onEvent: (callback: (event: import("../shared/work/work-event-contract").WorkTaskEvent) => void) => () => void;
       };
     };
+    /** PRD v1.3 WorkTask Workbench 2.0 — Main-proxied /api/v1/work-tasks */
+    workTasks: import("./work-tasks-api").WorkTasksAPI;
     internalView?: import("../shared/shell/overlay-contract").InternalViewAPI;
   }
 

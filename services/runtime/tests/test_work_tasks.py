@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -48,7 +48,7 @@ async def test_event_sequence_uniqueness(app_client) -> None:
     run = await repo.add_run(TaskRun(task_id=task.id, run_number=1, status="running"))
     store = TaskEventStore(settings, session)
     await store.append(task_id=task.id, run_id=run.id, event_type="task.started", payload={"a": 1})
-    await store.append(task_id=task.id, run_id=run.id, event_type="task.progress", payload={"b": 2})
+    await store.append(task_id=task.id, run_id=run.id, event_type="task.updated", payload={"b": 2})
     await session.commit()
 
     events = await repo.list_events_for_run(run.id)
@@ -74,7 +74,7 @@ async def test_sse_replay_from_last_event_id(enrolled_client) -> None:
     events = await client.get(f"/api/v1/work-tasks/{work_task_id}/events")
     assert events.status_code == 200
     all_events = events.json()
-    assert any(e["eventType"] == "agent.message.delta" for e in all_events)
+    assert any(e["eventType"] in {"agent.message.delta", "task.message.delta"} for e in all_events)
 
     if len(all_events) >= 2:
         mid_sequence = all_events[0]["sequence"]
@@ -88,25 +88,37 @@ async def test_sse_replay_from_last_event_id(enrolled_client) -> None:
 
 # @lat: [[tests#Work Task Execution#Cancel marks cancelled]]
 @pytest.mark.asyncio
-async def test_cancel_marks_cancelled(enrolled_client) -> None:
-    client, _app, center = enrolled_client
-    center.enqueue_assignment(sample_assignment(assignmentId="assignment-cancel-wt"))
-    await client.post("/api/v1/sync/now")
-    listed = await client.get("/api/v1/remote-tasks")
-    row = next(r for r in listed.json() if r["assignmentId"] == "assignment-cancel-wt")
-    work_task_id = row.get("workTaskId")
-    if not work_task_id:
-        await client.post(f"/api/v1/remote-tasks/{row['id']}/accept")
-        listed = await client.get("/api/v1/remote-tasks")
-        row = next(r for r in listed.json() if r["assignmentId"] == "assignment-cancel-wt")
-        work_task_id = row.get("workTaskId") or row.get("localTaskId")
+async def test_cancel_marks_cancelled(app_client) -> None:
+    _client, supervisor, settings, _hub, app = app_client
+    session_maker = app.state.session_maker
+    center = app.state.service_center
+    session = session_maker()
+    repo = WorkTaskRepository(session)
+    task = await repo.add_task(
+        WorkTask(
+            source="test",
+            title="cancel-me",
+            task_type="coding",
+            status=WorkTaskStatus.QUEUED.value,
+            profile_id="sales-expert",
+            instructions="hang",
+        )
+    )
+    await session.commit()
+    task_id = task.id
+    await session.close()
 
-    cancelled = await client.post(f"/api/v1/work-tasks/{work_task_id}/cancel")
-    assert cancelled.status_code == 200
-    assert cancelled.json()["status"] == WorkTaskStatus.CANCELLED.value
+    from services.work_task_service import WorkTaskService
+
+    session = session_maker()
+    svc = WorkTaskService(settings, session, center, supervisor)
+    cancelled = await svc.cancel(task_id)
+    await session.commit()
+    assert cancelled.status == WorkTaskStatus.CANCELLED.value
+    await session.close()
 
 
-# @lat: [[tests#Work Task Execution#Recovery marks orphaned]]
+# @lat: [[endpoint-sync#Work Task Execution#Task Recovery]]
 @pytest.mark.asyncio
 async def test_recovery_marks_orphaned(app_client) -> None:
     _client, supervisor, settings, _hub, app = app_client
@@ -133,17 +145,13 @@ async def test_recovery_marks_orphaned(app_client) -> None:
     from runtime.tasks.recovery import TaskRecovery
 
     session = session_maker()
-    with patch(
-        "runtime.tasks.hermes_adapter.HermesRuntimeAdapter.health",
-        new=AsyncMock(return_value=False),
-    ):
-        count = await TaskRecovery(settings, session, supervisor, center).recover_on_startup()
-        await session.commit()
+    count = await TaskRecovery(settings, session, supervisor, center).recover_on_startup()
+    await session.commit()
     assert count >= 1
     repo = WorkTaskRepository(session)
     task = await repo.get_task(task_id)
     assert task is not None
-    assert task.status == WorkTaskStatus.ORPHANED.value
+    assert task.status == WorkTaskStatus.INTERRUPTED.value
     await session.close()
 
 
@@ -198,7 +206,7 @@ async def test_executor_uses_adapter_not_stub_text(app_client) -> None:
     assert result is not None
     assert result.status in {WorkTaskStatus.COMPLETED.value, WorkTaskStatus.FINALIZING.value}
     events = await repo.list_events(task.id)
-    deltas = [e for e in events if e.event_type == "agent.message.delta"]
+    deltas = [e for e in events if e.event_type in {"agent.message.delta", "task.message.delta"}]
     assert deltas
     payload = json.loads(deltas[0].payload_json or "{}")
     assert "mock:" in str(payload.get("delta") or "")
@@ -217,6 +225,6 @@ async def test_large_event_payload_artifact(app_client) -> None:
     run = await repo.add_run(TaskRun(task_id=task.id, run_number=1, status="running"))
     store = TaskEventStore(settings, session)
     big = {"data": "x" * INLINE_PAYLOAD_MAX_BYTES}
-    event = await store.append(task_id=task.id, run_id=run.id, event_type="task.progress", payload=big)
+    event = await store.append(task_id=task.id, run_id=run.id, event_type="task.updated", payload=big)
     assert event.payload_artifact_id is not None
     await session.close()

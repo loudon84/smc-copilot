@@ -10,10 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.work_tasks import (
     TaskApproval,
     TaskArtifact,
+    TaskExecutionQueue,
+    TaskInteraction,
     TaskResourceLock,
     TaskRun,
     TaskRunCheckpoint,
     TaskRunEvent,
+    TaskRoutingRule,
     WorkTask,
 )
 
@@ -175,6 +178,141 @@ class WorkTaskRepository:
         )
         return result.scalar_one_or_none()
 
+    async def reclaim_resource_lock(
+        self, task_id: str, resource_type: str, resource_id: str
+    ) -> TaskResourceLock | None:
+        result = await self._s.execute(
+            select(TaskResourceLock).where(
+                TaskResourceLock.resource_type == resource_type,
+                TaskResourceLock.resource_id == resource_id,
+                TaskResourceLock.status == "released",
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        row.task_id = task_id
+        row.status = "held"
+        row.released_at = None
+        await self._s.flush()
+        return row
+
     async def list_runs_by_statuses(self, statuses: list[str], limit: int = 100) -> list[TaskRun]:
         result = await self._s.execute(select(TaskRun).where(TaskRun.status.in_(statuses)).limit(limit))
         return list(result.scalars().all())
+
+    async def add_queue_entry(self, row: TaskExecutionQueue) -> TaskExecutionQueue:
+        self._s.add(row)
+        await self._s.flush()
+        await self._s.refresh(row)
+        return row
+
+    async def get_queue_entry(self, queue_id: str) -> TaskExecutionQueue | None:
+        return await self._s.get(TaskExecutionQueue, queue_id)
+
+    async def get_queue_entry_for_run(self, run_id: str) -> TaskExecutionQueue | None:
+        result = await self._s.execute(
+            select(TaskExecutionQueue)
+            .where(TaskExecutionQueue.run_id == run_id)
+            .order_by(TaskExecutionQueue.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_queue_by_statuses(self, statuses: list[str], limit: int = 200) -> list[TaskExecutionQueue]:
+        result = await self._s.execute(
+            select(TaskExecutionQueue)
+            .where(TaskExecutionQueue.status.in_(statuses))
+            .order_by(TaskExecutionQueue.created_at.asc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def list_approvals(self, task_id: str) -> list[TaskApproval]:
+        result = await self._s.execute(
+            select(TaskApproval).where(TaskApproval.task_id == task_id).order_by(TaskApproval.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_approval(self, approval_id: str) -> TaskApproval | None:
+        return await self._s.get(TaskApproval, approval_id)
+
+    async def list_artifacts(self, task_id: str) -> list[TaskArtifact]:
+        result = await self._s.execute(
+            select(TaskArtifact).where(TaskArtifact.task_id == task_id).order_by(TaskArtifact.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_artifact(self, artifact_id: str) -> TaskArtifact | None:
+        return await self._s.get(TaskArtifact, artifact_id)
+
+    async def list_interactions(self, task_id: str) -> list[TaskInteraction]:
+        result = await self._s.execute(
+            select(TaskInteraction).where(TaskInteraction.task_id == task_id).order_by(TaskInteraction.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def add_interaction(self, row: TaskInteraction) -> TaskInteraction:
+        self._s.add(row)
+        await self._s.flush()
+        await self._s.refresh(row)
+        return row
+
+    async def get_interaction(self, interaction_id: str) -> TaskInteraction | None:
+        return await self._s.get(TaskInteraction, interaction_id)
+
+    async def list_routing_rules(self, *, enabled_only: bool = True) -> list[TaskRoutingRule]:
+        stmt = select(TaskRoutingRule).order_by(TaskRoutingRule.priority.desc(), TaskRoutingRule.task_type)
+        if enabled_only:
+            stmt = stmt.where(TaskRoutingRule.enabled.is_(True))
+        result = await self._s.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_routing_rule(self, task_type: str) -> TaskRoutingRule | None:
+        result = await self._s.execute(
+            select(TaskRoutingRule).where(TaskRoutingRule.task_type == task_type, TaskRoutingRule.enabled.is_(True))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_routing_rule_row(self, task_type: str) -> TaskRoutingRule | None:
+        result = await self._s.execute(select(TaskRoutingRule).where(TaskRoutingRule.task_type == task_type))
+        return result.scalar_one_or_none()
+
+    async def upsert_routing_rule(self, row: TaskRoutingRule) -> TaskRoutingRule:
+        existing = await self.get_routing_rule_row(row.task_type)
+        if existing is not None:
+            existing.profile_type = row.profile_type
+            existing.profile_id = row.profile_id
+            existing.require_approval = row.require_approval
+            existing.priority = row.priority
+            existing.enabled = row.enabled
+            existing.execution_mode = row.execution_mode
+            await self._s.flush()
+            await self._s.refresh(existing)
+            return existing
+        self._s.add(row)
+        await self._s.flush()
+        await self._s.refresh(row)
+        return row
+
+    async def count_queue_by_status(self) -> dict[str, int]:
+        result = await self._s.execute(
+            select(TaskExecutionQueue.status, func.count())
+            .select_from(TaskExecutionQueue)
+            .group_by(TaskExecutionQueue.status)
+        )
+        return {str(status): int(count) for status, count in result.all()}
+
+    async def count_tasks_by_status(self, statuses: list[str]) -> int:
+        result = await self._s.execute(
+            select(func.count()).select_from(WorkTask).where(WorkTask.status.in_(statuses))
+        )
+        return int(result.scalar_one())
+
+    async def count_failed_tasks_since(self, since: datetime) -> int:
+        result = await self._s.execute(
+            select(func.count())
+            .select_from(WorkTask)
+            .where(WorkTask.status == "failed", WorkTask.updated_at >= since)
+        )
+        return int(result.scalar_one())

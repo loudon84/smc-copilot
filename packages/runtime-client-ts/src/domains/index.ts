@@ -81,22 +81,23 @@ export function createApprovalDomain(transport: RuntimeTransport) {
   };
 }
 
-export function createTaskDomain(transport: RuntimeTransport) {
-  return {
-    list: (signal?: AbortSignal) => transport.request({ path: "/api/v1/work-tasks", signal }),
-    create: (body: unknown, signal?: AbortSignal) =>
-      transport.request({ method: "POST", path: "/api/v1/work-tasks", body, signal }),
-    get: (taskId: string, signal?: AbortSignal) =>
-      transport.request({ path: `/api/v1/work-tasks/${enc(taskId)}`, signal }),
-    cancel: (taskId: string, signal?: AbortSignal) =>
-      transport.request({
-        method: "POST",
-        path: `/api/v1/work-tasks/${enc(taskId)}/cancel`,
-        body: {},
-        signal,
-      }),
-  };
-}
+export {
+  createWorkTaskDomain,
+  createTaskDomain,
+  type WorkTaskDomain,
+  type TaskDomain,
+  type WorkTaskCreate,
+  type WorkTaskPatch,
+  type WorkTaskResponse,
+  type WorkTaskListResponse,
+  type WorkTaskAssignBody,
+  type WorkTaskListQuery,
+  type WorkTaskEventsQuery,
+  type WorkTaskSnapshot,
+  type TaskRunResponse,
+  type TaskStartResult,
+  type TaskEventResponse,
+} from "./work-task";
 
 export function createResourceDomain(transport: RuntimeTransport) {
   return {

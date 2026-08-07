@@ -1,13 +1,10 @@
-"""Hermes Gateway runtime adapter (FR-501)."""
+"""Hermes Gateway runtime adapter (FR-501) — Compatibility Adapter after PRD v1.3 Kernel."""
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
-
-import httpx
 
 from core.config import Settings
 from core.errors import GatewayError, HermesClientError
@@ -15,8 +12,7 @@ from core.logging import get_logger
 from db.repositories.profile_repo import ProfileRepository
 from integrations.hermes.client import HermesGatewayClient, extract_run_id
 from integrations.hermes.client_factory import HermesGatewayClientFactory
-from runtime.tasks.event_normalizer import normalize_hermes_sse, parse_sse_block
-from services.chat_stream_service import abort_stream, register_stream
+from services.chat_stream_service import abort_stream
 from services.gateway_credential_service import GatewayCredentialService
 from services.gateway_supervisor import GatewaySupervisor
 
@@ -111,59 +107,19 @@ class HermesRuntimeAdapter:
         session_id: str | None = None,
         stream_id: str | None = None,
     ) -> AsyncIterator[StreamEvent]:
-        ctx = await self.ensure_instance(profile_id)
-        sid = stream_id or f"task_{uuid.uuid4().hex}"
-        cancel = register_stream(sid)
+        """Deprecated: Task streaming must go through AgentExecutionKernel → HermesChatExecutor.
 
-        messages = [{"role": "user", "content": instructions}]
-        payload: dict[str, Any] = {"messages": messages, "stream": True}
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-        }
-        api_key = await GatewayCredentialService(self._settings, self._session).optional_key_for_profile(
-            ctx.profile_name
+        Kept as a Compatibility Adapter stub so callers fail loudly instead of opening a
+        second Hermes HTTP stream.
+        """
+        _ = (profile_id, instructions, session_id, stream_id)
+        raise GatewayError(
+            "HermesRuntimeAdapter.stream_run is removed; use AgentExecutionKernel "
+            "(HermesChatExecutor is the sole owner of /v1/chat/completions)"
         )
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        if session_id:
-            headers["x-hermes-session-id"] = session_id
-
-        url = f"http://127.0.0.1:{ctx.gateway_port}/v1/chat/completions"
-        try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream("POST", url, json=payload, headers=headers) as response:
-                    if response.status_code >= 400:
-                        text = await response.aread()
-                        yield StreamEvent(
-                            event_name="chat.error",
-                            data={
-                                "message": f"HTTP {response.status_code}",
-                                "body": text.decode(errors="replace")[:500],
-                            },
-                        )
-                        return
-
-                    buffer = ""
-                    async for chunk in response.aiter_text():
-                        if cancel.is_set():
-                            yield StreamEvent(event_name="chat.error", data={"message": "aborted"})
-                            return
-                        buffer += chunk
-                        while "\n\n" in buffer:
-                            block, buffer = buffer.split("\n\n", 1)
-                            event_name, data = parse_sse_block(block)
-                            for et, payload in normalize_hermes_sse(event_name, data):
-                                yield StreamEvent(event_name=et, data=payload)
-
-                    if buffer.strip():
-                        event_name, data = parse_sse_block(buffer)
-                        for et, payload in normalize_hermes_sse(event_name, data):
-                            yield StreamEvent(event_name=et, data=payload)
-
-            yield StreamEvent(event_name="agent.message.completed", data={"streamId": sid})
-        finally:
-            abort_stream(sid)
+        # Make this an async generator for type checkers.
+        if False:  # pragma: no cover
+            yield StreamEvent(event_name="chat.error", data={"message": "removed"})
 
     async def cancel_run(self, profile_id: str, run_id: str | None = None, stream_id: str | None = None) -> None:
         if stream_id:

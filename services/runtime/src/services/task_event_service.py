@@ -37,8 +37,11 @@ class TaskEventService:
             "runId": event.run_id,
             "sequence": event.sequence,
             "eventType": event.event_type,
+            "schemaVersion": event.schema_version,
             "payload": payload,
             "payloadArtifactId": event.payload_artifact_id,
+            "visibility": event.visibility,
+            "redactionStatus": event.redaction_status,
             "createdAt": event.created_at.isoformat() if event.created_at else None,
         }
 

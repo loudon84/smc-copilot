@@ -23,6 +23,19 @@ export type {
   ChatClarifyRespondBody,
   ChatApprovalRespondBody,
   ChatInteractionRespondBody,
+  WorkTaskDomain,
+  TaskDomain,
+  WorkTaskCreate,
+  WorkTaskPatch,
+  WorkTaskResponse,
+  WorkTaskListResponse,
+  WorkTaskAssignBody,
+  WorkTaskListQuery,
+  WorkTaskEventsQuery,
+  WorkTaskSnapshot,
+  TaskRunResponse,
+  TaskStartResult,
+  TaskEventResponse,
 } from "./client/create-runtime-client";
 export { RuntimeApiError, normalizeRuntimeError } from "./client/error-normalizer";
 export type { RuntimeApiErrorBody } from "./client/error-normalizer";

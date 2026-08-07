@@ -42,6 +42,7 @@ export {
   REQUIRED_CHAT_FEATURES,
   REQUIRED_TASK_FEATURES,
   REQUIRED_MCP_FEATURES,
+  WORK_TASK_V2_FEATURE,
 } from "./runtime-capability-contract";
 
 export type {

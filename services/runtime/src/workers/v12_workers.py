@@ -17,10 +17,11 @@ from db.models.task_related import SyncOutbox, TaskEvent
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.v12_repos import SyncOutboxRepository, TaskEventRepository, TaskRepository
 from integrations.hermes.client_factory import HermesGatewayClientFactory
+from integrations.service_center.protocol import ServiceCenterClient
 from integrations.team_hub.client import TeamHubClient
 from services.gateway_supervisor import GatewaySupervisor
 from services.task_routing_registry import TaskRoutingRegistry
-from services.task_runtime import TaskRuntimeService
+from services.work_task_service import WorkTaskService
 from services.task_state_machine import assert_transition_allowed
 
 logger = get_logger(__name__)
@@ -35,12 +36,14 @@ class TaskListenerWorker:
         supervisor: GatewaySupervisor,
         hub: TeamHubClient,
         routing: TaskRoutingRegistry,
+        center: ServiceCenterClient,
     ) -> None:
         self._settings = settings
         self._session_maker = session_maker
         self._supervisor = supervisor
         self._hub = hub
         self._routing = routing
+        self._center = center
 
     async def run_forever(self) -> None:
         while True:
@@ -55,10 +58,10 @@ class TaskListenerWorker:
     async def _tick(self) -> None:
         session = self._session_maker()
         try:
-            runtime = TaskRuntimeService(session, self._settings, self._supervisor, self._routing)
+            svc = WorkTaskService(self._settings, session, self._center, self._supervisor)
             assignments = await self._hub.poll_assignments()
             for dto in assignments:
-                await runtime.ingest_assignment(self._hub, dto)
+                await svc.ingest_team_assignment(self._hub, dto)
             await session.commit()
         finally:
             await session.close()

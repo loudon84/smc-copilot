@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { approve, listPendingApprovals, reject } from "../../lib/copilot-serve/approval-client";
 import {
   bindProfile,
@@ -13,8 +13,18 @@ import { pullTeamTasks } from "../../lib/copilot-serve/team-task-client";
 import type { ApprovalRecord, LocalTask, TaskEventRecord, TaskWorkbenchSummary } from "../../lib/copilot-serve/types";
 import { useCopilotHttpConfig } from "../../lib/copilot-serve/use-copilot-http-config";
 import { subscribeSse, type SseMessage } from "../../lib/copilot-serve/workbench-stream";
+import type {
+  WorkTaskDto,
+  WorkTaskEventDto,
+} from "../../../../shared/work-tasks/work-tasks-contract";
+import {
+  createInitialProjection,
+  taskWorkbenchProjectionReducer,
+} from "./taskWorkbenchProjection";
 
-export function TaskWorkbenchScreen(): React.JSX.Element {
+type WorkbenchMode = "checking" | "v2" | "legacy";
+
+function LegacyTaskWorkbench(): React.JSX.Element {
   const { config, loading, error, refresh } = useCopilotHttpConfig();
   const [tasks, setTasks] = useState<LocalTask[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -212,6 +222,7 @@ export function TaskWorkbenchScreen(): React.JSX.Element {
     <div className="flex h-full min-h-0 flex-col gap-2 p-3">
       <header className="flex flex-wrap items-center gap-2 border-b pb-2 text-sm">
         <span className="font-medium">Task Workbench</span>
+        <span className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">legacy</span>
         {summary ? (
           <span className="text-muted-foreground">
             任务 {Object.values(summary.tasks).reduce((a, b) => a + b, 0)} · 待审批{" "}
@@ -368,4 +379,295 @@ export function TaskWorkbenchScreen(): React.JSX.Element {
       </div>
     </div>
   );
+}
+
+function WorkTaskWorkbenchV2(): React.JSX.Element {
+  const [tasks, setTasks] = useState<WorkTaskDto[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [projection, dispatch] = useReducer(
+    taskWorkbenchProjectionReducer,
+    undefined,
+    () => createInitialProjection(),
+  );
+  const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([]);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const reloadLists = useCallback(async () => {
+    const result = await window.workTasks.list({
+      status: statusFilter === "all" ? null : statusFilter,
+      limit: 100,
+    });
+    setTasks(result.items);
+    setLoading(false);
+    if (!selectedId && result.items[0]) {
+      setSelectedId(result.items[0].id);
+    }
+  }, [selectedId, statusFilter]);
+
+  const loadSnapshot = useCallback(async (taskId: string) => {
+    const snap = await window.workTasks.getSnapshot(taskId);
+    dispatch({ type: "reset", task: snap.task, events: snap.events });
+  }, []);
+
+  useEffect(() => {
+    void reloadLists().catch((err: unknown) => {
+      setActionError(err instanceof Error ? err.message : String(err));
+      setLoading(false);
+    });
+  }, [reloadLists]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const rows = await window.profileRuntime.listProfiles();
+        setProfiles(rows.map((p) => ({ id: p.id, name: p.name })));
+      } catch {
+        setProfiles([]);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
+      dispatch({ type: "reset", task: null, events: [] });
+      return;
+    }
+    void loadSnapshot(selectedId).catch((err: unknown) => {
+      setActionError(err instanceof Error ? err.message : String(err));
+    });
+  }, [selectedId, loadSnapshot]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const unsub = window.workTasks.subscribeEvents(
+      { taskId: selectedId, lastEventId: projection.lastEventId },
+      (payload) => {
+        if (payload.event) {
+          dispatch({ type: "append_event", event: payload.event });
+        }
+        void window.workTasks.get(selectedId).then((task) => {
+          dispatch({ type: "patch_task", task });
+          setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+        });
+      },
+    );
+    return unsub;
+    // Intentionally omit projection.lastEventId to avoid resubscribe churn; snapshot seeds it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- subscribe once per selected task
+  }, [selectedId]);
+
+  const runAction = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await fn();
+      await reloadLists();
+      if (selectedId) await loadSnapshot(selectedId);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const detail = projection.task;
+  const timeline: WorkTaskEventDto[] = projection.events;
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        加载 Work Tasks…
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-2 p-3">
+      <header className="flex flex-wrap items-center gap-2 border-b pb-2 text-sm">
+        <span className="font-medium">Task Workbench 2.0</span>
+        <span className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          tasks.work.v2
+        </span>
+        <span className="text-muted-foreground">任务 {tasks.length}</span>
+        <select
+          className="rounded border px-2 py-1 text-xs"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="all">All</option>
+          <option value="running">Running</option>
+          <option value="waiting_approval">Waiting Approval</option>
+          <option value="waiting_input">Waiting Input</option>
+          <option value="failed">Failed</option>
+          <option value="completed">Completed</option>
+        </select>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded border px-2 py-1"
+            disabled={busy}
+            onClick={() =>
+              void runAction(async () => {
+                await window.workTasks.create({
+                  title: `Task ${new Date().toLocaleTimeString()}`,
+                  taskType: "coding",
+                });
+              })
+            }
+          >
+            新建任务
+          </button>
+        </div>
+      </header>
+
+      {actionError ? <p className="text-xs text-destructive">{actionError}</p> : null}
+
+      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_280px] gap-3">
+        <aside className="flex min-h-0 flex-col overflow-auto rounded border">
+          {tasks.length === 0 ? (
+            <p className="p-3 text-xs text-muted-foreground">暂无任务</p>
+          ) : (
+            <ul>
+              {tasks.map((task) => (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    className={`w-full px-3 py-2 text-left text-xs hover:bg-muted ${
+                      selectedId === task.id ? "bg-muted font-medium" : ""
+                    }`}
+                    onClick={() => setSelectedId(task.id)}
+                  >
+                    <div className="truncate">{task.title}</div>
+                    <div className="text-muted-foreground">{task.status}</div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+
+        <section className="flex min-h-0 flex-col overflow-auto rounded border p-3 text-sm">
+          {!detail ? (
+            <p className="text-muted-foreground">选择任务查看详情</p>
+          ) : (
+            <>
+              <h2 className="text-base font-semibold">{detail.title}</h2>
+              <p className="text-xs text-muted-foreground">状态：{detail.status}</p>
+              <p className="text-xs text-muted-foreground">类型：{detail.taskType}</p>
+              {detail.errorMessage ? (
+                <p className="mt-2 text-xs text-destructive">{detail.errorMessage}</p>
+              ) : null}
+
+              <label className="mt-3 block text-xs">
+                分配 Profile
+                <select
+                  className="mt-1 w-full rounded border px-2 py-1"
+                  value={detail.assignedProfileId ?? detail.profileId ?? ""}
+                  onChange={(e) =>
+                    void runAction(async () => {
+                      if (!e.target.value) return;
+                      await window.workTasks.assign(detail.id, { profileId: e.target.value });
+                    })
+                  }
+                >
+                  <option value="">未分配</option>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded border px-2 py-1"
+                  disabled={busy}
+                  onClick={() => void runAction(async () => { await window.workTasks.start(detail.id); })}
+                >
+                  Start
+                </button>
+                <button
+                  type="button"
+                  className="rounded border px-2 py-1"
+                  disabled={busy}
+                  onClick={() => void runAction(async () => { await window.workTasks.retry(detail.id); })}
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  className="rounded border px-2 py-1"
+                  disabled={busy}
+                  onClick={() => void runAction(async () => { await window.workTasks.cancel(detail.id); })}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        <aside className="flex min-h-0 flex-col overflow-auto rounded border p-2 text-xs">
+          <p className="mb-2 font-medium">Execution Timeline</p>
+          {timeline.length === 0 ? (
+            <p className="text-muted-foreground">暂无事件</p>
+          ) : (
+            <ul className="space-y-2">
+              {timeline.map((ev) => (
+                <li key={ev.id} className="rounded border p-2">
+                  <div className="font-medium">{ev.eventType}</div>
+                  {ev.runId ? <div className="text-muted-foreground">run: {ev.runId}</div> : null}
+                  <div className="text-muted-foreground">
+                    seq {ev.sequence}
+                    {ev.createdAt ? ` · ${ev.createdAt}` : ""}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+export function TaskWorkbenchScreen(): React.JSX.Element {
+  const [mode, setMode] = useState<WorkbenchMode>("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const hasV2 =
+          typeof window.workTasks?.hasWorkV2 === "function"
+            ? await window.workTasks.hasWorkV2()
+            : false;
+        if (!cancelled) setMode(hasV2 ? "v2" : "legacy");
+      } catch {
+        if (!cancelled) setMode("legacy");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (mode === "checking") {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        检测 Runtime capability…
+      </div>
+    );
+  }
+
+  if (mode === "v2") {
+    return <WorkTaskWorkbenchV2 />;
+  }
+
+  return <LegacyTaskWorkbench />;
 }

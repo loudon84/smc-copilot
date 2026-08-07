@@ -123,6 +123,7 @@ def _build_supervisor(
                         supervisor=gateway_supervisor,
                         hub=hub,
                         routing=registry,
+                        center=center,
                     )
                 ),
                 interval_seconds=settings.task_poll_interval_seconds,
@@ -273,6 +274,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.team_hub = hub
     app.state.service_center = center
     app.state.task_routing_registry = registry
+
+    async with session_maker() as session:
+        await registry.load_from_db(session)
     app.state.runtime_job_service = job_service
     app.state.process_lock = process_lock
 
@@ -296,10 +300,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await recover_chat_turns(session_maker)
         except Exception:
             logger.exception("chat_turn_recovery_failed")
+        try:
+            from runtime.tasks.task_recovery_service import recover_task_runtime
+
+            await recover_task_runtime(
+                session_maker,
+                settings=settings,
+                supervisor=supervisor,
+                center=center,
+            )
+        except Exception:
+            logger.exception("task_runtime_recovery_failed")
     else:
         from services.chat_turn_scheduler import ChatTurnScheduler
 
         ChatTurnScheduler.configure(session_maker)
+        try:
+            from runtime.tasks.task_worker_manager import TaskWorkerManager
+
+            TaskWorkerManager.configure(
+                settings=settings,
+                session_maker=session_maker,
+                center=center,
+                supervisor=supervisor,
+            )
+        except Exception:
+            logger.exception("task_worker_manager_configure_failed")
 
     if not bool(getattr(app.state, "_disable_gateway_autostart", False)):
         await supervisor.reconcile_instances_on_boot()

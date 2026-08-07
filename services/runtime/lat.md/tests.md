@@ -318,6 +318,34 @@ Executor 经 MockHermesRuntimeAdapter 产出 `agent.message.delta`，不得返�
 
 事件 inline payload 超过 64KB 时写入 `task_artifacts` 并在事件中引用 `payload_artifact_id`。
 
+## Work Task Runtime E2E
+
+`tests/test_v13_task_runtime_e2e.py` 覆盖 PRD v1.3 Phase 9：L1 happy path、Fake Hermes 场景、恢复与资源锁。
+
+### L1 happy path
+
+HTTP create → assign → start（workers 禁用时 inline execute）→ completed，并断言 `task.started` / `task.message.delta` / `task.completed` 事件。
+
+### L2 Fake Hermes scenarios
+
+[[tests/support/scenario_hermes_adapter.py#ScenarioHermesRuntimeAdapter]] 参数化场景：message delta、tool、usage、approval pause、fail、cancel。
+
+### Queued entry survives recovery
+
+启动恢复后 queued 队列行仍为 `queued`，任务保持 `queued` 状态。
+
+### Running interrupted on recovery
+
+running 队列行在 `TaskRecoveryService.recover_on_startup` 后标为 `interrupted`，写 `task.interrupted`，不重发 Hermes。
+
+### Resource lock exclusivity
+
+同 workspace 第二任务无法 claim 锁；释放锁后可继续执行。
+
+### Snapshot API
+
+`GET /work-tasks/{id}/snapshot` 返回 task、runs、events、approvals、artifacts 聚合。
+
 ## Experience redaction and candidates
 
 `tests/test_experience.py` 验证 Experience 脱敏与 candidate 提交路径。

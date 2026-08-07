@@ -2079,9 +2079,15 @@ components:
             - resources.actual-state-probe
             - resources.artifact-cache-v2
             - tasks.local-control-plane
+            - tasks.work.v2
+            - tasks.durable-scheduler
             - tasks.hermes-execution
             - tasks.event-store
             - tasks.event-replay
+            - tasks.artifacts
+            - tasks.interactions
+            - tasks.resource-locks
+            - tasks.chat-binding
             - tasks.cancel
             - tasks.recovery
             - tasks.scheduler
@@ -2350,9 +2356,15 @@ components:
             - resources.actual-state-probe
             - resources.artifact-cache-v2
             - tasks.local-control-plane
+            - tasks.work.v2
+            - tasks.durable-scheduler
             - tasks.hermes-execution
             - tasks.event-store
             - tasks.event-replay
+            - tasks.artifacts
+            - tasks.interactions
+            - tasks.resource-locks
+            - tasks.chat-binding
             - tasks.cancel
             - tasks.recovery
             - tasks.scheduler
@@ -2669,42 +2681,198 @@ components:
       - default_gateway_port
       title: SystemInfoResponse
       type: object
-    TaskEventResponse:
+    TaskApprovalResponse:
       properties:
-        created_at:
-          format: date-time
-          title: Created At
-          type: string
-        event_payload:
+        createdAt:
           anyOf:
-          - type: string
+          - format: date-time
+            type: string
           - type: 'null'
-          title: Event Payload
-        event_type:
-          title: Event Type
-          type: string
+          title: Createdat
         id:
           title: Id
           type: string
-        message:
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        resolvedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Resolvedat
+        runId:
           anyOf:
           - type: string
           - type: 'null'
-          title: Message
-        run_id:
+          title: Runid
+        status:
+          title: Status
+          type: string
+        taskId:
+          title: Taskid
+          type: string
+        toolCallId:
           anyOf:
           - type: string
           - type: 'null'
-          title: Run Id
-        task_id:
-          title: Task Id
+          title: Toolcallid
+      required:
+      - id
+      - taskId
+      - status
+      title: TaskApprovalResponse
+      type: object
+    TaskArtifactOpenResult:
+      properties:
+        localPath:
+          title: Localpath
+          type: string
+      required:
+      - localPath
+      title: TaskArtifactOpenResult
+      type: object
+    TaskArtifactResponse:
+      properties:
+        artifactType:
+          title: Artifacttype
+          type: string
+        checksum:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checksum
+        contentType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contenttype
+        createdAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdat
+        id:
+          title: Id
+          type: string
+        localPath:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Localpath
+        remoteUrl:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Remoteurl
+        runId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Runid
+        sizeBytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sizebytes
+        taskId:
+          title: Taskid
+          type: string
+        uploadStatus:
+          default: pending
+          title: Uploadstatus
           type: string
       required:
       - id
-      - task_id
-      - event_type
-      - created_at
-      title: TaskEventResponse
+      - taskId
+      - artifactType
+      title: TaskArtifactResponse
+      type: object
+    TaskArtifactSaveAsBody:
+      properties:
+        destinationPath:
+          minLength: 1
+          title: Destinationpath
+          type: string
+      required:
+      - destinationPath
+      title: TaskArtifactSaveAsBody
+      type: object
+    TaskInteractionResolveBody:
+      properties:
+        response:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Response
+      title: TaskInteractionResolveBody
+      type: object
+    TaskInteractionResponse:
+      properties:
+        createdAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdat
+        id:
+          title: Id
+          type: string
+        interactionType:
+          title: Interactiontype
+          type: string
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        prompt:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Prompt
+        resolvedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Resolvedat
+        response:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Response
+        runId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Runid
+        status:
+          title: Status
+          type: string
+        taskId:
+          title: Taskid
+          type: string
+        updatedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Updatedat
+      required:
+      - id
+      - taskId
+      - interactionType
+      - status
+      title: TaskInteractionResponse
       type: object
     TaskRoutingPatch:
       properties:
@@ -2727,6 +2895,146 @@ components:
       required:
       - rules
       title: TaskRoutingRulesResponse
+      type: object
+    TaskRunResponse:
+      properties:
+        chatRunId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chatrunid
+        createdAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdat
+        errorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errorcode
+        errorDetail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errordetail
+        exitReason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Exitreason
+        finishedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Finishedat
+        gatewayInstanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gatewayinstanceid
+        hermesSessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hermessessionid
+        id:
+          title: Id
+          type: string
+        leaseId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Leaseid
+        runNumber:
+          title: Runnumber
+          type: integer
+        startedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Startedat
+        status:
+          title: Status
+          type: string
+        taskId:
+          title: Taskid
+          type: string
+        updatedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Updatedat
+        usage:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Usage
+      required:
+      - id
+      - taskId
+      - runNumber
+      - status
+      title: TaskRunResponse
+      type: object
+    TaskSnapshotResponse:
+      properties:
+        activeRun:
+          anyOf:
+          - $ref: '#/components/schemas/TaskRunResponse'
+          - type: 'null'
+        approvals:
+          items:
+            $ref: '#/components/schemas/TaskApprovalResponse'
+          title: Approvals
+          type: array
+        artifacts:
+          items:
+            $ref: '#/components/schemas/TaskArtifactResponse'
+          title: Artifacts
+          type: array
+        events:
+          items:
+            $ref: '#/components/schemas/schemas__work_tasks__TaskEventResponse'
+          title: Events
+          type: array
+        interactions:
+          items:
+            $ref: '#/components/schemas/TaskInteractionResponse'
+          title: Interactions
+          type: array
+        runtime:
+          additionalProperties: true
+          title: Runtime
+          type: object
+        task:
+          $ref: '#/components/schemas/WorkTaskResponse'
+      required:
+      - task
+      title: TaskSnapshotResponse
+      type: object
+    TaskStartResult:
+      properties:
+        runId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Runid
+        status:
+          default: queued
+          title: Status
+          type: string
+        taskId:
+          title: Taskid
+          type: string
+      required:
+      - taskId
+      title: TaskStartResult
       type: object
     TaskWorkbenchSummary:
       properties:
@@ -2773,19 +3081,25 @@ components:
           title: Id
           type: string
         local_task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Local Task Id
-          type: string
         remote_task_id:
           title: Remote Task Id
           type: string
         sync_status:
           title: Sync Status
           type: string
+        work_task_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Work Task Id
       required:
       - id
       - remote_task_id
       - assignment_id
-      - local_task_id
       - sync_status
       - created_at
       title: TeamTaskBindingResponse
@@ -2853,6 +3167,421 @@ components:
       - msg
       - type
       title: ValidationError
+      type: object
+    WorkTaskAssignBody:
+      properties:
+        instanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+        profileId:
+          minLength: 1
+          title: Profileid
+          type: string
+      required:
+      - profileId
+      title: WorkTaskAssignBody
+      type: object
+    WorkTaskCreate:
+      properties:
+        approvalPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Approvalpolicy
+        assignmentId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignmentid
+        chatRunId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chatrunid
+        createdBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdby
+        dataPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Datapolicy
+        deadline:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Deadline
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        instanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+        instructions:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instructions
+        parentTaskId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parenttaskid
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        priority:
+          default: 0
+          title: Priority
+          type: integer
+        profileId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profileid
+        source:
+          default: local
+          title: Source
+          type: string
+        sourceTaskId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sourcetaskid
+        taskType:
+          default: coding
+          enum:
+          - chat
+          - expert
+          - expert_team
+          - web
+          - workflow
+          - coding
+          - business
+          - remote_assignment
+          title: Tasktype
+          type: string
+        title:
+          minLength: 1
+          title: Title
+          type: string
+        toolPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Toolpolicy
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+        workspacePolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Workspacepolicy
+      required:
+      - title
+      title: WorkTaskCreate
+      type: object
+    WorkTaskListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/WorkTaskResponse'
+          title: Items
+          type: array
+        nextCursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Nextcursor
+      required:
+      - items
+      title: WorkTaskListResponse
+      type: object
+    WorkTaskPatch:
+      properties:
+        approvalPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Approvalpolicy
+        chatRunId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chatrunid
+        dataPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Datapolicy
+        deadline:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Deadline
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        instanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+        instructions:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instructions
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        priority:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Priority
+        profileId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profileid
+        resultSummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resultsummary
+        taskType:
+          anyOf:
+          - enum:
+            - chat
+            - expert
+            - expert_team
+            - web
+            - workflow
+            - coding
+            - business
+            - remote_assignment
+            type: string
+          - type: 'null'
+          title: Tasktype
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        toolPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Toolpolicy
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+        workspacePolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Workspacepolicy
+      title: WorkTaskPatch
+      type: object
+    WorkTaskResponse:
+      properties:
+        activeRunId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Activerunid
+        approvalPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Approvalpolicy
+        assignedInstanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignedinstanceid
+        assignedProfileId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignedprofileid
+        assignmentId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignmentid
+        chatRunId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chatrunid
+        completedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Completedat
+        createdAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdat
+        createdBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdby
+        dataPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Datapolicy
+        deadline:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Deadline
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        errorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errorcode
+        errorMessage:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errormessage
+        id:
+          title: Id
+          type: string
+        instanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+        instructions:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instructions
+        legacySourceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Legacysourceid
+        parentTaskId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parenttaskid
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        priority:
+          title: Priority
+          type: integer
+        profileId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profileid
+        resultSummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resultsummary
+        source:
+          title: Source
+          type: string
+        sourceTaskId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sourcetaskid
+        status:
+          title: Status
+          type: string
+        taskType:
+          title: Tasktype
+          type: string
+        title:
+          title: Title
+          type: string
+        toolPolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Toolpolicy
+        updatedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Updatedat
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+        workspacePolicy:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Workspacepolicy
+      required:
+      - id
+      - source
+      - title
+      - taskType
+      - priority
+      - status
+      title: WorkTaskResponse
       type: object
     WorkspaceChatAbortResponse:
       properties:
@@ -3057,6 +3786,97 @@ components:
       required:
       - path
       title: WorkspaceValidatePath
+      type: object
+    schemas__v12_tasks__TaskEventResponse:
+      properties:
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        event_payload:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Payload
+        event_type:
+          title: Event Type
+          type: string
+        id:
+          title: Id
+          type: string
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        run_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Run Id
+        task_id:
+          title: Task Id
+          type: string
+      required:
+      - id
+      - task_id
+      - event_type
+      - created_at
+      title: TaskEventResponse
+      type: object
+    schemas__work_tasks__TaskEventResponse:
+      properties:
+        createdAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdat
+        eventType:
+          title: Eventtype
+          type: string
+        id:
+          title: Id
+          type: string
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        payloadArtifactId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Payloadartifactid
+        redactionStatus:
+          default: redacted
+          title: Redactionstatus
+          type: string
+        runId:
+          title: Runid
+          type: string
+        schemaVersion:
+          default: '1'
+          title: Schemaversion
+          type: string
+        sequence:
+          title: Sequence
+          type: integer
+        taskId:
+          title: Taskid
+          type: string
+        visibility:
+          default: internal
+          title: Visibility
+          type: string
+      required:
+      - id
+      - taskId
+      - runId
+      - sequence
+      - eventType
+      title: TaskEventResponse
       type: object
 info:
   description: Local Hermes Runtime Service for smc-copilot-desktop
@@ -9875,7 +10695,9 @@ paths:
         name: limit
         required: false
         schema:
-          default: 200
+          default: 50
+          maximum: 100
+          minimum: 1
           title: Limit
           type: integer
       - in: header
@@ -10118,7 +10940,7 @@ paths:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/TaskEventResponse'
+                  $ref: '#/components/schemas/schemas__v12_tasks__TaskEventResponse'
                 title: Response List Events Api V1 Tasks  Task Id  Events Get
                 type: array
           description: Successful Response
@@ -10502,6 +11324,97 @@ paths:
     get:
       operationId: list_work_tasks_api_v1_work_tasks_get
       parameters:
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 100
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - in: query
+        name: status
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - in: query
+        name: taskType
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tasktype
+      - in: query
+        name: source
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+      - in: query
+        name: profileId
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profileid
+      - in: query
+        name: instanceId
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+      - in: query
+        name: workspaceId
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+      - in: query
+        name: search
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      - in: query
+        name: createdAfter
+        required: false
+        schema:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdafter
+      - in: query
+        name: createdBefore
+        required: false
+        schema:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Createdbefore
       - in: header
         name: Authorization
         required: false
@@ -10523,11 +11436,7 @@ paths:
           content:
             application/json:
               schema:
-                items:
-                  additionalProperties: true
-                  type: object
-                title: Response List Work Tasks Api V1 Work Tasks Get
-                type: array
+                $ref: '#/components/schemas/WorkTaskListResponse'
           description: Successful Response
         '422':
           content:
@@ -10538,7 +11447,85 @@ paths:
       summary: List Work Tasks
       tags:
       - work-tasks
+    post:
+      operationId: create_work_task_api_v1_work_tasks_post
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkTaskCreate'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkTaskResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Work Task
+      tags:
+      - work-tasks
   /api/v1/work-tasks/{task_id}:
+    delete:
+      operationId: delete_work_task_api_v1_work_tasks__task_id__delete
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Delete Work Task
+      tags:
+      - work-tasks
     get:
       operationId: get_work_task_api_v1_work_tasks__task_id__get
       parameters:
@@ -10569,9 +11556,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Get Work Task Api V1 Work Tasks  Task Id  Get
-                type: object
+                $ref: '#/components/schemas/WorkTaskResponse'
           description: Successful Response
         '422':
           content:
@@ -10580,6 +11565,440 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Get Work Task
+      tags:
+      - work-tasks
+    patch:
+      operationId: patch_work_task_api_v1_work_tasks__task_id__patch
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkTaskPatch'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkTaskResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Patch Work Task
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/approvals:
+    get:
+      operationId: list_task_approvals_api_v1_work_tasks__task_id__approvals_get
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/TaskApprovalResponse'
+                title: Response List Task Approvals Api V1 Work Tasks  Task Id  Approvals Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Task Approvals
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/approvals/{approval_id}/approve:
+    post:
+      operationId: approve_task_api_v1_work_tasks__task_id__approvals__approval_id__approve_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: path
+        name: approval_id
+        required: true
+        schema:
+          title: Approval Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskApprovalResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Approve Task
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/approvals/{approval_id}/reject:
+    post:
+      operationId: reject_task_approval_api_v1_work_tasks__task_id__approvals__approval_id__reject_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: path
+        name: approval_id
+        required: true
+        schema:
+          title: Approval Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskApprovalResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Reject Task Approval
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/artifacts:
+    get:
+      operationId: list_task_artifacts_api_v1_work_tasks__task_id__artifacts_get
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/TaskArtifactResponse'
+                title: Response List Task Artifacts Api V1 Work Tasks  Task Id  Artifacts Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Task Artifacts
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/artifacts/{artifact_id}:
+    get:
+      operationId: get_task_artifact_api_v1_work_tasks__task_id__artifacts__artifact_id__get
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: path
+        name: artifact_id
+        required: true
+        schema:
+          title: Artifact Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskArtifactResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Task Artifact
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/artifacts/{artifact_id}/open:
+    post:
+      operationId: open_task_artifact_api_v1_work_tasks__task_id__artifacts__artifact_id__open_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: path
+        name: artifact_id
+        required: true
+        schema:
+          title: Artifact Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskArtifactOpenResult'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Open Task Artifact
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/artifacts/{artifact_id}/save-as:
+    post:
+      operationId: save_task_artifact_as_api_v1_work_tasks__task_id__artifacts__artifact_id__save_as_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: path
+        name: artifact_id
+        required: true
+        schema:
+          title: Artifact Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskArtifactSaveAsBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                title: Response Save Task Artifact As Api V1 Work Tasks  Task Id  Artifacts  Artifact Id  Save As Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Save Task Artifact As
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/assign:
+    post:
+      operationId: assign_work_task_api_v1_work_tasks__task_id__assign_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkTaskAssignBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkTaskResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Assign Work Task
       tags:
       - work-tasks
   /api/v1/work-tasks/{task_id}/cancel:
@@ -10613,9 +12032,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Cancel Work Task Api V1 Work Tasks  Task Id  Cancel Post
-                type: object
+                $ref: '#/components/schemas/WorkTaskResponse'
           description: Successful Response
         '422':
           content:
@@ -10636,6 +12053,14 @@ paths:
         schema:
           title: Task Id
           type: string
+      - in: query
+        name: afterSequence
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Aftersequence
       - in: query
         name: after_sequence
         required: false
@@ -10666,8 +12091,7 @@ paths:
             application/json:
               schema:
                 items:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/components/schemas/schemas__work_tasks__TaskEventResponse'
                 title: Response List Task Events Api V1 Work Tasks  Task Id  Events Get
                 type: array
           description: Successful Response
@@ -10721,9 +12145,9 @@ paths:
       summary: Stream Task Events
       tags:
       - work-tasks
-  /api/v1/work-tasks/{task_id}/retry:
-    post:
-      operationId: retry_work_task_api_v1_work_tasks__task_id__retry_post
+  /api/v1/work-tasks/{task_id}/interactions:
+    get:
+      operationId: list_task_interactions_api_v1_work_tasks__task_id__interactions_get
       parameters:
       - in: path
         name: task_id
@@ -10752,9 +12176,106 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Retry Work Task Api V1 Work Tasks  Task Id  Retry Post
-                type: object
+                items:
+                  $ref: '#/components/schemas/TaskInteractionResponse'
+                title: Response List Task Interactions Api V1 Work Tasks  Task Id  Interactions Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Task Interactions
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/interactions/{interaction_id}/resolve:
+    post:
+      operationId: resolve_task_interaction_api_v1_work_tasks__task_id__interactions__interaction_id__resolve_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: path
+        name: interaction_id
+        required: true
+        schema:
+          title: Interaction Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskInteractionResolveBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskInteractionResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Resolve Task Interaction
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/retry:
+    post:
+      operationId: retry_work_task_api_v1_work_tasks__task_id__retry_post
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStartResult'
           description: Successful Response
         '422':
           content:
@@ -10797,8 +12318,7 @@ paths:
             application/json:
               schema:
                 items:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/components/schemas/TaskRunResponse'
                 title: Response List Task Runs Api V1 Work Tasks  Task Id  Runs Get
                 type: array
           description: Successful Response
@@ -10809,6 +12329,48 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: List Task Runs
+      tags:
+      - work-tasks
+  /api/v1/work-tasks/{task_id}/snapshot:
+    get:
+      operationId: get_task_snapshot_api_v1_work_tasks__task_id__snapshot_get
+      parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskSnapshotResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Task Snapshot
       tags:
       - work-tasks
   /api/v1/work-tasks/{task_id}/start:
@@ -10838,13 +12400,11 @@ paths:
           - type: 'null'
           title: X-Copilot-Desktop-Token
       responses:
-        '200':
+        '202':
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Start Work Task Api V1 Work Tasks  Task Id  Start Post
-                type: object
+                $ref: '#/components/schemas/TaskStartResult'
           description: Successful Response
         '422':
           content:

@@ -36,6 +36,7 @@ import { copilotServeApi } from "./copilot-serve-api";
 import { copilotRuntimeApi } from "./copilot-runtime-api";
 import { workspaceChatApi } from "./workspace-chat-api";
 import { workApiBridge } from "./work-api";
+import { workTasksApi } from "./work-tasks-api";
 import { hermesDefaultChatApi } from "./hermes-default-chat-api";
 import { chatRuntimeApi } from "./chat-runtime-api";
 import { chatFilesApi } from "./chat-files-api";
@@ -914,6 +915,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("hermesExperts", hermesExpertsApi);
     contextBridge.exposeInMainWorld("hermesMcpConfig", hermesMcpConfigApi);
     contextBridge.exposeInMainWorld("work", workApiBridge);
+    contextBridge.exposeInMainWorld("workTasks", workTasksApi);
   } catch (error) {
     console.error(error);
   }
@@ -972,4 +974,6 @@ if (process.contextIsolated) {
   window.hermesMcpConfig = hermesMcpConfigApi;
   // @ts-ignore (define in dts)
   window.work = workApiBridge;
+  // @ts-ignore (define in dts)
+  window.workTasks = workTasksApi;
 }

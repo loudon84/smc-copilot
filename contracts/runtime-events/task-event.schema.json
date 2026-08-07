@@ -1,0 +1,1099 @@
+{
+  "$id": "https://smc-copilot.local/contracts/runtime-events/task-event.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.approval.requested",
+          "default": "task.approval.requested",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.approval.requested",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.approval.resolved",
+          "default": "task.approval.resolved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.approval.resolved",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.artifact.created",
+          "default": "task.artifact.created",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.artifact.created",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.cancelled",
+          "default": "task.cancelled",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.cancelled",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.completed",
+          "default": "task.completed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.completed",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.created",
+          "default": "task.created",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.created",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.failed",
+          "default": "task.failed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.failed",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.input.requested",
+          "default": "task.input.requested",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.input.requested",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.input.resolved",
+          "default": "task.input.resolved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.input.resolved",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.interrupted",
+          "default": "task.interrupted",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.interrupted",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.message.completed",
+          "default": "task.message.completed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.message.completed",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.message.delta",
+          "default": "task.message.delta",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.message.delta",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.queued",
+          "default": "task.queued",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.queued",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.reasoning.delta",
+          "default": "task.reasoning.delta",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.reasoning.delta",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.started",
+          "default": "task.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.started",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.tool.completed",
+          "default": "task.tool.completed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.tool.completed",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.tool.failed",
+          "default": "task.tool.failed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.tool.failed",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.tool.progress",
+          "default": "task.tool.progress",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.tool.progress",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.tool.started",
+          "default": "task.tool.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.tool.started",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.updated",
+          "default": "task.updated",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.updated",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "taskId": {
+          "title": "Taskid",
+          "type": "string"
+        },
+        "timestamp": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timestamp"
+        },
+        "type": {
+          "const": "task.usage.updated",
+          "default": "task.usage.updated",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "taskId",
+        "runId",
+        "sequence",
+        "type"
+      ],
+      "title": "task.usage.updated",
+      "type": "object"
+    }
+  ],
+  "title": "WorkTaskEvent"
+}

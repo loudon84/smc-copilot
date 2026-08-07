@@ -109,3 +109,11 @@ Details about this child topic.
 
 The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.
 %% lat:end %%
+
+## Work Task Runtime (v1.3)
+
+- **SOT**: `WorkTask` + durable `task_execution_queue`; legacy `LocalTask` retained at `/api/v1/tasks`.
+- **Kernel**: [[runtime/execution/kernel.py#AgentExecutionKernel]] — sole Hermes execution facade for task runs.
+- **Guards**: `npm run guard` in `services/runtime/` (no direct Hermes in `runtime/tasks/`, state machine, contract drift).
+- **E2E**: `tests/test_v13_task_runtime_e2e.py`
+- **Docs**: `docs/architecture/work-task-runtime.md`

@@ -14,6 +14,10 @@ packages/runtime-client-ts (@smc/runtime-client)
 Desktop Main (only)
 ```
 
+## Work Task runtime (v1.3)
+
+WorkTask durable execution, Kernel, and 21 event types are documented in [work-task-runtime.md](./work-task-runtime.md). Event schema: `contracts/runtime-events/task-event.schema.json` (`runtimeEvents` in `contracts/version.json`).
+
 ## Governance
 
 - Source of truth: Runtime FastAPI + Pydantic (not hand-written OpenAPI). Desktop no longer keeps an OpenAPI snapshot.

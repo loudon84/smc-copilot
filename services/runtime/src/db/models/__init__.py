@@ -58,10 +58,13 @@ from db.models.task_related import Approval, AuditLog, SyncOutbox, TaskEvent, Te
 from db.models.work_tasks import (
     TaskApproval,
     TaskArtifact,
+    TaskExecutionQueue,
+    TaskInteraction,
     TaskResourceLock,
     TaskRun,
     TaskRunCheckpoint,
     TaskRunEvent,
+    TaskRoutingRule,
     WorkTask,
 )
 from db.models.workspace_db import Workspace
@@ -125,7 +128,10 @@ __all__ = [
     "TaskArtifact",
     "TaskDeliveryRecord",
     "TaskEvent",
+    "TaskExecutionQueue",
+    "TaskInteraction",
     "TaskLease",
+    "TaskRoutingRule",
     "TaskResourceLock",
     "TaskRun",
     "TaskRunCheckpoint",

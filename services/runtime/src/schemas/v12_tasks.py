@@ -121,7 +121,8 @@ class TeamTaskBindingResponse(BaseModel):
     id: str
     remote_task_id: str
     assignment_id: str
-    local_task_id: str
+    local_task_id: str | None = None
+    work_task_id: str | None = None
     sync_status: str
     created_at: datetime
 

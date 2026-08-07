@@ -25,6 +25,7 @@ class TaskRunService:
                 "taskId": r.task_id,
                 "runNumber": r.run_number,
                 "status": r.status,
+                "chatRunId": r.chat_run_id,
                 "hermesSessionId": r.hermes_session_id,
                 "gatewayInstanceId": r.gateway_instance_id,
                 "leaseId": r.lease_id,
@@ -34,6 +35,8 @@ class TaskRunService:
                 "usage": json.loads(r.usage_json) if r.usage_json else None,
                 "errorCode": r.error_code,
                 "errorDetail": r.error_detail,
+                "createdAt": r.created_at.isoformat() if r.created_at else None,
+                "updatedAt": r.updated_at.isoformat() if r.updated_at else None,
             }
             for r in runs
         ]

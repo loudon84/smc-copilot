@@ -98,6 +98,7 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 | `window.hermesMcpConfig` | `src/preload/hermes-mcp-config-api.ts` | **v7.6** Hermes Agent `mcp_servers` 配置（读写 `config.yaml` + `.env` token 掩码）；**不向 Renderer 暴露 token** |
 | `window.nodeskclawRuntimeSkillAPI` | `src/preload/nodeskclaw-runtime-skill-api.ts` | **v7.5.1** legacy Runtime Skill 路由；**v7.6 Chat 业务禁止** |
 | `window.work` | `src/preload/work-api.ts` | **v7.4.1 Work 任务 Hotfix** `task.start` / `resume` / `list` / `getBySession`；首条消息走 `hermesDefaultChat`；元数据 `work-tasks.json`；legacy `send`/`onEvent` 保留 |
+| `window.workTasks` | `src/preload/work-tasks-api.ts` | **v1.3 Workbench 2.0** WorkTask CRUD / assign / start / snapshot / SSE；Main-only `@smc/runtime-client` → `/api/v1/work-tasks`（**禁止** Renderer 直调 `/api/v1/tasks`） |
 
 类型定义：`src/preload/index.d.ts`。契约类型：`src/shared/profile-runtime/`、`src/shared/enterprise/`、**`src/shared/mcp/`（V6.1）**、**`src/shared/mcp-skill-gateway-runtime/`（V6.4）**、**`src/shared/genehub/`（V6.5）**、**`src/shared/hermes-mcp-config/`（v7.6）**、**`src/shared/nodeskclaw/`（v7.5.1）**、**`src/shared/work/`（v1.4）**、**`src/shared/chat-runtime/` + `src/shared/chat-files/`（v8.0）**。
 
@@ -709,3 +710,9 @@ Details about this child topic.
 
 The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.
 %% lat:end %%
+
+## Work Tasks (v1.3)
+
+- **Workbench 2.0**: Renderer → `window.workTasks` → Main IPC → `@smc/runtime-client` → `GET/POST /api/v1/work-tasks*`. Do not call legacy `/api/v1/tasks` from Workbench 2.0 code.
+- CI guard: `npm run check:no-legacy-local-task-client` (included in `npm run guard`).
+- Architecture: `docs/architecture/work-task-runtime.md`.
