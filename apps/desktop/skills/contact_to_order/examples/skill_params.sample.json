@@ -1,0 +1,5 @@
+{
+  "skill": "contact_to_order",
+  "issmple": "1",
+  "callbackURL": "http://192.168.99.35:8080/sdms/om/sdms_om_main/sdmsOmMain.do?method=addSoDesktop&tempType="
+}

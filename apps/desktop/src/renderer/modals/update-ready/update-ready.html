@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Update Ready</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.2s ease-out;
+      }
+
+      .modal-container {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        width: 400px;
+        max-width: 90vw;
+        overflow: hidden;
+        animation: slideUp 0.3s ease-out;
+      }
+
+      .modal-header {
+        padding: 24px 24px 16px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0 0 4px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .modal-subtitle {
+        font-size: 14px;
+        color: #6b7280;
+        margin: 0;
+      }
+
+      .modal-body {
+        padding: 16px 24px;
+      }
+
+      .version-info {
+        background: #f3f4f6;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+
+      .version-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      .version-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .version-label {
+        color: #6b7280;
+      }
+
+      .version-value {
+        color: #111827;
+        font-weight: 500;
+      }
+
+      .release-notes {
+        margin-top: 16px;
+      }
+
+      .release-notes-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #111827;
+        margin: 0 0 8px 0;
+      }
+
+      .release-notes-content {
+        font-size: 13px;
+        color: #4b5563;
+        line-height: 1.5;
+        max-height: 120px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+      }
+
+      .modal-footer {
+        padding: 16px 24px 24px;
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        border: none;
+        outline: none;
+      }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+      }
+
+      .btn-secondary:hover {
+        background: #e5e7eb;
+      }
+
+      .btn-primary {
+        background: #3b82f6;
+        color: #ffffff;
+      }
+
+      .btn-primary:hover {
+        background: #2563eb;
+      }
+
+      .update-icon {
+        width: 24px;
+        height: 24px;
+        color: #3b82f6;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Dark mode support */
+      @media (prefers-color-scheme: dark) {
+        .modal-container {
+          background: #1f2937;
+        }
+
+        .modal-title {
+          color: #f9fafb;
+        }
+
+        .modal-subtitle {
+          color: #9ca3af;
+        }
+
+        .modal-header {
+          border-color: #374151;
+        }
+
+        .version-info {
+          background: #111827;
+        }
+
+        .version-value {
+          color: #f9fafb;
+        }
+
+        .version-label {
+          color: #9ca3af;
+        }
+
+        .release-notes-title {
+          color: #f9fafb;
+        }
+
+        .release-notes-content {
+          color: #d1d5db;
+        }
+
+        .btn-secondary {
+          background: #374151;
+          color: #d1d5db;
+        }
+
+        .btn-secondary:hover {
+          background: #4b5563;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h2 class="modal-title">
+            <svg class="update-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M2 12h20M12 2l-4 4M12 2l4 4M12 22l-4-4M12 22l4-4M2 12l4-4M2 12l4 4M22 12l-4-4M22 12l-4 4"/>
+            </svg>
+            Update Available
+          </h2>
+          <p class="modal-subtitle">A new version of SMC-Copilot is ready to install</p>
+        </div>
+        <div class="modal-body">
+          <div class="version-info">
+            <div class="version-row">
+              <span class="version-label">New Version:</span>
+              <span class="version-value" id="newVersion">-</span>
+            </div>
+            <div class="version-row">
+              <span class="version-label">Current Version:</span>
+              <span class="version-value" id="currentVersion">-</span>
+            </div>
+          </div>
+          <div class="release-notes" id="releaseNotesContainer" style="display: none;">
+            <h3 class="release-notes-title">What's New</h3>
+            <div class="release-notes-content" id="releaseNotes">-</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="laterBtn">Later</button>
+          <button class="btn btn-primary" id="installBtn">Install Now</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./update-ready.ts"></script>
+  </body>
+</html>

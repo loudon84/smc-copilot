@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "contact_to_order output schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderinfo"],
+  "properties": {
+    "orderinfo": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "custname",
+          "orderno",
+          "supname",
+          "deliverydate",
+          "partno",
+          "partdesc",
+          "quantity",
+          "price",
+          "amount"
+        ],
+        "properties": {
+          "custname": { "type": ["string", "null"] },
+          "orderno": { "type": ["string", "null"] },
+          "supname": { "type": ["string", "null"] },
+          "deliverydate": {
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "partno": { "type": ["string", "null"] },
+          "partdesc": { "type": ["string", "null"] },
+          "quantity": { "type": ["integer", "null"] },
+          "price": {
+            "type": ["string", "null"],
+            "pattern": "^-?\\d+\\.\\d{6}$"
+          },
+          "amount": {
+            "type": ["string", "null"],
+            "pattern": "^-?\\d+\\.\\d{6}$"
+          }
+        }
+      }
+    }
+  }
+}

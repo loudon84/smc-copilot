@@ -1,0 +1,45 @@
+export type ExpertErrorCode =
+  | "EXPERT_CATALOG_NOT_FOUND"
+  | "EXPERT_CATALOG_DISABLED"
+  | "EXPERT_CATALOG_NOT_PUBLISHED"
+  | "EXPERT_CATALOG_KIND_UNSUPPORTED"
+  | "EXPERT_SKILL_NOT_FOUND"
+  | "EXPERT_SKILL_NOT_PUBLIC"
+  | "EXPERT_SKILL_CALL_DISABLED"
+  | "EXPERT_PERMISSION_DENIED"
+  | "EXPERT_ROUTE_OVERRIDE_FORBIDDEN"
+  | "EXPERT_TEAM_ORCHESTRATION_DISABLED"
+  | "EXPERT_TEAM_MEMBERS_REQUIRED"
+  | "EXPERT_UPSTREAM_MCP_ERROR"
+  | "EXPERT_UPSTREAM_TIMEOUT"
+  | "EXPERT_INVALID_JSONRPC"
+  | "NODESKCLAW_UNAUTHORIZED"
+  | "NODESKCLAW_BACKEND_UNREACHABLE"
+  | "EXPERT_GATEWAY_HEALTH_FAILED"
+  | "EXPERT_MCP_ENDPOINT_NOT_CONFIGURED"
+  | "EXPERT_MCP_INITIALIZE_FAILED"
+  | "EXPERT_MCP_TOOLS_LIST_FAILED"
+  | "EXPERT_MCP_CALL_FAILED"
+  | "EXPERT_CATALOG_EMPTY"
+  | "EXPERT_RESPONSE_EMPTY"
+  | "EXPERT_NOT_FOUND"
+  | "TEAM_NOT_FOUND"
+  | "EXPERT_TOOL_NAME_REQUIRED"
+  | "EXPERT_PROMPT_REQUIRED"
+  | "EXPERT_REMOTE_CALL_FAILED"
+  | "EXPERT_APPROVAL_REQUIRED"
+  | "EXPERT_UPSTREAM_ERROR";
+
+export class HermesExpertsError extends Error {
+  readonly code: string;
+
+  constructor(code: ExpertErrorCode | string, message: string) {
+    super(message);
+    this.name = "HermesExpertsError";
+    this.code = code;
+  }
+}
+
+export function isHermesExpertsError(err: unknown): err is HermesExpertsError {
+  return err instanceof HermesExpertsError;
+}

@@ -1,0 +1,124 @@
+.hermes-task-start-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.hermes-task-start-dialog__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 42rem;
+  max-height: min(90vh, 640px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--border-bright);
+  border-radius: 2px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.hermes-task-start-dialog__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hermes-task-start-dialog__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.hermes-task-start-dialog__meta p {
+  margin: 0;
+  word-break: break-all;
+}
+
+.hermes-task-start-dialog__meta-label {
+  color: var(--text-muted);
+}
+
+.hermes-task-start-dialog__error {
+  margin: 0;
+  font-size: 11px;
+  color: #f87171;
+  line-height: 1.45;
+}
+
+.hermes-task-start-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hermes-task-start-dialog__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hermes-task-start-dialog__textarea,
+.hermes-task-start-dialog__select {
+  width: 97%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.hermes-task-start-dialog__textarea[readonly] {
+  color: var(--text-secondary);
+}
+
+.hermes-task-start-dialog__textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.hermes-task-start-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.hermes-task-start-dialog__btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.hermes-task-start-dialog__btn:hover {
+  background: var(--bg-hover);
+}
+
+.hermes-task-start-dialog__btn--primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.hermes-task-start-dialog__btn--primary:hover {
+  background: var(--accent-hover);
+}
+
+.hermes-task-start-dialog__btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

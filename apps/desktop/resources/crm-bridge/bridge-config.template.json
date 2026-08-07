@@ -1,0 +1,102 @@
+{
+  "version": "6.0",
+  "enabled": true,
+  "payloadMaxBytes": 524288,
+  "trustedGestureWindowMs": 1500,
+  "sites": [
+    {
+      "siteId": "crm-lite",
+      "name": "CRM Lite Demo",
+      "enabled": true,
+      "allowedOrigins": [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://192.168.70.161:3000",
+        "http://192.168.70.161",
+        "http://192.168.70.161:8080"
+      ]
+    },
+    {
+      "siteId": "sdms-om",
+      "name": "SDMS Order Management",
+      "enabled": true,
+      "allowedOrigins": [
+        "http://192.168.70.161",
+        "http://192.168.70.161:3000",
+        "http://192.168.70.161:8080",
+        "http://localhost:8080"
+      ]
+    },
+    {
+      "siteId": "internal-crm",
+      "name": "Internal CRM",
+      "enabled": false,
+      "allowedOrigins": [
+        "https://crm.company.com",
+        "https://*.crm.company.com"
+      ]
+    }
+  ],
+  "allowedFormTypes": [
+    "product",
+    "customer",
+    "quote",
+    "order",
+    "supplier"
+  ],
+  "allowedActions": [
+    "create",
+    "edit",
+    "view",
+    "analytic"
+  ],
+  "allowedSkills": [
+    "crm-product-analytic",
+    "crm-product-create",
+    "crm-product-edit",
+    "crm-quote-risk-check"
+  ],
+  "routes": [
+    {
+      "formType": "product",
+      "action": "view",
+      "skillName": "crm-product-analytic",
+      "desktopAction": "open-web-operator-panel",
+      "focusedPanel": "host-context"
+    },
+    {
+      "formType": "product",
+      "action": "analytic",
+      "skillName": "crm-product-analytic",
+      "desktopAction": "open-hermes-skill",
+      "focusedPanel": "host-context"
+    },
+    {
+      "formType": "product",
+      "action": "create",
+      "skillName": "crm-product-create",
+      "desktopAction": "open-hermes-skill",
+      "callbackMode": "open-tab-fill-form"
+    },
+    {
+      "formType": "product",
+      "action": "edit",
+      "skillName": "crm-product-edit",
+      "desktopAction": "open-hermes-skill",
+      "callbackMode": "open-tab-fill-form"
+    }
+  ],
+  "security": {
+    "forbiddenPayloadKeys": [
+      "password",
+      "token",
+      "cookie",
+      "authorization",
+      "apiKey",
+      "api_key",
+      "secret"
+    ],
+    "allowWildcardSubdomain": true,
+    "requireUserGesture": true
+  }
+}

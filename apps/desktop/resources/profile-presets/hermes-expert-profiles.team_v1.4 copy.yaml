@@ -1,0 +1,195 @@
+version: team_v1.4
+
+runtime:
+  db: sqlite
+  defaultAdapter: hermes-local
+
+gateway:
+  host: "127.0.0.1"
+  healthPath: "/health"
+
+roleLibrary:
+  repo: "https://github.com/jnMetaCode/agency-agents-zh.git"
+  branch: "main"
+  localDir: "agency-agents-zh"
+
+profiles:
+  writer-9601:
+    displayName: "Writer"
+    role: "specialist"
+    roleName: "写作生文专家"
+    description: "模板创作、一键生文、内容改写、内容日历。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9601
+    entry:
+      type: "specialist-workspace"
+      route: "profile/writer"
+      title: "写作生文"
+      icon: "pen-tool"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+    roleSpec:
+      roleKey: "writer"
+      roleName: "写作生文专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "marketing/marketing-content-creator.md"
+        - "marketing/marketing-book-co-author.md"
+        - "marketing/marketing-linkedin-content-creator.md"
+        - "marketing/marketing-wechat-official-account.md"
+        - "marketing/marketing-zhihu-strategist.md"
+      outputMode: "soul-memory-skill"
+
+  engineer-9612:
+    displayName: "Engineer"
+    role: "specialist"
+    roleName: "智能体专家"
+    description: "生产 Hermes skill、代码、工具、插件与集成方案。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9612
+    entry:
+      type: "specialist-workspace"
+      route: "profile/engineer"
+      title: "智能体专家"
+      icon: "bot"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: "engineer"
+      roleName: "智能体专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "engineering/engineering-ai-engineer.md"
+        - "engineering/engineering-senior-developer.md"
+        - "engineering/engineering-software-architect.md"
+        - "engineering/engineering-rapid-prototyper.md"
+        - "engineering/engineering-code-reviewer.md"
+        - "engineering/engineering-devops-automator.md"
+      outputMode: "soul-memory-skill"
+
+  research-9602:
+    displayName: "Research"
+    role: "specialist"
+    roleName: "数据研究专家"
+    description: "策略研究、趋势分析、投放与搜索词洞察。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9602
+    entry:
+      type: "specialist-workspace"
+      route: "profile/research"
+      title: "数据研究"
+      icon: "search"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+    roleSpec:
+      roleKey: "research"
+      roleName: "数据研究专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "strategy/nexus-strategy.md"
+        - "strategy/EXECUTIVE-BRIEF.md"
+        - "strategy/QUICKSTART.md"
+        - "paid-media/paid-media-search-query-analyst.md"
+        - "paid-media/paid-media-auditor.md"
+        - "paid-media/paid-media-tracking-specialist.md"
+      outputMode: "soul-memory-skill"
+
+  hurman-9621:
+    displayName: "Hurman"
+    role: "specialist"
+    roleName: "招聘专家"
+    description: "JD、简历筛选、面试流程、招聘看板。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9621
+    entry:
+      type: "specialist-workspace"
+      route: "profile/hurman"
+      title: "招聘专家"
+      icon: "users"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+    roleSpec:
+      roleKey: "hurman"
+      roleName: "招聘专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "hr/hr-recruiter.md"
+        - "hr/hr-performance-reviewer.md"
+      outputMode: "soul-memory-skill"
+
+  finance-9631:
+    displayName: "Finance"
+    role: "specialist"
+    roleName: "财经专家"
+    description: "财务分析、预算、预测、发票与经营指标辅助。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9631
+    entry:
+      type: "specialist-workspace"
+      route: "profile/finance"
+      title: "财经分析"
+      icon: "chart-line"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+    roleSpec:
+      roleKey: "finance"
+      roleName: "财经专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "finance/finance-financial-analyst.md"
+        - "finance/finance-financial-forecaster.md"
+        - "finance/finance-fpa-analyst.md"
+        - "finance/finance-investment-researcher.md"
+        - "finance/finance-invoice-manager.md"
+      outputMode: "soul-memory-skill"
+
+  sales-9641:
+    displayName: "Sales"
+    role: "specialist"
+    roleName: "销售专家"
+    description: "客户拓展、商机策略、提案、Pipeline 分析。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9641
+    entry:
+      type: "specialist-workspace"
+      route: "profile/sales"
+      title: "销售专家"
+      icon: "briefcase"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+    roleSpec:
+      roleKey: "sales"
+      roleName: "销售专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "sales/sales-account-strategist.md"
+        - "sales/sales-deal-strategist.md"
+        - "sales/sales-outbound-strategist.md"
+        - "sales/sales-pipeline-analyst.md"
+        - "sales/sales-proposal-strategist.md"
+      outputMode: "soul-memory-skill"

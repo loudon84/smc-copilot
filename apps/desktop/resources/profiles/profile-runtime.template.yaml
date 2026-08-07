@@ -1,0 +1,113 @@
+version: 1
+
+runtime:
+  db: sqlite
+  defaultAdapter: hermes-local
+
+gateway:
+  host: "127.0.0.1"
+  healthPath: "/health"
+
+profiles:
+  default:
+    displayName: "Portal 主控"
+    role: "主控调度专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8642
+    model: "kimi/kimi-k2.5"
+    entry:
+      type: "aios-workspace"
+      route: "aios"
+      title: "Portal"
+      icon: "layout-dashboard"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - web-operator
+
+  writer:
+    displayName: "Writer"
+    role: "写作生文专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8643
+    model: "kimi/kimi-k2.5"
+    entry:
+      type: "specialist-workspace"
+      route: "profile/writer"
+      title: "写作生文"
+      icon: "pen-tool"
+
+  coding:
+    displayName: "Coding"
+    role: "代码生成专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8644
+    model: "kimi/kimi-k2.5"
+    entry:
+      type: "specialist-workspace"
+      route: "profile/coding"
+      title: "代码生成"
+      icon: "code"
+
+  research:
+    displayName: "Research"
+    role: "数据搜索专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8645
+    model: "deepseek/deepseek-reasoner"
+    entry:
+      type: "specialist-workspace"
+      route: "profile/research"
+      title: "数据搜索"
+      icon: "search"
+
+  recruiters:
+    displayName: "Recruiters"
+    role: "招聘专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8646
+    model: "kimi/kimi-k2.5"
+    entry:
+      type: "specialist-workspace"
+      route: "profile/recruiters"
+      title: "招聘专家"
+      icon: "users"
+
+  finance:
+    displayName: "Finance"
+    role: "财经专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8647
+    model: "kimi/kimi-k2.5"
+    entry:
+      type: "specialist-workspace"
+      route: "profile/finance"
+      title: "财经分析"
+      icon: "chart-line"
+
+  agenter:
+    displayName: "Agenter"
+    role: "智能体专家"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8648
+    model: "kimi/kimi-k2.5"
+    entry:
+      type: "specialist-workspace"
+      route: "profile/agenter"
+      title: "智能体专家"
+      icon: "bot"

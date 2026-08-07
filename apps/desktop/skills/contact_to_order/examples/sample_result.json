@@ -1,0 +1,15 @@
+{
+  "orderinfo": [
+    {
+      "custname": "示例采购公司",
+      "orderno": "PO20260602001",
+      "supname": "示例供货公司",
+      "deliverydate": "2026-06-30",
+      "partno": "STM32F103C8T6",
+      "partdesc": "MCU 32-bit ARM Cortex-M3",
+      "quantity": 1000,
+      "price": "1.230000",
+      "amount": "1230.000000"
+    }
+  ]
+}

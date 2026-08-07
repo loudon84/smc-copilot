@@ -1,0 +1,39 @@
+.hermes-panel-skill {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hermes-panel-skill__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hermes-panel-skill__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hermes-panel-skill__select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.hermes-panel-skill__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.hermes-panel-skill__error {
+  margin: 0;
+  font-size: 11px;
+  color: #f87171;
+  line-height: 1.45;
+}

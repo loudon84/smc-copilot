@@ -1,0 +1,14 @@
+{
+  "filesScanned": 141,
+  "filesRewritten": 28,
+  "packageImportCandidates": [
+    "@testing-library/react",
+    "date-fns",
+    "highlight.js",
+    "lucide-react",
+    "react",
+    "react-dom",
+    "react-hot-toast",
+    "vitest"
+  ]
+}

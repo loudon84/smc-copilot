@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error Report</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-container {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        width: 500px;
+        max-width: 90vw;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .modal-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .error-icon {
+        width: 28px;
+        height: 28px;
+        color: #ef4444;
+      }
+      .modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .modal-body {
+        padding: 20px 24px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .error-summary {
+        font-size: 14px;
+        color: #374151;
+        margin-bottom: 16px;
+        padding: 12px;
+        background: #fef2f2;
+        border-radius: 8px;
+        border-left: 4px solid #ef4444;
+      }
+      .error-context {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 12px;
+      }
+      .stack-toggle {
+        font-size: 13px;
+        color: #3b82f6;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .stack-toggle:hover { text-decoration: underline; }
+      .stack-trace {
+        font-size: 12px;
+        color: #4b5563;
+        background: #f3f4f6;
+        padding: 12px;
+        border-radius: 6px;
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+      }
+      .stack-trace.visible { display: block; }
+      .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+      .btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.15s;
+      }
+      .btn:hover { transform: translateY(-1px); }
+      .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+      }
+      .btn-secondary:hover { background: #e5e7eb; }
+      .btn-primary {
+        background: #3b82f6;
+        color: #ffffff;
+      }
+      .btn-primary:hover { background: #2563eb; }
+      @media (prefers-color-scheme: dark) {
+        .modal-container { background: #1f2937; }
+        .modal-header { border-color: #374151; }
+        .modal-title { color: #f9fafb; }
+        .error-summary { background: #7f1d1d; color: #fca5a5; }
+        .error-context { color: #9ca3af; }
+        .stack-trace { background: #111827; color: #d1d5db; }
+        .btn-secondary { background: #374151; color: #d1d5db; }
+        .btn-secondary:hover { background: #4b5563; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <h2 class="modal-title">Something went wrong</h2>
+        </div>
+        <div class="modal-body">
+          <div class="error-summary" id="errorSummary">An unexpected error occurred.</div>
+          <div class="error-context" id="errorContext"></div>
+          <div class="stack-toggle" id="stackToggle">Show details</div>
+          <div class="stack-trace" id="stackTrace"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="dismissBtn">Dismiss</button>
+          <button class="btn btn-primary" id="restartBtn">Restart App</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./error-report.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>CRM Customer Detail</title>
+    <style>
+      .desktop-highlight {
+        outline: 2px solid #22c55e;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="customer-title">Customer: ACME</h1>
+    <button id="sync-to-desktop">同步到桌面助手</button>
+    <div id="toast"></div>
+
+    <!-- In real CRM, this is served from static assets -->
+    <script type="module">
+      // Minimal inline SDK behavior for integration test.
+      window.CopilotCrmDesktopSDK = {
+        submitPageContext: async (page, payload, options) => {
+          const event = {
+            source: "crm-web",
+            sdkVersion: "0.1.0",
+            requestId: options?.requestId ?? `req_${Date.now()}`,
+            type: "crm.context.submit",
+            trigger: {
+              type: "user-click",
+              elementId: options?.triggerElementId,
+              label: options?.triggerLabel,
+              timestamp: new Date().toISOString(),
+            },
+            page: {
+              app: "crm",
+              entityType: "customer",
+              entityId: "1001",
+              entityName: "ACME",
+              url: window.location.href,
+              title: document.title,
+              safeText: document.body.innerText.slice(0, 2000),
+            },
+            payload,
+          };
+          if (window.CopilotDesktopCRM?.emit) {
+            return await window.CopilotDesktopCRM.emit(event);
+          }
+          return { ok: false, message: "Desktop bridge not available" };
+        },
+        onCommand: (handler) => {
+          window.addEventListener("message", (event) => {
+            if (event.origin !== window.location.origin) return;
+            const data = event.data;
+            if (!data || data.source !== "copilot-desktop") return;
+            if (data.channel !== "crm.desktop.command") return;
+            handler(data.command);
+          });
+        },
+      };
+
+      window.CopilotCrmDesktopSDK.onCommand((command) => {
+        if (command.type === "desktop.crm.showToast") {
+          document.querySelector("#toast").textContent = command.payload?.message ?? "toast";
+        }
+        if (command.type === "desktop.crm.highlightField") {
+          const selector = command.target?.selector;
+          if (selector) document.querySelector(selector)?.classList.add("desktop-highlight");
+        }
+      });
+
+      document.querySelector("#sync-to-desktop").addEventListener("click", async () => {
+        const result = await window.CopilotCrmDesktopSDK.submitPageContext(
+          { app: "crm", entityId: "1001", entityName: "ACME" },
+          { sourceModule: "customer-detail" },
+          { triggerElementId: "sync-to-desktop", triggerLabel: "同步到桌面助手" },
+        );
+        console.log(result);
+      });
+    </script>
+  </body>
+</html>
+

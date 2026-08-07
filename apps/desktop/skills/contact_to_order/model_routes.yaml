@@ -1,0 +1,30 @@
+# contact_to_order model route mapping converted from Dify DSL.
+# issmple is kept as-is for compatibility with the original workflow.
+server:
+  url: http://192.168.70.249:11434/v1
+  provider: ollama
+  api_format: openai-compatible
+
+models:
+  image:
+    "0":
+      model: qwen2.5vl:7b
+      provider: ollama
+      num_ctx: 5048
+      num_predict: 5048
+    default:
+      model: qwen3-vl:30b
+      provider: ollama
+      num_ctx: 5048
+      num_predict: 5048
+  document:
+    "0":
+      model: qwen2.5vl:7b
+      provider: ollama
+      num_ctx: 20480
+      num_predict: 10240
+    default:
+      model: qwen3-vl:30b
+      provider: ollama
+      num_ctx: 20480
+      num_predict: 10240

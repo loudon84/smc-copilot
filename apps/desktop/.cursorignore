@@ -1,0 +1,59 @@
+﻿# SMC Copilot — Cursor 索引排除
+# 减少 Agent 无关上下文；不阻止显式 @ 引用
+
+# ── 依赖 ──
+node_modules/
+
+# ── 构建产物 ──
+dist/
+out/
+release/
+*.tsbuildinfo
+.eslintcache
+
+# ── 日志 ──
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── 打包 / Electron 生成 ──
+**/src-tauri/target/
+**/src-tauri/gen/
+**/src-tauri/WixTools/
+
+# ── 测试覆盖率 ──
+coverage/
+
+# ── 数据库与 SQLite ──
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ── 用户/安装运行时目录 ──
+runtime/hermes/venv/
+runtime/serve/venv/
+runtime/portal/node_modules/
+.wheels/
+
+# ── VCS / IDE ──
+.git/
+.idea/
+.DS_Store
+
+# ── Superpowers 本地原型 ──
+.superpowers/
+
+# ── 大型辅助索引 ──
+docs/code-assets/
+docs/memory-bank/
+
+# ── Agent 临时日志 ──
+specs/current-agent-log.md
+
+# ── 内置技能包 node_modules ──
+resources/skills/**/node_modules/

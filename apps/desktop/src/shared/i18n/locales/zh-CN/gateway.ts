@@ -1,0 +1,16 @@
+export default {
+  title: "网关",
+  messagingGateway: "消息网关",
+  platforms: "平台",
+  status: "状态",
+  running: "运行中",
+  stopped: "已停止",
+  gatewayHint: "将 Hermes 连接到 Telegram、Discord、Slack 等平台",
+  runtimeSetup: "运行时诊断",
+  environment: "环境信息",
+  diagnostics: "诊断检查",
+  runDoctor: "运行诊断",
+  oneClickRepair: "一键修复",
+  actions: "操作",
+  reinstallRuntime: "重新安装运行时",
+} as const;

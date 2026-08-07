@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm Exit</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-container {
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        width: 420px;
+        max-width: 90vw;
+        padding: 24px;
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .warning-icon {
+        width: 32px;
+        height: 32px;
+        color: #f59e0b;
+      }
+      .modal-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .modal-content {
+        font-size: 14px;
+        color: #4b5563;
+        line-height: 1.5;
+        margin-bottom: 24px;
+      }
+      .modal-footer {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+      .btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+        transition: all 0.15s;
+      }
+      .btn:hover { transform: translateY(-1px); }
+      .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+      }
+      .btn-secondary:hover { background: #e5e7eb; }
+      .btn-danger {
+        background: #ef4444;
+        color: #ffffff;
+      }
+      .btn-danger:hover { background: #dc2626; }
+      .btn-primary {
+        background: #3b82f6;
+        color: #ffffff;
+      }
+      .btn-primary:hover { background: #2563eb; }
+      @media (prefers-color-scheme: dark) {
+        .modal-container { background: #1f2937; }
+        .modal-title { color: #f9fafb; }
+        .modal-content { color: #d1d5db; }
+        .btn-secondary { background: #374151; color: #d1d5db; }
+        .btn-secondary:hover { background: #4b5563; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-overlay" id="overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <h2 class="modal-title">Gateway is Running</h2>
+        </div>
+        <div class="modal-content" id="content">
+          Hermes Gateway is still running. If you exit now, all active sessions will be lost.
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+          <button class="btn btn-primary" id="minimizeBtn">Minimize</button>
+          <button class="btn btn-danger" id="exitBtn">Exit</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./confirm-exit.ts"></script>
+  </body>
+</html>

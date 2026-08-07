@@ -1,0 +1,173 @@
+version: 1
+
+runtime:
+  defaultAdapter: hermes-local
+
+gateway:
+  host: 127.0.0.1
+  healthPath: /health
+
+roleLibrary:
+  provider: github
+  repo: https://github.com/jnMetaCode/agency-agents-zh.git
+  branch: main
+  localDir: agency-agents-zh
+
+profiles:
+  writer-9601:
+    displayName: 写作生文专家
+    role: 模板创作与一键生文专家
+    runtimeType: hermes-local
+    enabled: true
+    autoStart: false
+    port: 9601
+    model: default
+    entry:
+      type: specialist-workspace
+      route: profile/writer-9601
+      title: 写作生文
+      icon: pen-tool
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: writer
+      roleName: 写作生文专家
+      sourceRepo: https://github.com/jnMetaCode/agency-agents-zh
+      sourcePaths:
+        - marketing/marketing-content-creator.md
+      outputMode: soul-memory-skill
+
+  engineer-9612:
+    displayName: 智能体工程专家
+    role: Skill、代码与工具生产专家
+    runtimeType: hermes-local
+    enabled: true
+    autoStart: false
+    port: 9612
+    model: default
+    entry:
+      type: specialist-workspace
+      route: profile/engineer-9612
+      title: 智能体工程
+      icon: code-2
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: engineer
+      roleName: 智能体工程专家
+      sourceRepo: https://github.com/jnMetaCode/agency-agents-zh
+      sourcePaths:
+        - engineering/engineering-ai-engineer.md
+        - engineering/engineering-software-architect.md
+      outputMode: soul-memory-skill
+
+  research-9602:
+    displayName: 数据研究专家
+    role: 市场情报、数据研究与投放分析专家
+    runtimeType: hermes-local
+    enabled: true
+    autoStart: false
+    port: 9602
+    model: default
+    entry:
+      type: specialist-workspace
+      route: profile/research-9602
+      title: 数据研究
+      icon: chart-line
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: research
+      roleName: 数据研究专家
+      sourceRepo: https://github.com/jnMetaCode/agency-agents-zh
+      sourcePaths:
+        - strategy/playbooks/phase-0-discovery.md
+        - paid-media/paid-media-search-query-analyst.md
+      outputMode: soul-memory-skill
+
+  hurman-9621:
+    displayName: 招聘专家
+    role: 招聘全流程与人才获取专家
+    runtimeType: hermes-local
+    enabled: true
+    autoStart: false
+    port: 9621
+    model: default
+    entry:
+      type: specialist-workspace
+      route: profile/hurman-9621
+      title: 招聘专家
+      icon: users
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: hurman
+      roleName: 招聘专家
+      sourceRepo: https://github.com/jnMetaCode/agency-agents-zh
+      sourcePaths:
+        - hr/hr-recruiter.md
+      outputMode: soul-memory-skill
+
+  finance-9631:
+    displayName: 财经专家
+    role: 财务分析、经营模型与预算预测专家
+    runtimeType: hermes-local
+    enabled: true
+    autoStart: false
+    port: 9631
+    model: default
+    entry:
+      type: specialist-workspace
+      route: profile/finance-9631
+      title: 财经专家
+      icon: banknote
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: finance
+      roleName: 财经专家
+      sourceRepo: https://github.com/jnMetaCode/agency-agents-zh
+      sourcePaths:
+        - finance/finance-financial-analyst.md
+      outputMode: soul-memory-skill
+
+  sales-9641:
+    displayName: 销售专家
+    role: 客户拓展、QBR 与销售增长专家
+    runtimeType: hermes-local
+    enabled: true
+    autoStart: false
+    port: 9641
+    model: default
+    entry:
+      type: specialist-workspace
+      route: profile/sales-9641
+      title: 销售专家
+      icon: handshake
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+      - gateway-supervisor
+    roleSpec:
+      roleKey: sales
+      roleName: 销售专家
+      sourceRepo: https://github.com/jnMetaCode/agency-agents-zh
+      sourcePaths:
+        - sales/sales-account-strategist.md
+      outputMode: soul-memory-skill

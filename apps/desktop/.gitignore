@@ -1,0 +1,41 @@
+.DS_Store
+.idea/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# ESLint cache
+.eslintcache
+
+# Electron packaging artifacts
+release/
+.claude/worktrees
+
+# Superpowers brainstorming prototypes (local session artifacts)
+.superpowers/
+
+# Tauri
+**/src-tauri/target/
+**/src-tauri/gen/
+**/src-tauri/WixTools/
+# lat.md embedding / init cache
+lat.md/.cache/
+

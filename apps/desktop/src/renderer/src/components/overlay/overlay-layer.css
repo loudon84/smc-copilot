@@ -1,0 +1,144 @@
+.overlay-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.overlay-dialog-layer__entry {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.overlay-dialog-layer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgb(0 0 0 / 50%);
+  cursor: default;
+}
+
+.overlay-dialog-layer__panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  box-shadow: 0 20px 40px rgb(0 0 0 / 18%);
+  padding: 20px;
+}
+
+.overlay-dialog-layer__title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+.overlay-dialog-layer__message {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary, #4b5563);
+  white-space: pre-wrap;
+}
+
+.overlay-dialog-layer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.overlay-dialog-layer__btn {
+  min-width: 72px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #d1d5db);
+  background: var(--surface, #fff);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.overlay-dialog-layer__btn:hover {
+  background: var(--surface-hover, #f9fafb);
+}
+
+.overlay-dialog-layer__btn--primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.overlay-dialog-layer__btn--primary:hover {
+  background: #1d4ed8;
+}
+
+.overlay-dialog-layer__btn--danger {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
+.overlay-dialog-layer__btn--danger:hover {
+  background: #b91c1c;
+}
+
+.overlay-dialog-layer__fallback {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.overlay-drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.overlay-drawer-layer__entry {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.overlay-drawer-layer__backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: rgb(0 0 0 / 40%);
+  cursor: default;
+}
+
+.overlay-drawer-layer__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: min(480px, 100vw);
+  height: 100%;
+  overflow: auto;
+  border-left: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  box-shadow: -8px 0 24px rgb(0 0 0 / 12%);
+  padding: 20px;
+}
+
+.overlay-drawer-layer__title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.overlay-drawer-layer__fallback {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}

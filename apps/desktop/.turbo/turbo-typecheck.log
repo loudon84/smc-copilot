@@ -1,0 +1,25 @@
+
+> smc-ai-copilot@0.1.8 typecheck E:\git-ai\smc-coworker-full\copilot-desktop
+> npm run typecheck:node && npm run typecheck:web
+
+npm warn Unknown env config "sass-binary-site". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "sass_binary_site". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> smc-ai-copilot@0.1.8 typecheck:node
+> tsc --noEmit -p tsconfig.node.json --composite false
+
+npm notice
+npm notice New minor version of npm available! 11.11.0 -> 11.15.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.15.0
+npm notice To update run: npm install -g npm@11.15.0
+npm notice
+npm warn Unknown env config "sass-binary-site". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "shamefully-hoist". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "sass_binary_site". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> smc-ai-copilot@0.1.8 typecheck:web
+> tsc --noEmit -p tsconfig.web.json --composite false
+

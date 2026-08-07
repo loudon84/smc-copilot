@@ -1,0 +1,5 @@
+{
+  "callbackURL": "http://192.168.99.35:8080/sdms/om/sdms_om_main/sdmsOmMain.do?method=addSoDesktop&tempType=",
+  "callbackUrl": "http://192.168.99.35:8080/sdms/om/sdms_om_main/sdmsOmMain.do?method=addSoDesktop&tempType=",
+  "issmple": "1"
+}

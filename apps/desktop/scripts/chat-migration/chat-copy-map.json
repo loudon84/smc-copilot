@@ -1,0 +1,37 @@
+{
+  "sourceRoot": "references/copilot-desktop",
+  "copies": [
+    {
+      "from": "src/renderer/src/screens/Chat",
+      "to": "src/renderer/src/modules/chat/components",
+      "description": "Copilot Chat production UI (messages/composer/navigator/session-files)"
+    },
+    {
+      "from": "src/renderer/src/components/files",
+      "to": "src/renderer/src/modules/chat/components/session-files",
+      "description": "Session files + preview panels (File Platform UI)"
+    },
+    {
+      "from": "src/shared/files",
+      "to": "src/shared/chat-files",
+      "description": "File Platform shared contracts"
+    },
+    {
+      "from": "src/main/files",
+      "to": "src/main/chat-files/platform",
+      "description": "File Platform Main (files:* IPC)"
+    }
+  ],
+  "excludes": [
+    "**/WebPreviewPanel.tsx",
+    "**/RemoteFolderPicker.tsx",
+    "**/WorktreePanel.tsx",
+    "**/*.snap"
+  ],
+  "importRewrites": [
+    {
+      "pattern": "from [\"'](\\.\\./)+shared/files(/[^\"']*)?[\"']",
+      "replacement": "from \"@shared/chat-files$2\""
+    }
+  ]
+}
