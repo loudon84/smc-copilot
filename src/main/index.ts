@@ -34,9 +34,13 @@ import {
   isRemoteOnlyMode,
   sendMessage,
   startGateway,
+  startGatewayAsync,
   stopGateway,
+  stopGatewayAsync,
   isGatewayRunning,
+  isGatewayRunningAsync,
   restartGateway,
+  restartGatewayAsync,
   setHealthStatusCallback,
   ensureSshTunnelIfNeeded,
   setSshRemoteApiKey,
@@ -201,6 +205,15 @@ import {
   autoStartCopilotServeIfReady,
   registerCopilotServeIpc,
 } from "./copilot-serve/copilot-serve-ipc";
+import {
+  initCopilotRuntimeConnection,
+  registerCopilotRuntimeIpc,
+} from "./copilot-runtime-client";
+import {
+  canSpawnCopilotServe,
+  isServeControlPlanePreferred,
+  resolveCopilotRuntimeMode,
+} from "./copilot-runtime-client/runtime-mode";
 import { registerAuthIpc } from "./auth/auth-ipc";
 import { installTokenHeaderInjector } from "./auth/token-header-injector";
 import { setupStartupIPC } from "./startup/startup-ipc";
@@ -723,6 +736,19 @@ function setupIPC(): void {
         }
         return true;
       }
+
+      const { isServeConfigPreferred, isServeConfigControlPlane, serveSetModelConfig } =
+        await import("./runtime-adapters/config-control");
+      if (isServeConfigPreferred()) {
+        if (!isServeConfigControlPlane()) {
+          throw new Error(
+            "Serve Runtime is not Ready. Model config writes require Runtime Ready or COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true.",
+          );
+        }
+        await serveSetModelConfig(profile, { provider, model, baseUrl });
+        return true;
+      }
+
       const prev = getModelConfig(profile);
       setModelConfig(provider, model, baseUrl, profile);
 
@@ -920,18 +946,17 @@ function setupIPC(): void {
   ipcMain.handle("start-gateway", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) { await sshStartGateway(conn.ssh); return true; }
-    return startGateway();
+    return startGatewayAsync();
   });
   ipcMain.handle("stop-gateway", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) { await sshStopGateway(conn.ssh); return true; }
-    stopGateway(true);
-    return true;
+    return stopGatewayAsync(true);
   });
-  ipcMain.handle("gateway-status", () => {
+  ipcMain.handle("gateway-status", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshGatewayStatus(conn.ssh);
-    return isGatewayRunning();
+    return isGatewayRunningAsync();
   });
 
   // Platform toggles (config.yaml platforms section)
@@ -1180,20 +1205,27 @@ function setupIPC(): void {
       opts?: { apiKeyEnv?: string; apiKeyLiteral?: string },
     ) => {
       const entry = addModel(name, provider, model, baseUrl, opts);
-      syncCustomProvidersFromModels();
+      // Serve CP owns config.yaml custom_providers; keep local models.json only.
+      if (!isServeControlPlanePreferred()) {
+        syncCustomProvidersFromModels();
+      }
       return entry;
     },
   );
   ipcMain.handle("remove-model", (_event, id: string) => {
     const ok = removeModel(id);
-    if (ok) syncCustomProvidersFromModels();
+    if (ok && !isServeControlPlanePreferred()) {
+      syncCustomProvidersFromModels();
+    }
     return ok;
   });
   ipcMain.handle(
     "update-model",
     (_event, id: string, fields: Record<string, string>) => {
       const ok = updateModel(id, fields);
-      if (ok) syncCustomProvidersFromModels();
+      if (ok && !isServeControlPlanePreferred()) {
+        syncCustomProvidersFromModels();
+      }
       return ok;
     },
   );
@@ -1506,13 +1538,34 @@ app.whenReady().then(async () => {
     try {
       mergeRuntimeConfig({});
       registerCopilotServeIpc(() => mainWindow);
+      registerCopilotRuntimeIpc();
       console.log("[COPILOT-SERVE] IPC handlers registered");
-      void autoStartCopilotServeIfReady()
+      console.log("[COPILOT-RUNTIME] IPC handlers registered");
+      const runtimeMode = resolveCopilotRuntimeMode();
+      const maybeAutoStart = canSpawnCopilotServe(runtimeMode)
+        ? autoStartCopilotServeIfReady()
+        : Promise.resolve(null);
+      void maybeAutoStart
         .then((status) => {
-          console.log("[COPILOT-SERVE] auto-start status:", status.status);
+          if (status) {
+            console.log("[COPILOT-SERVE] auto-start status:", status.status);
+          } else {
+            console.log(
+              "[COPILOT-SERVE] production mode — skip spawn; probing existing Runtime",
+            );
+          }
         })
         .catch((err) => {
           console.warn("[COPILOT-SERVE] auto-start skipped:", err);
+        })
+        .finally(() => {
+          void initCopilotRuntimeConnection()
+            .then((state) => {
+              console.log("[COPILOT-RUNTIME] handshake state:", state.state);
+            })
+            .catch((err) => {
+              console.warn("[COPILOT-RUNTIME] handshake failed:", err);
+            });
         });
     } catch (err) {
       console.error("[COPILOT-SERVE] Failed to register IPC:", err);

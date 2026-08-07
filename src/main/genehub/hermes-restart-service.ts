@@ -1,4 +1,4 @@
-import { restartGateway, isGatewayRunning } from "../hermes";
+import { restartGatewayAsync, isGatewayRunningAsync } from "../hermes";
 import { restartProfile } from "../profile-runtime-manager";
 import { probeGatewayHealth } from "../gateway-health";
 import { GeneHubError } from "../../shared/genehub/genehub-errors";
@@ -11,7 +11,10 @@ export async function reloadOrRestart(profile: HermesProfileDto): Promise<{
 }> {
   try {
     if (profile.profileName === "default") {
-      await restartGateway();
+      const restarted = await restartGatewayAsync();
+      if (!restarted) {
+        throw new GeneHubError("HERMES_HEALTH_CHECK_FAILED", "Gateway restart failed");
+      }
       const healthy = await waitForGatewayHealth(profile.gatewayUrl ?? "http://127.0.0.1:8642", 8642);
       if (!healthy) {
         throw new GeneHubError("HERMES_HEALTH_CHECK_FAILED", "Gateway health check failed after restart");
@@ -57,5 +60,5 @@ async function waitForGatewayHealth(gatewayUrl: string, fallbackPort: number, at
     if (healthy) return true;
     await new Promise((r) => setTimeout(r, 1500));
   }
-  return isGatewayRunning();
+  return isGatewayRunningAsync();
 }

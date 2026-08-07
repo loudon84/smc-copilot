@@ -8,6 +8,10 @@ import type {
   WorkspaceChatSendPayload,
 } from "../../shared/workspace-chat/workspace-chat-contract";
 import { getCopilotServeConnection, startCopilotServeProcess } from "../copilot-serve/copilot-serve-process";
+import {
+  getDeviceTokenSync,
+  getLegacySharedTokenSync,
+} from "../copilot-runtime-client/runtime-auth-store";
 
 async function ensureConnection(): Promise<CopilotServeConnection> {
   let conn = getCopilotServeConnection();
@@ -21,14 +25,19 @@ async function ensureConnection(): Promise<CopilotServeConnection> {
   return conn;
 }
 
-function headers(conn: CopilotServeConnection, extra?: Record<string, string>): Record<string, string> {
+function headers(extra?: Record<string, string>): Record<string, string> {
   const base: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
     ...extra,
   };
-  if (conn.token) {
-    base["X-Copilot-Desktop-Token"] = conn.token;
+  const deviceToken = getDeviceTokenSync();
+  if (deviceToken) {
+    base.Authorization = `Bearer ${deviceToken}`;
+  }
+  const legacy = getLegacySharedTokenSync();
+  if (legacy) {
+    base["X-Copilot-Desktop-Token"] = legacy;
   }
   return base;
 }
@@ -41,7 +50,7 @@ async function serveFetch<T>(
   const url = `${conn.baseUrl.replace(/\/$/, "")}${path}`;
   const res = await fetch(url, {
     ...init,
-    headers: headers(conn, init?.headers as Record<string, string> | undefined),
+    headers: headers(init?.headers as Record<string, string> | undefined),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -112,11 +121,10 @@ export function chatCompletionsUrl(profileId: string): string {
 }
 
 export function chatCompletionsHeaders(): Record<string, string> {
-  const conn = getCopilotServeConnection();
-  if (!conn) {
+  if (!getCopilotServeConnection()) {
     throw new Error("copilot-serve 未连接");
   }
-  return headers(conn, {
+  return headers({
     Accept: "text/event-stream",
   });
 }
@@ -153,8 +161,13 @@ export async function uploadAttachmentsMultipart(
   }
   const url = `${conn.baseUrl.replace(/\/$/, "")}/api/v1/workspaces/${workspaceId}/attachments`;
   const hdrs: Record<string, string> = { Accept: "application/json" };
-  if (conn.token) {
-    hdrs["X-Copilot-Desktop-Token"] = conn.token;
+  const deviceToken = getDeviceTokenSync();
+  if (deviceToken) {
+    hdrs.Authorization = `Bearer ${deviceToken}`;
+  }
+  const legacy = getLegacySharedTokenSync();
+  if (legacy) {
+    hdrs["X-Copilot-Desktop-Token"] = legacy;
   }
   const res = await fetch(url, { method: "POST", headers: hdrs, body: form });
   if (!res.ok) {

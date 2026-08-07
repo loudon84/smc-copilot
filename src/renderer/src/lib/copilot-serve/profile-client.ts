@@ -9,7 +9,7 @@ import type {
 } from "../../../../shared/profile-runtime/profile-runtime-contract";
 import { copilotServeFetch, type CopilotServeHttpConfig } from "./http-client";
 
-/** 确保 copilot-serve 已启动并返回 Renderer 直连用的 HTTP 配置。 */
+/** Ensure Serve is reachable and return baseUrl-only config (token never in Renderer). */
 export async function ensureCopilotServeConfig(): Promise<CopilotServeHttpConfig> {
   let status = await window.copilotServe.getStatus();
   if (status.status !== "running") {
@@ -19,7 +19,7 @@ export async function ensureCopilotServeConfig(): Promise<CopilotServeHttpConfig
   if (!connection) {
     throw new Error(status.lastError ?? "copilot-serve 未连接");
   }
-  return { baseUrl: connection.baseUrl, token: connection.token };
+  return { baseUrl: connection.baseUrl };
 }
 
 export interface ServeProfileResponse {

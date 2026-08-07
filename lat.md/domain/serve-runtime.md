@@ -1,0 +1,57 @@
+# Serve-First Runtime
+
+v9.0 makes `copilot-serve` the trusted local control plane. Desktop Main connects, pairs, and proxies; Renderer never holds Device Tokens or fetches `:8765` directly for JSON.
+
+PRD: `prd_work/v9.0_serve-runtime-migration.md`. Phase 0/1 landed OpenAPI client consumption, pairing, handshake, and production process policy. Phase 2 routes Gateway / Configuration / MCP / Diagnostics through Serve. Phase 3 routes `window.chatRuntime` execution to Serve `/api/v1/chat-runs*` (hand-authored until OpenAPI catches up). Session/Resource cutovers are later phases.
+
+Architecture framing: [[architecture#Three-layer process model]], [[architecture#Preload bridge contract]]. Decision: [[decisions#Serve Device Token stays in Main]], [[decisions#Serve owns Gateway and YAML control plane]].
+
+## Connection handshake
+
+Desktop probes Serve with `health → /runtime/status → /runtime/capabilities → /runtime/compatibility`, then emits a seven-state connection model for UI.
+
+States: `Connecting`, `PairingRequired`, `Incompatible`, `RuntimeMissing`, `RuntimeStarting`, `RuntimeDegraded`, `Ready`. Non-`Ready` allows viewing local UI Workspace but must block Chat/Task/MCP mutating writes.
+
+Owner: [[src/main/copilot-runtime-client/runtime-connection-manager.ts#runRuntimeHandshake]] via `window.copilotRuntime`.
+
+## Device pairing and auth store
+
+Unpaired Desktop starts loopback pairing (`POST /pairings/start` → confirm) and stores the Device Token only in Main (keytar service `smc-copilot-runtime`, safeStorage fallback, memory).
+
+IPC and Preload (`getState`, pairing results, `getConnection`) must never return the token. HTTP uses `Authorization: Bearer` plus `X-Desktop-Version` / `X-Runtime-Api-Version` / `X-Request-ID` (writes add `Idempotency-Key`). Legacy `X-Copilot-Desktop-Token` is a Main-only deprecated bridge.
+
+Owners: [[src/main/copilot-runtime-client/runtime-auth-store.ts#saveDeviceToken]], [[src/main/copilot-runtime-client/runtime-pairing-manager.ts#confirmPairing]], [[src/main/copilot-runtime-client/runtime-http-client.ts#buildRuntimeRequestHeaders]].
+
+## Production process policy
+
+Packaged production Desktop must not spawn or stop Serve. It only probes an existing service; missing Runtime becomes `RuntimeMissing` with Repair. Spawn/stop remain allowed for `development`, `portable_dev`, and `e2e`.
+
+`COPILOT_ALLOW_LEGACY_HERMES_DIRECT` is forced false in production. Owner: [[src/main/copilot-runtime-client/runtime-mode.ts#canSpawnCopilotServe]].
+
+## OpenAPI contract gate
+
+Generated Serve types live under `src/shared/generated/copilot-serve/`. Refresh with `npm run generate:serve-client`; CI fails on drift via `npm run check:serve-contract-drift`. Hand-authored stable contracts stay in `src/shared/copilot-runtime/`.
+
+## Renderer bridge without token
+
+Legacy Renderer Serve JSON helpers use Main `copilot-runtime:proxy-fetch` / `window.copilotRuntime.proxyFetch` so Device Token never enters Renderer. Prefer domain IPC in later phases over growing the generic proxy.
+
+Owners: [[src/main/copilot-runtime-client/copilot-runtime-ipc.ts#registerCopilotRuntimeIpc]], [[src/preload/copilot-runtime-api.ts]].
+
+## Phase 2 Gateway and config control plane
+
+When Serve is preferred and Ready, Desktop must not spawn Hermes Gateway CLI or write `config.yaml` as the control plane. Modes: `serve | legacy | blocked` via [[src/main/runtime-adapters/gateway-control.ts#resolveGatewayControlMode]].
+
+Gateway start/stop/restart/status await Serve Instance ([[src/main/runtime-adapters/ServeInstanceAdapter.ts]], [[src/main/hermes.ts#startGatewayAsync]], [[src/main/hermes.ts#isGatewayRunningAsync]]). YAML writers call [[src/main/runtime-adapters/config-control.ts#assertLegacyYamlControlPlane]] and fail closed unless legacy-direct.
+
+Models CRUD may update local `models.json` but must skip `syncCustomProvidersFromModels` under Serve preferred. MCP Skill Gateway register and expert install materializer must skip Desktop `writeHermesConfig` under Serve preferred (Serve MCP/Configuration APIs own that surface).
+
+Related Gateway domain: [[domain/gateway#Gateway lifecycle]].
+
+## Phase 3 Chat Runtime transport
+
+When Serve chat transport is preferred and Ready, `window.chatRuntime` must not call Hermes `sendMessage` or write Desktop durable event sequences as the authority. Fail closed when preferred but not Ready.
+
+Gates: [[src/main/copilot-runtime-client/runtime-mode.ts#isServeChatTransportPreferred]], [[src/main/copilot-runtime-client/runtime-mode.ts#isServeChatTransportEnabled]]. Owner: [[src/main/runtime-adapters/ServeChatRuntimeAdapter.ts#ServeChatRuntimeAdapter]] via [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]].
+
+Client: [[src/main/copilot-runtime-client/clients/chat-runtime-client.ts#chatRuntimeClient]] + SSE [[src/main/copilot-runtime-client/runtime-sse-client.ts#subscribeRuntimeSse]]. Contracts: [[src/shared/copilot-runtime/chat-runtime-serve-contract.ts#mapServeChatEventToRuntimeEvent]] (hand-authored; OpenAPI alignment deferred).

@@ -8,6 +8,7 @@ import type {
   HermesExpertPolicy,
 } from "../../shared/hermes-experts/hermes-experts-contract";
 import { readHermesConfig, writeHermesConfig, type HermesConfigDocument } from "../hermes-config/hermes-config-yaml";
+import { isServeControlPlanePreferred } from "../copilot-runtime-client/runtime-mode";
 import { installSkill } from "../skills";
 import { insertRunEvent } from "./expert-runtime-db";
 import { registerExpertProfileRuntime } from "./expert-profile-manager";
@@ -55,6 +56,14 @@ function mergeInstallPlanConfig(profileName: string, port: number, plan: ExpertI
         trust_required: mcp.trustRequired ?? false,
       };
     }
+  }
+
+  // Phase 2 hardening: Serve owns Hermes YAML; skip Desktop write under Serve CP.
+  if (isServeControlPlanePreferred()) {
+    console.warn(
+      `[expert-install] Serve control plane preferred — skip writeHermesConfig for profile=${profileName}`,
+    );
+    return;
   }
 
   writeHermesConfig(profileName, doc);

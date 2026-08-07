@@ -44,6 +44,14 @@ import {
 } from "./hermes-experts/expert-profile-manager";
 import { getRuntimeInstance } from "./profile-runtime-db";
 import { resolveProfileId, startProfile } from "./profile-runtime-manager";
+import {
+  blockedGatewayMessage,
+  resolveGatewayControlMode,
+  serveRestartGateway,
+  serveStartGateway,
+  serveStopGateway,
+} from "./runtime-adapters/gateway-control";
+import { ServeInstanceAdapter } from "./runtime-adapters/ServeInstanceAdapter";
 
 const LOCAL_API_URL = "http://127.0.0.1:8642";
 
@@ -694,6 +702,14 @@ function spawnHermesGatewayProcess(
   cliArgs: string[],
   env: Record<string, string>,
 ): ChildProcess {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode !== "legacy") {
+    throw new Error(
+      controlMode === "blocked"
+        ? blockedGatewayMessage()
+        : "Serve control plane enabled: Hermes Gateway CLI spawn is forbidden",
+    );
+  }
   const cwd = getHermesRepo();
 
   if (process.platform === "win32") {
@@ -1041,6 +1057,7 @@ export function stopHealthPolling(): void {
   }
 }
 
+// AUTO-GENERATED PATCH CONTENT — applied by script
 // ────────────────────────────────────────────────────
 //  Gateway management
 // ────────────────────────────────────────────────────
@@ -1048,62 +1065,16 @@ export function stopHealthPolling(): void {
 let gatewayProcess: ChildProcess | null = null;
 let gatewayStartedByApp = false;
 
-// @lat: [[domain/gateway#Gateway lifecycle]]
-export function startGateway(profile?: string): boolean {
-  ensureInitialized();
-  if (profile && profile !== "default" && isExpertManagedProfile(profile)) {
-    ensureApiServerKey(profile);
-    void startProfile(resolveProfileId(profile)).catch((err) => {
-      console.error(`[Hermes] expert profile start failed (${profile}):`, err);
-    });
-    return true;
-  }
+/** Serve CP sync status cache — refreshed by isGatewayRunningAsync / start|stop. */
+const serveGatewayRunningCache = new Map<string, { running: boolean; at: number }>();
+const SERVE_STATUS_CACHE_MS = 5_000;
 
-  ensureApiServerKey(profile);
-  const configSynced = syncGatewayModelSection(profile);
-  if (configSynced && isGatewayRunning()) {
-    restartGateway(profile);
-    return false;
-  }
-  if (isGatewayRunning()) return false;
+function serveCacheKey(profile?: string): string {
+  return profile?.trim() || "default";
+}
 
-  // Build gateway env with profile API keys
-  const gatewayEnv: Record<string, string> = {
-    ...(process.env as Record<string, string>),
-    PATH: getEnhancedPath(),
-    HOME: homedir(),
-    HERMES_HOME: HERMES_HOME,
-    API_SERVER_ENABLED: "true", // Ensure API server starts with gateway
-  };
-
-  // Inject ALL profile API keys so the gateway can authenticate with any provider.
-  const profileEnv = readEnv(profile);
-  for (const [key, value] of Object.entries(profileEnv)) {
-    if (value) {
-      gatewayEnv[key] = value;
-    }
-  }
-
-  gatewayProcess = spawnHermesGatewayProcess(["gateway"], gatewayEnv);
-
-  gatewayProcess.unref();
-
-  gatewayProcess.on("close", () => {
-    gatewayProcess = null;
-    gatewayStartedByApp = false;
-    apiServerAvailable = false;
-    // Restart health polling to detect if gateway comes back
-    startHealthPolling();
-  });
-
-  gatewayStartedByApp = true;
-
-  // Wait a bit then check if API server came up
-  setTimeout(async () => {
-    apiServerAvailable = await isApiServerReady();
-  }, 3000);
-
-  return true;
+function setServeRunningCache(profile: string | undefined, running: boolean): void {
+  serveGatewayRunningCache.set(serveCacheKey(profile), { running, at: Date.now() });
 }
 
 function readPidFile(): number | null {
@@ -1111,7 +1082,6 @@ function readPidFile(): number | null {
   if (!existsSync(pidFile)) return null;
   try {
     const raw = readFileSync(pidFile, "utf-8").trim();
-    // PID file can be JSON ({"pid": 1234, ...}) or plain integer
     const parsed = raw.startsWith("{")
       ? JSON.parse(raw).pid
       : parseInt(raw, 10);
@@ -1121,7 +1091,47 @@ function readPidFile(): number | null {
   }
 }
 
-export function stopGateway(force = false): void {
+function isGatewayRunningLegacy(profile?: string): boolean {
+  if (profile && profile !== "default" && isExpertManagedProfile(profile)) {
+    const instance = getRuntimeInstance(resolveProfileId(profile));
+    return instance?.status === "running";
+  }
+  if (gatewayProcess && !gatewayProcess.killed) return true;
+  const pid = readPidFile();
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Probe Serve Instance health (Phase 2 hardening). */
+export async function isGatewayRunningAsync(profile?: string): Promise<boolean> {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    setServeRunningCache(profile, false);
+    return false;
+  }
+  if (controlMode === "serve") {
+    try {
+      const instanceId = await ServeInstanceAdapter.resolveInstanceId(serveCacheKey(profile));
+      const health = await ServeInstanceAdapter.health(instanceId);
+      const running =
+        health.healthy || health.status === "running" || health.status === "starting";
+      setServeRunningCache(profile, running);
+      return running;
+    } catch (err) {
+      console.error("[Hermes] Serve isGatewayRunningAsync failed:", err);
+      setServeRunningCache(profile, false);
+      return false;
+    }
+  }
+  return isGatewayRunningLegacy(profile);
+}
+
+function stopGatewayLegacy(force = false): void {
   if (!force && !gatewayStartedByApp) return;
 
   if (gatewayProcess && !gatewayProcess.killed) {
@@ -1136,35 +1146,153 @@ export function stopGateway(force = false): void {
       // already dead
     }
   }
-  // Always clear the PID file once we've signalled it. Leaving a stale PID
-  // around means the next isGatewayRunning() / stopGateway() call can hit
-  // an unrelated process that the OS has since assigned the same PID.
   const pidFile = join(HERMES_HOME, "gateway.pid");
   if (existsSync(pidFile)) {
     try {
       unlinkSync(pidFile);
     } catch {
-      // best-effort; will be overwritten on next gateway start
+      // best-effort
     }
   }
   gatewayStartedByApp = false;
   apiServerAvailable = false;
 }
 
-export function isGatewayRunning(profile?: string): boolean {
+function startGatewayLegacy(profile?: string): boolean {
   if (profile && profile !== "default" && isExpertManagedProfile(profile)) {
-    const instance = getRuntimeInstance(resolveProfileId(profile));
-    return instance?.status === "running";
-  }
-  if (gatewayProcess && !gatewayProcess.killed) return true;
-  const pid = readPidFile();
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
+    ensureApiServerKey(profile);
+    void startProfile(resolveProfileId(profile)).catch((err) => {
+      console.error(`[Hermes] expert profile start failed (${profile}):`, err);
+    });
     return true;
-  } catch {
+  }
+
+  ensureApiServerKey(profile);
+  const configSynced = syncGatewayModelSection(profile);
+  if (configSynced && isGatewayRunningLegacy()) {
+    restartGatewayLegacy(profile);
     return false;
   }
+  if (isGatewayRunningLegacy()) return false;
+
+  const gatewayEnv: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    PATH: getEnhancedPath(),
+    HOME: homedir(),
+    HERMES_HOME: HERMES_HOME,
+    API_SERVER_ENABLED: "true",
+  };
+
+  const profileEnv = readEnv(profile);
+  for (const [key, value] of Object.entries(profileEnv)) {
+    if (value) {
+      gatewayEnv[key] = value;
+    }
+  }
+
+  gatewayProcess = spawnHermesGatewayProcess(["gateway"], gatewayEnv);
+  gatewayProcess.unref();
+  gatewayProcess.on("close", () => {
+    gatewayProcess = null;
+    gatewayStartedByApp = false;
+    apiServerAvailable = false;
+    startHealthPolling();
+  });
+
+  gatewayStartedByApp = true;
+  setTimeout(async () => {
+    apiServerAvailable = await isApiServerReady();
+  }, 3000);
+
+  return true;
+}
+
+function restartGatewayLegacy(profile?: string): void {
+  if (!isGatewayRunningLegacy()) return;
+  stopGatewayLegacy(true);
+  setTimeout(() => {
+    startGatewayLegacy(profile);
+  }, 500);
+}
+
+// @lat: [[domain/gateway#Gateway lifecycle]]
+export async function startGatewayAsync(profile?: string): Promise<boolean> {
+  ensureInitialized();
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    console.error("[Hermes]", blockedGatewayMessage());
+    return false;
+  }
+  if (controlMode === "serve") {
+    const ok = await serveStartGateway(profile || "default");
+    setServeRunningCache(profile, ok);
+    return ok;
+  }
+  return startGatewayLegacy(profile);
+}
+
+/**
+ * Sync start. Under Serve CP schedules async start and returns false
+ * (does not claim success). Prefer `startGatewayAsync` from IPC / chat.
+ */
+export function startGateway(profile?: string): boolean {
+  ensureInitialized();
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    console.error("[Hermes]", blockedGatewayMessage());
+    return false;
+  }
+  if (controlMode === "serve") {
+    void startGatewayAsync(profile).then((ok) => {
+      if (!ok) console.error("[Hermes] Serve startGateway (sync schedule) failed");
+    });
+    return false;
+  }
+  return startGatewayLegacy(profile);
+}
+
+export async function stopGatewayAsync(force = false, profile?: string): Promise<boolean> {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    console.error("[Hermes]", blockedGatewayMessage());
+    return false;
+  }
+  if (controlMode === "serve") {
+    const ok = await serveStopGateway(profile || "default");
+    if (ok) setServeRunningCache(profile, false);
+    return ok;
+  }
+  stopGatewayLegacy(force);
+  return true;
+}
+
+export function stopGateway(force = false): void {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    console.error("[Hermes]", blockedGatewayMessage());
+    return;
+  }
+  if (controlMode === "serve") {
+    void stopGatewayAsync(force, "default").then((ok) => {
+      if (!ok) console.error("[Hermes] Serve stopGateway (sync schedule) failed");
+    });
+    return;
+  }
+  stopGatewayLegacy(force);
+}
+
+export function isGatewayRunning(profile?: string): boolean {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") return false;
+  if (controlMode === "serve") {
+    const key = serveCacheKey(profile);
+    const cached = serveGatewayRunningCache.get(key);
+    if (!cached || Date.now() - cached.at >= SERVE_STATUS_CACHE_MS) {
+      void isGatewayRunningAsync(profile);
+    }
+    return cached?.running ?? false;
+  }
+  return isGatewayRunningLegacy(profile);
 }
 
 export function isApiReady(): boolean {
@@ -1198,35 +1326,52 @@ export function testRemoteConnection(
 }
 
 export function restartGateway(profile?: string): void {
-  if (!isGatewayRunning()) return;
-  stopGateway(true);
-  setTimeout(() => {
-    startGateway(profile);
-  }, 500);
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    console.error("[Hermes]", blockedGatewayMessage());
+    return;
+  }
+  if (controlMode === "serve") {
+    void restartGatewayAsync(profile).then((ok) => {
+      if (!ok) console.error("[Hermes] Serve restartGateway (sync schedule) failed");
+    });
+    return;
+  }
+  restartGatewayLegacy(profile);
 }
 
-/** Restart gateway and wait until API health responds (local mode model switch). */
-export function restartGatewayAsync(profile?: string): Promise<void> {
+/** Restart gateway; under Serve awaits Instance restart and returns ok. */
+export async function restartGatewayAsync(profile?: string): Promise<boolean> {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    console.error("[Hermes]", blockedGatewayMessage());
+    return false;
+  }
+  if (controlMode === "serve") {
+    const ok = await serveRestartGateway(profile || "default");
+    setServeRunningCache(profile, ok);
+    return ok;
+  }
   return new Promise((resolve) => {
-    if (!isGatewayRunning()) {
-      resolve();
+    if (!isGatewayRunningLegacy()) {
+      resolve(true);
       return;
     }
-    stopGateway(true);
+    stopGatewayLegacy(true);
     apiServerAvailable = false;
     setTimeout(() => {
-      startGateway(profile);
+      startGatewayLegacy(profile);
       let attempts = 0;
       const poll = (): void => {
         void isApiServerReady(profile).then((ok) => {
           if (ok) {
             apiServerAvailable = true;
-            resolve();
+            resolve(true);
             return;
           }
           attempts += 1;
           if (attempts >= 24) {
-            resolve();
+            resolve(false);
             return;
           }
           setTimeout(poll, 250);

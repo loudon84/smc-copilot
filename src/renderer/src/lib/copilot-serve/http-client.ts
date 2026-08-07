@@ -1,50 +1,57 @@
+/**
+ * Legacy Renderer Serve HTTP helpers.
+ * v9.0: JSON requests go through Main `window.copilotRuntime.proxyFetch`
+ * so Device Token never enters Renderer. Prefer domain IPC in later phases.
+ */
 export interface CopilotServeHttpConfig {
   baseUrl: string;
-  token: string;
+  /**
+   * @deprecated Device Token is Main-only (v9.0). Always undefined in Renderer.
+   * Kept optional for call-site compatibility during migration.
+   */
+  token?: string;
 }
 
 export async function copilotServeFetch<T>(
-  config: CopilotServeHttpConfig,
+  _config: CopilotServeHttpConfig,
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const url = `${config.baseUrl.replace(/\/$/, "")}${path}`;
-  const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
-  if (config.token) {
-    headers.set("X-Copilot-Desktop-Token", config.token);
+  if (!window.copilotRuntime?.proxyFetch) {
+    throw new Error("copilotRuntime.proxyFetch unavailable — preload not loaded");
   }
 
-  const res = await fetch(url, { ...init, headers });
-  if (!res.ok) {
-    const text = await res.text();
-    let message = text || `HTTP ${res.status}`;
-    let code: string | undefined;
-    try {
-      const body = JSON.parse(text) as {
-        message?: string;
-        detail?: string | { msg?: string };
-        error?: { code?: string; message?: string };
-      };
-      code = body.error?.code;
-      if (body.error?.message) {
-        message = body.error.message;
-      } else if (typeof body.detail === "string") {
-        message = body.detail;
-      } else if (body.detail && typeof body.detail === "object" && "msg" in body.detail) {
-        message = String(body.detail.msg);
-      } else if (body.message) {
-        message = body.message;
+  const method = (init?.method?.toUpperCase() ?? "GET") as
+    | "GET"
+    | "POST"
+    | "PUT"
+    | "PATCH"
+    | "DELETE";
+  let body: unknown;
+  if (init?.body != null) {
+    if (typeof init.body === "string") {
+      try {
+        body = JSON.parse(init.body);
+      } catch {
+        body = init.body;
       }
-    } catch {
-      /* keep raw text */
+    } else {
+      body = init.body;
     }
+  }
+
+  const result = await window.copilotRuntime.proxyFetch({
+    path,
+    method,
+    body,
+  });
+
+  if (!result.ok) {
+    const message = result.error?.message || `HTTP ${result.status ?? "error"}`;
     const err = new Error(message) as Error & { code?: string };
-    if (code) err.code = code;
+    if (result.error?.code) err.code = result.error.code;
     throw err;
   }
-  if (res.status === 204) {
-    return undefined as T;
-  }
-  return (await res.json()) as T;
+
+  return result.data as T;
 }

@@ -2,7 +2,7 @@ import {
   readStoredSession,
   readStoredSessionSync,
 } from "../auth/token-store";
-import { restartGateway } from "../hermes";
+import { restartGatewayAsync } from "../hermes";
 import {
   getMcpSkillGatewayConfig,
   resolveBackendBaseUrl,
@@ -46,7 +46,7 @@ async function maybeRestartHermesGateway(): Promise<void> {
   const config = getMcpSkillGatewayConfig();
   if (!config.autoRestartHermesGateway) return;
   try {
-    await restartGateway();
+    await restartGatewayAsync();
   } catch (err) {
     console.warn("[MCP-SKILL-GATEWAY] Hermes gateway restart failed:", err);
   }

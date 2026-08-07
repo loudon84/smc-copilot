@@ -13,6 +13,7 @@ import {
   resolveApiKeyEnvForBaseUrl,
   resolveApiKeyForSavedModel,
 } from "../hermes-model-env";
+import { assertLegacyYamlControlPlane } from "../runtime-adapters/config-control";
 
 export type HermesCustomProvider = {
   name: string;
@@ -87,6 +88,8 @@ export function writeHermesConfig(
   profile: string | undefined,
   doc: HermesConfigDocument,
 ): void {
+  // Phase 2: Serve owns configuration; fail closed unless legacy-direct.
+  assertLegacyYamlControlPlane("writeHermesConfig");
   const configFile = ensureConfigFile(profile);
   safeWriteFile(configFile, yaml.dump(doc, { lineWidth: -1, noRefs: true }));
   invalidateModelConfigCache(profile);

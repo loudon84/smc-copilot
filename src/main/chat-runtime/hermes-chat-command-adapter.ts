@@ -5,7 +5,7 @@
  * Returns GATEWAY_UNSUPPORTED only when no transport can run.
  */
 
-import { getApiUrl, getRemoteAuthHeader, isGatewayRunning, isRemoteMode } from "../hermes";
+import { getApiUrl, getRemoteAuthHeader, isGatewayRunningAsync, isRemoteMode } from "../hermes";
 
 export type HermesChatCommandAdapter = {
   respondClarify(input: {
@@ -74,7 +74,7 @@ async function postContinuationMessage(input: {
   const profile =
     input.profileId === "default" ? undefined : input.profileId.trim() || undefined;
 
-  if (!isRemoteMode() && !isGatewayRunning(profile)) {
+  if (!isRemoteMode() && !(await isGatewayRunningAsync(profile))) {
     throw new HermesChatCommandUnsupportedError(
       "Gateway is not running; cannot continue clarify/approval",
     );

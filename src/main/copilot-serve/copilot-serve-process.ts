@@ -20,11 +20,23 @@ import {
 import { buildCopilotRuntimeEnv } from "../runtime/runtime-paths";
 import { runCopilotServePreflight } from "./copilot-serve-preflight";
 import { setCopilotServeManagedPid } from "./copilot-serve-runtime-state";
+import {
+  canSpawnCopilotServe,
+  canStopCopilotServe,
+  resolveCopilotRuntimeMode,
+} from "../copilot-runtime-client/runtime-mode";
+import { setLegacySharedToken } from "../copilot-runtime-client/runtime-auth-store";
 
 let child: ChildProcess | null = null;
+/** Dev/e2e legacy shared token only — never returned via getConnection / IPC. */
 let desktopToken = "";
 let lastError: string | null = null;
 let processStatus: CopilotServeProcessStatus = "stopped";
+
+function rememberLegacyToken(token: string): void {
+  desktopToken = token;
+  setLegacySharedToken(token);
+}
 
 function resolvePythonExecutable(_serveRoot: string): string {
   const fromEnv = process.env.COPILOT_SERVE_PYTHON?.trim();
@@ -98,11 +110,17 @@ function buildStatus(paths: NonNullable<ReturnType<typeof getCopilotServePaths>>
 
 export function getCopilotServeConnection(): CopilotServeConnection | null {
   const paths = getCopilotServePaths();
-  if (!paths || !desktopToken) return null;
+  if (!paths) return null;
+  // Paired device token or legacy env token may exist in auth store; never expose here.
+  if (!desktopToken && !process.env.COPILOT_DESKTOP_TOKEN?.trim()) {
+    // Still allow connection probe when Serve is already running without local spawn token.
+    if (processStatus !== "running" && processStatus !== "degraded") {
+      return null;
+    }
+  }
   return {
     baseUrl: `http://127.0.0.1:${paths.port}`,
     port: paths.port,
-    token: desktopToken,
   };
 }
 
@@ -116,7 +134,7 @@ export async function syncCopilotServeStatusFromHealth(): Promise<CopilotServeSt
   const healthUrl = `${buildStatus(paths).baseUrl}/api/v1/health`;
   if (await checkCopilotServeHealth(healthUrl)) {
     if (!desktopToken) {
-      desktopToken = process.env.COPILOT_DESKTOP_TOKEN?.trim() || randomUUID();
+      rememberLegacyToken(process.env.COPILOT_DESKTOP_TOKEN?.trim() || randomUUID());
     }
     if (!child || child.killed) {
       processStatus = "running";
@@ -159,6 +177,14 @@ function formatPreflightFailure(
 }
 
 export async function startCopilotServeProcess(): Promise<CopilotServeStatus> {
+  const mode = resolveCopilotRuntimeMode();
+  if (!canSpawnCopilotServe(mode)) {
+    processStatus = "missing";
+    lastError =
+      "Production Desktop must not spawn Runtime. Install or start the Windows Service, then Retry.";
+    return getCopilotServeStatus();
+  }
+
   const paths = getCopilotServePaths();
   if (!paths) {
     processStatus = "missing";
@@ -169,7 +195,7 @@ export async function startCopilotServeProcess(): Promise<CopilotServeStatus> {
   const healthUrl = `${buildStatus(paths).baseUrl}/api/v1/health`;
   if (await checkCopilotServeHealth(healthUrl)) {
     if (!desktopToken) {
-      desktopToken = process.env.COPILOT_DESKTOP_TOKEN?.trim() || randomUUID();
+      rememberLegacyToken(process.env.COPILOT_DESKTOP_TOKEN?.trim() || randomUUID());
     }
     processStatus = "running";
     lastError = null;
@@ -193,7 +219,7 @@ export async function startCopilotServeProcess(): Promise<CopilotServeStatus> {
 
   processStatus = "starting";
   lastError = null;
-  desktopToken = process.env.COPILOT_DESKTOP_TOKEN?.trim() || randomUUID();
+  rememberLegacyToken(process.env.COPILOT_DESKTOP_TOKEN?.trim() || randomUUID());
   mkdirSync(dirname(paths.sqlitePath), { recursive: true });
   mkdirSync(dirname(paths.logPath), { recursive: true });
 
@@ -252,6 +278,12 @@ export async function startCopilotServeProcess(): Promise<CopilotServeStatus> {
 }
 
 export function stopCopilotServeProcess(): CopilotServeStatus {
+  const mode = resolveCopilotRuntimeMode();
+  if (!canStopCopilotServe(mode)) {
+    lastError = "Production Desktop must not stop Runtime on quit";
+    return getCopilotServeStatus();
+  }
+
   if (child && !child.killed) {
     if (process.platform === "win32" && child.pid) {
       try {

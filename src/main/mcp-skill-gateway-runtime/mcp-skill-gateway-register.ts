@@ -1,5 +1,6 @@
 import { existsSync } from "fs";
 import { join } from "path";
+import { isServeControlPlanePreferred } from "../copilot-runtime-client/runtime-mode";
 import {
   readHermesConfig,
   writeHermesConfig,
@@ -153,6 +154,27 @@ export async function registerMcpSkillGatewayToHermes(input: {
         profile,
       );
       backendMatched = preconditions.backendMatched;
+    }
+
+    // Phase 2 hardening: Serve owns Hermes MCP config; do not write YAML.
+    if (isServeControlPlanePreferred()) {
+      console.warn(
+        "[MCP-SKILL-GATEWAY] Serve control plane preferred — skip Hermes YAML MCP registration",
+      );
+      return {
+        ok: false,
+        changed: false,
+        configPath,
+        profile,
+        url: expectedUrl,
+        expectedUrl,
+        urlMatched: false,
+        backendMatched,
+        ready: false,
+        error:
+          "Serve control plane owns Hermes MCP registration; Desktop YAML write skipped. Use Serve MCP APIs.",
+        errorCode: "MCP_GATEWAY_CONFIG_WRITE_FAILED",
+      };
     }
 
     const doc = readHermesConfig(profile === "default" ? undefined : profile);

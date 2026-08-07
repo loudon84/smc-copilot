@@ -18,6 +18,8 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
   const [updateResultType, setUpdateResultType] = useState<"success" | "error" | null>(null);
   const [dumpOutput, setDumpOutput] = useState<string | null>(null);
   const [dumpRunning, setDumpRunning] = useState(false);
+  const [serveControlPlane, setServeControlPlane] = useState(false);
+  const [diagnosticsEnv, setDiagnosticsEnv] = useState<string | null>(null);
 
   const loadConfig = useCallback(async (): Promise<void> => {
     const [home, aVersion] = await Promise.all([
@@ -37,6 +39,14 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
         }
       }
     });
+
+    if (window.copilotRuntime) {
+      try {
+        setServeControlPlane(await window.copilotRuntime.isServeControlPlane());
+      } catch {
+        setServeControlPlane(false);
+      }
+    }
   }, [profile]);
 
   useEffect(() => {
@@ -46,6 +56,29 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
   async function handleDoctor(): Promise<void> {
     setDoctorRunning(true);
     setDoctorOutput(null);
+    if (serveControlPlane && window.copilotRuntime) {
+      try {
+        const [summary, env, logs] = await Promise.all([
+          window.copilotRuntime.getDiagnosticsSummary(),
+          window.copilotRuntime.getDiagnosticsEnvironment(),
+          window.copilotRuntime.getDiagnosticsLogs({ tail: 40 }),
+        ]);
+        const lines = [
+          "Serve Diagnostics (CLI doctor disabled under Serve control plane)",
+          `runtime=${summary?.runtimeVersion ?? "—"} api=${summary?.runtimeApiVersion ?? "—"}`,
+          `hermes=${summary?.hermesVersion ?? "—"} storeHealthy=${String(summary?.storeHealthy)}`,
+          `platform=${env?.platform ?? "—"} hermesInstalled=${String(env?.hermesInstalled)}`,
+          "",
+          ...(logs?.lines ?? []),
+        ];
+        setDoctorOutput(lines.join("\n"));
+        setDiagnosticsEnv(env ? JSON.stringify(env.checks ?? {}, null, 2) : null);
+      } catch (err) {
+        setDoctorOutput(err instanceof Error ? err.message : String(err));
+      }
+      setDoctorRunning(false);
+      return;
+    }
     const output = await window.hermesAPI.runHermesDoctor();
     setDoctorOutput(output);
     setDoctorRunning(false);
@@ -65,6 +98,11 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
   }
 
   async function handleUpdateHermes(): Promise<void> {
+    if (serveControlPlane) {
+      setUpdateResult("Serve 控制面已启用：请通过 Runtime Repair / 签名安装器恢复 Hermes，不再使用本地 CLI update。");
+      setUpdateResultType("error");
+      return;
+    }
     setUpdating(true);
     setUpdateResult(null);
     const result = await window.hermesAPI.runHermesUpdate();
@@ -94,6 +132,11 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
   return (
     <section className="settings-section">
       <div className="settings-section-title">{t("settings.sections.hermesAgent")}</div>
+      {serveControlPlane ? (
+        <p className="settings-field-hint">
+          Serve control plane 已启用：Doctor 走 Serve Diagnostics；Update/Debug Dump 的 Hermes CLI 路径已禁用。
+        </p>
+      ) : null}
       <div className="settings-hermes-info">
         <div className="settings-hermes-row">
           <div className="settings-hermes-detail">
@@ -153,7 +196,7 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
           <div className="settings-hermes-update-badge">{parsedVersion.updateInfo}</div>
         ) : null}
         <div className="settings-hermes-actions">
-          {parsedVersion?.updateInfo ? (
+          {parsedVersion?.updateInfo && !serveControlPlane ? (
             <button
               type="button"
               className="btn btn-primary"
@@ -164,7 +207,7 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
             </button>
           ) : (
             <button type="button" className="btn btn-secondary" disabled>
-              {t("settings.latestVersion")}
+              {serveControlPlane ? "Use Runtime Repair" : t("settings.latestVersion")}
             </button>
           )}
           <button
@@ -173,19 +216,27 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
             onClick={() => void handleDoctor()}
             disabled={doctorRunning}
           >
-            {doctorRunning ? t("settings.runningDiagnosis") : t("settings.runDiagnosis")}
+            {doctorRunning
+              ? t("settings.runningDiagnosis")
+              : serveControlPlane
+                ? "Serve Diagnostics"
+                : t("settings.runDiagnosis")}
           </button>
           <button
             type="button"
             className="btn btn-secondary"
             onClick={async () => {
+              if (serveControlPlane) {
+                setDumpOutput("Serve control plane: Hermes CLI dump is disabled. Use Instance Logs / Serve Diagnostics instead.");
+                return;
+              }
               setDumpRunning(true);
               setDumpOutput(null);
               const output = await window.hermesAPI.runHermesDump();
               setDumpOutput(output);
               setDumpRunning(false);
             }}
-            disabled={dumpRunning}
+            disabled={dumpRunning || serveControlPlane}
           >
             {dumpRunning ? t("settings.running") : t("settings.debugDump")}
           </button>
@@ -196,6 +247,7 @@ export function HermesAgentSection({ profile }: HermesAgentSectionProps): React.
           </div>
         ) : null}
         {doctorOutput ? <pre className="settings-hermes-doctor">{doctorOutput}</pre> : null}
+        {diagnosticsEnv ? <pre className="settings-hermes-doctor">{diagnosticsEnv}</pre> : null}
         {dumpOutput ? <pre className="settings-hermes-doctor">{dumpOutput}</pre> : null}
       </div>
     </section>

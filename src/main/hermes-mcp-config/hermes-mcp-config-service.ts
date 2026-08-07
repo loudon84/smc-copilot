@@ -6,7 +6,7 @@ import {
   type HermesConfigDocument,
 } from "../hermes-config/hermes-config-yaml";
 import { readEnv, setEnvValue } from "../config";
-import { isGatewayRunning, restartGatewayAsync } from "../hermes";
+import { isGatewayRunningAsync, restartGatewayAsync } from "../hermes";
 import type {
   HermesMcpListToolsResult,
   HermesMcpServerMutationResult,
@@ -20,6 +20,12 @@ import {
   type HermesMcpServerYamlEntry,
   validateSaveHermesMcpServerInput,
 } from "./hermes-mcp-config-validator";
+import {
+  blockedGatewayMessage,
+  resolveGatewayControlMode,
+} from "../runtime-adapters/gateway-control";
+import { ServeMcpAdapter } from "../runtime-adapters/ServeMcpAdapter";
+import { asRecord, pickString } from "../../shared/copilot-runtime/instance-contract";
 
 function readMcpServers(doc: HermesConfigDocument): Record<string, HermesMcpServerYamlEntry> {
   const raw = doc.mcp_servers;
@@ -74,7 +80,26 @@ function toServerView(
   };
 }
 
-async function pingHermesHealth(profile?: string): Promise<boolean> {
+function mapServeToHermesView(server: {
+  serverId: string;
+  name: string;
+  enabled: boolean;
+  url: string | null;
+  tokenConfigured: boolean;
+  status: HermesMcpServerView["status"];
+  lastError: string | null;
+}): HermesMcpServerView {
+  return {
+    name: server.name || server.serverId,
+    enabled: server.enabled,
+    url: server.url ?? "",
+    tokenConfigured: server.tokenConfigured,
+    status: server.status,
+    lastError: server.lastError ?? undefined,
+  };
+}
+
+async function pingHermesHealth(_profile?: string): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get("http://127.0.0.1:8642/health", (res) => {
       resolve(res.statusCode != null && res.statusCode >= 200 && res.statusCode < 300);
@@ -89,12 +114,25 @@ async function pingHermesHealth(profile?: string): Promise<boolean> {
 }
 
 async function restartIfNeeded(profile?: string): Promise<boolean> {
-  if (!(await isGatewayRunning(profile))) return false;
+  if (!(await isGatewayRunningAsync(profile))) return false;
   await restartGatewayAsync(profile);
   return true;
 }
 
+function assertMcpControlAllowed(): void {
+  const mode = resolveGatewayControlMode();
+  if (mode === "blocked") {
+    throw new Error(blockedGatewayMessage());
+  }
+}
+
 export async function listHermesMcpServers(profile?: string): Promise<HermesMcpServerView[]> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    const servers = await ServeMcpAdapter.list(profile);
+    return servers.map(mapServeToHermesView);
+  }
   const doc = readHermesConfig(profile);
   const servers = readMcpServers(doc);
   return Object.entries(servers).map(([name, entry]) => toServerView(name, entry, profile));
@@ -106,6 +144,29 @@ export async function saveHermesMcpServer(
   const validationError = validateSaveHermesMcpServerInput(input);
   if (validationError) {
     return { ok: false, errorCode: "INVALID_INPUT", message: validationError };
+  }
+
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    try {
+      const saved = await ServeMcpAdapter.save(input.profile, {
+        name: input.name.trim(),
+        enabled: input.enabled,
+        url: input.url,
+        token: input.token,
+        timeout: input.timeout,
+        headers: input.headers,
+        toolsInclude: input.toolsInclude,
+      });
+      return { ok: true, server: mapServeToHermesView(saved), restarted: false };
+    } catch (err) {
+      return {
+        ok: false,
+        errorCode: "SERVE_MCP_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   const profile = input.profile;
@@ -166,6 +227,21 @@ export async function removeHermesMcpServer(
   name: string,
   profile?: string,
 ): Promise<HermesMcpServerMutationResult> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    try {
+      await ServeMcpAdapter.remove(name, profile);
+      return { ok: true, restarted: false };
+    } catch (err) {
+      return {
+        ok: false,
+        errorCode: "SERVE_MCP_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const doc = readHermesConfig(profile);
   const servers = readMcpServers(doc);
   if (!servers[name]) {
@@ -183,6 +259,28 @@ export async function setHermesMcpServerEnabled(
   enabled: boolean,
   profile?: string,
 ): Promise<HermesMcpServerMutationResult> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    try {
+      if (enabled) await ServeMcpAdapter.enable(name, profile);
+      else await ServeMcpAdapter.disable(name, profile);
+      const servers = await ServeMcpAdapter.list(profile);
+      const server = servers.find((s) => s.name === name || s.serverId === name);
+      return {
+        ok: true,
+        server: server ? mapServeToHermesView(server) : undefined,
+        restarted: false,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        errorCode: "SERVE_MCP_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const doc = readHermesConfig(profile);
   const servers = readMcpServers(doc);
   const entry = servers[name];
@@ -200,6 +298,29 @@ export async function testHermesMcpServer(
   name: string,
   profile?: string,
 ): Promise<HermesMcpTestServerResult> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    try {
+      const raw = await ServeMcpAdapter.test(name, profile);
+      const obj = asRecord(raw);
+      const ok = obj.ok !== false;
+      return {
+        ok,
+        gatewayHealthy: true,
+        serverRegistered: true,
+        message: pickString(obj, "message", "detail") ?? (ok ? "Serve MCP test ok" : "Serve MCP test failed"),
+        errorCode: ok ? undefined : "SERVE_MCP_TEST_FAILED",
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        errorCode: "SERVE_MCP_ERROR",
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const doc = readHermesConfig(profile);
   const servers = readMcpServers(doc);
   const entry = servers[name];
@@ -242,6 +363,20 @@ export async function testHermesMcpServer(
 export async function reloadHermesMcpConfig(
   profile?: string,
 ): Promise<{ ok: boolean; restarted?: boolean; message?: string }> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    try {
+      await ServeMcpAdapter.reload(profile);
+      return { ok: true, restarted: false, message: "Serve configuration reloaded" };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   const restarted = await restartIfNeeded(profile);
   return {
     ok: true,
@@ -254,6 +389,22 @@ export async function listHermesMcpTools(
   name: string,
   profile?: string,
 ): Promise<HermesMcpListToolsResult> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    const servers = await ServeMcpAdapter.list(profile);
+    const server = servers.find((s) => s.name === name || s.serverId === name);
+    if (!server) {
+      return { ok: false, tools: [], source: "config", message: `MCP server not found: ${name}` };
+    }
+    return {
+      ok: true,
+      tools: [],
+      source: "config",
+      message: "Tool list is managed by Serve Instance MCP (use Serve tools/list when available)",
+    };
+  }
+
   const doc = readHermesConfig(profile);
   const servers = readMcpServers(doc);
   const entry = servers[name];
@@ -274,6 +425,18 @@ export async function listHermesMcpTools(
 }
 
 export async function seedDefaultExpertMcpServer(profile?: string): Promise<void> {
+  assertMcpControlAllowed();
+  const mode = resolveGatewayControlMode();
+  if (mode === "serve") {
+    const servers = await ServeMcpAdapter.list(profile);
+    if (servers.some((s) => s.name === DEFAULT_EXPERT_MCP_SERVER)) return;
+    await ServeMcpAdapter.save(profile, {
+      name: DEFAULT_EXPERT_MCP_SERVER,
+      enabled: false,
+    });
+    return;
+  }
+
   const doc = readHermesConfig(profile);
   const servers = readMcpServers(doc);
   if (servers[DEFAULT_EXPERT_MCP_SERVER]) return;

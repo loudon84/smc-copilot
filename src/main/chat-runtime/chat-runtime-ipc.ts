@@ -41,12 +41,13 @@ import {
   replayChatRuntimeEvents,
 } from "./chat-event-replay-service";
 import { registerChatQueueIpc } from "./chat-queue-service";
+import { ServeChatRuntimeAdapter } from "../runtime-adapters/ServeChatRuntimeAdapter";
 import type { HermesChatSendPayload } from "../../shared/hermes-default-chat/hermes-default-chat-contract";
 import {
   isRemoteMode,
   sendMessage,
-  startGateway,
-  isGatewayRunning,
+  startGatewayAsync,
+  isGatewayRunningAsync,
   ensureSshTunnelIfNeeded,
 } from "../hermes";
 import { getConnectionConfig } from "../config";
@@ -255,6 +256,11 @@ async function beginChatTurn(
     return { ok: false, code: ChatRuntimeErrorCode.INVALID_INPUT, error: invalid };
   }
 
+  // Phase 3: Serve Chat Runtime transport (fail-closed when preferred but not Ready).
+  if (ServeChatRuntimeAdapter.preferred()) {
+    return ServeChatRuntimeAdapter.startTurn(input, event.sender);
+  }
+
   const runId = input.runId.trim();
   const turnId = input.turnId.trim();
   const request = input.request;
@@ -442,8 +448,8 @@ async function runChatTurnAsync(
     return;
   }
 
-  if (!isRemoteMode() && !isGatewayRunning(profile)) {
-    startGateway(profile);
+  if (!isRemoteMode() && !(await isGatewayRunningAsync(profile))) {
+    await startGatewayAsync(profile);
   }
 
   await ensureSshTunnelIfNeeded();
@@ -902,14 +908,17 @@ export function registerChatRuntimeIpc(
 
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.abort,
-    (_event, input: ChatAbortInput | string) => {
+    async (_event, input: ChatAbortInput | string) => {
       const runId = typeof input === "string" ? input : input?.runId;
       if (!runId?.trim()) {
         abortRun();
         abortAllTransports();
-        return { ok: true as const };
+        return { ok: true };
       }
       const id = runId.trim();
+      if (ServeChatRuntimeAdapter.preferred()) {
+        return ServeChatRuntimeAdapter.abort(id);
+      }
       abortTransport(id);
       const ok = abortRun(id);
       stopSessionReconcile(id);
@@ -936,6 +945,26 @@ export function registerChatRuntimeIpc(
           code: "INVALID_INPUT",
           error: "runId, turnId, and requestId are required",
         };
+      }
+
+      if (ServeChatRuntimeAdapter.preferred()) {
+        const result = await ServeChatRuntimeAdapter.command(command);
+        if (result.ok) {
+          const interactionType =
+            command.type === "clarify.respond" ? "clarify" : "approval";
+          emitChatRuntimeEvent(
+            event.sender,
+            {
+              type: "interaction.accepted",
+              runId: command.runId.trim(),
+              turnId: command.turnId.trim(),
+              requestId: command.requestId.trim(),
+              interactionType,
+            },
+            { persist: false },
+          );
+        }
+        return result;
       }
 
       const runId = command.runId.trim();
@@ -1260,6 +1289,9 @@ export function registerChatRuntimeIpc(
       _event,
       input?: ChatRuntimeRecoverInput,
     ): Promise<ChatRuntimeRecoverResult> => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        return ServeChatRuntimeAdapter.recover(input);
+      }
       try {
         const recovered = await recoverIncompleteTurns(input?.runId);
         return { ok: true, recoveredRuns: recovered };
@@ -1289,13 +1321,22 @@ export function registerChatRuntimeIpc(
 
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.getSnapshot,
-    (_event, input: ChatRuntimeGetSnapshotInput) => getChatRuntimeSnapshot(input),
+    async (_event, input: ChatRuntimeGetSnapshotInput) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        return ServeChatRuntimeAdapter.getSnapshot(input);
+      }
+      return getChatRuntimeSnapshot(input);
+    },
   );
 
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.replayEvents,
-    (_event, input: ChatRuntimeReplayEventsInput) =>
-      replayChatRuntimeEvents(input),
+    async (_event, input: ChatRuntimeReplayEventsInput) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        return ServeChatRuntimeAdapter.replayEvents(input);
+      }
+      return replayChatRuntimeEvents(input);
+    },
   );
 
   registerChatQueueIpc();

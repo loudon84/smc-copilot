@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 0.3.6（… + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
+| 版本 | 0.3.6（… + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
 | 后端 | Hermes Python Gateway，`http://127.0.0.1:8642`（default Profile） |
 
@@ -38,6 +38,9 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 | 路径 | 职责 | 常见改动 |
 |---|---|---|
 | `src/main/` | 主进程：IPC、Gateway、配置、SQLite、Enterprise Install | 新 IPC、后端逻辑 |
+| `src/main/copilot-serve/` | **V1.3** Serve 进程探测 / deploy / logs；**v9.0** production 禁止 spawn/stop | Runtime 进程策略 |
+| `src/main/copilot-runtime-client/` | **v9.0** Main-only Serve SDK：pairing / keytar Device Token / handshake / proxy-fetch / SSE scaffold | Serve-First 连接层 |
+| `src/main/runtime-adapters/` | **v9.0** Phase 2 Instance/Config/MCP/Diagnostics + **Phase 3 ServeChatRuntimeAdapter**（Session/Task/Files 仍 stub） | cutover |
 | `src/main/workspace-chat/` | **team_v1.8** Workspaces Chat：resolve / 模型 / 附件 / SSE 代理到 `copilot-serve` | Chat 面板 IPC |
 | `src/shared/workspace-chat/` | `workspace-chat-contract.ts` — Renderer/Main/Preload 共享类型 | 改 chat 契约时 |
 | `src/main/browser/` | Web Operator（BrowserView、安全、审计、Tool Server） | 浏览器自动化 |
@@ -76,7 +79,8 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 | `window.smcShell` | `src/preload/shell-api.ts` | **启动门控** `resolveStartupDecision()`；窗口控制 / openExternal |
 | `window.desktopAuth` | `src/preload/auth-api.ts` | V3.3 Portal Auth 登录（**不向 Renderer 暴露 token**） |
 | `window.desktopUserConfig` | `src/preload/user-config-api.ts` | V3.3 本地 bootstrap apply / diff / bootstrap-state |
-| `window.copilotServe` | `src/preload/copilot-serve-api.ts` | **V1.3** 本地 `copilot-serve` 生命周期（:get-connection / start / stop / logs）；**不含**任务业务 API |
+| `window.copilotServe` | `src/preload/copilot-serve-api.ts` | **V1.3** 本地 `copilot-serve` 生命周期（get-connection **不含 token** / start / stop / logs）；**不含**任务业务 API |
+| `window.copilotRuntime` | `src/preload/copilot-runtime-api.ts` | **v9.0** Serve-First：connection/pairing/repair/diagnostics/**proxyFetch**/Instance 启停与日志；**不向 Renderer 暴露 Device Token** |
 | `window.workspaceChat` | `src/preload/workspace-chat-api.ts` | **team_v1.8** Workspaces Chat（resolve / 模型 / 附件 / send SSE）；见 `docs/API_CONTRACTS.md` § Workspace Chat |
 | `window.chatRuntime` | `src/preload/chat-runtime-api.ts` | **v8.1.1** `start`/`abort`/`command`/`getState`/`getSnapshot`/`replayEvents`/`recover`/`exportDiagnostics`/`saveDiagnostics` + `queue.*` + ordered event；Continuation `completion`；profile store；`submit` 兼容（PR7 再删） |
 | `window.chatWorkspace` | `src/preload/chat-workspace-api.ts` | **v8.2** Chat Tab/Draft 持久化：`getSnapshot`/`open`/`openSession`/`patchRun`/`closeRun`/`setActive`/`reorder`/`migrateV1` + `onChanged`；Main `chat-workspace.db` |
@@ -509,6 +513,7 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 | 改 Auth / 登录 / Bootstrap | `LoginScreen.tsx` → `desktopAuth` / `desktopUserConfig` → `auth-client.ts` / `user-config-client.ts` / `startup-decision.ts` |
 | 改启动门控 / splash→login | `useStartupGate.ts` → `shell-api.ts` → `startup-ipc.ts` → `startup-decision.ts` |
 | 改 Settings / Runtime 入口 | `SettingsDrawer.tsx` + `server/ServerPanel.tsx` + `general/GeneralPanel.tsx` + `Layout.openSettingsDrawer`；Workspaces 侧栏已无 `settings` 页 |
+| 改 Serve-First Runtime / Pairing / Chat transport（v9） | `copilot-runtime-client/*` → `window.copilotRuntime`；Chat cutover：`ServeChatRuntimeAdapter` + `chat-runtime-ipc`；UI `CopilotRuntimeStatusSection` + Instances；契约 `src/shared/copilot-runtime/`；OpenAPI `npm run generate:serve-client` |
 | 改安装 / runtime 路径（V5.3 / V5.4） | `electron-builder.yml` + `build/installer.nsh` → `install-location-resolver.ts` → `runtime/runtime-paths.ts` → `shim-manager.ts` |
 | 改 Portal 部署 / Settings Portal Runtime | `build/scripts/deploy-copilot-serve.ps1` → `PortalRuntimeSection.tsx` → `aios:get-portal-info` → `getAiOsPortalInfo()` |
 | 改 i18n | `src/shared/i18n/locales/<locale>/navigation.ts`（二级侧栏 + openSettings） |
@@ -560,6 +565,7 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 | **v8.0.1** | **Chat 迁移闭环**：Controller Session/History、Abort Promise、Work 参数、SSE 事件、Prompt Hint、`chat-runtime:command`、持久化 File index、ChatRunRegistry、`typecheck:chat` | `prd_work/v8.0.1_migrate.md`, `modules/chat/controller/`, `chat-files-session-store.ts`, `workspace/chatRunRegistry.ts` |
 | **v8.0.2** | **Chat Full Integration**：完整 MessageList/Composer/ModelPicker、File Platform `chat-files/platform`（`files:*`）、PromptNavigator、多 Chat 后台并行、删除 `source/**` 与 `_upstream/**` | `prd_work/v8.0.2_chat-full-integrated.md`, `modules/chat/components/**`, `src/main/chat-files/platform/`, `MultiRunChatShell.tsx` |
 | **v8.0.3** | **Chat Workspace Layout**：`ChatRunRecord` per-run 隔离、单一 `ChatRunHeader`、Content Rail 统一宽度、Composer Context Chip、Run 状态回传 Tab、`chat-workspace-state.v1` 持久化 | `prd_work/v8.0.3_chat-workspace-layout.md`, `modules/chat/workspace/ChatRunRecord.ts`, `chatWorkspaceReducer.ts`, `ChatRunHeader.tsx`, `AiosCopilotChatHost.tsx` |
+| **v9.0.0** | **Serve-First Runtime Phase 0/1/2/3**：OpenAPI client + pairing/keytar + production 禁 spawn；**Phase 2** Instance/Config/MCP/Diagnostics + Gateway/YAML fail-closed；**Phase 3** `window.chatRuntime` → Serve `/api/v1/chat-runs*` + SSE（hand-authored 契约，legacy-direct 可回退） | copilot-runtime-client/, runtime-adapters/, prd_work/v9.0_serve-runtime-migration.md |
 | **v8.2.0** | **Persistent Chat Workspace + Session Catalog**：Chat 常驻挂载、`chat-workspace.db`、Draft/Session 区分、Sessions 直读 `state.db`、`openSession` 去重、强制 Electron E2E | `prd_work/v8.2_persistent-chat-session.md`, `src/main/chat-workspace/`, `src/main/session-catalog/`, `HermesPersistentChatWorkspace.tsx`, `tests/e2e/chat/persistent-workspace.spec.ts` |
 | **v8.1.1** | **Durable Runtime Closure**：Continuation completion 互斥、profile store+事务 sequence、Snapshot/RecoveryBridge、Queue IPC/UI、turnId Retry、Diagnostics Save、Playwright E2E（PR7 Deprecated 顺延） | `prd_work/v8.1.1_runtime-infrastructure.md`, `hermes-interaction-continuation-adapter.ts`, `chat-runtime-store-router.ts`, `chat-event-replay-service.ts`, `chat-queue-service.ts`, `chat-diagnostics-service.ts`, `tests/e2e/chat/` |
 | **v8.1.0** | **Durable Chat Runtime**：事件驱动 `start`、state.db 持久化、Transport/State 分离、Interaction 流式续跑、Turn Ledger/Retry/Queue、Recovery+Diagnostics | `prd_work/v8.1_chat-interaction-contract.md`, `chat-runtime-store.ts`, `chat-event-sequencer.ts`, `hermes-interaction-continuation-adapter.ts`, `chatTurnLedger.ts`, `useChatRuntimeRecovery.ts` |

@@ -6,10 +6,10 @@ export type CopilotServeProcessStatus =
   | "degraded"
   | "error";
 
+/** Public connection info — Device Token must NEVER be included (v9.0 PRD §5.2). */
 export interface CopilotServeConnection {
   baseUrl: string;
   port: number;
-  token: string;
 }
 
 export interface CopilotServeStatus {

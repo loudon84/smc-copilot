@@ -1,4 +1,6 @@
 import { CopilotServeRuntimeSection } from "../../../modules/hermes-runtime/sections/CopilotServeRuntimeSection";
+import { CopilotRuntimeStatusSection } from "../../../modules/hermes-runtime/sections/CopilotRuntimeStatusSection";
+import { CopilotRuntimeInstancesSection } from "../../../modules/hermes-runtime/sections/CopilotRuntimeInstancesSection";
 import type { SettingsDrawerPanel } from "../settings-drawer-types";
 import type { View } from "../../../types/desktop-shell";
 import { ConnectionSection } from "./ConnectionSection";
@@ -30,6 +32,8 @@ export function ServerPanel({
           onNavigate={onNavigate}
         />
         */}
+        <CopilotRuntimeStatusSection />
+        <CopilotRuntimeInstancesSection />
         <HermesAgentSection profile={activeProfile} />
         <PortalRuntimeSection />
         <CopilotServeRuntimeSection />

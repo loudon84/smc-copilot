@@ -3,7 +3,7 @@ import type {
   McpSkillGatewayActionResult,
   McpSkillGatewayRuntimeConfig,
 } from "../../shared/mcp-skill-gateway-runtime/mcp-skill-gateway-runtime-contract";
-import { restartGateway } from "../hermes";
+import { restartGatewayAsync } from "../hermes";
 import { readStoredSession } from "../auth/token-store";
 import {
   getMcpSkillGatewayConfig,
@@ -136,7 +136,7 @@ export function registerMcpSkillGatewayRuntimeIpc(): void {
           profiles.add(profile || "default");
           saveMcpSkillGatewayConfig({ registeredProfiles: [...profiles] });
           if (result.changed && config.autoRestartHermesGateway) {
-            await restartGateway();
+            await restartGatewayAsync();
           }
         }
 
@@ -164,7 +164,7 @@ export function registerMcpSkillGatewayRuntimeIpc(): void {
       const config = getMcpSkillGatewayConfig();
       const result = await unregisterMcpSkillGatewayFromHermes(profile || "default");
       if (result.ok && result.changed && config.autoRestartHermesGateway) {
-        await restartGateway();
+        await restartGatewayAsync();
       }
       return result;
     },

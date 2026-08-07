@@ -14,4 +14,5 @@ Sibling domain concept files under `lat.md/domain/`. Pick the domain that matche
 - [[install]] — Windows runtime layout and bootstrap vs NSIS
 - [[mcp]] — MCP Skill Gateway, Hermes MCP host mode, GeneHub/Experts
 - [[profiles]] — Profile isolation, home layout, delegation
+- [[serve-runtime]] — v9.0 Serve-First connection, pairing, Device Token, production process policy, Phase 2 Gateway/YAML control plane, Phase 2 control plane
 - [[web-operator]] — Browser automation, Hermes task handoff, Host/CRM bridges

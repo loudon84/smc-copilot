@@ -34,8 +34,9 @@ export async function subscribeSse(
   signal: AbortSignal,
   lastEventId?: string,
 ): Promise<void> {
+  // Phase 1: SSE still uses Renderer fetch without token. Full Main SSE multiplexer is Phase 3.
+  // Prefer unpaired/local-dev endpoints or migrate TaskWorkbench to Main stream IPC later.
   const headers: Record<string, string> = { Accept: "text/event-stream" };
-  if (config.token) headers["X-Copilot-Desktop-Token"] = config.token;
   if (lastEventId) headers["Last-Event-ID"] = lastEventId;
 
   const res = await fetch(`${config.baseUrl.replace(/\/$/, "")}${path}`, { headers, signal });

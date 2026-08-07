@@ -1,15 +1,11 @@
-# Current Agent Task — Persistent Chat Workspace + Unified Session Catalog v8.2.0
+# Current Agent Task — Phase 3 Chat Runtime Cutover
 
 ## Goal
-Implement PR1–PR4 + PR6 from plan `v8.2_persistent_chat_session` (PR5 compatibility cleanup deferred).
+Desktop-only: wire `window.chatRuntime` to Serve `/api/v1/chat-runs*` via ServeChatRuntimeAdapter.
 
 ## Stages
-1. PR1 Chat Workspace Always Mounted — done
-2. PR2 Durable Workspace Store (chat-workspace.db) — done
-3. PR3 Profile-aware Session Catalog — done
-4. PR4 Sessions ↔ Chat Workspace Open — done
-5. PR6 Mandatory Electron E2E — done
-6. Verify + docs sync — done
-
-## Deferred
-- PR5 sessions.json title migration / old API deprecation cleanup
+1. p3-contracts-gate — done
+2. p3-clients-sse — done
+3. p3-adapter — done
+4. p3-ipc-wire — done
+5. p3-tests-docs — done

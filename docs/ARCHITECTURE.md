@@ -67,6 +67,15 @@ SMC Copilot Desktop Shell 是基于 Electron 的桌面应用壳层，采用分�
    - 管理所有系统资源
    - 启动 Python Gateway 后端
 
+### Serve-First Runtime（v9.0）
+
+`copilot-serve`（:8765）是本地可信控制面。Main-only Device Token（keytar）；Renderer 经 `window.copilotRuntime` / domain IPC，禁止直连 Serve JSON。
+
+- **Phase 2：** Instance / Config / MCP / Diagnostics 与 Gateway/YAML 控制面经 Serve；非 Ready 或 Serve preferred 时 fail-closed（仅 `COPILOT_ALLOW_LEGACY_HERMES_DIRECT` 开发逃生）。
+- **Phase 3 Chat：** `window.chatRuntime` Preload 不变；Serve preferred + Ready 时 Main `ServeChatRuntimeAdapter` → `/api/v1/chat-runs*` + events SSE（手写契约；Event Store 权威在 Serve）。非 Ready 返回 `RUNTIME_UNAVAILABLE`，不回落 Hermes `sendMessage`。
+
+详见 `prd_work/v9.0_serve-runtime-migration.md`、`lat.md/domain/serve-runtime.md`、`docs/API_CONTRACTS.md`。
+
 ## CRM Desktop Bridge（V5.7.1）
 
 目标：在 **WebOperator** 承载的 CRM 页面中，提供“用户主动点击触发的上下文上报”与“Desktop 回控命令”两条链路，并保持安全边界（不向页面暴露 Node/Electron 能力）。

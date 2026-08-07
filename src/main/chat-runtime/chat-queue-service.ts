@@ -12,6 +12,7 @@ import {
   listQueueEntries,
   upsertQueueEntry,
 } from "./chat-runtime-store";
+import { ServeChatRuntimeAdapter } from "../runtime-adapters/ServeChatRuntimeAdapter";
 
 const autoDrainByRun = new Map<string, boolean>();
 
@@ -113,51 +114,89 @@ export function getQueueAutoDrain(runId: string): boolean {
 export function registerChatQueueIpc(): void {
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.queueEnqueue,
-    (_e, input: QueueEnqueueInput) => ({
-      ok: true as const,
-      entry: enqueueChatMessage(input),
-    }),
+    async (_e, input: QueueEnqueueInput) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        const entry = await ServeChatRuntimeAdapter.enqueue(
+          input.runId,
+          input.snapshotJson,
+        );
+        return { ok: true as const, entry };
+      }
+      return {
+        ok: true as const,
+        entry: enqueueChatMessage(input),
+      };
+    },
   );
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.queueList,
-    (_e, input: { runId: string; profileId?: string }) => ({
-      ok: true as const,
-      entries: listQueueEntries(
-        input.runId,
-        input.profileId || getRun(input.runId)?.profileId || "default",
-      ),
-      autoDrain: getQueueAutoDrain(input.runId),
-    }),
+    async (_e, input: { runId: string; profileId?: string }) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        const entries = await ServeChatRuntimeAdapter.listQueue(input.runId);
+        return {
+          ok: true as const,
+          entries,
+          autoDrain: getQueueAutoDrain(input.runId),
+        };
+      }
+      return {
+        ok: true as const,
+        entries: listQueueEntries(
+          input.runId,
+          input.profileId || getRun(input.runId)?.profileId || "default",
+        ),
+        autoDrain: getQueueAutoDrain(input.runId),
+      };
+    },
   );
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.queueRemove,
-    (_e, input: { queueId: string; runId: string; profileId?: string }) => {
+    async (_e, input: { queueId: string; runId: string; profileId?: string }) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        await ServeChatRuntimeAdapter.deleteQueue(input.runId, input.queueId);
+        return { ok: true as const };
+      }
       removeQueuedMessage(input.queueId, input.runId, input.profileId);
       return { ok: true as const };
     },
   );
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.queueMove,
-    (_e, input: {
+    async (_e, input: {
       runId: string;
       profileId?: string;
       queueId: string;
       toPosition: number;
-    }) => ({
-      ok: true as const,
-      entries: moveQueuedMessage(input),
-    }),
+    }) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        await ServeChatRuntimeAdapter.patchQueue(input.runId, input.queueId, {
+          position: input.toPosition,
+        });
+        const entries = await ServeChatRuntimeAdapter.listQueue(input.runId);
+        return { ok: true as const, entries };
+      }
+      return {
+        ok: true as const,
+        entries: moveQueuedMessage(input),
+      };
+    },
   );
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.queueMarkRunning,
-    (_e, input: { queueId: string; runId: string; profileId?: string }) => {
+    async (_e, input: { queueId: string; runId: string; profileId?: string }) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        await ServeChatRuntimeAdapter.patchQueue(input.runId, input.queueId, {
+          status: "running",
+        });
+        return { ok: true as const };
+      }
       markQueueRunning(input.queueId, input.runId, input.profileId);
       return { ok: true as const };
     },
   );
   ipcMain.handle(
     CHAT_RUNTIME_CHANNELS.queueComplete,
-    (
+    async (
       _e,
       input: {
         queueId: string;
@@ -166,6 +205,17 @@ export function registerChatQueueIpc(): void {
         status?: "completed" | "failed" | "cancelled";
       },
     ) => {
+      if (ServeChatRuntimeAdapter.preferred()) {
+        const status = input.status || "completed";
+        if (status === "completed") {
+          await ServeChatRuntimeAdapter.deleteQueue(input.runId, input.queueId);
+        } else {
+          await ServeChatRuntimeAdapter.patchQueue(input.runId, input.queueId, {
+            status,
+          });
+        }
+        return { ok: true as const };
+      }
       completeQueueEntry(
         input.queueId,
         input.runId,

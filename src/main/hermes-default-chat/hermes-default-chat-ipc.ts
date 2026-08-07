@@ -8,8 +8,8 @@ import type {
 import {
   isRemoteMode,
   sendMessage,
-  startGateway,
-  isGatewayRunning,
+  startGatewayAsync,
+  isGatewayRunningAsync,
   ensureSshTunnelIfNeeded,
   restartGatewayAsync,
 } from "../hermes";
@@ -103,6 +103,34 @@ export function registerHermesDefaultChatIpc(
   ipcMain.handle(
     "hermes-chat:set-model-config",
     async (_event, profile: string | undefined, payload: SetHermesChatModelConfigPayload) => {
+      const {
+        isServeConfigPreferred,
+        isServeConfigControlPlane,
+        serveSetModelConfig,
+        serveGetModelConfig,
+      } = await import("../runtime-adapters/config-control");
+
+      if (isServeConfigPreferred()) {
+        if (!isServeConfigControlPlane()) {
+          throw new Error(
+            "Serve Runtime is not Ready. Model config writes require Runtime Ready or COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true.",
+          );
+        }
+        await serveSetModelConfig(profile, {
+          modelId: payload.model_id,
+          model: payload.model_id,
+        });
+        const view = await serveGetModelConfig(profile);
+        return {
+          profile_id: profile?.trim() || "default",
+          provider: view.provider ?? "",
+          model_id: view.modelId ?? payload.model_id,
+          model_label: view.modelId ?? payload.model_id,
+          base_url: null,
+          updated_at: new Date().toISOString(),
+        };
+      }
+
       const before = getModelConfig(profile);
       const result = setHermesChatModelConfig(profile, payload);
       const after = getModelConfig(profile);
@@ -111,7 +139,7 @@ export function registerHermesDefaultChatIpc(
         before.model !== after.model ||
         before.baseUrl !== after.baseUrl;
 
-      if (!isRemoteMode() && changed && isGatewayRunning()) {
+      if (!isRemoteMode() && changed && (await isGatewayRunningAsync(profile))) {
         await restartGatewayAsync(profile);
       }
       return result;
@@ -166,8 +194,8 @@ export function registerHermesDefaultChatIpc(
       return { ok: false as const, errorCode: block.errorCode, error: block.message };
     }
 
-    if (!isRemoteMode() && !isGatewayRunning(profile)) {
-      startGateway(profile);
+    if (!isRemoteMode() && !(await isGatewayRunningAsync(profile))) {
+      await startGatewayAsync(profile);
     }
 
     await ensureSshTunnelIfNeeded();

@@ -120,8 +120,9 @@ export function HermesDefaultWebChatSurface({
         profileId={task.profileId}
         durationMs={task.durationMs}
       />
-      <StatusToast message={toast} variant={stream.lastError ? "error" : "info"} />
-      <div className="hermes-skills-tab__toolbar">
+     {/*
+      <StatusToast message={toast} variant={stream.lastError ? "error" : "info"} />y
+     <div className="hermes-skills-tab__toolbar">
         <label className="hermes-skills-search">
           <Search size={14} aria-hidden />
           <input
@@ -145,7 +146,9 @@ export function HermesDefaultWebChatSurface({
           </p>
         ) : null}
       </div>
+     
       {showWorkControls ? <WorkChatContextBar context={workContext} /> : null}
+     */}
       {showWorkControls ? (
         <PromptHintComposer
           userMessage={composer.text}

@@ -12,7 +12,7 @@ import type { ChatInvocationSource } from "../../shared/chat-runtime/chat-runtim
 import {
   getApiUrl,
   getRemoteAuthHeader,
-  isGatewayRunning,
+  isGatewayRunningAsync,
   isRemoteMode,
   sendMessage,
 } from "../hermes";
@@ -184,7 +184,7 @@ async function callNativeEndpoint(input: {
 }): Promise<void> {
   const profile =
     input.profileId === "default" ? undefined : input.profileId.trim() || undefined;
-  if (!isRemoteMode() && !isGatewayRunning(profile)) {
+  if (!isRemoteMode() && !(await isGatewayRunningAsync(profile))) {
     throw new HermesChatCommandUnsupportedError(
       "Gateway is not running; cannot continue interaction",
     );

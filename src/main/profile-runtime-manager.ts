@@ -21,6 +21,14 @@ import { startCollecting, stopCollecting } from "./gateway-log-collector";
 import type { ProfileSummary, ProfileGatewayState, ProfileRuntimeStatus } from "../shared/profile-runtime/profile-runtime-contract";
 import { ProfileRuntimeError } from "../shared/profile-runtime/profile-runtime-errors";
 import { probeGatewayHealth } from "./gateway-health";
+import {
+  blockedGatewayMessage,
+  resolveGatewayControlMode,
+  serveRestartGateway,
+  serveStartGateway,
+  serveStopGateway,
+} from "./runtime-adapters/gateway-control";
+import { ServeInstanceAdapter } from "./runtime-adapters/ServeInstanceAdapter";
 
 const STARTUP_TIMEOUT_MS = 30_000;
 const startupTimeoutTimers = new Map<string, NodeJS.Timeout>();
@@ -105,6 +113,33 @@ function setStartupTimeout(profileId: string, instance: NonNullable<ReturnType<t
 
 export async function startProfile(profileIdOrName: string): Promise<ProfileGatewayState> {
   const profileId = resolveProfileId(profileIdOrName);
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    throw new ProfileRuntimeError("PROFILE_RUNTIME_START_FAILED", blockedGatewayMessage());
+  }
+  if (controlMode === "serve") {
+    const ok = await serveStartGateway(profileIdOrName);
+    if (!ok) {
+      throw new ProfileRuntimeError("PROFILE_RUNTIME_START_FAILED", `Serve instance start failed for ${profileIdOrName}`);
+    }
+    const instance = getRuntimeInstance(profileId);
+    let summary = null as Awaited<ReturnType<typeof ServeInstanceAdapter.get>> | null;
+    try {
+      const resolved = await ServeInstanceAdapter.resolveRef(profileIdOrName);
+      if (resolved.instanceId) summary = await ServeInstanceAdapter.get(resolved.instanceId);
+    } catch {
+      summary = null;
+    }
+    return {
+      profileId,
+      status: summary?.status === "running" ? "running" : "starting",
+      port: summary?.port ?? instance?.port ?? 0,
+      pid: null,
+      baseUrl: summary?.port ? `http://127.0.0.1:${summary.port}` : instance?.base_url ?? "",
+      lastError: summary?.lastError ?? null,
+    };
+  }
+
   const profile = getProfile(profileId);
   if (!profile) throw new ProfileRuntimeError("PROFILE_NOT_FOUND", profileIdOrName);
 
@@ -181,6 +216,22 @@ export async function startProfile(profileIdOrName: string): Promise<ProfileGate
 
 export async function stopProfile(profileIdOrName: string): Promise<ProfileGatewayState> {
   const profileId = resolveProfileId(profileIdOrName);
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    throw new ProfileRuntimeError("PROFILE_RUNTIME_START_FAILED", blockedGatewayMessage());
+  }
+  if (controlMode === "serve") {
+    await serveStopGateway(profileIdOrName);
+    return {
+      profileId,
+      status: "stopped",
+      port: 0,
+      pid: null,
+      baseUrl: "",
+      lastError: null,
+    };
+  }
+
   const profile = getProfile(profileId);
   if (!profile) throw new ProfileRuntimeError("PROFILE_NOT_FOUND", profileIdOrName);
 
@@ -234,6 +285,14 @@ export async function stopProfile(profileIdOrName: string): Promise<ProfileGatew
 }
 
 export async function restartProfile(profileId: string): Promise<ProfileGatewayState> {
+  const controlMode = resolveGatewayControlMode();
+  if (controlMode === "blocked") {
+    throw new ProfileRuntimeError("PROFILE_RUNTIME_START_FAILED", blockedGatewayMessage());
+  }
+  if (controlMode === "serve") {
+    await serveRestartGateway(profileId);
+    return startProfile(profileId);
+  }
   await stopProfile(profileId);
   return startProfile(profileId);
 }

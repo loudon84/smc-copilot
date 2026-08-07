@@ -20,6 +20,20 @@ Auth tokens live in Main vault (keytar → safeStorage → memory). Renderer see
 
 See [[domain/auth#Token vault and injection]].
 
+## Serve Device Token stays in Main
+
+v9.0 Serve Device Token is Main-only (keytar `smc-copilot-runtime`). `copilot-serve:get-connection` and `window.copilotRuntime` never return the token. Renderer Serve JSON uses Main `proxyFetch` during migration.
+
+Production Desktop must not spawn/stop Serve. See [[domain/serve-runtime#Serve-First Runtime]], [[domain/serve-runtime#Device pairing and auth store]], [[domain/serve-runtime#Production process policy]].
+
+## Serve owns Gateway and YAML control plane
+
+When Serve is preferred and Ready, Desktop must not use Hermes CLI spawn or `config.yaml` as the control plane.
+
+Gateway start/stop/status await Serve Instance APIs and return real results. YAML writers (`writeHermesConfig` / `syncCustomProvidersFromModels`) fail closed unless `COPILOT_ALLOW_LEGACY_HERMES_DIRECT` (blocked in production). Models CRUD may keep local `models.json` but must not sync `custom_providers` YAML under Serve preferred. MCP register / expert materializer skip Desktop YAML writes under Serve preferred.
+
+See [[domain/serve-runtime#Phase 2 Gateway and config control plane]], [[domain/gateway#Gateway lifecycle]].
+
 ## Chat runId isolation (v8)
 
 Concurrent chat turns are isolated by `runId` through [[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]] and `window.chatRuntime`. Abort and events are scoped per run so multi-surface chat does not cross-talk.

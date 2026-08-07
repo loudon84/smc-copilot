@@ -33,6 +33,7 @@ import { authApi } from "./auth-api";
 import { userConfigApi } from "./user-config-api";
 import { shellApi } from "./shell-api";
 import { copilotServeApi } from "./copilot-serve-api";
+import { copilotRuntimeApi } from "./copilot-runtime-api";
 import { workspaceChatApi } from "./workspace-chat-api";
 import { workApiBridge } from "./work-api";
 import { hermesDefaultChatApi } from "./hermes-default-chat-api";
@@ -899,6 +900,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("desktopUserConfig", userConfigApi);
     contextBridge.exposeInMainWorld("smcShell", shellApi);
     contextBridge.exposeInMainWorld("copilotServe", copilotServeApi);
+    contextBridge.exposeInMainWorld("copilotRuntime", copilotRuntimeApi);
     contextBridge.exposeInMainWorld("workspaces", workspaces);
     contextBridge.exposeInMainWorld("workspaceChat", workspaceChatApi);
     contextBridge.exposeInMainWorld("hermesDefaultChat", hermesDefaultChatApi);
@@ -940,6 +942,10 @@ if (process.contextIsolated) {
   window.desktopUserConfig = userConfigApi;
   // @ts-ignore (define in dts)
   window.smcShell = shellApi;
+  // @ts-ignore (define in dts)
+  window.copilotServe = copilotServeApi;
+  // @ts-ignore (define in dts)
+  window.copilotRuntime = copilotRuntimeApi;
   // @ts-ignore (define in dts)
   window.workspaces = workspaces;
   // @ts-ignore (define in dts)

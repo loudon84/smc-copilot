@@ -76,15 +76,66 @@ Workspaces Chat 面板经 `window.workspaceChat` 代理到 `copilot-serve`（`:8
 
 Renderer UI：`panels/ChatPanel.tsx` → `pages/Chat/HermesWebChatSurface.tsx`；编排 hook：`hooks/useHermesWebChat.ts`。
 
-**team_v1.8.1 hotfix：** 会话历史改走 copilot-serve `GET /api/v1/profiles/{id}/sessions/{session_id}/messages`（Renderer `copilotServeFetch`）；`chat.done` 回写 `resolved_session_id`；Main stream 按 `profile_id:session_id` 分桶 abort。
+**team_v1.8.1 hotfix：** 会话历史改走 copilot-serve `GET /api/v1/profiles/{id}/sessions/{session_id}/messages`（Renderer 经 `copilotServeFetch` → **v9.0** Main `copilot-runtime:proxy-fetch`）；`chat.done` 回写 `resolved_session_id`；Main stream 按 `profile_id:session_id` 分桶 abort。
 
 **team_v1.8.3 hotfix：** 聊天门控以 `resolveProfile` 为准；Profile runtime 启停/状态变更后 Renderer 必须 re-resolve（`useHermesWebChat` 监听 `runtime.status` 等）。勿用 legacy `hermesAPI.gatewayStatus` 覆盖 copilot-serve 的 stopped/starting 状态。
 
-**Serve 会话消息（Renderer 直连 serve，不经 IPC）：**
+**Serve 会话消息（v9.0：经 Main proxy，不向 Renderer 暴露 Device Token）：**
 
 ```http
 GET /api/v1/profiles/{profile_id}/sessions/{session_id}/messages
 ```
+
+## Copilot Runtime（v9.0 Serve-First Phase 0/1/2）
+
+Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc-copilot-runtime`），**禁止**经 IPC / Preload / Renderer 返回。
+
+**Phase 2：** Instance / Configuration / MCP / Diagnostics 控制面切到 Serve；默认禁止 Desktop Gateway CLI 与 `config.yaml` 控制面写入（仅 `COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true` 可回退）。
+
+| 项 | 路径 |
+|---|---|
+| Main SDK | `src/main/copilot-runtime-client/` |
+| Adapters | `src/main/runtime-adapters/`（Instance / Configuration / MCP / Diagnostics；Chat/Session/Task/Files 仍 stub） |
+| Shared 契约 | `src/shared/copilot-runtime/` |
+| Generated OpenAPI | `src/shared/generated/copilot-serve/`（`npm run generate:serve-client`） |
+| Preload | `src/preload/copilot-runtime-api.ts` → `window.copilotRuntime` |
+| UI | `CopilotRuntimeStatusSection` + `CopilotRuntimeInstancesSection`（Settings → Server） |
+
+| Channel | Direction | Args | Returns | Notes |
+|---------|-----------|------|---------|-------|
+| `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 7 态：Connecting / PairingRequired / Incompatible / RuntimeMissing / RuntimeStarting / RuntimeDegraded / Ready；**无 token** |
+| `copilot-runtime:get-capabilities` | invoke | — | `RuntimeCapabilitiesView \| null` | |
+| `copilot-runtime:get-diagnostics-summary` | invoke | — | `RuntimeDiagnosticsSummary \| null` | |
+| `copilot-runtime:start-pairing` | invoke | — | `RuntimePairingStartResult` | `POST /pairings/start`；challenge 仅 Main 暂存 |
+| `copilot-runtime:confirm-pairing` | invoke | `pairingId: string` | `RuntimePairingConfirmResult` | 存 Device Token 到 keytar；不返回 token |
+| `copilot-runtime:retry` | invoke | — | `RuntimeConnectionState` | 重新 handshake |
+| `copilot-runtime:repair` | invoke | — | `{ ok, message }` | production 不 spawn；dev 可启动 Serve |
+| `copilot-runtime:is-serve-control-plane` | invoke | — | `boolean` | Ready 且非 legacy-direct |
+| `copilot-runtime:list-instances` | invoke | — | `ServeInstanceSummary[]` | Phase 2 |
+| `copilot-runtime:get-instance` | invoke | `instanceId` | `ServeInstanceSummary \| null` | |
+| `copilot-runtime:resolve-instance` | invoke | `ref` | `ServeInstanceResolveResult \| null` | `profileId`/`name` → instanceId |
+| `copilot-runtime:start-instance` | invoke | `instanceId` | `{ ok, message }` | 经 Serve；无 Hermes CLI |
+| `copilot-runtime:stop-instance` | invoke | `instanceId` | `{ ok, message }` | |
+| `copilot-runtime:restart-instance` | invoke | `instanceId` | `{ ok, message }` | |
+| `copilot-runtime:get-instance-health` | invoke | `instanceId` | `ServeInstanceHealth \| null` | |
+| `copilot-runtime:get-instance-logs` | invoke | `instanceId`, `{ tail? }` | `ServeInstanceLogsResult \| null` | |
+| `copilot-runtime:get-diagnostics-environment` | invoke | — | `ServeDiagnosticsEnvironment \| null` | |
+| `copilot-runtime:get-diagnostics-logs` | invoke | `{ tail? }` | `ServeDiagnosticsLogsResult \| null` | |
+| `copilot-runtime:proxy-fetch` | invoke | `{ path, method?, body?, query? }` | `{ ok, status, data, error }` | Main 带 Bearer 代理 Serve JSON；迁移期桥接 legacy Renderer HTTP |
+
+| Event | Payload | Notes |
+|-------|---------|-------|
+| `copilot-runtime:state-changed` | `RuntimeConnectionState` | handshake / pairing 后推送 |
+
+**`copilot-serve:get-connection`（v9.0 变更）：** 返回 `{ baseUrl, port }`，**不再包含 `token`**。
+
+**进程策略：** `COPILOT_RUNTIME_MODE=production` 时 Desktop 不 spawn/stop Serve；不可达 → `RuntimeMissing` + Repair。开发/e2e/portable_dev 仍可本地 spawn。
+
+**Phase 2 控制面：** `start-gateway` / `stop-gateway` / `gateway-status` 在 Serve CP 下 **await** Instance start/stop/health（不再乐观返回）；`profileRuntime` start/stop、Models `set-model-config`、`hermesMcpConfig` 走 Instance/Configuration/MCP API；Models CRUD（`add-model`/`update-model`/`remove-model`）在 Serve preferred 时只写本地 `models.json`、跳过 `syncCustomProvidersFromModels` YAML；`writeHermesConfig` / `setModelConfig` YAML 写入 fail-closed；MCP Skill Gateway register 与 expert install materializer 在 Serve preferred 时跳过 YAML 写入。
+
+**Phase 3 Chat 传输：** 默认 `chat.transport=serve`。`window.chatRuntime`（`start`/`abort`/`command`/`queue`/`getSnapshot`/`replayEvents`/`recover`）在 Serve preferred + Ready 时走 Main `ServeChatRuntimeAdapter` → `/api/v1/chat-runs*` + events SSE；非 Ready 时 fail-closed（`RUNTIME_UNAVAILABLE`，不回落 Hermes `sendMessage`）。仅 `COPILOT_ALLOW_LEGACY_HERMES_DIRECT`（非 production）保留 Desktop durable + Hermes。Serve Chat Event 用手写契约映射到现有 Desktop `ChatRuntimeEvent`（OpenAPI snapshot 待 Serve 对齐后 regenerate）。Event Store 权威在 Serve；Serve 模式下 Desktop 不持久化 runtime event sequence。
+
+**静态门禁：** `npm run generate:serve-client` / `check:serve-contract-drift` / `check:no-renderer-runtime-http`（CI）；`check:no-legacy-profile-chat`（Phase 3 soft）；`check:no-direct-hermes` 等 Phase 8 强制前为 scaffold（Phase 2 已有 Main 运行时守卫）。
 
 ## Hermes Default Chat (v5.6.4)
 

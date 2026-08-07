@@ -7,6 +7,7 @@ import type { InstallerPrecheck } from "../shared/enterprise/enterprise-contract
 import type { RuntimeState } from "../shared/enterprise/runtime-state-contract";
 import type { AiOsAPI, AiOsRuntimeSnapshot } from "../shared/aios/aios-contract";
 import type { CopilotServeAPI } from "../shared/copilot-serve/copilot-serve-contract";
+import type { CopilotRuntimeAPI } from "../shared/copilot-runtime";
 import type { HermesMcpAPI } from "../shared/mcp/mcp-contract";
 import type { McpSkillGatewayRuntimeAPI } from "../shared/mcp-skill-gateway-runtime/mcp-skill-gateway-runtime-contract";
 import type { GeneHubRuntimeAPI } from "../shared/genehub/genehub-contract";
@@ -743,6 +744,8 @@ declare global {
     desktopAuth: import("../shared/auth/auth-contract").DesktopAuthAPI;
     desktopUserConfig: import("../shared/user-config/user-config-contract").UserConfigAPI;
     copilotServe: CopilotServeAPI;
+    /** v9.0 Serve-First Runtime connection / pairing (Main-only token; never exposed). */
+    copilotRuntime: CopilotRuntimeAPI;
     mcpSkillGatewayRuntime: McpSkillGatewayRuntimeAPI;
     genehubRuntime: GeneHubRuntimeAPI;
     hermesExperts: import("../shared/hermes-experts/hermes-experts-contract").HermesExpertsAPI;

@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { HERMES_HOME } from "./installer";
 import { profileHome, escapeRegex, safeWriteFile } from "./utils";
+import { assertLegacyYamlControlPlane } from "./runtime-adapters/config-control";
 
 // ── Connection Config (local / remote / ssh) ─────────────
 
@@ -411,6 +412,8 @@ export function setModelConfig(
   baseUrl: string,
   profile?: string,
 ): void {
+  // Phase 2: prefer Serve Configuration; fail closed when Serve preferred.
+  assertLegacyYamlControlPlane("setModelConfig");
   invalidateCache(`mc:${profile || "default"}`);
   const paths = profilePaths(profile);
   ensureHermesConfigFile(paths.configFile, paths.home);
