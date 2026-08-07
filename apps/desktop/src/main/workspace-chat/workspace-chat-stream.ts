@@ -91,7 +91,7 @@ export async function startWorkspaceChatStream(
     stream: true,
   };
 
-  const url = new URL(chatCompletionsUrl(payload.profile_id));
+  const url = new URL(await chatCompletionsUrl(payload.profile_id));
   const headers = chatCompletionsHeaders();
   const requester = url.protocol === "https:" ? https.request : http.request;
 

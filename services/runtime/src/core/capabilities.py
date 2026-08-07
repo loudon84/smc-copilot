@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 # Single source of truth for Runtime API negotiation version (PRD v1.1 §12.2 / §13).
-RUNTIME_API_VERSION = "1.4"
+RUNTIME_API_VERSION = "2.0"
 
 RuntimeFeatureId = Literal[
     "runtime.install",

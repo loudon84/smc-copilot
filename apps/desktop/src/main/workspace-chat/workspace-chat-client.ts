@@ -1,3 +1,7 @@
+/**
+ * Workspace Chat Runtime client — Profile → Instance → instance chat / Chat Runtime v2.
+ * Forbidden: /profiles/*/chat/* (PRD v1.1 §9–§10).
+ */
 import type { CopilotServeConnection } from "../../shared/copilot-serve/copilot-serve-contract";
 import type {
   ChatModelListResponse,
@@ -7,11 +11,16 @@ import type {
   UploadWorkspaceAttachmentsResponse,
   WorkspaceChatSendPayload,
 } from "../../shared/workspace-chat/workspace-chat-contract";
-import { getCopilotServeConnection, startCopilotServeProcess } from "../copilot-serve/copilot-serve-process";
+import {
+  getCopilotServeConnection,
+  startCopilotServeProcess,
+} from "../copilot-serve/copilot-serve-process";
 import {
   getDeviceTokenSync,
   getLegacySharedTokenSync,
 } from "../copilot-runtime-client/runtime-auth-store";
+import { instanceClient } from "../copilot-runtime-client/clients/instance-client";
+import { getSmcRuntimeClient } from "../copilot-runtime-client/smc-runtime-client";
 
 async function ensureConnection(): Promise<CopilotServeConnection> {
   let conn = getCopilotServeConnection();
@@ -72,52 +81,96 @@ async function serveFetch<T>(
   return (await res.json()) as T;
 }
 
+/** Resolve profile/instance ref → Instance, then map to Workspace ResolvedProfile. */
 export async function resolveProfileRef(ref: string): Promise<ResolvedProfile> {
-  const encoded = encodeURIComponent(ref);
-  return serveFetch<ResolvedProfile>(`/api/v1/profiles/resolve?ref=${encoded}`);
+  const resolved = await instanceClient.resolve(ref);
+  const instanceId = resolved.instanceId;
+  if (!instanceId) {
+    throw new Error(`Unable to resolve instance for ref: ${ref}`);
+  }
+  let name = ref;
+  try {
+    const inst = await instanceClient.get(instanceId);
+    name = inst.name || inst.profileRef || instanceId;
+  } catch {
+    /* keep ref */
+  }
+  return {
+    profile_id: instanceId,
+    name,
+    matched_by: resolved.matchedBy,
+  } as ResolvedProfile;
+}
+
+export async function resolveInstanceId(profileOrInstanceRef: string): Promise<string> {
+  const resolved = await instanceClient.resolve(profileOrInstanceRef);
+  if (!resolved.instanceId) {
+    throw new Error(`Unable to resolve instance for: ${profileOrInstanceRef}`);
+  }
+  return resolved.instanceId;
 }
 
 export async function listChatModels(profileId: string): Promise<ChatModelListResponse> {
-  return serveFetch<ChatModelListResponse>(`/api/v1/profiles/${profileId}/chat/models`);
+  const instanceId = await resolveInstanceId(profileId);
+  const raw = await getSmcRuntimeClient().transport.request<ChatModelListResponse>({
+    path: `/api/v1/instances/${encodeURIComponent(instanceId)}/chat/models`,
+  });
+  return { ...raw, profile_id: profileId };
 }
 
 export async function getChatModelConfig(
   profileId: string,
 ): Promise<ProfileChatModelConfig | null> {
-  return serveFetch<ProfileChatModelConfig | null>(
-    `/api/v1/profiles/${profileId}/chat/model-config`,
-  );
+  const instanceId = await resolveInstanceId(profileId);
+  const raw = await getSmcRuntimeClient().transport.request<Record<string, unknown> | null>({
+    path: `/api/v1/instances/${encodeURIComponent(instanceId)}/chat/model-config`,
+  });
+  if (!raw) return null;
+  return {
+    profile_id: profileId,
+    provider: String(raw.provider ?? ""),
+    model_id: String(raw.model_id ?? raw.modelId ?? ""),
+    model_label: (raw.model_label ?? raw.modelLabel ?? null) as string | null,
+    base_url: (raw.base_url ?? raw.baseUrl ?? null) as string | null,
+    updated_at: (raw.updated_at ?? raw.updatedAt ?? null) as string | null,
+  };
 }
 
 export async function setChatModelConfig(
   profileId: string,
   payload: SetProfileChatModelConfigPayload,
 ): Promise<ProfileChatModelConfig> {
-  return serveFetch<ProfileChatModelConfig>(
-    `/api/v1/profiles/${profileId}/chat/model-config`,
-    {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    },
-  );
+  const instanceId = await resolveInstanceId(profileId);
+  const raw = await getSmcRuntimeClient().transport.request<Record<string, unknown>>({
+    method: "PUT",
+    path: `/api/v1/instances/${encodeURIComponent(instanceId)}/chat/model-config`,
+    body: payload,
+  });
+  return {
+    profile_id: profileId,
+    provider: String(raw.provider ?? payload.provider ?? ""),
+    model_id: String(raw.model_id ?? raw.modelId ?? payload.model_id ?? ""),
+    model_label: (raw.model_label ?? raw.modelLabel ?? payload.model_label ?? null) as
+      | string
+      | null,
+    base_url: (raw.base_url ?? raw.baseUrl ?? payload.base_url ?? null) as string | null,
+    updated_at: (raw.updated_at ?? raw.updatedAt ?? null) as string | null,
+  };
 }
 
 export async function removeChatAttachment(
   workspaceId: string,
   attachmentId: string,
 ): Promise<void> {
-  await serveFetch<void>(
-    `/api/v1/workspaces/${workspaceId}/attachments/${attachmentId}`,
-    { method: "DELETE" },
-  );
+  await serveFetch<void>(`/api/v1/workspaces/${workspaceId}/attachments/${attachmentId}`, {
+    method: "DELETE",
+  });
 }
 
-export function chatCompletionsUrl(profileId: string): string {
-  const conn = getCopilotServeConnection();
-  if (!conn) {
-    throw new Error("copilot-serve 未连接");
-  }
-  return `${conn.baseUrl.replace(/\/$/, "")}/api/v1/profiles/${profileId}/chat/completions`;
+export async function chatCompletionsUrl(profileId: string): Promise<string> {
+  const conn = await ensureConnection();
+  const instanceId = await resolveInstanceId(profileId);
+  return `${conn.baseUrl.replace(/\/$/, "")}/api/v1/instances/${encodeURIComponent(instanceId)}/chat/completions`;
 }
 
 export function chatCompletionsHeaders(): Record<string, string> {
@@ -133,13 +186,17 @@ export async function abortChatStream(
   profileId: string,
   streamId: string,
 ): Promise<void> {
-  const encoded = encodeURIComponent(streamId);
-  await serveFetch<void>(
-    `/api/v1/profiles/${profileId}/chat/abort?stream_id=${encoded}`,
-    { method: "POST" },
-  ).catch(() => {
+  try {
+    const instanceId = await resolveInstanceId(profileId);
+    await getSmcRuntimeClient().transport.request({
+      method: "POST",
+      path: `/api/v1/instances/${encodeURIComponent(instanceId)}/chat/abort`,
+      query: { stream_id: streamId },
+      body: {},
+    });
+  } catch {
     /* best-effort */
-  });
+  }
 }
 
 export async function uploadAttachmentsMultipart(
@@ -149,10 +206,12 @@ export async function uploadAttachmentsMultipart(
   filePaths: string[],
 ): Promise<UploadWorkspaceAttachmentsResponse> {
   const conn = await ensureConnection();
+  const instanceId = await resolveInstanceId(profileId);
   const { readFile } = await import("node:fs/promises");
   const { basename } = await import("node:path");
   const form = new FormData();
   form.append("profile_id", profileId);
+  form.append("instance_id", instanceId);
   form.append("session_id", sessionId);
   for (const filePath of filePaths) {
     const buf = await readFile(filePath);

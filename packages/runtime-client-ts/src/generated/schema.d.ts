@@ -1285,75 +1285,6 @@ export interface paths {
         patch: operations["update_profile_api_v1_profiles__profile_id__patch"];
         trace?: never;
     };
-    "/api/v1/profiles/{profile_id}/chat/abort": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Abort Chat Stream */
-        post: operations["abort_chat_stream_api_v1_profiles__profile_id__chat_abort_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/profiles/{profile_id}/chat/completions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Chat Completions */
-        post: operations["chat_completions_api_v1_profiles__profile_id__chat_completions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/profiles/{profile_id}/chat/model-config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Chat Model Config */
-        get: operations["get_chat_model_config_api_v1_profiles__profile_id__chat_model_config_get"];
-        /** Set Chat Model Config */
-        put: operations["set_chat_model_config_api_v1_profiles__profile_id__chat_model_config_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/profiles/{profile_id}/chat/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Chat Models */
-        get: operations["list_chat_models_api_v1_profiles__profile_id__chat_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/profiles/{profile_id}/events": {
         parameters: {
             query?: never;
@@ -3706,21 +3637,6 @@ export interface components {
             /** Port Conflicts */
             port_conflicts?: components["schemas"]["PortConflictItem"][];
         };
-        /** ProfileChatModelConfig */
-        ProfileChatModelConfig: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Model Id */
-            model_id: string;
-            /** Model Label */
-            model_label?: string | null;
-            /** Profile Id */
-            profile_id: string;
-            /** Provider */
-            provider: string;
-            /** Updated At */
-            updated_at: string;
-        };
         /** ProfileCreate */
         ProfileCreate: {
             /**
@@ -3955,7 +3871,7 @@ export interface components {
         RuntimeCapabilitiesResponse: {
             /**
              * Apiversion
-             * @default 1.3
+             * @default 2.0
              */
             apiVersion: string;
             /** Features */
@@ -4225,20 +4141,6 @@ export interface components {
         };
         /** SetInstanceChatModelConfigPayload */
         SetInstanceChatModelConfigPayload: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Model Id */
-            model_id: string;
-            /** Model Label */
-            model_label?: string | null;
-            /**
-             * Provider
-             * @default auto
-             */
-            provider: string;
-        };
-        /** SetProfileChatModelConfigPayload */
-        SetProfileChatModelConfigPayload: {
             /** Base Url */
             base_url?: string | null;
             /** Model Id */
@@ -7709,186 +7611,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    abort_chat_stream_api_v1_profiles__profile_id__chat_abort_post: {
-        parameters: {
-            query: {
-                stream_id: string;
-            };
-            header?: {
-                Authorization?: string | null;
-                "X-Copilot-Desktop-Token"?: string | null;
-            };
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceChatAbortResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    chat_completions_api_v1_profiles__profile_id__chat_completions_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string | null;
-                "X-Copilot-Desktop-Token"?: string | null;
-            };
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkspaceChatSendPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_chat_model_config_api_v1_profiles__profile_id__chat_model_config_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string | null;
-                "X-Copilot-Desktop-Token"?: string | null;
-            };
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProfileChatModelConfig"] | null;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_chat_model_config_api_v1_profiles__profile_id__chat_model_config_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string | null;
-                "X-Copilot-Desktop-Token"?: string | null;
-            };
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetProfileChatModelConfigPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProfileChatModelConfig"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_chat_models_api_v1_profiles__profile_id__chat_models_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                Authorization?: string | null;
-                "X-Copilot-Desktop-Token"?: string | null;
-            };
-            path: {
-                profile_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatModelListResponse"];
                 };
             };
             /** @description Validation Error */

@@ -14,10 +14,6 @@ const ROOTS = ["src/main", "src/preload", "src/renderer"];
 const PATTERN = /\/profiles\/[^"'`\s]+\/chat\//g;
 const ALLOW_FILE_SUBSTRINGS = [
   "check-no-legacy-profile-chat",
-  "openapi.snapshot",
-  "generated/copilot-serve",
-  // Phase 8 deletion targets — still live until Workspaces chat cutover
-  "workspace-chat/workspace-chat-client.ts",
 ];
 
 function walk(dir, out = []) {
