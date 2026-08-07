@@ -1,0 +1,14 @@
+---
+description: Desktop process boundaries and cwd requirements
+globs: apps/desktop/**
+alwaysApply: false
+---
+
+# Desktop boundary
+
+- Renderer must not access Node APIs or Runtime tokens directly.
+- New IPC must follow Main → Preload → `index.d.ts` → Renderer.
+- All Desktop npm/electron commands run with `cwd=apps/desktop`.
+- Generated Runtime HTTP client (`@smc/runtime-client`) is Main-only.
+- Keep `node_modules` local to `apps/desktop` (no npm workspaces in v1.0).
+- Do not set `COPILOT_PORTAL_ROOT` to the SMC Copilot Monorepo root.

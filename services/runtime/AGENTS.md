@@ -1,6 +1,10 @@
 %% lat:begin %%
 # Before starting work
 
+> **Monorepo location:** `services/runtime/` inside `smc-copilot`.
+> Root routing: ../../AGENTS.md. Prefer `lat search` before reading large trees.
+> API changes must regenerate contracts via `npm run contracts:generate` from repo root.
+
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
 - Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 

@@ -1,5 +1,9 @@
 # Hermes Desktop — Agent 编码指南
 
+> **Monorepo location:** `apps/desktop/` inside `smc-copilot`.
+> Root routing: ../../AGENTS.md. Run Desktop commands with `cwd=apps/desktop`.
+> Runtime HTTP client: import only `@smc/runtime-client` from Main process.
+
 > 面向 Cursor / AI Agent 的项目速查。详细设计见 `docs/INDEX.md`、`docs/ARCHITECTURE.md`、`docs/MODULES.md`。
 
 ## 项目是什么

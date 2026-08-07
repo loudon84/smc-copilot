@@ -1,0 +1,45 @@
+﻿# Dependencies
+**/node_modules/
+**/.venv/
+**/venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+
+# Build
+**/dist/
+**/out/
+**/coverage/
+apps/desktop/release/
+services/runtime/release/
+artifacts/
+**/*.tsbuildinfo
+.nx/
+.cache/
+
+# Runtime data
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.db-wal
+**/*.db-shm
+**/logs/
+**/downloads/
+**/staging/
+**/data/
+
+# Generated and temporary
+**/.generated-temp/
+**/htmlcov/
+**/.agent-context/
+**/playwright-report/
+**/test-results/
+
+# Source control and IDE
+.git/
+.idea/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example

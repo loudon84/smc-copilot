@@ -1,0 +1,17 @@
+# Historical material
+**/references/
+**/prd/archive/
+**/docs/archive/
+**/docs/code-assets/
+**/docs/memory-bank/
+
+# Generated client implementation
+packages/runtime-client-ts/src/generated/
+
+# Large lock or generated metadata not useful for semantic indexing
+**/package-lock.json
+services/runtime/uv.lock
+
+# Test snapshots and fixtures
+**/__snapshots__/
+**/fixtures/large/

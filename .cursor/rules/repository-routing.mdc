@@ -1,0 +1,19 @@
+---
+description: Route agent work to Desktop, Runtime, Contracts, or Cross-project contexts
+globs:
+alwaysApply: true
+---
+
+# Repository routing
+
+1. Classify the task before scanning code:
+   - Desktop UI / Electron / IPC → `apps/desktop/`
+   - Runtime / FastAPI / Hermes install → `services/runtime/`
+   - OpenAPI / SSE schemas / TS client → `contracts/` + `packages/runtime-client-ts/`
+   - Cross-project feature → inspect contracts first
+
+2. Read only the matching `AGENTS.md` (root file is routing only).
+
+3. Do not recursively scan the whole monorepo without a target.
+
+4. Prefer `lat search` inside Runtime before reading large Python trees.

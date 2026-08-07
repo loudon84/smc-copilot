@@ -1,0 +1,12 @@
+---
+description: Contract generation and breaking-change governance
+globs: contracts/**,packages/runtime-client-ts/**,tools/contract-generate/**
+alwaysApply: false
+---
+
+# Contract boundary
+
+- Never hand-edit generated OpenAPI, JSON Schema, or `src/generated/*`.
+- Flow: Runtime Pydantic → OpenAPI/event schemas → TS client → Desktop Main.
+- Breaking API changes require a major bump in `contracts/version.json` + ADR.
+- Desktop imports only `@smc/runtime-client` public facade, not deep generated paths.

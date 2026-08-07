@@ -1,0 +1,14 @@
+---
+description: Runtime Python / uv / Alembic / contract generation rules
+globs: services/runtime/**
+alwaysApply: false
+---
+
+# Runtime boundary
+
+- Python version is fixed to 3.12 (`requires-python = ">=3.12,<3.13"`).
+- Use `uv` for install/test/build; do not invent a Node rewrite of Runtime.
+- Database schema changes require Alembic migrations.
+- API changes must regenerate `contracts/runtime-api/openapi.yaml`.
+- SSE / event payload changes must regenerate `contracts/runtime-events/*`.
+- Runtime install scripts treat `services/runtime` as `RUNTIME_SOURCE_ROOT`.
