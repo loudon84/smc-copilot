@@ -8,14 +8,15 @@ contracts/runtime-api/openapi.yaml
 contracts/runtime-events/*.schema.json
         ↓  tools/contract-generate/generate_ts_client.mjs
 packages/runtime-client-ts/src/generated/
-        ↓  handwritten facade
-packages/runtime-client-ts/src/index.ts (@smc/runtime-client)
-        ↓
-Desktop Main
+        ↓  transport + domain facades
+packages/runtime-client-ts (@smc/runtime-client)
+        ↓  DesktopRuntimeTransport
+Desktop Main (only)
 ```
 
 ## Governance
 
-- Source of truth: Runtime FastAPI + Pydantic (not hand-written OpenAPI).
+- Source of truth: Runtime FastAPI + Pydantic (not hand-written OpenAPI). Desktop no longer keeps an OpenAPI snapshot.
 - `npm run contracts:check` fails CI on drift.
-- Breaking changes bump `contracts/version.json` major and require an ADR.
+- Breaking OpenAPI changes bump `contracts/version.json` `runtimeApi` major and require an ADR (see ADR-006).
+- Bundle version: `contracts/version.json` `bundleVersion`.

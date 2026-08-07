@@ -9,7 +9,38 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "node tools/integration/run-smoke.mjs"
+        "command": "node tools/integration/run-smoke.mjs",
+        "env": {
+          "INTEGRATION_LEVEL": "all"
+        }
+      }
+    },
+    "test-l1": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/integration/run-smoke.mjs",
+        "env": {
+          "INTEGRATION_LEVEL": "l1"
+        }
+      }
+    },
+    "test-l2": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/integration/run-smoke.mjs",
+        "env": {
+          "INTEGRATION_LEVEL": "l2"
+        }
+      }
+    },
+    "test-l3": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/integration/run-smoke.mjs",
+        "env": {
+          "INTEGRATION_LEVEL": "all",
+          "INTEGRATION_L3": "1"
+        }
       }
     }
   }

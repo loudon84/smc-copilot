@@ -27,6 +27,9 @@ if (!semverOk(desktop.version)) errors.push(`invalid desktop version: ${desktop.
 if (!runtimeMatch || !semverOk(runtimeMatch[1])) errors.push("invalid runtime version in pyproject.toml");
 if (!semverOk(contracts.runtimeApi)) errors.push("invalid contracts.runtimeApi");
 if (!semverOk(contracts.runtimeEvents)) errors.push("invalid contracts.runtimeEvents");
+if (!semverOk(contracts.bundleVersion ?? "")) {
+  errors.push("invalid or missing contracts.bundleVersion");
+}
 if (!contracts.compatibility?.minimumDesktopVersion) {
   errors.push("missing contracts.compatibility.minimumDesktopVersion");
 }
@@ -44,5 +47,6 @@ if (errors.length) {
 console.log("[verify-version-bumps] ok");
 console.log(`  desktop=${desktop.version}`);
 console.log(`  runtime=${runtimeMatch[1]}`);
+console.log(`  bundleVersion=${contracts.bundleVersion}`);
 console.log(`  runtimeApi=${contracts.runtimeApi}`);
 console.log(`  runtimeEvents=${contracts.runtimeEvents}`);

@@ -29,10 +29,84 @@ jobs:
       - run: npm ci
       - name: Verify version bumps
         run: node tools/release/verify-version-bumps.mjs
-      - name: Build release manifest
+      - name: Build release manifest + SHA256
         run: node tools/release/build-release-manifest.mjs
       - name: Upload manifest
         uses: actions/upload-artifact@v4
         with:
           name: release-manifest
-          path: artifacts/release-manifest.json
+          path: |
+            artifacts/release-manifest.json
+            artifacts/SHA256SUMS
+            artifacts/contracts-bundle/**
+
+  desktop-release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v') || (github.event_name == 'workflow_dispatch' && inputs.component == 'desktop')
+    needs: manifest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - working-directory: packages/runtime-client-ts
+        run: npm ci
+      - working-directory: apps/desktop
+        run: npm ci
+      - run: node tools/release/generate-build-info.mjs
+      - run: npx nx run desktop:package-win
+      - name: Manifest checksums
+        run: node tools/release/build-release-manifest.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-installer
+          path: |
+            apps/desktop/dist/**/*.exe
+            artifacts/SHA256SUMS
+            artifacts/release-manifest.json
+          if-no-files-found: warn
+
+  runtime-release:
+    if: startsWith(github.ref, 'refs/tags/runtime-v') || (github.event_name == 'workflow_dispatch' && inputs.component == 'runtime')
+    needs: manifest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - working-directory: services/runtime
+        run: uv sync --extra dev
+      - working-directory: services/runtime
+        run: uv build
+      - name: Manifest checksums
+        run: node tools/release/build-release-manifest.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-artifacts
+          path: |
+            services/runtime/dist/**
+            artifacts/SHA256SUMS
+            artifacts/release-manifest.json
+          if-no-files-found: warn
+
+  contracts-release:
+    if: startsWith(github.ref, 'refs/tags/contracts-v') || (github.event_name == 'workflow_dispatch' && inputs.component == 'contracts')
+    needs: manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      - run: node tools/release/build-release-manifest.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contracts-bundle
+          path: |
+            artifacts/contracts-bundle/**
+            artifacts/SHA256SUMS
+            artifacts/release-manifest.json
