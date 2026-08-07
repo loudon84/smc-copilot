@@ -6,6 +6,13 @@
   "tags": ["type:lib", "scope:desktop"],
   "implicitDependencies": ["contracts"],
   "targets": {
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/runtime-client-ts",
+        "command": "npm ci"
+      }
+    },
     "generate": {
       "executor": "nx:run-commands",
       "options": {

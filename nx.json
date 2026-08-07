@@ -9,8 +9,9 @@
       "!{projectRoot}/tests/**/*"
     ],
     "sharedGlobals": [
-      "{workspaceRoot}/contracts/**/*",
-      "{workspaceRoot}/nx.json"
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/package-lock.json"
     ]
   },
   "targetDefaults": {
