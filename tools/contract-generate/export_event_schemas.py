@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Export Runtime SSE / error JSON Schemas to contracts/runtime-events/."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_SRC = ROOT / "services" / "runtime" / "src"
+OUT_DIR = ROOT / "contracts" / "runtime-events"
+
+
+def _sort(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _sort(value[k]) for k in sorted(value)}
+    if isinstance(value, list):
+        return [_sort(item) for item in value]
+    return value
+
+
+def _write(name: str, schema: dict[str, Any]) -> None:
+    path = OUT_DIR / name
+    path.write_text(
+        json.dumps(_sort(schema), indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    print(f"[export_event_schemas] wrote {path.relative_to(ROOT)}")
+
+
+def main() -> int:
+    sys.path.insert(0, str(RUNTIME_SRC))
+    from schemas.chat import (  # noqa: WPS433
+        WorkspaceChatChunkEvent,
+        WorkspaceChatDoneEvent,
+        WorkspaceChatErrorEvent,
+        WorkspaceChatToolProgressEvent,
+        WorkspaceChatUsageEvent,
+    )
+    from schemas.events import ErrorEnvelope, RuntimeJobSseEvent  # noqa: WPS433
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    job_schema = RuntimeJobSseEvent.model_json_schema(mode="serialization")
+    job_schema["$id"] = "https://smc-copilot.local/contracts/runtime-events/job-event.schema.json"
+    job_schema["title"] = "RuntimeJobSseEvent"
+    _write("job-event.schema.json", job_schema)
+
+    chat_schema: dict[str, Any] = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://smc-copilot.local/contracts/runtime-events/chat-event.schema.json",
+        "title": "WorkspaceChatSseEvent",
+        "oneOf": [
+            {"title": "chunk", **WorkspaceChatChunkEvent.model_json_schema(mode="serialization")},
+            {"title": "tool_progress", **WorkspaceChatToolProgressEvent.model_json_schema(mode="serialization")},
+            {"title": "usage", **WorkspaceChatUsageEvent.model_json_schema(mode="serialization")},
+            {"title": "done", **WorkspaceChatDoneEvent.model_json_schema(mode="serialization")},
+            {"title": "error", **WorkspaceChatErrorEvent.model_json_schema(mode="serialization")},
+        ],
+    }
+    _write("chat-event.schema.json", chat_schema)
+
+    error_schema = ErrorEnvelope.model_json_schema(mode="serialization")
+    error_schema["$id"] = "https://smc-copilot.local/contracts/runtime-events/error.schema.json"
+    error_schema["title"] = "RuntimeErrorEnvelope"
+    _write("error.schema.json", error_schema)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

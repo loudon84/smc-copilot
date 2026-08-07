@@ -1,0 +1,44 @@
+{
+  "$defs": {
+    "ErrorBody": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "requestId": {
+          "title": "Requestid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "requestId"
+      ],
+      "title": "ErrorBody",
+      "type": "object"
+    }
+  },
+  "$id": "https://smc-copilot.local/contracts/runtime-events/error.schema.json",
+  "description": "Unified Runtime HTTP error envelope (see api.middleware.error_envelope).",
+  "properties": {
+    "error": {
+      "$ref": "#/$defs/ErrorBody"
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "title": "RuntimeErrorEnvelope",
+  "type": "object"
+}

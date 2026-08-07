@@ -1,0 +1,55 @@
+{
+  "$id": "https://smc-copilot.local/contracts/runtime-events/job-event.schema.json",
+  "description": "SSE payload for GET /api/v1/runtime/jobs/{jobId}/events.",
+  "properties": {
+    "createdAt": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Createdat"
+    },
+    "event": {
+      "title": "Event",
+      "type": "string"
+    },
+    "level": {
+      "default": "info",
+      "title": "Level",
+      "type": "string"
+    },
+    "message": {
+      "title": "Message",
+      "type": "string"
+    },
+    "payload": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Payload"
+    },
+    "sequence": {
+      "title": "Sequence",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "event",
+    "sequence",
+    "message"
+  ],
+  "title": "RuntimeJobSseEvent",
+  "type": "object"
+}
