@@ -4,9 +4,15 @@ export type {
   RuntimeCapabilities,
   RuntimeClient,
   RuntimeStatus,
+  RuntimeTransport,
+  RuntimeRequest,
+  RuntimeStreamRequest,
+  RuntimeSseMessage,
 } from "./client/create-runtime-client";
 export { RuntimeApiError, normalizeRuntimeError } from "./client/error-normalizer";
 export type { RuntimeApiErrorBody } from "./client/error-normalizer";
 export type { RuntimeAuthProvider, RuntimeClientAuthOptions } from "./client/auth-provider";
 export { readSseStream } from "./client/sse-client";
 export type { SseMessage } from "./client/sse-client";
+export { createDefaultFetchTransport } from "./transport/default-fetch-transport";
+export type { DefaultFetchTransportOptions } from "./transport/default-fetch-transport";

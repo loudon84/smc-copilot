@@ -1,22 +1,14 @@
-import { runtimeFetch } from "../runtime-http-client";
+import { getSmcRuntimeClient } from "../smc-runtime-client";
 
-/** Thin stub — filled in Phase 5. */
 export const taskClient = {
-  list: () => runtimeFetch({ path: "/api/v1/work-tasks" }),
-  create: (body: Record<string, unknown>) =>
-    runtimeFetch({ method: "POST", path: "/api/v1/work-tasks", body }),
-  get: (taskId: string) =>
-    runtimeFetch({ path: `/api/v1/work-tasks/${encodeURIComponent(taskId)}` }),
+  list: () => getSmcRuntimeClient().tasks.list(),
+  create: (body: Record<string, unknown>) => getSmcRuntimeClient().tasks.create(body),
+  get: (taskId: string) => getSmcRuntimeClient().tasks.get(taskId),
+  cancel: (taskId: string) => getSmcRuntimeClient().tasks.cancel(taskId),
   start: (taskId: string) =>
-    runtimeFetch({
+    getSmcRuntimeClient().transport.request({
       method: "POST",
       path: `/api/v1/work-tasks/${encodeURIComponent(taskId)}/start`,
-      body: {},
-    }),
-  cancel: (taskId: string) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/work-tasks/${encodeURIComponent(taskId)}/cancel`,
       body: {},
     }),
 };

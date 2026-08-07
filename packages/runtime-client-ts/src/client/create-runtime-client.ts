@@ -1,105 +1,99 @@
 import type { RuntimeClientAuthOptions } from "./auth-provider";
-import { normalizeRuntimeError, RuntimeApiError } from "./error-normalizer";
-import { readSseStream, type SseMessage } from "./sse-client";
-import type { components } from "../generated/schema";
+import { RuntimeApiError } from "./error-normalizer";
+import { createDefaultFetchTransport } from "../transport/default-fetch-transport";
+import type { RuntimeTransport } from "../transport/types";
+import { createRuntimeDomain, type RuntimeCapabilities, type RuntimeStatus } from "../domains/runtime";
+import { createInstanceDomain } from "../domains/instance";
+import {
+  createApprovalDomain,
+  createAttachmentDomain,
+  createChatDomain,
+  createConfigurationDomain,
+  createDiagnosticsDomain,
+  createEndpointDomain,
+  createMcpDomain,
+  createResourceDomain,
+  createSecretDomain,
+  createSessionDomain,
+  createTaskDomain,
+} from "../domains/index";
 
-export type RuntimeStatus = components["schemas"]["RuntimeStatusResponse"];
-export type RuntimeCapabilities = components["schemas"]["RuntimeCapabilitiesResponse"];
+export type { RuntimeStatus, RuntimeCapabilities };
+export type { RuntimeTransport } from "../transport/types";
+export type {
+  RuntimeRequest,
+  RuntimeStreamRequest,
+  RuntimeSseMessage,
+} from "../transport/types";
 
 export interface CreateRuntimeClientOptions extends RuntimeClientAuthOptions {
   baseUrl: string;
   desktopVersion?: string;
   runtimeApiVersion?: string;
   fetchImpl?: typeof fetch;
+  /** Inject DesktopRuntimeTransport to preserve auth/idempotency/SSE reconnect. */
+  transport?: RuntimeTransport;
 }
 
 export interface RuntimeClient {
-  getStatus(signal?: AbortSignal): Promise<RuntimeStatus>;
-  getCapabilities(signal?: AbortSignal): Promise<RuntimeCapabilities>;
-  getJobEvents(
-    jobId: string,
-    signal?: AbortSignal,
-  ): AsyncGenerator<SseMessage>;
-}
+  readonly transport: RuntimeTransport;
+  readonly runtime: ReturnType<typeof createRuntimeDomain>;
+  readonly instances: ReturnType<typeof createInstanceDomain>;
+  readonly sessions: ReturnType<typeof createSessionDomain>;
+  readonly configuration: ReturnType<typeof createConfigurationDomain>;
+  readonly secrets: ReturnType<typeof createSecretDomain>;
+  readonly attachments: ReturnType<typeof createAttachmentDomain>;
+  readonly approvals: ReturnType<typeof createApprovalDomain>;
+  readonly tasks: ReturnType<typeof createTaskDomain>;
+  readonly resources: ReturnType<typeof createResourceDomain>;
+  readonly diagnostics: ReturnType<typeof createDiagnosticsDomain>;
+  readonly endpoint: ReturnType<typeof createEndpointDomain>;
+  readonly mcp: ReturnType<typeof createMcpDomain>;
+  readonly chat: ReturnType<typeof createChatDomain>;
 
-function buildUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+  /** @deprecated Prefer client.runtime.getStatus */
+  getStatus(signal?: AbortSignal): Promise<RuntimeStatus>;
+  /** @deprecated Prefer client.runtime.getCapabilities */
+  getCapabilities(signal?: AbortSignal): Promise<RuntimeCapabilities>;
+  /** @deprecated Prefer client.runtime.getJobEvents */
+  getJobEvents(jobId: string, signal?: AbortSignal): AsyncGenerator<{ data: string; id?: string; event?: string }>;
 }
 
 export function createRuntimeClient(options: CreateRuntimeClientOptions): RuntimeClient {
-  const fetchImpl = options.fetchImpl ?? fetch;
-
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      ...(init?.headers as Record<string, string> | undefined),
-    };
-    if (options.desktopVersion) {
-      headers["X-Desktop-Version"] = options.desktopVersion;
-    }
-    if (options.runtimeApiVersion) {
-      headers["X-Runtime-Api-Version"] = options.runtimeApiVersion;
-    }
-    const token = options.getDeviceToken?.();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    const legacy = options.getLegacyToken?.();
-    if (legacy) {
-      headers["X-Copilot-Desktop-Token"] = legacy;
-    }
-
-    const res = await fetchImpl(buildUrl(options.baseUrl, path), {
-      ...init,
-      headers,
+  const transport =
+    options.transport ??
+    createDefaultFetchTransport({
+      baseUrl: options.baseUrl,
+      desktopVersion: options.desktopVersion,
+      runtimeApiVersion: options.runtimeApiVersion,
+      fetchImpl: options.fetchImpl,
+      getDeviceToken: options.getDeviceToken,
+      getLegacyToken: options.getLegacyToken,
     });
-    if (!res.ok) {
-      let body: unknown = null;
-      const text = await res.text();
-      try {
-        body = text ? JSON.parse(text) : null;
-      } catch {
-        body = text;
-      }
-      throw normalizeRuntimeError({ status: res.status, body });
-    }
-    if (res.status === 204) {
-      return undefined as T;
-    }
-    return (await res.json()) as T;
-  }
 
-  return {
-    getStatus(signal) {
-      return request<RuntimeStatus>("/api/v1/runtime/status", { method: "GET", signal });
-    },
-    getCapabilities(signal) {
-      return request<RuntimeCapabilities>("/api/v1/runtime/capabilities", {
-        method: "GET",
-        signal,
-      });
-    },
+  const runtime = createRuntimeDomain(transport);
+  const client: RuntimeClient = {
+    transport,
+    runtime,
+    instances: createInstanceDomain(transport),
+    sessions: createSessionDomain(transport),
+    configuration: createConfigurationDomain(transport),
+    secrets: createSecretDomain(transport),
+    attachments: createAttachmentDomain(transport),
+    approvals: createApprovalDomain(transport),
+    tasks: createTaskDomain(transport),
+    resources: createResourceDomain(transport),
+    diagnostics: createDiagnosticsDomain(transport),
+    endpoint: createEndpointDomain(transport),
+    mcp: createMcpDomain(transport),
+    chat: createChatDomain(transport),
+    getStatus: (signal) => runtime.getStatus(signal),
+    getCapabilities: (signal) => runtime.getCapabilities(signal),
     async *getJobEvents(jobId, signal) {
-      const headers: Record<string, string> = { Accept: "text/event-stream" };
-      const token = options.getDeviceToken?.();
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const legacy = options.getLegacyToken?.();
-      if (legacy) headers["X-Copilot-Desktop-Token"] = legacy;
-
-      const res = await fetchImpl(
-        buildUrl(options.baseUrl, `/api/v1/runtime/jobs/${encodeURIComponent(jobId)}/events`),
-        { method: "GET", headers, signal },
-      );
-      if (!res.ok) {
-        throw new RuntimeApiError({
-          message: `SSE HTTP ${res.status}`,
-          status: res.status,
-          code: "sse_error",
-        });
-      }
-      yield* readSseStream(res, signal);
+      yield* runtime.getJobEvents(jobId, signal);
     },
   };
+  return client;
 }
 
 export { RuntimeApiError };

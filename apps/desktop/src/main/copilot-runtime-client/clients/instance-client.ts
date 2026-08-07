@@ -1,4 +1,4 @@
-import { runtimeFetch } from "../runtime-http-client";
+import { getSmcRuntimeClient } from "../smc-runtime-client";
 import type {
   ServeInstanceHealth,
   ServeInstanceLogsResult,
@@ -11,10 +11,6 @@ import {
   pickString,
 } from "../../../shared/copilot-runtime/instance-contract";
 
-function encodeId(id: string): string {
-  return encodeURIComponent(id);
-}
-
 function mapInstance(raw: unknown): ServeInstanceSummary {
   const obj = asRecord(raw);
   const status = normalizeServeInstanceStatus(obj.status ?? obj.state);
@@ -24,7 +20,12 @@ function mapInstance(raw: unknown): ServeInstanceSummary {
       ? healthRaw
       : "unknown";
   const portVal = obj.port ?? obj.gateway_port;
-  const port = typeof portVal === "number" ? portVal : typeof portVal === "string" ? Number(portVal) || null : null;
+  const port =
+    typeof portVal === "number"
+      ? portVal
+      : typeof portVal === "string"
+        ? Number(portVal) || null
+        : null;
   return {
     instanceId: pickString(obj, "instanceId", "instance_id", "id") ?? "",
     name: pickString(obj, "name", "displayName", "display_name"),
@@ -45,22 +46,23 @@ function unwrapList(raw: unknown): unknown[] {
   return Array.isArray(items) ? items : [];
 }
 
+function instances() {
+  return getSmcRuntimeClient().instances;
+}
+
 export const instanceClient = {
   list: async (): Promise<ServeInstanceSummary[]> => {
-    const raw = await runtimeFetch({ path: "/api/v1/instances" });
+    const raw = await instances().list();
     return unwrapList(raw).map(mapInstance).filter((i) => i.instanceId);
   },
 
   get: async (instanceId: string): Promise<ServeInstanceSummary> => {
-    const raw = await runtimeFetch({ path: `/api/v1/instances/${encodeId(instanceId)}` });
+    const raw = await instances().get(instanceId);
     return mapInstance(raw);
   },
 
   resolve: async (ref: string): Promise<ServeInstanceResolveResult> => {
-    const raw = await runtimeFetch({
-      path: "/api/v1/instances/resolve",
-      query: { ref },
-    });
+    const raw = await instances().resolve(ref);
     const obj = asRecord(raw);
     const instanceId = pickString(obj, "instanceId", "instance_id", "id") ?? "";
     const matchedRaw = pickString(obj, "matchedBy", "matched_by")?.toLowerCase() ?? "unknown";
@@ -77,47 +79,21 @@ export const instanceClient = {
     return { instanceId, ref, matchedBy };
   },
 
-  create: (body: Record<string, unknown>) =>
-    runtimeFetch({ method: "POST", path: "/api/v1/instances", body }),
+  create: (body: Record<string, unknown>) => instances().create(body),
 
   patch: (instanceId: string, body: Record<string, unknown>) =>
-    runtimeFetch({
-      method: "PATCH",
-      path: `/api/v1/instances/${encodeId(instanceId)}`,
-      body,
-    }),
+    instances().patch(instanceId, body),
 
-  delete: (instanceId: string) =>
-    runtimeFetch({
-      method: "DELETE",
-      path: `/api/v1/instances/${encodeId(instanceId)}`,
-    }),
+  delete: (instanceId: string) => instances().delete(instanceId),
 
-  start: (instanceId: string) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/instances/${encodeId(instanceId)}/start`,
-      body: {},
-    }),
+  start: (instanceId: string) => instances().start(instanceId),
 
-  stop: (instanceId: string) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/instances/${encodeId(instanceId)}/stop`,
-      body: {},
-    }),
+  stop: (instanceId: string) => instances().stop(instanceId),
 
-  restart: (instanceId: string) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/instances/${encodeId(instanceId)}/restart`,
-      body: {},
-    }),
+  restart: (instanceId: string) => instances().restart(instanceId),
 
   health: async (instanceId: string): Promise<ServeInstanceHealth> => {
-    const raw = await runtimeFetch({
-      path: `/api/v1/instances/${encodeId(instanceId)}/health`,
-    });
+    const raw = await instances().health(instanceId);
     const obj = asRecord(raw);
     const checksRaw = obj.checks;
     const checks: Record<string, string> = {};
@@ -143,10 +119,7 @@ export const instanceClient = {
     instanceId: string,
     options?: { tail?: number },
   ): Promise<ServeInstanceLogsResult> => {
-    const raw = await runtimeFetch({
-      path: `/api/v1/instances/${encodeId(instanceId)}/logs`,
-      query: { tail: options?.tail ?? 200 },
-    });
+    const raw = await instances().logs(instanceId, { tail: options?.tail ?? 200 });
     const obj = asRecord(raw);
     const linesRaw = obj.lines ?? obj.logs ?? obj.data;
     const lines = Array.isArray(linesRaw)
