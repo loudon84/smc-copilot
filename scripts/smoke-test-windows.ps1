@@ -28,6 +28,7 @@ Assert-Ok "health" {
 Assert-Ok "service/status" {
     $s = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/status"
     if (-not $s.port) { throw "missing port in service status" }
+    $script:hermesHomeResolved = $(if ($null -ne $s.hermes_home -and "$($s.hermes_home)" -ne "") { $s.hermes_home } else { "$([Environment]::GetFolderPath('UserProfile'))\.hermes" })
     Write-Host ($s | ConvertTo-Json -Depth 5)
 }
 
@@ -40,6 +41,11 @@ Assert-Ok "create profile default" {
         -ContentType "application/json" `
         -Body '{"name":"default","type":"default","auto_start":false}'
     if (-not $script:default.id) { throw "no profile id" }
+    $expected = [System.IO.Path]::GetFullPath(($script:hermesHomeResolved -replace '/','\'))
+    $got = [System.IO.Path]::GetFullPath(($script:default.profile_path -replace '/','\'))
+    if ($got -ne $expected) {
+        throw "default profile_path should equal service hermes_home ($expected), got $got"
+    }
 }
 
 Assert-Ok "create profile writer" {

@@ -31,6 +31,7 @@ async def test_profile_list_and_create(app_client) -> None:
     assert resp.status_code == 201
     profile = resp.json()
     assert profile["name"] == "default"
+    assert profile["profile_path"] == str(settings.hermes_home_path)
 
     listed = await client.get("/api/v1/profiles")
     assert listed.status_code == 200

@@ -42,6 +42,7 @@ from db.models.work_tasks import (
     TaskRunEvent,
     WorkTask,
 )
+from db.models.local_task import LocalTask
 from db.models.profile import Profile
 from db.models.role_spec import ProfileRoleSpec
 from db.models.runtime import (

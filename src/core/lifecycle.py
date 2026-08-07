@@ -180,7 +180,14 @@ def _build_supervisor(
         ws.register(
             WorkerRegistration(
                 name="AssignmentWorker",
-                tick=_tick_fn(AssignmentWorker(settings=settings, session_maker=session_maker, center=center)),
+                tick=_tick_fn(
+                    AssignmentWorker(
+                        settings=settings,
+                        session_maker=session_maker,
+                        center=center,
+                        supervisor=gateway_supervisor,
+                    )
+                ),
                 interval_seconds=settings.sync_poll_interval_seconds,
             )
         )

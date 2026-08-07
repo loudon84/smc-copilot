@@ -56,7 +56,9 @@ v1.6 FR-401–507：[[src/db/models/work_tasks.py#WorkTask]] / [[src/db/models/w
 
 ## Workers
 
-后台循环经 [[src/workers/supervisor.py#WorkerSupervisor]] 注册：EndpointHeartbeat、DesiredState、Assignment、DeliveryOutbox、AckDelivery、LeaseRenewal、ArtifactDelivery、StaffDeckReview、Retention 等；Team Hub listener/outbox 仅在显式配置 `AIOS_TEAM_HUB_BASE_URL` 时启动。`app.state._disable_workers` 关闭全部循环。
+经 [[src/workers/supervisor.py#WorkerSupervisor]] 注册 EndpointHeartbeat、DesiredState、Assignment、DeliveryOutbox 等；Assignment 须注入 `GatewaySupervisor`。
+
+Team Hub listener/outbox 仅在显式配置 `AIOS_TEAM_HUB_BASE_URL` 时启动。`app.state._disable_workers` 关闭全部循环。
 
 ## Capability
 

@@ -28,6 +28,7 @@ Profile 与任务相关表及枚举。
 | `0002` | 任务、审批、工作空间、审计等 v1.2 表 |
 | `001_role_spec` | Profile 展示字段 + `profile_role_specs` |
 | `002_team_v18_chat` | `profile_chat_settings`、`chat_attachments` |
+| `003_fix_default_profile_path` | 修正默认 `profile_path`（与 `003_runtime_core` 同父，曾成孤立分支） |
 | `003_runtime_core` | Runtime 表（versions/jobs/instances/devices 等）+ profiles→instances 数据迁移 |
 | `004_v14_instance_chat` | `profile_chat_settings`/`chat_attachments` 增加 `instance_id` |
 | `005_v14_mcp_tables` | `mcp_servers`/`mcp_secret_refs`/`mcp_test_results` |
@@ -38,6 +39,9 @@ Profile 与任务相关表及枚举。
 | `009_v16_resource_apply` | `resource_apply_runs`/`resource_apply_operations`/`resource_snapshots` |
 | `010_v16_merge_heads` | 合并 reliable_sync 与 resource_apply 分支 |
 | `011_v16_work_tasks` | `work_tasks`/`task_runs`/`task_run_events` 等；未完成 assignment 迁移为 `migration_pending_review` |
+| `012_v16_artifact_workers` | artifact upload / worker state 表 |
+| `013_v16_experience` | Experience evidence links / fingerprints |
+| `014_merge_profile_path_v16` | 合并 `003_fix_default_profile_path` 与 `013_v16_experience`，恢复单一 head |
 
 生产启动前 `alembic upgrade head`。新增表必须配 Alembic 迁移。
 
