@@ -26,13 +26,13 @@ async def test_runtime_status_and_capabilities(app_client) -> None:
     assert body["status"] in ("ready", "degraded", "starting")
     assert "features" in body
     assert "checks" in body
-    assert body["apiVersion"] == "1.3"
+    assert body["apiVersion"] == "1.4"
     assert "gateway.auth.internal" in body["features"]
 
     caps = await client.get("/api/v1/runtime/capabilities")
     assert caps.status_code == 200
     assert "runtime.install" in caps.json()["features"]
-    assert caps.json()["apiVersion"] == "1.3"
+    assert caps.json()["apiVersion"] == "1.4"
 
 
 @pytest.mark.asyncio

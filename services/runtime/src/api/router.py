@@ -8,6 +8,7 @@ from api.v1 import (
     attachments,
     bootstrap,
     chat,
+    chat_runs,
     configurations,
     desktop_workbench,
     diagnostics,
@@ -45,6 +46,7 @@ api_router.include_router(system.router)
 api_router.include_router(service.router)
 api_router.include_router(runtime.router)
 api_router.include_router(instance_chat.router)
+api_router.include_router(chat_runs.router)
 api_router.include_router(instances.router)
 api_router.include_router(sessions.router)
 api_router.include_router(configurations.router)

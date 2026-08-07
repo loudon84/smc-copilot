@@ -72,6 +72,34 @@ Chat SSE 路径通过 Credential Broker 解析 key 并加入 Authorization heade
 
 当 Profile `status=stopped` 而 Instance `status=running` 时，`InstanceChatService.list_models` 仍按 Instance 状态调用 Gateway；静态检查确保 `instance_ref_resolver` / `instance_chat_service` 不引用 `ProfileRefResolver` 或 `GatewayStatus`。
 
+## Chat Runtime v2
+
+`tests/test_chat_runs.py` 覆盖 durable ChatRun API：建 run/turn、事件 replay、abort、queue、interaction，以及 `chat.runtime.v2` capability。对应 [[chat-sessions#Chat Runtime v2]]。
+
+### Create run and turn
+
+创建 ChatRun（`clientRunId` 幂等）并创建 turn；stub worker 发出 `agent.message.delta`/`completed` 与 `turn.completed`。
+
+### List events replay
+
+`after_sequence` 只返回更大序号事件；亦可用 `clientRunId` 作为路径 `runId` 查询。
+
+### Abort cancels turn
+
+`POST .../abort` 将 run 标为 `cancelled` 并持久化 `turn.cancelled`。
+
+### Queue lifecycle
+
+enqueue / list / patch / delete 队列项，并写入 `queue.changed` 事件；snapshot 含 events。
+
+### Interaction respond
+
+`POST .../interactions/{requestId}/respond` 解析 clarify 并追加 `clarify.resolved`。
+
+### Capability declared
+
+`/runtime/capabilities` 的 features 包含 `chat.runtime.v2`。
+
 ## 角色库
 
 `tests/test_role_compiler.py` 验证 `SOUL.md`/`MEMORY.md`/manifest 生成与端口不写入 SOUL。`tests/test_role_library_service.py`、`tests/test_role_library_import.py`、`tests/test_role_library_preset_resolve.py` 验证角色库同步与预设导入。对应 [[profiles-instances#角色编译]]。

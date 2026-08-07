@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 # Single source of truth for Runtime API negotiation version (PRD v1.1 §12.2 / §13).
-RUNTIME_API_VERSION = "1.3"
+RUNTIME_API_VERSION = "1.4"
 
 RuntimeFeatureId = Literal[
     "runtime.install",
@@ -76,7 +76,6 @@ RuntimeFeatureId = Literal[
     "observability.metrics",
     "observability.slo",
     "experience.auto-evidence",
-    # Declared for OpenAPI union; enabled when Chat Runtime v2 ships (PRD v1.1 Phase 5).
     "chat.runtime.v2",
 ]
 
@@ -151,6 +150,7 @@ DEFAULT_FEATURES: tuple[RuntimeFeatureId, ...] = (
     "observability.metrics",
     "observability.slo",
     "experience.auto-evidence",
+    "chat.runtime.v2",
 )
 
 

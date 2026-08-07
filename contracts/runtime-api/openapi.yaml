@@ -237,6 +237,27 @@ components:
       - status
       title: BootstrapJobResponse
       type: object
+    ChatAcceptedResult:
+      properties:
+        accepted:
+          default: true
+          title: Accepted
+          type: boolean
+        eventCursor:
+          default: 0
+          title: Eventcursor
+          type: integer
+        runId:
+          title: Runid
+          type: string
+        turnId:
+          default: ''
+          title: Turnid
+          type: string
+      required:
+      - runId
+      title: ChatAcceptedResult
+      type: object
     ChatAttachmentResponse:
       properties:
         id:
@@ -282,6 +303,80 @@ components:
       - sha256
       - workspace_relative_path
       title: ChatAttachmentResponse
+      type: object
+    ChatCreateRunBody:
+      properties:
+        clientRunId:
+          minLength: 1
+          title: Clientrunid
+          type: string
+        instanceId:
+          minLength: 1
+          title: Instanceid
+          type: string
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+      required:
+      - clientRunId
+      - instanceId
+      title: ChatCreateRunBody
+      type: object
+    ChatCreateTurnBody:
+      properties:
+        attachmentIds:
+          items:
+            type: string
+          title: Attachmentids
+          type: array
+        clientRunId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Clientrunid
+        clientTurnId:
+          minLength: 1
+          title: Clientturnid
+          type: string
+        context:
+          anyOf:
+          - $ref: '#/components/schemas/ChatTurnContext'
+          - type: 'null'
+        instanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+        message:
+          minLength: 1
+          title: Message
+          type: string
+        modelId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Modelid
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+      required:
+      - clientTurnId
+      - message
+      title: ChatCreateTurnBody
       type: object
     ChatModel:
       properties:
@@ -345,6 +440,71 @@ components:
       required:
       - models
       title: ChatModelListResponse
+      type: object
+    ChatQueueCreateBody:
+      additionalProperties: true
+      properties:
+        payload:
+          additionalProperties: true
+          title: Payload
+          type: object
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      title: ChatQueueCreateBody
+      type: object
+    ChatQueuePatchBody:
+      additionalProperties: true
+      properties:
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      title: ChatQueuePatchBody
+      type: object
+    ChatTurnContext:
+      additionalProperties: true
+      properties:
+        expertId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expertid
+        invocationSource:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Invocationsource
+        permissionMode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Permissionmode
+        skillName:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Skillname
+        teamId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Teamid
+        workMode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workmode
+      title: ChatTurnContext
       type: object
     ConfigurationPatchRequest:
       properties:
@@ -1592,15 +1752,86 @@ components:
     RuntimeCapabilitiesResponse:
       properties:
         apiVersion:
+          default: '1.3'
           title: Apiversion
           type: string
         features:
           items:
+            enum:
+            - runtime.install
+            - runtime.update
+            - runtime.rollback
+            - runtime.doctor
+            - instances.multiple
+            - chat.stream
+            - sessions.read
+            - mcp.crud
+            - mcp.test
+            - secrets.manage
+            - pairing.device
+            - config.manage
+            - gateway.auth.internal
+            - instances.chat
+            - instances.sessions
+            - runtime.update.plan
+            - runtime.update.transactional
+            - runtime.job.cancel
+            - runtime.service.update
+            - runtime.bootstrap
+            - runtime.repair
+            - mcp.compile
+            - diagnostics.bundle
+            - artifact.signature
+            - endpoint.enrollment
+            - endpoint.inventory
+            - sync.cursor
+            - sync.desired-state
+            - sync.resources
+            - sync.offline-outbox
+            - sync.dead-letter
+            - tasks.remote.v2
+            - tasks.lease
+            - tasks.result.delivery
+            - artifacts.presigned-upload
+            - experience.capture
+            - experience.local-review
+            - experience.staffdeck.submit
+            - runtime.release.production
+            - runtime.maintenance.apply
+            - installer.windows.production
+            - deployment.production-mode
+            - service-center.http.production
+            - service-center.device-signature
+            - service-center.circuit-breaker
+            - sync.ack-outbox
+            - sync.signature-verification
+            - sync.sequence-gap
+            - sync.poison-message
+            - resources.real-apply
+            - resources.revision-rollback
+            - resources.actual-state-probe
+            - resources.artifact-cache-v2
+            - tasks.local-control-plane
+            - tasks.hermes-execution
+            - tasks.event-store
+            - tasks.event-replay
+            - tasks.cancel
+            - tasks.recovery
+            - tasks.scheduler
+            - approvals.task-scoped
+            - policies.effective-policy
+            - artifacts.streaming-upload
+            - artifacts.multipart-resume
+            - artifacts.encrypted-spool
+            - workers.supervisor
+            - observability.metrics
+            - observability.slo
+            - experience.auto-evidence
+            - chat.runtime.v2
             type: string
           title: Features
           type: array
       required:
-      - apiVersion
       - features
       title: RuntimeCapabilitiesResponse
       type: object
@@ -1791,6 +2022,77 @@ components:
           type: string
         features:
           items:
+            enum:
+            - runtime.install
+            - runtime.update
+            - runtime.rollback
+            - runtime.doctor
+            - instances.multiple
+            - chat.stream
+            - sessions.read
+            - mcp.crud
+            - mcp.test
+            - secrets.manage
+            - pairing.device
+            - config.manage
+            - gateway.auth.internal
+            - instances.chat
+            - instances.sessions
+            - runtime.update.plan
+            - runtime.update.transactional
+            - runtime.job.cancel
+            - runtime.service.update
+            - runtime.bootstrap
+            - runtime.repair
+            - mcp.compile
+            - diagnostics.bundle
+            - artifact.signature
+            - endpoint.enrollment
+            - endpoint.inventory
+            - sync.cursor
+            - sync.desired-state
+            - sync.resources
+            - sync.offline-outbox
+            - sync.dead-letter
+            - tasks.remote.v2
+            - tasks.lease
+            - tasks.result.delivery
+            - artifacts.presigned-upload
+            - experience.capture
+            - experience.local-review
+            - experience.staffdeck.submit
+            - runtime.release.production
+            - runtime.maintenance.apply
+            - installer.windows.production
+            - deployment.production-mode
+            - service-center.http.production
+            - service-center.device-signature
+            - service-center.circuit-breaker
+            - sync.ack-outbox
+            - sync.signature-verification
+            - sync.sequence-gap
+            - sync.poison-message
+            - resources.real-apply
+            - resources.revision-rollback
+            - resources.actual-state-probe
+            - resources.artifact-cache-v2
+            - tasks.local-control-plane
+            - tasks.hermes-execution
+            - tasks.event-store
+            - tasks.event-replay
+            - tasks.cancel
+            - tasks.recovery
+            - tasks.scheduler
+            - approvals.task-scoped
+            - policies.effective-policy
+            - artifacts.streaming-upload
+            - artifacts.multipart-resume
+            - artifacts.encrypted-spool
+            - workers.supervisor
+            - observability.metrics
+            - observability.slo
+            - experience.auto-evidence
+            - chat.runtime.v2
             type: string
           title: Features
           type: array
@@ -2817,6 +3119,590 @@ paths:
       summary: Bootstrap Job Status
       tags:
       - bootstrap
+  /api/v1/chat-runs:
+    post:
+      operationId: create_chat_run_api_v1_chat_runs_post
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCreateRunBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatAcceptedResult'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Chat Run
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}:
+    get:
+      operationId: get_chat_run_api_v1_chat_runs__run_id__get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Get Chat Run Api V1 Chat Runs  Run Id  Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Chat Run
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/abort:
+    post:
+      operationId: abort_chat_run_api_v1_chat_runs__run_id__abort_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Abort Chat Run Api V1 Chat Runs  Run Id  Abort Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Abort Chat Run
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/events:
+    get:
+      operationId: list_chat_events_api_v1_chat_runs__run_id__events_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: query
+        name: after_sequence
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After Sequence
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 500
+          maximum: 2000
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  additionalProperties: true
+                  type: object
+                title: Response List Chat Events Api V1 Chat Runs  Run Id  Events Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Chat Events
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/events/stream:
+    get:
+      operationId: stream_chat_events_api_v1_chat_runs__run_id__events_stream_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Stream Chat Events
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/interactions/{request_id}/respond:
+    post:
+      operationId: respond_chat_interaction_api_v1_chat_runs__run_id__interactions__request_id__respond_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: true
+              title: Body
+              type: object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Respond Chat Interaction Api V1 Chat Runs  Run Id  Interactions  Request Id  Respond Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Respond Chat Interaction
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/queue:
+    get:
+      operationId: list_chat_queue_api_v1_chat_runs__run_id__queue_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  additionalProperties: true
+                  type: object
+                title: Response List Chat Queue Api V1 Chat Runs  Run Id  Queue Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Chat Queue
+      tags:
+      - chat-runs
+    post:
+      operationId: enqueue_chat_queue_api_v1_chat_runs__run_id__queue_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatQueueCreateBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Enqueue Chat Queue Api V1 Chat Runs  Run Id  Queue Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Enqueue Chat Queue
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/queue/{queue_id}:
+    delete:
+      operationId: delete_chat_queue_api_v1_chat_runs__run_id__queue__queue_id__delete
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: path
+        name: queue_id
+        required: true
+        schema:
+          title: Queue Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Delete Chat Queue Api V1 Chat Runs  Run Id  Queue  Queue Id  Delete
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Delete Chat Queue
+      tags:
+      - chat-runs
+    patch:
+      operationId: patch_chat_queue_api_v1_chat_runs__run_id__queue__queue_id__patch
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: path
+        name: queue_id
+        required: true
+        schema:
+          title: Queue Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatQueuePatchBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Patch Chat Queue Api V1 Chat Runs  Run Id  Queue  Queue Id  Patch
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Patch Chat Queue
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/snapshot:
+    get:
+      operationId: get_chat_snapshot_api_v1_chat_runs__run_id__snapshot_get
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Get Chat Snapshot Api V1 Chat Runs  Run Id  Snapshot Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Chat Snapshot
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/turns:
+    post:
+      operationId: create_chat_turn_api_v1_chat_runs__run_id__turns_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCreateTurnBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatAcceptedResult'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Chat Turn
+      tags:
+      - chat-runs
   /api/v1/desktop/task-workbench/events/stream:
     get:
       description: 'Global task workbench SSE: task_created / task_updated / approval_created + ping.'

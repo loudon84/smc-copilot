@@ -123,6 +123,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Chat Run */
+        post: operations["create_chat_run_api_v1_chat_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chat Run */
+        get: operations["get_chat_run_api_v1_chat_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/abort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Abort Chat Run */
+        post: operations["abort_chat_run_api_v1_chat_runs__run_id__abort_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Chat Events */
+        get: operations["list_chat_events_api_v1_chat_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Chat Events */
+        get: operations["stream_chat_events_api_v1_chat_runs__run_id__events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/interactions/{request_id}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Respond Chat Interaction */
+        post: operations["respond_chat_interaction_api_v1_chat_runs__run_id__interactions__request_id__respond_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Chat Queue */
+        get: operations["list_chat_queue_api_v1_chat_runs__run_id__queue_get"];
+        put?: never;
+        /** Enqueue Chat Queue */
+        post: operations["enqueue_chat_queue_api_v1_chat_runs__run_id__queue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/queue/{queue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Chat Queue */
+        delete: operations["delete_chat_queue_api_v1_chat_runs__run_id__queue__queue_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Chat Queue */
+        patch: operations["patch_chat_queue_api_v1_chat_runs__run_id__queue__queue_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Chat Snapshot */
+        get: operations["get_chat_snapshot_api_v1_chat_runs__run_id__snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Chat Turn */
+        post: operations["create_chat_turn_api_v1_chat_runs__run_id__turns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/desktop/task-workbench/events/stream": {
         parameters: {
             query?: never;
@@ -2927,6 +3099,26 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** ChatAcceptedResult */
+        ChatAcceptedResult: {
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+            /**
+             * Eventcursor
+             * @default 0
+             */
+            eventCursor: number;
+            /** Runid */
+            runId: string;
+            /**
+             * Turnid
+             * @default
+             */
+            turnId: string;
+        };
         /** ChatAttachmentResponse */
         ChatAttachmentResponse: {
             /** Id */
@@ -2949,6 +3141,37 @@ export interface components {
             workspace_id: string;
             /** Workspace Relative Path */
             workspace_relative_path: string;
+        };
+        /** ChatCreateRunBody */
+        ChatCreateRunBody: {
+            /** Clientrunid */
+            clientRunId: string;
+            /** Instanceid */
+            instanceId: string;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+        };
+        /** ChatCreateTurnBody */
+        ChatCreateTurnBody: {
+            /** Attachmentids */
+            attachmentIds?: string[];
+            /** Clientrunid */
+            clientRunId?: string | null;
+            /** Clientturnid */
+            clientTurnId: string;
+            context?: components["schemas"]["ChatTurnContext"] | null;
+            /** Instanceid */
+            instanceId?: string | null;
+            /** Message */
+            message: string;
+            /** Modelid */
+            modelId?: string | null;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
         };
         /** ChatModel */
         ChatModel: {
@@ -2985,6 +3208,45 @@ export interface components {
             } | null;
             /** Status */
             status?: string | null;
+        };
+        /** ChatQueueCreateBody */
+        ChatQueueCreateBody: {
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ChatQueuePatchBody */
+        ChatQueuePatchBody: {
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** ChatTurnContext */
+        ChatTurnContext: {
+            /** Expertid */
+            expertId?: string | null;
+            /** Invocationsource */
+            invocationSource?: string | null;
+            /** Permissionmode */
+            permissionMode?: string | null;
+            /** Skillname */
+            skillName?: string | null;
+            /** Teamid */
+            teamId?: string | null;
+            /** Workmode */
+            workMode?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ConfigurationPatchRequest */
         ConfigurationPatchRequest: {
@@ -3691,10 +3953,13 @@ export interface components {
         };
         /** RuntimeCapabilitiesResponse */
         RuntimeCapabilitiesResponse: {
-            /** Apiversion */
+            /**
+             * Apiversion
+             * @default 1.3
+             */
             apiVersion: string;
             /** Features */
-            features: string[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2")[];
         };
         /** RuntimeCompatibilityFlags */
         RuntimeCompatibilityFlags: {
@@ -3823,7 +4088,7 @@ export interface components {
             /** Datadir */
             dataDir: string;
             /** Features */
-            features: string[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2")[];
             /** Hermeshome */
             hermesHome: string;
             /** Hermesinstalled */
@@ -4461,6 +4726,458 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BootstrapJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_chat_run_api_v1_chat_runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatCreateRunBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAcceptedResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chat_run_api_v1_chat_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    abort_chat_run_api_v1_chat_runs__run_id__abort_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_chat_events_api_v1_chat_runs__run_id__events_get: {
+        parameters: {
+            query?: {
+                after_sequence?: number | null;
+                limit?: number;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_chat_events_api_v1_chat_runs__run_id__events_stream_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    respond_chat_interaction_api_v1_chat_runs__run_id__interactions__request_id__respond_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_chat_queue_api_v1_chat_runs__run_id__queue_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enqueue_chat_queue_api_v1_chat_runs__run_id__queue_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatQueueCreateBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_chat_queue_api_v1_chat_runs__run_id__queue__queue_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+                queue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_chat_queue_api_v1_chat_runs__run_id__queue__queue_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+                queue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatQueuePatchBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_chat_snapshot_api_v1_chat_runs__run_id__snapshot_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_chat_turn_api_v1_chat_runs__run_id__turns_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatCreateTurnBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAcceptedResult"];
                 };
             };
             /** @description Validation Error */

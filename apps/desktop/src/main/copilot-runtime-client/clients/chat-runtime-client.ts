@@ -1,8 +1,8 @@
 /**
- * Serve Chat Runtime v2 HTTP + SSE client (PRD §8–§9).
- * Paths are hand-authored until OpenAPI snapshot includes chat-runs*.
+ * Serve Chat Runtime v2 client — HTTP paths via @smc/runtime-client chat domain.
+ * SSE auto-reconnect stays on Desktop runtime-sse-client.
  */
-import { runtimeFetch } from "../runtime-http-client";
+import { getSmcRuntimeClient } from "../smc-runtime-client";
 import { subscribeRuntimeSse, type RuntimeSseMessage } from "../runtime-sse-client";
 import {
   normalizeServeChatEvent,
@@ -14,10 +14,6 @@ import {
   type ServeChatQueueEntry,
   type ServeChatSnapshot,
 } from "../../../shared/copilot-runtime/chat-runtime-serve-contract";
-
-function encodeId(id: string): string {
-  return encodeURIComponent(id);
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -80,7 +76,10 @@ function parseSseDataToEvent(message: RuntimeSseMessage): ServeChatEvent | null 
     const parsed = JSON.parse(message.data) as unknown;
     return normalizeServeChatEvent(
       message.id
-        ? { ...(asRecord(parsed)), eventId: pickString(asRecord(parsed), "eventId", "event_id") ?? message.id }
+        ? {
+            ...asRecord(parsed),
+            eventId: pickString(asRecord(parsed), "eventId", "event_id") ?? message.id,
+          }
         : parsed,
     );
   } catch {
@@ -88,23 +87,20 @@ function parseSseDataToEvent(message: RuntimeSseMessage): ServeChatEvent | null 
   }
 }
 
+function chat() {
+  return getSmcRuntimeClient().chat;
+}
+
 export const chatRuntimeClient = {
   createRun: async (body: ServeChatCreateRunBody): Promise<ServeChatAcceptedResult> => {
-    const raw = await runtimeFetch({
-      method: "POST",
-      path: "/api/v1/chat-runs",
-      body,
-    });
+    const raw = await chat().createRun(body);
     return mapAccepted(raw, body.clientRunId, "");
   },
 
-  getRun: (runId: string) =>
-    runtimeFetch({ path: `/api/v1/chat-runs/${encodeId(runId)}` }),
+  getRun: (runId: string) => chat().getRun(runId),
 
   getSnapshot: async (runId: string): Promise<ServeChatSnapshot> => {
-    const raw = await runtimeFetch({
-      path: `/api/v1/chat-runs/${encodeId(runId)}/snapshot`,
-    });
+    const raw = await chat().snapshot(runId);
     const obj = asRecord(raw);
     const events = unwrapList(obj.events ?? raw)
       .map((e) => normalizeServeChatEvent(e))
@@ -125,15 +121,10 @@ export const chatRuntimeClient = {
     runId: string,
     body: ServeChatCreateTurnBody,
   ): Promise<ServeChatAcceptedResult> => {
-    const raw = await runtimeFetch({
-      method: "POST",
-      path: `/api/v1/chat-runs/${encodeId(runId)}/turns`,
-      body,
-    });
+    const raw = await chat().createTurn(runId, body);
     return mapAccepted(raw, body.clientRunId || runId, body.clientTurnId);
   },
 
-  /** Create run+first turn in one shot when Serve accepts createRun with turn fields. */
   startTurn: async (body: ServeChatCreateTurnBody): Promise<ServeChatAcceptedResult> => {
     try {
       await chatRuntimeClient.createRun({
@@ -148,35 +139,22 @@ export const chatRuntimeClient = {
     return chatRuntimeClient.createTurn(body.clientRunId, body);
   },
 
-  abort: (runId: string) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/chat-runs/${encodeId(runId)}/abort`,
-      body: {},
-    }),
+  abort: (runId: string) => chat().abort(runId, {}),
 
   respondInteraction: (
     runId: string,
     requestId: string,
     body: ServeChatInteractionRespondBody,
-  ) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/chat-runs/${encodeId(runId)}/interactions/${encodeId(requestId)}/respond`,
-      body,
-    }),
+  ) => chat().respondInteraction(runId, requestId, body),
 
   listEvents: async (
     runId: string,
     options?: { afterSequence?: number; limit?: number },
   ): Promise<ServeChatEvent[]> => {
-    const raw = await runtimeFetch({
-      path: `/api/v1/chat-runs/${encodeId(runId)}/events`,
-      query: {
-        after_sequence: options?.afterSequence,
-        afterSequence: options?.afterSequence,
-        limit: options?.limit ?? 500,
-      },
+    const raw = await chat().listEvents(runId, {
+      after_sequence: options?.afterSequence,
+      afterSequence: options?.afterSequence,
+      limit: options?.limit ?? 500,
     });
     return unwrapList(raw)
       .map((e) => normalizeServeChatEvent(e))
@@ -193,7 +171,7 @@ export const chatRuntimeClient = {
   }): Promise<void> => {
     const seen = new Set<string>();
     return subscribeRuntimeSse({
-      path: `/api/v1/chat-runs/${encodeId(input.runId)}/events/stream`,
+      path: `/api/v1/chat-runs/${encodeURIComponent(input.runId)}/events/stream`,
       lastEventId: input.lastEventId,
       signal: input.signal,
       autoReconnect: input.autoReconnect ?? true,
@@ -209,31 +187,16 @@ export const chatRuntimeClient = {
   },
 
   listQueue: async (runId: string): Promise<ServeChatQueueEntry[]> => {
-    const raw = await runtimeFetch({
-      path: `/api/v1/chat-runs/${encodeId(runId)}/queue`,
-    });
+    const raw = await chat().listQueue(runId);
     return unwrapList(raw)
       .map((q) => mapQueueEntry(q))
       .filter((q): q is ServeChatQueueEntry => q != null);
   },
 
-  enqueue: (runId: string, body: Record<string, unknown>) =>
-    runtimeFetch({
-      method: "POST",
-      path: `/api/v1/chat-runs/${encodeId(runId)}/queue`,
-      body,
-    }),
+  enqueue: (runId: string, body: Record<string, unknown>) => chat().enqueue(runId, body),
 
   patchQueue: (runId: string, queueId: string, body: Record<string, unknown>) =>
-    runtimeFetch({
-      method: "PATCH",
-      path: `/api/v1/chat-runs/${encodeId(runId)}/queue/${encodeId(queueId)}`,
-      body,
-    }),
+    chat().patchQueue(runId, queueId, body),
 
-  deleteQueue: (runId: string, queueId: string) =>
-    runtimeFetch({
-      method: "DELETE",
-      path: `/api/v1/chat-runs/${encodeId(runId)}/queue/${encodeId(queueId)}`,
-    }),
+  deleteQueue: (runId: string, queueId: string) => chat().deleteQueue(runId, queueId),
 };

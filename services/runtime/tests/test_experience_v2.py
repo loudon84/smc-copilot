@@ -58,11 +58,11 @@ async def test_auto_evidence_dedup(app_client) -> None:
         await session.commit()
 
 
-def test_api_version_is_1_3() -> None:
+def test_api_version_is_1_4() -> None:
     import core.capabilities as cap
 
     cap._registry = None
     reg = get_capability_registry()
-    assert reg.api_version == "1.3"
+    assert reg.api_version == "1.4"
     assert reg.has("experience.auto-evidence")
     assert reg.has("workers.supervisor")

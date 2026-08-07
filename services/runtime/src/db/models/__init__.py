@@ -5,6 +5,7 @@ from db.models.artifact_worker import (
     WorkerStateRow,
 )
 from db.models.chat_attachment import ChatAttachment
+from db.models.chat_runtime import ChatEvent, ChatInteraction, ChatQueueEntry, ChatRun, ChatTurn
 from db.models.chat_settings import ProfileChatSettings
 from db.models.endpoint_sync import (
     DeliveryOutbox,
@@ -72,6 +73,11 @@ __all__ = [
     "AuditLog",
     "BootstrapSession",
     "ChatAttachment",
+    "ChatEvent",
+    "ChatInteraction",
+    "ChatQueueEntry",
+    "ChatRun",
+    "ChatTurn",
     "ConfigSnapshot",
     "DeliveryOutbox",
     "DesiredStateResource",

@@ -13,6 +13,11 @@ from db.base import Base
 from db.models import (  # noqa: F401
     Approval,
     AuditLog,
+    ChatEvent,
+    ChatInteraction,
+    ChatQueueEntry,
+    ChatRun,
+    ChatTurn,
     ConfigSnapshot,
     DeliveryOutbox,
     DesiredStateResource,

@@ -19,3 +19,9 @@ Runtime 通过 `sessions` 路由读取 Profile 目录下 Hermes `state.db` 的�
 ## Instance Chat
 
 v1.4 Chat 以 HermesInstance 为一等公民。[[src/services/instance_ref_resolver.py#InstanceRefResolver]] 解析 id/name/profile_name/default；[[src/services/instance_chat_service.py#InstanceChatService]] 经 credential broker 代理 models/config/completions/sessions。旧 `/profiles/{id}/chat/*` 映射到 Instance 并返回 `Deprecation`/`Sunset` 头；chat settings 优先 `instance_id`。
+
+## Chat Runtime v2
+
+v1.1 引入 durable ChatRun：Desktop 经 `/api/v1/chat-runs*` 与 Event Store 交互，Hermes SSE 不再是 Desktop 事实源。路由 [[src/api/v1/chat_runs.py]]；编排 [[src/services/chat_run_service.py#ChatRunService]]；事件 [[src/services/chat_event_service.py#ChatEventService]]；队列 [[src/services/chat_queue_service.py#ChatQueueService]]；交互 [[src/services/chat_interaction_service.py#ChatInteractionService]]。能力 `chat.runtime.v2` 见 [[profiles-instances#能力协商]]。
+
+Turn 执行当前为 stub worker，持久化 `agent.message.*` / `turn.*` 事件以保证 SSE/replay e2e；后续切到 InstanceChatService→Hermes。`runId` 路径同时接受主键与 `client_run_id`。SSE 用单调 `sequence` 作 `Last-Event-ID`，亦支持用 event UUID 定位后继续 replay。

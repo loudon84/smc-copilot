@@ -42,8 +42,15 @@ Profile 与任务相关表及枚举。
 | `012_v16_artifact_workers` | artifact upload / worker state 表 |
 | `013_v16_experience` | Experience evidence links / fingerprints |
 | `014_merge_profile_path_v16` | 合并 `003_fix_default_profile_path` 与 `013_v16_experience`，恢复单一 head |
+| `015_v11_chat_runtime` | Chat Runtime v2：`chat_runs`/`chat_turns`/`chat_events`/`chat_queue_entries`/`chat_interactions` |
 
 生产启动前 `alembic upgrade head`。新增表必须配 Alembic 迁移。
+
+## Chat Runtime 表
+
+v1.1 durable chat 表，模型 [[src/db/models/chat_runtime.py#ChatRun]] / [[src/db/models/chat_runtime.py#ChatTurn]] / [[src/db/models/chat_runtime.py#ChatEvent]] / [[src/db/models/chat_runtime.py#ChatQueueEntry]] / [[src/db/models/chat_runtime.py#ChatInteraction]]；仓储 [[src/db/repositories/chat_run_repo.py#ChatRunRepository]]。
+
+约束：`UNIQUE(client_run_id)`、`UNIQUE(run_id, client_turn_id)`、`UNIQUE(run_id, sequence)`、`UNIQUE(run_id, request_id)`。Event Store 为 SSE replay 的唯一事实源（见 [[chat-sessions#Chat Runtime v2]]）。
 
 ## Work Task 表
 
