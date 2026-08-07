@@ -14,7 +14,7 @@
 |---|---|
 | 版本 | 0.3.6（… + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
-| 后端 | Hermes Python Gateway，`http://127.0.0.1:8642`（default Profile） |
+| 后端 | Copilot Runtime `http://127.0.0.1:8765`（Desktop 唯一启动 SOT；Hermes Gateway 由 Runtime 管理） |
 
 ## 架构：三层进程（必须遵守）
 
@@ -31,6 +31,7 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 **硬性规则：**
 
 - 渲染进程**禁止** `import` Node 模块；只通过 `window.*` API 访问主进程
+- **启动门控**只依赖 Auth + Bootstrap + `RuntimeConnectionState`（:8765）；**禁止**在启动链调用 Hermes Install IPC 或探测 :8642
 - **禁止**猜测新增 IPC channel；新通道必须：Main 注册 handler → Preload 封装 → `index.d.ts` 类型 → `docs/API_CONTRACTS.md`
 - **禁止**绕过 Preload 使用 `ipcRenderer`（除 Preload 自身）
 - 改 Gateway 启停/进程管理前，先读 `src/main/hermes.ts` 与 `profile-runtime-manager.ts`
@@ -107,13 +108,13 @@ Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
 **生命周期路由**（`src/renderer/src/App.tsx` + `hooks/useStartupGate.ts`）：
 
 ```
-splash → login → welcome → installing → setup → main (Layout)
+splash → login → runtime-recovery → main (Layout)
          ↑
-    auth + bootstrap 门控（V3.3.1：全连接模式统一）
+    auth + bootstrap + RuntimeConnectionState（PRD v1.3.1）
 ```
 
-- `useStartupGate` 调用 `window.smcShell.resolveStartupDecision()` → IPC `startup:resolve-decision` → `startup-decision.ts`
-- 登录成功 + 本地 bootstrap apply 完成后 `recheck()` 重新解析路由（可能进入 `main` / `setup` / `welcome`，取决于 Hermes 安装与模型配置）
+- `useStartupGate` 调用 `window.smcShell.resolveStartupDecision()` → IPC `startup:resolve-decision` → `desktop-boot-coordinator` + `startup-decision.ts`
+- 登录成功 + 本地 bootstrap apply 完成后 `recheck()` 重新解析路由（可能进入 `main` / `runtime-recovery`，取决于 Runtime 七态）
 
 **主界面壳层（V2.0）** — `Layout.tsx` 编排状态与 `WorkspaceOutlet`；`MainPage` 自持壳层 UI：
 

@@ -1,26 +1,27 @@
 import { useState, useEffect, useCallback } from "react";
-import { useI18n } from "../components/useI18n";
 import type { StartupDecision } from "../../../shared/startup/startup-contract";
 
-export type AppScreen = "splash" | "login" | "welcome" | "installing" | "setup" | "main";
+export type AppScreen = "splash" | "login" | "runtime-recovery" | "main";
 
 const SPLASH_MIN_MS = 1300;
 
 export interface UseStartupGateResult {
   screen: AppScreen;
-  installError: string | null;
-  setInstallError: (error: string | null) => void;
+  startupError: string | null;
+  setStartupError: (error: string | null) => void;
+  decision: StartupDecision | null;
   navigateTo: (screen: AppScreen) => void;
   recheck: () => void;
 }
 
 /**
- * Startup gate: Main Process resolves route (V3.3 includes login before install).
+ * Startup gate (PRD v1.3.1): Auth + RuntimeConnectionState only.
+ * Never calls Hermes install verification APIs or Install screens.
  */
 export function useStartupGate(): UseStartupGateResult {
-  const { t } = useI18n();
   const [screen, setScreen] = useState<AppScreen>("splash");
-  const [installError, setInstallError] = useState<string | null>(null);
+  const [startupError, setStartupError] = useState<string | null>(null);
+  const [decision, setDecision] = useState<StartupDecision | null>(null);
   const [checkKey, setCheckKey] = useState(0);
 
   const navigateTo = useCallback((next: AppScreen) => {
@@ -28,7 +29,7 @@ export function useStartupGate(): UseStartupGateResult {
   }, []);
 
   const recheck = useCallback(() => {
-    setInstallError(null);
+    setStartupError(null);
     setCheckKey((k) => k + 1);
   }, []);
 
@@ -37,23 +38,19 @@ export function useStartupGate(): UseStartupGateResult {
 
     async function runDecision() {
       setScreen("splash");
-      setInstallError(null);
+      setStartupError(null);
 
       const startedAt = Date.now();
-      let decision: StartupDecision;
+      let next: StartupDecision;
 
       try {
-        decision = await window.smcShell.resolveStartupDecision();
+        next = await window.smcShell.resolveStartupDecision();
       } catch (err) {
         console.error("[STARTUP] Failed to resolve startup decision:", err);
-        decision = {
-          runtime: null,
-          connectionMode: "local",
+        next = {
           nextScreen: "login",
-          skipAgentInstall: false,
-          skipModelSetup: false,
-          shouldVerifyInBackground: false,
           reason: "auth-required",
+          runtimeState: null,
           error: "Failed to resolve startup decision",
         };
       }
@@ -66,27 +63,11 @@ export function useStartupGate(): UseStartupGateResult {
 
       if (cancelled) return;
 
-      if (decision.error) {
-        setInstallError(decision.error);
+      if (next.error) {
+        setStartupError(next.error);
       }
-
-      setScreen(decision.nextScreen as AppScreen);
-
-      if (decision.shouldVerifyInBackground && decision.runtime) {
-        window.hermesAPI.verifyInstall().then((ok) => {
-          if (cancelled) return;
-          if (!ok) {
-            if (decision.runtime!.updateMode) {
-              console.warn(
-                "[STARTUP] Background verify failed in update mode, staying on current screen",
-              );
-            } else {
-              setInstallError(t("errors.installBroken"));
-              setScreen("welcome");
-            }
-          }
-        });
-      }
+      setDecision(next);
+      setScreen(next.nextScreen as AppScreen);
     }
 
     void runDecision();
@@ -94,12 +75,13 @@ export function useStartupGate(): UseStartupGateResult {
     return () => {
       cancelled = true;
     };
-  }, [t, checkKey]);
+  }, [checkKey]);
 
   return {
     screen,
-    installError,
-    setInstallError,
+    startupError,
+    setStartupError,
+    decision,
     navigateTo,
     recheck,
   };

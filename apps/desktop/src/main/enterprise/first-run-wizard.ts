@@ -214,13 +214,10 @@ export async function openWizardWindow(
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    wizardWindow.loadURL(
-      `${process.env.ELECTRON_RENDERER_URL}#/install-wizard`,
-    );
+    // PRD v1.3.1: Install wizard UI removed — open main shell; Runtime recovery handles repair.
+    wizardWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    wizardWindow.loadFile(join(__dirname, "../renderer/index.html"), {
-      hash: "/install-wizard",
-    });
+    wizardWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
   wizardWindow.on("closed", () => {

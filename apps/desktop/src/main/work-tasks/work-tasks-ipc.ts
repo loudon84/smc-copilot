@@ -3,7 +3,6 @@ import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { taskClient } from "../copilot-runtime-client/clients/task-client";
 import { hasFeature } from "../copilot-runtime-client/runtime-capability-manager";
-import { subscribeRuntimeSse } from "../copilot-runtime-client/runtime-sse-client";
 import {
   WORK_TASKS_CHANNELS,
   WORK_TASKS_V2_FEATURE,
@@ -103,7 +102,7 @@ function mapStartResult(raw: TaskStartResult): WorkTaskStartResultDto {
 
 function parseEventFromSse(
   taskId: string,
-  message: { id: string | null; event: string | null; data: string },
+  message: { id?: string | null; event?: string | null; data: string },
 ): WorkTaskEventDto | null {
   if (!message.data?.trim()) return null;
   if (message.event === "ping") return null;
@@ -239,8 +238,8 @@ export function registerWorkTasksIpc(getMainWindow: () => BrowserWindow | null):
       return {
         task: mapTask(snap.task),
         activeRun: snap.activeRun ? mapRun(snap.activeRun) : null,
-        runs: snap.runs.map(mapRun),
-        events: snap.events.map(mapEvent),
+        runs: snap.activeRun ? [mapRun(snap.activeRun)] : [],
+        events: (snap.events ?? []).map(mapEvent),
       };
     },
   );
@@ -252,30 +251,32 @@ export function registerWorkTasksIpc(getMainWindow: () => BrowserWindow | null):
       const controller = new AbortController();
       subscriptions.set(subscriptionId, { taskId: input.taskId, controller });
 
-      void subscribeRuntimeSse({
-        path: `/api/v1/work-tasks/${encodeURIComponent(input.taskId)}/events/stream`,
-        lastEventId: input.lastEventId ?? null,
-        signal: controller.signal,
-        autoReconnect: true,
-        onMessage: (message) => {
-          const event = parseEventFromSse(input.taskId, message);
-          pushEvent({
-            taskId: input.taskId,
-            subscriptionId,
-            event,
-            raw: {
-              id: message.id,
-              event: message.event,
-              data: message.data,
-            },
-          });
-        },
-        onError: (err) => {
-          console.warn("[work-tasks] SSE error", input.taskId, err);
-        },
-      }).finally(() => {
-        subscriptions.delete(subscriptionId);
-      });
+      void (async () => {
+        try {
+          for await (const message of taskClient.streamEvents(input.taskId, {
+            lastEventId: input.lastEventId ?? undefined,
+            signal: controller.signal,
+          })) {
+            const event = parseEventFromSse(input.taskId, message);
+            pushEvent({
+              taskId: input.taskId,
+              subscriptionId,
+              event,
+              raw: {
+                id: message.id ?? null,
+                event: message.event ?? null,
+                data: message.data,
+              },
+            });
+          }
+        } catch (err) {
+          if (!controller.signal.aborted) {
+            console.warn("[work-tasks] SSE error", input.taskId, err);
+          }
+        } finally {
+          subscriptions.delete(subscriptionId);
+        }
+      })();
 
       return { ok: true, subscriptionId };
     },

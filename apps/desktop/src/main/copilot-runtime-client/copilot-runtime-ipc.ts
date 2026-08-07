@@ -20,6 +20,7 @@ import {
 import { isServeControlPlaneEnabled } from "./runtime-mode";
 import { ServeInstanceAdapter } from "../runtime-adapters/ServeInstanceAdapter";
 import { ServeDiagnosticsAdapter } from "../runtime-adapters/ServeDiagnosticsAdapter";
+import { getSmcRuntimeClient } from "./smc-runtime-client";
 
 export interface CopilotRuntimeProxyFetchRequest {
   path: string;
@@ -67,6 +68,43 @@ export function registerCopilotRuntimeIpc(): void {
   });
   ipcMain.handle("copilot-runtime:retry", () => retryRuntimeConnection());
   ipcMain.handle("copilot-runtime:repair", () => repairRuntimeConnection());
+
+  ipcMain.handle("copilot-runtime:start-install", async (_event, body?: unknown) => {
+    try {
+      const result = await getSmcRuntimeClient().runtime.install(
+        body && typeof body === "object" ? (body as Record<string, unknown>) : undefined,
+      );
+      return { jobId: result.jobId, status: result.status, message: null };
+    } catch (err) {
+      return {
+        jobId: null,
+        status: "failed",
+        message: mutationResult(err).message ?? "install failed",
+      };
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:start-doctor", async () => {
+    try {
+      const result = await getSmcRuntimeClient().runtime.doctor();
+      return { jobId: result.jobId, status: result.status, message: null };
+    } catch (err) {
+      return {
+        jobId: null,
+        status: "failed",
+        message: mutationResult(err).message ?? "doctor failed",
+      };
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:get-job", async (_event, jobId: string) => {
+    if (typeof jobId !== "string" || !jobId.trim()) return null;
+    try {
+      return await getSmcRuntimeClient().runtime.getJob(jobId.trim());
+    } catch {
+      return null;
+    }
+  });
 
   ipcMain.handle("copilot-runtime:is-serve-control-plane", () =>
     isServeControlPlaneEnabled(getRuntimeConnectionState().ready),

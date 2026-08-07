@@ -7,9 +7,9 @@ export function HermesInstallSection(): React.JSX.Element {
 
   const refresh = useCallback(async () => {
     try {
-      const s = await window.hermesAPI.checkInstallStatus();
-      setStatus(typeof s === "string" ? s : (s as { status?: string }).status ?? "ok");
-      setError(null);
+      const state = await window.copilotRuntime.getState();
+      setStatus(state.state);
+      setError(state.lastError);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -19,11 +19,34 @@ export function HermesInstallSection(): React.JSX.Element {
     void refresh();
   }, [refresh]);
 
-  const runUpdate = async () => {
+  const runRepair = async () => {
     setBusy(true);
+    setError(null);
     try {
-      await window.hermesAPI.runHermesUpdate();
+      const result = await window.copilotRuntime.startRuntimeInstall();
+      setStatus(
+        result.jobId
+          ? `Repair job ${result.jobId} (${result.status})`
+          : result.message ?? result.status,
+      );
       await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runDoctor = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await window.copilotRuntime.startRuntimeDoctor();
+      setStatus(
+        result.jobId
+          ? `Doctor job ${result.jobId} (${result.status})`
+          : result.message ?? result.status,
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -34,7 +57,7 @@ export function HermesInstallSection(): React.JSX.Element {
   return (
     <>
       <p>
-        Install: <span>{status ?? "—"}</span>
+        Runtime: <span>{status ?? "—"}</span>
       </p>
       {error ? <p className="settings-drawer-text-error">{error}</p> : null}
       <div className="settings-drawer-actions">
@@ -50,9 +73,17 @@ export function HermesInstallSection(): React.JSX.Element {
           type="button"
           disabled={busy}
           className="settings-drawer-btn-success"
-          onClick={() => void runUpdate()}
+          onClick={() => void runRepair()}
         >
-          Update
+          Repair Runtime
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          className="settings-drawer-btn-secondary"
+          onClick={() => void runDoctor()}
+        >
+          Run Doctor
         </button>
       </div>
     </>

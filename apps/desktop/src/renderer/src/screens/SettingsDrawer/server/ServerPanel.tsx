@@ -3,7 +3,6 @@ import { CopilotRuntimeStatusSection } from "../../../modules/hermes-runtime/sec
 import { CopilotRuntimeInstancesSection } from "../../../modules/hermes-runtime/sections/CopilotRuntimeInstancesSection";
 import type { SettingsDrawerPanel } from "../settings-drawer-types";
 import type { View } from "../../../types/desktop-shell";
-import { ConnectionSection } from "./ConnectionSection";
 import { GlobalProfileSection } from "./GlobalProfileSection";
 import { HermesAgentSection } from "./HermesAgentSection";
 import { PortalRuntimeSection } from "./PortalRuntimeSection";
@@ -37,7 +36,6 @@ export function ServerPanel({
         <HermesAgentSection profile={activeProfile} />
         <PortalRuntimeSection />
         <CopilotServeRuntimeSection />
-        {/* <ConnectionSection /> */}
       </div>
     </div>
   );

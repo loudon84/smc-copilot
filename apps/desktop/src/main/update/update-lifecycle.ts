@@ -1,5 +1,4 @@
-import { stopHealthPolling, stopGateway } from "../hermes";
-import { stopSshTunnel } from "../ssh-tunnel";
+import { stopHealthPolling } from "../hermes";
 import { stopAll as stopClaw3d } from "../claw3d";
 import { stopAllProfiles, onBeforeQuit } from "../profile-runtime-manager";
 
@@ -23,17 +22,8 @@ export async function prepareForAppUpdate(): Promise<void> {
     /* best effort */
   }
 
-  try {
-    stopGateway();
-  } catch {
-    /* best effort */
-  }
-
-  try {
-    stopSshTunnel();
-  } catch {
-    /* best effort */
-  }
+  // PRD v1.3.1: Desktop update must NOT stop Runtime / Hermes Gateway.
+  // Runtime Service lifecycle is independent of Desktop.
 
   try {
     stopClaw3d();

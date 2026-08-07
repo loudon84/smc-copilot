@@ -127,9 +127,7 @@ describe("New APIs from v0.8/v0.9 features", () => {
 
 describe("Desktop Install V1.3 APIs", () => {
   const v13Methods = [
-    "checkInstallStatus",
     "getRuntimeState",
-    "startInstallWithSource",
     "runDoctor",
     "runRepair",
     "reinstallRuntime",
@@ -180,10 +178,6 @@ describe("Desktop Install V1.3 APIs", () => {
 
 describe("Legacy APIs preserved (backward compat)", () => {
   const requiredMethods = [
-    // Installation
-    "checkInstall",
-    "startInstall",
-    "onInstallProgress",
     // Hermes engine
     "getHermesVersion",
     "refreshHermesVersion",

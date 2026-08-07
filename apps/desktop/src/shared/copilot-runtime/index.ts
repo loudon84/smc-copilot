@@ -78,6 +78,23 @@ export interface RuntimePairingConfirmResult {
   message: string | null;
 }
 
+export interface RuntimeJobAcceptedView {
+  jobId: string | null;
+  status: string;
+  message?: string | null;
+}
+
+export interface RuntimeJobView {
+  jobId: string;
+  status: string;
+  jobType?: string;
+  phase?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  createdAt?: string | null;
+  completedAt?: string | null;
+}
+
 export interface CopilotRuntimeAPI {
   getState: () => Promise<import("./runtime-state-contract").RuntimeConnectionState>;
   getCapabilities: () => Promise<
@@ -90,6 +107,11 @@ export interface CopilotRuntimeAPI {
   confirmPairing: (pairingId: string) => Promise<RuntimePairingConfirmResult>;
   retry: () => Promise<import("./runtime-state-contract").RuntimeConnectionState>;
   repair: () => Promise<{ ok: boolean; message: string | null }>;
+  startRuntimeInstall: (
+    body?: Record<string, unknown>,
+  ) => Promise<RuntimeJobAcceptedView>;
+  startRuntimeDoctor: () => Promise<RuntimeJobAcceptedView>;
+  getRuntimeJob: (jobId: string) => Promise<RuntimeJobView | null>;
   /** True when Main routes Gateway/Config/MCP via Serve (not legacy Hermes CLI/YAML). */
   isServeControlPlane: () => Promise<boolean>;
   listInstances: () => Promise<import("./instance-contract").ServeInstanceSummary[]>;

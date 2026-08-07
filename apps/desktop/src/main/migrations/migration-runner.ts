@@ -12,8 +12,9 @@ import { migrateRuntimeLayout } from "./002-runtime-layout";
 import { migrateWebOperatorConfig } from "./003-web-operator-config";
 import { migrateV53RuntimeLayout } from "./004-v53-runtime-layout";
 import { migrateV541InstallIdentity } from "./005-v541-install-identity";
+import { migrateLegacyHermesConnectionV1 } from "./006-legacy-hermes-connection-v1";
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 let lastMigrationStatus: MigrationStatus = {
   schemaVersion: 0,
@@ -78,8 +79,21 @@ export function runDesktopMigrations(): MigrationStatus {
     state.schemaVersion = 4;
   }
 
-  if (state.schemaVersion < CURRENT_SCHEMA_VERSION) {
+  if (state.schemaVersion < 5) {
     migrateV541InstallIdentity(location);
+    state.schemaVersion = 5;
+  }
+
+  if (state.schemaVersion < CURRENT_SCHEMA_VERSION) {
+    try {
+      warnings.push(...migrateLegacyHermesConnectionV1());
+    } catch (err) {
+      warnings.push(
+        `legacy-hermes-connection-v1 migration failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
     state.schemaVersion = CURRENT_SCHEMA_VERSION;
   }
 

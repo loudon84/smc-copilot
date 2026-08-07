@@ -11,10 +11,6 @@ import { electronApp, optimizer, is } from "./utils/electron-toolkit-wrapper";
 import type { AppUpdater } from "electron-updater";
 import icon from "../../resources/icon.png?asset";
 import {
-  checkInstallStatus,
-  verifyInstall,
-  runInstall,
-  runInstallWithSource,
   getHermesVersion,
   clearVersionCache,
   runHermesDoctor,
@@ -41,7 +37,6 @@ import {
   isGatewayRunningAsync,
   restartGateway,
   restartGatewayAsync,
-  setHealthStatusCallback,
   ensureSshTunnelIfNeeded,
   setSshRemoteApiKey,
   stopHealthPolling,
@@ -200,23 +195,19 @@ import { setupProfileRoleIPC } from "./profile-role-ipc";
 import { registerFirstRunWizardIPC } from "./enterprise/first-run-wizard";
 import { setupEnterpriseInstallIpcEarly, setupEnterpriseInstallIPC } from "./enterprise/enterprise-ipc";
 import { registerAiosIpc } from "./aios/aios-ipc";
-import { mergeRuntimeConfig } from "./enterprise/desktop-runtime-config";
 import {
-  autoStartCopilotServeIfReady,
   registerCopilotServeIpc,
 } from "./copilot-serve/copilot-serve-ipc";
 import {
-  initCopilotRuntimeConnection,
   registerCopilotRuntimeIpc,
+  getRuntimeConnectionState,
+  onRuntimeConnectionStateChanged,
 } from "./copilot-runtime-client";
-import {
-  canSpawnCopilotServe,
-  isServeControlPlanePreferred,
-  resolveCopilotRuntimeMode,
-} from "./copilot-runtime-client/runtime-mode";
+import { isServeControlPlanePreferred } from "./copilot-runtime-client/runtime-mode";
 import { registerAuthIpc } from "./auth/auth-ipc";
 import { installTokenHeaderInjector } from "./auth/token-header-injector";
 import { setupStartupIPC } from "./startup/startup-ipc";
+import { desktopBootCoordinator } from "./startup/desktop-boot-coordinator";
 import { registerUserConfigIpc } from "./user-config/user-config-ipc";
 import { getAiOsEnvConfig } from "./aios/aios-config";
 import { ShellViewManager } from "./shell/views/shell-view-manager";
@@ -550,43 +541,6 @@ function setupIPC(): void {
 
   // NOTE: Enterprise IPC handlers that need mainWindow (install/reinstall),
   // AIOS IPC, and ShellView IPC are registered after createWindow().
-
-  // Installation
-  ipcMain.handle("check-install", () => {
-    return checkInstallStatus();
-  });
-
-  ipcMain.handle("verify-install", () => verifyInstall());
-
-  ipcMain.handle("start-install", async (event) => {
-    try {
-      await runInstall((progress: InstallProgress) => {
-        event.sender.send("install-progress", progress);
-      }, mainWindow);
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
-  });
-
-  ipcMain.handle(
-    "start-install-with-source",
-    async (event, sourceConfig: unknown, options?: { force?: boolean }) => {
-      try {
-        await runInstallWithSource(
-          sourceConfig,
-          (progress: InstallProgress) => {
-            event.sender.send("install-progress", progress);
-          },
-          mainWindow,
-          options,
-        );
-        return { success: true };
-      } catch (err) {
-        return { success: false, error: (err as Error).message };
-      }
-    },
-  );
 
   ipcMain.handle("show-open-dialog", async (_event, opts: Electron.OpenDialogOptions) => {
     const { dialog } = await import("electron");
@@ -1501,6 +1455,18 @@ app.whenReady().then(async () => {
 
   setupIPC();
 
+  try {
+    registerCopilotServeIpc(() => mainWindow);
+    registerCopilotRuntimeIpc();
+    console.log("[COPILOT-SERVE] IPC handlers registered (pre-window)");
+    console.log("[COPILOT-RUNTIME] IPC handlers registered (pre-window)");
+    void desktopBootCoordinator.bootstrap().catch((err) => {
+      console.warn("[BOOT] coordinator bootstrap failed:", err);
+    });
+  } catch (err) {
+    console.error("[COPILOT-RUNTIME] Failed early runtime IPC registration:", err);
+  }
+
   createWindow();
 
   if (mainWindow) {
@@ -1514,12 +1480,11 @@ app.whenReady().then(async () => {
         },
       );
       trayManager.create();
-      setHealthStatusCallback((running) => {
-        trayManager?.setGatewayRunning(running);
-        console.log(`[TRAY] Gateway status changed: ${running ? "running" : "stopped"}`);
+      trayManager.setRuntimeStatus(getRuntimeConnectionState().state);
+      onRuntimeConnectionStateChanged((state) => {
+        trayManager?.setRuntimeStatus(state.state);
       });
-      trayManager.setGatewayRunning(isGatewayRunning());
-      console.log("[TRAY] Tray initialized");
+      console.log("[TRAY] Tray initialized with Runtime status");
     } catch (err) {
       console.error("[TRAY] Failed to initialize tray:", err);
     }
@@ -1535,42 +1500,6 @@ app.whenReady().then(async () => {
       console.log("[AIOS] IPC handlers registered successfully");
     } catch (err) {
       console.error("[AIOS] Failed to register IPC:", err);
-    }
-
-    try {
-      mergeRuntimeConfig({});
-      registerCopilotServeIpc(() => mainWindow);
-      registerCopilotRuntimeIpc();
-      console.log("[COPILOT-SERVE] IPC handlers registered");
-      console.log("[COPILOT-RUNTIME] IPC handlers registered");
-      const runtimeMode = resolveCopilotRuntimeMode();
-      const maybeAutoStart = canSpawnCopilotServe(runtimeMode)
-        ? autoStartCopilotServeIfReady()
-        : Promise.resolve(null);
-      void maybeAutoStart
-        .then((status) => {
-          if (status) {
-            console.log("[COPILOT-SERVE] auto-start status:", status.status);
-          } else {
-            console.log(
-              "[COPILOT-SERVE] production mode — skip spawn; probing existing Runtime",
-            );
-          }
-        })
-        .catch((err) => {
-          console.warn("[COPILOT-SERVE] auto-start skipped:", err);
-        })
-        .finally(() => {
-          void initCopilotRuntimeConnection()
-            .then((state) => {
-              console.log("[COPILOT-RUNTIME] handshake state:", state.state);
-            })
-            .catch((err) => {
-              console.warn("[COPILOT-RUNTIME] handshake failed:", err);
-            });
-        });
-    } catch (err) {
-      console.error("[COPILOT-SERVE] Failed to register IPC:", err);
     }
 
     try {
@@ -1747,8 +1676,6 @@ app.on("window-all-closed", () => {
     return;
   }
 
-  stopGateway();
-  stopSshTunnel();
   stopClaw3d();
   if (browserToolServer) browserToolServer.stop();
   teardownCrmBridge();
@@ -1802,8 +1729,6 @@ app.on("before-quit", () => {
     destroyShortcutManager();
     console.log("[SHORTCUT] Shortcut manager destroyed");
   } catch { /* best effort */ }
-  stopGateway();
-  stopSshTunnel();
   stopClaw3d();
   if (browserToolServer) browserToolServer.stop();
   try {

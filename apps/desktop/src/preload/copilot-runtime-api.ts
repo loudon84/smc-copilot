@@ -18,6 +18,10 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
     ipcRenderer.invoke("copilot-runtime:confirm-pairing", pairingId),
   retry: () => ipcRenderer.invoke("copilot-runtime:retry"),
   repair: () => ipcRenderer.invoke("copilot-runtime:repair"),
+  startRuntimeInstall: (body?: Record<string, unknown>) =>
+    ipcRenderer.invoke("copilot-runtime:start-install", body),
+  startRuntimeDoctor: () => ipcRenderer.invoke("copilot-runtime:start-doctor"),
+  getRuntimeJob: (jobId: string) => ipcRenderer.invoke("copilot-runtime:get-job", jobId),
   isServeControlPlane: () => ipcRenderer.invoke("copilot-runtime:is-serve-control-plane"),
   listInstances: () => ipcRenderer.invoke("copilot-runtime:list-instances"),
   getInstance: (instanceId: string) =>

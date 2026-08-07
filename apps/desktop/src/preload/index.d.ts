@@ -12,38 +12,11 @@ import type { HermesMcpAPI } from "../shared/mcp/mcp-contract";
 import type { McpSkillGatewayRuntimeAPI } from "../shared/mcp-skill-gateway-runtime/mcp-skill-gateway-runtime-contract";
 import type { GeneHubRuntimeAPI } from "../shared/genehub/genehub-contract";
 
-interface InstallStatus {
-  installed: boolean;
-  configured: boolean;
-  hasApiKey: boolean;
-  verified: boolean;
-}
-
-interface InstallProgress {
-  step: number;
-  totalSteps: number;
-  title: string;
-  detail: string;
-  log: string;
-}
-
 interface HermesAPI {
-  // Installation
-  checkInstall: () => Promise<InstallStatus>;
-  checkInstallStatus: () => Promise<InstallStatus>;
-  verifyInstall: () => Promise<boolean>;
-  startInstall: () => Promise<{ success: boolean; error?: string }>;
-  startInstallWithSource: (
-    sourceConfig: unknown,
-    options?: { force?: boolean },
-  ) => Promise<{ success: boolean; error?: string }>;
   getRuntimeState: () => Promise<RuntimeState>;
   showOpenDialog: (
     opts: Electron.OpenDialogOptions,
   ) => Promise<Electron.OpenDialogReturnValue>;
-  onInstallProgress: (
-    callback: (progress: InstallProgress) => void,
-  ) => () => void;
 
   // Hermes engine info
   getHermesVersion: () => Promise<string | null>;
@@ -771,7 +744,7 @@ declare global {
         onEvent: (callback: (event: import("../shared/work/work-event-contract").WorkTaskEvent) => void) => () => void;
       };
     };
-    /** PRD v1.3 WorkTask Workbench 2.0 — Main-proxied /api/v1/work-tasks */
+    /** PRD v1.3 WorkTask Workbench 2.0 — Main-proxied via @smc/runtime-client workTasks domain */
     workTasks: import("./work-tasks-api").WorkTasksAPI;
     internalView?: import("../shared/shell/overlay-contract").InternalViewAPI;
   }
