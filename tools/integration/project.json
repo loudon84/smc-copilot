@@ -1,0 +1,16 @@
+{
+  "name": "integration-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "tools/integration",
+  "projectType": "library",
+  "tags": ["type:e2e", "scope:cross"],
+  "implicitDependencies": ["desktop", "runtime", "runtime-client-ts"],
+  "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/integration/run-smoke.mjs"
+      }
+    }
+  }
+}

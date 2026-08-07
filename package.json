@@ -1,0 +1,25 @@
+{
+  "name": "smc-copilot-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "SMC Copilot Monorepo — Desktop + Runtime orchestration via Nx",
+  "scripts": {
+    "nx": "nx",
+    "graph": "nx graph",
+    "bootstrap": "nx run-many -t install",
+    "check": "nx run-many -t lint,typecheck,test",
+    "build": "nx run-many -t build",
+    "affected:check": "nx affected -t lint,typecheck,test",
+    "affected:build": "nx affected -t build",
+    "dev:desktop": "nx run desktop:dev",
+    "dev:runtime": "nx run runtime:dev",
+    "contracts:generate": "nx run contracts:generate",
+    "contracts:check": "nx run contracts:check",
+    "client:generate": "nx run runtime-client-ts:generate",
+    "integration:test": "nx run integration-e2e:test"
+  },
+  "devDependencies": {
+    "@nx/workspace": "21.2.2",
+    "nx": "21.2.2"
+  }
+}

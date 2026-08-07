@@ -1,0 +1,31 @@
+{
+  "name": "runtime-client-ts",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/runtime-client-ts/src",
+  "projectType": "library",
+  "tags": ["type:lib", "scope:desktop"],
+  "implicitDependencies": ["contracts"],
+  "targets": {
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node tools/contract-generate/generate_ts_client.mjs"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/runtime-client-ts",
+        "command": "npx tsc --noEmit -p tsconfig.json"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["generate"],
+      "options": {
+        "cwd": "packages/runtime-client-ts",
+        "command": "npx tsc -p tsconfig.json"
+      }
+    }
+  }
+}

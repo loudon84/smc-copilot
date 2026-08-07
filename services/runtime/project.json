@@ -1,0 +1,72 @@
+{
+  "name": "runtime",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "services/runtime/src",
+  "projectType": "application",
+  "tags": ["type:service", "scope:runtime"],
+  "targets": {
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv sync --extra dev"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv run uvicorn main:app --app-dir src --reload --host 127.0.0.1 --port 8765"
+      }
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv run alembic upgrade head"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv run ruff check ."
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv run ruff format --check ."
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv run pytest"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv build"
+      }
+    },
+    "smoke": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runtime-smoke-test-windows.ps1"
+      }
+    },
+    "package-windows": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runtime-install-windows.ps1 -SkipProgramsCheck"
+      }
+    }
+  }
+}
