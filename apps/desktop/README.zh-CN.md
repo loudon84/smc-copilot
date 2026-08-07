@@ -87,7 +87,7 @@ Web Operator（主进程：`src/main/browser/`）：
 - 使用独立分区 `persist:aios-external-web` 的 **WebContentsView**
 - 域名白名单、敏感操作确认（`browser.click`、`browser.type`）
 - 审计日志（JSONL）：`~/.hermes/desktop/web-operator/`
-- 本地 Tool Server：`127.0.0.1`（8765–8775），供 Hermes 工具桥接
+- 本地 Tool Server：`127.0.0.1`（18765–18775），供 Hermes 工具桥接
 
 Preload API：`window.aiosBrowser`。
 

@@ -1,8 +1,8 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from "http";
 import { BrowserToolBridge } from "./browser-tool-bridge";
 
-const BASE_PORT = 8765;
-const MAX_PORT = 8775;
+const BASE_PORT = 18765;
+const MAX_PORT = 18775;
 const REQUEST_TIMEOUT_MS = 30000;
 
 export class BrowserToolServer {
@@ -27,7 +27,7 @@ export class BrowserToolServer {
         continue;
       }
     }
-    console.error("[BROWSER TOOL SERVER] All ports 8765-8775 are in use, tool server not started");
+    console.error("[BROWSER TOOL SERVER] All ports 18765-18775 are in use, tool server not started");
   }
 
   private listenOnPort(port: number): Promise<void> {

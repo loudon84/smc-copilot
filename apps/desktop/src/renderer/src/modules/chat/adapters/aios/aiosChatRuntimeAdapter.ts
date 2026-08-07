@@ -19,13 +19,16 @@ import type {
   ChatRuntimeReplayEventsResult,
 } from "@shared/chat-runtime/chat-runtime-state";
 import type { ChatDiagnosticsExport } from "@shared/chat-runtime/chat-runtime-trace";
+import { ensureRuntimeReadyForWrite } from "../../../../lib/runtime/runtimeWriteGate";
 
 /** AI-OS adapter: window.chatRuntime → ChatRuntimePort */
 export const aiosChatRuntimeAdapter: ChatRuntimePort = {
-  start(input: ChatStartInput): Promise<ChatStartResult> {
+  async start(input: ChatStartInput): Promise<ChatStartResult> {
+    await ensureRuntimeReadyForWrite();
     return window.chatRuntime.start(input);
   },
-  submit(input: ChatSubmitInput): Promise<ChatSubmitResult> {
+  async submit(input: ChatSubmitInput): Promise<ChatSubmitResult> {
+    await ensureRuntimeReadyForWrite();
     return window.chatRuntime.submit(input);
   },
   abort(runId: string): Promise<{ ok: boolean }> {

@@ -555,7 +555,7 @@ CRM 页面运行在 WebOperator 的 WebContentsView 中，由专用 preload `src
 |-------|---------|
 | `crm-bridge:command` | `CrmDesktopCommand`（含 `expectAck` / `timeoutMs` / `target.actionKey`） |
 
-### Browser Tool Server（Hermes，`127.0.0.1:8765+`）
+### Browser Tool Server（Hermes，`127.0.0.1:18765+`）
 
 **V5.7.6** 新增 CRM 工具（`BrowserToolBridge` + `browser-tool-schema.ts`）：
 

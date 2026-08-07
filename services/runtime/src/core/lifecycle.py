@@ -242,130 +242,142 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         raise
 
     process_lock: ProcessLock | None = None
-    if not bool(getattr(app.state, "_skip_process_lock", False)):
-        process_lock = ProcessLock.for_data_dir(settings.resolved_runtime_data_dir())
-        try:
-            process_lock.acquire()
-        except RuntimeAlreadyRunningError:
-            logger.error("runtime_already_running")
-            raise SystemExit(3) from None
+    engine = None
+    job_service = None
+    supervisor = None
+    worker_supervisor: WorkerSupervisor | None = None
+    boot_completed = False
 
-    injected_engine = getattr(app.state, "_test_engine", None)
-    engine = injected_engine if injected_engine is not None else create_engine(settings)
-    session_maker = create_sessionmaker(engine)
+    try:
+        if not bool(getattr(app.state, "_skip_process_lock", False)):
+            process_lock = ProcessLock.for_data_dir(settings.resolved_runtime_data_dir())
+            try:
+                process_lock.acquire()
+            except RuntimeAlreadyRunningError as exc:
+                logger.error("runtime_already_running", error=str(exc))
+                raise SystemExit(3) from None
 
-    supervisor = getattr(app.state, "_test_gateway_supervisor", None) or GatewaySupervisor(
-        settings=settings, session_maker=session_maker
-    )
-    registry = getattr(app.state, "_test_task_routing_registry", None) or TaskRoutingRegistry(settings)
-    hub = getattr(app.state, "_test_team_hub", None) or _hub_factory(settings)
-    center = getattr(app.state, "_test_service_center", None) or create_service_center_client(settings)
+        injected_engine = getattr(app.state, "_test_engine", None)
+        engine = injected_engine if injected_engine is not None else create_engine(settings)
+        session_maker = create_sessionmaker(engine)
 
-    job_service = getattr(app.state, "_test_runtime_job_service", None)
-    if job_service is None:
-        job_service = RuntimeJobService(settings, session_maker)
-        _register_runtime_handlers(job_service, settings, session_maker)
+        supervisor = getattr(app.state, "_test_gateway_supervisor", None) or GatewaySupervisor(
+            settings=settings, session_maker=session_maker
+        )
+        registry = getattr(app.state, "_test_task_routing_registry", None) or TaskRoutingRegistry(settings)
+        hub = getattr(app.state, "_test_team_hub", None) or _hub_factory(settings)
+        center = getattr(app.state, "_test_service_center", None) or create_service_center_client(settings)
 
-    worker_supervisor: WorkerSupervisor | None = getattr(app.state, "_test_worker_supervisor", None)
+        job_service = getattr(app.state, "_test_runtime_job_service", None)
+        if job_service is None:
+            job_service = RuntimeJobService(settings, session_maker)
+            _register_runtime_handlers(job_service, settings, session_maker)
 
-    app.state.engine = engine
-    app.state.session_maker = session_maker
-    app.state.gateway_supervisor = supervisor
-    app.state.team_hub = hub
-    app.state.service_center = center
-    app.state.task_routing_registry = registry
+        worker_supervisor = getattr(app.state, "_test_worker_supervisor", None)
 
-    async with session_maker() as session:
-        await registry.load_from_db(session)
-    app.state.runtime_job_service = job_service
-    app.state.process_lock = process_lock
-
-    bootstrap_token = (os.environ.get("RUNTIME_BOOTSTRAP_TOKEN") or "").strip()
-    if bootstrap_token:
-        from services.bootstrap_service import BootstrapService
+        app.state.engine = engine
+        app.state.session_maker = session_maker
+        app.state.gateway_supervisor = supervisor
+        app.state.team_hub = hub
+        app.state.service_center = center
+        app.state.task_routing_registry = registry
 
         async with session_maker() as session:
-            await BootstrapService(settings, session).register_token(bootstrap_token)
-            await session.commit()
-        logger.info("bootstrap_token_registered")
+            await registry.load_from_db(session)
+        app.state.runtime_job_service = job_service
+        app.state.process_lock = process_lock
 
-    recovered = await job_service.recover_incomplete_jobs()
-    if recovered:
-        logger.info("runtime_jobs_recovered", count=recovered)
+        bootstrap_token = (os.environ.get("RUNTIME_BOOTSTRAP_TOKEN") or "").strip()
+        if bootstrap_token:
+            from services.bootstrap_service import BootstrapService
 
-    if not bool(getattr(app.state, "_disable_workers", False)):
-        try:
-            from services.chat_turn_recovery import recover_chat_turns
+            async with session_maker() as session:
+                await BootstrapService(settings, session).register_token(bootstrap_token)
+                await session.commit()
+            logger.info("bootstrap_token_registered")
 
-            await recover_chat_turns(session_maker)
-        except Exception:
-            logger.exception("chat_turn_recovery_failed")
-        try:
-            from runtime.tasks.task_recovery_service import recover_task_runtime
+        recovered = await job_service.recover_incomplete_jobs()
+        if recovered:
+            logger.info("runtime_jobs_recovered", count=recovered)
 
-            await recover_task_runtime(
-                session_maker,
-                settings=settings,
-                supervisor=supervisor,
-                center=center,
-            )
-        except Exception:
-            logger.exception("task_runtime_recovery_failed")
-    else:
-        from services.chat_turn_scheduler import ChatTurnScheduler
+        if not bool(getattr(app.state, "_disable_workers", False)):
+            try:
+                from services.chat_turn_recovery import recover_chat_turns
 
-        ChatTurnScheduler.configure(session_maker)
-        try:
-            from runtime.tasks.task_worker_manager import TaskWorkerManager
+                await recover_chat_turns(session_maker)
+            except Exception:
+                logger.exception("chat_turn_recovery_failed")
+            try:
+                from runtime.tasks.task_recovery_service import recover_task_runtime
 
-            TaskWorkerManager.configure(
-                settings=settings,
-                session_maker=session_maker,
-                center=center,
-                supervisor=supervisor,
-            )
-        except Exception:
-            logger.exception("task_worker_manager_configure_failed")
+                await recover_task_runtime(
+                    session_maker,
+                    settings=settings,
+                    supervisor=supervisor,
+                    center=center,
+                )
+            except Exception:
+                logger.exception("task_runtime_recovery_failed")
+        else:
+            from services.chat_turn_scheduler import ChatTurnScheduler
 
-    if not bool(getattr(app.state, "_disable_gateway_autostart", False)):
-        await supervisor.reconcile_instances_on_boot()
-        await supervisor.reconcile_legacy_profiles_on_boot()
-        await supervisor.start_auto_start_instances()
-        await supervisor.start_auto_start_profiles()
+            ChatTurnScheduler.configure(session_maker)
+            try:
+                from runtime.tasks.task_worker_manager import TaskWorkerManager
 
-    disable_workers = bool(getattr(app.state, "_disable_workers", False))
-    await job_service.start_worker()
+                TaskWorkerManager.configure(
+                    settings=settings,
+                    session_maker=session_maker,
+                    center=center,
+                    supervisor=supervisor,
+                )
+            except Exception:
+                logger.exception("task_worker_manager_configure_failed")
 
-    if not disable_workers:
-        endpoint_enabled = await _endpoint_workers_enabled(settings, session_maker, center)
-        if worker_supervisor is None:
-            worker_supervisor = _build_supervisor(
-                settings,
-                session_maker,
-                center,
-                supervisor,
-                hub,
-                registry,
-                endpoint_enabled=endpoint_enabled,
-            )
-        app.state.worker_supervisor = worker_supervisor
-        await worker_supervisor.start_all()
+        if not bool(getattr(app.state, "_disable_gateway_autostart", False)):
+            await supervisor.reconcile_instances_on_boot()
+            await supervisor.reconcile_legacy_profiles_on_boot()
+            await supervisor.start_auto_start_instances()
+            await supervisor.start_auto_start_profiles()
 
-    logger.info(
-        "copilot_serve_started",
-        host=settings.bind_host,
-        port=settings.bind_port,
-        workers=not disable_workers,
-    )
+        disable_workers = bool(getattr(app.state, "_disable_workers", False))
+        await job_service.start_worker()
 
-    yield
+        if not disable_workers:
+            endpoint_enabled = await _endpoint_workers_enabled(settings, session_maker, center)
+            if worker_supervisor is None:
+                worker_supervisor = _build_supervisor(
+                    settings,
+                    session_maker,
+                    center,
+                    supervisor,
+                    hub,
+                    registry,
+                    endpoint_enabled=endpoint_enabled,
+                )
+            app.state.worker_supervisor = worker_supervisor
+            await worker_supervisor.start_all()
 
-    if worker_supervisor is not None:
-        await worker_supervisor.drain()
-    await job_service.stop_worker()
-    await supervisor.shutdown_all_instances()
-    await supervisor.shutdown_all_legacy_profiles()
-    if process_lock is not None:
-        process_lock.release()
-    await engine.dispose()
-    logger.info("copilot_serve_stopped")
+        logger.info(
+            "copilot_serve_started",
+            host=settings.bind_host,
+            port=settings.bind_port,
+            workers=not disable_workers,
+        )
+        boot_completed = True
+        yield
+    finally:
+        if boot_completed:
+            if worker_supervisor is not None:
+                await worker_supervisor.drain()
+            if job_service is not None:
+                await job_service.stop_worker()
+            if supervisor is not None:
+                await supervisor.shutdown_all_instances()
+                await supervisor.shutdown_all_legacy_profiles()
+            logger.info("copilot_serve_stopped")
+        # Always release on failed boot or clean shutdown — otherwise --reload leaves a stale lock.
+        if process_lock is not None:
+            process_lock.release()
+        if engine is not None:
+            await engine.dispose()

@@ -37,4 +37,4 @@
 
 ## Worker Supervisor
 
-v1.6 FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 在 `lifespan` 中统一注册后台 Worker，提供 Backoff、熔断、Tick Timeout、手动重启与 Critical Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 防止双实例重复消费。
+v1.6 FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 在 `lifespan` 中统一注册后台 Worker，提供 Backoff、熔断、Tick Timeout、手动重启与 Critical Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 防止双实例重复消费（含陈旧锁回收）。

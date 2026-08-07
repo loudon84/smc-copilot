@@ -590,9 +590,9 @@
 
 #### browser-tool-server.ts — BrowserToolServer
 
-- **职责**: 本地 HTTP 工具服务器，仅绑定 127.0.0.1，端口冲突自动递增（8765→8775）
+- **职责**: 本地 HTTP 工具服务器，仅绑定 127.0.0.1，端口冲突自动递增（18765→18775）；避免与 Runtime `:8765` 冲突
 - **端点**: GET /tools → Schema 列表；POST /tools/:toolName → 执行工具
-- **配置**: REQUEST_TIMEOUT_MS=30000, BASE_PORT=8765, MAX_PORT=8775
+- **配置**: REQUEST_TIMEOUT_MS=30000, BASE_PORT=18765, MAX_PORT=18775
 
 ---
 

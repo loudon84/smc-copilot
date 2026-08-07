@@ -793,7 +793,7 @@ function setupIPC(): void {
     return true;
   });
 
-  // Chat — lazy-start gateway on first message
+  // Chat — Desktop must not start Hermes Gateway (PRD v1.3.1). Runtime owns instances.
   ipcMain.handle(
     "send-message",
     async (
@@ -803,10 +803,6 @@ function setupIPC(): void {
       resumeSessionId?: string,
       history?: Array<{ role: string; content: string }>,
     ) => {
-      if (!isRemoteMode() && !isGatewayRunning()) {
-        startGateway(profile);
-      }
-
       await ensureSshTunnelIfNeeded();
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) {

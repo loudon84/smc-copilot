@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
@@ -78,3 +79,20 @@ def test_single_instance_lock(tmp_path: Path) -> None:
             lock2.acquire()
     finally:
         lock1.release()
+
+
+# @lat: [[tests#Worker Supervisor#Single instance lock]]
+def test_single_instance_lock_reclaims_stale_pid(tmp_path: Path) -> None:
+    lock_path = tmp_path / "locks" / "runtime.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # PID 1 is not a reliable "dead" probe on all OSes; use a synthetic dead pid.
+    dead_pid = 2_147_483_646
+    lock_path.write_text(str(dead_pid), encoding="utf-8")
+
+    lock = ProcessLock.for_data_dir(tmp_path)
+    lock.acquire()
+    try:
+        assert lock_path.read_text(encoding="utf-8").strip() == str(os.getpid())
+    finally:
+        lock.release()
+
