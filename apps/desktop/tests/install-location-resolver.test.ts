@@ -95,6 +95,7 @@ describe("install-location-resolver", () => {
 
   it("prefers HKCU Software\\SMC\\copilot registry on Windows", async () => {
     delete process.env.SMC_COPILOT_INSTALL_DIR;
+    delete process.env.ELECTRON_RENDERER_URL;
     Object.defineProperty(process, "platform", { value: "win32" });
 
     const primaryDir = join(tempRoot, "primary-install");
@@ -114,6 +115,7 @@ describe("install-location-resolver", () => {
 
   it("falls back to legacy Copilot registry when primary is missing", async () => {
     delete process.env.SMC_COPILOT_INSTALL_DIR;
+    delete process.env.ELECTRON_RENDERER_URL;
     Object.defineProperty(process, "platform", { value: "win32" });
 
     const legacyDir = join(tempRoot, "legacy-install");

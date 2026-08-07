@@ -27,6 +27,13 @@ export default defineConfig({
     },
   },
   renderer: {
+    // Pin IPv4 loopback. Default `localhost` can bind only [::1] (Node 17+ / Windows),
+    // while Electron Chromium often dials 127.0.0.1 → ERR_CONNECTION_REFUSED / blank window.
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      strictPort: true
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

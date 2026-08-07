@@ -60,10 +60,17 @@ function readRegistryValue(key: string, valueName: string): string | null {
   if (process.platform !== "win32") return null;
 
   try {
+    // Keep stderr off the Electron console — missing keys print
+    // "系统找不到指定的注册表项" via inherited stdio and flood Main logs.
     const result = execFileSync(
       "reg",
       ["query", key, "/v", valueName],
-      { encoding: "utf-8", timeout: 5000 },
+      {
+        encoding: "utf-8",
+        timeout: 5000,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+      },
     ).trim();
 
     const match = result.match(
@@ -173,7 +180,13 @@ export function readLegacyInstallLocations(): LegacyInstallLocation[] {
   return result;
 }
 
+let cachedInstallLocation: DesktopInstallLocation | null = null;
+
 export function resolveInstallLocation(): DesktopInstallLocation {
+  if (cachedInstallLocation) {
+    return cachedInstallLocation;
+  }
+
   const envValue =
     process.env[ENV_VAR_PRIMARY]?.trim() ||
     process.env[ENV_VAR_LEGACY]?.trim();
@@ -182,7 +195,15 @@ export function resolveInstallLocation(): DesktopInstallLocation {
     if (!existsSync(installDir)) {
       mkdirSync(installDir, { recursive: true });
     }
-    return locationFromInstallDir(installDir, "env-var");
+    cachedInstallLocation = locationFromInstallDir(installDir, "env-var");
+    return cachedInstallLocation;
+  }
+
+  // electron-vite / unpackaged: skip sync registry probes (6× reg.exe per call).
+  // Hot paths call this repeatedly; missing keys used to stall Main + flood stderr.
+  if (process.env.ELECTRON_RENDERER_URL) {
+    cachedInstallLocation = locationFromInstallDir(getDevDefault(), "dev-default");
+    return cachedInstallLocation;
   }
 
   const regInfo = readRegistryInstallInfo();
@@ -190,17 +211,20 @@ export function resolveInstallLocation(): DesktopInstallLocation {
     const source = PRIMARY_REGISTRY_KEYS.has(regInfo.registryKey ?? "")
       ? "registry"
       : "legacy-registry";
-    return locationFromInstallDir(regInfo.installLocation, source);
+    cachedInstallLocation = locationFromInstallDir(regInfo.installLocation, source);
+    return cachedInstallLocation;
   }
 
   if (process.execPath && !process.execPath.includes("electron-vite")) {
     const execDir = dirname(process.execPath);
     if (existsSync(execDir)) {
-      return locationFromInstallDir(execDir, "exec-path");
+      cachedInstallLocation = locationFromInstallDir(execDir, "exec-path");
+      return cachedInstallLocation;
     }
   }
 
-  return locationFromInstallDir(getDevDefault(), "dev-default");
+  cachedInstallLocation = locationFromInstallDir(getDevDefault(), "dev-default");
+  return cachedInstallLocation;
 }
 
 /** Alias aligned with PRD naming. */

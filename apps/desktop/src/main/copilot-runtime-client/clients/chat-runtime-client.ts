@@ -126,17 +126,19 @@ export const chatRuntimeClient = {
   },
 
   startTurn: async (body: ServeChatCreateTurnBody): Promise<ServeChatAcceptedResult> => {
+    const clientRunId = body.clientRunId ?? body.clientTurnId;
+    const instanceId = body.instanceId ?? "";
     try {
       await chatRuntimeClient.createRun({
-        clientRunId: body.clientRunId,
-        instanceId: body.instanceId,
+        clientRunId,
+        instanceId,
         sessionId: body.sessionId,
         workspaceId: body.workspaceId,
       });
     } catch {
       // Run may already exist — continue with turn.
     }
-    return chatRuntimeClient.createTurn(body.clientRunId, body);
+    return chatRuntimeClient.createTurn(clientRunId, body);
   },
 
   abort: (runId: string) => chat().abort(runId, {}),
@@ -153,7 +155,6 @@ export const chatRuntimeClient = {
   ): Promise<ServeChatEvent[]> => {
     const raw = await chat().listEvents(runId, {
       after_sequence: options?.afterSequence,
-      afterSequence: options?.afterSequence,
       limit: options?.limit ?? 500,
     });
     return unwrapList(raw)
