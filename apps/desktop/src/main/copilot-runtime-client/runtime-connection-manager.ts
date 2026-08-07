@@ -24,21 +24,11 @@ import {
   resolveCopilotRuntimeMode,
   resolveServeBaseUrl,
 } from "./runtime-mode";
-
-interface RuntimeStatusResponse {
-  serviceVersion?: string;
-  apiVersion?: string;
-  status?: string;
-  hermesInstalled?: boolean;
-  activeHermesVersion?: string | null;
-  features?: string[];
-  checks?: Record<string, string>;
-}
-
-interface RuntimeCapabilitiesResponse {
-  apiVersion?: string;
-  features?: string[];
-}
+import {
+  getSmcRuntimeClient,
+  type RuntimeCapabilities,
+  type RuntimeStatus,
+} from "./smc-runtime-client";
 
 interface RuntimeCompatibilityResponse {
   apiVersion?: string;
@@ -158,16 +148,11 @@ export async function runRuntimeHandshake(): Promise<RuntimeConnectionState> {
     }
 
     try {
-      const status = await runtimeFetch<RuntimeStatusResponse>({
-        path: "/api/v1/runtime/status",
-        unauthenticated: !isPairedSync(),
-      });
-
-      const capabilities = await runtimeFetch<RuntimeCapabilitiesResponse>({
-        path: "/api/v1/runtime/capabilities",
-        unauthenticated: !isPairedSync(),
-      });
-      setCachedCapabilities(toCapabilitiesView(capabilities));
+      const client = getSmcRuntimeClient(baseUrl);
+      // Prefer contract-generated client for status / capabilities (Monorepo Phase 5).
+      const status = (await client.getStatus()) as RuntimeStatus;
+      const capabilities = (await client.getCapabilities()) as RuntimeCapabilities;
+      setCachedCapabilities(toCapabilitiesView(capabilities as { apiVersion?: string; features?: string[] }));
 
       const compatibility = await runtimeFetch<RuntimeCompatibilityResponse>({
         path: "/api/v1/runtime/compatibility",

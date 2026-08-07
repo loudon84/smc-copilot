@@ -5,6 +5,11 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   main: {
+    resolve: {
+      alias: {
+        '@smc/runtime-client': resolve('../../packages/runtime-client-ts/src/index.ts')
+      }
+    },
     build: {
       rollupOptions: {
         external: ['better-sqlite3']
