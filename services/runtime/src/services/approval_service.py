@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
@@ -110,7 +110,9 @@ class ApprovalService:
         )
         task = await self._tasks.get(row.task_id)
         if task and task.status == TaskStatus.WAITING_APPROVAL.value:
-            target = TaskStatus.CANCELLED.value if self._settings.task_reject_sets_cancelled else TaskStatus.FAILED.value
+            target = (
+                TaskStatus.CANCELLED.value if self._settings.task_reject_sets_cancelled else TaskStatus.FAILED.value
+            )
             assert_transition_allowed(task.status, target)
             task.status = target
             if target == TaskStatus.FAILED.value:

@@ -17,7 +17,6 @@ import sys
 import time
 from pathlib import Path
 
-
 EXIT_OK = 0
 EXIT_PYTHON_MISSING = 10
 EXIT_MAIN_MISSING = 11
@@ -156,9 +155,7 @@ def start_runtime(
     cmd = [str(py), "-m", "main", *(extra_args or [])]
     creationflags = 0
     if sys.platform == "win32" and detach:
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
-            subprocess, "DETACHED_PROCESS", 0
-        )
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
     try:
         proc = subprocess.Popen(
             cmd,

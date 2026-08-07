@@ -15,9 +15,7 @@ class McpServerRepository:
 
     async def list_by_instance(self, instance_id: str) -> list[McpServer]:
         result = await self._session.execute(
-            select(McpServer)
-            .where(McpServer.instance_id == instance_id)
-            .order_by(McpServer.created_at.asc())
+            select(McpServer).where(McpServer.instance_id == instance_id).order_by(McpServer.created_at.asc())
         )
         return list(result.scalars().all())
 
@@ -47,9 +45,7 @@ class McpServerRepository:
         await self._session.flush()
 
     async def list_secret_refs(self, mcp_server_id: str) -> list[McpSecretRef]:
-        result = await self._session.execute(
-            select(McpSecretRef).where(McpSecretRef.mcp_server_id == mcp_server_id)
-        )
+        result = await self._session.execute(select(McpSecretRef).where(McpSecretRef.mcp_server_id == mcp_server_id))
         return list(result.scalars().all())
 
     async def replace_secret_refs(

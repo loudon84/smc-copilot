@@ -1,13 +1,13 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import FastAPI
 
-from version import __version__
 from api.middleware.cors_asgi import PureAsgiCorsMiddleware
 from api.middleware.error_envelope import register_error_handlers
 from api.router import api_router
 from core.config import get_settings
 from core.lifecycle import lifespan
+from version import __version__
 
 
 # @lat: [[architecture#应用装配]]

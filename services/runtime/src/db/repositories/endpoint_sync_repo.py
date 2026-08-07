@@ -165,9 +165,7 @@ class EndpointSyncRepository:
         return row
 
     async def get_ack_outbox_by_message_id(self, message_id: str) -> SyncAckOutbox | None:
-        result = await self._s.execute(
-            select(SyncAckOutbox).where(SyncAckOutbox.message_id == message_id)
-        )
+        result = await self._s.execute(select(SyncAckOutbox).where(SyncAckOutbox.message_id == message_id))
         return result.scalar_one_or_none()
 
     async def list_due_ack_outbox(self, *, limit: int = 100) -> list[SyncAckOutbox]:
@@ -195,9 +193,7 @@ class EndpointSyncRepository:
         return row
 
     async def get_poison_by_message_id(self, message_id: str) -> SyncPoisonMessage | None:
-        result = await self._s.execute(
-            select(SyncPoisonMessage).where(SyncPoisonMessage.message_id == message_id)
-        )
+        result = await self._s.execute(select(SyncPoisonMessage).where(SyncPoisonMessage.message_id == message_id))
         return result.scalar_one_or_none()
 
     # --- delivery outbox ---
@@ -241,9 +237,7 @@ class EndpointSyncRepository:
     # --- desired state / resources ---
 
     async def get_revision_by_number(self, revision: int) -> DesiredStateRevision | None:
-        result = await self._s.execute(
-            select(DesiredStateRevision).where(DesiredStateRevision.revision == revision)
-        )
+        result = await self._s.execute(select(DesiredStateRevision).where(DesiredStateRevision.revision == revision))
         return result.scalar_one_or_none()
 
     async def get_latest_revision(self) -> DesiredStateRevision | None:

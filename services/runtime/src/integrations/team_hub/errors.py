@@ -1,4 +1,4 @@
-﻿"""Team Task Hub integration errors."""
+"""Team Task Hub integration errors."""
 
 from core.errors import TeamHubError
 

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,7 +54,5 @@ async def reject(
     body: ApprovalRejectBody | None = Body(default=None),
     approvals: ApprovalService = Depends(get_approval_service),
 ) -> ApprovalResponse:
-    row = await approvals.reject(
-        approval_id, actor=body.actor if body else None, reason=body.reason if body else None
-    )
+    row = await approvals.reject(approval_id, actor=body.actor if body else None, reason=body.reason if body else None)
     return ApprovalResponse.model_validate(row)

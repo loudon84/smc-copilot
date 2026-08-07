@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 
@@ -142,7 +142,9 @@ class ApprovalRepository:
         return await self._s.get(Approval, approval_id)
 
     async def list_pending(self) -> list[Approval]:
-        result = await self._s.execute(select(Approval).where(Approval.status == "pending").order_by(Approval.created_at))
+        result = await self._s.execute(
+            select(Approval).where(Approval.status == "pending").order_by(Approval.created_at)
+        )
         return list(result.scalars().all())
 
     async def list_all(self, limit: int = 200) -> list[Approval]:
@@ -150,7 +152,9 @@ class ApprovalRepository:
         return list(result.scalars().all())
 
     async def list_for_task(self, task_id: str) -> list[Approval]:
-        result = await self._s.execute(select(Approval).where(Approval.task_id == task_id).order_by(Approval.created_at))
+        result = await self._s.execute(
+            select(Approval).where(Approval.task_id == task_id).order_by(Approval.created_at)
+        )
         return list(result.scalars().all())
 
     async def create(self, row: Approval) -> Approval:

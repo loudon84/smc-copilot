@@ -129,9 +129,7 @@ class InstallationService:
         version = str(request.get("version") or "latest")
         channel = str(request.get("channel") or self._settings.hermes_runtime_channel)
         force = bool(request.get("force", False))
-        create_default = bool(
-            request.get("createDefaultInstance", request.get("create_default_instance", True))
-        )
+        create_default = bool(request.get("createDefaultInstance", request.get("create_default_instance", True)))
         activate_on_complete = create_default
         toolchain_override = request.get("toolchain") or {}
         self._current_pip_proc: asyncio.subprocess.Process | None = None
@@ -140,7 +138,9 @@ class InstallationService:
         await progress("Probing environment", phase="probe", progress_value=0.05, event_type="job.phase_changed")
         probe = self._probe.require_ready(overrides=toolchain_override if isinstance(toolchain_override, dict) else {})
 
-        await progress("Fetching version manifest", phase="manifest", progress_value=0.1, event_type="job.phase_changed")
+        await progress(
+            "Fetching version manifest", phase="manifest", progress_value=0.1, event_type="job.phase_changed"
+        )
         manifest = await self._resolve_manifest(version, channel, probe.platform, probe.architecture)
         resolved_version = str(manifest.get("version") or version)
         if resolved_version == "latest":
@@ -176,7 +176,9 @@ class InstallationService:
 
         try:
             token.raise_if_cancelled()
-            await progress("Downloading artifact", phase="download", progress_value=0.25, event_type="job.phase_changed")
+            await progress(
+                "Downloading artifact", phase="download", progress_value=0.25, event_type="job.phase_changed"
+            )
             archive_name = Path(artifact_url).name or f"hermes-{resolved_version}.zip"
             archive_path = self._layout.download_path(archive_name)
             await self._downloader.download(artifact_url, archive_path, cancellation_token=token)
@@ -203,12 +205,16 @@ class InstallationService:
             version_root.parent.mkdir(parents=True, exist_ok=True)
 
             token.raise_if_cancelled()
-            await progress("Creating isolated Python environment", phase="venv", progress_value=0.6, event_type="job.phase_changed")
+            await progress(
+                "Creating isolated Python environment", phase="venv", progress_value=0.6, event_type="job.phase_changed"
+            )
             venv_dir = probe.toolchain.venv_dir or (version_root / "venv")
             await self._create_venv(probe.toolchain.python_path, venv_dir, token)  # type: ignore[arg-type]
 
             token.raise_if_cancelled()
-            await progress("Installing Hermes Agent", phase="install", progress_value=0.7, event_type="job.phase_changed")
+            await progress(
+                "Installing Hermes Agent", phase="install", progress_value=0.7, event_type="job.phase_changed"
+            )
             await self._pip_install(venv_dir, extract_dir, token)
 
             if not version_root.exists():
@@ -279,7 +285,9 @@ class InstallationService:
                     row.checksum = expected_sha
                     row.channel = channel
                     row.artifact_type = artifact_type
-                    row.manifest_version = str(manifest.get("manifestVersion") or manifest.get("manifest_version") or "")
+                    row.manifest_version = str(
+                        manifest.get("manifestVersion") or manifest.get("manifest_version") or ""
+                    )
                     row.signature_key_id = str(manifest.get("keyId") or manifest.get("key_id") or "") or None
                     row.verified_at = now
                     row.installed_at = now
@@ -370,10 +378,10 @@ class InstallationService:
         self._validate_manifest_release(data, platform_name, architecture)
         return data
 
-    def _validate_manifest_release(
-        self, release: dict[str, Any], platform_name: str, architecture: str
-    ) -> None:
-        missing = [f for f in _REQUIRED_MANIFEST_FIELDS if not release.get(f) and not release.get(f.replace("Type", "_type"))]
+    def _validate_manifest_release(self, release: dict[str, Any], platform_name: str, architecture: str) -> None:
+        missing = [
+            f for f in _REQUIRED_MANIFEST_FIELDS if not release.get(f) and not release.get(f.replace("Type", "_type"))
+        ]
         # Accept artifact_type snake_case as alias
         if not release.get("artifactType") and release.get("artifact_type"):
             release["artifactType"] = release["artifact_type"]

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -83,7 +83,7 @@ class BootstrapService:
         row = BootstrapSession(
             token_hash=hash_bootstrap_token(token),
             status=BootstrapSessionStatus.PENDING.value,
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl),
+            expires_at=datetime.now(UTC) + timedelta(seconds=ttl),
         )
         await self._repo().add(row)
         return row
@@ -92,10 +92,10 @@ class BootstrapService:
         row = await self._repo().get_by_token_hash(hash_bootstrap_token(token))
         if row is None:
             return None
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = row.expires_at
         if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+            expires = expires.replace(tzinfo=UTC)
         if row.status in (
             BootstrapSessionStatus.COMPLETED.value,
             BootstrapSessionStatus.INVALIDATED.value,

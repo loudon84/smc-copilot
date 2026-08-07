@@ -90,15 +90,11 @@ def build_reconciliation_plan(
     for key, d in desired_map.items():
         cur = installed_map.get(key)
         if cur is None:
-            plan.operations.append(
-                PlanOperation("install", d.resource_type, d.resource_id, None, d.version)
-            )
+            plan.operations.append(PlanOperation("install", d.resource_type, d.resource_id, None, d.version))
             if d.resource_type in _RESTART_TYPES:
                 plan.restart_required = True
         elif (cur.version or "") != (d.version or ""):
-            plan.operations.append(
-                PlanOperation("upgrade", d.resource_type, d.resource_id, cur.version, d.version)
-            )
+            plan.operations.append(PlanOperation("upgrade", d.resource_type, d.resource_id, cur.version, d.version))
             if d.resource_type in _RESTART_TYPES:
                 plan.restart_required = True
             if not d.checksum:
@@ -111,17 +107,13 @@ def build_reconciliation_plan(
             if not rtype or not rid:
                 continue
             cur = installed_map.get((rtype, rid))
-            plan.operations.append(
-                PlanOperation("remove", rtype, rid, cur.version if cur else None, None)
-            )
+            plan.operations.append(PlanOperation("remove", rtype, rid, cur.version if cur else None, None))
             if rtype in _RESTART_TYPES:
                 plan.restart_required = True
     else:
         for key, cur in installed_map.items():
             if key not in desired_map and cur.resource_type not in {"local_secret", "local_path"}:
-                plan.operations.append(
-                    PlanOperation("remove", cur.resource_type, cur.resource_id, cur.version, None)
-                )
+                plan.operations.append(PlanOperation("remove", cur.resource_type, cur.resource_id, cur.version, None))
                 if cur.resource_type in _RESTART_TYPES:
                     plan.restart_required = True
 

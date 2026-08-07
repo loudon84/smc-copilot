@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -16,10 +15,10 @@ from core.logging import get_logger
 from db.repositories.profile_repo import ProfileRepository
 from integrations.hermes.client import HermesGatewayClient, extract_run_id
 from integrations.hermes.client_factory import HermesGatewayClientFactory
+from runtime.tasks.event_normalizer import normalize_hermes_sse, parse_sse_block
 from services.chat_stream_service import abort_stream, register_stream
 from services.gateway_credential_service import GatewayCredentialService
 from services.gateway_supervisor import GatewaySupervisor
-from runtime.tasks.event_normalizer import normalize_hermes_sse, parse_sse_block
 
 logger = get_logger(__name__)
 

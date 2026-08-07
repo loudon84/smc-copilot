@@ -13,9 +13,7 @@ class ChatAttachmentRepository:
     async def get(self, attachment_id: str) -> ChatAttachment | None:
         return await self._session.get(ChatAttachment, attachment_id)
 
-    async def list_for_session(
-        self, *, profile_id: str, workspace_id: str, session_id: str
-    ) -> list[ChatAttachment]:
+    async def list_for_session(self, *, profile_id: str, workspace_id: str, session_id: str) -> list[ChatAttachment]:
         result = await self._session.execute(
             select(ChatAttachment).where(
                 ChatAttachment.profile_id == profile_id,

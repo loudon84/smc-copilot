@@ -4,7 +4,7 @@ import hashlib
 import mimetypes
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -45,7 +45,7 @@ _SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _safe_name(name: str) -> str:
@@ -189,11 +189,7 @@ class AttachmentService:
                     code="ATTACHMENT_NOT_FOUND",
                     http_status=404,
                 )
-            if (
-                row.profile_id != profile_id
-                or row.workspace_id != workspace_id
-                or row.session_id != session_id
-            ):
+            if row.profile_id != profile_id or row.workspace_id != workspace_id or row.session_id != session_id:
                 raise ChatApiError(
                     "Attachment scope mismatch",
                     code="ATTACHMENT_SCOPE_MISMATCH",
@@ -215,9 +211,7 @@ class AttachmentService:
                 lines.append("   content:")
                 lines.append(row.text_preview)
             else:
-                lines.append(
-                    "   note: binary attachment. Use file tools inside workspace when needed."
-                )
+                lines.append("   note: binary attachment. Use file tools inside workspace when needed.")
             lines.append("")
         return "\n".join(lines).strip()
 

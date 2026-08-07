@@ -3,11 +3,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from app.db.base import Base
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.db.base import Base
 
 
 class Document(Base):
@@ -38,7 +37,7 @@ class Document(Base):
     archived_at: Mapped[datetime | None] = mapped_column(nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
-    versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")
+    versions: Mapped[list[DocumentVersion]] = relationship(back_populates="document")
 
     __table_args__ = (
         CheckConstraint("document_type IN ('spreadsheet')", name="chk_documents_type"),

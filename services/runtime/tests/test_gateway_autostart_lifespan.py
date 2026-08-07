@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app import create_app
-from core.config import Settings, get_settings
+from core.config import Settings
 from core.constants import GatewayStatus
 from core.lifecycle import lifespan
 from db.models.profile import Profile

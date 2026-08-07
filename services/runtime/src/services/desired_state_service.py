@@ -90,9 +90,7 @@ class DesiredStateService:
         payload = json.loads(rev_row.payload_json)
         desired = [parse_desired_resource(x) for x in (payload.get("resources") or []) if isinstance(x, dict)]
         installations = await self._repo.list_installations()
-        installed = [
-            InstalledResource(i.resource_type, i.resource_id, i.installed_version) for i in installations
-        ]
+        installed = [InstalledResource(i.resource_type, i.resource_id, i.installed_version) for i in installations]
         removed = payload.get("removedResources")
         return build_reconciliation_plan(
             revision=rev_row.revision,

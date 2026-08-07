@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -19,8 +19,8 @@ from app import create_app
 from core.config import Settings, get_settings
 from core.lifecycle import lifespan
 from db.session import create_engine, create_sessionmaker, init_db
-from integrations.team_hub.client import StubTeamHubClient
 from integrations.service_center.client import StubServiceCenterClient
+from integrations.team_hub.client import StubTeamHubClient
 from runtime.gateway_process import GatewayProcessManager
 from services.gateway_supervisor import GatewaySupervisor
 
@@ -58,9 +58,7 @@ def test_settings(tmp_data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Settin
 @pytest_asyncio.fixture
 async def app_client(
     test_settings: Settings,
-) -> AsyncIterator[
-    tuple[AsyncClient, GatewaySupervisor, Settings, StubTeamHubClient, object]
-]:
+) -> AsyncIterator[tuple[AsyncClient, GatewaySupervisor, Settings, StubTeamHubClient, object]]:
     engine: AsyncEngine = create_engine(test_settings)
     await init_db(engine)
     session_maker = create_sessionmaker(engine)

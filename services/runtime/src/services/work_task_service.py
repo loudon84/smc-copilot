@@ -139,9 +139,7 @@ class WorkTaskService:
         assignment.status = RemoteAssignmentStatus.CLAIMING.value
         task.status = WorkTaskStatus.CLAIMING.value
         lease_resp = await self._center.claim(assignment.assignment_id, endpoint_id=cred.endpoint_id)
-        expires = _parse_dt(lease_resp.expires_at) or (
-            datetime.now(UTC) + timedelta(seconds=assignment.lease_seconds)
-        )
+        expires = _parse_dt(lease_resp.expires_at) or (datetime.now(UTC) + timedelta(seconds=assignment.lease_seconds))
         lease = TaskLease(
             assignment_row_id=assignment.id,
             assignment_id=assignment.assignment_id,

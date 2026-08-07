@@ -18,8 +18,8 @@ from integrations.service_center.dto import (
     ClaimResponse,
     EnrollRequest,
     EnrollResponse,
-    ExperienceReviewItem,
     EventsBatchResponse,
+    ExperienceReviewItem,
     TokenRefreshResponse,
     UploadRequestResponse,
 )
@@ -658,8 +658,7 @@ def create_service_center_client(settings: Settings) -> StubServiceCenterClient 
         return StubServiceCenterClient()
 
     allowlist = [x.strip() for x in (settings.service_center_domain_allowlist or "").split(",") if x.strip()]
-    from integrations.service_center.transport import ServiceCenterTransport, get_shared_transport
-    import httpx
+    from integrations.service_center.transport import get_shared_transport
 
     transport = get_shared_transport()
     # Retune shared transport timeouts from settings once

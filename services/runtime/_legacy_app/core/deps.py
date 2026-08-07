@@ -3,11 +3,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from uuid import UUID, uuid4
 
-from fastapi import Header
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-
 from app.core.context import RequestContext
 from app.db.session import create_engine, create_sessionmaker, session_scope
+from fastapi import Header
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None

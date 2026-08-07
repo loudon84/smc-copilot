@@ -1,4 +1,9 @@
-﻿from db.models.experience_v2 import ExperienceEvidenceLink, ExperienceFingerprint
+from db.models.artifact_worker import (
+    ArtifactUploadPart,
+    ArtifactUploadSession,
+    WorkerIncident,
+    WorkerStateRow,
+)
 from db.models.chat_attachment import ChatAttachment
 from db.models.chat_settings import ProfileChatSettings
 from db.models.endpoint_sync import (
@@ -12,10 +17,10 @@ from db.models.endpoint_sync import (
     ExperienceEvidence,
     ExperienceSubmissionRecord,
     RemoteTaskAssignment,
-    ResourceConflict,
-    ResourceInstallation,
     ResourceApplyOperation,
     ResourceApplyRun,
+    ResourceConflict,
+    ResourceInstallation,
     ResourceSnapshot,
     ResultArtifact,
     SyncAckOutbox,
@@ -27,21 +32,7 @@ from db.models.endpoint_sync import (
     TaskDeliveryRecord,
     TaskLease,
 )
-from db.models.artifact_worker import (
-    ArtifactUploadPart,
-    ArtifactUploadSession,
-    WorkerIncident,
-    WorkerStateRow,
-)
-from db.models.work_tasks import (
-    TaskApproval,
-    TaskArtifact,
-    TaskResourceLock,
-    TaskRun,
-    TaskRunCheckpoint,
-    TaskRunEvent,
-    WorkTask,
-)
+from db.models.experience_v2 import ExperienceEvidenceLink, ExperienceFingerprint
 from db.models.local_task import LocalTask
 from db.models.profile import Profile
 from db.models.role_spec import ProfileRoleSpec
@@ -63,6 +54,15 @@ from db.models.runtime import (
     SecretReference,
 )
 from db.models.task_related import Approval, AuditLog, SyncOutbox, TaskEvent, TeamTaskBinding
+from db.models.work_tasks import (
+    TaskApproval,
+    TaskArtifact,
+    TaskResourceLock,
+    TaskRun,
+    TaskRunCheckpoint,
+    TaskRunEvent,
+    WorkTask,
+)
 from db.models.workspace_db import Workspace
 
 __all__ = [

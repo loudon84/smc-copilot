@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from runtime.resources._common import (
     copy_staged_to_version,
@@ -13,7 +14,13 @@ from runtime.resources._common import (
     read_current_pointer,
     restore_snapshot,
 )
-from runtime.resources.base import ApplyResult, ResourceAdapter, ResourceContext, ResourceDesired, ResourceRollbackSnapshot
+from runtime.resources.base import (
+    ApplyResult,
+    ResourceAdapter,
+    ResourceContext,
+    ResourceDesired,
+    ResourceRollbackSnapshot,
+)
 
 
 class PolicyResourceAdapter:

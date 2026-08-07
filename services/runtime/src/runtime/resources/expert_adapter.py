@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from runtime.resource_bundle import parse_profile_bundle
 from runtime.resources._common import (
@@ -11,10 +12,15 @@ from runtime.resources._common import (
     default_stage,
     default_validate,
     read_current_pointer,
-    restore_snapshot,
     version_dir,
 )
-from runtime.resources.base import ApplyResult, ResourceAdapter, ResourceContext, ResourceDesired, ResourceRollbackSnapshot
+from runtime.resources.base import (
+    ApplyResult,
+    ResourceAdapter,
+    ResourceContext,
+    ResourceDesired,
+    ResourceRollbackSnapshot,
+)
 from runtime.resources.profile_adapter import ProfileResourceAdapter
 
 

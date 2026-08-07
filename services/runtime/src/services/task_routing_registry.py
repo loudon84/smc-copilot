@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from core.config import Settings
 from core.task_routing import RoutingRule, merge_routing

@@ -144,6 +144,8 @@ async def test_poison_quarantine_allows_next_sequence(enrolled_client) -> None:
     inbox = await repo.get_inbox_by_message_id(poison_id)
     assert inbox.status == SyncInboxStatus.QUARANTINED.value
     await session2.close()
+
+
 @pytest.mark.asyncio
 async def test_partial_event_ack_on_outbox(enrolled_client) -> None:
     client, app, center = enrolled_client

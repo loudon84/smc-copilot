@@ -1,7 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, Request
 
 from api.deps import get_app_settings
 from core.config import Settings

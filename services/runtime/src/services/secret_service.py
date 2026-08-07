@@ -152,9 +152,7 @@ class SecretService:
         await self._session.flush()
         return SecretMetaResponse(name=name, configured=True, updatedAt=row.updated_at or now)
 
-    async def put_with_restart_hint(
-        self, scope: str, name: str, value: str
-    ) -> dict:
+    async def put_with_restart_hint(self, scope: str, name: str, value: str) -> dict:
         meta = await self.put(scope, name, value)
         # If any running instance uses this profile scope, caller should restart.
         result = await self._session.execute(
@@ -177,10 +175,7 @@ class SecretService:
             )
         )
         rows = list(result.scalars().all())
-        return [
-            SecretMetaResponse(name=r.secret_name, configured=True, updatedAt=r.updated_at)
-            for r in rows
-        ]
+        return [SecretMetaResponse(name=r.secret_name, configured=True, updatedAt=r.updated_at) for r in rows]
 
     async def delete(self, scope: str, name: str) -> None:
         result = await self._session.execute(

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from core.config import get_settings
 from schemas.role_library import PresetImportRequest
 from services.role_library_service import RoleLibraryService, preset_filenames_for_version

@@ -53,9 +53,7 @@ async def diagnostics_environment(settings: Settings = Depends(get_app_settings)
             "node": str(probe.toolchain.node_path) if probe.toolchain.node_path else None,
             "git": str(probe.toolchain.git_path) if probe.toolchain.git_path else None,
             "venvDir": str(probe.toolchain.venv_dir) if probe.toolchain.venv_dir else None,
-            "hermesInstallDir": str(probe.toolchain.hermes_install_dir)
-            if probe.toolchain.hermes_install_dir
-            else None,
+            "hermesInstallDir": str(probe.toolchain.hermes_install_dir) if probe.toolchain.hermes_install_dir else None,
         },
         "runtimeDataDir": str(layout.root),
         "hermesHome": str(settings.hermes_home_path),

@@ -95,6 +95,7 @@ def chat_completions(body: ChatCompletionBody):
         headers={"x-hermes-session-id": session_header},
     )
 
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, required=True)

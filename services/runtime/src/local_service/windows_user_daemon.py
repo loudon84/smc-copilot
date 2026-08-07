@@ -12,7 +12,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
 TASK_NAME = "HermesRuntimeUserDaemon"
 DEFAULT_PORT = 8765
 HEALTH_PATH = "/api/v1/health"

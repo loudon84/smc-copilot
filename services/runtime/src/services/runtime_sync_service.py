@@ -65,9 +65,7 @@ class RuntimeSyncService:
                 for c in channels
             ],
             "deadLetterCount": len(await self._repo.list_dead_letters(limit=500)),
-            "recentDeadLetters": [
-                {"id": d.id, "eventType": d.event_type, "lastError": d.last_error} for d in dead
-            ],
+            "recentDeadLetters": [{"id": d.id, "eventType": d.event_type, "lastError": d.last_error} for d in dead],
         }
 
     async def list_channels(self) -> list[dict[str, Any]]:
@@ -167,9 +165,7 @@ class RuntimeSyncService:
                     processed_at=datetime.now(UTC),
                 )
                 await self._repo.add_inbox(inbox)
-            await self._enqueue_ack_outbox(
-                endpoint_id=endpoint_id, channel=channel, message_id=mid, cursor=cursor
-            )
+            await self._enqueue_ack_outbox(endpoint_id=endpoint_id, channel=channel, message_id=mid, cursor=cursor)
             return "ignored"
 
         sequence = meta.get("sequence")

@@ -74,9 +74,7 @@ class BackupService:
         svc = SecretService(self._settings, self._session)
         # Collect metadata across common scopes without exposing values
         scopes = {"runtime", "default"}
-        result = await self._session.execute(
-            select(HermesInstance.profile_name).distinct()
-        )
+        result = await self._session.execute(select(HermesInstance.profile_name).distinct())
         for name in result.scalars().all():
             if name:
                 scopes.add(str(name))

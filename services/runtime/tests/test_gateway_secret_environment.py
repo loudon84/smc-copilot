@@ -60,9 +60,7 @@ def test_build_gateway_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     config_mod._settings = None
 
 
-def test_build_gateway_environment_requires_api_server_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_build_gateway_environment_requires_api_server_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     hermes = tmp_path / "hermes"
     hermes.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(hermes))
@@ -95,9 +93,7 @@ def test_build_gateway_environment_requires_api_server_key(
 
 
 # @lat: [[tests#Gateway Env#Parent provider secrets not inherited]]
-def test_parent_provider_secrets_not_inherited(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_parent_provider_secrets_not_inherited(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     hermes = tmp_path / "hermes"
     hermes.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(hermes))
@@ -136,8 +132,8 @@ def test_logs_only_env_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     import core.config as config_mod
 
     config_mod._settings = None
-    from core.config import get_settings
     import runtime.gateway_environment as gateway_env_mod
+    from core.config import get_settings
 
     settings = get_settings()
     mock_logger = MagicMock()

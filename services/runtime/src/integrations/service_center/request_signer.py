@@ -14,7 +14,7 @@ def body_sha256(body: bytes | None) -> str:
 
 
 def signing_payload(*, method: str, path: str, body_digest: str, timestamp: str, nonce: str) -> bytes:
-    return f"{method.upper()}\n{path}\n{body_digest}\n{timestamp}\n{nonce}".encode("utf-8")
+    return f"{method.upper()}\n{path}\n{body_digest}\n{timestamp}\n{nonce}".encode()
 
 
 def build_signed_headers(

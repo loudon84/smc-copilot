@@ -65,12 +65,8 @@ class ChatStreamService:
     ) -> None:
         self._profiles = profile_repo
         self._app_settings = settings or get_settings()
-        self._model_service = ChatModelService(
-            profile_repo, settings_repo, settings=self._app_settings
-        )
-        self._attachment_service = AttachmentService(
-            profile_repo, attachment_repo, workspace_repo
-        )
+        self._model_service = ChatModelService(profile_repo, settings_repo, settings=self._app_settings)
+        self._attachment_service = AttachmentService(profile_repo, attachment_repo, workspace_repo)
         self._resolver = ProfileRefResolver(profile_repo, settings=self._app_settings)
 
     async def stream_chat(
@@ -101,9 +97,7 @@ class ChatStreamService:
             )
             context_block = self._attachment_service.build_attachment_context(attachment_rows)
 
-            messages: list[dict[str, str]] = [
-                {"role": m.role, "content": m.content} for m in body.messages
-            ]
+            messages: list[dict[str, str]] = [{"role": m.role, "content": m.content} for m in body.messages]
             if context_block:
                 messages.insert(
                     0,

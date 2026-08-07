@@ -163,9 +163,7 @@ def upgrade() -> None:
     # Data migration: profiles -> instances (preserve id and gateway_port)
     conn = op.get_bind()
     profiles = conn.execute(
-        sa.text(
-            "SELECT id, name, gateway_port, auto_start, status, gateway_pid FROM profiles"
-        )
+        sa.text("SELECT id, name, gateway_port, auto_start, status, gateway_pid FROM profiles")
     ).fetchall()
     for row in profiles:
         status = row[4] or "stopped"

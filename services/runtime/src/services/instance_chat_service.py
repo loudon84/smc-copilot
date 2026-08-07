@@ -4,7 +4,7 @@ import json
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -38,7 +38,7 @@ from services.sse_helpers import format_sse
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _infer_provider(model_id: str, raw: dict[str, Any]) -> str | None:
@@ -247,9 +247,7 @@ class InstanceChatService:
             )
             context_block = self._attachment_service.build_attachment_context(attachment_rows)
 
-            messages: list[dict[str, str]] = [
-                {"role": m.role, "content": m.content} for m in body.messages
-            ]
+            messages: list[dict[str, str]] = [{"role": m.role, "content": m.content} for m in body.messages]
             if context_block:
                 messages.insert(0, {"role": "system", "content": context_block})
 
@@ -264,9 +262,9 @@ class InstanceChatService:
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream",
             }
-            api_key = await GatewayCredentialService(
-                self._app_settings, self._session
-            ).optional_key_for_profile(inst.profile_name)
+            api_key = await GatewayCredentialService(self._app_settings, self._session).optional_key_for_profile(
+                inst.profile_name
+            )
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             if body.session_id:
@@ -352,9 +350,7 @@ class InstanceChatService:
     def abort(self, stream_id: str) -> bool:
         return abort_stream(stream_id)
 
-    async def list_session_messages(
-        self, instance_id: str, session_id: str
-    ) -> WorkspaceChatSessionMessagesResponse:
+    async def list_session_messages(self, instance_id: str, session_id: str) -> WorkspaceChatSessionMessagesResponse:
         inst = await self._resolver.require_instance(instance_id)
         home = profile_home(self._app_settings, inst.profile_name)
         if not home.is_dir():

@@ -1,6 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings, get_settings
 from core.constants import GatewayStatus
@@ -9,7 +11,6 @@ from db.models.profile import Profile
 from integrations.hermes.client import HermesGatewayClient, extract_run_id
 from integrations.hermes.client_factory import HermesGatewayClientFactory
 from schemas.hermes import HermesRunCreate
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class HermesGatewayService:

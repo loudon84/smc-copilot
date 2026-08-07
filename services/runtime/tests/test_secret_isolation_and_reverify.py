@@ -16,9 +16,7 @@ from services.secret_service import SecretStore
 
 
 @pytest.mark.asyncio
-async def test_named_profile_does_not_borrow_default_secrets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_named_profile_does_not_borrow_default_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setenv("RUNTIME_DATA_DIR", str(tmp_path / "rt"))
     monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "db.sqlite"))
@@ -59,9 +57,7 @@ async def test_named_profile_does_not_borrow_default_secrets(
         await session.commit()
 
     pm = GatewayProcessManager(settings)
-    svc = InstanceGatewayService(
-        settings=settings, session_maker=session_maker, process_manager=pm
-    )
+    svc = InstanceGatewayService(settings=settings, session_maker=session_maker, process_manager=pm)
     async with session_maker() as session:
         default_secrets = await svc._resolve_secrets(session, "default")
         named_secrets = await svc._resolve_secrets(session, "alice")
@@ -74,9 +70,7 @@ async def test_named_profile_does_not_borrow_default_secrets(
 
 
 @pytest.mark.asyncio
-async def test_already_installed_rejects_missing_executable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_already_installed_rejects_missing_executable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setenv("RUNTIME_DATA_DIR", str(tmp_path / "rt"))
     monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "db.sqlite"))
@@ -121,9 +115,7 @@ async def test_already_installed_rejects_missing_executable(
 
 
 @pytest.mark.asyncio
-async def test_already_installed_rejects_stub_script(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_already_installed_rejects_stub_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setenv("RUNTIME_DATA_DIR", str(tmp_path / "rt"))
     monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "db.sqlite"))

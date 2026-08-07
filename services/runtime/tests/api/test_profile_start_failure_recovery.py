@@ -26,9 +26,7 @@ async def test_start_failure_resets_starting_status(
 ) -> None:
     client, supervisor, settings, _hub, app = app_client
     port = 19602
-    supervisor.set_mock_gateway_command(
-        [sys.executable, str(_ROOT / "scripts" / "does_not_exist_mock_gateway.py")]
-    )
+    supervisor.set_mock_gateway_command([sys.executable, str(_ROOT / "scripts" / "does_not_exist_mock_gateway.py")])
 
     session_maker = app.state.session_maker
     async with session_maker() as session:

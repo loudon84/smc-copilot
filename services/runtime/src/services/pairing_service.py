@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +34,7 @@ class PairingService:
         pairing = DevicePairing(
             challenge_hash=hash_token(challenge),
             status=DevicePairingStatus.PENDING.value,
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds),
+            expires_at=datetime.now(UTC) + timedelta(seconds=ttl_seconds),
         )
         self._session.add(pairing)
         await self._session.flush()
@@ -50,10 +50,10 @@ class PairingService:
             raise RuntimeServiceError("Pairing not found", code="not_found")
         if pairing.status != DevicePairingStatus.PENDING.value:
             raise RuntimeServiceError("Pairing is not pending", code="invalid_state")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = pairing.expires_at
         if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=timezone.utc)
+            expires = expires.replace(tzinfo=UTC)
         if now > expires:
             pairing.status = DevicePairingStatus.EXPIRED.value
             await self._session.flush()
@@ -93,7 +93,7 @@ class PairingService:
         if device is None:
             raise RuntimeServiceError("Device not found", code="not_found")
         device.status = DeviceStatus.REVOKED.value
-        device.revoked_at = datetime.now(timezone.utc)
+        device.revoked_at = datetime.now(UTC)
         await self._session.flush()
         await self._audit(device.id, "device.revoked", "device", device.id)
 
@@ -104,7 +104,7 @@ class PairingService:
         )
         device = result.scalar_one_or_none()
         if device:
-            device.last_seen_at = datetime.now(timezone.utc)
+            device.last_seen_at = datetime.now(UTC)
             await self._session.flush()
         return device
 

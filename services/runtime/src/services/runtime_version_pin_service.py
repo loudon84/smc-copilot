@@ -64,9 +64,7 @@ class RuntimeVersionPinService:
         return len(healthy) == 1 and healthy[0].id == row.id
 
     async def _is_rollback_reserved(self, version_id: str) -> bool:
-        result = await self._session.execute(
-            select(RuntimeJob).where(RuntimeJob.rollback_state_json.is_not(None))
-        )
+        result = await self._session.execute(select(RuntimeJob).where(RuntimeJob.rollback_state_json.is_not(None)))
         for job in result.scalars().all():
             if not job.rollback_state_json:
                 continue

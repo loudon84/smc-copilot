@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,10 +30,7 @@ class ProfileRepository:
 
     async def get_first_by_type(self, profile_type: str) -> Profile | None:
         result = await self._session.execute(
-            select(Profile)
-            .where(Profile.type == profile_type)
-            .order_by(Profile.created_at)
-            .limit(1)
+            select(Profile).where(Profile.type == profile_type).order_by(Profile.created_at).limit(1)
         )
         return result.scalar_one_or_none()
 

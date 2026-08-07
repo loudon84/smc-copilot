@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.context import RequestContext
@@ -15,10 +13,11 @@ from app.modules.documents.permission import PermissionService
 from app.modules.documents.repository import DocumentRepository
 from app.modules.documents.schemas import SnapshotEnvelope, SnapshotSaveRequest
 from app.modules.documents.storage import SnapshotStorage
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _utc_now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _snapshot_key(*, tenant_id: UUID, workspace_id: UUID, document_id: UUID, version_no: int) -> str:
@@ -67,12 +66,16 @@ class DocumentService:
             snapshot=_create_empty_univer_snapshot(),
         )
 
-        payload = json.dumps(envelope.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        payload = json.dumps(envelope.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
         if len(payload) > settings.document_snapshot_max_bytes:
             raise SnapshotTooLarge()
 
         checksum = sha256_hex(payload)
-        key = _snapshot_key(tenant_id=ctx.tenant_id, workspace_id=ctx.workspace_id, document_id=doc.id, version_no=version_no)
+        key = _snapshot_key(
+            tenant_id=ctx.tenant_id, workspace_id=ctx.workspace_id, document_id=doc.id, version_no=version_no
+        )
         await self._storage.put_snapshot(bucket=settings.document_snapshot_bucket, key=key, payload=payload)
 
         version = await self._repo.create_version(
@@ -123,7 +126,9 @@ class DocumentService:
             raise DocumentNotFound()
         return doc
 
-    async def get_current_user_role(self, session: AsyncSession, *, ctx: RequestContext, document_id: UUID) -> str | None:
+    async def get_current_user_role(
+        self, session: AsyncSession, *, ctx: RequestContext, document_id: UUID
+    ) -> str | None:
         return await self._permission.get_user_role(
             session,
             document_id=document_id,
@@ -139,7 +144,9 @@ class DocumentService:
         if not self._permission.can_view(role):
             raise PermissionDenied()
 
-        version = await self._repo.get_version_by_no(session, document_id=document_id, version_no=doc.current_version_no)
+        version = await self._repo.get_version_by_no(
+            session, document_id=document_id, version_no=doc.current_version_no
+        )
         if version is None:
             raise DocumentNotFound("Current version not found")
 
@@ -211,12 +218,16 @@ class DocumentService:
             saved_by=str(ctx.user_id),
             snapshot=req.snapshot,
         )
-        payload = json.dumps(envelope.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        payload = json.dumps(envelope.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode(
+            "utf-8"
+        )
         if len(payload) > settings.document_snapshot_max_bytes:
             raise SnapshotTooLarge()
 
         checksum = sha256_hex(payload)
-        key = _snapshot_key(tenant_id=ctx.tenant_id, workspace_id=ctx.workspace_id, document_id=doc.id, version_no=next_version_no)
+        key = _snapshot_key(
+            tenant_id=ctx.tenant_id, workspace_id=ctx.workspace_id, document_id=doc.id, version_no=next_version_no
+        )
         await self._storage.put_snapshot(bucket=settings.document_snapshot_bucket, key=key, payload=payload)
 
         version = await self._repo.create_version(

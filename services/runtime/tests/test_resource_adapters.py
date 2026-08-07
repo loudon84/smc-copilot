@@ -8,7 +8,6 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
 from core.errors import ConflictError, CopilotError
@@ -73,9 +72,9 @@ async def test_skill_adapter_stage_apply_rollback(test_settings: Settings, tmp_p
         probe = await adapter.verify(ctx, desired)
         assert probe["filesystem"] is True
 
-        snapshot = __import__(
-            "runtime.resources._common", fromlist=["capture_snapshot"]
-        ).capture_snapshot(ctx, "skill", "demo-skill", None)
+        snapshot = __import__("runtime.resources._common", fromlist=["capture_snapshot"]).capture_snapshot(
+            ctx, "skill", "demo-skill", None
+        )
         await adapter.rollback(ctx, desired, snapshot)
         probe_after = await adapter.verify(ctx, desired)
         assert probe_after.get("filesystem") in {True, False}

@@ -89,7 +89,9 @@ def apply_maintenance(
 
     # Stop UserDaemon / uvicorn on port
     stop = _run([sys.executable, "-m", "local_service.windows_user_daemon", "stop", "--port", str(port)])
-    _step(steps, "stop_daemon", "ok" if stop.returncode == 0 else "degraded", stop.stderr.strip() or stop.stdout.strip())
+    _step(
+        steps, "stop_daemon", "ok" if stop.returncode == 0 else "degraded", stop.stderr.strip() or stop.stdout.strip()
+    )
 
     # Backup DB
     try:

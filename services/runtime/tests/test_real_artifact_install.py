@@ -99,9 +99,7 @@ async def test_resolve_manifest_picks_highest_semver(tmp_path: Path, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_install_fails_without_installable_artifact(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_install_fails_without_installable_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """v1.3.1: README-only zip must fail with artifact_not_installable — no stub."""
     import asyncio
     import sys
@@ -177,9 +175,11 @@ async def test_install_fails_without_installable_artifact(
                 await asyncio.sleep(0.1)
             assert final is not None
             assert final["status"] == "failed", final
-            assert final.get("errorCode") == "artifact_not_installable" or (
-                final.get("error_code") == "artifact_not_installable"
-            ) or "artifact_not_installable" in str(final)
+            assert (
+                final.get("errorCode") == "artifact_not_installable"
+                or (final.get("error_code") == "artifact_not_installable")
+                or "artifact_not_installable" in str(final)
+            )
 
     config_mod._settings = None
 

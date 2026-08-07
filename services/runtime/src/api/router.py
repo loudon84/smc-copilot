@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
@@ -6,6 +6,7 @@ from api.deps import verify_desktop_token
 from api.v1 import (
     approvals,
     attachments,
+    bootstrap,
     chat,
     configurations,
     desktop_workbench,
@@ -20,13 +21,13 @@ from api.v1 import (
     metrics,
     pairings,
     profiles,
-    bootstrap,
     remote_tasks,
     resources,
     role_library,
     runtime,
     secrets,
     service,
+    service_center,
     sessions,
     sync,
     system,
@@ -36,7 +37,6 @@ from api.v1 import (
     work_tasks,
     workers,
     workspaces,
-    service_center,
 )
 
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_desktop_token)])

@@ -36,8 +36,12 @@ def upgrade() -> None:
         sa.Column("memory_path", sa.String(length=512), nullable=True),
         sa.Column("source_checksum", sa.String(length=128), nullable=True),
         sa.Column("output_mode", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("(CURRENT_TIMESTAMP)"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("(CURRENT_TIMESTAMP)"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("(CURRENT_TIMESTAMP)"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("(CURRENT_TIMESTAMP)"), nullable=False
+        ),
         sa.ForeignKeyConstraint(["profile_id"], ["profiles.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("profile_id"),

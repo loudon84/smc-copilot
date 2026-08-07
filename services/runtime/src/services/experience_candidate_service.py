@@ -55,9 +55,7 @@ class ExperienceCandidateService:
             raise CopilotError("runtime cannot set candidate to published/accepted", code="invalid_status")
         row = ExperienceCandidate(
             endpoint_id=body.get("endpoint_id") or body.get("endpointId"),
-            candidate_type=str(
-                body.get("candidate_type") or body.get("candidateType") or "skill_candidate"
-            ),
+            candidate_type=str(body.get("candidate_type") or body.get("candidateType") or "skill_candidate"),
             title=str(body.get("title") or "untitled"),
             summary=body.get("summary"),
             status=status,

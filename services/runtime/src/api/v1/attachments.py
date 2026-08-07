@@ -7,7 +7,7 @@ from api.deps import get_db_session
 from db.repositories.chat_attachment_repo import ChatAttachmentRepository
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.v12_repos import WorkspaceRepository
-from schemas.attachments import ChatAttachmentResponse, RemoveAttachmentResponse, UploadAttachmentsResponse
+from schemas.attachments import RemoveAttachmentResponse, UploadAttachmentsResponse
 from services.attachment_service import AttachmentService
 
 router = APIRouter(tags=["attachments"])

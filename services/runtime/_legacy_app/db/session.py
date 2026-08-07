@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-
 from app.core.config import get_settings, require_postgres_dsn
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 
 def create_engine() -> AsyncEngine:

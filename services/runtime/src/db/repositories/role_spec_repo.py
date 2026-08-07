@@ -11,18 +11,14 @@ class RoleSpecRepository:
         self._session = session
 
     async def list_all(self) -> list[ProfileRoleSpec]:
-        result = await self._session.execute(
-            select(ProfileRoleSpec).order_by(ProfileRoleSpec.created_at)
-        )
+        result = await self._session.execute(select(ProfileRoleSpec).order_by(ProfileRoleSpec.created_at))
         return list(result.scalars().all())
 
     async def get_by_id(self, spec_id: str) -> ProfileRoleSpec | None:
         return await self._session.get(ProfileRoleSpec, spec_id)
 
     async def get_by_profile_id(self, profile_id: str) -> ProfileRoleSpec | None:
-        result = await self._session.execute(
-            select(ProfileRoleSpec).where(ProfileRoleSpec.profile_id == profile_id)
-        )
+        result = await self._session.execute(select(ProfileRoleSpec).where(ProfileRoleSpec.profile_id == profile_id))
         return result.scalar_one_or_none()
 
     async def create(self, spec: ProfileRoleSpec) -> ProfileRoleSpec:

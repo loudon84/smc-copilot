@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -71,9 +70,7 @@ class RuntimeUpdatePlanService:
         instance_ids: list[str] | None,
     ) -> list[dict[str, Any]]:
         if instance_ids:
-            result = await session.execute(
-                select(HermesInstance).where(HermesInstance.id.in_(instance_ids))
-            )
+            result = await session.execute(select(HermesInstance).where(HermesInstance.id.in_(instance_ids)))
             instances = list(result.scalars().all())
         else:
             result = await session.execute(select(HermesInstance))
@@ -99,27 +96,21 @@ class RuntimeUpdatePlanService:
         instance_ids: list[str] | None,
     ) -> str | None:
         if instance_ids:
-            result = await session.execute(
-                select(HermesInstance).where(HermesInstance.id.in_(instance_ids))
-            )
+            result = await session.execute(select(HermesInstance).where(HermesInstance.id.in_(instance_ids)))
             candidates = list(result.scalars().all())
             if candidates:
                 return candidates[0].id
 
         result = await session.execute(
             select(HermesInstance).where(
-                HermesInstance.status.in_(
-                    (InstanceStatus.RUNNING.value, InstanceStatus.STARTING.value)
-                )
+                HermesInstance.status.in_((InstanceStatus.RUNNING.value, InstanceStatus.STARTING.value))
             )
         )
         running = list(result.scalars().all())
         if running:
             return running[0].id
 
-        result = await session.execute(
-            select(HermesInstance).where(HermesInstance.auto_start.is_(True))
-        )
+        result = await session.execute(select(HermesInstance).where(HermesInstance.auto_start.is_(True)))
         auto = list(result.scalars().all())
         if auto:
             return auto[0].id

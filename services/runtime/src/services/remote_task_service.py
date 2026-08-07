@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
-from core.enums import RemoteAssignmentStatus, WorkTaskStatus
+from core.enums import RemoteAssignmentStatus
 from core.errors import ConflictError, CopilotError, NotFoundError
-from db.models.endpoint_sync import RemoteTaskAssignment, TaskDeliveryRecord, TaskLease
+from db.models.endpoint_sync import RemoteTaskAssignment, TaskDeliveryRecord
 from db.repositories.endpoint_sync_repo import EndpointSyncRepository
 from db.repositories.work_task_repo import WorkTaskRepository
 from integrations.service_center.protocol import ServiceCenterClient
@@ -136,9 +136,7 @@ class RemoteTaskService:
         return self._to_dict(row)
 
     async def accept(self, row_id: str) -> dict[str, Any]:
-        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(
-            row_id
-        )
+        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(row_id)
         if row is None:
             raise NotFoundError("assignment not found")
         if row.status in {
@@ -158,9 +156,7 @@ class RemoteTaskService:
         return self._to_dict(row)
 
     async def reject(self, row_id: str, *, reason: str | None = None) -> dict[str, Any]:
-        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(
-            row_id
-        )
+        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(row_id)
         if row is None:
             raise NotFoundError("assignment not found")
         row.status = RemoteAssignmentStatus.REJECTED.value
@@ -168,9 +164,7 @@ class RemoteTaskService:
         return self._to_dict(row)
 
     async def cancel(self, row_id: str) -> dict[str, Any]:
-        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(
-            row_id
-        )
+        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(row_id)
         if row is None:
             raise NotFoundError("assignment not found")
         if row.work_task_id:
@@ -185,9 +179,7 @@ class RemoteTaskService:
         return self._to_dict(row)
 
     async def list_events(self, row_id: str) -> list[dict[str, Any]]:
-        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(
-            row_id
-        )
+        row = await self._repo.get_assignment_row(row_id) or await self._repo.get_assignment_by_assignment_id(row_id)
         if row is None:
             raise NotFoundError("assignment not found")
 

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.core.context import RequestContext
 from app.core.deps import get_db_session, get_request_context
-from app.modules.documents.exceptions import DocumentNotFound, DocumentServiceError, PermissionDenied, SnapshotTooLarge, VersionConflict
+from app.modules.documents.exceptions import (
+    DocumentNotFound,
+    DocumentServiceError,
+    PermissionDenied,
+    SnapshotTooLarge,
+    VersionConflict,
+)
 from app.modules.documents.permission import PermissionService
 from app.modules.documents.repository import DocumentRepository
 from app.modules.documents.schemas import (
@@ -23,7 +26,8 @@ from app.modules.documents.schemas import (
 )
 from app.modules.documents.service import DocumentService
 from app.modules.documents.storage import SnapshotStorage
-
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -144,7 +148,9 @@ async def patch_document(
             role = await _svc.get_current_user_role(session, ctx=ctx, document_id=document_id)
             if not _permission.can_edit(role):
                 raise PermissionDenied()
-            await _repo.patch_document(session, document_id=document_id, title=payload.title, status=payload.status, updated_by=ctx.user_id)
+            await _repo.patch_document(
+                session, document_id=document_id, title=payload.title, status=payload.status, updated_by=ctx.user_id
+            )
             doc2 = await _repo.get_document(session, document_id=document_id)
             assert doc2 is not None
             return _to_doc_response(doc2, current_user_permission=role or "edit")
@@ -192,7 +198,9 @@ async def save_snapshot(
 ):
     try:
         async with session.begin():
-            version_no, size_bytes, checksum, saved_at = await _svc.save_snapshot(session, ctx=ctx, document_id=document_id, req=payload)
+            version_no, size_bytes, checksum, saved_at = await _svc.save_snapshot(
+                session, ctx=ctx, document_id=document_id, req=payload
+            )
             return SnapshotSaveResponse(
                 document_id=str(document_id),
                 version_no=version_no,

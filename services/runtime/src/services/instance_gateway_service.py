@@ -60,9 +60,7 @@ class InstanceGatewayService:
         if inst.runtime_version_id:
             ver = await session.get(RuntimeVersion, inst.runtime_version_id)
         if ver is None:
-            result = await session.execute(
-                select(RuntimeVersion).where(RuntimeVersion.status == "active").limit(1)
-            )
+            result = await session.execute(select(RuntimeVersion).where(RuntimeVersion.status == "active").limit(1))
             ver = result.scalar_one_or_none()
         if ver is None or not ver.executable_path:
             raise RuntimeServiceError(
@@ -88,9 +86,7 @@ class InstanceGatewayService:
         if is_default_profile(name):
             # default profile may also use explicit scope aliases used by Secret API
             scope_ids.add("default")
-        result = await session.execute(
-            select(SecretReference).where(SecretReference.scope_id.in_(scope_ids))
-        )
+        result = await session.execute(select(SecretReference).where(SecretReference.scope_id.in_(scope_ids)))
         out: dict[str, str] = {}
         for row in result.scalars().all():
             value = self._secret_store.get(row.storage_key)
@@ -329,9 +325,7 @@ class InstanceGatewayService:
 
     async def start_auto_start_instances(self) -> list[InstanceResponse]:
         async with self._session_maker() as session:
-            result = await session.execute(
-                select(HermesInstance).where(HermesInstance.auto_start.is_(True))
-            )
+            result = await session.execute(select(HermesInstance).where(HermesInstance.auto_start.is_(True)))
             targets = [
                 i
                 for i in result.scalars().all()

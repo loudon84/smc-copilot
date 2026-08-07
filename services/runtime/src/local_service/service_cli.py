@@ -23,9 +23,7 @@ def _require_pywin32() -> None:
     try:
         import win32serviceutil  # noqa: F401
     except ImportError as exc:
-        raise SystemExit(
-            "pywin32 is required for service management. Install with: uv sync --extra service"
-        ) from exc
+        raise SystemExit("pywin32 is required for service management. Install with: uv sync --extra service") from exc
 
 
 def _handle_service_command(command: str) -> None:

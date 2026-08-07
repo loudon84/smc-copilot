@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.modules.documents.models import DocumentPermission
 from app.modules.documents.repository import DocumentRepository
-
+from sqlalchemy.ext.asyncio import AsyncSession
 
 ROLE_ORDER: dict[str, int] = {"view": 1, "edit": 2, "owner": 3}
 

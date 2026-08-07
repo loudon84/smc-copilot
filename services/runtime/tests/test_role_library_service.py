@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
 from db.repositories.profile_repo import ProfileRepository
@@ -50,17 +50,15 @@ async def test_recompile_role_with_local_sources(
     role_lib_session: AsyncSession,
     tmp_path: Path,
 ) -> None:
-    from services.profile_service import ProfileService
-    from schemas.profile import ProfileCreate
     from db.models.role_spec import ProfileRoleSpec
+    from schemas.profile import ProfileCreate
+    from services.profile_service import ProfileService
 
     profile_repo = ProfileRepository(role_lib_session)
     role_spec_repo = RoleSpecRepository(role_lib_session)
     profile_svc = ProfileService(test_settings, profile_repo)
 
-    profile = await profile_svc.create_profile(
-        ProfileCreate(name="writer-9601", type="writer", gateway_port=19602)
-    )
+    profile = await profile_svc.create_profile(ProfileCreate(name="writer-9601", type="writer", gateway_port=19602))
     profile.description = "写作专家"
     await profile_repo.update(profile)
 
@@ -96,15 +94,13 @@ async def test_import_preset_overwrite_calls_stop(
     test_settings: Settings,
     role_lib_session: AsyncSession,
 ) -> None:
-    from services.profile_service import ProfileService
     from schemas.profile import ProfileCreate
+    from services.profile_service import ProfileService
 
     profile_repo = ProfileRepository(role_lib_session)
     role_spec_repo = RoleSpecRepository(role_lib_session)
     profile_svc = ProfileService(test_settings, profile_repo)
-    profile = await profile_svc.create_profile(
-        ProfileCreate(name="writer-9601", type="writer", gateway_port=19603)
-    )
+    profile = await profile_svc.create_profile(ProfileCreate(name="writer-9601", type="writer", gateway_port=19603))
 
     mock_supervisor = MagicMock()
     mock_supervisor.stop_profile = AsyncMock()

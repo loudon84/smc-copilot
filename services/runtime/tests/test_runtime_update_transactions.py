@@ -9,8 +9,8 @@ import pytest
 from sqlalchemy import select
 
 from core.config import Settings
-from core.runtime_errors import RuntimeServiceError
 from core.runtime_enums import InstanceStatus, RuntimeVersionStatus
+from core.runtime_errors import RuntimeServiceError
 from db.models.runtime import HermesInstance, RuntimeJob, RuntimeVersion
 from db.session import create_sessionmaker
 from runtime.cancellation_token import CancellationToken, JobCancelled
@@ -55,7 +55,6 @@ async def test_update_rebinds_instances(app_client) -> None:
         session.add(inst)
         await session.commit()
         instance_id = inst.id
-        old_ver_id = old_ver.id
         new_ver_id = new_ver.id
 
     update = UpdateService(settings, session_maker)

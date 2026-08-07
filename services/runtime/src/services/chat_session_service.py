@@ -13,9 +13,7 @@ class ChatSessionService:
     def __init__(self, profile_repo: ProfileRepository) -> None:
         self._resolver = ProfileRefResolver(profile_repo)
 
-    async def list_messages(
-        self, profile_id: str, session_id: str
-    ) -> WorkspaceChatSessionMessagesResponse:
+    async def list_messages(self, profile_id: str, session_id: str) -> WorkspaceChatSessionMessagesResponse:
         profile = await self._resolver.require_profile(profile_id)
         profile_path = (profile.profile_path or "").strip()
         if not profile_path or not Path(profile_path).exists():

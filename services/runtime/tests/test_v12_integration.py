@@ -1,4 +1,4 @@
-﻿"""v1.2 integration flows (subset of PRD section 16): Hub pull, local task, Hermes run, approval gate, workbench."""
+"""v1.2 integration flows (subset of PRD section 16): Hub pull, local task, Hermes run, approval gate, workbench."""
 
 from __future__ import annotations
 

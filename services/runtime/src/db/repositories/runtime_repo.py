@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +48,7 @@ class RuntimeVersionRepository:
         if row is None:
             return None
         row.status = RuntimeVersionStatus.ACTIVE.value
-        row.activated_at = datetime.now(timezone.utc)
+        row.activated_at = datetime.now(UTC)
         await self._session.flush()
         return row
 
@@ -79,9 +79,7 @@ class RuntimeUpdatePlanRepository:
 
     async def list_active(self) -> list[RuntimeUpdatePlan]:
         result = await self._session.execute(
-            select(RuntimeUpdatePlan).where(
-                RuntimeUpdatePlan.status.in_(("planned", "running"))
-            )
+            select(RuntimeUpdatePlan).where(RuntimeUpdatePlan.status.in_(("planned", "running")))
         )
         return list(result.scalars().all())
 
@@ -99,9 +97,7 @@ class RuntimeJobRepository:
         return await self._session.get(RuntimeJob, job_id)
 
     async def list_jobs(self, *, limit: int = 50) -> list[RuntimeJob]:
-        result = await self._session.execute(
-            select(RuntimeJob).order_by(RuntimeJob.created_at.desc()).limit(limit)
-        )
+        result = await self._session.execute(select(RuntimeJob).order_by(RuntimeJob.created_at.desc()).limit(limit))
         return list(result.scalars().all())
 
     async def find_active_write_job(self) -> RuntimeJob | None:
@@ -110,9 +106,7 @@ class RuntimeJobRepository:
             select(RuntimeJob)
             .where(
                 RuntimeJob.job_type.in_(write_types),
-                RuntimeJob.status.in_(
-                    (RuntimeJobStatus.PENDING.value, RuntimeJobStatus.RUNNING.value)
-                ),
+                RuntimeJob.status.in_((RuntimeJobStatus.PENDING.value, RuntimeJobStatus.RUNNING.value)),
             )
             .order_by(RuntimeJob.created_at.asc())
             .limit(1)
@@ -122,9 +116,7 @@ class RuntimeJobRepository:
     async def list_incomplete(self) -> list[RuntimeJob]:
         result = await self._session.execute(
             select(RuntimeJob).where(
-                RuntimeJob.status.in_(
-                    (RuntimeJobStatus.PENDING.value, RuntimeJobStatus.RUNNING.value)
-                )
+                RuntimeJob.status.in_((RuntimeJobStatus.PENDING.value, RuntimeJobStatus.RUNNING.value))
             )
         )
         return list(result.scalars().all())

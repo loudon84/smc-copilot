@@ -37,6 +37,7 @@ def _apply_deprecation(response: Response) -> None:
     for key, value in LEGACY_CHAT_DEPRECATION_HEADERS.items():
         response.headers[key] = value
 
+
 def _instance_chat_service(session: AsyncSession = Depends(get_db_session)) -> InstanceChatService:
     return InstanceChatService(
         session,
@@ -62,9 +63,7 @@ async def _instance_id_for_profile(session: AsyncSession, profile_id: str) -> st
     )
     inst = result.scalar_one_or_none()
     if inst is None:
-        result = await session.execute(
-            select(HermesInstance).where(HermesInstance.name == profile.name).limit(1)
-        )
+        result = await session.execute(select(HermesInstance).where(HermesInstance.name == profile.name).limit(1))
         inst = result.scalar_one_or_none()
     if inst is None:
         inst = HermesInstance(

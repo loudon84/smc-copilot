@@ -1,6 +1,5 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -86,10 +85,12 @@ def _register_runtime_handlers(job_service: RuntimeJobService, settings, session
 
 def _tick_fn(worker: object) -> Callable[[], Awaitable[None]]:
     if hasattr(worker, "tick"):
+
         async def tick() -> None:
             await worker.tick()  # type: ignore[attr-defined]
 
         return tick
+
     async def tick() -> None:
         await worker._tick()  # type: ignore[attr-defined]
 
@@ -145,9 +146,7 @@ def _build_supervisor(
         ws.register(
             WorkerRegistration(
                 name="EndpointHeartbeatWorker",
-                tick=_tick_fn(
-                    EndpointHeartbeatWorker(settings=settings, session_maker=session_maker, center=center)
-                ),
+                tick=_tick_fn(EndpointHeartbeatWorker(settings=settings, session_maker=session_maker, center=center)),
                 interval_seconds=settings.endpoint_heartbeat_interval_seconds,
                 critical=True,
             )
@@ -155,9 +154,7 @@ def _build_supervisor(
         ws.register(
             WorkerRegistration(
                 name="DeliveryOutboxWorker",
-                tick=_tick_fn(
-                    DeliveryOutboxWorker(settings=settings, session_maker=session_maker, center=center)
-                ),
+                tick=_tick_fn(DeliveryOutboxWorker(settings=settings, session_maker=session_maker, center=center)),
                 interval_seconds=settings.delivery_outbox_interval_seconds,
                 critical=True,
             )
@@ -194,18 +191,14 @@ def _build_supervisor(
         ws.register(
             WorkerRegistration(
                 name="StaffDeckReviewWorker",
-                tick=_tick_fn(
-                    StaffDeckReviewWorker(settings=settings, session_maker=session_maker, center=center)
-                ),
+                tick=_tick_fn(StaffDeckReviewWorker(settings=settings, session_maker=session_maker, center=center)),
                 interval_seconds=settings.sync_poll_interval_seconds,
             )
         )
         ws.register(
             WorkerRegistration(
                 name="ArtifactDeliveryWorker",
-                tick=_tick_fn(
-                    ArtifactDeliveryWorker(settings=settings, session_maker=session_maker, center=center)
-                ),
+                tick=_tick_fn(ArtifactDeliveryWorker(settings=settings, session_maker=session_maker, center=center)),
                 interval_seconds=settings.delivery_outbox_interval_seconds,
             )
         )

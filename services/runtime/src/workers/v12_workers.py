@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import hashlib
@@ -101,11 +101,7 @@ class SyncOutboxWorker:
                     row.status = OutboxStatus.SENT.value
                     await outbox_repo.save(row)
 
-                    if (
-                        row.target_type == "local_task"
-                        and row.event_type == "task_completed"
-                        and row.target_id
-                    ):
+                    if row.target_type == "local_task" and row.event_type == "task_completed" and row.target_id:
                         task = await task_repo.get(row.target_id)
                         if task and task.status == TaskStatus.COMPLETED.value:
                             assert_transition_allowed(task.status, TaskStatus.SYNCED.value)

@@ -51,10 +51,8 @@ class EndpointEnrollmentService:
         cred = await self._repo.get_credential()
         return {
             "enrollmentStatus": enrollment.enrollment_status if enrollment else "unregistered",
-            "endpointId": (cred.endpoint_id if cred else None)
-            or (enrollment.endpoint_id if enrollment else None),
-            "tenantId": (cred.tenant_id if cred else None)
-            or (enrollment.tenant_id if enrollment else None),
+            "endpointId": (cred.endpoint_id if cred else None) or (enrollment.endpoint_id if enrollment else None),
+            "tenantId": (cred.tenant_id if cred else None) or (enrollment.tenant_id if enrollment else None),
             "revokedAt": enrollment.revoked_at.isoformat() if enrollment and enrollment.revoked_at else None,
             "accessTokenExpiresAt": (
                 cred.access_token_expires_at.isoformat() if cred and cred.access_token_expires_at else None

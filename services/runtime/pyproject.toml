@@ -54,6 +54,7 @@ pythonpath = ["src", "tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+exclude = ["_legacy_app"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
@@ -61,3 +62,8 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/conftest.py" = ["E402"]
+"src/local_service/**" = ["E402"]
+"src/integrations/hermes/session_adapter.py" = ["E402"]
+"src/runtime/cancellation_token.py" = ["N818"]
+"src/integrations/service_center/retry_policy.py" = ["UP047"]
+"src/db/models/__init__.py" = ["F401"]

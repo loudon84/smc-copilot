@@ -1,11 +1,11 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from version import __version__
 from api.deps import get_app_settings
 from core.config import Settings
 from schemas.system import SystemInfoResponse
+from version import __version__
 
 router = APIRouter(prefix="/system", tags=["system"])
 

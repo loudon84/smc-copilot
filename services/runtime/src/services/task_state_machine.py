@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from core.enums import TaskStatus
 from core.errors import StateMachineError
@@ -20,7 +20,9 @@ _ALLOWED: dict[str, frozenset[str]] = {
             TaskStatus.CANCELLED.value,
         }
     ),
-    TaskStatus.APPROVED.value: frozenset({TaskStatus.RUNNING.value, TaskStatus.CANCELLED.value, TaskStatus.FAILED.value}),
+    TaskStatus.APPROVED.value: frozenset(
+        {TaskStatus.RUNNING.value, TaskStatus.CANCELLED.value, TaskStatus.FAILED.value}
+    ),
     TaskStatus.RUNNING.value: frozenset(
         {
             TaskStatus.COMPLETED.value,

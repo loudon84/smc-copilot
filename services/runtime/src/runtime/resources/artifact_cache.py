@@ -68,7 +68,8 @@ class ArtifactCache:
         partial = target.with_suffix(target.suffix + ".partial")
 
         if url.startswith("file:"):
-            from urllib.parse import unquote, urlparse as up
+            from urllib.parse import unquote
+            from urllib.parse import urlparse as up
             from urllib.request import url2pathname
 
             parsed = up(url)
@@ -83,9 +84,7 @@ class ArtifactCache:
         else:
             hasher = hashlib.sha256()
             try:
-                async with httpx.AsyncClient(
-                    timeout=self._policy.timeout, follow_redirects=True
-                ) as client:
+                async with httpx.AsyncClient(timeout=self._policy.timeout, follow_redirects=True) as client:
                     async with client.stream("GET", url) as resp:
                         self._policy.validate_redirect_chain(resp)
                         if resp.status_code >= 400:
@@ -158,9 +157,7 @@ class ArtifactDownloader:
     def __init__(self, settings: Settings, cache_dir: Path) -> None:
         self._cache = ArtifactCache(settings, cache_dir)
 
-    async def download(
-        self, url: str, *, expected_sha256: str | None = None, dest: Path | None = None
-    ) -> Path:
+    async def download(self, url: str, *, expected_sha256: str | None = None, dest: Path | None = None) -> Path:
         return await self._cache.download(url, expected_sha256=expected_sha256, dest=dest)
 
     def sha256(self, path: Path) -> str:

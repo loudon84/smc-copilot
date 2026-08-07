@@ -61,9 +61,7 @@ class ExperienceAutoCapture:
         )
 
         existing_fp = (
-            await self._session.execute(
-                select(ExperienceFingerprint).where(ExperienceFingerprint.fingerprint == fp)
-            )
+            await self._session.execute(select(ExperienceFingerprint).where(ExperienceFingerprint.fingerprint == fp))
         ).scalar_one_or_none()
 
         if existing_fp is not None:

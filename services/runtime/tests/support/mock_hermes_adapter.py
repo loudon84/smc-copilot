@@ -42,9 +42,7 @@ class MockHermesRuntimeAdapter:
         yield StreamEvent(event_name="agent.message.delta", data={"delta": f"mock:{instructions[:32]}"})
         yield StreamEvent(event_name="agent.message.completed", data={"streamId": stream_id})
 
-    async def cancel_run(
-        self, profile_id: str, run_id: str | None = None, stream_id: str | None = None
-    ) -> None:
+    async def cancel_run(self, profile_id: str, run_id: str | None = None, stream_id: str | None = None) -> None:
         return None
 
     async def get_session(self, profile_id: str, session_id: str) -> dict[str, Any]:

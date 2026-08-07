@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aiobotocore.session import get_session
-from botocore.exceptions import ClientError
-
 from app.core.config import get_settings
+from botocore.exceptions import ClientError
 
 
 @dataclass(frozen=True)
@@ -21,7 +20,9 @@ class SnapshotStorage:
         except ClientError:
             await client.create_bucket(Bucket=bucket)
 
-    async def put_snapshot(self, *, bucket: str, key: str, payload: bytes, content_type: str = "application/json") -> SnapshotPutResult:
+    async def put_snapshot(
+        self, *, bucket: str, key: str, payload: bytes, content_type: str = "application/json"
+    ) -> SnapshotPutResult:
         settings = get_settings()
         session = get_session()
         async with session.create_client(

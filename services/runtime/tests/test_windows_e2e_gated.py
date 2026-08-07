@@ -37,9 +37,7 @@ def _run_ps1(script: Path, *args: str) -> None:
     ]
     proc = subprocess.run(cmd, cwd=str(REPO_ROOT), capture_output=True, text=True, check=False)
     if proc.returncode != 0:
-        raise AssertionError(
-            f"script failed rc={proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-        )
+        raise AssertionError(f"script failed rc={proc.returncode}\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}")
 
 
 # @lat: [[tests#验收#Gated Windows Hermes E2E]]

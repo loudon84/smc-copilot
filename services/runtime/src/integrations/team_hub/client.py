@@ -1,4 +1,4 @@
-﻿"""Team Task Hub client.
+"""Team Task Hub client.
 
 DEPRECATED: Prefer ``integrations.service_center`` (Work Copilot Service Center) for
 endpoint enrollment, desired-state sync, remote task v2, and experience delivery.

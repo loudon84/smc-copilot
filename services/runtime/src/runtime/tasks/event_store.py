@@ -9,8 +9,8 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.enums import DeliveryOutboxStatus
 from core.config import Settings
+from core.enums import DeliveryOutboxStatus
 from db.models.endpoint_sync import DeliveryOutbox
 from db.models.work_tasks import TaskArtifact, TaskRunEvent
 from db.repositories.endpoint_sync_repo import EndpointSyncRepository

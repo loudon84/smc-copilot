@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,9 +22,7 @@ class BootstrapSessionRepository:
         return await self._session.get(BootstrapSession, session_id)
 
     async def get_by_token_hash(self, token_hash: str) -> BootstrapSession | None:
-        result = await self._session.execute(
-            select(BootstrapSession).where(BootstrapSession.token_hash == token_hash)
-        )
+        result = await self._session.execute(select(BootstrapSession).where(BootstrapSession.token_hash == token_hash))
         return result.scalar_one_or_none()
 
     async def list_active(self) -> list[BootstrapSession]:
@@ -41,7 +39,7 @@ class BootstrapSessionRepository:
         return list(result.scalars().all())
 
     async def mark_completed(self, row: BootstrapSession) -> BootstrapSession:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         row.status = BootstrapSessionStatus.COMPLETED.value
         row.completed_at = now
         await self._session.flush()
@@ -54,7 +52,7 @@ class BootstrapSessionRepository:
 
     async def invalidate_all_active(self) -> int:
         rows = await self.list_active()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for row in rows:
             row.status = BootstrapSessionStatus.INVALIDATED.value
             row.completed_at = now

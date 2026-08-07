@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -12,9 +12,9 @@ from core.config import Settings
 from core.logging import get_logger
 from core.runtime_enums import RuntimeJobStatus, RuntimeJobType
 from core.runtime_errors import RuntimeServiceError, runtime_lock_conflict
-from runtime.cancellation_token import CancellationToken, JobCancelled
 from db.models.runtime import RuntimeJob, RuntimeJobEvent
 from db.repositories.runtime_repo import RuntimeJobRepository
+from runtime.cancellation_token import CancellationToken, JobCancelled
 from schemas.runtime import RuntimeJobAcceptedResponse, RuntimeJobResponse
 
 logger = get_logger(__name__)
@@ -106,7 +106,7 @@ class RuntimeJobService:
                 job.status = RuntimeJobStatus.FAILED.value
                 job.error_code = "runtime_restarted"
                 job.error_message = "Job interrupted by runtime service restart"
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 await repo.add_event(
                     RuntimeJobEvent(
                         job_id=job.id,
@@ -191,7 +191,7 @@ class RuntimeJobService:
                 ):
                     raise RuntimeServiceError("Job already finished", code="invalid_state")
 
-                job.cancellation_requested_at = datetime.now(timezone.utc)
+                job.cancellation_requested_at = datetime.now(UTC)
                 token = self._cancellation_tokens.get(job_id)
                 if token is not None:
                     token.cancel()
@@ -202,7 +202,7 @@ class RuntimeJobService:
 
                 if job.status == RuntimeJobStatus.PENDING.value:
                     job.status = RuntimeJobStatus.CANCELLED.value
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(UTC)
                     await repo.add_event(
                         RuntimeJobEvent(
                             job_id=job.id,
@@ -252,11 +252,15 @@ class RuntimeJobService:
                         "payload": payload,
                         "createdAt": ev.created_at.isoformat() if ev.created_at else None,
                     }
-                if job.status in (
-                    RuntimeJobStatus.SUCCEEDED.value,
-                    RuntimeJobStatus.FAILED.value,
-                    RuntimeJobStatus.CANCELLED.value,
-                ) and not events:
+                if (
+                    job.status
+                    in (
+                        RuntimeJobStatus.SUCCEEDED.value,
+                        RuntimeJobStatus.FAILED.value,
+                        RuntimeJobStatus.CANCELLED.value,
+                    )
+                    and not events
+                ):
                     return
             await asyncio.sleep(poll_interval)
 
@@ -317,7 +321,7 @@ class RuntimeJobService:
                 if job.cancellation_requested_at is not None:
                     token.cancel()
                 job.status = RuntimeJobStatus.RUNNING.value
-                job.started_at = datetime.now(timezone.utc)
+                job.started_at = datetime.now(UTC)
                 job.phase = "running"
                 await session.commit()
 
@@ -362,7 +366,7 @@ class RuntimeJobService:
                         return
                     if job.status == RuntimeJobStatus.CANCELLED.value or token.is_cancelled:
                         job.status = RuntimeJobStatus.CANCELLED.value
-                        job.completed_at = datetime.now(timezone.utc)
+                        job.completed_at = datetime.now(UTC)
                         await repo.add_event(
                             RuntimeJobEvent(
                                 job_id=job.id,
@@ -396,7 +400,7 @@ class RuntimeJobService:
                     job.progress = 1.0
                     job.phase = "completed"
                     job.result_json = json.dumps(result)
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(UTC)
                     await repo.add_event(
                         RuntimeJobEvent(
                             job_id=job.id,
@@ -415,7 +419,7 @@ class RuntimeJobService:
                     job.status = RuntimeJobStatus.CANCELLED.value
                     job.error_code = "cancelled"
                     job.error_message = "Job cancelled"
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(UTC)
                     await repo.add_event(
                         RuntimeJobEvent(
                             job_id=job.id,
@@ -433,7 +437,7 @@ class RuntimeJobService:
                     job.status = RuntimeJobStatus.FAILED.value
                     job.error_code = exc.code
                     job.error_message = exc.message
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(UTC)
                     await repo.add_event(
                         RuntimeJobEvent(
                             job_id=job.id,
@@ -453,7 +457,7 @@ class RuntimeJobService:
                     job.status = RuntimeJobStatus.FAILED.value
                     job.error_code = "internal_error"
                     job.error_message = str(exc)
-                    job.completed_at = datetime.now(timezone.utc)
+                    job.completed_at = datetime.now(UTC)
                     await repo.add_event(
                         RuntimeJobEvent(
                             job_id=job.id,

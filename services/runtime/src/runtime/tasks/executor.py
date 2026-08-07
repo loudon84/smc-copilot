@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -215,9 +214,7 @@ class TaskExecutor:
         await self._tasks.release_locks(task.id)
 
         if not failed and not self._cancellation.is_cancelled(task.id):
-            await self._finalize_assignment(
-                assignment, lease, run_id=run.id, result_summary=instructions[:200]
-            )
+            await self._finalize_assignment(assignment, lease, run_id=run.id, result_summary=instructions[:200])
             task.status = WorkTaskStatus.COMPLETED.value
             task.completed_at = datetime.now(UTC)
         elif task.status == WorkTaskStatus.FAILED.value:
@@ -323,9 +320,7 @@ class TaskExecutor:
         )
         return task
 
-    async def acquire_resource_lock(
-        self, task_id: str, resource_type: str, resource_id: str
-    ) -> bool:
+    async def acquire_resource_lock(self, task_id: str, resource_type: str, resource_id: str) -> bool:
         existing = await self._tasks.get_resource_lock(resource_type, resource_id)
         if existing and existing.task_id != task_id:
             return False

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from httpx import AsyncClient
-
 
 MINIMAL_PRESET = """
 version: team_v1.4

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from core.config import Settings
 from core.constants import GatewayStatus

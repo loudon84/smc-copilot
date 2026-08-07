@@ -41,12 +41,8 @@ def machine_level_smc_root() -> Path | None:
 
 DEFAULT_USER_COPILOT_RUNTIME_DIR = user_level_smc_root() / "CopilotRuntime"
 DEFAULT_USER_HERMES_INSTALL_DIR = user_level_smc_root() / "HermesAgent"
-DEFAULT_MACHINE_COPILOT_RUNTIME_DIR = (
-    machine_level_smc_root() / "CopilotRuntime" if machine_level_smc_root() else None
-)
-DEFAULT_MACHINE_HERMES_INSTALL_DIR = (
-    machine_level_smc_root() / "HermesAgent" if machine_level_smc_root() else None
-)
+DEFAULT_MACHINE_COPILOT_RUNTIME_DIR = machine_level_smc_root() / "CopilotRuntime" if machine_level_smc_root() else None
+DEFAULT_MACHINE_HERMES_INSTALL_DIR = machine_level_smc_root() / "HermesAgent" if machine_level_smc_root() else None
 
 DEFAULT_HERMES_INSTALL_DIR = DEFAULT_USER_HERMES_INSTALL_DIR
 DEFAULT_COPILOT_SERVE_DIR = DEFAULT_USER_COPILOT_RUNTIME_DIR

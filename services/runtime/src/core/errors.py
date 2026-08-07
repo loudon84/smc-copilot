@@ -105,9 +105,7 @@ def attachment_total_size_exceeded(
     message: str = "Attachment total size exceeded",
     **details: object,
 ) -> ChatApiError:
-    return ChatApiError(
-        message, code="ATTACHMENT_TOTAL_SIZE_EXCEEDED", details=dict(details), http_status=400
-    )
+    return ChatApiError(message, code="ATTACHMENT_TOTAL_SIZE_EXCEEDED", details=dict(details), http_status=400)
 
 
 def attachment_not_found(message: str = "Attachment not found", **details: object) -> ChatApiError:

@@ -235,9 +235,7 @@ async def test_backup_create_list(app_client, test_settings: Settings) -> None:
 
 
 @pytest.mark.asyncio
-async def test_install_job_rejects_non_installable_artifact(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_install_job_rejects_non_installable_artifact(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """v1.3.1: non-installable artifact must fail the job (no stub activation)."""
     import json
     import sys

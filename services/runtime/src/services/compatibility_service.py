@@ -51,9 +51,7 @@ class CompatibilityService:
             "warnings": warnings,
         }
 
-    def _config_compatible(
-        self, from_version: str | None, to_version: str, warnings: list[str]
-    ) -> bool:
+    def _config_compatible(self, from_version: str | None, to_version: str, warnings: list[str]) -> bool:
         if not from_version:
             return True
         from_key = _semver_key(from_version)

@@ -152,7 +152,9 @@ class McpService:
             [McpServerRepository.server_to_dict(s) for s in servers],
         )
 
-    def _to_response(self, row: McpServer, *, test: McpTestResult | None = None, secret_configured: bool = False) -> McpServerResponse:
+    def _to_response(
+        self, row: McpServer, *, test: McpTestResult | None = None, secret_configured: bool = False
+    ) -> McpServerResponse:
         return McpServerResponse(
             id=row.id,
             name=row.name,

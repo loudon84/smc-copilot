@@ -7,13 +7,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from core.config import get_settings
 from core.enums import WorkTaskStatus
 from db.models.work_tasks import TaskRun, WorkTask
 from db.repositories.work_task_repo import WorkTaskRepository
 from runtime.tasks.event_store import INLINE_PAYLOAD_MAX_BYTES, TaskEventStore
 from runtime.tasks.executor import TaskExecutor
-from runtime.tasks.registry import get_task_scheduler, reset_task_scheduler, set_test_hermes_adapter
+from runtime.tasks.registry import reset_task_scheduler, set_test_hermes_adapter
 from runtime.tasks.scheduler import TaskExecutionScheduler
 from tests.fakes.service_center import sample_assignment
 from tests.support.mock_hermes_adapter import MockHermesRuntimeAdapter
@@ -46,9 +45,7 @@ async def test_event_sequence_uniqueness(app_client) -> None:
             instructions="hello",
         )
     )
-    run = await repo.add_run(
-        TaskRun(task_id=task.id, run_number=1, status="running")
-    )
+    run = await repo.add_run(TaskRun(task_id=task.id, run_number=1, status="running"))
     store = TaskEventStore(settings, session)
     await store.append(task_id=task.id, run_id=run.id, event_type="task.started", payload={"a": 1})
     await store.append(task_id=task.id, run_id=run.id, event_type="task.progress", payload={"b": 2})
@@ -216,9 +213,7 @@ async def test_large_event_payload_artifact(app_client) -> None:
     session_maker = app.state.session_maker
     session = session_maker()
     repo = WorkTaskRepository(session)
-    task = await repo.add_task(
-        WorkTask(source="test", title="big", task_type="t", status="running", profile_id="p")
-    )
+    task = await repo.add_task(WorkTask(source="test", title="big", task_type="t", status="running", profile_id="p"))
     run = await repo.add_run(TaskRun(task_id=task.id, run_number=1, status="running"))
     store = TaskEventStore(settings, session)
     big = {"data": "x" * INLINE_PAYLOAD_MAX_BYTES}

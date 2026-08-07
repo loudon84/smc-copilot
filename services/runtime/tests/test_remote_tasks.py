@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from fakes.service_center import sample_assignment
 
 

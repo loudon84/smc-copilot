@@ -4,10 +4,9 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
+from app.modules.documents.models import Document, DocumentEvent, DocumentPermission, DocumentVersion
 from sqlalchemy import Select, and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.modules.documents.models import Document, DocumentEvent, DocumentPermission, DocumentVersion
 
 
 class DocumentRepository:
@@ -91,7 +90,12 @@ class DocumentRepository:
         stmt = (
             update(Document)
             .where(Document.id == document_id)
-            .values(current_version_no=current_version_no, current_version_id=current_version_id, updated_by=updated_by, updated_at=datetime.utcnow())
+            .values(
+                current_version_no=current_version_no,
+                current_version_id=current_version_id,
+                updated_by=updated_by,
+                updated_at=datetime.utcnow(),
+            )
         )
         await session.execute(stmt)
 
@@ -161,7 +165,9 @@ class DocumentRepository:
         await session.flush()
         return v
 
-    async def list_versions(self, session: AsyncSession, *, document_id: UUID, page: int, page_size: int) -> tuple[list[DocumentVersion], int]:
+    async def list_versions(
+        self, session: AsyncSession, *, document_id: UUID, page: int, page_size: int
+    ) -> tuple[list[DocumentVersion], int]:
         base = select(DocumentVersion).where(DocumentVersion.document_id == document_id)
         count_stmt = select(func.count()).select_from(base.subquery())
         total = int((await session.execute(count_stmt)).scalar_one())
@@ -175,8 +181,12 @@ class DocumentRepository:
         items = list((await session.execute(stmt)).scalars().all())
         return items, total
 
-    async def get_version_by_no(self, session: AsyncSession, *, document_id: UUID, version_no: int) -> DocumentVersion | None:
-        stmt = select(DocumentVersion).where(DocumentVersion.document_id == document_id, DocumentVersion.version_no == version_no)
+    async def get_version_by_no(
+        self, session: AsyncSession, *, document_id: UUID, version_no: int
+    ) -> DocumentVersion | None:
+        stmt = select(DocumentVersion).where(
+            DocumentVersion.document_id == document_id, DocumentVersion.version_no == version_no
+        )
         return (await session.execute(stmt)).scalar_one_or_none()
 
     async def list_permissions(self, session: AsyncSession, *, document_id: UUID) -> list[DocumentPermission]:
@@ -222,7 +232,9 @@ class DocumentRepository:
         await session.flush()
         return ev
 
-    async def list_events(self, session: AsyncSession, *, document_id: UUID, page: int, page_size: int) -> tuple[list[DocumentEvent], int]:
+    async def list_events(
+        self, session: AsyncSession, *, document_id: UUID, page: int, page_size: int
+    ) -> tuple[list[DocumentEvent], int]:
         base = select(DocumentEvent).where(DocumentEvent.document_id == document_id)
         count_stmt = select(func.count()).select_from(base.subquery())
         total = int((await session.execute(count_stmt)).scalar_one())

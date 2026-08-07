@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import time
@@ -133,9 +133,7 @@ class GatewaySupervisor:
             await session.close()
 
     async def _gateway_client(self, session: AsyncSession, profile: Profile) -> HermesGatewayClient:
-        key = await GatewayCredentialService(self._settings, session).optional_key_for_profile(
-            profile.name
-        )
+        key = await GatewayCredentialService(self._settings, session).optional_key_for_profile(profile.name)
         return HermesGatewayClient(profile.gateway_port, api_key=key)
 
     async def _compute_status(
@@ -208,9 +206,7 @@ class GatewaySupervisor:
             p = await svc2.get_profile(profile_id)
             if p.status in (GatewayStatus.STARTING.value, GatewayStatus.RUNNING.value):
                 p = await svc2.set_status(p, GatewayStatus.ERROR)
-            await self._append_profile_audit(
-                session2, p, "profile_start_failed", extra={"reason": reason}
-            )
+            await self._append_profile_audit(session2, p, "profile_start_failed", extra={"reason": reason})
             await session2.commit()
         finally:
             await session2.close()
@@ -256,9 +252,7 @@ class GatewaySupervisor:
                     pid=handle.pid if handle else None,
                 )
 
-                key = await GatewayCredentialService(self._settings, session).optional_key_for_profile(
-                    profile.name
-                )
+                key = await GatewayCredentialService(self._settings, session).optional_key_for_profile(profile.name)
                 healthy = await self._wait_for_health(profile.gateway_port, api_key=key)
                 if not healthy:
                     profile = await svc.set_status(profile, GatewayStatus.ERROR)
@@ -269,9 +263,7 @@ class GatewaySupervisor:
                         extra={"reason": "health_check_failed"},
                     )
                     await session.commit()
-                    raise GatewayError(
-                        f"Gateway on port {profile.gateway_port} failed health check"
-                    )
+                    raise GatewayError(f"Gateway on port {profile.gateway_port} failed health check")
 
                 await self._append_profile_audit(session, profile, "profile_started")
                 await session.commit()
@@ -346,7 +338,9 @@ class GatewaySupervisor:
         # V1.0: gateway_id == profile_id
         return await self.refresh_status(gateway_id)
 
-    def read_gateway_logs(self, gateway_id: str, *, tail: int = 200, profile_name: str | None = None) -> tuple[list[str], bool]:
+    def read_gateway_logs(
+        self, gateway_id: str, *, tail: int = 200, profile_name: str | None = None
+    ) -> tuple[list[str], bool]:
         lines, truncated = self._process_manager.read_logs(gateway_id, tail=tail)
         if lines:
             return lines, truncated
@@ -363,10 +357,14 @@ class GatewaySupervisor:
         try:
             profiles = await svc.list_profiles()
             for profile in profiles:
-                if profile.status not in (
-                    GatewayStatus.RUNNING.value,
-                    GatewayStatus.STARTING.value,
-                ) and profile.gateway_pid is None:
+                if (
+                    profile.status
+                    not in (
+                        GatewayStatus.RUNNING.value,
+                        GatewayStatus.STARTING.value,
+                    )
+                    and profile.gateway_pid is None
+                ):
                     continue
 
                 await self._process_manager.stop(profile.id, pid=profile.gateway_pid)

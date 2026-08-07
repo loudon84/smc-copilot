@@ -204,9 +204,7 @@ class DesiredStateResource(Base):
 
 class ResourceInstallation(Base):
     __tablename__ = "resource_installations"
-    __table_args__ = (
-        UniqueConstraint("resource_type", "resource_id", name="uq_resource_installation"),
-    )
+    __table_args__ = (UniqueConstraint("resource_type", "resource_id", name="uq_resource_installation"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -293,9 +291,7 @@ class ResourceSnapshot(Base):
 
 class RemoteTaskAssignment(Base):
     __tablename__ = "remote_task_assignments"
-    __table_args__ = (
-        UniqueConstraint("assignment_id", "assignment_version", name="uq_remote_assignment_version"),
-    )
+    __table_args__ = (UniqueConstraint("assignment_id", "assignment_version", name="uq_remote_assignment_version"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     task_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)

@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import Settings
 from core.logging import get_logger
-from core.runtime_enums import InstanceStatus, RuntimeVersionStatus
+from core.runtime_enums import RuntimeVersionStatus
 from core.runtime_errors import RuntimeServiceError
-from db.models.runtime import HermesInstance, RuntimeJob, RuntimeVersion
+from db.models.runtime import HermesInstance, RuntimeJob
 from db.repositories.runtime_repo import RuntimeVersionRepository
 from integrations.hermes.client_factory import HermesGatewayClientFactory
 from runtime.cancellation_token import CancellationToken, JobCancelled
@@ -86,9 +86,7 @@ class UpdateService:
                 progress,
                 cancellation_token=token,
             )
-            new_version_label = str(
-                install_result.get("resolvedVersion") or install_result.get("version") or target
-            )
+            new_version_label = str(install_result.get("resolvedVersion") or install_result.get("version") or target)
 
             async with self._session_maker() as session:
                 repo = RuntimeVersionRepository(session)
@@ -357,11 +355,9 @@ class RollbackService:
             rollout_ids = await self._resolve_rollback_instances(session, mode, instance_ids)
             original_bindings = {
                 inst.id: inst.runtime_version_id
-                for inst in (
-                    await session.execute(
-                        select(HermesInstance).where(HermesInstance.id.in_(rollout_ids))
-                    )
-                ).scalars().all()
+                for inst in (await session.execute(select(HermesInstance).where(HermesInstance.id.in_(rollout_ids))))
+                .scalars()
+                .all()
             }
 
             job.rollback_state_json = json.dumps(
@@ -468,9 +464,10 @@ class DoctorService:
         progress,
         cancellation_token: CancellationToken | None = None,
     ) -> dict[str, Any]:
+        from pathlib import Path
+
         from runtime.environment_probe import EnvironmentProbe
         from runtime.platform_paths import RuntimeLayout
-        from pathlib import Path
 
         await progress("Collecting diagnostics", phase="probe", progress_value=0.2, event_type="job.phase_changed")
         probe = EnvironmentProbe(self._settings).probe()

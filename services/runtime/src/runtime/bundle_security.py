@@ -15,7 +15,7 @@ from typing import Any
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, load_pem_public_key
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 
 class BundleSecurityError(Exception):
@@ -196,7 +196,9 @@ def verify_bundle_artifact(
         verify_sha256(artifact, expected_sha256)
     if signature_b64 and public_key:
         verify_ed25519_signature(
-            payload=artifact.read_bytes() if artifact.stat().st_size < 32 * 1024 * 1024 else sha256_file(artifact).encode(),
+            payload=artifact.read_bytes()
+            if artifact.stat().st_size < 32 * 1024 * 1024
+            else sha256_file(artifact).encode(),
             signature_b64=signature_b64,
             public_key_b64_or_pem=public_key,
         )

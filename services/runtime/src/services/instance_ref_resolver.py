@@ -50,9 +50,7 @@ class InstanceRefResolver:
         if by_id is not None:
             return by_id
 
-        by_name = await self._session.execute(
-            select(HermesInstance).where(HermesInstance.name == ref).limit(1)
-        )
+        by_name = await self._session.execute(select(HermesInstance).where(HermesInstance.name == ref).limit(1))
         inst = by_name.scalar_one_or_none()
         if inst is not None:
             return inst

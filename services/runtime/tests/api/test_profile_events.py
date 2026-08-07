@@ -78,9 +78,7 @@ async def test_profile_events_includes_task_events(
     engine = create_engine(settings)
     session_maker = create_sessionmaker(engine)
     async with session_maker() as session:
-        await TaskEventRepository(session).create(
-            TaskEvent(task_id=task_id, event_type="task_created", message="ok")
-        )
+        await TaskEventRepository(session).create(TaskEvent(task_id=task_id, event_type="task_created", message="ok"))
         await session.commit()
     await engine.dispose()
 

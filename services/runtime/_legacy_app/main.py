@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
-
 from app.modules.documents.router import router as documents_router
+from fastapi import FastAPI
 
 
 def create_app() -> FastAPI:

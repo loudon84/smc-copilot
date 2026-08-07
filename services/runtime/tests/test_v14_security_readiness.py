@@ -25,9 +25,12 @@ def test_archive_rejects_path_traversal(tmp_path: Path):
     dest = tmp_path / "out"
     with pytest.raises(RuntimeServiceError) as exc:
         policy.safe_extract_archive(archive, dest)
-    assert exc.value.code in ("policy_denied", "artifact_extract_failed", "validation_error") or "travers" in str(
-        exc.value
-    ).lower() or "outside" in str(exc.value).lower() or True
+    assert (
+        exc.value.code in ("policy_denied", "artifact_extract_failed", "validation_error")
+        or "travers" in str(exc.value).lower()
+        or "outside" in str(exc.value).lower()
+        or True
+    )
 
 
 # @lat: [[tests#Artifact Security#Signature structure]]
@@ -60,6 +63,7 @@ async def test_backup_excludes_plaintext_env(tmp_path: Path, monkeypatch):
     (tmp_path / "data").mkdir()
 
     session = MagicMock()
+
     # Minimal async session stubs for metadata
     class _Result:
         def scalars(self):

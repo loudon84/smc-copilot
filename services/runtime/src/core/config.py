@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     runtime_manifest_public_keys_json: str = Field(
         default="",
         alias="RUNTIME_MANIFEST_PUBLIC_KEYS_JSON",
-        description='JSON map of keyId -> base64 Ed25519 public key for manifest verification',
+        description="JSON map of keyId -> base64 Ed25519 public key for manifest verification",
     )
     artifact_allowed_domains: str = Field(default="", alias="ARTIFACT_ALLOWED_DOMAINS")
     artifact_max_manifest_bytes: int = Field(default=1_048_576, alias="ARTIFACT_MAX_MANIFEST_BYTES")
@@ -134,27 +134,15 @@ class Settings(BaseSettings):
     service_center_connect_timeout_seconds: float = Field(
         default=10.0, alias="AIOS_SERVICE_CENTER_CONNECT_TIMEOUT_SECONDS"
     )
-    service_center_read_timeout_seconds: float = Field(
-        default=30.0, alias="AIOS_SERVICE_CENTER_READ_TIMEOUT_SECONDS"
-    )
-    service_center_max_response_bytes: int = Field(
-        default=2_000_000, alias="AIOS_SERVICE_CENTER_MAX_RESPONSE_BYTES"
-    )
+    service_center_read_timeout_seconds: float = Field(default=30.0, alias="AIOS_SERVICE_CENTER_READ_TIMEOUT_SECONDS")
+    service_center_max_response_bytes: int = Field(default=2_000_000, alias="AIOS_SERVICE_CENTER_MAX_RESPONSE_BYTES")
     endpoint_max_concurrent_runs: int = Field(default=2, alias="AIOS_ENDPOINT_MAX_CONCURRENT_RUNS")
     instance_max_concurrent_runs: int = Field(default=1, alias="AIOS_INSTANCE_MAX_CONCURRENT_RUNS")
-    task_event_inline_payload_max_bytes: int = Field(
-        default=65536, alias="AIOS_TASK_EVENT_INLINE_PAYLOAD_MAX_BYTES"
-    )
-    artifact_multipart_threshold_bytes: int = Field(
-        default=8_000_000, alias="AIOS_ARTIFACT_MULTIPART_THRESHOLD_BYTES"
-    )
-    endpoint_heartbeat_interval_seconds: float = Field(
-        default=300.0, alias="AIOS_ENDPOINT_HEARTBEAT_INTERVAL_SECONDS"
-    )
+    task_event_inline_payload_max_bytes: int = Field(default=65536, alias="AIOS_TASK_EVENT_INLINE_PAYLOAD_MAX_BYTES")
+    artifact_multipart_threshold_bytes: int = Field(default=8_000_000, alias="AIOS_ARTIFACT_MULTIPART_THRESHOLD_BYTES")
+    endpoint_heartbeat_interval_seconds: float = Field(default=300.0, alias="AIOS_ENDPOINT_HEARTBEAT_INTERVAL_SECONDS")
     sync_poll_interval_seconds: float = Field(default=15.0, alias="AIOS_SYNC_POLL_INTERVAL_SECONDS")
-    delivery_outbox_interval_seconds: float = Field(
-        default=5.0, alias="AIOS_DELIVERY_OUTBOX_INTERVAL_SECONDS"
-    )
+    delivery_outbox_interval_seconds: float = Field(default=5.0, alias="AIOS_DELIVERY_OUTBOX_INTERVAL_SECONDS")
     delivery_outbox_max_retries: int = Field(default=20, alias="AIOS_DELIVERY_OUTBOX_MAX_RETRIES")
     lease_renewal_poll_seconds: float = Field(default=10.0, alias="AIOS_LEASE_RENEWAL_POLL_SECONDS")
 

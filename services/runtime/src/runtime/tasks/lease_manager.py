@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from core.logging import get_logger
 from db.models.endpoint_sync import TaskLease

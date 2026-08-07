@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 
@@ -18,7 +19,13 @@ from runtime.resources._common import (
     restore_snapshot,
     write_resource_meta,
 )
-from runtime.resources.base import ApplyResult, ResourceAdapter, ResourceContext, ResourceDesired, ResourceRollbackSnapshot
+from runtime.resources.base import (
+    ApplyResult,
+    ResourceAdapter,
+    ResourceContext,
+    ResourceDesired,
+    ResourceRollbackSnapshot,
+)
 from services.secret_service import SecretStore
 
 
@@ -37,10 +44,7 @@ class McpResourceAdapter:
             return []
         store = SecretStore(ctx.settings)
         scope = (
-            desired.payload.get("profileName")
-            or desired.payload.get("profile_name")
-            or ctx.profile_name
-            or "default"
+            desired.payload.get("profileName") or desired.payload.get("profile_name") or ctx.profile_name or "default"
         )
         missing: list[str] = []
         for name in required:

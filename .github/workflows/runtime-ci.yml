@@ -34,10 +34,10 @@ jobs:
         run: uv run alembic upgrade head
       - name: Ruff check
         working-directory: services/runtime
-        run: uv run ruff check . || true
+        run: uv run ruff check .
       - name: Ruff format
         working-directory: services/runtime
-        run: uv run ruff format --check . || true
+        run: uv run ruff format --check .
       - name: Pytest
         working-directory: services/runtime
         run: uv run pytest

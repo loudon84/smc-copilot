@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from core.config import Settings, get_settings
@@ -21,7 +21,7 @@ from services.profile_ref_resolver import ProfileRefResolver
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _infer_provider(model_id: str, raw: dict[str, Any]) -> str | None:
@@ -58,9 +58,7 @@ class ChatModelService:
                 status="gateway_not_running",
             )
 
-        client = await self._factory().create_for_profile_name(
-            profile.name, profile.gateway_port, require_key=False
-        )
+        client = await self._factory().create_for_profile_name(profile.name, profile.gateway_port, require_key=False)
         healthy = await client.health_check()
         if not healthy:
             return ChatModelListResponse(
@@ -119,9 +117,7 @@ class ChatModelService:
             updated_at=row.updated_at,
         )
 
-    async def set_model_config(
-        self, profile_id: str, body: SetProfileChatModelConfigPayload
-    ) -> ProfileChatModelConfig:
+    async def set_model_config(self, profile_id: str, body: SetProfileChatModelConfigPayload) -> ProfileChatModelConfig:
         await self._resolver.require_profile(profile_id)
         if not body.model_id.strip():
             raise ChatApiError(
@@ -166,9 +162,7 @@ class ChatModelService:
         profile = await self._resolver.require_profile(profile_id)
         if profile.status != GatewayStatus.RUNNING.value:
             raise gateway_not_running(profile_id=profile_id, state=profile.status)
-        client = await self._factory().create_for_profile_name(
-            profile.name, profile.gateway_port, require_key=False
-        )
+        client = await self._factory().create_for_profile_name(profile.name, profile.gateway_port, require_key=False)
         healthy = await client.health_check()
         if not healthy:
             raise gateway_health_failed(profile_id=profile_id)

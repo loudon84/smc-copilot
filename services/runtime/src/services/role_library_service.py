@@ -9,8 +9,7 @@ from typing import Any
 import yaml
 
 from core.config import Settings
-from core.constants import GatewayStatus, ProfileType
-from db.models.profile import Profile
+from core.constants import ProfileType
 from db.models.role_spec import ProfileRoleSpec
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.role_spec_repo import RoleSpecRepository
@@ -249,12 +248,7 @@ class RoleLibraryService:
             except Exception as exc:
                 errors.append(f"{name}: {exc}")
 
-        ok = (
-            imported > 0
-            and not port_conflicts
-            and not existing_without_overwrite
-            and not errors
-        )
+        ok = imported > 0 and not port_conflicts and not existing_without_overwrite and not errors
         return PresetImportResponse(
             ok=ok,
             imported_count=imported,

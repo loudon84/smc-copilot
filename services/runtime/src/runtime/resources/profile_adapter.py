@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Any
 
 from runtime.resource_bundle import parse_profile_bundle
 from runtime.resources._common import (
-    capture_snapshot,
     copy_staged_to_version,
     default_remove,
     default_stage,
@@ -15,9 +15,14 @@ from runtime.resources._common import (
     read_current_pointer,
     restore_snapshot,
     version_dir,
-    write_resource_meta,
 )
-from runtime.resources.base import ApplyResult, ResourceAdapter, ResourceContext, ResourceDesired, ResourceRollbackSnapshot
+from runtime.resources.base import (
+    ApplyResult,
+    ResourceAdapter,
+    ResourceContext,
+    ResourceDesired,
+    ResourceRollbackSnapshot,
+)
 
 
 class ProfileResourceAdapter:

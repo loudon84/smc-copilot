@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Annotated
 
@@ -16,8 +16,6 @@ from api.deps import (
 from core.config import Settings
 from core.errors import NotFoundError
 from db.repositories.v12_repos import TaskEventRepository
-from services.sse_helpers import stream_sse_headers
-from services.workbench_event_stream import iter_task_timeline_events, resolve_last_event_id
 from schemas.v12_tasks import (
     BindProfileBody,
     LocalTaskCreate,
@@ -25,7 +23,9 @@ from schemas.v12_tasks import (
     TaskEventResponse,
 )
 from services.approval_service import ApprovalService
+from services.sse_helpers import stream_sse_headers
 from services.task_runtime import TaskRuntimeService
+from services.workbench_event_stream import iter_task_timeline_events, resolve_last_event_id
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 

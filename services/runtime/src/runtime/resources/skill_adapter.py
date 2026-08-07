@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from runtime.resources._common import (
     copy_staged_to_version,
@@ -13,7 +14,13 @@ from runtime.resources._common import (
     restore_snapshot,
     version_dir,
 )
-from runtime.resources.base import ApplyResult, ResourceAdapter, ResourceContext, ResourceDesired, ResourceRollbackSnapshot
+from runtime.resources.base import (
+    ApplyResult,
+    ResourceAdapter,
+    ResourceContext,
+    ResourceDesired,
+    ResourceRollbackSnapshot,
+)
 
 
 class SkillResourceAdapter:
@@ -26,9 +33,7 @@ class SkillResourceAdapter:
     async def stage(self, ctx: ResourceContext, desired: ResourceDesired) -> Path:
         return await default_stage(ctx, desired)
 
-    async def _run_skill_cli(
-        self, ctx: ResourceContext, desired: ResourceDesired, subcmd: str
-    ) -> tuple[bool, str]:
+    async def _run_skill_cli(self, ctx: ResourceContext, desired: ResourceDesired, subcmd: str) -> tuple[bool, str]:
         skill_id = desired.resource_id
         cmd_label = f"hermes skills {subcmd} {skill_id}"
         if ctx.hermes_cli is None:

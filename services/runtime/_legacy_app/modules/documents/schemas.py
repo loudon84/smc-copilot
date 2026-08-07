@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 DocumentType = Literal["spreadsheet"]
 DocumentEngine = Literal["univer"]
 DocumentStatus = Literal["draft", "active", "archived", "deleted"]

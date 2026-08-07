@@ -53,9 +53,7 @@ class WorkTaskRepository:
         return row
 
     async def list_tasks_by_statuses(self, statuses: list[str], limit: int = 100) -> list[WorkTask]:
-        result = await self._s.execute(
-            select(WorkTask).where(WorkTask.status.in_(statuses)).limit(limit)
-        )
+        result = await self._s.execute(select(WorkTask).where(WorkTask.status.in_(statuses)).limit(limit))
         return list(result.scalars().all())
 
     async def add_run(self, row: TaskRun) -> TaskRun:
@@ -68,9 +66,7 @@ class WorkTaskRepository:
         return await self._s.get(TaskRun, run_id)
 
     async def list_runs(self, task_id: str) -> list[TaskRun]:
-        result = await self._s.execute(
-            select(TaskRun).where(TaskRun.task_id == task_id).order_by(TaskRun.run_number)
-        )
+        result = await self._s.execute(select(TaskRun).where(TaskRun.task_id == task_id).order_by(TaskRun.run_number))
         return list(result.scalars().all())
 
     async def save_run(self, row: TaskRun) -> TaskRun:
@@ -80,9 +76,7 @@ class WorkTaskRepository:
 
     async def count_active_runs_endpoint(self) -> int:
         active = ("starting", "running", "waiting_approval", "finalizing")
-        result = await self._s.execute(
-            select(func.count()).select_from(TaskRun).where(TaskRun.status.in_(active))
-        )
+        result = await self._s.execute(select(func.count()).select_from(TaskRun).where(TaskRun.status.in_(active)))
         return int(result.scalar_one())
 
     async def count_active_runs_instance(self, instance_id: str) -> int:
@@ -95,9 +89,7 @@ class WorkTaskRepository:
         return int(result.scalar_one())
 
     async def next_event_sequence(self, run_id: str) -> int:
-        result = await self._s.execute(
-            select(func.max(TaskRunEvent.sequence)).where(TaskRunEvent.run_id == run_id)
-        )
+        result = await self._s.execute(select(func.max(TaskRunEvent.sequence)).where(TaskRunEvent.run_id == run_id))
         current = result.scalar_one_or_none()
         return int(current or 0) + 1
 
@@ -114,8 +106,10 @@ class WorkTaskRepository:
         after_sequence: int | None = None,
         limit: int = 500,
     ) -> list[TaskRunEvent]:
-        stmt = select(TaskRunEvent).where(TaskRunEvent.task_id == task_id).order_by(
-            TaskRunEvent.created_at, TaskRunEvent.sequence
+        stmt = (
+            select(TaskRunEvent)
+            .where(TaskRunEvent.task_id == task_id)
+            .order_by(TaskRunEvent.created_at, TaskRunEvent.sequence)
         )
         if after_sequence is not None:
             stmt = stmt.where(TaskRunEvent.sequence > after_sequence)
@@ -163,9 +157,7 @@ class WorkTaskRepository:
 
     async def release_locks(self, task_id: str) -> None:
         result = await self._s.execute(
-            select(TaskResourceLock).where(
-                TaskResourceLock.task_id == task_id, TaskResourceLock.status == "held"
-            )
+            select(TaskResourceLock).where(TaskResourceLock.task_id == task_id, TaskResourceLock.status == "held")
         )
         now = datetime.now()
         for lock in result.scalars().all():
@@ -184,7 +176,5 @@ class WorkTaskRepository:
         return result.scalar_one_or_none()
 
     async def list_runs_by_statuses(self, statuses: list[str], limit: int = 100) -> list[TaskRun]:
-        result = await self._s.execute(
-            select(TaskRun).where(TaskRun.status.in_(statuses)).limit(limit)
-        )
+        result = await self._s.execute(select(TaskRun).where(TaskRun.status.in_(statuses)).limit(limit))
         return list(result.scalars().all())

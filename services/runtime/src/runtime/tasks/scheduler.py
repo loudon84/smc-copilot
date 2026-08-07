@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import heapq
 from dataclasses import dataclass, field
-from typing import Any
 
 from core.logging import get_logger
 

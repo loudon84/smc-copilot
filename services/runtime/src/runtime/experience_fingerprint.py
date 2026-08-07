@@ -6,7 +6,6 @@ import hashlib
 import json
 from typing import Any
 
-
 AUTO_EVIDENCE_EVENTS = frozenset(
     {
         "task.completed",

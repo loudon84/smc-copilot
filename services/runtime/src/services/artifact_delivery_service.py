@@ -17,7 +17,7 @@ from integrations.service_center.artifact_client import StubArtifactUploadClient
 from integrations.service_center.protocol import ServiceCenterClient
 from runtime.artifacts.multipart_upload import FileMultipartStore, MultipartUploader
 from runtime.artifacts.spool import ArtifactSpool, ArtifactSpoolState
-from runtime.artifacts.streaming_hash import iter_file_chunks, hash_file_streaming
+from runtime.artifacts.streaming_hash import hash_file_streaming, iter_file_chunks
 
 logger = get_logger(__name__)
 
@@ -97,7 +97,9 @@ class ArtifactDeliveryService:
                 await self._upload_entry(entry.id, assignment_id=entry.assignment_id, content_type=entry.content_type)
                 count += 1
             except Exception as exc:
-                self._spool.transition(entry.id, ArtifactSpoolState.FAILED, error_code=getattr(exc, "code", "upload_failed"))
+                self._spool.transition(
+                    entry.id, ArtifactSpoolState.FAILED, error_code=getattr(exc, "code", "upload_failed")
+                )
                 logger.exception("artifact_upload_failed", entry_id=entry.id)
         return count
 
