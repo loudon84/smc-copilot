@@ -25,7 +25,7 @@ if (-not $SkipProgramsCheck) {
     $repoFull = [System.IO.Path]::GetFullPath($RepoRoot)
     $rootFull = [System.IO.Path]::GetFullPath($ProgramsRoot)
     if (-not $repoFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "RepoRoot 必须位于 $ProgramsRoot 下（当前: $repoFull）。请将 copilot-serve clone 到 D:\Programs\copilot-serve"
+        throw "RuntimeRoot 必须位于允许的程序目录下（当前: $repoFull）。Monorepo 开发态路径允许：D:\Programs\smc-copilot\services\runtime"
     }
 }
 

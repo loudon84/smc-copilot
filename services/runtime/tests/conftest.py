@@ -8,6 +8,13 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+# Legacy tests import removed `app.modules.*` package paths (pre-flat src layout).
+collect_ignore = [
+    "test_permission_service.py",
+    "test_snapshot_save_schema.py",
+    "test_version_conflict.py",
+]
+
 from app import create_app
 from core.config import Settings, get_settings
 from core.lifecycle import lifespan

@@ -1,5 +1,5 @@
 # Single-repo Windows bootstrap: venv, deps, .env, migrate
-# 约定：RepoRoot 应在 D:\Programs 下（如 D:\Programs\copilot-serve），.venv 随之落在 Programs 内。
+# 约定：RuntimeRoot 须在允许的程序目录下；Monorepo 开发态允许 D:\Programs\smc-copilot\services\runtime。
 param(
     [string]$RepoRoot = $PSScriptRoot + "\..",
     [string]$PythonPath = "",
@@ -16,7 +16,7 @@ if (-not $SkipProgramsCheck) {
     $repoFull = [System.IO.Path]::GetFullPath($RepoRoot)
     $rootFull = [System.IO.Path]::GetFullPath($ProgramsRoot)
     if (-not $repoFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "RepoRoot 必须位于 $ProgramsRoot 下（当前: $repoFull）。请 clone 到 D:\Programs\copilot-serve"
+        throw "RuntimeRoot 必须位于允许的程序目录下（当前: $repoFull）。Monorepo 开发态路径允许：D:\Programs\smc-copilot\services\runtime"
     }
 }
 
