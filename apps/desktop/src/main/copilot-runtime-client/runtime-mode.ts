@@ -1,12 +1,21 @@
 /**
  * Desktop runtime process policy (PRD §6.1 / §26).
  * Production must never spawn/stop Serve; only probe and Repair.
+ *
+ * Product / API versions come from generated build-info (PRD v1.1 §12.1).
  */
+
+import {
+  DESKTOP_VERSION,
+  RUNTIME_API_VERSION,
+} from "../../shared/generated/build-info";
 
 export type CopilotRuntimeMode = "development" | "portable_dev" | "e2e" | "production";
 
-export const DESKTOP_VERSION = "9.0.0";
-export const DESKTOP_RUNTIME_API_VERSION = "1.3";
+export { DESKTOP_VERSION };
+/** @deprecated Prefer RUNTIME_API_VERSION from build-info; kept for existing imports. */
+export const DESKTOP_RUNTIME_API_VERSION = RUNTIME_API_VERSION;
+export { RUNTIME_API_VERSION };
 export const DEFAULT_SERVE_PORT = 8765;
 export const DEFAULT_SERVE_BASE_URL = `http://127.0.0.1:${DEFAULT_SERVE_PORT}`;
 

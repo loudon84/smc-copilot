@@ -1,5 +1,10 @@
 import type { RuntimeCapabilitiesView } from "../../shared/copilot-runtime/runtime-capability-contract";
-import { REQUIRED_RUNTIME_FEATURES } from "../../shared/copilot-runtime/runtime-capability-contract";
+import {
+  REQUIRED_CHAT_FEATURES,
+  REQUIRED_CORE_FEATURES,
+  REQUIRED_MCP_FEATURES,
+  REQUIRED_TASK_FEATURES,
+} from "../../shared/copilot-runtime/runtime-capability-contract";
 import { createDesktopRuntimeError } from "./runtime-error-mapper";
 import type { DesktopRuntimeError } from "../../shared/copilot-runtime/runtime-error-contract";
 
@@ -43,6 +48,33 @@ export function assertFeature(featureId: string): void {
   }
 }
 
+function missingFeatures(required: readonly string[]): string[] {
+  return required.filter((f) => !hasFeature(f));
+}
+
+export function assertModuleFeatures(
+  moduleName: "core" | "chat" | "task" | "mcp",
+  required: readonly string[],
+): DesktopRuntimeError | null {
+  if (!cachedCapabilities) {
+    return createDesktopRuntimeError(
+      "RUNTIME_UNAVAILABLE",
+      `Runtime capabilities not loaded for ${moduleName}`,
+      { retryable: true },
+    );
+  }
+  const missing = missingFeatures(required);
+  if (missing.length > 0) {
+    return createDesktopRuntimeError(
+      "RUNTIME_INCOMPATIBLE",
+      `Runtime missing required ${moduleName} features: ${missing.join(", ")}`,
+      { details: { module: moduleName, missing } },
+    );
+  }
+  return null;
+}
+
+/** Hard gate for Chat / Task / MCP writes when Runtime claims Ready. */
 export function assertReadyForWrites(ready: boolean): DesktopRuntimeError | null {
   if (!ready) {
     return createDesktopRuntimeError(
@@ -51,15 +83,23 @@ export function assertReadyForWrites(ready: boolean): DesktopRuntimeError | null
       { retryable: true },
     );
   }
-  const missing = REQUIRED_RUNTIME_FEATURES.filter((f) => !hasFeature(f));
-  // Soft check: Serve may expose features under different names; only hard-fail when
-  // capabilities were loaded and explicitly empty.
-  if (cachedCapabilities && cachedCapabilities.featureIds.length === 0) {
-    return createDesktopRuntimeError(
-      "RUNTIME_INCOMPATIBLE",
-      "Runtime capabilities empty",
-      { details: { missing: [...missing] } },
-    );
-  }
-  return null;
+  return assertModuleFeatures("core", REQUIRED_CORE_FEATURES);
+}
+
+export function assertReadyForChat(ready: boolean): DesktopRuntimeError | null {
+  const core = assertReadyForWrites(ready);
+  if (core) return core;
+  return assertModuleFeatures("chat", REQUIRED_CHAT_FEATURES);
+}
+
+export function assertReadyForTask(ready: boolean): DesktopRuntimeError | null {
+  const core = assertReadyForWrites(ready);
+  if (core) return core;
+  return assertModuleFeatures("task", REQUIRED_TASK_FEATURES);
+}
+
+export function assertReadyForMcp(ready: boolean): DesktopRuntimeError | null {
+  const core = assertReadyForWrites(ready);
+  if (core) return core;
+  return assertModuleFeatures("mcp", REQUIRED_MCP_FEATURES);
 }

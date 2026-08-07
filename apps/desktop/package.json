@@ -19,6 +19,8 @@
     "check:no-hermes-home-access": "node scripts/check-no-hermes-home-access.mjs",
     "check:no-hermes-cli": "node scripts/check-no-hermes-cli.mjs",
     "check:no-legacy-profile-chat": "node scripts/check-no-legacy-profile-chat.mjs",
+    "prebuild": "node ../../tools/release/generate-build-info.mjs",
+    "pretypecheck": "node ../../tools/release/generate-build-info.mjs",
     "guard": "npm run check:workspaces-no-tailwind && npm run check:no-reference-imports && npm run check:no-renderer-runtime-http && npm run check:no-direct-hermes && npm run check:no-hermes-home-access && npm run check:no-hermes-cli && npm run check:no-legacy-profile-chat && npm run check:chat-boundaries && npm run typecheck:chat",
     "typecheck:chat": "tsc --noEmit -p tsconfig.chat.json --composite false",
     "chat:inventory": "node scripts/chat-migration/inventory.mjs",

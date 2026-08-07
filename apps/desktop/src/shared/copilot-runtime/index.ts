@@ -36,7 +36,13 @@ export type {
   RuntimeDiagnosticsSummary,
   RequiredRuntimeFeature,
 } from "./runtime-capability-contract";
-export { REQUIRED_RUNTIME_FEATURES } from "./runtime-capability-contract";
+export {
+  REQUIRED_RUNTIME_FEATURES,
+  REQUIRED_CORE_FEATURES,
+  REQUIRED_CHAT_FEATURES,
+  REQUIRED_TASK_FEATURES,
+  REQUIRED_MCP_FEATURES,
+} from "./runtime-capability-contract";
 
 export type {
   ServeInstanceStatus,

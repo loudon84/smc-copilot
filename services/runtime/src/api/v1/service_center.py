@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from api.deps import get_app_settings
+from core.capabilities import RUNTIME_API_VERSION
 from core.config import Settings
 from core.deployment_mode import parse_deployment_mode
 from integrations.service_center.circuit_breaker import CircuitState
@@ -20,7 +21,7 @@ async def runtime_mode(settings: Settings = Depends(get_app_settings)) -> dict:
         "deploymentMode": mode.value,
         "serviceCenterUseStub": settings.service_center_use_stub,
         "serviceCenterConfigured": bool((settings.service_center_base_url or "").strip()),
-        "apiVersion": "1.3",
+        "apiVersion": RUNTIME_API_VERSION,
     }
 
 

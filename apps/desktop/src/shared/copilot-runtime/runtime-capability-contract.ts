@@ -1,4 +1,4 @@
-/** Capability / compatibility view models for Serve Runtime handshake. */
+/** Capability / compatibility view models for Serve Runtime handshake (PRD v1.1 §13). */
 
 export interface RuntimeCapabilityFeature {
   id: string;
@@ -24,11 +24,25 @@ export interface RuntimeDiagnosticsSummary {
   details: Record<string, unknown> | null;
 }
 
-/** Features Desktop requires before Ready for Chat/Task/MCP writes. */
-export const REQUIRED_RUNTIME_FEATURES = [
-  "instances",
-  "pairings",
-  "runtime",
+/** Core features required before Ready (pairing / multi-instance control plane). */
+export const REQUIRED_CORE_FEATURES = [
+  "pairing.device",
+  "instances.multiple",
 ] as const;
 
-export type RequiredRuntimeFeature = (typeof REQUIRED_RUNTIME_FEATURES)[number];
+/** Chat module write path (enforced when Serve Chat transport is active). */
+export const REQUIRED_CHAT_FEATURES = ["chat.runtime.v2"] as const;
+
+/** Task module write path. */
+export const REQUIRED_TASK_FEATURES = [
+  "tasks.local-control-plane",
+  "tasks.event-store",
+] as const;
+
+/** MCP module write path. */
+export const REQUIRED_MCP_FEATURES = ["mcp.crud"] as const;
+
+/** @deprecated Use REQUIRED_CORE_FEATURES */
+export const REQUIRED_RUNTIME_FEATURES = REQUIRED_CORE_FEATURES;
+
+export type RequiredRuntimeFeature = (typeof REQUIRED_CORE_FEATURES)[number];

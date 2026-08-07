@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.capabilities import RUNTIME_API_VERSION, RuntimeFeatureId
+
 
 class RuntimeStatusResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -17,7 +19,7 @@ class RuntimeStatusResponse(BaseModel):
     active_hermes_version: str | None = Field(default=None, alias="activeHermesVersion")
     platform: str
     architecture: str
-    features: list[str]
+    features: list[RuntimeFeatureId]
     data_dir: str = Field(alias="dataDir")
     hermes_home: str = Field(alias="hermesHome")
 
@@ -25,8 +27,8 @@ class RuntimeStatusResponse(BaseModel):
 class RuntimeCapabilitiesResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    api_version: str = Field(alias="apiVersion")
-    features: list[str]
+    api_version: str = Field(default=RUNTIME_API_VERSION, alias="apiVersion")
+    features: list[RuntimeFeatureId]
 
 
 class RuntimeCompatibilityResponse(BaseModel):
