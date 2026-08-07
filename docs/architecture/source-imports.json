@@ -1,0 +1,12 @@
+﻿{
+  "desktop": {
+    "repository": "https://github.com/loudon84/ai-os-desktop.git",
+    "branch": "main",
+    "commit": "5bd9e02124820754fe97fc4de877086531bc730f"
+  },
+  "runtime": {
+    "repository": "https://github.com/loudon84/ai-os-serve.git",
+    "branch": "master",
+    "commit": "e95b1a9566b3a05b665004d9f1e4d08ddab5fbf7"
+  }
+}
