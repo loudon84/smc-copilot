@@ -98,8 +98,9 @@ export async function resolveProfileRef(ref: string): Promise<ResolvedProfile> {
   return {
     profile_id: instanceId,
     name,
-    matched_by: resolved.matchedBy,
-  } as ResolvedProfile;
+    status: "stopped",
+    healthy: false,
+  };
 }
 
 export async function resolveInstanceId(profileOrInstanceRef: string): Promise<string> {
