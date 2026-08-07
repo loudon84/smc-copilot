@@ -82,3 +82,93 @@ class ChatQueuePatchBody(BaseModel):
 
     status: str | None = None
     payload: dict[str, Any] | None = None
+
+
+class ChatRunResponse(BaseModel):
+    """GET /chat-runs/{runId} response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    run_id: str = Field(alias="runId")
+    id: str | None = None
+    client_run_id: str = Field(alias="clientRunId")
+    instance_id: str = Field(alias="instanceId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    status: str
+    event_cursor: int = Field(default=0, alias="eventCursor")
+    created_at: str | None = Field(default=None, alias="createdAt")
+    updated_at: str | None = Field(default=None, alias="updatedAt")
+    completed_at: str | None = Field(default=None, alias="completedAt")
+
+
+class ChatEventResponse(BaseModel):
+    """Single durable chat-run event as returned by list/snapshot APIs."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    event_id: str = Field(alias="eventId")
+    id: str | None = None
+    sequence: int
+    run_id: str = Field(alias="runId")
+    turn_id: str = Field(default="", alias="turnId")
+    type: str
+    event_type: str | None = Field(default=None, alias="eventType")
+    timestamp: str | None = None
+    created_at: str | None = Field(default=None, alias="createdAt")
+    instance_id: str | None = Field(default=None, alias="instanceId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatQueueEntryResponse(BaseModel):
+    """Queue entry as returned by queue CRUD APIs."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    queue_id: str = Field(alias="queueId")
+    id: str | None = None
+    run_id: str = Field(alias="runId")
+    status: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: str | None = Field(default=None, alias="createdAt")
+    updated_at: str | None = Field(default=None, alias="updatedAt")
+    ok: bool | None = None
+
+
+class ChatSnapshotResponse(BaseModel):
+    """GET /chat-runs/{runId}/snapshot response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    run_id: str = Field(alias="runId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    status: str
+    event_cursor: int = Field(default=0, alias="eventCursor")
+    events: list[ChatEventResponse] = Field(default_factory=list)
+    queue: list[ChatQueueEntryResponse] = Field(default_factory=list)
+
+
+class ChatAbortResponse(BaseModel):
+    """POST /chat-runs/{runId}/abort response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    ok: bool = True
+    run_id: str = Field(alias="runId")
+    status: str
+    cancelled_turns: list[str] = Field(default_factory=list, alias="cancelledTurns")
+
+
+class ChatInteractionResponse(BaseModel):
+    """POST /chat-runs/{runId}/interactions/{requestId}/respond response."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    accepted: bool = True
+    request_id: str = Field(alias="requestId")
+    status: str
+    already_resolved: bool | None = Field(default=None, alias="alreadyResolved")
+    turn_id: str | None = Field(default=None, alias="turnId")
+    interaction_type: str | None = Field(default=None, alias="interactionType")
+    response: dict[str, Any] | None = None

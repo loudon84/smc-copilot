@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.errors import NotFoundError
 from db.models.chat_runtime import ChatEvent, ChatRun
 from db.repositories.chat_run_repo import ChatRunRepository
+from schemas.chat_events import validate_chat_run_event_type
 from services.sse_helpers import format_ping, format_sse
 
 POLL_INTERVAL_SEC = 0.5
@@ -58,6 +59,7 @@ class ChatEventService:
         payload: dict[str, Any] | None = None,
         turn_id: str | None = None,
     ) -> ChatEvent:
+        validate_chat_run_event_type(event_type)
         sequence = await self._repo.next_event_sequence(run.id)
         row = ChatEvent(
             run_id=run.id,

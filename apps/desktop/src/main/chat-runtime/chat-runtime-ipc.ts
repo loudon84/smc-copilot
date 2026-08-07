@@ -42,6 +42,12 @@ import {
 } from "./chat-event-replay-service";
 import { registerChatQueueIpc } from "./chat-queue-service";
 import { ServeChatRuntimeAdapter } from "../runtime-adapters/ServeChatRuntimeAdapter";
+import { getRuntimeConnectionState } from "../copilot-runtime-client/runtime-connection-manager";
+import {
+  assertReadyForChat,
+  getCachedCapabilities,
+  hasFeature,
+} from "../copilot-runtime-client/runtime-capability-manager";
 import type { HermesChatSendPayload } from "../../shared/hermes-default-chat/hermes-default-chat-contract";
 import {
   isRemoteMode,
@@ -256,8 +262,32 @@ async function beginChatTurn(
     return { ok: false, code: ChatRuntimeErrorCode.INVALID_INPUT, error: invalid };
   }
 
-  // Phase 3: Serve Chat Runtime transport (fail-closed when preferred but not Ready).
+  // Phase 3 / v1.2 Phase 5: Serve Chat Runtime transport + capability gate.
   if (ServeChatRuntimeAdapter.preferred()) {
+    const ready = getRuntimeConnectionState().ready;
+    const gate = assertReadyForChat(ready);
+    if (gate) {
+      return {
+        ok: false,
+        code: ChatRuntimeErrorCode.RUNTIME_UNAVAILABLE,
+        error: gate.message,
+      };
+    }
+    // Prefer finer gate when Runtime advertises subdivided chat.runtime.v2.* features.
+    const caps = getCachedCapabilities();
+    if (
+      caps &&
+      caps.featureIds.some(
+        (id) => id.startsWith("chat.runtime.v2.") && id !== "chat.runtime.v2",
+      ) &&
+      !hasFeature("chat.runtime.v2.real-execution")
+    ) {
+      return {
+        ok: false,
+        code: ChatRuntimeErrorCode.RUNTIME_UNAVAILABLE,
+        error: "Runtime missing required chat feature: chat.runtime.v2.real-execution",
+      };
+    }
     return ServeChatRuntimeAdapter.startTurn(input, event.sender);
   }
 

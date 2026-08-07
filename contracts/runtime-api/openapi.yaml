@@ -237,6 +237,29 @@ components:
       - status
       title: BootstrapJobResponse
       type: object
+    ChatAbortResponse:
+      description: POST /chat-runs/{runId}/abort response.
+      properties:
+        cancelledTurns:
+          items:
+            type: string
+          title: Cancelledturns
+          type: array
+        ok:
+          default: true
+          title: Ok
+          type: boolean
+        runId:
+          title: Runid
+          type: string
+        status:
+          title: Status
+          type: string
+      required:
+      - runId
+      - status
+      title: ChatAbortResponse
+      type: object
     ChatAcceptedResult:
       properties:
         accepted:
@@ -257,6 +280,32 @@ components:
       required:
       - runId
       title: ChatAcceptedResult
+      type: object
+    ChatApprovalRespondBody:
+      properties:
+        decision:
+          enum:
+          - approved
+          - denied
+          title: Decision
+          type: string
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        turnId:
+          title: Turnid
+          type: string
+        type:
+          const: approval
+          default: approval
+          title: Type
+          type: string
+      required:
+      - turnId
+      - decision
+      title: ChatApprovalRespondBody
       type: object
     ChatAttachmentResponse:
       properties:
@@ -303,6 +352,24 @@ components:
       - sha256
       - workspace_relative_path
       title: ChatAttachmentResponse
+      type: object
+    ChatClarifyRespondBody:
+      properties:
+        answer:
+          title: Answer
+          type: string
+        turnId:
+          title: Turnid
+          type: string
+        type:
+          const: clarify
+          default: clarify
+          title: Type
+          type: string
+      required:
+      - turnId
+      - answer
+      title: ChatClarifyRespondBody
       type: object
     ChatCreateRunBody:
       properties:
@@ -377,6 +444,106 @@ components:
       - clientTurnId
       - message
       title: ChatCreateTurnBody
+      type: object
+    ChatEventResponse:
+      description: Single durable chat-run event as returned by list/snapshot APIs.
+      properties:
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        eventId:
+          title: Eventid
+          type: string
+        eventType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Eventtype
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        instanceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instanceid
+        payload:
+          additionalProperties: true
+          title: Payload
+          type: object
+        runId:
+          title: Runid
+          type: string
+        sequence:
+          title: Sequence
+          type: integer
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+        timestamp:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Timestamp
+        turnId:
+          default: ''
+          title: Turnid
+          type: string
+        type:
+          title: Type
+          type: string
+      required:
+      - eventId
+      - sequence
+      - runId
+      - type
+      title: ChatEventResponse
+      type: object
+    ChatInteractionResponse:
+      additionalProperties: true
+      description: POST /chat-runs/{runId}/interactions/{requestId}/respond response.
+      properties:
+        accepted:
+          default: true
+          title: Accepted
+          type: boolean
+        alreadyResolved:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Alreadyresolved
+        interactionType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Interactiontype
+        requestId:
+          title: Requestid
+          type: string
+        response:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Response
+        status:
+          title: Status
+          type: string
+        turnId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Turnid
+      required:
+      - requestId
+      - status
+      title: ChatInteractionResponse
       type: object
     ChatModel:
       properties:
@@ -455,6 +622,48 @@ components:
           title: Status
       title: ChatQueueCreateBody
       type: object
+    ChatQueueEntryResponse:
+      description: Queue entry as returned by queue CRUD APIs.
+      properties:
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        ok:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Ok
+        payload:
+          additionalProperties: true
+          title: Payload
+          type: object
+        queueId:
+          title: Queueid
+          type: string
+        runId:
+          title: Runid
+          type: string
+        status:
+          title: Status
+          type: string
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      required:
+      - queueId
+      - runId
+      - status
+      title: ChatQueueEntryResponse
+      type: object
     ChatQueuePatchBody:
       additionalProperties: true
       properties:
@@ -470,6 +679,95 @@ components:
           - type: 'null'
           title: Status
       title: ChatQueuePatchBody
+      type: object
+    ChatRunResponse:
+      description: GET /chat-runs/{runId} response.
+      properties:
+        clientRunId:
+          title: Clientrunid
+          type: string
+        completedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Completedat
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        eventCursor:
+          default: 0
+          title: Eventcursor
+          type: integer
+        id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Id
+        instanceId:
+          title: Instanceid
+          type: string
+        runId:
+          title: Runid
+          type: string
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+        status:
+          title: Status
+          type: string
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+      required:
+      - runId
+      - clientRunId
+      - instanceId
+      - status
+      title: ChatRunResponse
+      type: object
+    ChatSnapshotResponse:
+      description: GET /chat-runs/{runId}/snapshot response.
+      properties:
+        eventCursor:
+          default: 0
+          title: Eventcursor
+          type: integer
+        events:
+          items:
+            $ref: '#/components/schemas/ChatEventResponse'
+          title: Events
+          type: array
+        queue:
+          items:
+            $ref: '#/components/schemas/ChatQueueEntryResponse'
+          title: Queue
+          type: array
+        runId:
+          title: Runid
+          type: string
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+        status:
+          title: Status
+          type: string
+      required:
+      - runId
+      - status
+      title: ChatSnapshotResponse
       type: object
     ChatTurnContext:
       additionalProperties: true
@@ -1797,6 +2095,12 @@ components:
             - observability.slo
             - experience.auto-evidence
             - chat.runtime.v2
+            - chat.runtime.v2.real-execution
+            - chat.runtime.v2.replay
+            - chat.runtime.v2.queue
+            - chat.runtime.v2.recovery
+            - chat.runtime.v2.abort
+            - chat.interaction.clarify
             type: string
           title: Features
           type: array
@@ -2062,6 +2366,12 @@ components:
             - observability.slo
             - experience.auto-evidence
             - chat.runtime.v2
+            - chat.runtime.v2.real-execution
+            - chat.runtime.v2.replay
+            - chat.runtime.v2.queue
+            - chat.runtime.v2.recovery
+            - chat.runtime.v2.abort
+            - chat.interaction.clarify
             type: string
           title: Features
           type: array
@@ -3138,9 +3448,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Get Chat Run Api V1 Chat Runs  Run Id  Get
-                type: object
+                $ref: '#/components/schemas/ChatRunResponse'
           description: Successful Response
         '422':
           content:
@@ -3182,9 +3490,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Abort Chat Run Api V1 Chat Runs  Run Id  Abort Post
-                type: object
+                $ref: '#/components/schemas/ChatAbortResponse'
           description: Successful Response
         '422':
           content:
@@ -3244,8 +3550,7 @@ paths:
             application/json:
               schema:
                 items:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/components/schemas/ChatEventResponse'
                 title: Response List Chat Events Api V1 Chat Runs  Run Id  Events Get
                 type: array
           description: Successful Response
@@ -3335,18 +3640,22 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
+              discriminator:
+                mapping:
+                  approval: '#/components/schemas/ChatApprovalRespondBody'
+                  clarify: '#/components/schemas/ChatClarifyRespondBody'
+                propertyName: type
+              oneOf:
+              - $ref: '#/components/schemas/ChatClarifyRespondBody'
+              - $ref: '#/components/schemas/ChatApprovalRespondBody'
               title: Body
-              type: object
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Respond Chat Interaction Api V1 Chat Runs  Run Id  Interactions  Request Id  Respond Post
-                type: object
+                $ref: '#/components/schemas/ChatInteractionResponse'
           description: Successful Response
         '422':
           content:
@@ -3389,8 +3698,7 @@ paths:
             application/json:
               schema:
                 items:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/components/schemas/ChatQueueEntryResponse'
                 title: Response List Chat Queue Api V1 Chat Runs  Run Id  Queue Get
                 type: array
           description: Successful Response
@@ -3439,9 +3747,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Enqueue Chat Queue Api V1 Chat Runs  Run Id  Queue Post
-                type: object
+                $ref: '#/components/schemas/ChatQueueEntryResponse'
           description: Successful Response
         '422':
           content:
@@ -3489,9 +3795,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Delete Chat Queue Api V1 Chat Runs  Run Id  Queue  Queue Id  Delete
-                type: object
+                $ref: '#/components/schemas/ChatQueueEntryResponse'
           description: Successful Response
         '422':
           content:
@@ -3544,9 +3848,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Patch Chat Queue Api V1 Chat Runs  Run Id  Queue  Queue Id  Patch
-                type: object
+                $ref: '#/components/schemas/ChatQueueEntryResponse'
           description: Successful Response
         '422':
           content:
@@ -3588,9 +3890,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                title: Response Get Chat Snapshot Api V1 Chat Runs  Run Id  Snapshot Get
-                type: object
+                $ref: '#/components/schemas/ChatSnapshotResponse'
           description: Successful Response
         '422':
           content:

@@ -40,6 +40,28 @@ def main() -> int:
         WorkspaceChatToolProgressEvent,
         WorkspaceChatUsageEvent,
     )
+    from schemas.chat_events import (  # noqa: WPS433
+        ApprovalRequestedEvent,
+        ApprovalResolvedEvent,
+        ArtifactCreatedEvent,
+        ClarifyRequestedEvent,
+        ClarifyResolvedEvent,
+        MessageCompletedEvent,
+        MessageDeltaEvent,
+        QueueChangedEvent,
+        ReasoningCompletedEvent,
+        ReasoningDeltaEvent,
+        RunStartedEvent,
+        SessionStartedEvent,
+        ToolCompletedEvent,
+        ToolFailedEvent,
+        ToolProgressEvent,
+        ToolStartedEvent,
+        TurnCancelledEvent,
+        TurnCompletedEvent,
+        TurnFailedEvent,
+        UsageUpdatedEvent,
+    )
     from schemas.events import ErrorEnvelope, RuntimeJobSseEvent  # noqa: WPS433
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -62,6 +84,39 @@ def main() -> int:
         ],
     }
     _write("chat-event.schema.json", chat_schema)
+
+    chat_run_event_classes = [
+        ("run.started", RunStartedEvent),
+        ("session.started", SessionStartedEvent),
+        ("agent.message.delta", MessageDeltaEvent),
+        ("agent.message.completed", MessageCompletedEvent),
+        ("reasoning.delta", ReasoningDeltaEvent),
+        ("reasoning.completed", ReasoningCompletedEvent),
+        ("tool.started", ToolStartedEvent),
+        ("tool.progress", ToolProgressEvent),
+        ("tool.completed", ToolCompletedEvent),
+        ("tool.failed", ToolFailedEvent),
+        ("clarify.requested", ClarifyRequestedEvent),
+        ("clarify.resolved", ClarifyResolvedEvent),
+        ("approval.requested", ApprovalRequestedEvent),
+        ("approval.resolved", ApprovalResolvedEvent),
+        ("usage.updated", UsageUpdatedEvent),
+        ("artifact.created", ArtifactCreatedEvent),
+        ("turn.completed", TurnCompletedEvent),
+        ("turn.failed", TurnFailedEvent),
+        ("turn.cancelled", TurnCancelledEvent),
+        ("queue.changed", QueueChangedEvent),
+    ]
+    chat_run_schema: dict[str, Any] = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://smc-copilot.local/contracts/runtime-events/chat-run-event.schema.json",
+        "title": "ChatRunEvent",
+        "oneOf": [
+            {"title": title, **cls.model_json_schema(mode="serialization")}
+            for title, cls in chat_run_event_classes
+        ],
+    }
+    _write("chat-run-event.schema.json", chat_run_schema)
 
     error_schema = ErrorEnvelope.model_json_schema(mode="serialization")
     error_schema["$id"] = "https://smc-copilot.local/contracts/runtime-events/error.schema.json"

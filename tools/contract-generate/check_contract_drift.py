@@ -15,6 +15,7 @@ CONTRACT_PATHS = [
     ROOT / "contracts" / "runtime-api" / "openapi.yaml",
     ROOT / "contracts" / "runtime-events" / "job-event.schema.json",
     ROOT / "contracts" / "runtime-events" / "chat-event.schema.json",
+    ROOT / "contracts" / "runtime-events" / "chat-run-event.schema.json",
     ROOT / "contracts" / "runtime-events" / "error.schema.json",
 ]
 

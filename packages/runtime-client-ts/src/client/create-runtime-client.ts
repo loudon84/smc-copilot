@@ -26,6 +26,23 @@ export type {
   RuntimeStreamRequest,
   RuntimeSseMessage,
 } from "../transport/types";
+export type {
+  ChatDomain,
+  ChatCreateRunBody,
+  ChatCreateTurnBody,
+  ChatAcceptedResult,
+  ChatRunResponse,
+  ChatSnapshotResponse,
+  ChatEventResponse,
+  ChatAbortResponse,
+  ChatInteractionResponse,
+  ChatQueueEntryResponse,
+  ChatQueueCreateBody,
+  ChatQueuePatchBody,
+  ChatClarifyRespondBody,
+  ChatApprovalRespondBody,
+  ChatInteractionRespondBody,
+} from "../domains/chat";
 
 export interface CreateRuntimeClientOptions extends RuntimeClientAuthOptions {
   baseUrl: string;

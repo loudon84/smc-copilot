@@ -162,64 +162,21 @@ export function createMcpDomain(transport: RuntimeTransport) {
   };
 }
 
-export function createChatDomain(transport: RuntimeTransport) {
-  return {
-    createRun: (body: unknown, signal?: AbortSignal) =>
-      transport.request({ method: "POST", path: "/api/v1/chat-runs", body, signal }),
-    getRun: (runId: string, signal?: AbortSignal) =>
-      transport.request({ path: `/api/v1/chat-runs/${enc(runId)}`, signal }),
-    snapshot: (runId: string, signal?: AbortSignal) =>
-      transport.request({ path: `/api/v1/chat-runs/${enc(runId)}/snapshot`, signal }),
-    createTurn: (runId: string, body: unknown, signal?: AbortSignal) =>
-      transport.request({
-        method: "POST",
-        path: `/api/v1/chat-runs/${enc(runId)}/turns`,
-        body,
-        signal,
-      }),
-    abort: (runId: string, body?: unknown, signal?: AbortSignal) =>
-      transport.request({
-        method: "POST",
-        path: `/api/v1/chat-runs/${enc(runId)}/abort`,
-        body: body ?? {},
-        signal,
-      }),
-    listEvents: (runId: string, query?: Record<string, string | number | undefined>, signal?: AbortSignal) =>
-      transport.request({ path: `/api/v1/chat-runs/${enc(runId)}/events`, query, signal }),
-    streamEvents: (runId: string, opts?: { lastEventId?: string; signal?: AbortSignal }) =>
-      transport.stream({
-        path: `/api/v1/chat-runs/${enc(runId)}/events/stream`,
-        lastEventId: opts?.lastEventId,
-        signal: opts?.signal,
-      }),
-    respondInteraction: (runId: string, requestId: string, body: unknown, signal?: AbortSignal) =>
-      transport.request({
-        method: "POST",
-        path: `/api/v1/chat-runs/${enc(runId)}/interactions/${enc(requestId)}/respond`,
-        body,
-        signal,
-      }),
-    listQueue: (runId: string, signal?: AbortSignal) =>
-      transport.request({ path: `/api/v1/chat-runs/${enc(runId)}/queue`, signal }),
-    enqueue: (runId: string, body: unknown, signal?: AbortSignal) =>
-      transport.request({
-        method: "POST",
-        path: `/api/v1/chat-runs/${enc(runId)}/queue`,
-        body,
-        signal,
-      }),
-    patchQueue: (runId: string, queueId: string, body: unknown, signal?: AbortSignal) =>
-      transport.request({
-        method: "PATCH",
-        path: `/api/v1/chat-runs/${enc(runId)}/queue/${enc(queueId)}`,
-        body,
-        signal,
-      }),
-    deleteQueue: (runId: string, queueId: string, signal?: AbortSignal) =>
-      transport.request({
-        method: "DELETE",
-        path: `/api/v1/chat-runs/${enc(runId)}/queue/${enc(queueId)}`,
-        signal,
-      }),
-  };
-}
+export {
+  createChatDomain,
+  type ChatDomain,
+  type ChatCreateRunBody,
+  type ChatCreateTurnBody,
+  type ChatAcceptedResult,
+  type ChatRunResponse,
+  type ChatSnapshotResponse,
+  type ChatEventResponse,
+  type ChatAbortResponse,
+  type ChatInteractionResponse,
+  type ChatQueueEntryResponse,
+  type ChatQueueCreateBody,
+  type ChatQueuePatchBody,
+  type ChatClarifyRespondBody,
+  type ChatApprovalRespondBody,
+  type ChatInteractionRespondBody,
+} from "./chat";

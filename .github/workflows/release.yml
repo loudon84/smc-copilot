@@ -29,6 +29,8 @@ jobs:
       - run: npm ci
       - name: Verify version bumps
         run: node tools/release/verify-version-bumps.mjs
+      - name: Verify release tag matches version SOT
+        run: node tools/release/verify-release-tags.mjs
       - name: Build release manifest + SHA256
         run: node tools/release/build-release-manifest.mjs
       - name: Upload manifest

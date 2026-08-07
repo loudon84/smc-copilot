@@ -74,11 +74,13 @@ Chat SSE 路径通过 Credential Broker 解析 key 并加入 Authorization heade
 
 ## Chat Runtime v2
 
-`tests/test_chat_runs.py` 覆盖 durable ChatRun API：建 run/turn、事件 replay、abort、queue、interaction，以及 `chat.runtime.v2` capability。对应 [[chat-sessions#Chat Runtime v2]]。
+`tests/test_chat_runs.py` 覆盖 durable ChatRun API；另有 SSE 解析与 Echo Worker 单测。对应 [[chat-sessions#Chat Runtime v2]]。
+
+`tests/test_hermes_chat_executor_unit.py` 用 fixture SSE 块单测 `parse_hermes_sse_block`；`tests/test_chat_turn_worker_echo.py` 验证 EchoChatExecutor 事件落入 durable store。
 
 ### Create run and turn
 
-创建 ChatRun（`clientRunId` 幂等）并创建 turn；stub worker 发出 `agent.message.delta`/`completed` 与 `turn.completed`。
+创建 ChatRun（`clientRunId` 幂等）并创建 turn；worker（echo 或 Hermes）发出 `agent.message.delta`/`completed` 与 `turn.completed`。
 
 ### List events replay
 
@@ -99,6 +101,14 @@ enqueue / list / patch / delete 队列项，并写入 `queue.changed` 事件；s
 ### Capability declared
 
 `/runtime/capabilities` 的 features 包含 `chat.runtime.v2`。
+
+### Echo turn worker persistence
+
+`ChatTurnWorker` + `EchoChatExecutor` 将 message delta / completed / usage / turn.completed 写入 Event Store，无需 Fake Gateway。
+
+### Echo turn worker cancel
+
+预置 cancel flag 时 echo 路径将 turn 标为 `cancelled`。
 
 ## 角色库
 

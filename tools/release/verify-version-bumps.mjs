@@ -2,6 +2,9 @@
 /**
  * Ensure Desktop/Runtime/Contracts versions exist and follow independent tagging policy.
  * Does not auto-bump — fails if contracts/version.json is missing required fields.
+ *
+ * For tag ↔ SOT equality (desktop-vX.Y.Z == package.json, etc.) see
+ * tools/release/verify-release-tags.mjs (wired in .github/workflows/release.yml).
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

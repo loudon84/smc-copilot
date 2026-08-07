@@ -1,6 +1,8 @@
 /**
- * Hand-authored Serve Chat Runtime v2 contracts until Runtime OpenAPI includes chat-runs*.
- * Desktop OpenAPI snapshot removed (PRD v1.1 §4.1); types move to @smc/runtime-client after Phase 5.
+ * Desktop Chat Runtime event → UI mapper layer (PRD v1.2 §18.1).
+ * DTO shapes mirror `@smc/runtime-client` / OpenAPI Chat* schemas.
+ * This shared module must not import `@smc/runtime-client` (Main-only path mapping).
+ * Main should prefer generated client types; keep this file for event→UI mapping.
  */
 
 import type {
@@ -11,6 +13,78 @@ import type {
   ChatUsage,
   ClarifyRequest,
 } from "../chat-runtime/chat-runtime-events";
+
+/** Aligned with OpenAPI ChatCreateRunBody */
+export type ServeChatCreateRunBody = {
+  clientRunId: string;
+  instanceId: string;
+  sessionId?: string | null;
+  workspaceId?: string | null;
+};
+
+/** Aligned with OpenAPI ChatCreateTurnBody */
+export type ServeChatCreateTurnBody = {
+  clientRunId?: string | null;
+  clientTurnId: string;
+  instanceId?: string | null;
+  sessionId?: string | null;
+  workspaceId?: string | null;
+  message: string;
+  modelId?: string | null;
+  attachmentIds?: string[];
+  context?: {
+    expertId?: string | null;
+    teamId?: string | null;
+    skillName?: string | null;
+    workMode?: string | null;
+    permissionMode?: string | null;
+    invocationSource?: string | null;
+  } | null;
+};
+
+/** Aligned with OpenAPI ChatAcceptedResult */
+export type ServeChatAcceptedResult = {
+  accepted: boolean;
+  runId: string;
+  turnId: string;
+  eventCursor: number;
+};
+
+/** Aligned with OpenAPI ChatClarifyRespondBody | ChatApprovalRespondBody */
+export type ServeChatInteractionRespondBody =
+  | {
+      turnId: string;
+      type: "clarify";
+      answer: string;
+    }
+  | {
+      turnId: string;
+      type: "approval";
+      decision: "approved" | "denied";
+      reason?: string | null;
+    };
+
+/** Aligned with OpenAPI ChatQueueEntryResponse */
+export type ServeChatQueueEntry = {
+  queueId: string;
+  id?: string | null;
+  runId: string;
+  status: string;
+  payload?: Record<string, unknown>;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  ok?: boolean | null;
+};
+
+/** Aligned with OpenAPI ChatSnapshotResponse (+ UI event view) */
+export type ServeChatSnapshot = {
+  runId: string;
+  sessionId?: string | null;
+  status: string;
+  eventCursor?: number;
+  events: ServeChatEvent[];
+  queue: ServeChatQueueEntry[];
+};
 
 export type ServeChatEventType =
   | "run.started"
@@ -47,69 +121,6 @@ export type ServeChatEvent = {
   type: ServeChatEventType;
   timestamp: string;
   payload: Record<string, unknown>;
-};
-
-export type ServeChatCreateRunBody = {
-  clientRunId: string;
-  instanceId: string;
-  sessionId?: string | null;
-  workspaceId?: string;
-};
-
-export type ServeChatCreateTurnBody = {
-  clientRunId: string;
-  clientTurnId: string;
-  instanceId: string;
-  sessionId?: string | null;
-  workspaceId?: string;
-  message: string;
-  modelId?: string;
-  attachmentIds?: string[];
-  context?: {
-    expertId?: string;
-    teamId?: string;
-    skillName?: string;
-    workMode?: string;
-    permissionMode?: string;
-    invocationSource?: string;
-  };
-};
-
-export type ServeChatAcceptedResult = {
-  accepted: boolean;
-  runId: string;
-  turnId: string;
-  eventCursor: number;
-};
-
-export type ServeChatInteractionRespondBody =
-  | {
-      turnId: string;
-      type: "clarify";
-      answer: string;
-    }
-  | {
-      turnId: string;
-      type: "approval";
-      decision: "approved" | "denied";
-      reason?: string | null;
-    };
-
-export type ServeChatQueueEntry = {
-  queueId: string;
-  runId: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled" | string;
-  payload: Record<string, unknown>;
-  createdAt: string | null;
-  updatedAt: string | null;
-};
-
-export type ServeChatSnapshot = {
-  runId: string;
-  sessionId: string | null;
-  status: string;
-  events: ServeChatEvent[];
-  queue: ServeChatQueueEntry[];
 };
 
 function asRecord(value: unknown): Record<string, unknown> {

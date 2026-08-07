@@ -81,10 +81,15 @@ async def app_client(
     app.state._skip_process_lock = True
 
     from runtime.tasks.registry import reset_task_scheduler, set_test_hermes_adapter
+    from services.chat_turn_scheduler import ChatTurnScheduler
+    from services.chat_turn_worker import set_use_echo_executor
     from tests.support.mock_hermes_adapter import MockHermesRuntimeAdapter
 
     reset_task_scheduler()
     set_test_hermes_adapter(MockHermesRuntimeAdapter())
+    set_use_echo_executor(True)
+    ChatTurnScheduler.reset()
+    ChatTurnScheduler.configure(session_maker)
 
     async with lifespan(app):
         transport = ASGITransport(app=app)

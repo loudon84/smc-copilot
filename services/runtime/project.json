@@ -61,11 +61,18 @@
         "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runtime-smoke-test-windows.ps1"
       }
     },
-    "package-windows": {
+    "provision-windows": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "services/runtime",
         "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runtime-install-windows.ps1 -SkipProgramsCheck"
+      }
+    },
+    "package-windows": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runtime-package-windows.ps1"
       }
     }
   }

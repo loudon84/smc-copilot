@@ -16,7 +16,10 @@
     "contracts:generate": "nx run contracts:generate",
     "contracts:check": "nx run contracts:check",
     "client:generate": "nx run runtime-client-ts:generate",
-    "integration:test": "nx run integration-e2e:test"
+    "integration:test": "nx run integration-e2e:test",
+    "check:runtime-path-ownership": "node tools/agent-context/check-runtime-path-ownership.mjs",
+    "check:release-tags": "node tools/release/verify-release-tags.mjs",
+    "verify:agent-context": "node tools/agent-context/verify-rules.mjs && node tools/agent-context/check-runtime-path-ownership.mjs"
   },
   "devDependencies": {
     "@nx/workspace": "21.2.2",

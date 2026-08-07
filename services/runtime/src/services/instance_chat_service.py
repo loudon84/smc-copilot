@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator
@@ -32,7 +31,8 @@ from schemas.chat import (
 )
 from services.attachment_service import AttachmentService
 from services.chat_stream_service import _ACTIVE_STREAMS, abort_stream, register_stream
-from services.gateway_credential_service import GatewayCredentialService
+from services.hermes_chat_event_mapper import HermesExecutionEvent
+from services.hermes_chat_executor import HermesChatExecutionRequest, HermesChatExecutor
 from services.instance_ref_resolver import InstanceRefResolver
 from services.sse_helpers import format_sse
 
@@ -48,20 +48,6 @@ def _infer_provider(model_id: str, raw: dict[str, Any]) -> str | None:
     if "/" in model_id:
         return model_id.split("/", 1)[0]
     return None
-
-
-def _parse_tool_progress(event_type: str, data_line: str) -> tuple[str, str] | None:
-    if event_type != "hermes.tool.progress":
-        return None
-    try:
-        payload = json.loads(data_line)
-        if not isinstance(payload, dict):
-            return None
-        name = str(payload.get("tool") or payload.get("name") or "tool")
-        label = str(payload.get("label") or name)
-        return name, label
-    except json.JSONDecodeError:
-        return None
 
 
 # @lat: [[chat-sessions#Instance Chat]]
@@ -224,6 +210,8 @@ class InstanceChatService:
         instance_id: str,
         body: WorkspaceChatSendPayload,
     ) -> AsyncIterator[str]:
+        """Compatibility adapter: HermesChatExecutor → legacy chat.* SSE strings."""
+        # @lat: [[chat-sessions#Instance Chat]]
         stream_id = body.stream_id or f"stream_{uuid.uuid4().hex}"
         cancel = register_stream(stream_id)
         scope = {
@@ -232,89 +220,32 @@ class InstanceChatService:
             "workspace_id": body.workspace_id,
             "session_id": body.session_id,
         }
+        resolved_session_id: str | None = None
 
         try:
-            inst = await self._resolver.require_deployed_instance(instance_id)
-            await self.ensure_gateway_ready(instance_id)
-            model = await self.resolve_default_model(instance_id, body.model)
-
-            attachment_profile_id = await self._attachment_profile_id(inst)
-            attachment_rows = await self._attachment_service.load_scoped(
-                profile_id=attachment_profile_id,
-                workspace_id=body.workspace_id,
+            executor = HermesChatExecutor(
+                self._session,
+                settings=self._app_settings,
+                settings_repo=self._settings_repo,
+                profile_repo=self._profiles,
+            )
+            request = HermesChatExecutionRequest(
+                instance_id=instance_id,
+                messages=[{"role": m.role, "content": m.content} for m in body.messages],
                 session_id=body.session_id,
-                attachment_ids=body.attachments,
+                workspace_id=body.workspace_id,
+                model_id=body.model,
+                attachment_ids=list(body.attachments or []),
             )
-            context_block = self._attachment_service.build_attachment_context(attachment_rows)
-
-            messages: list[dict[str, str]] = [{"role": m.role, "content": m.content} for m in body.messages]
-            if context_block:
-                messages.insert(0, {"role": "system", "content": context_block})
-
-            payload: dict[str, Any] = {
-                "messages": messages,
-                "stream": True,
-            }
-            if model:
-                payload["model"] = model
-
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-            }
-            api_key = await GatewayCredentialService(self._app_settings, self._session).optional_key_for_profile(
-                inst.profile_name
-            )
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-            if body.session_id:
-                headers["x-hermes-session-id"] = body.session_id
-
-            url = f"http://127.0.0.1:{inst.gateway_port}/v1/chat/completions"
-            resolved_session_id: str | None = None
-
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream(
-                    "POST",
-                    url,
-                    json=payload,
-                    headers=headers,
-                ) as response:
-                    header_sid = response.headers.get("x-hermes-session-id")
-                    if header_sid and str(header_sid).strip():
-                        resolved_session_id = str(header_sid).strip()
-
-                    if response.status_code >= 400:
-                        text = await response.aread()
-                        raise ChatApiError(
-                            f"Chat stream failed: HTTP {response.status_code}",
-                            code="CHAT_STREAM_FAILED",
-                            details={"body": text.decode(errors="replace")[:500]},
-                            http_status=502,
-                        )
-
-                    buffer = ""
-                    async for chunk in response.aiter_text():
-                        if cancel.is_set():
-                            yield format_sse(
-                                event_id=stream_id,
-                                event_name="chat.error",
-                                data={
-                                    **scope,
-                                    "message": "Stream aborted",
-                                    "details": {"code": "CHAT_STREAM_ABORTED"},
-                                },
-                            )
-                            return
-                        buffer += chunk
-                        while "\n\n" in buffer:
-                            block, buffer = buffer.split("\n\n", 1)
-                            for event in self._process_block(block, scope):
-                                yield event
-
-                    if buffer.strip():
-                        for event in self._process_block(buffer, scope):
-                            yield event
+            async for event in executor.execute(request, cancel):
+                if event.type == "session":
+                    sid = event.payload.get("sessionId")
+                    if isinstance(sid, str) and sid.strip():
+                        resolved_session_id = sid.strip()
+                for sse in _legacy_sse_from_execution_event(event, scope, stream_id):
+                    yield sse
+                if event.type in ("failed", "cancelled"):
+                    return
 
             done_data = {**scope}
             if resolved_session_id:
@@ -395,76 +326,60 @@ class InstanceChatService:
                 return profile.id
         return inst.id
 
-    def _process_block(self, block: str, scope: dict[str, str]) -> list[str]:
-        events: list[str] = []
-        event_type = ""
-        data_line = ""
-        for line in block.split("\n"):
-            if line.startswith("event: "):
-                event_type = line[7:].strip()
-            elif line.startswith("data: "):
-                data_line = line[6:]
 
-        if not data_line:
-            return events
-
-        if event_type:
-            progress = _parse_tool_progress(event_type, data_line)
-            if progress:
-                name, label = progress
-                events.append(
-                    format_sse(
-                        event_id=scope["stream_id"],
-                        event_name="chat.tool_progress",
-                        data={**scope, "name": name, "label": label},
-                    )
-                )
-            return events
-
-        if data_line == "[DONE]":
-            return events
-
-        try:
-            parsed = json.loads(data_line)
-        except json.JSONDecodeError:
-            return events
-
-        if isinstance(parsed, dict) and parsed.get("error"):
-            err = parsed["error"]
-            message = err.get("message") if isinstance(err, dict) else str(err)
-            events.append(
-                format_sse(
-                    event_id=scope["stream_id"],
-                    event_name="chat.error",
-                    data={**scope, "message": message or "Provider error", "details": parsed},
-                )
+def _legacy_sse_from_execution_event(
+    event: HermesExecutionEvent,
+    scope: dict[str, str],
+    stream_id: str,
+) -> list[str]:
+    """Map HermesExecutionEvent → legacy Workspace chat.* SSE strings."""
+    if event.type == "message_delta":
+        content = str(event.payload.get("content") or "")
+        if not content:
+            return []
+        return [
+            format_sse(
+                event_id=stream_id,
+                event_name="chat.chunk",
+                data={**scope, "content": content},
             )
-            return events
-
-        usage = parsed.get("usage") if isinstance(parsed, dict) else None
-        if isinstance(usage, dict):
-            events.append(
-                format_sse(
-                    event_id=scope["stream_id"],
-                    event_name="chat.usage",
-                    data={
-                        **scope,
-                        "prompt_tokens": int(usage.get("prompt_tokens") or 0),
-                        "completion_tokens": int(usage.get("completion_tokens") or 0),
-                        "total_tokens": int(usage.get("total_tokens") or 0),
-                    },
-                )
+        ]
+    if event.type == "tool_progress" or event.type == "tool_started":
+        return [
+            format_sse(
+                event_id=stream_id,
+                event_name="chat.tool_progress",
+                data={
+                    **scope,
+                    "name": str(event.payload.get("name") or "tool"),
+                    "label": str(event.payload.get("label") or event.payload.get("name") or "tool"),
+                },
             )
-
-        choice = parsed.get("choices", [{}])[0] if isinstance(parsed, dict) else {}
-        delta = choice.get("delta", {}) if isinstance(choice, dict) else {}
-        content = delta.get("content") if isinstance(delta, dict) else None
-        if content:
-            events.append(
-                format_sse(
-                    event_id=scope["stream_id"],
-                    event_name="chat.chunk",
-                    data={**scope, "content": content},
-                )
+        ]
+    if event.type == "usage":
+        return [
+            format_sse(
+                event_id=stream_id,
+                event_name="chat.usage",
+                data={
+                    **scope,
+                    "prompt_tokens": int(event.payload.get("promptTokens") or 0),
+                    "completion_tokens": int(event.payload.get("completionTokens") or 0),
+                    "total_tokens": int(event.payload.get("totalTokens") or 0),
+                },
             )
-        return events
+        ]
+    if event.type in ("failed", "cancelled"):
+        code = "CHAT_STREAM_ABORTED" if event.type == "cancelled" else str(event.payload.get("errorCode") or "CHAT_STREAM_FAILED")
+        return [
+            format_sse(
+                event_id=stream_id,
+                event_name="chat.error",
+                data={
+                    **scope,
+                    "message": str(event.payload.get("message") or "Stream error"),
+                    "details": {"code": code, **(event.payload.get("details") or {})},
+                },
+            )
+        ]
+    return []

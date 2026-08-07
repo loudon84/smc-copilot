@@ -289,6 +289,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if recovered:
         logger.info("runtime_jobs_recovered", count=recovered)
 
+    if not bool(getattr(app.state, "_disable_workers", False)):
+        try:
+            from services.chat_turn_recovery import recover_chat_turns
+
+            await recover_chat_turns(session_maker)
+        except Exception:
+            logger.exception("chat_turn_recovery_failed")
+    else:
+        from services.chat_turn_scheduler import ChatTurnScheduler
+
+        ChatTurnScheduler.configure(session_maker)
+
     if not bool(getattr(app.state, "_disable_gateway_autostart", False)):
         await supervisor.reconcile_instances_on_boot()
         await supervisor.reconcile_legacy_profiles_on_boot()

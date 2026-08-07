@@ -55,3 +55,11 @@ When Serve chat transport is preferred and Ready, `window.chatRuntime` must not 
 Gates: [[src/main/copilot-runtime-client/runtime-mode.ts#isServeChatTransportPreferred]], [[src/main/copilot-runtime-client/runtime-mode.ts#isServeChatTransportEnabled]]. Owner: [[src/main/runtime-adapters/ServeChatRuntimeAdapter.ts#ServeChatRuntimeAdapter]] via [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]].
 
 Client: [[src/main/copilot-runtime-client/clients/chat-runtime-client.ts#chatRuntimeClient]] + SSE [[src/main/copilot-runtime-client/runtime-sse-client.ts#subscribeRuntimeSse]]. Contracts: [[src/shared/copilot-runtime/chat-runtime-serve-contract.ts#mapServeChatEventToRuntimeEvent]] (hand-authored; OpenAPI alignment deferred).
+
+Production start also gates on [[src/main/copilot-runtime-client/runtime-capability-manager.ts#assertReadyForChat]] (`chat.runtime.v2`, and `chat.runtime.v2.real-execution` when subdivided v2 features are advertised).
+
+## Workspace Chat durable cutover
+
+Workspaces Chat streams through chat-runs; `clientRunId` is the stable Desktop `session_id`, not a per-message run.
+
+[[src/main/workspace-chat/workspace-chat-stream.ts#startWorkspaceChatStream]] uses `chatRuntimeClient.startTurn` + `subscribeEvents` and maps Serve events to existing `workspace-chat:*` IPC (Renderer unchanged). Guard: `npm run check:no-direct-instance-chat`.

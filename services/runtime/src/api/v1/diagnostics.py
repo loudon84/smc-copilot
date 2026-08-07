@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_app_settings, get_db_session
 from core.config import Settings
+from db.models.chat_runtime import ChatEvent, ChatRun, ChatTurn
 from runtime.environment_probe import EnvironmentProbe
 from runtime.platform_paths import RuntimeLayout
 from schemas.runtime import BackupCreateRequest
 from services.backup_service import BackupService
 from services.runtime_job_service import RuntimeJobService
+from services.runtime_status_service import RuntimeStatusService
 
 router = APIRouter(tags=["diagnostics-backup"])
 
@@ -23,10 +28,34 @@ async def diagnostics_summary(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    from services.runtime_status_service import RuntimeStatusService
-
     status = await RuntimeStatusService(settings, session).status()
     probe = EnvironmentProbe(settings).probe()
+
+    active_runs = (
+        await session.execute(
+            select(func.count()).select_from(ChatRun).where(ChatRun.status.in_(("active", "running", "waiting_interaction")))
+        )
+    ).scalar_one()
+    active_turns = (
+        await session.execute(
+            select(func.count())
+            .select_from(ChatTurn)
+            .where(ChatTurn.status.in_(("running", "waiting_clarify", "waiting_approval", "waiting_interaction")))
+        )
+    ).scalar_one()
+    queued_turns = (
+        await session.execute(select(func.count()).select_from(ChatTurn).where(ChatTurn.status.in_(("queued", "pending"))))
+    ).scalar_one()
+    since = datetime.now(UTC) - timedelta(hours=24)
+    failed_24h = (
+        await session.execute(
+            select(func.count())
+            .select_from(ChatTurn)
+            .where(ChatTurn.status == "failed", ChatTurn.completed_at.is_not(None), ChatTurn.completed_at >= since)
+        )
+    ).scalar_one()
+    event_count = (await session.execute(select(func.count()).select_from(ChatEvent))).scalar_one()
+
     return {
         "runtime": status.model_dump(by_alias=True),
         "environment": {
@@ -37,6 +66,13 @@ async def diagnostics_summary(
             "node": str(probe.toolchain.node_path) if probe.toolchain.node_path else None,
             "git": str(probe.toolchain.git_path) if probe.toolchain.git_path else None,
         },
+        "activeChatRuns": int(active_runs or 0),
+        "activeChatTurns": int(active_turns or 0),
+        "queuedChatTurns": int(queued_turns or 0),
+        "failedChatTurns24h": int(failed_24h or 0),
+        "averageTurnDuration": None,
+        "chatEventStoreStatus": {"ok": True, "eventCount": int(event_count or 0)},
+        "gatewayChatStatus": "unknown",
     }
 
 

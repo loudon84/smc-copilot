@@ -77,6 +77,12 @@ RuntimeFeatureId = Literal[
     "observability.slo",
     "experience.auto-evidence",
     "chat.runtime.v2",
+    "chat.runtime.v2.real-execution",
+    "chat.runtime.v2.replay",
+    "chat.runtime.v2.queue",
+    "chat.runtime.v2.recovery",
+    "chat.runtime.v2.abort",
+    "chat.interaction.clarify",
 ]
 
 
@@ -151,6 +157,12 @@ DEFAULT_FEATURES: tuple[RuntimeFeatureId, ...] = (
     "observability.slo",
     "experience.auto-evidence",
     "chat.runtime.v2",
+    "chat.runtime.v2.real-execution",
+    "chat.runtime.v2.replay",
+    "chat.runtime.v2.queue",
+    "chat.runtime.v2.recovery",
+    "chat.runtime.v2.abort",
+    "chat.interaction.clarify",
 )
 
 

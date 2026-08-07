@@ -8,6 +8,21 @@ export type {
   RuntimeRequest,
   RuntimeStreamRequest,
   RuntimeSseMessage,
+  ChatDomain,
+  ChatCreateRunBody,
+  ChatCreateTurnBody,
+  ChatAcceptedResult,
+  ChatRunResponse,
+  ChatSnapshotResponse,
+  ChatEventResponse,
+  ChatAbortResponse,
+  ChatInteractionResponse,
+  ChatQueueEntryResponse,
+  ChatQueueCreateBody,
+  ChatQueuePatchBody,
+  ChatClarifyRespondBody,
+  ChatApprovalRespondBody,
+  ChatInteractionRespondBody,
 } from "./client/create-runtime-client";
 export { RuntimeApiError, normalizeRuntimeError } from "./client/error-normalizer";
 export type { RuntimeApiErrorBody } from "./client/error-normalizer";

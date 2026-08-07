@@ -72,3 +72,7 @@ Hand-authored [[src/shared/copilot-runtime/chat-runtime-serve-contract.ts#mapSer
 ### Serve chat-runs start awaits createRun and createTurn
 
 [[src/main/runtime-adapters/ServeChatRuntimeAdapter.ts#ServeChatRuntimeAdapter]] starts a turn via `/api/v1/chat-runs` + turns, then subscribes to `/events/stream` — no optimistic local Hermes `sendMessage`.
+
+### Workspace Chat stream uses chat-runs not instance completions
+
+[[src/main/workspace-chat/workspace-chat-stream.ts#startWorkspaceChatStream]] binds `clientRunId` to Desktop `session_id`, calls createRun/createTurn via [[src/main/copilot-runtime-client/clients/chat-runtime-client.ts#chatRuntimeClient]], and forwards Serve events as `workspace-chat:*` IPC. Production source must not mention instance chat completions (`check:no-direct-instance-chat`).

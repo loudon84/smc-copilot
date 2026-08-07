@@ -3030,6 +3030,23 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * ChatAbortResponse
+         * @description POST /chat-runs/{runId}/abort response.
+         */
+        ChatAbortResponse: {
+            /** Cancelledturns */
+            cancelledTurns?: string[];
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Runid */
+            runId: string;
+            /** Status */
+            status: string;
+        };
         /** ChatAcceptedResult */
         ChatAcceptedResult: {
             /**
@@ -3049,6 +3066,23 @@ export interface components {
              * @default
              */
             turnId: string;
+        };
+        /** ChatApprovalRespondBody */
+        ChatApprovalRespondBody: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approved" | "denied";
+            /** Reason */
+            reason?: string | null;
+            /** Turnid */
+            turnId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "approval";
         };
         /** ChatAttachmentResponse */
         ChatAttachmentResponse: {
@@ -3072,6 +3106,18 @@ export interface components {
             workspace_id: string;
             /** Workspace Relative Path */
             workspace_relative_path: string;
+        };
+        /** ChatClarifyRespondBody */
+        ChatClarifyRespondBody: {
+            /** Answer */
+            answer: string;
+            /** Turnid */
+            turnId: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "clarify";
         };
         /** ChatCreateRunBody */
         ChatCreateRunBody: {
@@ -3103,6 +3149,68 @@ export interface components {
             sessionId?: string | null;
             /** Workspaceid */
             workspaceId?: string | null;
+        };
+        /**
+         * ChatEventResponse
+         * @description Single durable chat-run event as returned by list/snapshot APIs.
+         */
+        ChatEventResponse: {
+            /** Createdat */
+            createdAt?: string | null;
+            /** Eventid */
+            eventId: string;
+            /** Eventtype */
+            eventType?: string | null;
+            /** Id */
+            id?: string | null;
+            /** Instanceid */
+            instanceId?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** Runid */
+            runId: string;
+            /** Sequence */
+            sequence: number;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /**
+             * Turnid
+             * @default
+             */
+            turnId: string;
+            /** Type */
+            type: string;
+        };
+        /**
+         * ChatInteractionResponse
+         * @description POST /chat-runs/{runId}/interactions/{requestId}/respond response.
+         */
+        ChatInteractionResponse: {
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+            /** Alreadyresolved */
+            alreadyResolved?: boolean | null;
+            /** Interactiontype */
+            interactionType?: string | null;
+            /** Requestid */
+            requestId: string;
+            /** Response */
+            response?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+            /** Turnid */
+            turnId?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ChatModel */
         ChatModel: {
@@ -3151,6 +3259,30 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ChatQueueEntryResponse
+         * @description Queue entry as returned by queue CRUD APIs.
+         */
+        ChatQueueEntryResponse: {
+            /** Createdat */
+            createdAt?: string | null;
+            /** Id */
+            id?: string | null;
+            /** Ok */
+            ok?: boolean | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            };
+            /** Queueid */
+            queueId: string;
+            /** Runid */
+            runId: string;
+            /** Status */
+            status: string;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
         /** ChatQueuePatchBody */
         ChatQueuePatchBody: {
             /** Payload */
@@ -3161,6 +3293,58 @@ export interface components {
             status?: string | null;
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * ChatRunResponse
+         * @description GET /chat-runs/{runId} response.
+         */
+        ChatRunResponse: {
+            /** Clientrunid */
+            clientRunId: string;
+            /** Completedat */
+            completedAt?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /**
+             * Eventcursor
+             * @default 0
+             */
+            eventCursor: number;
+            /** Id */
+            id?: string | null;
+            /** Instanceid */
+            instanceId: string;
+            /** Runid */
+            runId: string;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Status */
+            status: string;
+            /** Updatedat */
+            updatedAt?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+        };
+        /**
+         * ChatSnapshotResponse
+         * @description GET /chat-runs/{runId}/snapshot response.
+         */
+        ChatSnapshotResponse: {
+            /**
+             * Eventcursor
+             * @default 0
+             */
+            eventCursor: number;
+            /** Events */
+            events?: components["schemas"]["ChatEventResponse"][];
+            /** Queue */
+            queue?: components["schemas"]["ChatQueueEntryResponse"][];
+            /** Runid */
+            runId: string;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Status */
+            status: string;
         };
         /** ChatTurnContext */
         ChatTurnContext: {
@@ -3875,7 +4059,7 @@ export interface components {
              */
             apiVersion: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
         };
         /** RuntimeCompatibilityFlags */
         RuntimeCompatibilityFlags: {
@@ -4004,7 +4188,7 @@ export interface components {
             /** Datadir */
             dataDir: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
             /** Hermeshome */
             hermesHome: string;
             /** Hermesinstalled */
@@ -4697,9 +4881,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatRunResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4733,9 +4915,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatAbortResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4772,9 +4952,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ChatEventResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -4837,9 +5015,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["ChatClarifyRespondBody"] | components["schemas"]["ChatApprovalRespondBody"];
             };
         };
         responses: {
@@ -4849,9 +5025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatInteractionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4885,9 +5059,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ChatQueueEntryResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -4925,9 +5097,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatQueueEntryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4962,9 +5132,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatQueueEntryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5003,9 +5171,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatQueueEntryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5039,9 +5205,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ChatSnapshotResponse"];
                 };
             };
             /** @description Validation Error */

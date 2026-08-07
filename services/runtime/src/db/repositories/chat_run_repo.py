@@ -117,6 +117,13 @@ class ChatRunRepository:
         return row
 
     async def list_active_turns(self, run_id: str) -> list[ChatTurn]:
-        active = ("pending", "running", "waiting_interaction")
+        active = (
+            "queued",
+            "pending",
+            "running",
+            "waiting_interaction",
+            "waiting_clarify",
+            "waiting_approval",
+        )
         result = await self._s.execute(select(ChatTurn).where(ChatTurn.run_id == run_id, ChatTurn.status.in_(active)))
         return list(result.scalars().all())

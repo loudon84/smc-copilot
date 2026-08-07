@@ -1,6 +1,7 @@
 /**
- * Workspace Chat Runtime client — Profile → Instance → instance chat / Chat Runtime v2.
- * Forbidden: /profiles/*/chat/* (PRD v1.1 §9–§10).
+ * Workspace Chat Runtime client — Profile → Instance resolve + models/attachments.
+ * Streaming uses chatRuntimeClient (chat-runs). Forbidden: instance chat completions
+ * and legacy profile chat paths (PRD v1.1 §9–§10 / v1.2 Phase 5).
  */
 import type { CopilotServeConnection } from "../../shared/copilot-serve/copilot-serve-contract";
 import type {
@@ -133,7 +134,7 @@ export async function getChatModelConfig(
     model_id: String(raw.model_id ?? raw.modelId ?? ""),
     model_label: (raw.model_label ?? raw.modelLabel ?? null) as string | null,
     base_url: (raw.base_url ?? raw.baseUrl ?? null) as string | null,
-    updated_at: (raw.updated_at ?? raw.updatedAt ?? null) as string | null,
+    updated_at: String(raw.updated_at ?? raw.updatedAt ?? ""),
   };
 }
 
@@ -155,7 +156,7 @@ export async function setChatModelConfig(
       | string
       | null,
     base_url: (raw.base_url ?? raw.baseUrl ?? payload.base_url ?? null) as string | null,
-    updated_at: (raw.updated_at ?? raw.updatedAt ?? null) as string | null,
+    updated_at: String(raw.updated_at ?? raw.updatedAt ?? ""),
   };
 }
 
@@ -166,38 +167,6 @@ export async function removeChatAttachment(
   await serveFetch<void>(`/api/v1/workspaces/${workspaceId}/attachments/${attachmentId}`, {
     method: "DELETE",
   });
-}
-
-export async function chatCompletionsUrl(profileId: string): Promise<string> {
-  const conn = await ensureConnection();
-  const instanceId = await resolveInstanceId(profileId);
-  return `${conn.baseUrl.replace(/\/$/, "")}/api/v1/instances/${encodeURIComponent(instanceId)}/chat/completions`;
-}
-
-export function chatCompletionsHeaders(): Record<string, string> {
-  if (!getCopilotServeConnection()) {
-    throw new Error("copilot-serve 未连接");
-  }
-  return headers({
-    Accept: "text/event-stream",
-  });
-}
-
-export async function abortChatStream(
-  profileId: string,
-  streamId: string,
-): Promise<void> {
-  try {
-    const instanceId = await resolveInstanceId(profileId);
-    await getSmcRuntimeClient().transport.request({
-      method: "POST",
-      path: `/api/v1/instances/${encodeURIComponent(instanceId)}/chat/abort`,
-      query: { stream_id: streamId },
-      body: {},
-    });
-  } catch {
-    /* best-effort */
-  }
 }
 
 export async function uploadAttachmentsMultipart(

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Verify required Cursor rules / ignore files exist. */
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,3 +25,10 @@ if (missing.length) {
   process.exit(1);
 }
 console.log("[verify-rules] ok");
+
+// Also run Runtime path ownership guard when present (PRD v1.2 §19).
+const ownership = join(ROOT, "tools/agent-context/check-runtime-path-ownership.mjs");
+if (existsSync(ownership)) {
+  const r = spawnSync(process.execPath, [ownership], { stdio: "inherit", cwd: ROOT });
+  if (r.status !== 0) process.exit(r.status ?? 1);
+}
