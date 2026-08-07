@@ -23,6 +23,13 @@
         }
       }
     },
+    "guard": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/desktop",
+        "command": "npm run guard"
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

@@ -37,6 +37,11 @@ jobs:
       - name: Install desktop
         working-directory: apps/desktop
         run: npm ci
+      - name: Install runtime-client-ts
+        working-directory: packages/runtime-client-ts
+        run: npm ci
+      - name: Guard
+        run: npx nx run desktop:guard
       - name: Lint
         run: npx nx run desktop:lint
       - name: Typecheck
