@@ -1,0 +1,22 @@
+---
+description: Core project rules for smc-copilot-serve, the local control-plane service for smc-copilot-desktop and Hermes Gateway profiles.
+globs:
+  - "src/**/*.py"
+  - "tests/**/*.py"
+  - "docs/**/*.md"
+alwaysApply: true
+---
+
+# smc-copilot-serve Cursor Rules
+
+This project is a local control-plane service. Keep routers thin, business logic in services, external integrations behind adapters, and all risky local execution behind Workspace Guard and Approval Runtime.
+
+Use these boundaries:
+
+- API routers: request parsing, dependency injection, response mapping only.
+- Services: orchestration and state transitions.
+- Repositories: database operations only.
+- Integrations: Hermes, Team Hub, shell, filesystem, and other external systems.
+- Runtime: process registry, port allocation, gateway lifecycle, heartbeat, locks.
+
+Before editing code, inspect `AGENTS.md` and the relevant skill under `.cursor/skills/`.

@@ -1,0 +1,61 @@
+version: team_v1.4
+
+runtime:
+  db: sqlite
+  defaultAdapter: hermes-local
+
+gateway:
+  host: "127.0.0.1"
+  healthPath: "/health"
+
+roleLibrary:
+  repo: "https://github.com/jnMetaCode/agency-agents-zh.git"
+  branch: "main"
+  localDir: "agency-agents-zh"
+
+profiles:
+  default:
+    displayName: "智能助手"
+    roleName: "智能助手"
+    description: "Portal 主控 Gateway（~/.hermes，端口 8642）"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 8642
+    entry:
+      type: "workspaces"
+      route: "aios"
+      title: "智能助手"
+      icon: "layout-dashboard"
+    capabilities:
+      - gateway-supervisor
+
+  writer-9601:
+    displayName: "Writer"
+    role: "specialist"
+    roleName: "写作生文专家"
+    description: "模板创作、一键生文、内容改写、内容日历。"
+    runtimeType: "hermes-local"
+    enabled: true
+    autoStart: true
+    port: 9601
+    entry:
+      type: "specialist-workspace"
+      route: "profile/writer"
+      title: "写作生文"
+      icon: "pen-tool"
+    capabilities:
+      - delegation
+      - skill-sync
+      - session-share
+    roleSpec:
+      roleKey: "writer"
+      roleName: "写作生文专家"
+      sourceRepo: "https://github.com/jnMetaCode/agency-agents-zh"
+      sourcePaths:
+        - "marketing/marketing-content-creator.md"
+        - "marketing/marketing-book-co-author.md"
+        - "marketing/marketing-linkedin-content-creator.md"
+        - "marketing/marketing-wechat-official-account.md"
+        - "marketing/marketing-zhihu-strategist.md"
+      outputMode: "soul-memory-skill"

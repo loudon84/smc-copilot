@@ -1,0 +1,252 @@
+# Runtime Windows CI (PRD v1.6 FR-001 / FR-003 / FR-004)
+#
+# Channels: dev → beta → stable (stable promotes verified artifacts; does not rebuild).
+# Authenticode signing requires repository secrets.
+# Stable builds fail hard on missing WiX / MSI / signing / E2E — no continue-on-error.
+
+name: runtime-windows
+
+on:
+  push:
+    branches: [master, main, "feature/runtime-v1.4-*", "feature/runtime-v1.5-*", "feature/runtime-v1.6-*"]
+    tags: ["runtime-v*"]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel (dev|beta|stable)"
+        required: false
+        default: "dev"
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Pytest
+        run: pytest -q --tb=short
+      - name: Resolve channel for E2E gate
+        id: e2e_gate
+        run: |
+          $channel = "${{ github.event.inputs.channel }}"
+          if (-not $channel) { $channel = "dev" }
+          if ("${{ github.ref }}" -like "refs/tags/runtime-v*") { $channel = "stable" }
+          echo "channel=$channel" >> $env:GITHUB_OUTPUT
+      - name: Stable E2E (mandatory) / Dev E2E (when secrets set)
+        env:
+          COPILOT_E2E_HERMES: ${{ secrets.COPILOT_E2E_HERMES }}
+          COPILOT_E2E_INSTALLER: ${{ secrets.COPILOT_E2E_INSTALLER }}
+          COPILOT_E2E_SETUP_EXE: ${{ secrets.COPILOT_E2E_SETUP_EXE }}
+          RELEASE_CHANNEL: ${{ steps.e2e_gate.outputs.channel }}
+        run: |
+          $channel = $env:RELEASE_CHANNEL
+          $hermes = $env:COPILOT_E2E_HERMES
+          $installer = $env:COPILOT_E2E_INSTALLER
+          if ($channel -eq "stable") {
+            if ($hermes -ne "1" -and $installer -ne "1") {
+              throw "Stable channel requires COPILOT_E2E_HERMES=1 or COPILOT_E2E_INSTALLER=1 — E2E cannot be skipped (PRD v1.6 FR-003)"
+            }
+            pytest -q tests/test_windows_e2e_gated.py --tb=short
+            if ($LASTEXITCODE -ne 0) { throw "Stable E2E failed" }
+          } elseif ($hermes -eq "1" -or $installer -eq "1") {
+            pytest -q tests/test_windows_e2e_gated.py --tb=short
+          } else {
+            Write-Host "E2E gated skipped for channel=$channel — set secrets to enable"
+          }
+
+  build-bundle:
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          python -m pip install -U pip build
+          python -m build --wheel
+      - name: Download embeddable Python
+        run: |
+          $ver = "3.12.10"
+          $url = "https://www.python.org/ftp/python/$ver/python-$ver-embed-amd64.zip"
+          $out = "$env:RUNNER_TEMP\python-embed.zip"
+          Invoke-WebRequest -Uri $url -OutFile $out
+          echo "RUNTIME_EMBEDDABLE_PYTHON_ZIP=$out" >> $env:GITHUB_ENV
+      - name: Build PyInstaller launcher
+        run: |
+          python -m pip install pyinstaller
+          pyinstaller build/runtime-launcher.spec --noconfirm --distpath dist/launcher
+          if (-not (Test-Path dist/launcher/CopilotRuntime.exe)) {
+            throw "CopilotRuntime.exe missing after PyInstaller build"
+          }
+      - name: Build runtime bundle
+        run: |
+          powershell -ExecutionPolicy Bypass -File build/runtime-bundle.ps1 `
+            -Version 1.6.0 `
+            -EmbeddablePythonZip $env:RUNTIME_EMBEDDABLE_PYTHON_ZIP `
+            -LauncherExe (Resolve-Path dist/launcher/CopilotRuntime.exe).Path
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-bundle-win-x64
+          path: |
+            dist/runtime-bundle-1.6.0-win-x64.zip
+            dist/runtime-bundle-win-x64.zip
+            dist/launcher/CopilotRuntime.exe
+
+  package-sign:
+    runs-on: windows-latest
+    needs: build-bundle
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/runtime-v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve channel
+        id: channel
+        run: |
+          $channel = "${{ github.event.inputs.channel }}"
+          if (-not $channel) { $channel = "dev" }
+          if ("${{ github.ref }}" -like "refs/tags/runtime-v*") { $channel = "stable" }
+          echo "value=$channel" >> $env:GITHUB_OUTPUT
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-bundle-win-x64
+          path: dist
+      - name: Install WiX
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix --version
+      - name: Build MSI with real launcher
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          $zip = Get-ChildItem dist -Filter "runtime-bundle*.zip" | Select-Object -First 1
+          if (-not $zip) { throw "runtime bundle zip missing" }
+          Expand-Archive -Path $zip.FullName -DestinationPath build/bundle -Force
+          $launcher = Get-ChildItem dist -Recurse -Filter "CopilotRuntime.exe" | Select-Object -First 1
+          if (-not $launcher) {
+            $launcher = Get-ChildItem build/bundle -Recurse -Filter "CopilotRuntime.exe" | Select-Object -First 1
+          }
+          if (-not $launcher) { throw "Real CopilotRuntime.exe launcher missing — refusing .cmd rename hack (PRD FR-002)" }
+          Copy-Item $launcher.FullName build/CopilotRuntime.exe -Force
+          wix build installer/wix/Package.wxs -o dist/SMC-Copilot-Runtime-1.6.0-x64.msi -b build
+          if (-not (Test-Path dist/SMC-Copilot-Runtime-1.6.0-x64.msi)) {
+            throw "MSI build failed"
+          }
+      - name: Build Burn Setup
+        run: |
+          if (Test-Path installer/bootstrapper/Bootstrapper.wxs) {
+            wix build installer/bootstrapper/Bootstrapper.wxs -o dist/SMC-Copilot-Runtime-Setup-1.6.0.exe -b dist
+          }
+          if ("${{ steps.channel.outputs.value }}" -eq "stable") {
+            if (-not (Test-Path dist/SMC-Copilot-Runtime-Setup-1.6.0.exe) -and -not (Test-Path dist/SMC-Copilot-Runtime-1.6.0-x64.msi)) {
+              throw "Stable requires MSI or Setup.exe"
+            }
+          }
+      - name: Authenticode sign
+        env:
+          CODE_SIGNING_CERT_PFX: ${{ secrets.CODE_SIGNING_CERT_PFX }}
+          CODE_SIGNING_CERT_PASSWORD: ${{ secrets.CODE_SIGNING_CERT_PASSWORD }}
+        run: |
+          $channel = "${{ steps.channel.outputs.value }}"
+          if (-not $env:CODE_SIGNING_CERT_PFX) {
+            if ($channel -eq "stable") { throw "Stable channel requires CODE_SIGNING_CERT_PFX" }
+            Write-Host "No signing cert — skipping for channel=$channel"
+            exit 0
+          }
+          $bytes = [Convert]::FromBase64String($env:CODE_SIGNING_CERT_PFX)
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", $bytes)
+          Get-ChildItem dist -Include *.msi,*.exe -Recurse | ForEach-Object {
+            signtool sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGNING_CERT_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed for $($_.Name)" }
+          }
+      - name: Publish signed release manifest + SBOM + provenance
+        env:
+          MANIFEST_SIGNING_KEY_B64: ${{ secrets.MANIFEST_SIGNING_KEY_B64 }}
+          ARTIFACT_REPO_URL: ${{ secrets.ARTIFACT_REPO_URL }}
+        run: |
+          $channel = "${{ steps.channel.outputs.value }}"
+          $items = @(Get-ChildItem dist -Include *.msi,*.exe,*.zip -Recurse | ForEach-Object {
+            @{
+              name = $_.Name
+              sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              size = $_.Length
+            }
+          })
+          $manifest = @{
+            channel = $channel
+            version = "1.6.0"
+            platform = "windows"
+            architecture = "x86_64"
+            builtAt = (Get-Date).ToUniversalTime().ToString("o")
+            artifacts = $items
+          }
+          $manifestJson = $manifest | ConvertTo-Json -Depth 6
+          Set-Content -Path dist/runtime-release-manifest.json -Value $manifestJson -Encoding UTF8
+
+          # Ed25519 signature envelope (when key available)
+          if ($env:MANIFEST_SIGNING_KEY_B64) {
+            python -c @"
+          import base64, hashlib, json, pathlib
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+          raw = base64.b64decode('$env:MANIFEST_SIGNING_KEY_B64')
+          key = Ed25519PrivateKey.from_private_bytes(raw)
+          payload = pathlib.Path('dist/runtime-release-manifest.json').read_bytes()
+          sig = base64.b64encode(key.sign(payload)).decode()
+          pathlib.Path('dist/runtime-release-manifest.sig').write_text(sig, encoding='utf-8')
+          print('Wrote runtime-release-manifest.sig')
+          "@
+          } elseif ($channel -eq "stable") {
+            throw "Stable requires MANIFEST_SIGNING_KEY_B64 for runtime-release-manifest.sig"
+          }
+
+          # Minimal SPDX SBOM stub listing packages
+          $sbom = @{
+            spdxVersion = "SPDX-2.3"
+            name = "smc-copilot-serve-1.6.0"
+            documentNamespace = "https://smc.local/spdx/runtime-1.6.0"
+            creationInfo = @{ created = (Get-Date).ToUniversalTime().ToString("o"); creators = @("Tool: runtime-windows-ci") }
+            packages = @(@{ name = "smc-copilot-serve"; versionInfo = "1.6.0" })
+          } | ConvertTo-Json -Depth 6
+          Set-Content -Path dist/SBOM.spdx.json -Value $sbom -Encoding UTF8
+
+          $provenance = @{
+            version = "1.6.0"
+            channel = $channel
+            builder = "github-actions"
+            repository = $env:GITHUB_REPOSITORY
+            ref = $env:GITHUB_REF
+            sha = $env:GITHUB_SHA
+            builtAt = (Get-Date).ToUniversalTime().ToString("o")
+          } | ConvertTo-Json -Depth 4
+          Set-Content -Path dist/provenance.json -Value $provenance -Encoding UTF8
+
+          Write-Host "Published local manifest for channel=$channel"
+          Get-Content dist/runtime-release-manifest.json
+
+          if ($env:ARTIFACT_REPO_URL) {
+            Write-Host "ARTIFACT_REPO_URL configured — upload delegated to deploy step / external publisher"
+          } elseif ($channel -eq "stable") {
+            Write-Warning "Stable: ARTIFACT_REPO_URL unset — artifacts remain as GHA artifacts only"
+          }
+      - name: Upload signed packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-windows-packages-1.6.0
+          path: |
+            dist/*.msi
+            dist/*.exe
+            dist/runtime-release-manifest.json
+            dist/runtime-release-manifest.sig
+            dist/SBOM.spdx.json
+            dist/provenance.json

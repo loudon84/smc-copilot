@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import asyncio
+import shutil
+from pathlib import Path
+
+import httpx
+
+from core.config import Settings
+from core.logging import get_logger
+from core.runtime_errors import RuntimeServiceError
+from runtime.archive_policy import ArchivePolicy
+from runtime.cancellation_token import CancellationToken, JobCancelled
+
+logger = get_logger(__name__)
+
+
+class ArtifactDownloader:
+    def __init__(self, *, timeout: float = 300.0, settings: Settings | None = None) -> None:
+        self._timeout = timeout
+        self._settings = settings
+        self._policy = ArchivePolicy(settings) if settings is not None else None
+
+    def _policy_or_default(self) -> ArchivePolicy:
+        if self._policy is None:
+            from core.config import get_settings
+
+            self._policy = ArchivePolicy(get_settings())
+        return self._policy
+
+    async def download(
+        self,
+        url: str,
+        dest: Path,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> Path:
+        token = cancellation_token
+        policy = self._policy_or_default()
+        policy.validate_url(url)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if url.startswith("file:"):
+            from urllib.parse import unquote, urlparse
+            from urllib.request import url2pathname
+
+            parsed = urlparse(url)
+            src = Path(url2pathname(unquote(parsed.path)))
+            if not src.exists() and parsed.netloc:
+                src = Path(f"{parsed.netloc}:{url2pathname(unquote(parsed.path))}")
+            if not src.exists():
+                try:
+                    src = Path(unquote(url.removeprefix("file:///")))
+                    if not src.exists():
+                        src = Path(unquote(url.removeprefix("file://")))
+                except Exception:
+                    pass
+            if not src.exists():
+                raise RuntimeServiceError(
+                    f"Local artifact not found: {url}",
+                    code="artifact_download_failed",
+                    details={"url": url},
+                )
+            await asyncio.to_thread(shutil.copy2, src, dest)
+            if token:
+                token.raise_if_cancelled()
+            return dest
+
+        tmp = dest.with_suffix(dest.suffix + ".partial")
+        try:
+            async with httpx.AsyncClient(timeout=policy.timeout, follow_redirects=True) as client:
+                async with client.stream("GET", url) as resp:
+                    policy.validate_redirect_chain(resp)
+                    if resp.status_code >= 400:
+                        raise RuntimeServiceError(
+                            f"Download failed: HTTP {resp.status_code}",
+                            code="artifact_download_failed",
+                            details={"url": url, "status": resp.status_code},
+                        )
+                    content_length = resp.headers.get("content-length")
+                    if content_length:
+                        policy.validate_artifact_size(int(content_length))
+                    total = 0
+                    with tmp.open("wb") as fh:
+                        async for chunk in resp.aiter_bytes():
+                            if token and token.is_cancelled:
+                                raise JobCancelled()
+                            total += len(chunk)
+                            policy.validate_artifact_size(total)
+                            fh.write(chunk)
+            if token:
+                token.raise_if_cancelled()
+            tmp.replace(dest)
+            return dest
+        except JobCancelled:
+            policy.cleanup_partial(tmp)
+            raise
+        except RuntimeServiceError:
+            policy.cleanup_partial(tmp)
+            raise
+        except httpx.HTTPError as exc:
+            policy.cleanup_partial(tmp)
+            raise RuntimeServiceError(
+                f"Network error downloading artifact: {exc}",
+                code="artifact_download_failed",
+                details={"url": url},
+            ) from exc
+
+    async def fetch_json(self, url: str) -> dict:
+        policy = self._policy_or_default()
+        policy.validate_url(url)
+        if url.startswith("file:"):
+            from urllib.parse import unquote, urlparse
+            from urllib.request import url2pathname
+            import json
+
+            parsed = urlparse(url)
+            src = Path(url2pathname(unquote(parsed.path)))
+            if not src.exists() and parsed.netloc:
+                src = Path(f"{parsed.netloc}:{url2pathname(unquote(parsed.path))}")
+            if not src.exists():
+                try:
+                    src = Path(unquote(url.removeprefix("file:///")))
+                    if not src.exists():
+                        src = Path(unquote(url.removeprefix("file://")))
+                except Exception:
+                    pass
+            if not src.exists():
+                raise RuntimeServiceError(f"Manifest file not found: {url}", code="manifest_invalid")
+            raw = src.read_bytes()
+            policy.validate_manifest_size(len(raw))
+            data = json.loads(raw.decode("utf-8"))
+            if not isinstance(data, dict):
+                raise RuntimeServiceError("Manifest is not an object", code="manifest_invalid")
+            return data
+        try:
+            async with httpx.AsyncClient(timeout=policy.timeout, follow_redirects=True) as client:
+                resp = await client.get(url)
+                policy.validate_redirect_chain(resp)
+                if resp.status_code >= 400:
+                    raise RuntimeServiceError(
+                        f"Manifest fetch failed: HTTP {resp.status_code}",
+                        code="manifest_invalid",
+                        details={"url": url},
+                    )
+                policy.validate_manifest_size(len(resp.content))
+                data = resp.json()
+                if not isinstance(data, dict):
+                    raise RuntimeServiceError("Manifest is not an object", code="manifest_invalid")
+                return data
+        except RuntimeServiceError:
+            raise
+        except Exception as exc:
+            raise RuntimeServiceError(
+                f"Failed to fetch manifest: {exc}",
+                code="network_unavailable",
+                details={"url": url},
+            ) from exc
+
+    def extract_archive(self, archive: Path, dest_dir: Path) -> Path:
+        return self._policy_or_default().safe_extract_archive(archive, dest_dir)
+
+    async def extract_archive_async(self, archive: Path, dest_dir: Path) -> Path:
+        return await asyncio.to_thread(self.extract_archive, archive, dest_dir)
+
