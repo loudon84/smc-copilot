@@ -1,0 +1,49 @@
+name: Contracts CI
+
+on:
+  push:
+    paths:
+      - "services/runtime/src/api/**"
+      - "services/runtime/src/**/schemas/**"
+      - "contracts/**"
+      - "packages/runtime-client-ts/**"
+      - "tools/contract-generate/**"
+      - ".github/workflows/contracts-ci.yml"
+  pull_request:
+    paths:
+      - "services/runtime/src/api/**"
+      - "services/runtime/src/**/schemas/**"
+      - "contracts/**"
+      - "packages/runtime-client-ts/**"
+      - "tools/contract-generate/**"
+      - ".github/workflows/contracts-ci.yml"
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - uses: astral-sh/setup-uv@v5
+      - run: npm ci
+      - name: Install Runtime
+        working-directory: services/runtime
+        run: uv sync --extra dev
+      - name: Generate contracts
+        run: npm run contracts:generate
+      - name: Drift check
+        run: npm run contracts:check
+      - name: Breaking change check
+        run: uv run --project services/runtime python tools/contract-generate/check_breaking_change.py
+      - name: Generate TS client
+        run: npm run client:generate
+      - name: Typecheck client
+        run: npx nx run runtime-client-ts:typecheck
+      - name: Ensure no uncommitted contract changes
+        run: git diff --exit-code

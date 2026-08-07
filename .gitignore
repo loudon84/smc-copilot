@@ -9,8 +9,11 @@
 # Build
 **/dist/
 **/out/
-**/release/
 **/coverage/
+# Electron/Installer release outputs (keep tools/release scripts tracked)
+apps/desktop/release/
+services/runtime/release/
+artifacts/
 **/*.tsbuildinfo
 .nx/
 .cache/

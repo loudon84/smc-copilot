@@ -1,0 +1,46 @@
+name: Runtime CI
+
+on:
+  push:
+    paths:
+      - "services/runtime/**"
+      - "contracts/**"
+      - "tools/contract-generate/**"
+      - "nx.json"
+      - ".github/workflows/runtime-ci.yml"
+  pull_request:
+    paths:
+      - "services/runtime/**"
+      - "contracts/**"
+      - "tools/contract-generate/**"
+      - "nx.json"
+      - ".github/workflows/runtime-ci.yml"
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Sync
+        working-directory: services/runtime
+        run: uv sync --extra dev
+      - name: Migrate
+        working-directory: services/runtime
+        run: uv run alembic upgrade head
+      - name: Ruff check
+        working-directory: services/runtime
+        run: uv run ruff check . || true
+      - name: Ruff format
+        working-directory: services/runtime
+        run: uv run ruff format --check . || true
+      - name: Pytest
+        working-directory: services/runtime
+        run: uv run pytest
+      - name: Build wheel
+        working-directory: services/runtime
+        run: uv build

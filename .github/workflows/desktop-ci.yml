@@ -1,0 +1,65 @@
+name: Desktop CI
+
+on:
+  push:
+    paths:
+      - "apps/desktop/**"
+      - "packages/runtime-client-ts/**"
+      - "contracts/**"
+      - "nx.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/desktop-ci.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "packages/runtime-client-ts/**"
+      - "contracts/**"
+      - "nx.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/desktop-ci.yml"
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/package-lock.json
+      - name: Install root
+        run: npm ci
+      - name: Install desktop
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Lint
+        run: npx nx run desktop:lint
+      - name: Typecheck
+        run: npx nx run desktop:typecheck
+      - name: Test
+        run: npx nx run desktop:test
+      - name: Build
+        run: npx nx run desktop:build
+
+  package-win:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: desktop
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/package-lock.json
+      - run: npm ci
+      - working-directory: apps/desktop
+        run: npm ci
+      - run: npx nx run desktop:package-win

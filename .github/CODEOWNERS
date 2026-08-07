@@ -1,0 +1,8 @@
+# Default owners — refine per team once GitHub teams exist.
+* @loudon84
+
+/apps/desktop/ @loudon84
+/services/runtime/ @loudon84
+/contracts/ @loudon84
+/packages/runtime-client-ts/ @loudon84
+/tools/ @loudon84

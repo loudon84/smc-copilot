@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+      - "runtime-v*"
+      - "contracts-v*"
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "Component to release"
+        required: true
+        type: choice
+        options:
+          - desktop
+          - runtime
+          - contracts
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Verify version bumps
+        run: node tools/release/verify-version-bumps.mjs
+      - name: Build release manifest
+        run: node tools/release/build-release-manifest.mjs
+      - name: Upload manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: artifacts/release-manifest.json

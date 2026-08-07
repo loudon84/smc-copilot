@@ -1,0 +1,44 @@
+name: Integration CI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 16 * * *"
+  push:
+    paths:
+      - "apps/desktop/src/main/copilot-runtime-client/**"
+      - "services/runtime/src/api/**"
+      - "contracts/**"
+      - "packages/runtime-client-ts/**"
+      - "tools/integration/**"
+      - ".github/workflows/integration-ci.yml"
+  pull_request:
+    paths:
+      - "apps/desktop/src/main/copilot-runtime-client/**"
+      - "services/runtime/src/api/**"
+      - "contracts/**"
+      - "packages/runtime-client-ts/**"
+      - "tools/integration/**"
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - uses: astral-sh/setup-uv@v5
+      - run: npm ci
+      - working-directory: services/runtime
+        run: uv sync --extra dev
+      - working-directory: services/runtime
+        run: uv run alembic upgrade head
+      - name: Integration smoke
+        run: npx nx run integration-e2e:test
+        env:
+          RUNTIME_REQUIRE_AUTH: "false"
