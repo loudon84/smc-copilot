@@ -1,6 +1,6 @@
 /**
- * Hand-authored Serve Chat Runtime v2 contracts (PRD §8–§9).
- * Not yet in OpenAPI snapshot — generate:serve-client will align later.
+ * Hand-authored Serve Chat Runtime v2 contracts until Runtime OpenAPI includes chat-runs*.
+ * Desktop OpenAPI snapshot removed (PRD v1.1 §4.1); types move to @smc/runtime-client after Phase 5.
  */
 
 import type {

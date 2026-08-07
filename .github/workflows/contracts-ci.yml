@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -40,7 +42,12 @@ jobs:
       - name: Drift check
         run: npm run contracts:check
       - name: Breaking change check
+        env:
+          CONTRACT_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
         run: uv run --project services/runtime python tools/contract-generate/check_breaking_change.py
+      - name: Install runtime-client-ts
+        working-directory: packages/runtime-client-ts
+        run: npm ci
       - name: Generate TS client
         run: npm run client:generate
       - name: Typecheck client
