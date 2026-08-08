@@ -80,7 +80,16 @@ class DesktopBootCoordinator {
   }
 
   async resolveStartupDecision(): Promise<StartupDecision> {
-    const runtimeState = await this.runtime();
+    let runtimeState = await this.runtime();
+    // Boot may race Serve startup: if still transitional, do one fresh handshake
+    // before freezing the Renderer recovery snapshot.
+    if (runtimeState.state === "Connecting" || runtimeState.state === "RuntimeStarting") {
+      try {
+        runtimeState = await runRuntimeHandshake();
+      } catch {
+        runtimeState = getRuntimeConnectionState();
+      }
+    }
     return resolveStartupDecisionFromRuntime(runtimeState);
   }
 

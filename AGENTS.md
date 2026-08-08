@@ -15,4 +15,5 @@
 - Never scan references, build outputs, runtime data or archived PRDs
   unless explicitly requested.
 
-- Desktop is a Runtime Client; Agent control plane is `services/runtime` only (v1.4).
+- Desktop is a Runtime Client; Agent control plane is `services/runtime` only (v1.4 / v1.4.1).
+- Desktop must not listen on Agent ports (`18781` removed); Connection Ready follows `readiness.service` only.

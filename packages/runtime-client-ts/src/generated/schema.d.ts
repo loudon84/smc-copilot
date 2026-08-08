@@ -610,6 +610,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expert-mcp/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expert Mcp Get Config */
+        get: operations["expert_mcp_get_config_api_v1_expert_mcp_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Expert Mcp Patch Config */
+        patch: operations["expert_mcp_patch_config_api_v1_expert_mcp_config_patch"];
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Expert Mcp Connect */
+        post: operations["expert_mcp_connect_api_v1_expert_mcp_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expert Mcp Diagnostics */
+        get: operations["expert_mcp_diagnostics_api_v1_expert_mcp_diagnostics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expert Mcp Logs */
+        get: operations["expert_mcp_logs_api_v1_expert_mcp_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/reconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Expert Mcp Reconnect */
+        post: operations["expert_mcp_reconnect_api_v1_expert_mcp_reconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expert Mcp Status */
+        get: operations["expert_mcp_status_api_v1_expert_mcp_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Expert Mcp Test */
+        post: operations["expert_mcp_test_api_v1_expert_mcp_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expert-mcp/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expert Mcp Tools */
+        get: operations["expert_mcp_tools_api_v1_expert_mcp_tools_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/gateways/{gateway_id}/health": {
         parameters: {
             query?: never;
@@ -921,6 +1058,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/expert-mcp/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable Expert Mcp */
+        post: operations["disable_expert_mcp_api_v1_instances__instance_id__expert_mcp_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/expert-mcp/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Enable Expert Mcp */
+        post: operations["enable_expert_mcp_api_v1_instances__instance_id__expert_mcp_enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/health": {
         parameters: {
             query?: never;
@@ -1043,6 +1214,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Memory */
+        get: operations["get_memory_api_v1_instances__instance_id__memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/memory/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Memory Content */
+        put: operations["put_memory_content_api_v1_instances__instance_id__memory_content_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/memory/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Memory Entry */
+        post: operations["add_memory_entry_api_v1_instances__instance_id__memory_entries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/memory/entries/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Memory Entry */
+        delete: operations["delete_memory_entry_api_v1_instances__instance_id__memory_entries__index__delete"];
+        options?: never;
+        head?: never;
+        /** Update Memory Entry */
+        patch: operations["update_memory_entry_api_v1_instances__instance_id__memory_entries__index__patch"];
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/restart": {
         parameters: {
             query?: never;
@@ -1086,6 +1326,26 @@ export interface paths {
         };
         /** Search Sessions */
         get: operations["search_sessions_api_v1_instances__instance_id__sessions_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Stats
+         * @description PRD v1.4 §31 — session/message counts without Desktop reading state.db.
+         */
+        get: operations["session_stats_api_v1_instances__instance_id__sessions_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1157,6 +1417,23 @@ export interface paths {
         put?: never;
         /** Stop Instance */
         post: operations["stop_instance_api_v1_instances__instance_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/user-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put User Profile */
+        put: operations["put_user_profile_api_v1_instances__instance_id__user_profile_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1908,6 +2185,26 @@ export interface paths {
         };
         /** Runtime Mode */
         get: operations["runtime_mode_api_v1_runtime_mode_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runtime/readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Readiness
+         * @description PRD v1.4 domain readiness (service / execution / maintenance / expertMcp).
+         */
+        get: operations["runtime_readiness_api_v1_runtime_readiness_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3650,6 +3947,15 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /** ExpertMcpConfigPatch */
+        ExpertMcpConfigPatch: {
+            /** Accesstoken */
+            accessToken?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Endpoint */
+            endpoint?: string | null;
+        };
         /** GatewayHealthResponse */
         GatewayHealthResponse: {
             /** Gateway Id */
@@ -3939,6 +4245,56 @@ export interface components {
             transport: string;
             /** Url */
             url?: string | null;
+        };
+        /** MemoryContentPutRequest */
+        MemoryContentPutRequest: {
+            /** Content */
+            content: string;
+        };
+        /** MemoryEntry */
+        MemoryEntry: {
+            /** Content */
+            content: string;
+            /** Index */
+            index: number;
+        };
+        /** MemoryEntryCreateRequest */
+        MemoryEntryCreateRequest: {
+            /** Content */
+            content: string;
+        };
+        /** MemoryEntryUpdateRequest */
+        MemoryEntryUpdateRequest: {
+            /** Content */
+            content: string;
+        };
+        /** MemoryFileInfo */
+        MemoryFileInfo: {
+            /** Charcount */
+            charCount: number;
+            /** Charlimit */
+            charLimit: number;
+            /** Content */
+            content: string;
+            /** Entries */
+            entries?: components["schemas"]["MemoryEntry"][];
+            /** Exists */
+            exists: boolean;
+            /** Lastmodified */
+            lastModified?: number | null;
+        };
+        /** MemoryInfoResponse */
+        MemoryInfoResponse: {
+            memory: components["schemas"]["MemoryFileInfo"];
+            stats: components["schemas"]["SessionStatsInfo"];
+            user: components["schemas"]["UserProfileInfo"];
+        };
+        /** MemoryMutationResponse */
+        MemoryMutationResponse: {
+            /** Error */
+            error?: string | null;
+            /** Success */
+            success: boolean;
         };
         /** PairingConfirmRequest */
         PairingConfirmRequest: {
@@ -4249,7 +4605,7 @@ export interface components {
              */
             apiVersion: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify" | "runtime.readiness.v2" | "runtime.logs" | "hermes.lifecycle.runtime-managed" | "instances.runtime-managed" | "memory.runtime-managed" | "sessions.runtime-managed" | "expert-mcp.runtime-managed" | "expert-mcp.tools" | "expert-mcp.diagnostics")[];
         };
         /** RuntimeCompatibilityFlags */
         RuntimeCompatibilityFlags: {
@@ -4280,6 +4636,24 @@ export interface components {
             minDesktopApi: string;
             /** Notes */
             notes?: string[];
+        };
+        /**
+         * RuntimeDomainReadiness
+         * @description One readiness domain (service / execution / maintenance / expertMcp).
+         */
+        RuntimeDomainReadiness: {
+            /** Chatready */
+            chatReady?: boolean | null;
+            /** Checks */
+            checks?: {
+                [key: string]: string;
+            };
+            /** Ready */
+            ready: boolean;
+            /** Status */
+            status?: string | null;
+            /** Taskready */
+            taskReady?: boolean | null;
         };
         /** RuntimeInstallRequest */
         RuntimeInstallRequest: {
@@ -4351,6 +4725,16 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * RuntimeReadinessResponse
+         * @description PRD v1.4 three-layer readiness — Desktop gates Chat/Task/MCP separately.
+         */
+        RuntimeReadinessResponse: {
+            execution: components["schemas"]["RuntimeDomainReadiness"];
+            expertMcp: components["schemas"]["RuntimeDomainReadiness"];
+            maintenance: components["schemas"]["RuntimeDomainReadiness"];
+            service: components["schemas"]["RuntimeDomainReadiness"];
+        };
         /** RuntimeRollbackRequest */
         RuntimeRollbackRequest: {
             /** Instanceids */
@@ -4378,7 +4762,7 @@ export interface components {
             /** Datadir */
             dataDir: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify" | "runtime.readiness.v2" | "runtime.logs" | "hermes.lifecycle.runtime-managed" | "instances.runtime-managed" | "memory.runtime-managed" | "sessions.runtime-managed" | "expert-mcp.runtime-managed" | "expert-mcp.tools" | "expert-mcp.diagnostics")[];
             /** Hermeshome */
             hermesHome: string;
             /** Hermesinstalled */
@@ -4463,6 +4847,10 @@ export interface components {
             installPath: string;
             /** Installedat */
             installedAt?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
             /** Pythonpath */
             pythonPath?: string | null;
             /** Status */
@@ -4512,6 +4900,13 @@ export interface components {
             uptime_seconds: number;
             /** Version */
             version: string;
+        };
+        /** SessionStatsInfo */
+        SessionStatsInfo: {
+            /** Totalmessages */
+            totalMessages: number;
+            /** Totalsessions */
+            totalSessions: number;
         };
         /** SetInstanceChatModelConfigPayload */
         SetInstanceChatModelConfigPayload: {
@@ -4773,6 +5168,24 @@ export interface components {
         UploadAttachmentsResponse: {
             /** Attachments */
             attachments?: components["schemas"]["ChatAttachmentResponse"][];
+        };
+        /** UserProfileInfo */
+        UserProfileInfo: {
+            /** Charcount */
+            charCount: number;
+            /** Charlimit */
+            charLimit: number;
+            /** Content */
+            content: string;
+            /** Exists */
+            exists: boolean;
+            /** Lastmodified */
+            lastModified?: number | null;
+        };
+        /** UserProfilePutRequest */
+        UserProfilePutRequest: {
+            /** Content */
+            content: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -6577,6 +6990,320 @@ export interface operations {
             };
         };
     };
+    expert_mcp_get_config_api_v1_expert_mcp_config_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_patch_config_api_v1_expert_mcp_config_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExpertMcpConfigPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_connect_api_v1_expert_mcp_connect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_diagnostics_api_v1_expert_mcp_diagnostics_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_logs_api_v1_expert_mcp_logs_get: {
+        parameters: {
+            query?: {
+                tail?: number;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_reconnect_api_v1_expert_mcp_reconnect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_status_api_v1_expert_mcp_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_test_api_v1_expert_mcp_test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    expert_mcp_tools_api_v1_expert_mcp_tools_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     gateway_health_api_v1_gateways__gateway_id__health_get: {
         parameters: {
             query?: never;
@@ -7389,6 +8116,78 @@ export interface operations {
             };
         };
     };
+    disable_expert_mcp_api_v1_instances__instance_id__expert_mcp_disable_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_expert_mcp_api_v1_instances__instance_id__expert_mcp_enable_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     instance_health_api_v1_instances__instance_id__health_get: {
         parameters: {
             query?: never;
@@ -7749,6 +8548,190 @@ export interface operations {
             };
         };
     };
+    get_memory_api_v1_instances__instance_id__memory_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryInfoResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_memory_content_api_v1_instances__instance_id__memory_content_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryContentPutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_memory_entry_api_v1_instances__instance_id__memory_entries_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryEntryCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_memory_entry_api_v1_instances__instance_id__memory_entries__index__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_memory_entry_api_v1_instances__instance_id__memory_entries__index__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryEntryUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     restart_instance_api_v1_instances__instance_id__restart_post: {
         parameters: {
             query?: never;
@@ -7844,6 +8827,42 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_stats_api_v1_instances__instance_id__sessions_stats_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -8021,6 +9040,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_user_profile_api_v1_instances__instance_id__user_profile_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserProfilePutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9727,6 +10784,38 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_readiness_api_v1_runtime_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeReadinessResponse"];
                 };
             };
             /** @description Validation Error */

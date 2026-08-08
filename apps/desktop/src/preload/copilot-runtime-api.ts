@@ -30,6 +30,7 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
     ipcRenderer.invoke("copilot-runtime:start-rollback", body),
   startRuntimeDoctor: () => ipcRenderer.invoke("copilot-runtime:start-doctor"),
   getRuntimeJob: (jobId: string) => ipcRenderer.invoke("copilot-runtime:get-job", jobId),
+  listRuntimeJobs: () => ipcRenderer.invoke("copilot-runtime:list-jobs"),
   listRuntimeVersions: () => ipcRenderer.invoke("copilot-runtime:list-versions"),
   isServeControlPlane: () => ipcRenderer.invoke("copilot-runtime:is-serve-control-plane"),
   listInstances: () => ipcRenderer.invoke("copilot-runtime:list-instances"),

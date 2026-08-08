@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import type { RuntimeJobView } from "../../../../../shared/copilot-runtime";
 
 type LogTab = "runtime" | "instance" | "expertMcp" | "jobs";
+
+function jobIdOf(job: RuntimeJobView & { id?: string }): string {
+  return job.jobId || job.id || "";
+}
 
 export function RuntimeLogsSection(): React.JSX.Element {
   const [tab, setTab] = useState<LogTab>("runtime");
@@ -8,6 +13,8 @@ export function RuntimeLogsSection(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [jobs, setJobs] = useState<RuntimeJobView[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!window.copilotRuntime) return;
@@ -30,17 +37,52 @@ export function RuntimeLogsSection(): React.JSX.Element {
         }
       } else if (tab === "expertMcp") {
         const diag = await window.copilotRuntime.getExpertMcpDiagnostics();
-        setLines(JSON.stringify(diag ?? {}, null, 2));
+        setLines(
+          [
+            "# Expert MCP Diagnostics (no dedicated log API yet)",
+            JSON.stringify(diag ?? {}, null, 2),
+          ].join("\n"),
+        );
       } else {
-        const summary = await window.copilotRuntime.getDiagnosticsSummary();
-        setLines(JSON.stringify(summary ?? {}, null, 2));
+        const list = (await window.copilotRuntime.listRuntimeJobs?.()) ?? [];
+        setJobs(list);
+        const preferred =
+          selectedJobId && list.some((j) => jobIdOf(j) === selectedJobId)
+            ? selectedJobId
+            : list[0]
+              ? jobIdOf(list[0])
+              : null;
+        setSelectedJobId(preferred);
+        if (!preferred) {
+          setLines("(no runtime jobs)");
+        } else {
+          const detail = await window.copilotRuntime.getRuntimeJob(preferred);
+          const summary = list
+            .slice(0, 20)
+            .map(
+              (j) =>
+                `${jobIdOf(j)} · ${j.jobType ?? "job"} · ${j.status}${
+                  j.errorMessage ? ` · ${j.errorMessage}` : ""
+                }`,
+            )
+            .join("\n");
+          setLines(
+            [
+              "# Runtime Jobs",
+              summary || "(empty)",
+              "",
+              `# Selected Job ${preferred}`,
+              JSON.stringify(detail ?? {}, null, 2),
+            ].join("\n"),
+          );
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [tab]);
+  }, [tab, selectedJobId]);
 
   useEffect(() => {
     void refresh();
@@ -63,20 +105,48 @@ export function RuntimeLogsSection(): React.JSX.Element {
   }
 
   return (
-    <div className="settings-section" data-testid="runtime-logs-section">
+    <div
+      id="runtime-logs-section"
+      className="settings-section"
+      data-testid="runtime-logs-section"
+    >
       <div className="settings-section-title">Runtime Logs & Diagnostics</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        {(["runtime", "instance", "expertMcp", "jobs"] as const).map((key) => (
+        {(
+          [
+            ["runtime", "Runtime"],
+            ["instance", "Hermes Instance"],
+            ["expertMcp", "Expert MCP Diagnostics"],
+            ["jobs", "Runtime Jobs"],
+          ] as const
+        ).map(([key, label]) => (
           <button
             key={key}
             type="button"
             className={`btn ${tab === key ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setTab(key)}
           >
-            {key === "expertMcp" ? "Expert MCP" : key === "instance" ? "Hermes Instance" : key}
+            {label}
           </button>
         ))}
       </div>
+      {tab === "jobs" && jobs.length > 0 ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          {jobs.slice(0, 12).map((job) => {
+            const id = jobIdOf(job);
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`btn ${selectedJobId === id ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setSelectedJobId(id)}
+              >
+                {(job.jobType ?? "job").slice(0, 18)} · {job.status}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {error ? (
         <p className="settings-field-hint" role="alert">
           {error}

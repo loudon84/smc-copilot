@@ -110,7 +110,7 @@ Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc
 
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
-| `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 7 态：Connecting / PairingRequired / Incompatible / RuntimeMissing / RuntimeStarting / RuntimeDegraded / Ready；**无 token** |
+| `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 7 态；**Ready 仅当 readiness.service.ready**（v1.4.1）；**无 token** |
 | `copilot-runtime:get-capabilities` | invoke | — | `RuntimeCapabilitiesView \| null` | |
 | `copilot-runtime:get-diagnostics-summary` | invoke | — | `RuntimeDiagnosticsSummary \| null` | 含 `deviceTokenPersistence`（secure / memory-only）告警 |
 | `copilot-runtime:pair-and-connect` | invoke | — | `RuntimePairAndConnectResult` | **v1.3.2** Main 原子事务：start→confirm→saveDeviceToken→handshake；**不返回 challenge/token** |
@@ -128,7 +128,8 @@ Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc
 | `copilot-runtime:get-instance-health` | invoke | `instanceId` | `ServeInstanceHealth \| null` | |
 | `copilot-runtime:get-instance-logs` | invoke | `instanceId`, `{ tail? }` | `ServeInstanceLogsResult \| null` | |
 | `copilot-runtime:get-diagnostics-environment` | invoke | — | `ServeDiagnosticsEnvironment \| null` | |
-| `copilot-runtime:get-diagnostics-logs` | invoke | `{ tail? }` | `ServeDiagnosticsLogsResult \| null` | |
+| `copilot-runtime:get-diagnostics-logs` | invoke | `{ tail? }` | `ServeDiagnosticsLogsResult \| null` | v1.4.1 含 `source`（Runtime 日志文件路径） |
+| `copilot-runtime:list-jobs` | invoke | — | `RuntimeJobView[]` | Settings Logs → Runtime Jobs |
 | `copilot-runtime:proxy-fetch` | invoke | `{ path, method?, body?, query? }` | `{ ok, status, data, error }` | Main 带 Bearer 代理 Serve JSON；迁移期桥接 legacy Renderer HTTP |
 
 | Event | Payload | Notes |
@@ -728,17 +729,11 @@ Desktop MCP 管理面：`~/.hermes/desktop/mcp-registry.db`。Renderer 仅通过
 | `mcp:list-invocations` | `ListMcpInvocationsInput?` | `McpInvocation[]` |
 | `mcp:list-artifacts` | `invocationId` | `McpArtifact[]` |
 
-**Main 事件（Preload unsubscribe）**
+**v1.4.1 Compatibility Adapter**：Main `mcp-compat-ipc.ts` 保留既有 `mcp:*` channel 名；servers CRUD / test / enable / disable 委托 `ServeMcpAdapter`（Runtime `/instances/{id}/mcp/servers*`）。无 Runtime 对应能力（bind-tool / invoke-test / bridge / sync-tools 等）返回显式 `MCP_MOVED_TO_RUNTIME`。**已删除** Desktop MCP Proxy `:18781`、本地 MCP DB 与 tool sync 实现。
 
-| Event | Payload |
-|-------|---------|
-| `mcp:event` | `McpRuntimeEvent` |
-| `mcp:server-status` | `McpServerStatusEvent` |
-| `mcp:invocation-event` | `McpInvocationEvent` |
+**Main 事件**：兼容适配器不再广播本地 `mcp:event` / `mcp:invocation-event`（历史事件类型可忽略）。
 
-**Runtime Proxy**：Main `mcp-runtime-proxy.ts` 监听 `127.0.0.1:18781` — `GET /health`、`POST /mcp/skills/call`（供 `mcp-skill-bridge`）。
-
-**Legacy**：`list-mcp-servers` 仍读 Hermes `config.yaml` 的 `mcp_servers` 段，与 v6.1 registry 并存。
+**Legacy**：`list-mcp-servers`（Hermes `config.yaml`）与 Runtime MCP servers 并存语义由 Runtime 侧统一；Desktop 禁止再启本地 Agent HTTP listener。
 
 **Renderer**：`screens/Hermes/pages/MCP/HermesMCPPage.tsx`；Hermes 左导航 `mcp`；页内 Tab：MCP 服务 / 技能 / 市场。
 

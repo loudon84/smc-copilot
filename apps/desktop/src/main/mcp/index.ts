@@ -1,4 +1,2 @@
-export { initializeMcpRegistry } from "./mcp-db";
-export { registerMcpIpc } from "./mcp-ipc";
-export { startMcpRuntimeProxy, stopMcpRuntimeProxy, getMcpProxyUrl } from "./mcp-runtime-proxy";
-export { seedDefaultMcpServers } from "./mcp-seed";
+/** PRD v1.4.1 — Desktop MCP forwards to Runtime; no local proxy. */
+export { registerMcpCompatIpc } from "./mcp-compat-ipc";

@@ -224,9 +224,9 @@ def _build_supervisor(
 # @lat: [[architecture#生命周期与后台循环]]
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    configure_logging()
-    mark_service_boot()
     settings = get_settings()
+    configure_logging(settings)
+    mark_service_boot()
 
     try:
         from core.deployment_mode import validate_deployment_mode

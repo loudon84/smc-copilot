@@ -43,6 +43,13 @@ export function RuntimeServiceSection(): React.JSX.Element {
     }
   }
 
+  function onViewLogs(): void {
+    document.getElementById("runtime-logs-section")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
   if (!window.copilotRuntime) {
     return (
       <div className="settings-section">
@@ -118,9 +125,14 @@ export function RuntimeServiceSection(): React.JSX.Element {
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void loadDiagnostics()}>
           Diagnostics
         </button>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void retry()}>
-          Retry
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onViewLogs}>
+          View Logs
         </button>
+        {!state.ready ? (
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void retry()}>
+            Retry
+          </button>
+        ) : null}
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void onExportBundle()}>
           Export Diagnostic Bundle
         </button>

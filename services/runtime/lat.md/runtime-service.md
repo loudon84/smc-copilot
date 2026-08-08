@@ -122,11 +122,14 @@ FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 统一注册后台
 
 ## Readiness v2 / Memory / Expert MCP (PRD v1.4)
 
+Domain readiness, Memory APIs, session stats, and Expert MCP are Runtime-owned surfaces for Desktop Thin Client.
+
 - `GET /api/v1/runtime/readiness` — domain readiness: `service` / `execution` (chatReady/taskReady) / `maintenance` / `expertMcp`（[[src/services/runtime_status_service.py]]）。
 - Memory Domain — `GET/POST/PATCH/DELETE` under `/api/v1/instances/{id}/memory*`；Desktop 禁止直读 Hermes files。
 - Session stats — `GET /api/v1/instances/{id}/sessions/stats`。
 - Expert MCP Gateway — `/api/v1/expert-mcp/*` + SecretStore scope `expert-mcp`；Desktop 不再监听 :48742。
 - Primary DB — `%LOCALAPPDATA%/SMC/CopilotRuntime/data/runtime.db`（legacy `~/.hermes/desktop/sqlite.db` 仅迁移源）。
+- File logging (v1.4.1) — `configure_logging` writes `<RUNTIME_DATA_DIR>/logs/runtime-service.log`; diagnostics exposes `source`.
 
 ## 目录布局
 

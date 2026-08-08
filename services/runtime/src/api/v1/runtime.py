@@ -182,6 +182,16 @@ async def list_runtime_versions(
     from db.repositories.runtime_repo import RuntimeVersionRepository
 
     rows = await RuntimeVersionRepository(session).list_all()
+
+    def _meta(raw: str | None) -> dict | None:
+        if not raw:
+            return None
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else None
+        except json.JSONDecodeError:
+            return None
+
     return [
         RuntimeVersionResponse(
             id=r.id,
@@ -192,6 +202,7 @@ async def list_runtime_versions(
             pythonPath=r.python_path,
             checksum=r.checksum,
             status=r.status,
+            metadata=_meta(r.metadata_json),
             installedAt=r.installed_at,
             activatedAt=r.activated_at,
         )
@@ -210,6 +221,13 @@ async def get_runtime_version(
     row = await RuntimeVersionRepository(session).get_by_version(version)
     if row is None:
         raise RuntimeServiceError(f"Version not found: {version}", code="not_found")
+    metadata = None
+    if row.metadata_json:
+        try:
+            parsed = json.loads(row.metadata_json)
+            metadata = parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            metadata = None
     return RuntimeVersionResponse(
         id=row.id,
         version=row.version,
@@ -219,6 +237,7 @@ async def get_runtime_version(
         pythonPath=row.python_path,
         checksum=row.checksum,
         status=row.status,
+        metadata=metadata,
         installedAt=row.installed_at,
         activatedAt=row.activated_at,
     )

@@ -142,6 +142,32 @@ class InstanceService:
         await self._session.delete(inst)
         await self._session.flush()
 
+    async def ensure_default(self, runtime_version_id: str) -> str:
+        """Idempotently ensure the default Hermes instance exists and tracks the version.
+
+        PRD v1.4.1 §28–§29 — shared by InstallationService and Dev Hermes registration.
+        """
+        result = await self._session.execute(select(HermesInstance).where(HermesInstance.name == "default"))
+        existing = result.scalar_one_or_none()
+        if existing:
+            existing.runtime_version_id = runtime_version_id
+            if not existing.auto_start:
+                existing.auto_start = True
+            await self._session.flush()
+            return existing.id
+        inst = HermesInstance(
+            name="default",
+            profile_name="default",
+            runtime_version_id=runtime_version_id,
+            gateway_port=self._settings.default_gateway_port,
+            status=InstanceStatus.CREATED.value,
+            healthy=False,
+            auto_start=True,
+        )
+        self._session.add(inst)
+        await self._session.flush()
+        return inst.id
+
     async def resolve_executable(self, inst: HermesInstance) -> str | None:
         if inst.runtime_version_id:
             ver = await self._session.get(RuntimeVersion, inst.runtime_version_id)

@@ -142,10 +142,10 @@ async def diagnostics_logs(settings: Settings = Depends(get_app_settings), tail:
         candidates = sorted(settings.log_dir_path.glob("*.log"))
         log_path = candidates[0] if candidates else log_path
     if not log_path.exists():
-        return {"lines": [], "truncated": False}
+        return {"lines": [], "truncated": False, "source": str(log_path)}
     lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
     truncated = len(lines) > tail
-    return {"lines": lines[-tail:], "truncated": truncated}
+    return {"lines": lines[-tail:], "truncated": truncated, "source": str(log_path)}
 
 
 @router.post("/diagnostics/bundle")

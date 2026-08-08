@@ -139,6 +139,7 @@ export interface CopilotRuntimeAPI {
   startRuntimeRollback: (body?: Record<string, unknown>) => Promise<RuntimeJobAcceptedView>;
   startRuntimeDoctor: () => Promise<RuntimeJobAcceptedView>;
   getRuntimeJob: (jobId: string) => Promise<RuntimeJobView | null>;
+  listRuntimeJobs: () => Promise<RuntimeJobView[]>;
   listRuntimeVersions: () => Promise<unknown[]>;
   /** True when Main routes Gateway/Config/MCP via Serve (not legacy Hermes CLI/YAML). */
   isServeControlPlane: () => Promise<boolean>;

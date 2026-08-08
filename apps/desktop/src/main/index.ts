@@ -211,7 +211,7 @@ import { ensureShims } from "./enterprise/shim-manager";
 import { registerBrowserToolServerStop } from "./update/update-lifecycle";
 import { initializeProfileRuntime, onBeforeQuit as profileRuntimeBeforeQuit } from "./profile-runtime-manager";
 import { onBeforeQuit as aiosBeforeQuit } from "./aios/aios-runtime-supervisor";
-import { registerMcpIpc, seedDefaultMcpServers, stopMcpRuntimeProxy } from "./mcp";
+import { registerMcpCompatIpc } from "./mcp";
 import {
   registerMcpSkillGatewayRuntimeIpc,
   stopMcpSkillGatewayProxy,
@@ -472,8 +472,7 @@ function setupIPC(): void {
     registerSessionCatalogIpc(() => mainWindow);
     registerChatFilesIpc();
     registerFilesIpcHandlers(ipcMain);
-    registerMcpIpc(() => mainWindow);
-    seedDefaultMcpServers();
+    registerMcpCompatIpc();
     registerMcpSkillGatewayRuntimeIpc();
     registerGeneHubIpc();
     registerHermesExpertsIpc();
@@ -1655,11 +1654,6 @@ app.on("before-quit", () => {
   } catch { /* best effort */ }
   stopClaw3d();
   if (browserToolServer) browserToolServer.stop();
-  try {
-    stopMcpRuntimeProxy();
-  } catch {
-    /* best effort */
-  }
   try {
     stopMcpSkillGatewayProxy();
   } catch {

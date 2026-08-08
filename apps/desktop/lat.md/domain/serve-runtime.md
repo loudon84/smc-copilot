@@ -8,7 +8,9 @@ Architecture framing: [[architecture#Three-layer process model]], [[architecture
 
 ## Connection handshake
 
-Desktop probes Serve with `health → /runtime/status → /runtime/capabilities → /runtime/compatibility`, then emits a seven-state connection model for UI.
+Handshake loads status, capabilities, and readiness; Connection Ready follows service readiness only (ADR-013).
+
+Desktop probes Serve with `health → /runtime/status → /runtime/capabilities → /runtime/compatibility`, then emits a seven-state connection model for UI. Execution/maintenance Attention must not flip Connection to Degraded.
 
 States: `Connecting`, `PairingRequired`, `Incompatible`, `RuntimeMissing`, `RuntimeStarting`, `RuntimeDegraded`, `Ready`. Non-`Ready` allows viewing local UI Workspace but must block Chat/Task/MCP mutating writes.
 

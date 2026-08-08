@@ -8,6 +8,8 @@
 
 **v9.0.0（进行中）Serve-First Runtime：** Desktop Main 通过 window.copilotRuntime / src/main/copilot-runtime-client/ 连接常驻 copilot-serve :8765；Device Token 仅 Main（keytar）。Phase 0/1：OpenAPI、pairing、capability、production 禁 spawn。**Phase 2：** Instance/Gateway/Config/MCP/Diagnostics 经 Serve；默认禁止 Hermes CLI 与 YAML 控制面写入（COPILOT_ALLOW_LEGACY_HERMES_DIRECT 可回退）。**Phase 3：** `window.chatRuntime` → Serve `/api/v1/chat-runs*`（hand-authored 契约；legacy-direct 可回退）。Session/Files 见 Phase 4+（prd_work/v9.0_serve-runtime-migration.md）。
 
+**v1.4.1 Hotfix：** 删除 Desktop MCP Proxy `:18781`；Connection Ready 仅看 `readiness.service`；Settings → View Logs 读 Runtime `runtime-service.log`；dev:runtime 自动登记本机 Hermes（external-dev）。
+
 | 项 | 值 |
 |---|---|
 | **产品名称** | SMC-Copilot |
@@ -174,11 +176,10 @@ V1.4 在 V1.2.1 基础上完成 **Desktop Shell 布局重构** 与 **Windows NSI
 - **IPC**：`resolve/upsert` 必填 `source/requestId`；upsert **不传** `taskId`
 - **Renderer**：HostBridge `source=web-host-bridge`；手动分析 `source=manual`；`sessionStorage` 键 `weboperator-current-task-v2`
 
-**V6.1（Hermes MCP Skill Gateway，PRD `prd/v6.1_mcp-skill-gateway.md`）**：
-- **Registry**：`~/.hermes/desktop/mcp-registry.db`；Main `src/main/mcp/*`；Renderer `screens/Hermes/pages/MCP/`
-- **Preload**：`window.hermesAPI.mcp`（`mcp-api.ts`）；IPC `mcp:*` 见 [`docs/API_CONTRACTS.md`](API_CONTRACTS.md) § Hermes MCP Registry
-- **Runtime**：本地 proxy `127.0.0.1:18781`；bundled `mcp-skill-bridge` skill 供 Hermes Agent 调用 Desktop MCP tools
-- **UI**：Hermes 左导航独立 `mcp` 页（保留 `skills`）；页内三分区：MCP 服务 / 技能绑定 / 市场（占位）
+**V6.1（Hermes MCP Skill Gateway，PRD `prd/v6.1_mcp-skill-gateway.md`）** — **v1.4.1 修正**：
+- **历史**：曾有 Desktop MCP registry DB + local proxy `:18781`
+- **现行**：`window.hermesAPI.mcp` → Main `mcp-compat-ipc` → Runtime `/instances/{id}/mcp/servers*`（`ServeMcpAdapter`）；**禁止** Desktop 监听 `18781`；无 Runtime 对应能力返回 `MCP_MOVED_TO_RUNTIME`
+- **UI**：Hermes 左导航 `mcp` 页仍可用；Servers CRUD 走 Runtime
 
 **V6.4（MCP Skill Gateway Desktop Runtime，PRD `prd/v6.4_mcp-skill-gateway-desktop.md`）**：
 - **链路**：Hermes Agent → `http://127.0.0.1:48742/mcp` → Desktop Proxy（Bearer 注入）→ nodeskclaw `/api/v1/hermes/mcp`

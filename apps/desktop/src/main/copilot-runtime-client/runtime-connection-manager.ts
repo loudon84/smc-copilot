@@ -156,12 +156,16 @@ export async function runRuntimeHandshake(): Promise<RuntimeConnectionState> {
       const status = (await client.getStatus()) as RuntimeStatus;
       const capabilities = (await client.getCapabilities()) as RuntimeCapabilities;
       setCachedCapabilities(toCapabilitiesView(capabilities as { apiVersion?: string; features?: string[] }));
+      // PRD v1.4.1 §12–§14 / §63 — Connection Ready is driven only by readiness.service.
+      // Do not re-judge via status.status / hermesInstalled / status.checks.
+      let readiness: Awaited<ReturnType<typeof client.runtime.getReadiness>> | null = null;
       try {
-        const readiness = await client.runtime.getReadiness();
+        readiness = await client.runtime.getReadiness();
         setCachedReadiness(readiness);
       } catch (readinessErr) {
         console.warn("[copilot-runtime] readiness fetch failed (no legacy fallback):", readinessErr);
         setCachedReadiness(null);
+        readiness = null;
       }
 
       const compatibility = await runtimeFetch<RuntimeCompatibilityResponse>({
@@ -227,12 +231,8 @@ export async function runRuntimeHandshake(): Promise<RuntimeConnectionState> {
         });
       }
 
-      const degraded =
-        status.status === "degraded" ||
-        status.hermesInstalled === false ||
-        (status.checks && Object.values(status.checks).some((v) => v !== "ok" && v !== "pass"));
-
-      if (degraded) {
+      const serviceReady = readiness?.service?.ready === true;
+      if (!serviceReady) {
         return setState({
           state: "RuntimeDegraded",
           ready: false,
@@ -250,7 +250,9 @@ export async function runRuntimeHandshake(): Promise<RuntimeConnectionState> {
           canRetry: true,
           canRepair: true,
           canPair: false,
-          lastError: "Runtime is reachable but degraded",
+          lastError: readiness
+            ? "Runtime service domain is not ready"
+            : "Runtime readiness unavailable",
           lastErrorCode: "RUNTIME_UNAVAILABLE",
         });
       }

@@ -235,10 +235,13 @@ class Settings(BaseSettings):
 
     @property
     def log_dir_path(self) -> Path:
+        """Prefer RUNTIME_LOG_DIR; else <RUNTIME_DATA_DIR>/logs (PRD v1.4.1 §37)."""
         if self.runtime_log_dir:
             p = Path(self.runtime_log_dir)
         else:
-            p = (_PACKAGE_ROOT / self.log_dir).resolve()
+            from runtime.platform_paths import RuntimeLayout
+
+            p = RuntimeLayout.from_root(self.resolved_runtime_data_dir()).logs
         p.mkdir(parents=True, exist_ok=True)
         return p
 

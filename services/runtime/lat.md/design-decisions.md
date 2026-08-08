@@ -23,3 +23,13 @@ Hermes Gateway 是外部进程，控制面只经 `integrations/hermes/` 适配�
 ## 失败不破坏现状
 
 安装/更新/回滚 Job 串行互斥（见 [[runtime-service#运行时 Job 队列]]），失败保留当前 active 版本且 **禁止 Stub 激活**（v1.3.1）；服务重启将未完成 Job 标记失败（见 [[runtime-service#Job 恢复]]）；Gateway 启动失败置 `error` 但不删配置。端口冲突不杀未知 PID。这是 Runtime 的核心可靠性约束。
+
+## Development Hermes Registration（v1.4.1）
+
+`dev_bootstrap` discovers local Hermes and registers an external-dev RuntimeVersion plus default Instance.
+
+Resolve via `HERMES_DEV_EXECUTABLE` or `hermes` on PATH, validate `--version`, then `register_external` (`channel=development`, `metadata.source=external-dev`) and `InstanceService.ensure_default`. Missing Hermes may continue; invalid override / validation / DB write must exit non-zero.
+
+## Runtime File Logging（v1.4.1）
+
+`configure_logging(settings)` 双通道：stderr ConsoleRenderer + `<RUNTIME_DATA_DIR>/logs/runtime-service.log` 旋转 JSON Lines。`/diagnostics/logs` 暴露 `source`，供 Desktop View Logs 读取。

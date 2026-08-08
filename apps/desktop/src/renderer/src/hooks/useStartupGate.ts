@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { StartupDecision } from "../../../shared/startup/startup-contract";
+import type { RuntimeConnectionState } from "../../../shared/copilot-runtime/runtime-state-contract";
 
 export type AppScreen =
   | "splash"
@@ -9,6 +10,9 @@ export type AppScreen =
   | "main";
 
 const SPLASH_MIN_MS = 1300;
+
+/** States where the recovery screen may hold a stale snapshot while Main keeps polling. */
+const TRANSITIONAL_RUNTIME_STATES = new Set(["Connecting", "RuntimeStarting"]);
 
 export interface UseStartupGateResult {
   screen: AppScreen;
@@ -28,6 +32,10 @@ export function useStartupGate(): UseStartupGateResult {
   const [startupError, setStartupError] = useState<string | null>(null);
   const [decision, setDecision] = useState<StartupDecision | null>(null);
   const [checkKey, setCheckKey] = useState(0);
+  const screenRef = useRef(screen);
+  const decisionRef = useRef(decision);
+  screenRef.current = screen;
+  decisionRef.current = decision;
 
   const navigateTo = useCallback((next: AppScreen) => {
     setScreen(next);
@@ -81,6 +89,20 @@ export function useStartupGate(): UseStartupGateResult {
       cancelled = true;
     };
   }, [checkKey]);
+
+  // When recovery is stuck on Connecting/RuntimeStarting, Main may already be Ready /
+  // PairingRequired via the 15s poll — refresh the startup decision without a full splash.
+  useEffect(() => {
+    if (!window.copilotRuntime?.onStateChanged) return;
+
+    return window.copilotRuntime.onStateChanged((next: RuntimeConnectionState) => {
+      if (screenRef.current !== "runtime-recovery") return;
+      const frozen = decisionRef.current?.runtimeState?.state;
+      if (!frozen || !TRANSITIONAL_RUNTIME_STATES.has(frozen)) return;
+      if (TRANSITIONAL_RUNTIME_STATES.has(next.state)) return;
+      recheck();
+    });
+  }, [recheck]);
 
   return {
     screen,

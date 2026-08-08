@@ -76,3 +76,15 @@ Hand-authored [[src/shared/copilot-runtime/chat-runtime-serve-contract.ts#mapSer
 ### Workspace Chat stream uses chat-runs not instance completions
 
 [[src/main/workspace-chat/workspace-chat-stream.ts#startWorkspaceChatStream]] binds `clientRunId` to Desktop `session_id`, calls createRun/createTurn via [[src/main/copilot-runtime-client/clients/chat-runtime-client.ts#chatRuntimeClient]], and forwards Serve events as `workspace-chat:*` IPC. Production source must not mention instance chat completions (`check:no-direct-instance-chat`).
+
+## v1.4.1 Hotfix guards
+
+Regression specs for readiness semantics and removal of Desktop MCP Agent proxy.
+
+### Service readiness alone yields Ready
+
+When `readiness.service.ready` is true, Connection must be Ready even if execution/maintenance are false.
+
+### No desktop mcp proxy on 18781
+
+Production Desktop source must not reference `startMcpRuntimeProxy`, `mcp-runtime-proxy`, or port `18781`.

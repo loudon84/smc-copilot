@@ -117,3 +117,10 @@ The second example is invalid because `Bad Section` has no leading paragraph. `l
 - **Guards**: `npm run guard` in `services/runtime/` (no direct Hermes in `runtime/tasks/`, state machine, contract drift).
 - **E2E**: `tests/test_v13_task_runtime_e2e.py`
 - **Docs**: `docs/architecture/work-task-runtime.md`
+
+## v1.4.1 Hotfix notes
+
+- Dev registration: `scripts/dev_bootstrap.py` → `DevHermesRegistrationService` + `InstanceService.ensure_default`.
+- Logging: `configure_logging(settings)` dual sink under `<RUNTIME_DATA_DIR>/logs`.
+- Gateway foreign port conflict → `gateway_port_conflict`, never kill unknown PID.
+- ADRs: `docs/adr/ADR-011` … `ADR-014`.

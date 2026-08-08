@@ -30,6 +30,7 @@ export interface RuntimeVersionInfo {
   installPath?: string;
   executablePath?: string;
   status?: string;
+  metadata?: Record<string, unknown> | null;
   installedAt?: string | null;
   activatedAt?: string | null;
 }

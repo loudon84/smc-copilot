@@ -1,14 +1,16 @@
 # MCP and experts
 
-Desktop runs a local MCP Skill Gateway proxy, GeneHub skill sync, and Expert MCP clients. Tokens for remote MCP stay in Main; Renderer sees health and masked config only.
+Desktop no longer runs a local MCP Agent proxy on `:18781` (PRD v1.4.1). Renderer MCP IPC goes through Main compatibility adapter to Runtime.
+
+`window.hermesAPI.mcp` channels use Main `mcp-compat-ipc`, which delegates server CRUD/test/enable/disable to Runtime `/instances/{id}/mcp/servers*` via `ServeMcpAdapter`. Channels without Runtime equivalents return `MCP_MOVED_TO_RUNTIME` (no legacy DB/HTTP fallback).
+
+Expert MCP Skill Gateway module may still exist for diagnostics but must not auto-listen at app ready. Tokens for remote MCP stay in Main; Renderer sees health and masked config only.
 
 Chat policy: [[decisions#Chat must not bypass Hermes MCP host mode]].
 
 ## MCP Skill Gateway
 
-Local proxy (default profile-scoped URL) forwards to nodeskclaw Hermes MCP endpoints and injects Bearer only inside the proxy. Hermes Agent registers `mcp_servers` (including skill gateway) via config managed from Desktop.
-
-Operations include diagnostics, tools list/cache, invoke-test for read-only tools, structured logs, and GeneHub registration cards. Write-tool approval is server-side grant state — Desktop does not invent a local approval DB.
+Expert MCP Skill Gateway proxy code remains under `mcp-skill-gateway-runtime/` for optional/manual use, but v1.4+ disables automatic listen on app ready. Hermes Agent MCP servers are owned by Runtime instance config, not Desktop SQLite registry.
 
 ## Hermes Agent MCP host mode
 

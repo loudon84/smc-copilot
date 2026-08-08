@@ -148,6 +148,14 @@ export function registerCopilotRuntimeIpc(): void {
     }
   });
 
+  ipcMain.handle("copilot-runtime:list-jobs", async () => {
+    try {
+      return await getSmcRuntimeClient().runtime.listJobs();
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle("copilot-runtime:list-versions", async () => {
     try {
       return await getSmcRuntimeClient().runtime.listVersions();

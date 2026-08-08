@@ -469,3 +469,19 @@ Windows UNC 路径被拒绝。
 ### Gated Windows Installer E2E
 
 门控 MSI/Burn 安装器静默安装与卸载验收。
+
+## v1.4.1 Hotfix
+
+Dev Hermes 登记、Gateway 端口冲突与 Runtime 文件日志的回归规格。
+
+### Dev Hermes registration idempotent
+
+假 Hermes 可发现并登记；bootstrap 三次幂等；版本升级切换 active 且不删外部文件。
+
+### Foreign gateway port conflict
+
+8642 被外部占用时写入 `gateway_port_conflict` 且不 terminate 外部 PID。
+
+### Runtime file logging dual sink
+
+`configure_logging` 写旋转文件日志；`/diagnostics/logs` 可读且含 `source`。

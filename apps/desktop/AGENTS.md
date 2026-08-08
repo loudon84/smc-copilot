@@ -18,7 +18,7 @@
 
 ## 架构：三层进程（必须遵守）
 
-> **v1.4 Thin Client：** 后端为 Copilot Runtime `:8765`（`@smc/runtime-client`，Main-only）。Desktop **不**内置 Portal / Serve / Hermes 进程管理器；Agent 控制面仅在 `services/runtime`。
+> **v1.4 / v1.4.1 Thin Client：** 后端为 Copilot Runtime `:8765`（`@smc/runtime-client`，Main-only）。Desktop **不**内置 Portal / Serve / Hermes 进程管理器；Agent 控制面仅在 `services/runtime`。**禁止** Desktop MCP Agent Proxy `:18781`；`window.hermesAPI.mcp` 经 `mcp-compat-ipc` → Runtime MCP API。Connection `Ready` 仅看 `readiness.service.ready`。
 
 ```
 Renderer (React)  →  window.hermesAPI / smcShell / desktopAuth / desktopUserConfig / profileRuntime / aiosBrowser / shellView / copilotRuntime

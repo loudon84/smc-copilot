@@ -169,6 +169,7 @@ class RuntimeVersionResponse(BaseModel):
     python_path: str | None = Field(default=None, alias="pythonPath")
     checksum: str | None = None
     status: str
+    metadata: dict | None = None
     installed_at: datetime | None = Field(default=None, alias="installedAt")
     activated_at: datetime | None = Field(default=None, alias="activatedAt")
 

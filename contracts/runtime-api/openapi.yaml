@@ -968,6 +968,25 @@ components:
           title: Title
       title: ExperienceCandidatePatchRequest
       type: object
+    ExpertMcpConfigPatch:
+      properties:
+        accessToken:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Accesstoken
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+        endpoint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endpoint
+      title: ExpertMcpConfigPatch
+      type: object
     GatewayHealthResponse:
       properties:
         gateway_id:
@@ -1484,6 +1503,105 @@ components:
       - transport
       - enabled
       title: McpServerResponse
+      type: object
+    MemoryContentPutRequest:
+      properties:
+        content:
+          title: Content
+          type: string
+      required:
+      - content
+      title: MemoryContentPutRequest
+      type: object
+    MemoryEntry:
+      properties:
+        content:
+          title: Content
+          type: string
+        index:
+          title: Index
+          type: integer
+      required:
+      - index
+      - content
+      title: MemoryEntry
+      type: object
+    MemoryEntryCreateRequest:
+      properties:
+        content:
+          title: Content
+          type: string
+      required:
+      - content
+      title: MemoryEntryCreateRequest
+      type: object
+    MemoryEntryUpdateRequest:
+      properties:
+        content:
+          title: Content
+          type: string
+      required:
+      - content
+      title: MemoryEntryUpdateRequest
+      type: object
+    MemoryFileInfo:
+      properties:
+        charCount:
+          title: Charcount
+          type: integer
+        charLimit:
+          title: Charlimit
+          type: integer
+        content:
+          title: Content
+          type: string
+        entries:
+          items:
+            $ref: '#/components/schemas/MemoryEntry'
+          title: Entries
+          type: array
+        exists:
+          title: Exists
+          type: boolean
+        lastModified:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Lastmodified
+      required:
+      - content
+      - exists
+      - charCount
+      - charLimit
+      title: MemoryFileInfo
+      type: object
+    MemoryInfoResponse:
+      properties:
+        memory:
+          $ref: '#/components/schemas/MemoryFileInfo'
+        stats:
+          $ref: '#/components/schemas/SessionStatsInfo'
+        user:
+          $ref: '#/components/schemas/UserProfileInfo'
+      required:
+      - memory
+      - user
+      - stats
+      title: MemoryInfoResponse
+      type: object
+    MemoryMutationResponse:
+      properties:
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        success:
+          title: Success
+          type: boolean
+      required:
+      - success
+      title: MemoryMutationResponse
       type: object
     PairingConfirmRequest:
       properties:
@@ -2107,6 +2225,15 @@ components:
             - chat.runtime.v2.recovery
             - chat.runtime.v2.abort
             - chat.interaction.clarify
+            - runtime.readiness.v2
+            - runtime.logs
+            - hermes.lifecycle.runtime-managed
+            - instances.runtime-managed
+            - memory.runtime-managed
+            - sessions.runtime-managed
+            - expert-mcp.runtime-managed
+            - expert-mcp.tools
+            - expert-mcp.diagnostics
             type: string
           title: Features
           type: array
@@ -2147,6 +2274,36 @@ components:
       required:
       - apiVersion
       title: RuntimeCompatibilityResponse
+      type: object
+    RuntimeDomainReadiness:
+      description: One readiness domain (service / execution / maintenance / expertMcp).
+      properties:
+        chatReady:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Chatready
+        checks:
+          additionalProperties:
+            type: string
+          title: Checks
+          type: object
+        ready:
+          title: Ready
+          type: boolean
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        taskReady:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Taskready
+      required:
+      - ready
+      title: RuntimeDomainReadiness
       type: object
     RuntimeInstallRequest:
       properties:
@@ -2257,6 +2414,24 @@ components:
       - jobType
       - status
       title: RuntimeJobResponse
+      type: object
+    RuntimeReadinessResponse:
+      description: PRD v1.4 three-layer readiness — Desktop gates Chat/Task/MCP separately.
+      properties:
+        execution:
+          $ref: '#/components/schemas/RuntimeDomainReadiness'
+        expertMcp:
+          $ref: '#/components/schemas/RuntimeDomainReadiness'
+        maintenance:
+          $ref: '#/components/schemas/RuntimeDomainReadiness'
+        service:
+          $ref: '#/components/schemas/RuntimeDomainReadiness'
+      required:
+      - service
+      - execution
+      - maintenance
+      - expertMcp
+      title: RuntimeReadinessResponse
       type: object
     RuntimeRollbackRequest:
       properties:
@@ -2384,6 +2559,15 @@ components:
             - chat.runtime.v2.recovery
             - chat.runtime.v2.abort
             - chat.interaction.clarify
+            - runtime.readiness.v2
+            - runtime.logs
+            - hermes.lifecycle.runtime-managed
+            - instances.runtime-managed
+            - memory.runtime-managed
+            - sessions.runtime-managed
+            - expert-mcp.runtime-managed
+            - expert-mcp.tools
+            - expert-mcp.diagnostics
             type: string
           title: Features
           type: array
@@ -2528,6 +2712,12 @@ components:
             type: string
           - type: 'null'
           title: Installedat
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
         pythonPath:
           anyOf:
           - type: string
@@ -2632,6 +2822,19 @@ components:
       - hermes_home
       - profiles
       title: ServiceStatusResponse
+      type: object
+    SessionStatsInfo:
+      properties:
+        totalMessages:
+          title: Totalmessages
+          type: integer
+        totalSessions:
+          title: Totalsessions
+          type: integer
+      required:
+      - totalSessions
+      - totalMessages
+      title: SessionStatsInfo
       type: object
     SetInstanceChatModelConfigPayload:
       properties:
@@ -3141,6 +3344,41 @@ components:
           title: Attachments
           type: array
       title: UploadAttachmentsResponse
+      type: object
+    UserProfileInfo:
+      properties:
+        charCount:
+          title: Charcount
+          type: integer
+        charLimit:
+          title: Charlimit
+          type: integer
+        content:
+          title: Content
+          type: string
+        exists:
+          title: Exists
+          type: boolean
+        lastModified:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Lastmodified
+      required:
+      - content
+      - exists
+      - charCount
+      - charLimit
+      title: UserProfileInfo
+      type: object
+    UserProfilePutRequest:
+      properties:
+        content:
+          title: Content
+          type: string
+      required:
+      - content
+      title: UserProfilePutRequest
       type: object
     ValidationError:
       properties:
@@ -5621,6 +5859,369 @@ paths:
       summary: Get Evidence
       tags:
       - experience
+  /api/v1/expert-mcp/config:
+    get:
+      operationId: expert_mcp_get_config_api_v1_expert_mcp_config_get
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Get Config Api V1 Expert Mcp Config Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Get Config
+      tags:
+      - expert-mcp
+    patch:
+      operationId: expert_mcp_patch_config_api_v1_expert_mcp_config_patch
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpertMcpConfigPatch'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Patch Config Api V1 Expert Mcp Config Patch
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Patch Config
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/connect:
+    post:
+      operationId: expert_mcp_connect_api_v1_expert_mcp_connect_post
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Connect Api V1 Expert Mcp Connect Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Connect
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/diagnostics:
+    get:
+      operationId: expert_mcp_diagnostics_api_v1_expert_mcp_diagnostics_get
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Diagnostics Api V1 Expert Mcp Diagnostics Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Diagnostics
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/logs:
+    get:
+      operationId: expert_mcp_logs_api_v1_expert_mcp_logs_get
+      parameters:
+      - in: query
+        name: tail
+        required: false
+        schema:
+          default: 200
+          title: Tail
+          type: integer
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Logs Api V1 Expert Mcp Logs Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Logs
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/reconnect:
+    post:
+      operationId: expert_mcp_reconnect_api_v1_expert_mcp_reconnect_post
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Reconnect Api V1 Expert Mcp Reconnect Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Reconnect
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/status:
+    get:
+      operationId: expert_mcp_status_api_v1_expert_mcp_status_get
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Status Api V1 Expert Mcp Status Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Status
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/test:
+    post:
+      operationId: expert_mcp_test_api_v1_expert_mcp_test_post
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Expert Mcp Test Api V1 Expert Mcp Test Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Test
+      tags:
+      - expert-mcp
+  /api/v1/expert-mcp/tools:
+    get:
+      operationId: expert_mcp_tools_api_v1_expert_mcp_tools_get
+      parameters:
+      - in: query
+        name: refresh
+        required: false
+        schema:
+          default: false
+          title: Refresh
+          type: boolean
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  additionalProperties: true
+                  type: object
+                title: Response Expert Mcp Tools Api V1 Expert Mcp Tools Get
+                type: array
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Expert Mcp Tools
+      tags:
+      - expert-mcp
   /api/v1/gateways/{gateway_id}/health:
     get:
       operationId: gateway_health_api_v1_gateways__gateway_id__health_get
@@ -6617,6 +7218,94 @@ paths:
       summary: Validate Configuration
       tags:
       - instance-config-mcp
+  /api/v1/instances/{instance_id}/expert-mcp/disable:
+    post:
+      operationId: disable_expert_mcp_api_v1_instances__instance_id__expert_mcp_disable_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Disable Expert Mcp Api V1 Instances  Instance Id  Expert Mcp Disable Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Disable Expert Mcp
+      tags:
+      - expert-mcp
+  /api/v1/instances/{instance_id}/expert-mcp/enable:
+    post:
+      operationId: enable_expert_mcp_api_v1_instances__instance_id__expert_mcp_enable_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Enable Expert Mcp Api V1 Instances  Instance Id  Expert Mcp Enable Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Enable Expert Mcp
+      tags:
+      - expert-mcp
   /api/v1/instances/{instance_id}/health:
     get:
       operationId: instance_health_api_v1_instances__instance_id__health_get
@@ -7096,6 +7785,245 @@ paths:
       summary: Test Mcp Server
       tags:
       - instance-config-mcp
+  /api/v1/instances/{instance_id}/memory:
+    get:
+      operationId: get_memory_api_v1_instances__instance_id__memory_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryInfoResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Memory
+      tags:
+      - memory
+  /api/v1/instances/{instance_id}/memory/content:
+    put:
+      operationId: put_memory_content_api_v1_instances__instance_id__memory_content_put
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryContentPutRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryMutationResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Put Memory Content
+      tags:
+      - memory
+  /api/v1/instances/{instance_id}/memory/entries:
+    post:
+      operationId: add_memory_entry_api_v1_instances__instance_id__memory_entries_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryEntryCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryMutationResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Add Memory Entry
+      tags:
+      - memory
+  /api/v1/instances/{instance_id}/memory/entries/{index}:
+    delete:
+      operationId: delete_memory_entry_api_v1_instances__instance_id__memory_entries__index__delete
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: index
+        required: true
+        schema:
+          title: Index
+          type: integer
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryMutationResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Delete Memory Entry
+      tags:
+      - memory
+    patch:
+      operationId: update_memory_entry_api_v1_instances__instance_id__memory_entries__index__patch
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: index
+        required: true
+        schema:
+          title: Index
+          type: integer
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryEntryUpdateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryMutationResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Update Memory Entry
+      tags:
+      - memory
   /api/v1/instances/{instance_id}/restart:
     post:
       operationId: restart_instance_api_v1_instances__instance_id__restart_post
@@ -7235,6 +8163,51 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Search Sessions
+      tags:
+      - sessions
+  /api/v1/instances/{instance_id}/sessions/stats:
+    get:
+      description: PRD v1.4 §31 — session/message counts without Desktop reading state.db.
+      operationId: session_stats_api_v1_instances__instance_id__sessions_stats_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Session Stats Api V1 Instances  Instance Id  Sessions Stats Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Session Stats
       tags:
       - sessions
   /api/v1/instances/{instance_id}/sessions/{session_id}:
@@ -7468,6 +8441,54 @@ paths:
       summary: Stop Instance
       tags:
       - instances
+  /api/v1/instances/{instance_id}/user-profile:
+    put:
+      operationId: put_user_profile_api_v1_instances__instance_id__user_profile_put
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfilePutRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryMutationResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Put User Profile
+      tags:
+      - memory
   /api/v1/metrics:
     get:
       operationId: metrics_api_v1_metrics_get
@@ -9557,6 +10578,43 @@ paths:
       summary: Runtime Mode
       tags:
       - service-center
+  /api/v1/runtime/readiness:
+    get:
+      description: PRD v1.4 domain readiness (service / execution / maintenance / expertMcp).
+      operationId: runtime_readiness_api_v1_runtime_readiness_get
+      parameters:
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeReadinessResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Runtime Readiness
+      tags:
+      - runtime
   /api/v1/runtime/rollback:
     post:
       operationId: runtime_rollback_api_v1_runtime_rollback_post

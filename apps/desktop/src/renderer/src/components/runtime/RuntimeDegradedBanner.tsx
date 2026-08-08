@@ -61,8 +61,8 @@ export function RuntimeDegradedBanner({
     banners.push({
       id: "execution",
       title: "Agent execution unavailable",
-      body: "No healthy Hermes Instance is currently available. Chat / Task writes are gated until execution is ready.",
-      actionLabel: "View Instances",
+      body: "No healthy Hermes Instance is currently available.",
+      actionLabel: "View Hermes Runtime",
     });
   }
 

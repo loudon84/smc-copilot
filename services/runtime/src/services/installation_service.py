@@ -298,7 +298,9 @@ class InstallationService:
                     if activated is None:
                         raise RuntimeServiceError("Failed to activate version", code="activation_failed")
                     if create_default:
-                        instance_id = await self._ensure_default_instance(session, activated.id)
+                        from services.instance_service import InstanceService
+
+                        instance_id = await InstanceService(self._settings, session).ensure_default(activated.id)
                     self._activation.write_active_atomic(
                         {
                             "version": resolved_version,
@@ -506,23 +508,6 @@ class InstallationService:
         await cli.doctor()
 
     async def _ensure_default_instance(self, session: AsyncSession, runtime_version_id: str) -> str:
-        from sqlalchemy import select
+        from services.instance_service import InstanceService
 
-        result = await session.execute(select(HermesInstance).where(HermesInstance.name == "default"))
-        existing = result.scalar_one_or_none()
-        if existing:
-            existing.runtime_version_id = runtime_version_id
-            await session.flush()
-            return existing.id
-        inst = HermesInstance(
-            name="default",
-            profile_name="default",
-            runtime_version_id=runtime_version_id,
-            gateway_port=self._settings.default_gateway_port,
-            status=InstanceStatus.CREATED.value,
-            healthy=False,
-            auto_start=True,
-        )
-        session.add(inst)
-        await session.flush()
-        return inst.id
+        return await InstanceService(self._settings, session).ensure_default(runtime_version_id)

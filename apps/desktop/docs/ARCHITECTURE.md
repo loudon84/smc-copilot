@@ -133,23 +133,20 @@ Page Structure [分析内容]
 
 PRD：[`prd/v5.7.5_hermes_integration.md`](../prd/v5.7.5_hermes_integration.md) · IPC：[`docs/API_CONTRACTS.md`](API_CONTRACTS.md) § WebOperator Hermes Panel / Task Session
 
-## Hermes MCP Skill Gateway（V6.1）
+## Hermes MCP（V6.1 → v1.4.1 Thin Client）
 
-Desktop 侧 MCP 注册表与运行时代理，供 Local Hermes Agent 经 bundled `mcp-skill-bridge` skill 调用外部 MCP tools。
+Desktop 不再运行本地 MCP Agent Proxy。Renderer 仍走 `window.hermesAPI.mcp`，Main 经兼容适配器委托 Runtime MCP API。
 
 ```
-HermesMCPPage → window.hermesAPI.mcp → mcp:* IPC → src/main/mcp/*
-  ├─ mcp-registry.db（~/.hermes/desktop/）
-  ├─ mcp-client-service（streamable_http / stdio）
-  ├─ mcp-tool-sync + mcp-skill-binding（wrapper SKILL + profile 绑定）
-  └─ mcp-runtime-proxy（127.0.0.1:18781 → tools/call）
+HermesMCPPage → window.hermesAPI.mcp → mcp:* IPC → mcp-compat-ipc
+  └─ ServeMcpAdapter → Runtime /api/v1/instances/{id}/mcp/servers*
 ```
 
-- **Legacy 并存**：`list-mcp-servers` 仍读 Hermes `config.yaml` 的 `mcp_servers`；v6.1 registry 独立存储。
-- **Renderer**：Hermes 左导航 `mcp` → `HermesMCPPage`（页内：MCP 服务 / 技能 / 市场）。
-- **安全**：token 仅存 Main（safeStorage）；stdio 受控启动；profile 字段全链路透传。
+- **删除**：`mcp-runtime-proxy`（`:18781`）、Desktop MCP SQLite registry、本地 tool sync/bind/invoke。
+- **错误**：无 Runtime 对应 channel → 显式 `MCP_MOVED_TO_RUNTIME`（禁止 legacy fallback）。
+- **安全**：token / Device Token 仍仅 Main；Renderer 只见脱敏状态。
 
-PRD：[`prd/v6.1_mcp-skill-gateway.md`](../prd/v6.1_mcp-skill-gateway.md) · IPC：[`docs/API_CONTRACTS.md`](API_CONTRACTS.md) § Hermes MCP Registry
+PRD：[`prd/v1.4.1.md`](../prd/v1.4.1.md) · IPC：[`docs/API_CONTRACTS.md`](API_CONTRACTS.md) § Hermes MCP Registry · ADR-012
 
 ## Windows 安装 Runtime 布局（V5.3）
 
