@@ -246,11 +246,37 @@ export const workspacesApi = {
   async readMemoryFiles(profileId: string): Promise<AIOSMemoryFile[]> {
     const profile = await this.getProfile(profileId);
     const name = profileNameForApi(profileId, profile);
-    const [memoryBundle, soul] = await Promise.all([
-      window.hermesAPI.readMemory(name),
-      window.hermesAPI.readSoul(name),
-    ]);
-    const files: AIOSMemoryFile[] = [
+    // PRD v1.4 — Memory via Runtime; SOUL still via hermesAPI until Soul adapter lands.
+    let memoryContent = "";
+    let userContent = "";
+    let memoryUpdated: string | undefined;
+    let userUpdated: string | undefined;
+    if (window.copilotRuntime?.resolveInstance && window.copilotRuntime?.getMemory) {
+      const resolved = await window.copilotRuntime.resolveInstance(name);
+      const instanceId = resolved?.instanceId;
+      if (!instanceId) {
+        throw new Error("Unable to resolve Hermes Instance for Memory. Open Runtime & Agent.");
+      }
+      const bundle = (await window.copilotRuntime.getMemory(instanceId)) as {
+        memory?: { content?: string; lastModified?: number | null };
+        user?: { content?: string; lastModified?: number | null };
+      } | null;
+      if (!bundle) {
+        throw new Error("Runtime Memory unavailable. Please update Runtime.");
+      }
+      memoryContent = String(bundle.memory?.content ?? "");
+      userContent = String(bundle.user?.content ?? "");
+      memoryUpdated = bundle.memory?.lastModified
+        ? new Date(bundle.memory.lastModified * 1000).toISOString()
+        : undefined;
+      userUpdated = bundle.user?.lastModified
+        ? new Date(bundle.user.lastModified * 1000).toISOString()
+        : undefined;
+    } else {
+      throw new Error("Current Runtime does not expose Memory APIs. Please update Runtime.");
+    }
+    const soul = await window.hermesAPI.readSoul(name);
+    return [
       {
         profileId,
         file: "SOUL.md",
@@ -261,23 +287,18 @@ export const workspacesApi = {
       {
         profileId,
         file: "MEMORY.md",
-        content: memoryBundle.memory.content,
+        content: memoryContent,
         readonly: false,
-        updatedAt: memoryBundle.memory.lastModified
-          ? new Date(memoryBundle.memory.lastModified).toISOString()
-          : undefined,
+        updatedAt: memoryUpdated,
       },
       {
         profileId,
         file: "USER.md",
-        content: memoryBundle.user.content,
+        content: userContent,
         readonly: false,
-        updatedAt: memoryBundle.user.lastModified
-          ? new Date(memoryBundle.user.lastModified).toISOString()
-          : undefined,
+        updatedAt: userUpdated,
       },
     ];
-    return files;
   },
 
   async writeMemoryFile(

@@ -1,24 +1,26 @@
-import { BrowserWindow, ipcMain, shell } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import type {
-  CopilotServeDeployOptions,
   CopilotServeProcessStatus,
   CopilotServeStatusChangeEvent,
 } from "../../shared/copilot-serve/copilot-serve-contract";
 import type { RuntimeServiceStatus } from "../../shared/aios/aios-contract";
 import { updateRuntimeServiceStatus } from "../profile-runtime-db";
-import { runCopilotServeDeploy } from "./copilot-serve-deploy";
 import {
   autoStartCopilotServeIfReady,
   getCopilotServeConnection,
   getCopilotServeLogs,
   getCopilotServeStatus,
-  restartCopilotServeProcess,
-  startCopilotServeProcess,
-  stopCopilotServeProcess,
   syncCopilotServeStatusFromHealth,
 } from "./copilot-serve-process";
 import { runCopilotServePreflight } from "./copilot-serve-preflight";
-import { resolveCopilotServeRuntimeDir } from "./copilot-serve-paths";
+
+/** PRD v1.4 — Runtime process control owned by Copilot Runtime. */
+const RUNTIME_PROCESS_CONTROL_OWNED =
+  "Runtime process control is owned by Copilot Runtime. Use window.copilotRuntime.";
+
+function rejectRuntimeProcessControl(): never {
+  throw new Error(RUNTIME_PROCESS_CONTROL_OWNED);
+}
 
 function mapCopilotStatusToRuntime(status: CopilotServeProcessStatus): RuntimeServiceStatus {
   if (status === "missing") return "not_installed";
@@ -52,46 +54,29 @@ function emitStatusChanged(win: BrowserWindow | null): void {
 
 export function registerCopilotServeIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle("copilot-serve:get-connection", () => getCopilotServeConnection());
-  ipcMain.handle("copilot-serve:get-status", () => syncCopilotServeStatusFromHealth());
+  ipcMain.handle("copilot-serve:get-status", () => {
+    const status = syncCopilotServeStatusFromHealth();
+    emitStatusChanged(getWindow());
+    return status;
+  });
   ipcMain.handle("copilot-serve:get-logs", (_event, options?: { tailLines?: number }) =>
     getCopilotServeLogs(options),
   );
   ipcMain.handle("copilot-serve:precheck", () => runCopilotServePreflight());
-  ipcMain.handle(
-    "copilot-serve:deploy",
-    async (_event, options?: CopilotServeDeployOptions) => {
-      const win = getWindow();
-      const result = await runCopilotServeDeploy(options, (event) => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("copilot-serve:deploy-progress", event);
-        }
-      });
-      emitStatusChanged(win);
-      return result;
-    },
-  );
+  ipcMain.handle("copilot-serve:deploy", async () => {
+    rejectRuntimeProcessControl();
+  });
   ipcMain.handle("copilot-serve:open-runtime-dir", async () => {
-    const dir = resolveCopilotServeRuntimeDir();
-    if (!dir) {
-      return { ok: false, path: null };
-    }
-    const err = await shell.openPath(dir);
-    return { ok: err === "", path: dir };
+    rejectRuntimeProcessControl();
   });
   ipcMain.handle("copilot-serve:start", async () => {
-    const status = await startCopilotServeProcess();
-    emitStatusChanged(getWindow());
-    return status;
+    rejectRuntimeProcessControl();
   });
   ipcMain.handle("copilot-serve:stop", () => {
-    const status = stopCopilotServeProcess();
-    emitStatusChanged(getWindow());
-    return status;
+    rejectRuntimeProcessControl();
   });
   ipcMain.handle("copilot-serve:restart", async () => {
-    const status = await restartCopilotServeProcess();
-    emitStatusChanged(getWindow());
-    return status;
+    rejectRuntimeProcessControl();
   });
 }
 

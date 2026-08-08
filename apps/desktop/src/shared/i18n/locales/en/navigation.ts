@@ -41,7 +41,7 @@ export default {
   openSettings: "Open settings",
   createProfile: "Create New Profile",
   manageSettings: "Settings",
-  drawerServer: "Server & Agent",
+  drawerServer: "Runtime & Agent",
   drawerGeneral: "General",
   switchProfile: "Switch Profile",
   noProfiles: "No profiles found",

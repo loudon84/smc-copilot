@@ -1,11 +1,10 @@
-import { CopilotServeRuntimeSection } from "../../../modules/hermes-runtime/sections/CopilotServeRuntimeSection";
-import { CopilotRuntimeStatusSection } from "../../../modules/hermes-runtime/sections/CopilotRuntimeStatusSection";
-import { CopilotRuntimeInstancesSection } from "../../../modules/hermes-runtime/sections/CopilotRuntimeInstancesSection";
 import type { SettingsDrawerPanel } from "../settings-drawer-types";
 import type { View } from "../../../types/desktop-shell";
-import { GlobalProfileSection } from "./GlobalProfileSection";
-import { HermesAgentSection } from "./HermesAgentSection";
-import { PortalRuntimeSection } from "./PortalRuntimeSection";
+import { ExpertMcpGatewaySection } from "./ExpertMcpGatewaySection";
+import { HermesInstancesSection } from "./HermesInstancesSection";
+import { HermesRuntimeSection } from "./HermesRuntimeSection";
+import { RuntimeLogsSection } from "./RuntimeLogsSection";
+import { RuntimeServiceSection } from "./RuntimeServiceSection";
 
 export interface ServerPanelProps {
   activeProfile: string;
@@ -14,28 +13,24 @@ export interface ServerPanelProps {
   onNavigate: (view: View) => void;
 }
 
+/**
+ * PRD v1.4 Runtime & Agent panel — Desktop is Runtime Client only.
+ * Portal Runtime / Copilot Serve process controls removed.
+ */
 export function ServerPanel({
-  activeProfile,
-  onSelectProfile,
-  onOpenPanel,
-  onNavigate,
+  activeProfile: _activeProfile,
+  onSelectProfile: _onSelectProfile,
+  onOpenPanel: _onOpenPanel,
+  onNavigate: _onNavigate,
 }: ServerPanelProps): React.JSX.Element {
   return (
     <div className="settings-drawer-scroll settings-drawer-padded">
       <div className="settings-container">
-        {/*
-        <GlobalProfileSection
-          activeProfile={activeProfile}
-          onSelectProfile={onSelectProfile}
-          onOpenPanel={onOpenPanel}
-          onNavigate={onNavigate}
-        />
-        */}
-        <CopilotRuntimeStatusSection />
-        <CopilotRuntimeInstancesSection />
-        <HermesAgentSection profile={activeProfile} />
-        <PortalRuntimeSection />
-        <CopilotServeRuntimeSection />
+        <RuntimeServiceSection />
+        <HermesRuntimeSection />
+        <HermesInstancesSection />
+        <ExpertMcpGatewaySection />
+        <RuntimeLogsSection />
       </div>
     </div>
   );

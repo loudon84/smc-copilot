@@ -14,11 +14,13 @@ from api.v1 import (
     diagnostics,
     endpoint,
     experience,
+    expert_mcp,
     gateways,
     health,
     hermes_runs,
     instance_chat,
     instances,
+    memory,
     metrics,
     pairings,
     profiles,
@@ -49,6 +51,9 @@ api_router.include_router(instance_chat.router)
 api_router.include_router(chat_runs.router)
 api_router.include_router(instances.router)
 api_router.include_router(sessions.router)
+api_router.include_router(memory.router)
+api_router.include_router(expert_mcp.router)
+api_router.include_router(expert_mcp.instance_router)
 api_router.include_router(configurations.router)
 api_router.include_router(secrets.router)
 api_router.include_router(pairings.router)

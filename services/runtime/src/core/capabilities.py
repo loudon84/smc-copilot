@@ -89,6 +89,16 @@ RuntimeFeatureId = Literal[
     "chat.runtime.v2.recovery",
     "chat.runtime.v2.abort",
     "chat.interaction.clarify",
+    # PRD monorepo v1.4 Desktop Thin Client
+    "runtime.readiness.v2",
+    "runtime.logs",
+    "hermes.lifecycle.runtime-managed",
+    "instances.runtime-managed",
+    "memory.runtime-managed",
+    "sessions.runtime-managed",
+    "expert-mcp.runtime-managed",
+    "expert-mcp.tools",
+    "expert-mcp.diagnostics",
 ]
 
 
@@ -175,6 +185,15 @@ DEFAULT_FEATURES: tuple[RuntimeFeatureId, ...] = (
     "chat.runtime.v2.recovery",
     "chat.runtime.v2.abort",
     "chat.interaction.clarify",
+    "runtime.readiness.v2",
+    "runtime.logs",
+    "hermes.lifecycle.runtime-managed",
+    "instances.runtime-managed",
+    "memory.runtime-managed",
+    "sessions.runtime-managed",
+    "expert-mcp.runtime-managed",
+    "expert-mcp.tools",
+    "expert-mcp.diagnostics",
 )
 
 

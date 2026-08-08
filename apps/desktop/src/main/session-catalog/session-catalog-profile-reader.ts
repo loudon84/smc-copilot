@@ -1,12 +1,10 @@
 /**
- * v8.2 — Profile-aware reader for Hermes state.db sessions table.
+ * PRD v1.4 — Session catalog reads via Runtime Sessions API.
+ * Desktop must not open Hermes state.db (better-sqlite3).
  */
 
-import Database from "better-sqlite3";
-import { existsSync, readdirSync, statSync } from "fs";
-import { join } from "path";
-import { HERMES_HOME } from "../installer";
-import { stateDbPathForProfile } from "../utils";
+import { getSmcRuntimeClient } from "../copilot-runtime-client/smc-runtime-client";
+import { ServeInstanceAdapter } from "../runtime-adapters/ServeInstanceAdapter";
 
 export type ProfileSessionRow = {
   profileId: string;
@@ -20,232 +18,106 @@ export type ProfileSessionRow = {
   firstUserMessage?: string;
 };
 
-function openReadonly(dbPath: string): Database.Database | null {
-  if (!existsSync(dbPath)) return null;
+async function resolveInstanceIdForProfile(profileId: string): Promise<string | null> {
   try {
-    return new Database(dbPath, { readonly: true });
+    const resolved = await ServeInstanceAdapter.resolveRef(
+      profileId === "default" ? "default" : profileId,
+    );
+    if (resolved?.instanceId) return resolved.instanceId;
+  } catch {
+    /* fall through */
+  }
+  try {
+    const list = await ServeInstanceAdapter.list();
+    const match = list.find(
+      (i) =>
+        i.profileRef === profileId ||
+        i.name === profileId ||
+        (profileId === "default" && (i.profileRef === "default" || i.name === "default")),
+    );
+    return match?.instanceId ?? list[0]?.instanceId ?? null;
   } catch {
     return null;
   }
 }
 
-function generateTitle(message: string): string {
-  if (!message || !message.trim()) return "New Chat";
-  let text = message
-    .trim()
-    .replace(/[#*_`~[\]()]/g, "")
-    .replace(/https?:\/\/\S+/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!text) return "New Chat";
-  if (text.length <= 50) return text;
-  const words = text.split(" ");
-  let title = "";
-  for (const word of words) {
-    if ((`${title} ${word}`).trim().length > 45) break;
-    title = (`${title} ${word}`).trim();
-  }
-  return title || `${text.slice(0, 45)}...`;
+function mapSessionRow(profileId: string, raw: Record<string, unknown>): ProfileSessionRow {
+  const sessionId = String(raw.id ?? raw.sessionId ?? "");
+  const title = raw.title != null ? String(raw.title) : null;
+  const startedAt = Number(raw.created_at ?? raw.startedAt ?? raw.createdAt ?? Date.now());
+  const endedAtRaw = raw.ended_at ?? raw.endedAt ?? null;
+  return {
+    profileId,
+    sessionId,
+    title,
+    startedAt: Number.isFinite(startedAt) ? startedAt : Date.now(),
+    endedAt: endedAtRaw == null ? null : Number(endedAtRaw),
+    messageCount: Number(raw.message_count ?? raw.messageCount ?? 0),
+    model: String(raw.model ?? ""),
+    source: String(raw.source ?? "runtime"),
+    firstUserMessage: raw.first_user_message
+      ? String(raw.first_user_message)
+      : undefined,
+  };
 }
 
 export function listKnownProfileIds(): string[] {
-  const names = ["default"];
-  const profilesDir = join(HERMES_HOME, "profiles");
-  try {
-    if (!existsSync(profilesDir)) return names;
-    for (const name of readdirSync(profilesDir)) {
-      if (name.startsWith(".")) continue;
-      const full = join(profilesDir, name);
-      try {
-        if (statSync(full).isDirectory()) names.push(name);
-      } catch {
-        /* skip */
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return [...new Set(names)];
+  // Profiles are Runtime-owned; UI may still pass default until Profiles API is wired.
+  return ["default"];
 }
 
 // @lat: [[domain/chat#Persistent mount and session catalog]]
-export function readSessionsForProfile(
+export async function readSessionsForProfileAsync(
   profileId: string,
   limit = 200,
-): { rows: ProfileSessionRow[]; unavailable: boolean } {
-  const dbPath = stateDbPathForProfile(
-    profileId === "default" ? undefined : profileId,
-  );
-  const db = openReadonly(dbPath);
-  if (!db) {
-    return { rows: [], unavailable: !existsSync(dbPath) };
-  }
+): Promise<{ rows: ProfileSessionRow[]; unavailable: boolean }> {
   try {
-    const rows = db
-      .prepare(
-        `SELECT
-          s.id,
-          s.source,
-          s.started_at,
-          s.ended_at,
-          s.message_count,
-          s.model,
-          s.title
-        FROM sessions s
-        ORDER BY s.started_at DESC
-        LIMIT ?`,
-      )
-      .all(limit) as Array<{
-      id: string;
-      source: string;
-      started_at: number;
-      ended_at: number | null;
-      message_count: number;
-      model: string;
-      title: string | null;
-    }>;
-
-    const result: ProfileSessionRow[] = [];
-    for (const r of rows) {
-      let firstUserMessage: string | undefined;
-      if (!r.title) {
-        try {
-          const msg = db
-            .prepare(
-              `SELECT content FROM messages
-               WHERE session_id = ? AND role = 'user' AND content IS NOT NULL
-               ORDER BY timestamp, id LIMIT 1`,
-            )
-            .get(r.id) as { content: string } | undefined;
-          firstUserMessage = msg?.content;
-        } catch {
-          /* ignore */
-        }
-      }
-      result.push({
-        profileId,
-        sessionId: r.id,
-        title: r.title || (firstUserMessage ? generateTitle(firstUserMessage) : null),
-        startedAt: r.started_at,
-        endedAt: r.ended_at,
-        messageCount: r.message_count,
-        model: r.model || "",
-        source: r.source || "",
-        firstUserMessage,
-      });
-    }
-    return { rows: result, unavailable: false };
-  } catch {
+    const instanceId = await resolveInstanceIdForProfile(profileId);
+    if (!instanceId) return { rows: [], unavailable: true };
+    const sessions = (await getSmcRuntimeClient().sessions.listByInstance(instanceId)) as Array<
+      Record<string, unknown>
+    >;
+    const rows = sessions
+      .slice(0, limit)
+      .map((s) => mapSessionRow(profileId, s))
+      .filter((r) => r.sessionId);
+    return { rows, unavailable: false };
+  } catch (err) {
+    console.error("[session-catalog] Runtime sessions list failed:", err);
     return { rows: [], unavailable: true };
-  } finally {
-    try {
-      db.close();
-    } catch {
-      /* ignore */
-    }
+  }
+}
+
+/** Sync wrapper kept for existing callers — returns empty when Runtime not ready (no state.db). */
+export function readSessionsForProfile(
+  profileId: string,
+  _limit = 200,
+): { rows: ProfileSessionRow[]; unavailable: boolean } {
+  void profileId;
+  return { rows: [], unavailable: true };
+}
+
+export async function searchSessionsForProfileAsync(
+  profileId: string,
+  query: string,
+): Promise<ProfileSessionRow[]> {
+  try {
+    const instanceId = await resolveInstanceIdForProfile(profileId);
+    if (!instanceId) return [];
+    const sessions = (await getSmcRuntimeClient().sessions.search(
+      instanceId,
+      query,
+    )) as Array<Record<string, unknown>>;
+    return sessions.map((s) => mapSessionRow(profileId, s)).filter((r) => r.sessionId);
+  } catch {
+    return [];
   }
 }
 
 export function searchSessionsForProfile(
   profileId: string,
-  query: string,
-  limit = 40,
+  _query: string,
 ): ProfileSessionRow[] {
-  const dbPath = stateDbPathForProfile(
-    profileId === "default" ? undefined : profileId,
-  );
-  const db = openReadonly(dbPath);
-  if (!db) return [];
-  try {
-    const tableCheck = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'",
-      )
-      .get() as { name: string } | undefined;
-    if (!tableCheck) {
-      // Fallback: title/id substring match
-      const like = `%${query.replace(/%/g, "")}%`;
-      const rows = db
-        .prepare(
-          `SELECT id, source, started_at, ended_at, message_count, model, title
-           FROM sessions
-           WHERE id LIKE ? OR IFNULL(title, '') LIKE ?
-           ORDER BY started_at DESC
-           LIMIT ?`,
-        )
-        .all(like, like, limit) as Array<{
-        id: string;
-        source: string;
-        started_at: number;
-        ended_at: number | null;
-        message_count: number;
-        model: string;
-        title: string | null;
-      }>;
-      return rows.map((r) => ({
-        profileId,
-        sessionId: r.id,
-        title: r.title,
-        startedAt: r.started_at,
-        endedAt: r.ended_at,
-        messageCount: r.message_count,
-        model: r.model || "",
-        source: r.source || "",
-      }));
-    }
-
-    const sanitized = query
-      .trim()
-      .split(/\s+/)
-      .filter((w) => w.length > 0)
-      .map((w) => `"${w.replace(/"/g, "")}"*`)
-      .join(" ");
-    if (!sanitized) return [];
-
-    const rows = db
-      .prepare(
-        `SELECT DISTINCT
-          m.session_id,
-          s.title,
-          s.started_at,
-          s.ended_at,
-          s.source,
-          s.message_count,
-          s.model
-        FROM messages_fts
-        JOIN messages m ON m.id = messages_fts.rowid
-        JOIN sessions s ON s.id = m.session_id
-        WHERE messages_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?`,
-      )
-      .all(sanitized, limit) as Array<{
-      session_id: string;
-      title: string | null;
-      started_at: number;
-      ended_at: number | null;
-      source: string;
-      message_count: number;
-      model: string;
-    }>;
-
-    return rows.map((r) => ({
-      profileId,
-      sessionId: r.session_id,
-      title: r.title,
-      startedAt: r.started_at,
-      endedAt: r.ended_at,
-      messageCount: r.message_count,
-      model: r.model || "",
-      source: r.source || "",
-    }));
-  } catch {
-    return [];
-  } finally {
-    try {
-      db.close();
-    } catch {
-      /* ignore */
-    }
-  }
+  void profileId;
+  return [];
 }

@@ -120,6 +120,14 @@ FR-902：[[src/services/metrics_service.py#MetricsService]] 内存指标；`GET 
 
 FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 统一注册后台 Worker，支持 Backoff/Jitter/熔断/Tick Timeout/手动重启/Critical 标识与 Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 单实例锁（`runtime_already_running`；死亡 PID 可回收；[[src/core/lifecycle.py#lifespan]] 启动失败也会释放锁）。API：`GET/POST /api/v1/workers/*`；健康：`/health/live`、`/health/ready`、`/health/details`。
 
+## Readiness v2 / Memory / Expert MCP (PRD v1.4)
+
+- `GET /api/v1/runtime/readiness` — domain readiness: `service` / `execution` (chatReady/taskReady) / `maintenance` / `expertMcp`（[[src/services/runtime_status_service.py]]）。
+- Memory Domain — `GET/POST/PATCH/DELETE` under `/api/v1/instances/{id}/memory*`；Desktop 禁止直读 Hermes files。
+- Session stats — `GET /api/v1/instances/{id}/sessions/stats`。
+- Expert MCP Gateway — `/api/v1/expert-mcp/*` + SecretStore scope `expert-mcp`；Desktop 不再监听 :48742。
+- Primary DB — `%LOCALAPPDATA%/SMC/CopilotRuntime/data/runtime.db`（legacy `~/.hermes/desktop/sqlite.db` 仅迁移源）。
+
 ## 目录布局
 
-[[src/runtime/platform_paths.py#RuntimeLayout]] 定义服务态目录：`versions/`、`downloads/`、`staging/`、`logs/`（含 `service`/`jobs`/`instances`）、`backups/`、`runtime.db`、`active.json`。Windows 默认根 `%LOCALAPPDATA%\HermesRuntime`，其它平台 `~/.hermes-runtime`。服务态与程序目录必须隔离（见 [[design-decisions#服务态与程序目录隔离]]）。
+[[src/runtime/platform_paths.py#RuntimeLayout]] 定义服务态目录：`versions/`、`downloads/`、`staging/`、`logs/`（含 `service`/`jobs`/`instances`）、`backups/`、`runtime.db`、`active.json`。Windows 默认根 `%LOCALAPPDATA%\SMC\CopilotRuntime`，其它平台遵循 platform_paths。服务态与程序目录必须隔离（见 [[design-decisions#服务态与程序目录隔离]]）。

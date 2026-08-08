@@ -3,23 +3,12 @@ import type {
   McpSkillGatewayActionResult,
   McpSkillGatewayRuntimeConfig,
 } from "../../shared/mcp-skill-gateway-runtime/mcp-skill-gateway-runtime-contract";
-import { restartGatewayAsync } from "../hermes";
 import { readStoredSession } from "../auth/token-store";
 import {
   getMcpSkillGatewayConfig,
   saveMcpSkillGatewayConfig,
 } from "./mcp-skill-gateway-config";
-import {
-  restartMcpSkillGatewayProxy,
-  refreshMcpSkillGatewayProxyConfigFull,
-  startMcpSkillGatewayProxy,
-  stopMcpSkillGatewayProxy,
-} from "./mcp-skill-gateway-proxy";
-import {
-  listMcpSkillGatewayProfileRegistrations,
-  registerMcpSkillGatewayToHermes,
-  unregisterMcpSkillGatewayFromHermes,
-} from "./mcp-skill-gateway-register";
+import { listMcpSkillGatewayProfileRegistrations } from "./mcp-skill-gateway-register";
 import {
   testMcpSkillGatewayProxy,
   testRemoteMcpSkillGateway,
@@ -47,6 +36,18 @@ import {
   previewHermesArtifact,
   runHermesReadinessCheck,
 } from "./hermes-client-api";
+
+/** PRD v1.4 — Expert MCP local proxy disabled; use Runtime APIs. */
+const EXPERT_MCP_MOVED =
+  "Expert MCP local proxy is disabled. Use window.copilotRuntime Expert MCP APIs.";
+
+function rejectExpertMcpProxyControl(): McpSkillGatewayActionResult {
+  return {
+    ok: false,
+    error: EXPERT_MCP_MOVED,
+    errorCode: "MCP_GATEWAY_PROXY_START_FAILED",
+  };
+}
 
 function toActionResult(err: unknown): McpSkillGatewayActionResult {
   if (isMcpSkillGatewayError(err)) {
@@ -84,32 +85,17 @@ export function registerMcpSkillGatewayRuntimeIpc(): void {
       saveMcpSkillGatewayConfig(patch),
   );
 
-  ipcMain.handle("mcp-skill-gateway-runtime:start-proxy", async () => {
-    try {
-      await requireLoggedIn();
-      const config = getMcpSkillGatewayConfig();
-      await startMcpSkillGatewayProxy(config.localProxyPort);
-      return { ok: true } satisfies McpSkillGatewayActionResult;
-    } catch (err) {
-      return toActionResult(err);
-    }
-  });
+  ipcMain.handle("mcp-skill-gateway-runtime:start-proxy", async () =>
+    rejectExpertMcpProxyControl(),
+  );
 
-  ipcMain.handle("mcp-skill-gateway-runtime:stop-proxy", async () => {
-    stopMcpSkillGatewayProxy();
-    return { ok: true } satisfies McpSkillGatewayActionResult;
-  });
+  ipcMain.handle("mcp-skill-gateway-runtime:stop-proxy", async () =>
+    rejectExpertMcpProxyControl(),
+  );
 
-  ipcMain.handle("mcp-skill-gateway-runtime:restart-proxy", async () => {
-    try {
-      await requireLoggedIn();
-      await restartMcpSkillGatewayProxy();
-      await refreshMcpSkillGatewayProxyConfigFull();
-      return { ok: true } satisfies McpSkillGatewayActionResult;
-    } catch (err) {
-      return toActionResult(err);
-    }
-  });
+  ipcMain.handle("mcp-skill-gateway-runtime:restart-proxy", async () =>
+    rejectExpertMcpProxyControl(),
+  );
 
   ipcMain.handle("mcp-skill-gateway-runtime:test-proxy", async () =>
     testMcpSkillGatewayProxy(),
@@ -121,53 +107,28 @@ export function registerMcpSkillGatewayRuntimeIpc(): void {
 
   ipcMain.handle(
     "mcp-skill-gateway-runtime:register-to-profile",
-    async (_, profile: string) => {
-      try {
-        await requireLoggedIn();
-        const config = getMcpSkillGatewayConfig();
-        const result = await registerMcpSkillGatewayToHermes({
-          profile: profile || "default",
-          localProxyPort: config.localProxyPort,
-          enabled: true,
-        });
-
-        if (result.ok) {
-          const profiles = new Set(config.registeredProfiles);
-          profiles.add(profile || "default");
-          saveMcpSkillGatewayConfig({ registeredProfiles: [...profiles] });
-          if (result.changed && config.autoRestartHermesGateway) {
-            await restartGatewayAsync();
-          }
-        }
-
-        return result;
-      } catch (err) {
-        if (isMcpSkillGatewayError(err)) {
-          return {
-            ok: false,
-            changed: false,
-            configPath: "",
-            profile: profile || "default",
-            url: "",
-            error: err.message,
-            errorCode: err.code,
-          };
-        }
-        throw err;
-      }
-    },
+    async (_, profile: string) => ({
+      ok: false,
+      changed: false,
+      configPath: "",
+      profile: profile || "default",
+      url: "",
+      error: EXPERT_MCP_MOVED,
+      errorCode: "MCP_GATEWAY_PROXY_START_FAILED" as const,
+    }),
   );
 
   ipcMain.handle(
     "mcp-skill-gateway-runtime:unregister-from-profile",
-    async (_, profile: string) => {
-      const config = getMcpSkillGatewayConfig();
-      const result = await unregisterMcpSkillGatewayFromHermes(profile || "default");
-      if (result.ok && result.changed && config.autoRestartHermesGateway) {
-        await restartGatewayAsync();
-      }
-      return result;
-    },
+    async (_, profile: string) => ({
+      ok: false,
+      changed: false,
+      configPath: "",
+      profile: profile || "default",
+      url: "",
+      error: EXPERT_MCP_MOVED,
+      errorCode: "MCP_GATEWAY_PROXY_START_FAILED" as const,
+    }),
   );
 
   ipcMain.handle("mcp-skill-gateway-runtime:list-profile-registrations", async () =>

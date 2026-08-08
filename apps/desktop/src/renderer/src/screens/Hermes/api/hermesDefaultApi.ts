@@ -149,8 +149,20 @@ export const hermesDefaultApi = {
   },
 
   memory: {
-    read() {
-      return window.hermesAPI.readMemory(P);
+    async read() {
+      if (!window.copilotRuntime?.resolveInstance || !window.copilotRuntime?.getMemory) {
+        throw new Error("Current Runtime does not expose Memory APIs. Please update Runtime.");
+      }
+      const resolved = await window.copilotRuntime.resolveInstance(P);
+      const instanceId = resolved?.instanceId;
+      if (!instanceId) {
+        throw new Error("Unable to resolve Hermes Instance for Memory. Open Runtime & Agent.");
+      }
+      const bundle = await window.copilotRuntime.getMemory(instanceId);
+      if (!bundle) {
+        throw new Error("Runtime Memory unavailable. Please update Runtime.");
+      }
+      return bundle as Awaited<ReturnType<typeof window.hermesAPI.readMemory>>;
     },
     readSoul() {
       return window.hermesAPI.readSoul(P);
@@ -162,6 +174,7 @@ export const hermesDefaultApi = {
       return window.hermesAPI.resetSoul(P);
     },
     addMemoryEntry(content: string) {
+      // Main memory IPC is Runtime-backed (PRD v1.4).
       return window.hermesAPI.addMemoryEntry(content, P);
     },
     updateMemoryEntry(index: number, content: string) {

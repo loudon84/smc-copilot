@@ -24,3 +24,9 @@ WorkTask durable execution, Kernel, and 21 event types are documented in [work-t
 - `npm run contracts:check` fails CI on drift.
 - Breaking OpenAPI changes bump `contracts/version.json` `runtimeApi` major and require an ADR (see ADR-006).
 - Bundle version: `contracts/version.json` `bundleVersion`.
+
+## v1.4 readiness / memory / expert-mcp
+
+- **Readiness v2** (`GET /api/v1/runtime/readiness`) splits `service` / `execution` / `maintenance` / `expertMcp` — Desktop Domain Gate must not collapse these into a single hard block (ADR-010).
+- **Memory** and session stats are Runtime data-plane APIs; Desktop must not read Hermes `state.db` / `MEMORY.md` (ADR-008).
+- **Expert MCP Gateway** is hosted by Runtime; Desktop must not auto-start a local proxy on `:48742` (ADR-007 / ADR-009).

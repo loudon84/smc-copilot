@@ -24,6 +24,29 @@ class RuntimeStatusResponse(BaseModel):
     hermes_home: str = Field(alias="hermesHome")
 
 
+class RuntimeDomainReadiness(BaseModel):
+    """One readiness domain (service / execution / maintenance / expertMcp)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    ready: bool
+    checks: dict[str, str] = Field(default_factory=dict)
+    status: str | None = None
+    chat_ready: bool | None = Field(default=None, alias="chatReady")
+    task_ready: bool | None = Field(default=None, alias="taskReady")
+
+
+class RuntimeReadinessResponse(BaseModel):
+    """PRD v1.4 three-layer readiness — Desktop gates Chat/Task/MCP separately."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    service: RuntimeDomainReadiness
+    execution: RuntimeDomainReadiness
+    maintenance: RuntimeDomainReadiness
+    expert_mcp: RuntimeDomainReadiness = Field(alias="expertMcp")
+
+
 class RuntimeCapabilitiesResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

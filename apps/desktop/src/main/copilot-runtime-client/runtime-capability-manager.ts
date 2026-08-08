@@ -1,4 +1,5 @@
 import type { RuntimeCapabilitiesView } from "../../shared/copilot-runtime/runtime-capability-contract";
+import type { RuntimeReadinessView } from "../../shared/copilot-runtime/runtime-readiness-contract";
 import {
   REQUIRED_CHAT_FEATURES,
   REQUIRED_CORE_FEATURES,
@@ -9,6 +10,7 @@ import { createDesktopRuntimeError } from "./runtime-error-mapper";
 import type { DesktopRuntimeError } from "../../shared/copilot-runtime/runtime-error-contract";
 
 let cachedCapabilities: RuntimeCapabilitiesView | null = null;
+let cachedReadiness: RuntimeReadinessView | null = null;
 
 export function setCachedCapabilities(view: RuntimeCapabilitiesView | null): void {
   cachedCapabilities = view;
@@ -16,6 +18,36 @@ export function setCachedCapabilities(view: RuntimeCapabilitiesView | null): voi
 
 export function getCachedCapabilities(): RuntimeCapabilitiesView | null {
   return cachedCapabilities;
+}
+
+/** PRD v1.4 — cache /runtime/readiness alongside capabilities (no legacy fallback). */
+export function setCachedReadiness(view: RuntimeReadinessView | null): void {
+  cachedReadiness = view;
+}
+
+export function getCachedReadiness(): RuntimeReadinessView | null {
+  return cachedReadiness;
+}
+
+export function assertDomainReady(
+  domain: "service" | "execution" | "maintenance" | "expertMcp",
+): DesktopRuntimeError | null {
+  if (!cachedReadiness) {
+    return createDesktopRuntimeError(
+      "RUNTIME_UNAVAILABLE",
+      "Runtime readiness not loaded. Please update Runtime if this persists.",
+      { retryable: true },
+    );
+  }
+  const slice = cachedReadiness[domain];
+  if (!slice?.ready) {
+    return createDesktopRuntimeError(
+      "RESOURCE_NOT_READY",
+      `Runtime domain not ready: ${domain}. Please update Runtime or open Runtime & Agent.`,
+      { details: { domain, checks: slice?.checks ?? {} }, retryable: true },
+    );
+  }
+  return null;
 }
 
 export function toCapabilitiesView(raw: {

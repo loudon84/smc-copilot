@@ -3,11 +3,7 @@ import {
   initAiOsServices,
   getAiOsRuntimeStatus,
   getAiOsRuntimeSnapshot,
-  startAiOs,
-  stopAiOs,
-  restartAiOs,
 } from "./aios-runtime-supervisor";
-import { runAiOsDoctor } from "./aios-doctor";
 import { reconcileAiOsRuntime } from "./aios-reconciler";
 import { checkPortConflicts } from "./aios-port-check";
 import { getAiOsEnvConfig } from "./aios-config";
@@ -16,14 +12,23 @@ import { getAiOsPortalInfo } from "./aios-paths";
 import { listRuntimeServiceEvents } from "../profile-runtime-db";
 import type { AiOsServiceId, AiOsLogQueryOptions } from "../../shared/aios/aios-contract";
 
-export function registerAiosIpc(mainWindow: BrowserWindow): void {
+/** PRD v1.4 — Portal process control moved to external Runtime. */
+const PORTAL_PROCESS_CONTROL_MOVED =
+  "Portal Runtime process control moved to external Runtime. Desktop no longer starts Portal.";
+
+function rejectPortalProcessControl(): never {
+  throw new Error(PORTAL_PROCESS_CONTROL_MOVED);
+}
+
+export function registerAiosIpc(_mainWindow: BrowserWindow): void {
   try {
+    // Seed status records only — do not spawn Portal processes (PRD v1.4).
     initAiOsServices();
   } catch (err) {
     console.error("[AIOS] Failed to init services:", err);
   }
 
-  // Reconcile state from previous run
+  // Reconcile state from previous run (health probe only; no spawn)
   reconcileAiOsRuntime().catch((err) => {
     console.error("[AIOS] Reconcile failed:", err);
   });
@@ -37,15 +42,15 @@ export function registerAiosIpc(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle("aios:start", async () => {
-    return startAiOs(mainWindow);
+    rejectPortalProcessControl();
   });
 
   ipcMain.handle("aios:stop", async () => {
-    return stopAiOs(mainWindow);
+    rejectPortalProcessControl();
   });
 
   ipcMain.handle("aios:restart", async () => {
-    return restartAiOs(mainWindow);
+    rejectPortalProcessControl();
   });
 
   ipcMain.handle("aios:get-logs", (_event, serviceId: AiOsServiceId, options?: AiOsLogQueryOptions) => {
@@ -63,7 +68,7 @@ export function registerAiosIpc(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle("aios:doctor", async () => {
-    return runAiOsDoctor();
+    rejectPortalProcessControl();
   });
 
   ipcMain.handle("aios:reconcile", async () => {

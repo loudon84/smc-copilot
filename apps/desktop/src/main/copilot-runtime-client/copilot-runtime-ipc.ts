@@ -2,7 +2,7 @@
  * Copilot Runtime IPC — connection + Phase 2 Instance/Diagnostics.
  */
 import { ipcMain } from "electron";
-import { getCachedCapabilities } from "./runtime-capability-manager";
+import { getCachedCapabilities, getCachedReadiness, setCachedReadiness } from "./runtime-capability-manager";
 import {
   fetchDiagnosticsSummary,
   getRuntimeConnectionState,
@@ -53,6 +53,17 @@ export function registerCopilotRuntimeIpc(): void {
 
   ipcMain.handle("copilot-runtime:get-state", () => getRuntimeConnectionState());
   ipcMain.handle("copilot-runtime:get-capabilities", () => getCachedCapabilities());
+  ipcMain.handle("copilot-runtime:get-readiness", async () => {
+    try {
+      const readiness = await getSmcRuntimeClient().runtime.getReadiness();
+      setCachedReadiness(readiness);
+      return readiness;
+    } catch (err) {
+      console.error("[copilot-runtime] get-readiness", err);
+      setCachedReadiness(null);
+      return getCachedReadiness();
+    }
+  });
   ipcMain.handle("copilot-runtime:get-diagnostics-summary", () => fetchDiagnosticsSummary());
   ipcMain.handle("copilot-runtime:start-pairing", () => startPairing());
   ipcMain.handle("copilot-runtime:confirm-pairing", (_event, pairingId: string) => {
@@ -85,6 +96,36 @@ export function registerCopilotRuntimeIpc(): void {
     }
   });
 
+  ipcMain.handle("copilot-runtime:start-update", async (_event, body?: unknown) => {
+    try {
+      const result = await getSmcRuntimeClient().runtime.update(
+        body && typeof body === "object" ? (body as Record<string, unknown>) : undefined,
+      );
+      return { jobId: result.jobId, status: result.status, message: null };
+    } catch (err) {
+      return {
+        jobId: null,
+        status: "failed",
+        message: mutationResult(err).message ?? "update failed",
+      };
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:start-rollback", async (_event, body?: unknown) => {
+    try {
+      const result = await getSmcRuntimeClient().runtime.rollback(
+        body && typeof body === "object" ? (body as Record<string, unknown>) : undefined,
+      );
+      return { jobId: result.jobId, status: result.status, message: null };
+    } catch (err) {
+      return {
+        jobId: null,
+        status: "failed",
+        message: mutationResult(err).message ?? "rollback failed",
+      };
+    }
+  });
+
   ipcMain.handle("copilot-runtime:start-doctor", async () => {
     try {
       const result = await getSmcRuntimeClient().runtime.doctor();
@@ -104,6 +145,74 @@ export function registerCopilotRuntimeIpc(): void {
       return await getSmcRuntimeClient().runtime.getJob(jobId.trim());
     } catch {
       return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:list-versions", async () => {
+    try {
+      return await getSmcRuntimeClient().runtime.listVersions();
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:get-memory", async (_event, instanceId: string) => {
+    if (typeof instanceId !== "string" || !instanceId.trim()) return null;
+    try {
+      return await getSmcRuntimeClient().memory.get(instanceId.trim());
+    } catch (err) {
+      console.error("[copilot-runtime] get-memory", err);
+      return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:get-session-stats", async (_event, instanceId: string) => {
+    if (typeof instanceId !== "string" || !instanceId.trim()) return null;
+    try {
+      return await getSmcRuntimeClient().sessions.stats(instanceId.trim());
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:expert-mcp-status", async () => {
+    try {
+      return await getSmcRuntimeClient().expertMcp.status();
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:expert-mcp-connect", async () => {
+    try {
+      return await getSmcRuntimeClient().expertMcp.connect();
+    } catch (err) {
+      return { ok: false, error: mutationResult(err).message };
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:expert-mcp-test", async () => {
+    try {
+      return await getSmcRuntimeClient().expertMcp.test();
+    } catch (err) {
+      return { ok: false, error: mutationResult(err).message };
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:expert-mcp-diagnostics", async () => {
+    try {
+      return await getSmcRuntimeClient().expertMcp.diagnostics();
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:export-diagnostics-bundle", async () => {
+    try {
+      const result = await getSmcRuntimeClient().diagnostics.createBundle({});
+      return { ok: true, path: (result as { path?: string })?.path, message: null };
+    } catch (err) {
+      return { ok: false, message: mutationResult(err).message };
     }
   });
 

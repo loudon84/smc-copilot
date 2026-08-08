@@ -2,5 +2,5 @@
 export const DESKTOP_VERSION = "0.1.9" as const;
 export const RUNTIME_API_VERSION = "3.0" as const;
 export const RUNTIME_API_FULL_VERSION = "3.0.0" as const;
-export const GIT_COMMIT = "84d55bf" as const;
+export const GIT_COMMIT = "ef81011" as const;
 export const CONTRACT_BUNDLE_VERSION = "1.3.0" as const;

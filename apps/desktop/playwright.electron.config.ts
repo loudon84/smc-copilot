@@ -5,7 +5,7 @@ import { defineConfig } from "@playwright/test";
  * Set ELECTRON_APP_PATH to a packaged/binary main entry, or rely on out/main/index.js after build.
  */
 export default defineConfig({
-  testDir: "./tests/e2e/chat",
+  testDir: "./tests/e2e",
   timeout: 120_000,
   retries: process.env.CI ? 1 : 0,
   reporter: [
@@ -19,7 +19,7 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "electron-chat",
+      name: "electron-e2e",
       testMatch: "**/*.spec.ts",
     },
   ],

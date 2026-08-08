@@ -7,12 +7,11 @@ from pathlib import Path
 
 
 def default_runtime_data_dir() -> Path:
-    """Platform default for Hermes Runtime program/data root (not Hermes user data)."""
+    """Platform default for Runtime program/data root (PRD v1.4 §37)."""
     if sys.platform == "win32":
         local = os.environ.get("LOCALAPPDATA")
-        if local:
-            return Path(local) / "HermesRuntime"
-        return Path.home() / "AppData" / "Local" / "HermesRuntime"
+        base = Path(local) if local else Path.home() / "AppData" / "Local"
+        return base / "SMC" / "CopilotRuntime"
     return Path.home() / ".hermes-runtime"
 
 
@@ -32,6 +31,7 @@ class RuntimeLayout:
     @classmethod
     def from_root(cls, root: Path) -> RuntimeLayout:
         root = root.expanduser().resolve()
+        data = root / "data"
         return cls(
             root=root,
             service=root / "service",
@@ -40,13 +40,14 @@ class RuntimeLayout:
             staging=root / "staging",
             logs=root / "logs",
             backups=root / "backups",
-            db_path=root / "runtime.db",
+            db_path=data / "runtime.db",
             active_json=root / "active.json",
         )
 
     def ensure(self) -> None:
         for path in (
             self.root,
+            self.root / "data",
             self.service,
             self.versions,
             self.downloads,

@@ -18,6 +18,7 @@ from schemas.runtime import (
     RuntimeJobAcceptedResponse,
     RuntimeJobCreateRequest,
     RuntimeJobResponse,
+    RuntimeReadinessResponse,
     RuntimeRollbackRequest,
     RuntimeStatusResponse,
     RuntimeUpdatePlanRequest,
@@ -37,10 +38,21 @@ def get_runtime_job_service(request: Request) -> RuntimeJobService:
 
 @router.get("/status", response_model=RuntimeStatusResponse)
 async def runtime_status(
+    request: Request,
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> RuntimeStatusResponse:
-    return await RuntimeStatusService(settings, session).status()
+    return await RuntimeStatusService(settings, session, app_state=request.app.state).status()
+
+
+@router.get("/readiness", response_model=RuntimeReadinessResponse)
+async def runtime_readiness(
+    request: Request,
+    settings: Settings = Depends(get_app_settings),
+    session: AsyncSession = Depends(get_db_session),
+) -> RuntimeReadinessResponse:
+    """PRD v1.4 domain readiness (service / execution / maintenance / expertMcp)."""
+    return await RuntimeStatusService(settings, session, app_state=request.app.state).readiness_v2()
 
 
 @router.get("/capabilities", response_model=RuntimeCapabilitiesResponse)

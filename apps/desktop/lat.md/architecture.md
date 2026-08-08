@@ -15,18 +15,20 @@ Renderer (React)
 Preload (contextBridge)
        ↓ IPC
 Main (Node.js domain modules)
-       ↓ HTTP / spawn (Serve spawn restricted in production)
-Portal Auth (:8000) + Hermes Gateway (:8642+) + copilot-serve (:8765)
+       ↓ HTTP via @smc/runtime-client (no Hermes spawn / no state.db / no Expert MCP :48742)
+Copilot Runtime (:8765) → Hermes Instances / Gateway / Memory / Sessions / Expert MCP
 ```
 
-Hard rules:
+Hard rules (PRD v1.4 Thin Client):
 
+- Desktop is a Runtime Client only — no Portal/Serve/Hermes process managers, no Hermes MEMORY.md/state.db reads, no Expert MCP local proxy.
 - Renderer must never import `electron`, `fs`, `path`, `child_process`, or `better-sqlite3`.
 - Renderer must never call `ipcRenderer` directly.
 - Renderer must never fetch Serve (`127.0.0.1:8765`) with a Device Token; JSON goes through Main `copilotRuntime.proxyFetch` or domain IPC.
+- Domain gates use `/runtime/readiness` (execution/service/expertMcp/maintenance); missing capability → “Please update Runtime” (no legacy fallback).
 - New capabilities follow Main module → IPC registration → Preload wrapper → `index.d.ts` → `docs/API_CONTRACTS.md`.
 
-Core entry points: [[src/main/utils.ts#profileHome]], [[src/main/hermes.ts#startGatewayAsync]], [[src/main/startup/startup-decision.ts#resolveStartupDecision]], [[src/main/auth/token-header-injector.ts#installTokenHeaderInjector]], [[src/main/copilot-runtime-client/runtime-connection-manager.ts#runRuntimeHandshake]], [[src/main/copilot-runtime-client/copilot-runtime-ipc.ts#registerCopilotRuntimeIpc]], [[src/main/runtime-adapters/gateway-control.ts#resolveGatewayControlMode]], [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]], [[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]].
+Core entry points: [[src/main/startup/startup-decision.ts#resolveStartupDecision]], [[src/main/auth/token-header-injector.ts#installTokenHeaderInjector]], [[src/main/copilot-runtime-client/runtime-connection-manager.ts#runRuntimeHandshake]], [[src/main/copilot-runtime-client/copilot-runtime-ipc.ts#registerCopilotRuntimeIpc]], [[src/main/copilot-runtime-client/runtime-capability-manager.ts#getCachedReadiness]], [[src/main/chat-runtime/chat-runtime-ipc.ts#registerChatRuntimeIpc]], [[src/main/chat-runtime/chat-runtime-manager.ts#setActiveRun]].
 
 ## Preload bridge contract
 

@@ -11,14 +11,22 @@ from services.instance_service import InstanceService
 router = APIRouter(tags=["sessions"])
 
 
+async def _adapter(instance_id: str, settings: Settings, session: AsyncSession) -> HermesSessionAdapter:
+    inst = await InstanceService(settings, session).get(instance_id)
+    return HermesSessionAdapter(
+        settings,
+        gateway_port=inst.gateway_port,
+        profile_name=inst.profile_name,
+    )
+
+
 @router.get("/instances/{instance_id}/sessions")
 async def list_sessions(
     instance_id: str,
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[dict]:
-    inst = await InstanceService(settings, session).get(instance_id)
-    return await HermesSessionAdapter(settings, gateway_port=inst.gateway_port).list_sessions()
+    return await (await _adapter(instance_id, settings, session)).list_sessions()
 
 
 @router.get("/instances/{instance_id}/sessions/search")
@@ -28,8 +36,17 @@ async def search_sessions(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[dict]:
-    inst = await InstanceService(settings, session).get(instance_id)
-    return await HermesSessionAdapter(settings, gateway_port=inst.gateway_port).search(q)
+    return await (await _adapter(instance_id, settings, session)).search(q)
+
+
+@router.get("/instances/{instance_id}/sessions/stats")
+async def session_stats(
+    instance_id: str,
+    settings: Settings = Depends(get_app_settings),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """PRD v1.4 §31 — session/message counts without Desktop reading state.db."""
+    return await (await _adapter(instance_id, settings, session)).stats()
 
 
 @router.get("/instances/{instance_id}/sessions/{session_id}")
@@ -39,8 +56,7 @@ async def get_session(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    inst = await InstanceService(settings, session).get(instance_id)
-    return await HermesSessionAdapter(settings, gateway_port=inst.gateway_port).get_session(session_id)
+    return await (await _adapter(instance_id, settings, session)).get_session(session_id)
 
 
 @router.delete("/instances/{instance_id}/sessions/{session_id}")
@@ -50,6 +66,5 @@ async def delete_session(
     settings: Settings = Depends(get_app_settings),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    inst = await InstanceService(settings, session).get(instance_id)
-    await HermesSessionAdapter(settings, gateway_port=inst.gateway_port).delete_session(session_id)
+    await (await _adapter(instance_id, settings, session)).delete_session(session_id)
     return {"status": "deleted"}

@@ -5,6 +5,7 @@
     "check:no-task-direct-hermes": "node scripts/check-no-task-direct-hermes.mjs",
     "check:worktask-state-machine": "node scripts/check-worktask-state-machine.mjs",
     "check:task-contract-drift": "node scripts/check-task-contract-drift.mjs",
-    "guard": "npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift"
+    "check:no-runtime-legacy-desktop-db": "node scripts/check-no-runtime-legacy-desktop-db.mjs",
+    "guard": "npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift && npm run check:no-runtime-legacy-desktop-db"
   }
 }

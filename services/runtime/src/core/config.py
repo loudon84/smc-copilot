@@ -26,8 +26,20 @@ def _resolve_project_root() -> Path:
 
 _PACKAGE_ROOT = _resolve_project_root()
 
-# 与 smc-copilot-desktop 用户数据目录一致；可通过 SQLITE_PATH 覆盖
-_DEFAULT_SQLITE_PATH = "~/.hermes/desktop/sqlite.db"
+# PRD v1.4 §37: Runtime DB under Runtime data dir, not Desktop/Hermes legacy path.
+# Empty default → resolved via RuntimeLayout (runtime.db) at startup; SQLITE_PATH overrides.
+_DEFAULT_SQLITE_PATH = ""
+
+
+def _default_sqlite_path() -> str:
+    """%LOCALAPPDATA%/SMC/CopilotRuntime/data/runtime.db on Windows; else ~/.hermes-runtime/data/runtime.db."""
+    root = default_runtime_data_dir()
+    if is_windows():
+        # Prefer SMC CopilotRuntime program data when available
+        smc = default_copilot_runtime_dir()
+        if smc is not None:
+            root = smc
+    return str((root / "data" / "runtime.db").expanduser())
 
 
 def _abs_path(value: str) -> str:
@@ -46,7 +58,7 @@ class Settings(BaseSettings):
     # --- legacy / service bind (kept for compatibility) ---
     copilot_host: str = Field(default="127.0.0.1", alias="COPILOT_HOST")
     copilot_port: int = Field(default=8765, alias="COPILOT_PORT")
-    sqlite_path: str = Field(default=_DEFAULT_SQLITE_PATH, alias="SQLITE_PATH")
+    sqlite_path: str = Field(default="", alias="SQLITE_PATH")
     hermes_home: str = Field(default="~/.hermes", alias="HERMES_HOME")
     default_gateway_port: int = Field(default=8642, alias="DEFAULT_GATEWAY_PORT")
     hermes_gateway_command: str = Field(default="hermes gateway", alias="HERMES_GATEWAY_COMMAND")
@@ -193,9 +205,29 @@ class Settings(BaseSettings):
 
     @property
     def sqlite_url(self) -> str:
-        path = Path(self.sqlite_path).expanduser().resolve()
+        raw = (self.sqlite_path or "").strip()
+        if not raw:
+            from runtime.db_path_migration import default_runtime_control_db, migrate_legacy_desktop_db
+            from runtime.platform_paths import RuntimeLayout
+
+            layout = RuntimeLayout.from_root(self.resolved_runtime_data_dir())
+            layout.ensure()
+            path = migrate_legacy_desktop_db(layout=layout)
+        else:
+            path = Path(raw).expanduser().resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite+aiosqlite:///{path.as_posix()}"
+
+    @property
+    def resolved_sqlite_path(self) -> Path:
+        raw = (self.sqlite_path or "").strip()
+        if raw:
+            return Path(raw).expanduser().resolve()
+        from runtime.db_path_migration import default_runtime_control_db
+        from runtime.platform_paths import RuntimeLayout
+
+        layout = RuntimeLayout.from_root(self.resolved_runtime_data_dir())
+        return default_runtime_control_db(layout)
 
     @property
     def hermes_home_path(self) -> Path:

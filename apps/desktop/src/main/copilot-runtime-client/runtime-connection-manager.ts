@@ -17,6 +17,7 @@ import {
 import {
   getCachedCapabilities,
   setCachedCapabilities,
+  setCachedReadiness,
   toCapabilitiesView,
 } from "./runtime-capability-manager";
 import { CopilotRuntimeHttpError, runtimeFetch } from "./runtime-http-client";
@@ -155,6 +156,13 @@ export async function runRuntimeHandshake(): Promise<RuntimeConnectionState> {
       const status = (await client.getStatus()) as RuntimeStatus;
       const capabilities = (await client.getCapabilities()) as RuntimeCapabilities;
       setCachedCapabilities(toCapabilitiesView(capabilities as { apiVersion?: string; features?: string[] }));
+      try {
+        const readiness = await client.runtime.getReadiness();
+        setCachedReadiness(readiness);
+      } catch (readinessErr) {
+        console.warn("[copilot-runtime] readiness fetch failed (no legacy fallback):", readinessErr);
+        setCachedReadiness(null);
+      }
 
       const compatibility = await runtimeFetch<RuntimeCompatibilityResponse>({
         path: "/api/v1/runtime/compatibility",

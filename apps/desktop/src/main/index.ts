@@ -11,10 +11,6 @@ import { electronApp, optimizer, is } from "./utils/electron-toolkit-wrapper";
 import type { AppUpdater } from "electron-updater";
 import icon from "../../resources/icon.png?asset";
 import {
-  getHermesVersion,
-  clearVersionCache,
-  runHermesDoctor,
-  runHermesUpdate,
   checkOpenClawExists,
   runClawMigrate,
   runHermesBackup,
@@ -29,14 +25,7 @@ import {
   isRemoteMode,
   isRemoteOnlyMode,
   sendMessage,
-  startGateway,
-  startGatewayAsync,
-  stopGateway,
-  stopGatewayAsync,
-  isGatewayRunning,
   isGatewayRunningAsync,
-  restartGateway,
-  restartGatewayAsync,
   ensureSshTunnelIfNeeded,
   setSshRemoteApiKey,
   stopHealthPolling,
@@ -165,14 +154,11 @@ import {
   sshStartGateway,
   sshStopGateway,
   sshReadRemoteApiKey,
-  sshGetHermesVersion,
   sshReadLogs,
   sshGetPlatformEnabled,
   sshSetPlatformEnabled,
   sshListCachedSessions,
-  sshRunDoctor,
   sshListModels,
-  sshRunUpdate,
   sshRunDump,
   sshDiscoverMemoryProviders,
 } from "./ssh-remote";
@@ -227,7 +213,6 @@ import { initializeProfileRuntime, onBeforeQuit as profileRuntimeBeforeQuit } fr
 import { onBeforeQuit as aiosBeforeQuit } from "./aios/aios-runtime-supervisor";
 import { registerMcpIpc, seedDefaultMcpServers, stopMcpRuntimeProxy } from "./mcp";
 import {
-  autoStartMcpSkillGatewayIfReady,
   registerMcpSkillGatewayRuntimeIpc,
   stopMcpSkillGatewayProxy,
 } from "./mcp-skill-gateway-runtime";
@@ -547,48 +532,20 @@ function setupIPC(): void {
     return dialog.showOpenDialog(opts);
   });
 
-  // Hermes engine info
+  // Hermes engine info — PRD v1.4: local Hermes lifecycle owned by Copilot Runtime
+  const HERMES_CONTROL_MOVED =
+    "Hermes process control moved to Copilot Runtime. Use window.copilotRuntime.";
   ipcMain.handle("get-hermes-version", async () => {
-    const conn = getConnectionConfig();
-    if (conn.mode === "ssh" && conn.ssh) return sshGetHermesVersion(conn.ssh);
-    return getHermesVersion();
+    return null;
   });
   ipcMain.handle("refresh-hermes-version", async () => {
-    const conn = getConnectionConfig();
-    if (conn.mode === "ssh" && conn.ssh) return sshGetHermesVersion(conn.ssh);
-    clearVersionCache();
-    return getHermesVersion();
+    return null;
   });
   ipcMain.handle("run-hermes-doctor", () => {
-    const conn = getConnectionConfig();
-    if (conn.mode === "ssh" && conn.ssh) return sshRunDoctor(conn.ssh);
-    return runHermesDoctor();
+    return HERMES_CONTROL_MOVED;
   });
-  ipcMain.handle("run-hermes-update", async (event) => {
-    try {
-      const conn = getConnectionConfig();
-      if (conn.mode === "ssh" && conn.ssh) {
-        event.sender.send("install-progress", {
-          step: 1,
-          totalSteps: 1,
-          title: "Updating remote Hermes Agent",
-          detail: "Running hermes update over SSH...",
-          log: "Running hermes update over SSH...\n",
-        });
-        await sshRunUpdate(conn.ssh);
-        await sshStartGateway(conn.ssh);
-        await startSshTunnel(conn.ssh);
-        const key = await sshReadRemoteApiKey(conn.ssh);
-        setSshRemoteApiKey(key);
-        return { success: true };
-      }
-      await runHermesUpdate((progress: InstallProgress) => {
-        event.sender.send("install-progress", progress);
-      });
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: (err as Error).message };
-    }
+  ipcMain.handle("run-hermes-update", async () => {
+    return { success: false, error: HERMES_CONTROL_MOVED };
   });
 
   // OpenClaw migration
@@ -625,14 +582,7 @@ function setupIPC(): void {
         return true;
       }
       setEnvValue(key, value, profile);
-      // Restart gateway so it picks up the new API key
-      if (
-        (isGatewayRunning() && key.endsWith("_API_KEY")) ||
-        key.endsWith("_TOKEN") ||
-        key === "HF_TOKEN"
-      ) {
-        restartGateway(profile);
-      }
+      // PRD v1.4 — Desktop must not restart Hermes Gateway; Runtime owns lifecycle.
       return true;
     },
   );
@@ -707,17 +657,8 @@ function setupIPC(): void {
 
       const prev = getModelConfig(profile);
       setModelConfig(provider, model, baseUrl, profile);
-
-      // Restart gateway when provider, model, or endpoint changes so it picks up new config
-      if (
-        isGatewayRunning() &&
-        (prev.provider !== provider ||
-          prev.model !== model ||
-          prev.baseUrl !== baseUrl)
-      ) {
-        restartGateway(profile);
-      }
-
+      void prev;
+      // PRD v1.4 — Desktop must not restart Hermes Gateway; Runtime owns lifecycle.
       return true;
     },
   );
@@ -894,16 +835,16 @@ function setupIPC(): void {
     }
   });
 
-  // Gateway
+  // Gateway — PRD v1.4: local Hermes lifecycle owned by Copilot Runtime
   ipcMain.handle("start-gateway", async () => {
-    const conn = getConnectionConfig();
-    if (conn.mode === "ssh" && conn.ssh) { await sshStartGateway(conn.ssh); return true; }
-    return startGatewayAsync();
+    throw new Error(
+      "Hermes process control moved to Copilot Runtime. Use window.copilotRuntime.",
+    );
   });
   ipcMain.handle("stop-gateway", async () => {
-    const conn = getConnectionConfig();
-    if (conn.mode === "ssh" && conn.ssh) { await sshStopGateway(conn.ssh); return true; }
-    return stopGatewayAsync(true);
+    throw new Error(
+      "Hermes process control moved to Copilot Runtime. Use window.copilotRuntime.",
+    );
   });
   ipcMain.handle("gateway-status", async () => {
     const conn = getConnectionConfig();
@@ -926,10 +867,7 @@ function setupIPC(): void {
         return true;
       }
       setPlatformEnabled(platform, enabled, profile);
-      // Restart gateway so it picks up the new platform config
-      if (isGatewayRunning()) {
-        restartGateway(profile);
-      }
+      // PRD v1.4 — Desktop must not restart Hermes Gateway; Runtime owns lifecycle.
       return true;
     },
   );
@@ -968,52 +906,52 @@ function setupIPC(): void {
     return true;
   });
 
-  // Memory
-  ipcMain.handle("read-memory", (_event, profile?: string) => {
+  // Memory — PRD v1.4: Runtime-owned; local handlers await async memory.ts
+  ipcMain.handle("read-memory", async (_event, profile?: string) => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshReadMemory(conn.ssh, profile);
-    return readMemory(profile);
+    return await readMemory(profile);
   });
   ipcMain.handle(
     "add-memory-entry",
-    (_event, content: string, profile?: string) => {
+    async (_event, content: string, profile?: string) => {
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) return sshAddMemoryEntry(conn.ssh, content, profile);
-      return addMemoryEntry(content, profile);
+      return await addMemoryEntry(content, profile);
     },
   );
   ipcMain.handle(
     "update-memory-entry",
-    (_event, index: number, content: string, profile?: string) => {
+    async (_event, index: number, content: string, profile?: string) => {
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) return sshUpdateMemoryEntry(conn.ssh, index, content, profile);
-      return updateMemoryEntry(index, content, profile);
+      return await updateMemoryEntry(index, content, profile);
     },
   );
   ipcMain.handle(
     "remove-memory-entry",
-    (_event, index: number, profile?: string) => {
+    async (_event, index: number, profile?: string) => {
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) return sshRemoveMemoryEntry(conn.ssh, index, profile);
-      return removeMemoryEntry(index, profile);
+      return await removeMemoryEntry(index, profile);
     },
   );
   ipcMain.handle(
     "write-user-profile",
-    (_event, content: string, profile?: string) => {
+    async (_event, content: string, profile?: string) => {
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) return sshWriteUserProfile(conn.ssh, content, profile);
-      return writeUserProfile(content, profile);
+      return await writeUserProfile(content, profile);
     },
   );
   ipcMain.handle(
     "write-memory-content",
-    (_event, content: string, profile?: string) => {
+    async (_event, content: string, profile?: string) => {
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) {
-        return { success: false, error: "SSH mode: use local profile home" };
+        return { success: false, error: "SSH mode: use Runtime" };
       }
-      const result = writeMemoryContent(content, profile);
+      const result = await writeMemoryContent(content, profile);
       if (result.success && profile) {
         try {
           const rec = getProfileByName(profile);
@@ -1498,17 +1436,7 @@ app.whenReady().then(async () => {
       console.error("[AIOS] Failed to register IPC:", err);
     }
 
-    try {
-      void autoStartMcpSkillGatewayIfReady()
-        .then(() => {
-          console.log("[MCP-SKILL-GATEWAY] auto-start completed");
-        })
-        .catch((err) => {
-          console.warn("[MCP-SKILL-GATEWAY] auto-start skipped:", err);
-        });
-    } catch (err) {
-      console.error("[MCP-SKILL-GATEWAY] Failed to auto-start:", err);
-    }
+    // PRD v1.4 — Expert MCP Gateway is Runtime-owned; Desktop must not auto-start :48742 proxy.
 
     try {
       void autoInitializeGeneHubIfReady()

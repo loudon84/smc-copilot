@@ -8,8 +8,117 @@ export function createSessionDomain(transport: RuntimeTransport) {
   return {
     listByInstance: (instanceId: string, signal?: AbortSignal) =>
       transport.request({ path: `/api/v1/instances/${enc(instanceId)}/sessions`, signal }),
+    search: (instanceId: string, q: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/search`,
+        query: { q },
+        signal,
+      }),
+    stats: (instanceId: string, signal?: AbortSignal) =>
+      transport.request<{ totalSessions: number; totalMessages: number }>({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/stats`,
+        signal,
+      }),
+    get: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}`,
+        signal,
+      }),
+    delete: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "DELETE",
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}`,
+        signal,
+      }),
     catalog: (query?: Record<string, string | number | undefined>, signal?: AbortSignal) =>
       transport.request({ path: "/api/v1/session-catalog", query, signal }),
+  };
+}
+
+export function createMemoryDomain(transport: RuntimeTransport) {
+  return {
+    get: (instanceId: string, signal?: AbortSignal) =>
+      transport.request({ path: `/api/v1/instances/${enc(instanceId)}/memory`, signal }),
+    addEntry: (instanceId: string, content: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "POST",
+        path: `/api/v1/instances/${enc(instanceId)}/memory/entries`,
+        body: { content },
+        signal,
+      }),
+    updateEntry: (instanceId: string, index: number, content: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "PATCH",
+        path: `/api/v1/instances/${enc(instanceId)}/memory/entries/${index}`,
+        body: { content },
+        signal,
+      }),
+    deleteEntry: (instanceId: string, index: number, signal?: AbortSignal) =>
+      transport.request({
+        method: "DELETE",
+        path: `/api/v1/instances/${enc(instanceId)}/memory/entries/${index}`,
+        signal,
+      }),
+    putContent: (instanceId: string, content: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "PUT",
+        path: `/api/v1/instances/${enc(instanceId)}/memory/content`,
+        body: { content },
+        signal,
+      }),
+    putUserProfile: (instanceId: string, content: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "PUT",
+        path: `/api/v1/instances/${enc(instanceId)}/user-profile`,
+        body: { content },
+        signal,
+      }),
+  };
+}
+
+export function createExpertMcpDomain(transport: RuntimeTransport) {
+  return {
+    status: (signal?: AbortSignal) =>
+      transport.request({ path: "/api/v1/expert-mcp/status", signal }),
+    getConfig: (signal?: AbortSignal) =>
+      transport.request({ path: "/api/v1/expert-mcp/config", signal }),
+    patchConfig: (body: Record<string, unknown>, signal?: AbortSignal) =>
+      transport.request({
+        method: "PATCH",
+        path: "/api/v1/expert-mcp/config",
+        body,
+        signal,
+      }),
+    connect: (signal?: AbortSignal) =>
+      transport.request({ method: "POST", path: "/api/v1/expert-mcp/connect", body: {}, signal }),
+    reconnect: (signal?: AbortSignal) =>
+      transport.request({ method: "POST", path: "/api/v1/expert-mcp/reconnect", body: {}, signal }),
+    test: (signal?: AbortSignal) =>
+      transport.request({ method: "POST", path: "/api/v1/expert-mcp/test", body: {}, signal }),
+    tools: (refresh = false, signal?: AbortSignal) =>
+      transport.request({
+        path: "/api/v1/expert-mcp/tools",
+        query: refresh ? { refresh: "true" } : undefined,
+        signal,
+      }),
+    diagnostics: (signal?: AbortSignal) =>
+      transport.request({ path: "/api/v1/expert-mcp/diagnostics", signal }),
+    logs: (tail = 200, signal?: AbortSignal) =>
+      transport.request({ path: "/api/v1/expert-mcp/logs", query: { tail }, signal }),
+    enableForInstance: (instanceId: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "POST",
+        path: `/api/v1/instances/${enc(instanceId)}/expert-mcp/enable`,
+        body: {},
+        signal,
+      }),
+    disableForInstance: (instanceId: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "POST",
+        path: `/api/v1/instances/${enc(instanceId)}/expert-mcp/disable`,
+        body: {},
+        signal,
+      }),
   };
 }
 
@@ -117,10 +226,14 @@ export function createDiagnosticsDomain(transport: RuntimeTransport) {
   return {
     summary: (signal?: AbortSignal) =>
       transport.request({ path: "/api/v1/diagnostics/summary", signal }),
+    environment: (signal?: AbortSignal) =>
+      transport.request({ path: "/api/v1/diagnostics/environment", signal }),
+    logs: (query?: Record<string, string | number | undefined>, signal?: AbortSignal) =>
+      transport.request({ path: "/api/v1/diagnostics/logs", query, signal }),
     createBundle: (body?: unknown, signal?: AbortSignal) =>
       transport.request({
         method: "POST",
-        path: "/api/v1/diagnostics/bundles",
+        path: "/api/v1/diagnostics/bundle",
         body: body ?? {},
         signal,
       }),

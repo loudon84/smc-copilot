@@ -101,6 +101,13 @@ Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc
 | Preload | `src/preload/copilot-runtime-api.ts` → `window.copilotRuntime` |
 | UI | `CopilotRuntimeStatusSection` + `CopilotRuntimeInstancesSection`（Settings → Server） |
 
+### v1.4 Readiness / Memory（Thin Client）
+
+| Preload | Channel | Returns | Notes |
+|---------|---------|---------|-------|
+| `window.copilotRuntime.getReadiness()` | `copilot-runtime:get-readiness` | `RuntimeReadinessView \| null` | service / execution / maintenance / expertMcp 分层；Domain Gate 与 Banner 订阅 |
+| `window.copilotRuntime.getMemory(instanceId)` | `copilot-runtime:get-memory` | Memory payload | Main-only → Runtime Memory API；**禁止** Desktop 直读 `MEMORY.md` / `state.db` |
+
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
 | `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 7 态：Connecting / PairingRequired / Incompatible / RuntimeMissing / RuntimeStarting / RuntimeDegraded / Ready；**无 token** |

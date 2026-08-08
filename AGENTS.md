@@ -14,3 +14,5 @@
 
 - Never scan references, build outputs, runtime data or archived PRDs
   unless explicitly requested.
+
+- Desktop is a Runtime Client; Agent control plane is `services/runtime` only (v1.4).

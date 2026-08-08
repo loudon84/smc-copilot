@@ -17,8 +17,8 @@ import * as workspaceStore from "../chat-workspace/chat-workspace-store";
 import { getRun } from "../chat-runtime/chat-runtime-store";
 import {
   listKnownProfileIds,
-  readSessionsForProfile,
-  searchSessionsForProfile,
+  readSessionsForProfileAsync,
+  searchSessionsForProfileAsync,
   type ProfileSessionRow,
 } from "./session-catalog-profile-reader";
 import {
@@ -95,9 +95,9 @@ function toItem(
 }
 
 // @lat: [[domain/chat#Persistent mount and session catalog]]
-export function listSessions(
+export async function listSessions(
   query: SessionCatalogQuery = {},
-): SessionCatalogListResult {
+): Promise<SessionCatalogListResult> {
   const profileFilter = query.profileId && query.profileId !== "all"
     ? [query.profileId]
     : listKnownProfileIds();
@@ -120,9 +120,9 @@ export function listSessions(
   const search = query.search?.trim();
   for (const profileId of profileFilter) {
     if (search) {
-      rows.push(...searchSessionsForProfile(profileId, search, query.limit ?? 80));
+      rows.push(...(await searchSessionsForProfileAsync(profileId, search)));
     } else {
-      const { rows: profileRows, unavailable } = readSessionsForProfile(
+      const { rows: profileRows, unavailable } = await readSessionsForProfileAsync(
         profileId,
         query.limit ?? 200,
       );
@@ -186,9 +186,9 @@ export function listSessions(
   };
 }
 
-export function renameSession(
+export async function renameSession(
   input: SessionCatalogRenameInput,
-): SessionCatalogItem | null {
+): Promise<SessionCatalogItem | null> {
   upsertSessionMetadata(input.profileId, input.sessionId, {
     customTitle: input.title.trim(),
   });
@@ -204,7 +204,7 @@ export function renameSession(
     });
   }
   notifyChanged(input.profileId, "title.changed");
-  const listed = listSessions({
+  const listed = await listSessions({
     profileId: input.profileId,
     includeArchived: true,
     includeDrafts: false,

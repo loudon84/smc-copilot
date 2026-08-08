@@ -3,6 +3,7 @@ export type {
   CreateRuntimeClientOptions,
   RuntimeCapabilities,
   RuntimeClient,
+  RuntimeReadiness,
   RuntimeStatus,
   RuntimeTransport,
   RuntimeRequest,
@@ -37,6 +38,27 @@ export type {
   TaskStartResult,
   TaskEventResponse,
 } from "./client/create-runtime-client";
+export type {
+  RuntimeDomain,
+  RuntimeDomainReadiness,
+  RuntimeInstallRequest,
+  RuntimeJobAcceptedResponse,
+  RuntimeJobResponse,
+  RuntimeVersionInfo,
+} from "./domains/runtime";
+export {
+  createSessionDomain,
+  createMemoryDomain,
+  createExpertMcpDomain,
+  createDiagnosticsDomain,
+  createMcpDomain,
+  createConfigurationDomain,
+  createSecretDomain,
+  createAttachmentDomain,
+  createApprovalDomain,
+  createResourceDomain,
+  createEndpointDomain,
+} from "./domains/index";
 export { RuntimeApiError, normalizeRuntimeError } from "./client/error-normalizer";
 export type { RuntimeApiErrorBody } from "./client/error-normalizer";
 export type { RuntimeAuthProvider, RuntimeClientAuthOptions } from "./client/auth-provider";

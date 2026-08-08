@@ -12,6 +12,8 @@ export default {
   portalRuntimeHint:
     "Portal Backend（:8000）与 Frontend（:3000）独立于 Hermes Gateway。桌面可托管启动；开发时也可在 monorepo 根目录执行 pnpm dev。需 PostgreSQL（默认 127.0.0.1:55432）。",
   portalRuntimeApiMissing: "aiosRuntime API 不可用（preload 未加载）",
+  portalEndpointNotConfigured:
+    "未配置 Portal 端点。请在登录 / 运行时设置中配置 Portal Home URL。",
   startPortal: "启动 Portal",
   startingPortal: "启动中…",
   stopPortal: "停止",

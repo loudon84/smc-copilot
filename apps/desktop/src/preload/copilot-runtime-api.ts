@@ -7,11 +7,13 @@ import type {
   RuntimePairingStartResult,
   RuntimeCapabilitiesView,
   RuntimeDiagnosticsSummary,
+  RuntimeReadinessView,
 } from "../shared/copilot-runtime";
 
 export const copilotRuntimeApi: CopilotRuntimeAPI = {
   getState: () => ipcRenderer.invoke("copilot-runtime:get-state"),
   getCapabilities: () => ipcRenderer.invoke("copilot-runtime:get-capabilities"),
+  getReadiness: () => ipcRenderer.invoke("copilot-runtime:get-readiness"),
   getDiagnosticsSummary: () =>
     ipcRenderer.invoke("copilot-runtime:get-diagnostics-summary"),
   startPairing: () => ipcRenderer.invoke("copilot-runtime:start-pairing"),
@@ -22,8 +24,13 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
   repair: () => ipcRenderer.invoke("copilot-runtime:repair"),
   startRuntimeInstall: (body?: Record<string, unknown>) =>
     ipcRenderer.invoke("copilot-runtime:start-install", body),
+  startRuntimeUpdate: (body?: Record<string, unknown>) =>
+    ipcRenderer.invoke("copilot-runtime:start-update", body),
+  startRuntimeRollback: (body?: Record<string, unknown>) =>
+    ipcRenderer.invoke("copilot-runtime:start-rollback", body),
   startRuntimeDoctor: () => ipcRenderer.invoke("copilot-runtime:start-doctor"),
   getRuntimeJob: (jobId: string) => ipcRenderer.invoke("copilot-runtime:get-job", jobId),
+  listRuntimeVersions: () => ipcRenderer.invoke("copilot-runtime:list-versions"),
   isServeControlPlane: () => ipcRenderer.invoke("copilot-runtime:is-serve-control-plane"),
   listInstances: () => ipcRenderer.invoke("copilot-runtime:list-instances"),
   getInstance: (instanceId: string) =>
@@ -44,6 +51,17 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
     ipcRenderer.invoke("copilot-runtime:get-diagnostics-environment"),
   getDiagnosticsLogs: (options?: { tail?: number }) =>
     ipcRenderer.invoke("copilot-runtime:get-diagnostics-logs", options),
+  exportDiagnosticsBundle: () =>
+    ipcRenderer.invoke("copilot-runtime:export-diagnostics-bundle"),
+  getMemory: (instanceId: string) =>
+    ipcRenderer.invoke("copilot-runtime:get-memory", instanceId),
+  getSessionStats: (instanceId: string) =>
+    ipcRenderer.invoke("copilot-runtime:get-session-stats", instanceId),
+  getExpertMcpStatus: () => ipcRenderer.invoke("copilot-runtime:expert-mcp-status"),
+  connectExpertMcp: () => ipcRenderer.invoke("copilot-runtime:expert-mcp-connect"),
+  testExpertMcp: () => ipcRenderer.invoke("copilot-runtime:expert-mcp-test"),
+  getExpertMcpDiagnostics: () =>
+    ipcRenderer.invoke("copilot-runtime:expert-mcp-diagnostics"),
   proxyFetch: (request) => ipcRenderer.invoke("copilot-runtime:proxy-fetch", request),
   onStateChanged: (callback) => {
     const handler = (
@@ -62,4 +80,5 @@ export type {
   RuntimePairingStartResult,
   RuntimeCapabilitiesView,
   RuntimeDiagnosticsSummary,
+  RuntimeReadinessView,
 };

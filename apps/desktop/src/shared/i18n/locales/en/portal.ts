@@ -12,6 +12,8 @@ export default {
   portalRuntimeHint:
     "Portal Backend (:8000) and Frontend (:3000) are separate from Hermes Gateway. The desktop can start them when the Portal monorepo is available; you can also run pnpm dev at the repo root. PostgreSQL is required (default 127.0.0.1:55432).",
   portalRuntimeApiMissing: "aiosRuntime API is unavailable (preload not loaded)",
+  portalEndpointNotConfigured:
+    "Portal endpoint is not configured. Set the Portal Home URL in login / Runtime settings.",
   startPortal: "Start Portal",
   startingPortal: "Starting…",
   stopPortal: "Stop",

@@ -2,7 +2,12 @@ import type { RuntimeClientAuthOptions } from "./auth-provider";
 import { RuntimeApiError } from "./error-normalizer";
 import { createDefaultFetchTransport } from "../transport/default-fetch-transport";
 import type { RuntimeTransport } from "../transport/types";
-import { createRuntimeDomain, type RuntimeCapabilities, type RuntimeStatus } from "../domains/runtime";
+import {
+  createRuntimeDomain,
+  type RuntimeCapabilities,
+  type RuntimeReadiness,
+  type RuntimeStatus,
+} from "../domains/runtime";
 import type { RuntimeSseMessage } from "../transport/types";
 import { createInstanceDomain } from "../domains/instance";
 import {
@@ -12,14 +17,16 @@ import {
   createConfigurationDomain,
   createDiagnosticsDomain,
   createEndpointDomain,
+  createExpertMcpDomain,
   createMcpDomain,
+  createMemoryDomain,
   createResourceDomain,
   createSecretDomain,
   createSessionDomain,
   createWorkTaskDomain,
 } from "../domains/index";
 
-export type { RuntimeStatus, RuntimeCapabilities };
+export type { RuntimeStatus, RuntimeCapabilities, RuntimeReadiness };
 export type { RuntimeTransport } from "../transport/types";
 export type {
   RuntimeRequest,
@@ -73,6 +80,8 @@ export interface RuntimeClient {
   readonly runtime: ReturnType<typeof createRuntimeDomain>;
   readonly instances: ReturnType<typeof createInstanceDomain>;
   readonly sessions: ReturnType<typeof createSessionDomain>;
+  readonly memory: ReturnType<typeof createMemoryDomain>;
+  readonly expertMcp: ReturnType<typeof createExpertMcpDomain>;
   readonly configuration: ReturnType<typeof createConfigurationDomain>;
   readonly secrets: ReturnType<typeof createSecretDomain>;
   readonly attachments: ReturnType<typeof createAttachmentDomain>;
@@ -114,6 +123,8 @@ export function createRuntimeClient(options: CreateRuntimeClientOptions): Runtim
     runtime,
     instances: createInstanceDomain(transport),
     sessions: createSessionDomain(transport),
+    memory: createMemoryDomain(transport),
+    expertMcp: createExpertMcpDomain(transport),
     configuration: createConfigurationDomain(transport),
     secrets: createSecretDomain(transport),
     attachments: createAttachmentDomain(transport),

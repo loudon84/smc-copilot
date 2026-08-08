@@ -16,7 +16,14 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "services/runtime",
-        "command": "uv run alembic upgrade head && uv run uvicorn main:app --app-dir src --reload --host 127.0.0.1 --port 8765"
+        "command": "uv run alembic upgrade head && uv run python scripts/dev_bootstrap.py && uv run uvicorn main:app --app-dir src --reload --host 127.0.0.1 --port 8765"
+      }
+    },
+    "dev-service": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/runtime",
+        "command": "uv run uvicorn main:app --app-dir src --reload --host 127.0.0.1 --port 8765"
       }
     },
     "migrate": {

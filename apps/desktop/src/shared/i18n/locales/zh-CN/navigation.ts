@@ -41,7 +41,7 @@ export default {
   openSettings: "打开设置",
   createProfile: "新建 Profile",
   manageSettings: "设置",
-  drawerServer: "服务与 Agent",
+  drawerServer: "Runtime 与 Agent",
   drawerGeneral: "通用",
   switchProfile: "切换 Profile",
   noProfiles: "未找到 Profile",

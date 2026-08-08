@@ -22,8 +22,6 @@ export function PortalScreen({
   const [services, setServices] = useState<RuntimeServiceRecord[]>([]);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [homeUrl, setHomeUrl] = useState<string | null>(null);
-  const [startingPortal, setStartingPortal] = useState(false);
-  const [startPortalError, setStartPortalError] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -92,19 +90,22 @@ export function PortalScreen({
     services.length > 0 &&
     portalRecord?.status !== "running";
 
-  const handleStartPortal = useCallback(async () => {
-    if (!window.aiosRuntime?.startAiOs) return;
-    setStartingPortal(true);
-    setStartPortalError(null);
-    try {
-      await window.aiosRuntime.startAiOs();
-      await refreshStatus();
-    } catch (err) {
-      setStartPortalError((err as Error).message);
-    } finally {
-      setStartingPortal(false);
-    }
-  }, [refreshStatus]);
+  if (!homeUrl && !loading) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 overflow-hidden px-6 text-center">
+        <p className="text-sm text-zinc-300">{t("portalEndpointNotConfigured")}</p>
+        {onOpenRuntimeSettings ? (
+          <button
+            type="button"
+            className="rounded border border-zinc-600 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
+            onClick={() => onOpenRuntimeSettings()}
+          >
+            {t("openRuntimeSettings")}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -117,18 +118,7 @@ export function PortalScreen({
           />
           <span className="min-w-0 flex-1">
             {t("portalUnreachable", { url: homeUrl })}
-            {startPortalError ? (
-              <span className="mt-1 block text-amber-200/80">{startPortalError}</span>
-            ) : null}
           </span>
-          <button
-            type="button"
-            className="shrink-0 rounded border border-amber-700/50 px-2 py-0.5 text-[11px] hover:bg-amber-900/40 disabled:opacity-50"
-            disabled={startingPortal || !window.aiosRuntime?.startAiOs}
-            onClick={() => void handleStartPortal()}
-          >
-            {startingPortal ? t("startingPortal") : t("startPortal")}
-          </button>
           {onOpenRuntimeSettings ? (
             <button
               type="button"

@@ -32,7 +32,10 @@ import type { ProfileRoleSpecRecord } from "../shared/profile-roles/profile-role
 const DB_DIR = join(HERMES_HOME, "desktop");
 const DB_PATH = join(DB_DIR, "profile-runtime.db");
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
+
+/** PRD v1.4 — Desktop domain DB frozen; no new agent-domain tables. */
+export const DESKTOP_DOMAIN_DB_MARKER = "desktop-domain-db-v1";
 
 let dbInstance: Database.Database | null = null;
 
@@ -324,6 +327,16 @@ export function initProfileRuntimeDb(): Database.Database {
       if (ver < 3) {
         createTablesV3(db);
         createIndexesV3(db);
+      }
+      if (ver < 4) {
+        // Freeze: mark that Desktop will not grow agent-domain tables further.
+        db.exec(`CREATE TABLE IF NOT EXISTS desktop_migration_markers (
+          marker TEXT PRIMARY KEY,
+          applied_at TEXT NOT NULL
+        )`);
+        db.prepare(
+          "INSERT OR REPLACE INTO desktop_migration_markers (marker, applied_at) VALUES (?, ?)",
+        ).run(DESKTOP_DOMAIN_DB_MARKER, now());
       }
       db.prepare(
         "INSERT OR REPLACE INTO schema_version (version, applied_at) VALUES (?, ?)",

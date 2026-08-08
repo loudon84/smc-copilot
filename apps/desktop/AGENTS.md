@@ -18,14 +18,16 @@
 
 ## 架构：三层进程（必须遵守）
 
+> **v1.4 Thin Client：** 后端为 Copilot Runtime `:8765`（`@smc/runtime-client`，Main-only）。Desktop **不**内置 Portal / Serve / Hermes 进程管理器；Agent 控制面仅在 `services/runtime`。
+
 ```
-Renderer (React)  →  window.hermesAPI / smcShell / desktopAuth / desktopUserConfig / profileRuntime / aiosBrowser / shellView
+Renderer (React)  →  window.hermesAPI / smcShell / desktopAuth / desktopUserConfig / profileRuntime / aiosBrowser / shellView / copilotRuntime
        ↓ ipcRenderer.invoke
-Preload (contextBridge)  →  src/preload/index.ts + auth-api / shell-api / user-config-api
+Preload (contextBridge)  →  src/preload/index.ts + auth-api / shell-api / user-config-api / copilot-runtime-api
        ↓ IPC
 Main (Node.js)  →  src/main/index.ts + 各 *-ipc.ts / *.ts 模块
-       ↓ HTTP / child_process
-Portal Auth Backend (:8000)  +  Hermes Python Gateway (:8642)
+       ↓ HTTP (@smc/runtime-client)
+Copilot Runtime (:8765)  →  Hermes Instances / Gateway / Memory / Expert MCP
 ```
 
 **硬性规则：**

@@ -1,104 +1,34 @@
-import {
-  readStoredSession,
-  readStoredSessionSync,
-} from "../auth/token-store";
-import { restartGatewayAsync } from "../hermes";
+import { readStoredSessionSync } from "../auth/token-store";
 import {
   getMcpSkillGatewayConfig,
   resolveBackendBaseUrl,
   resolveLocalMcpUrl,
-  resolveRemoteMcpUrl,
   resolveRemoteMcpUrlAsync,
-  saveMcpSkillGatewayConfig,
 } from "./mcp-skill-gateway-config";
 import {
   getMcpSkillGatewayProxyLastError,
   getMcpProxyLastStructuredError,
   getMcpProxyRuntimeState,
   isMcpSkillGatewayProxyRunning,
-  refreshMcpSkillGatewayProxyConfigFull,
-  startMcpSkillGatewayProxy,
   stopMcpSkillGatewayProxy,
 } from "./mcp-skill-gateway-proxy";
 import { getMcpAuthState } from "./mcp-token-provider";
 import { isMcpToolsCacheStale, readMcpToolsCache } from "./mcp-tools-cache";
-import {
-  listMcpSkillGatewayProfileRegistrations,
-  registerMcpSkillGatewayToHermes,
-} from "./mcp-skill-gateway-register";
-import { testMcpSkillGatewayProxy, testRemoteMcpSkillGateway } from "./mcp-skill-gateway-health";
-import { isMcpSkillGatewayError } from "./mcp-skill-gateway-errors";
-
-async function ensureRegisteredProfiles(): Promise<void> {
-  const config = getMcpSkillGatewayConfig();
-  if (!config.autoRegisterToHermes) return;
-
-  for (const profile of config.registeredProfiles) {
-    await registerMcpSkillGatewayToHermes({
-      profile,
-      localProxyPort: config.localProxyPort,
-      enabled: true,
-    });
-  }
-}
-
-async function maybeRestartHermesGateway(): Promise<void> {
-  const config = getMcpSkillGatewayConfig();
-  if (!config.autoRestartHermesGateway) return;
-  try {
-    await restartGatewayAsync();
-  } catch (err) {
-    console.warn("[MCP-SKILL-GATEWAY] Hermes gateway restart failed:", err);
-  }
-}
+import { listMcpSkillGatewayProfileRegistrations } from "./mcp-skill-gateway-register";
+import { testRemoteMcpSkillGateway } from "./mcp-skill-gateway-health";
 
 export async function autoStartMcpSkillGatewayIfReady(): Promise<void> {
-  const config = getMcpSkillGatewayConfig();
-  if (!config.enabled) return;
-
-  const session = await readStoredSession();
-  if (!session?.accessToken) return;
-  if (!config.autoStartProxy) return;
-
-  try {
-    await startMcpSkillGatewayProxy(config.localProxyPort);
-    await ensureRegisteredProfiles();
-  } catch (err) {
-    const message = isMcpSkillGatewayError(err)
-      ? `${err.code}: ${err.message}`
-      : err instanceof Error
-        ? err.message
-        : String(err);
-    console.warn("[MCP-SKILL-GATEWAY] auto-start failed:", message);
-  }
+  // PRD v1.4 — Desktop no longer starts Expert MCP local proxy (:48742).
+  return;
 }
 
 export async function onMcpSkillGatewayLoginSuccess(): Promise<void> {
+  // PRD v1.4 — do not start local proxy or restart Hermes gateway on login.
   const config = getMcpSkillGatewayConfig();
   if (!config.enabled) return;
 
   try {
-    if (config.autoStartProxy) {
-      await startMcpSkillGatewayProxy(config.localProxyPort);
-    }
-    await refreshMcpSkillGatewayProxyConfigFull();
-    await testMcpSkillGatewayProxy();
     await testRemoteMcpSkillGateway();
-    if (config.autoRegisterToHermes && config.registeredProfiles.includes("default")) {
-      const result = await registerMcpSkillGatewayToHermes({
-        profile: "default",
-        localProxyPort: config.localProxyPort,
-        enabled: true,
-      });
-      if (result.changed) {
-        const nextProfiles = new Set(config.registeredProfiles);
-        nextProfiles.add("default");
-        saveMcpSkillGatewayConfig({
-          registeredProfiles: [...nextProfiles],
-        });
-        await maybeRestartHermesGateway();
-      }
-    }
   } catch (err) {
     console.warn("[MCP-SKILL-GATEWAY] login hook failed:", err);
   }

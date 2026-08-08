@@ -6,6 +6,11 @@ export type {
 export { createInitialRuntimeConnectionState } from "./runtime-state-contract";
 
 export type {
+  RuntimeDomainReadinessView,
+  RuntimeReadinessView,
+} from "./runtime-readiness-contract";
+
+export type {
   DesktopRuntimeError,
   DesktopRuntimeErrorCode,
 } from "./runtime-error-contract";
@@ -117,6 +122,7 @@ export interface CopilotRuntimeAPI {
   getCapabilities: () => Promise<
     import("./runtime-capability-contract").RuntimeCapabilitiesView | null
   >;
+  getReadiness: () => Promise<import("./runtime-readiness-contract").RuntimeReadinessView | null>;
   getDiagnosticsSummary: () => Promise<
     import("./runtime-capability-contract").RuntimeDiagnosticsSummary | null
   >;
@@ -129,8 +135,11 @@ export interface CopilotRuntimeAPI {
   startRuntimeInstall: (
     body?: Record<string, unknown>,
   ) => Promise<RuntimeJobAcceptedView>;
+  startRuntimeUpdate: (body?: Record<string, unknown>) => Promise<RuntimeJobAcceptedView>;
+  startRuntimeRollback: (body?: Record<string, unknown>) => Promise<RuntimeJobAcceptedView>;
   startRuntimeDoctor: () => Promise<RuntimeJobAcceptedView>;
   getRuntimeJob: (jobId: string) => Promise<RuntimeJobView | null>;
+  listRuntimeVersions: () => Promise<unknown[]>;
   /** True when Main routes Gateway/Config/MCP via Serve (not legacy Hermes CLI/YAML). */
   isServeControlPlane: () => Promise<boolean>;
   listInstances: () => Promise<import("./instance-contract").ServeInstanceSummary[]>;
@@ -156,6 +165,15 @@ export interface CopilotRuntimeAPI {
   getDiagnosticsLogs: (options?: {
     tail?: number;
   }) => Promise<import("./diagnostics-contract").ServeDiagnosticsLogsResult | null>;
+  exportDiagnosticsBundle: () => Promise<{ ok: boolean; path?: string; message?: string | null }>;
+  getMemory: (instanceId: string) => Promise<unknown | null>;
+  getSessionStats: (
+    instanceId: string,
+  ) => Promise<{ totalSessions: number; totalMessages: number } | null>;
+  getExpertMcpStatus: () => Promise<Record<string, unknown> | null>;
+  connectExpertMcp: () => Promise<Record<string, unknown> | null>;
+  testExpertMcp: () => Promise<Record<string, unknown> | null>;
+  getExpertMcpDiagnostics: () => Promise<Record<string, unknown> | null>;
   /**
    * Main-authenticated Serve JSON proxy. Renderer must not send Device Token.
    * Prefer domain-specific IPC in later phases; this bridges legacy Renderer Serve HTTP.

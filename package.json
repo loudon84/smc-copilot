@@ -13,6 +13,7 @@
     "affected:build": "nx affected -t build",
     "dev:desktop": "nx run desktop:dev",
     "dev:runtime": "nx run runtime:dev",
+    "dev:runtime:service": "nx run runtime:dev-service",
     "contracts:generate": "nx run contracts:generate",
     "contracts:check": "nx run contracts:check",
     "client:generate": "nx run runtime-client-ts:generate",

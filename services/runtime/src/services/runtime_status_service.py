@@ -16,6 +16,8 @@ from runtime.platform_paths import RuntimeLayout
 from schemas.runtime import (
     RuntimeCapabilitiesResponse,
     RuntimeCompatibilityResponse,
+    RuntimeDomainReadiness,
+    RuntimeReadinessResponse,
     RuntimeStatusResponse,
 )
 from services.secret_service import SecretStore
@@ -26,6 +28,11 @@ _CHECK_OK = "ok"
 _CHECK_FAILED = "failed"
 _CHECK_DEGRADED = "degraded"
 _CHECK_UNKNOWN = "unknown"
+_CHECK_MISSING = "missing"
+
+_SERVICE_KEYS = ("database", "migration", "secretStore", "jobWorker")
+_EXECUTION_KEYS = ("hermes", "instance", "gateway")
+_MAINTENANCE_KEYS = ("manifest", "disk")
 
 
 class RuntimeStatusService:
@@ -84,17 +91,21 @@ class RuntimeStatusService:
         hermes_exe = Path(active.executable_path) if active else None
         checks["hermes"] = _CHECK_OK if active and hermes_exe and hermes_exe.exists() else _CHECK_FAILED
 
-        # defaultInstance
+        # defaultInstance (also exposed as "instance" for readiness v2)
         result = await self._session.execute(select(HermesInstance).limit(1))
         default_inst = result.scalar_one_or_none()
         if default_inst is None:
             checks["defaultInstance"] = _CHECK_DEGRADED
+            checks["instance"] = _CHECK_DEGRADED
         elif default_inst.status in ("running", "starting") and default_inst.healthy:
             checks["defaultInstance"] = _CHECK_OK
+            checks["instance"] = _CHECK_OK
         elif default_inst.status in ("running", "starting"):
             checks["defaultInstance"] = _CHECK_DEGRADED
+            checks["instance"] = _CHECK_DEGRADED
         else:
             checks["defaultInstance"] = _CHECK_FAILED
+            checks["instance"] = _CHECK_FAILED
 
         # gateway (any running instance)
         result = await self._session.execute(
@@ -117,19 +128,75 @@ class RuntimeStatusService:
 
         # manifest URL configured
         manifest_url = (self._settings.hermes_manifest_url or "").strip()
-        checks["manifest"] = _CHECK_OK if manifest_url else _CHECK_DEGRADED
+        checks["manifest"] = _CHECK_OK if manifest_url else _CHECK_MISSING
 
         return checks
 
+    def _domain_ready(self, checks: dict[str, str], keys: tuple[str, ...]) -> bool:
+        return all(checks.get(k, _CHECK_FAILED) == _CHECK_OK for k in keys)
+
+    def _subset(self, checks: dict[str, str], keys: tuple[str, ...]) -> dict[str, str]:
+        return {k: checks.get(k, _CHECK_UNKNOWN) for k in keys}
+
+    async def readiness_v2(self) -> RuntimeReadinessResponse:
+        """PRD v1.4 domain readiness — does not collapse maintenance into service failure."""
+        checks = await self.readiness_checks()
+        service_ready = self._domain_ready(checks, _SERVICE_KEYS)
+        execution_ok = self._domain_ready(checks, _EXECUTION_KEYS)
+        # Chat/Task ready when hermes+instance+gateway are healthy
+        chat_ready = execution_ok
+        task_ready = execution_ok
+        maintenance_ready = checks.get("manifest") == _CHECK_OK
+
+        expert_status = "unknown"
+        expert_ready = False
+        try:
+            from services.expert_mcp_gateway_service import ExpertMcpGatewayService
+
+            expert = await ExpertMcpGatewayService(self._settings, self._session).status()
+            expert_status = str(expert.get("status") or "unknown")
+            expert_ready = bool(expert.get("ready"))
+        except Exception:
+            expert_status = "unavailable"
+            expert_ready = False
+
+        return RuntimeReadinessResponse(
+            service=RuntimeDomainReadiness(
+                ready=service_ready,
+                checks=self._subset(checks, _SERVICE_KEYS),
+            ),
+            execution=RuntimeDomainReadiness(
+                ready=execution_ok,
+                chatReady=chat_ready,
+                taskReady=task_ready,
+                checks=self._subset(checks, _EXECUTION_KEYS),
+            ),
+            maintenance=RuntimeDomainReadiness(
+                ready=maintenance_ready,
+                checks=self._subset(checks, _MAINTENANCE_KEYS),
+            ),
+            expertMcp=RuntimeDomainReadiness(
+                ready=expert_ready,
+                status=expert_status,
+                checks={"expertMcp": _CHECK_OK if expert_ready else _CHECK_DEGRADED},
+            ),
+        )
+
     def _aggregate_status(self, checks: dict[str, str], *, maintenance: bool = False) -> str:
+        """Legacy single-status aggregation for /runtime/status (compat).
+
+        v1.4 Desktop should prefer /runtime/readiness so missing manifest does not
+        mark the whole Runtime as degraded.
+        """
         if maintenance:
             return "maintenance"
-        values = set(checks.values())
-        if _CHECK_FAILED in values:
+        # Only service-critical failures collapse to failed/degraded for legacy status.
+        service_values = {checks.get(k) for k in _SERVICE_KEYS}
+        if _CHECK_FAILED in service_values:
             if checks.get("database") == _CHECK_FAILED:
                 return "failed"
             return "degraded"
-        if _CHECK_DEGRADED in values:
+        if _CHECK_DEGRADED in service_values:
             return "degraded"
         return "ready"
 
