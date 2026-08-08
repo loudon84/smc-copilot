@@ -40,6 +40,14 @@ export function RuntimeDegradedBanner({
     });
   }, []);
 
+  const handleRetry = useCallback(() => {
+    void retry();
+  }, [retry]);
+
+  const handleRepair = useCallback(() => {
+    void repair();
+  }, [repair]);
+
   const banners: DomainBanner[] = [];
 
   if (!state.ready && state.state !== "Connecting") {
@@ -78,14 +86,6 @@ export function RuntimeDegradedBanner({
 
   const visible = banners.filter((b) => !dismissed[b.id]);
   if (visible.length === 0) return null;
-
-  const handleRetry = useCallback(() => {
-    void retry();
-  }, [retry]);
-
-  const handleRepair = useCallback(() => {
-    void repair();
-  }, [repair]);
 
   return (
     <div data-testid="runtime-degraded-banner">
