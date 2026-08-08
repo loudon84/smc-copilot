@@ -25,6 +25,7 @@ function requireWindow(): void {
 test.describe("copilot runtime phase1 e2e (v9.0)", () => {
   test("E2E contracts: runtime IPC channel names", () => {
     expect("copilot-runtime:get-state").toContain("copilot-runtime");
+    expect("copilot-runtime:pair-and-connect").toContain("pair-and-connect");
     expect("copilot-runtime:start-pairing").toContain("pairing");
     expect("copilot-runtime:confirm-pairing").toContain("confirm");
     expect("copilot-runtime:state-changed").toContain("state-changed");
@@ -51,6 +52,7 @@ test.describe("copilot runtime phase1 e2e (v9.0)", () => {
         expect(surface.methods).toEqual(
           expect.arrayContaining([
             "getState",
+            "pairAndConnect",
             "startPairing",
             "confirmPairing",
             "retry",

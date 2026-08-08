@@ -6,7 +6,6 @@ const STATE_TITLES: Record<string, string> = {
   RuntimeStarting: "Starting local runtime…",
   RuntimeMissing: "Runtime Service unavailable",
   RuntimeDegraded: "Runtime requires attention",
-  PairingRequired: "Pair this Desktop with Runtime",
   Incompatible: "Desktop / Runtime version mismatch",
   Ready: "Runtime ready",
 };
@@ -36,11 +35,9 @@ export function RuntimeRecoveryStatus({
             ? "The Runtime Service is not reachable. Desktop does not install Hermes Agent."
             : state === "RuntimeDegraded"
               ? "Runtime Service is running, but one or more components require attention."
-              : state === "PairingRequired"
-                ? "Complete device pairing to continue. Hermes Setup is not required."
-                : state === "Incompatible"
-                  ? "Update Runtime or Desktop so API versions match."
-                  : "Resolve Runtime connection before continuing."}
+              : state === "Incompatible"
+                ? "Update Runtime or Desktop so API versions match."
+                : "Resolve Runtime connection before continuing."}
       </p>
 
       <dl className="runtime-recovery-meta">

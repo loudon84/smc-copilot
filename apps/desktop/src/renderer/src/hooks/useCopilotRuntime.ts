@@ -3,7 +3,7 @@ import type {
   RuntimeCapabilitiesView,
   RuntimeConnectionState,
   RuntimeDiagnosticsSummary,
-  RuntimePairingStartResult,
+  RuntimePairAndConnectResult,
 } from "../../../shared/copilot-runtime";
 import { createInitialRuntimeConnectionState } from "../../../shared/copilot-runtime";
 
@@ -11,14 +11,12 @@ export function useCopilotRuntime(): {
   state: RuntimeConnectionState;
   capabilities: RuntimeCapabilitiesView | null;
   diagnostics: RuntimeDiagnosticsSummary | null;
-  pairing: RuntimePairingStartResult | null;
   busy: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   retry: () => Promise<void>;
   repair: () => Promise<void>;
-  startPairing: () => Promise<void>;
-  confirmPairing: () => Promise<void>;
+  pairAndConnect: () => Promise<RuntimePairAndConnectResult | null>;
   loadDiagnostics: () => Promise<void>;
   canWrite: boolean;
 } {
@@ -27,7 +25,6 @@ export function useCopilotRuntime(): {
   );
   const [capabilities, setCapabilities] = useState<RuntimeCapabilitiesView | null>(null);
   const [diagnostics, setDiagnostics] = useState<RuntimeDiagnosticsSummary | null>(null);
-  const [pairing, setPairing] = useState<RuntimePairingStartResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,41 +76,24 @@ export function useCopilotRuntime(): {
     }
   }, [refresh]);
 
-  const startPairing = useCallback(async (): Promise<void> => {
-    if (!window.copilotRuntime) return;
+  const pairAndConnect = useCallback(async (): Promise<RuntimePairAndConnectResult | null> => {
+    if (!window.copilotRuntime?.pairAndConnect) return null;
     setBusy(true);
     setError(null);
     try {
-      const result = await window.copilotRuntime.startPairing();
-      setPairing(result);
-      if (!result.pairingId) {
-        setError(result.message ?? "Failed to start pairing");
+      const result = await window.copilotRuntime.pairAndConnect();
+      if (!result.ok) {
+        setError(result.error?.message ?? "Pairing failed");
       }
+      setState(result.state);
+      return result;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return null;
     } finally {
       setBusy(false);
     }
   }, []);
-
-  const confirmPairing = useCallback(async (): Promise<void> => {
-    if (!window.copilotRuntime || !pairing?.pairingId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await window.copilotRuntime.confirmPairing(pairing.pairingId);
-      if (!result.ok) {
-        setError(result.message ?? "Pairing confirm failed");
-      } else {
-        setPairing(null);
-        await refresh();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [pairing, refresh]);
 
   const loadDiagnostics = useCallback(async (): Promise<void> => {
     if (!window.copilotRuntime) return;
@@ -130,14 +110,12 @@ export function useCopilotRuntime(): {
     state,
     capabilities,
     diagnostics,
-    pairing,
     busy,
     error,
     refresh,
     retry,
     repair,
-    startPairing,
-    confirmPairing,
+    pairAndConnect,
     loadDiagnostics,
     canWrite: state.ready && state.state === "Ready",
   };

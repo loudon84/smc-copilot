@@ -16,11 +16,13 @@ Owner: [[src/main/copilot-runtime-client/runtime-connection-manager.ts#runRuntim
 
 ## Device pairing and auth store
 
-Unpaired Desktop starts loopback pairing (`POST /pairings/start` → confirm) and stores the Device Token only in Main (keytar service `smc-copilot-runtime`, safeStorage fallback, memory).
+v1.3.2 Main-owned `pairAndConnect()`: start → confirm → saveDeviceToken → handshake → Ready. Renderer only calls `window.copilotRuntime.pairAndConnect()`; challenge and Device Token never leave Main.
 
-IPC and Preload (`getState`, pairing results, `getConnection`) must never return the token. HTTP uses `Authorization: Bearer` plus `X-Desktop-Version` / `X-Runtime-Api-Version` / `X-Request-ID` (writes add `Idempotency-Key`). Legacy `X-Copilot-Desktop-Token` is a Main-only deprecated bridge.
+Token persistence: keytar (`smc-copilot-runtime`) → Electron safeStorage → memory-only (Diagnostics warns `DEVICE_TOKEN_NOT_PERSISTED`). `DEVICE_REVOKED` / `INVALID_DEVICE_TOKEN` clear local credentials; generic 401 does not.
 
-Owners: [[src/main/copilot-runtime-client/runtime-auth-store.ts#saveDeviceToken]], [[src/main/copilot-runtime-client/runtime-pairing-manager.ts#confirmPairing]], [[src/main/copilot-runtime-client/runtime-http-client.ts#buildRuntimeRequestHeaders]].
+Startup maps `PairingRequired` → `runtime-pairing` screen (not Runtime Recovery). Concurrent `pairAndConnect` shares one in-flight Promise.
+
+Owners: [[src/main/copilot-runtime-client/runtime-auth-store.ts#saveDeviceToken]], [[src/main/copilot-runtime-client/runtime-pairing-manager.ts#pairAndConnect]], [[src/main/copilot-runtime-client/runtime-http-client.ts#buildRuntimeRequestHeaders]].
 
 ## Production process policy
 

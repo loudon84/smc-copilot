@@ -77,7 +77,10 @@ describe("runtime-capability-manager", () => {
   it("tracks features and write gate", () => {
     expect(hasFeature("instances")).toBe(false);
     setCachedCapabilities(
-      toCapabilitiesView({ apiVersion: "1.3", features: ["instances", "pairings", "runtime"] }),
+      toCapabilitiesView({
+        apiVersion: "1.3",
+        features: ["instances", "pairings", "runtime", "pairing.device", "instances.multiple"],
+      }),
     );
     expect(hasFeature("instances")).toBe(true);
     expect(assertReadyForWrites(false)?.code).toBe("RUNTIME_UNAVAILABLE");

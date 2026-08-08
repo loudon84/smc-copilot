@@ -64,9 +64,10 @@ export type {
   ServeDiagnosticsBundleMeta,
 } from "./diagnostics-contract";
 
-/** Pairing IPC payloads (token never included). */
+/** Pairing IPC payloads (token / challenge never included). */
 export interface RuntimePairingStartResult {
   pairingId: string;
+  /** Display hint only — never the raw challenge secret. */
   code: string | null;
   expiresAt: string | null;
   message: string | null;
@@ -76,6 +77,22 @@ export interface RuntimePairingConfirmResult {
   ok: boolean;
   deviceId: string | null;
   message: string | null;
+}
+
+/** Atomic Main-owned pairing transaction (PRD v1.3.2). */
+export interface RuntimePairAndConnectError {
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+export interface RuntimePairAndConnectResult {
+  ok: boolean;
+  state: import("./runtime-state-contract").RuntimeConnectionState;
+  deviceId: string | null;
+  error: RuntimePairAndConnectError | null;
+  /** Present when token could not be written to keytar/safeStorage. */
+  persistence?: "secure" | "memory-only";
 }
 
 export interface RuntimeJobAcceptedView {
@@ -105,6 +122,8 @@ export interface CopilotRuntimeAPI {
   >;
   startPairing: () => Promise<RuntimePairingStartResult>;
   confirmPairing: (pairingId: string) => Promise<RuntimePairingConfirmResult>;
+  /** Preferred pairing entry — start+confirm+handshake in Main (PRD v1.3.2). */
+  pairAndConnect: () => Promise<RuntimePairAndConnectResult>;
   retry: () => Promise<import("./runtime-state-contract").RuntimeConnectionState>;
   repair: () => Promise<{ ok: boolean; message: string | null }>;
   startRuntimeInstall: (

@@ -2,6 +2,7 @@ import { ipcRenderer } from "electron";
 import type {
   CopilotRuntimeAPI,
   RuntimeConnectionState,
+  RuntimePairAndConnectResult,
   RuntimePairingConfirmResult,
   RuntimePairingStartResult,
   RuntimeCapabilitiesView,
@@ -16,6 +17,7 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
   startPairing: () => ipcRenderer.invoke("copilot-runtime:start-pairing"),
   confirmPairing: (pairingId: string) =>
     ipcRenderer.invoke("copilot-runtime:confirm-pairing", pairingId),
+  pairAndConnect: () => ipcRenderer.invoke("copilot-runtime:pair-and-connect"),
   retry: () => ipcRenderer.invoke("copilot-runtime:retry"),
   repair: () => ipcRenderer.invoke("copilot-runtime:repair"),
   startRuntimeInstall: (body?: Record<string, unknown>) =>
@@ -55,6 +57,7 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
 
 export type {
   RuntimeConnectionState,
+  RuntimePairAndConnectResult,
   RuntimePairingConfirmResult,
   RuntimePairingStartResult,
   RuntimeCapabilitiesView,

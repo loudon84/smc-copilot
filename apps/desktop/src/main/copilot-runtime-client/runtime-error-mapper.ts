@@ -9,6 +9,7 @@ const RETRYABLE = new Set<DesktopRuntimeErrorCode>([
   "EVENT_REPLAY_REQUIRED",
   "INSTANCE_NOT_READY",
   "GATEWAY_NOT_RUNNING",
+  "PAIRING_EXPIRED",
 ]);
 
 const CODE_ALIASES: Record<string, DesktopRuntimeErrorCode> = {
@@ -19,8 +20,11 @@ const CODE_ALIASES: Record<string, DesktopRuntimeErrorCode> = {
   incompatible: "RUNTIME_INCOMPATIBLE",
   pairing_required: "PAIRING_REQUIRED",
   unauthorized: "PAIRING_REQUIRED",
+  pairing_expired: "PAIRING_EXPIRED",
+  expired: "PAIRING_EXPIRED",
   device_revoked: "DEVICE_REVOKED",
   revoked: "DEVICE_REVOKED",
+  invalid_device_token: "INVALID_DEVICE_TOKEN",
   instance_not_found: "INSTANCE_NOT_FOUND",
   not_found: "INSTANCE_NOT_FOUND",
   instance_not_ready: "INSTANCE_NOT_READY",
@@ -45,7 +49,9 @@ function normalizeCode(raw: string | undefined | null): DesktopRuntimeErrorCode 
         "RUNTIME_UNAVAILABLE",
         "RUNTIME_INCOMPATIBLE",
         "PAIRING_REQUIRED",
+        "PAIRING_EXPIRED",
         "DEVICE_REVOKED",
+        "INVALID_DEVICE_TOKEN",
         "INSTANCE_NOT_FOUND",
         "INSTANCE_NOT_READY",
         "GATEWAY_NOT_RUNNING",

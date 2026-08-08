@@ -1,14 +1,14 @@
 # Auth and startup
 
-Startup gates on Portal auth and local bootstrap before Hermes install/setup. Login uses Portal Auth HTTP, not the Hermes Gateway port.
+Startup gates on Portal auth, local bootstrap, then RuntimeConnectionState (PRD v1.3.1/v1.3.2). Login uses Portal Auth HTTP, not the Hermes Gateway port.
 
-Decision: [[decisions#Tokens stay in Main]]. Entry: [[src/main/startup/startup-decision.ts#resolveStartupDecision]].
+Decision: [[decisions#Tokens stay in Main]]. Entry: [[src/main/startup/startup-decision.ts#resolveStartupDecisionFromRuntime]].
 
 ## Startup gate
 
-[[src/main/startup/startup-decision.ts#resolveStartupDecision]] is the Main authority for splash routing. Renderer reaches it via `window.smcShell.resolveStartupDecision()`.
+[[src/main/startup/startup-decision.ts#resolveStartupDecisionFromRuntime]] is the Main authority for splash routing. Renderer reaches it via `window.smcShell.resolveStartupDecision()`.
 
-Route order: splash → login → welcome → installing → setup → main. Local, remote, and SSH modes share the same auth + bootstrap gate. `bootstrap-pending` can auto-run bootstrap on LoginScreen after credentials succeed.
+Route order: splash → login → `runtime-pairing` (PairingRequired) | `runtime-recovery` (Missing/Starting/Incompatible) → main. `RuntimeDegraded` enters main with banner. Pairing success must recheck through this gate (never Renderer `setScreen("main")`).
 
 ## Token vault and injection
 

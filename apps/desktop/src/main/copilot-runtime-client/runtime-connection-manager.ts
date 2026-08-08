@@ -6,7 +6,9 @@ import type { RuntimeConnectionState } from "../../shared/copilot-runtime/runtim
 import { createInitialRuntimeConnectionState } from "../../shared/copilot-runtime/runtime-state-contract";
 import type { RuntimeDiagnosticsSummary } from "../../shared/copilot-runtime/runtime-capability-contract";
 import {
+  clearDeviceToken,
   getDeviceMetaSync,
+  getDeviceTokenPersistence,
   getPublicAuthSnapshot,
   hydrateRuntimeAuthStore,
   isPairedSync,
@@ -268,7 +270,20 @@ export async function runRuntimeHandshake(): Promise<RuntimeConnectionState> {
     } catch (err) {
       if (err instanceof CopilotRuntimeHttpError) {
         const code = err.runtimeError.code;
-        if (code === "PAIRING_REQUIRED" || code === "DEVICE_REVOKED" || err.status === 401) {
+        // Only clear credentials for explicit auth revocation — not every 401.
+        if (code === "DEVICE_REVOKED" || code === "INVALID_DEVICE_TOKEN") {
+          await clearDeviceToken();
+          return setState({
+            state: "PairingRequired",
+            ready: false,
+            paired: false,
+            deviceId: null,
+            canPair: true,
+            lastError: err.runtimeError.message,
+            lastErrorCode: code,
+          });
+        }
+        if (code === "PAIRING_REQUIRED") {
           return setState({
             state: "PairingRequired",
             ready: false,
@@ -345,6 +360,11 @@ export async function repairRuntimeConnection(): Promise<{ ok: boolean; message:
 }
 
 export async function fetchDiagnosticsSummary(): Promise<RuntimeDiagnosticsSummary | null> {
+  const persistence = getDeviceTokenPersistence();
+  const persistenceWarning =
+    persistence === "memory-only"
+      ? "Device authorization will be lost when Desktop exits."
+      : null;
   try {
     const summary = await runtimeFetch<Record<string, unknown>>({
       path: "/api/v1/diagnostics/summary",
@@ -368,6 +388,8 @@ export async function fetchDiagnosticsSummary(): Promise<RuntimeDiagnosticsSumma
       activeTasks: typeof summary.activeTasks === "number" ? summary.activeTasks : null,
       approvalCount: typeof summary.approvalCount === "number" ? summary.approvalCount : null,
       storeHealthy: typeof summary.storeHealthy === "boolean" ? summary.storeHealthy : null,
+      deviceTokenPersistence: persistence,
+      deviceTokenPersistenceWarning: persistenceWarning,
       details: summary,
     };
   } catch {
@@ -379,6 +401,8 @@ export async function fetchDiagnosticsSummary(): Promise<RuntimeDiagnosticsSumma
       activeTasks: null,
       approvalCount: null,
       storeHealthy: null,
+      deviceTokenPersistence: persistence,
+      deviceTokenPersistenceWarning: persistenceWarning,
       details: {
         capabilities: getCachedCapabilities(),
         state: currentState.state,

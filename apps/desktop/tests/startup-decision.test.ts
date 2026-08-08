@@ -94,11 +94,11 @@ describe("resolveStartupDecisionFromRuntime", () => {
     expect(decision.reason).toBe("runtime-degraded");
   });
 
-  it("maps PairingRequired to runtime-recovery", async () => {
+  it("maps PairingRequired to runtime-pairing", async () => {
     const { resolveStartupDecisionFromRuntime } =
       await import("../src/main/startup/startup-decision");
     const decision = await resolveStartupDecisionFromRuntime(runtimeState("PairingRequired"));
-    expect(decision.nextScreen).toBe("runtime-recovery");
+    expect(decision.nextScreen).toBe("runtime-pairing");
     expect(decision.reason).toBe("pairing-required");
   });
 

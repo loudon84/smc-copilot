@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import type { StartupDecision } from "../../../shared/startup/startup-contract";
 
-export type AppScreen = "splash" | "login" | "runtime-recovery" | "main";
+export type AppScreen =
+  | "splash"
+  | "login"
+  | "runtime-recovery"
+  | "runtime-pairing"
+  | "main";
 
 const SPLASH_MIN_MS = 1300;
 

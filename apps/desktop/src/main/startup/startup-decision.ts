@@ -44,7 +44,7 @@ function mapRuntimeToDecision(runtime: RuntimeConnectionState): StartupDecision 
       };
     case "PairingRequired":
       return {
-        nextScreen: "runtime-recovery",
+        nextScreen: "runtime-pairing",
         reason: "pairing-required",
         runtimeState: runtime,
       };

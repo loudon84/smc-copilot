@@ -3,6 +3,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Layout from "./screens/Layout/Layout";
 import RuntimeRecoveryScreen from "./screens/RuntimeRecovery/RuntimeRecoveryScreen";
+import RuntimePairingScreen from "./screens/RuntimePairing/RuntimePairingScreen";
 import { AuthProvider } from "./modules/auth/AuthProvider";
 import { LoginScreen } from "./modules/auth/LoginScreen";
 import SplashScreen from "./screens/SplashScreen/SplashScreen";
@@ -30,6 +31,8 @@ function App(): React.JSX.Element {
         return <SplashScreen onFinished={handleSplashFinished} />;
       case "login":
         return <LoginScreen onSuccess={recheck} />;
+      case "runtime-pairing":
+        return <RuntimePairingScreen decision={decision} onComplete={recheck} />;
       case "runtime-recovery":
         return (
           <RuntimeRecoveryScreen

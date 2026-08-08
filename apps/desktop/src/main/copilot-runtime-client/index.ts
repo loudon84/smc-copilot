@@ -7,6 +7,7 @@ export {
   onRuntimeConnectionStateChanged,
 } from "./runtime-connection-manager";
 export { getDeviceTokenSync, getPublicAuthSnapshot, isPairedSync } from "./runtime-auth-store";
+export { pairAndConnect, startPairing, confirmPairing } from "./runtime-pairing-manager";
 export { runtimeFetch, CopilotRuntimeHttpError } from "./runtime-http-client";
 export {
   canSpawnCopilotServe,

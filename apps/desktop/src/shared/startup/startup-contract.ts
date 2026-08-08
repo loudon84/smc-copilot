@@ -6,7 +6,7 @@ import type { RuntimeConnectionState } from "../copilot-runtime/runtime-state-co
  */
 
 /** Business screens after splash (splash is transitional only). */
-export type StartupScreen = "login" | "runtime-recovery" | "main";
+export type StartupScreen = "login" | "runtime-recovery" | "runtime-pairing" | "main";
 
 export type StartupDecisionReason =
   | "auth-required"

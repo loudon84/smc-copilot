@@ -8,19 +8,21 @@ export interface RuntimeRecoveryActionsProps {
   onEnterMain?: () => void;
 }
 
+/**
+ * Recovery actions only (PRD v1.3.2).
+ * PairingRequired is handled by RuntimePairingScreen — no Start/Confirm Pairing here.
+ */
 export function RuntimeRecoveryActions({
   runtimeState,
   onRetry,
   onEnterMain,
 }: RuntimeRecoveryActionsProps): React.JSX.Element {
-  const { busy, error, retry, startPairing, confirmPairing, pairing, loadDiagnostics } =
-    useCopilotRuntime();
+  const { busy, error, retry, loadDiagnostics } = useCopilotRuntime();
   const [jobMessage, setJobMessage] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
 
   const state = runtimeState?.state;
   const canRepair = runtimeState?.canRepair ?? true;
-  const canPair = state === "PairingRequired" || runtimeState?.canPair;
 
   async function handleRepairRuntime(): Promise<void> {
     setJobBusy(true);
@@ -99,45 +101,12 @@ export function RuntimeRecoveryActions({
           Open Diagnostics
         </button>
 
-        {canPair ? (
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || jobBusy}
-            onClick={() => void startPairing()}
-            data-testid="runtime-recovery-start-pairing"
-          >
-            Start Pairing
-          </button>
-        ) : null}
-
         {state === "RuntimeDegraded" && onEnterMain ? (
           <button type="button" className="btn btn-secondary" onClick={onEnterMain}>
             Continue to App
           </button>
         ) : null}
       </div>
-
-      {pairing?.pairingId ? (
-        <div className="runtime-recovery-pairing" style={{ marginTop: 16 }}>
-          <p>
-            Pairing ID: <code>{pairing.pairingId}</code>
-          </p>
-          {pairing.code ? (
-            <p>
-              Challenge: <code>{pairing.code}</code>
-            </p>
-          ) : null}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => void confirmPairing().then(() => onRetry())}
-          >
-            Confirm Pairing
-          </button>
-        </div>
-      ) : null}
 
       {error ? (
         <p role="alert" style={{ marginTop: 12 }}>

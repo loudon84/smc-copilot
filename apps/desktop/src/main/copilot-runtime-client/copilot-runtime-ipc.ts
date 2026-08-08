@@ -11,7 +11,7 @@ import {
   retryRuntimeConnection,
   runRuntimeHandshake,
 } from "./runtime-connection-manager";
-import { confirmPairing, startPairing } from "./runtime-pairing-manager";
+import { confirmPairing, pairAndConnect, startPairing } from "./runtime-pairing-manager";
 import {
   CopilotRuntimeHttpError,
   runtimeFetch,
@@ -66,6 +66,7 @@ export function registerCopilotRuntimeIpc(): void {
       return result;
     });
   });
+  ipcMain.handle("copilot-runtime:pair-and-connect", () => pairAndConnect());
   ipcMain.handle("copilot-runtime:retry", () => retryRuntimeConnection());
   ipcMain.handle("copilot-runtime:repair", () => repairRuntimeConnection());
 

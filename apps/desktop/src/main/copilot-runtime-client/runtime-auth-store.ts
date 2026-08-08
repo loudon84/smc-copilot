@@ -22,12 +22,16 @@ export interface RuntimeDeviceMeta {
   pairedAt: string;
 }
 
+export type DeviceTokenPersistence = "secure" | "memory-only";
+
 interface StoredRuntimeAuth {
   deviceToken: string;
   meta: RuntimeDeviceMeta;
 }
 
 let memoryAuth: StoredRuntimeAuth | null = null;
+/** Last successful save persistence level (for diagnostics). */
+let lastPersistence: DeviceTokenPersistence | null = null;
 /** Dev legacy shared token (X-Copilot-Desktop-Token); never sent as Bearer. */
 let legacySharedToken: string | null = null;
 
@@ -77,6 +81,10 @@ export function isPairedSync(): boolean {
   return Boolean(memoryAuth?.deviceToken);
 }
 
+export function getDeviceTokenPersistence(): DeviceTokenPersistence | null {
+  return lastPersistence;
+}
+
 export async function hydrateRuntimeAuthStore(): Promise<RuntimeDeviceMeta | null> {
   if (memoryAuth) return memoryAuth.meta;
 
@@ -121,7 +129,7 @@ export async function hydrateRuntimeAuthStore(): Promise<RuntimeDeviceMeta | nul
 export async function saveDeviceToken(
   deviceToken: string,
   meta: RuntimeDeviceMeta,
-): Promise<void> {
+): Promise<DeviceTokenPersistence> {
   if (!deviceToken.trim()) {
     throw new Error("device token must not be empty");
   }
@@ -132,7 +140,9 @@ export async function saveDeviceToken(
     try {
       await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, deviceToken.trim());
       await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_META_ACCOUNT, JSON.stringify(meta));
-      return;
+      lastPersistence = "secure";
+      console.log("[copilot-runtime] token persisted securely");
+      return "secure";
     } catch (err) {
       console.warn(
         "[copilot-runtime] keytar write failed, falling back:",
@@ -145,16 +155,21 @@ export async function saveDeviceToken(
     mkdirSync(AUTH_DIR(), { recursive: true });
     writeFileSync(TOKEN_FILE(), safeStorage.encryptString(deviceToken.trim()));
     writeFileSync(META_FILE(), JSON.stringify(meta, null, 2), "utf8");
-    return;
+    lastPersistence = "secure";
+    console.log("[copilot-runtime] token persisted securely");
+    return "secure";
   }
 
+  lastPersistence = "memory-only";
   console.warn(
     "[copilot-runtime] No keytar/safeStorage — device token kept in memory only (not persisted)",
   );
+  return "memory-only";
 }
 
 export async function clearDeviceToken(): Promise<void> {
   setMemory(null);
+  lastPersistence = null;
 
   const keytar = await loadKeytar();
   if (keytar) {
