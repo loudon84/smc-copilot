@@ -1,172 +1,112 @@
-import { getConnectionConfig, getFullConnectionConfig } from "../config";
+/**
+ * Startup decision — RuntimeConnectionState SOT (PRD v1.3.1).
+ * Does NOT read ~/.hermes/desktop.json, probe Hermes gateway ports, or verify Hermes install.
+ */
 import { readAuthEndpointConfig } from "../auth/auth-endpoint-config-store";
 import { hydrateTokenStore, readStoredSession } from "../auth/token-store";
-import { resolveRuntimeState } from "../enterprise/runtime-state-resolver";
-import { testRemoteConnection } from "../hermes";
-import { isSshTunnelHealthy, startSshTunnel } from "../ssh-tunnel";
 import { readBootstrapState } from "../user-config/user-config-store";
+import type { RuntimeConnectionState } from "../../shared/copilot-runtime/runtime-state-contract";
 import type {
   StartupDecision,
-  StartupScreen,
   StartupDecisionReason,
-  ConnectionMode,
 } from "../../shared/startup/startup-contract";
 
-function authRequiredDecision(connectionMode: ConnectionMode): StartupDecision {
+function authRequired(): StartupDecision {
   return {
-    runtime: null,
-    connectionMode,
     nextScreen: "login",
-    skipAgentInstall: true,
-    skipModelSetup: true,
-    shouldVerifyInBackground: false,
     reason: "auth-required",
+    runtimeState: null,
   };
 }
 
-function bootstrapPendingDecision(connectionMode: ConnectionMode): StartupDecision {
+function bootstrapPending(): StartupDecision {
   return {
-    runtime: null,
-    connectionMode,
     nextScreen: "login",
-    skipAgentInstall: true,
-    skipModelSetup: true,
-    shouldVerifyInBackground: false,
     reason: "bootstrap-pending",
+    runtimeState: null,
   };
+}
+
+function mapRuntimeToDecision(runtime: RuntimeConnectionState): StartupDecision {
+  switch (runtime.state) {
+    case "Ready":
+      return {
+        nextScreen: "main",
+        reason: "runtime-ready",
+        runtimeState: runtime,
+      };
+    case "RuntimeDegraded":
+      // Enter main with degraded banner / capability gates — never Install screen.
+      return {
+        nextScreen: "main",
+        reason: "runtime-degraded",
+        runtimeState: runtime,
+      };
+    case "PairingRequired":
+      return {
+        nextScreen: "runtime-pairing",
+        reason: "pairing-required",
+        runtimeState: runtime,
+      };
+    case "RuntimeMissing":
+      return {
+        nextScreen: "runtime-recovery",
+        reason: "runtime-missing",
+        runtimeState: runtime,
+        error: runtime.lastError ?? "Runtime Service unavailable",
+      };
+    case "Incompatible":
+      return {
+        nextScreen: "runtime-recovery",
+        reason: "runtime-incompatible",
+        runtimeState: runtime,
+        error: runtime.lastError ?? "Desktop / Runtime version mismatch",
+      };
+    case "Connecting":
+    case "RuntimeStarting":
+      return {
+        nextScreen: "runtime-recovery",
+        reason: "runtime-starting",
+        runtimeState: runtime,
+      };
+    default: {
+      const _exhaustive: never = runtime.state;
+      return {
+        nextScreen: "runtime-recovery",
+        reason: "runtime-missing",
+        runtimeState: runtime,
+        error: `Unknown runtime state: ${String(_exhaustive)}`,
+      };
+    }
+  }
 }
 
 /**
- * 解析启动决策
- *
- * V3.3.1 规则（所有连接模式统一）：
- * 1. endpoint + auth token 必须就绪，否则 → login
- * 2. bootstrap 必须 initialized，否则 → login（bootstrap-pending）
- * 3. 按 connection mode 分支：
- *    - remote/ssh → 连接检测 → main / welcome
- *    - local → runtimeReady + modelConfigured → main
- *    - local → runtimeReady + !modelConfigured → setup
- *    - local → !runtimeReady → welcome
+ * Core decision given an already-resolved RuntimeConnectionState.
+ * Auth + bootstrap gates run first.
  */
-// @lat: [[domain/auth#Startup gate]]
-export async function resolveStartupDecision(): Promise<StartupDecision> {
-  const conn = getConnectionConfig();
-  const connectionMode: ConnectionMode = conn.mode === "remote" || conn.mode === "ssh"
-    ? conn.mode
-    : "local";
-
-  // V3.3.1: auth + bootstrap gate for all modes
+export async function resolveStartupDecisionFromRuntime(
+  runtime: RuntimeConnectionState,
+): Promise<StartupDecision> {
   await hydrateTokenStore();
   const endpointConfig = readAuthEndpointConfig();
   const session = await readStoredSession();
   if (!endpointConfig || !session?.accessToken) {
-    return authRequiredDecision(connectionMode);
+    return authRequired();
   }
 
   const bootstrap = readBootstrapState();
   if (!bootstrap.initialized) {
-    return bootstrapPendingDecision(connectionMode);
+    return bootstrapPending();
   }
 
-  // Remote mode
-  if (conn.mode === "remote" && conn.remoteUrl) {
-    const ok = await testRemoteConnection(
-      conn.remoteUrl,
-      getFullConnectionConfig().apiKey,
-    );
-    const nextScreen: StartupScreen = ok ? "main" : "welcome";
-    const reason: StartupDecisionReason = ok
-      ? "remote-ready"
-      : "remote-unreachable";
-
-    return {
-      runtime: null,
-      connectionMode: "remote",
-      nextScreen,
-      skipAgentInstall: true,
-      skipModelSetup: true,
-      shouldVerifyInBackground: false,
-      reason,
-      error: ok ? undefined : `Cannot reach remote Hermes at ${conn.remoteUrl}`,
-    };
-  }
-
-  // SSH mode
-  if (conn.mode === "ssh" && conn.ssh && conn.ssh.host) {
-    try {
-      await startSshTunnel(conn.ssh);
-      const healthy = await isSshTunnelHealthy();
-
-      if (healthy) {
-        return {
-          runtime: null,
-          connectionMode: "ssh",
-          nextScreen: "main",
-          skipAgentInstall: true,
-          skipModelSetup: true,
-          shouldVerifyInBackground: false,
-          reason: "ssh-ready",
-        };
-      }
-
-      return {
-        runtime: null,
-        connectionMode: "ssh",
-        nextScreen: "welcome",
-        skipAgentInstall: true,
-        skipModelSetup: true,
-        shouldVerifyInBackground: false,
-        reason: "ssh-unreachable",
-        error: "SSH tunnel health check failed",
-      };
-    } catch (err) {
-      return {
-        runtime: null,
-        connectionMode: "ssh",
-        nextScreen: "welcome",
-        skipAgentInstall: true,
-        skipModelSetup: true,
-        shouldVerifyInBackground: false,
-        reason: "ssh-unreachable",
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
-
-  // Local mode
-  const runtime = resolveRuntimeState();
-
-  if (runtime.runtimeReady && runtime.modelConfigured) {
-    return {
-      runtime,
-      connectionMode: "local",
-      nextScreen: "main",
-      skipAgentInstall: true,
-      skipModelSetup: true,
-      shouldVerifyInBackground: true,
-      reason: "runtime-ready-model-configured",
-    };
-  }
-
-  if (runtime.runtimeReady && !runtime.modelConfigured) {
-    return {
-      runtime,
-      connectionMode: "local",
-      nextScreen: "setup",
-      skipAgentInstall: true,
-      skipModelSetup: false,
-      shouldVerifyInBackground: true,
-      reason: "runtime-ready-model-missing",
-    };
-  }
-
-  return {
-    runtime,
-    connectionMode: "local",
-    nextScreen: "welcome",
-    skipAgentInstall: false,
-    skipModelSetup: false,
-    shouldVerifyInBackground: false,
-    reason: "runtime-missing",
-  };
+  return mapRuntimeToDecision(runtime);
 }
+
+/** @deprecated Prefer desktopBootCoordinator.resolveStartupDecision */
+export async function resolveStartupDecision(): Promise<StartupDecision> {
+  const { desktopBootCoordinator } = await import("./desktop-boot-coordinator");
+  return desktopBootCoordinator.resolveStartupDecision();
+}
+
+export type { StartupDecisionReason };

@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-
-type ConnectionConfig = Awaited<ReturnType<typeof window.hermesAPI.getConnectionConfig>>;
+import type { RuntimeConnectionState } from "../../../../../shared/copilot-runtime/runtime-state-contract";
 
 export function HermesConnectionSection(): React.JSX.Element {
-  const [config, setConfig] = useState<ConnectionConfig | null>(null);
+  const [state, setState] = useState<RuntimeConnectionState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const c = await window.hermesAPI.getConnectionConfig();
-      setConfig(c);
-      setError(null);
+      const runtime = await window.copilotRuntime.getState();
+      setState(runtime);
+      setError(runtime.lastError);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -23,65 +21,41 @@ export function HermesConnectionSection(): React.JSX.Element {
 
   useEffect(() => {
     void load();
+    const unsubscribe = window.copilotRuntime.onStateChanged((next) => {
+      setState(next);
+      setError(next.lastError);
+    });
+    return unsubscribe;
   }, [load]);
 
-  const save = async () => {
-    if (!config) return;
-    setSaving(true);
-    try {
-      await window.hermesAPI.setConnectionConfig(
-        config.mode,
-        config.remoteUrl ?? "",
-        undefined,
-      );
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) return <p className="settings-drawer-text-muted">Loading…</p>;
-  if (!config) return <p className="settings-drawer-text-error">{error ?? "No config"}</p>;
+  if (!state) return <p className="settings-drawer-text-error">{error ?? "No runtime state"}</p>;
 
   return (
     <>
-      <label className="settings-drawer-field">
-        <span className="settings-drawer-field-label">Mode</span>
-        <select
-          className="settings-drawer-select"
-          value={config.mode}
-          onChange={(e) =>
-            setConfig({
-              ...config,
-              mode: e.target.value as ConnectionConfig["mode"],
-            })
-          }
-        >
-          <option value="local">local</option>
-          <option value="remote">remote</option>
-          <option value="ssh">ssh</option>
-        </select>
-      </label>
-      {config.mode === "remote" ? (
-        <label className="settings-drawer-field">
-          <span className="settings-drawer-field-label">Remote URL</span>
-          <input
-            className="settings-drawer-input"
-            value={config.remoteUrl ?? ""}
-            onChange={(e) => setConfig({ ...config, remoteUrl: e.target.value })}
-          />
-        </label>
-      ) : null}
+      <p className="settings-drawer-hint">
+        Desktop connects to Copilot Runtime on port 8765. Legacy Hermes Gateway remote URLs are
+        not used for startup or settings.
+      </p>
+      <dl className="settings-drawer-kv">
+        <dt>State</dt>
+        <dd>{state.state}</dd>
+        <dt>Base URL</dt>
+        <dd>
+          <code>{state.baseUrl}</code>
+        </dd>
+        <dt>Paired</dt>
+        <dd>{state.paired ? "yes" : "no"}</dd>
+        <dt>Runtime version</dt>
+        <dd>{state.runtimeVersion ?? "—"}</dd>
+      </dl>
       {error ? <p className="settings-drawer-text-error">{error}</p> : null}
       <button
         type="button"
-        disabled={saving}
-        className="settings-drawer-btn-success"
-        onClick={() => void save()}
+        className="settings-drawer-btn-secondary"
+        onClick={() => void load()}
       >
-        {saving ? "Saving…" : "Save"}
+        Refresh
       </button>
     </>
   );

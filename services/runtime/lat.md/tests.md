@@ -428,7 +428,7 @@ Backoff、熔断与单实例 Process Lock 回归。
 
 ### Single instance lock
 
-同一数据目录第二个 `ProcessLock.acquire` 抛出 `runtime_already_running`。
+同一数据目录第二个 `ProcessLock.acquire` 抛出 `runtime_already_running`；若 `runtime.lock` 中 PID 已死亡则回收陈旧锁并允许启动。启动失败（`yield` 前异常）也会 `release`，避免 `--reload` 留下陈旧锁。
 
 ## Effective Policy
 

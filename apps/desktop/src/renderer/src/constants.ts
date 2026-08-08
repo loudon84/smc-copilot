@@ -768,9 +768,7 @@ export const GATEWAY_PLATFORMS: PlatformDef[] = [
 ];
 
 // ── Install ─────────────────────────────────────────────
-
-export const INSTALL_CMD =
-  "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash";
+// Hermes curl install removed in PRD v1.3.1 — use Runtime Repair from Settings / Recovery.
 
 // Helper to resolve i18n key or return as-is
 export function tk(t: (key: string) => string, value: string): string {

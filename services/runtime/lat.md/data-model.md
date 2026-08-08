@@ -20,7 +20,7 @@ Profile 与任务相关表及枚举。
 
 ## 迁移链
 
-迁移按 revision 顺序执行，生产启动前需 `alembic upgrade head`。
+迁移按 revision 顺序执行。本地 `dev` 目标会自动 `alembic upgrade head`；生产启动前亦需手动或安装流程执行迁移。
 
 | Revision | 内容 |
 |----------|------|
@@ -43,8 +43,11 @@ Profile 与任务相关表及枚举。
 | `013_v16_experience` | Experience evidence links / fingerprints |
 | `014_merge_profile_path_v16` | 合并 `003_fix_default_profile_path` 与 `013_v16_experience`，恢复单一 head |
 | `015_v11_chat_runtime` | Chat Runtime v2：`chat_runs`/`chat_turns`/`chat_events`/`chat_queue_entries`/`chat_interactions` |
+| `016_v13_task_domain_sot` | v1.3 WorkTask 域字段扩展 + LocalTask → WorkTask 数据迁移 |
+| `017_v13_task_execution_queue` | v1.3 持久化 `task_execution_queue` |
+| `018_v13_task_phase456` | v1.3：`task_interactions`、`task_routing_rules`、team binding `work_task_id`（当前 head） |
 
-生产启动前 `alembic upgrade head`。新增表必须配 Alembic 迁移。
+本地 `nx run runtime:dev` / `npm run dev:runtime` 会先执行 `alembic upgrade head` 再启动 uvicorn。生产启动前亦需 `alembic upgrade head`（或 `nx run runtime:migrate`）。新增表必须配 Alembic 迁移。
 
 ## Chat Runtime 表
 

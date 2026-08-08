@@ -21,6 +21,7 @@ import {
   createInitialProjection,
   taskWorkbenchProjectionReducer,
 } from "./taskWorkbenchProjection";
+import { ensureRuntimeReadyForWrite } from "../../lib/runtime/runtimeWriteGate";
 
 type WorkbenchMode = "checking" | "v2" | "legacy";
 
@@ -463,6 +464,7 @@ function WorkTaskWorkbenchV2(): React.JSX.Element {
     setBusy(true);
     setActionError(null);
     try {
+      await ensureRuntimeReadyForWrite();
       await fn();
       await reloadLists();
       if (selectedId) await loadSnapshot(selectedId);

@@ -74,13 +74,8 @@ export function GeneralPanel({ activeProfile }: GeneralPanelProps): React.JSX.El
     setMigrationLog("");
     setMigrationResult(null);
 
-    const cleanup = window.hermesAPI.onInstallProgress((p) => {
-      setMigrationLog(p.log);
-    });
-
     try {
       const result = await window.hermesAPI.runClawMigrate();
-      cleanup();
       if (result.success) {
         setMigrationResult(t("settings.migrationComplete"));
         setMigrationResultType("success");
@@ -90,7 +85,6 @@ export function GeneralPanel({ activeProfile }: GeneralPanelProps): React.JSX.El
         setMigrationResultType("error");
       }
     } catch (err) {
-      cleanup();
       setMigrationResult((err as Error).message || t("settings.migrationFailed"));
       setMigrationResultType("error");
     }

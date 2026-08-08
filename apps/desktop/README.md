@@ -88,7 +88,7 @@ Web Operator (Main: `src/main/browser/`):
 - **WebContentsView** with isolated partition `persist:aios-external-web`
 - Domain allowlist, sensitive-action confirmation (`browser.click`, `browser.type`)
 - JSONL audit log under `~/.hermes/desktop/web-operator/`
-- Local tool server on `127.0.0.1` (8765–8775) for Hermes tool bridge
+- Local tool server on `127.0.0.1` (18765–18775) for Hermes tool bridge
 
 Preload API: `window.aiosBrowser`.
 

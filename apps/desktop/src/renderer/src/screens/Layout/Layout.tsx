@@ -37,6 +37,7 @@ import { useShellLayerVisibility } from "../../hooks/useShellLayerVisibility";
 import type { CrmBridgeOnEventPayload } from "../../../../shared/crm-bridge";
 import { navigateCrmRendererRoute } from "../../crm-bridge/crm-renderer-navigation";
 import { WebOperatorScreen } from "../WebOperator/WebOperatorScreen";
+import { RuntimeDegradedBanner } from "../../components/runtime/RuntimeDegradedBanner";
 
 function isValidRestoredView(
   view: string | undefined,
@@ -382,6 +383,9 @@ function Layout(): React.JSX.Element {
           onUpdate={handleUpdate}
           outlet={
             <>
+              <RuntimeDegradedBanner
+                onOpenRuntimeSettings={() => openSettingsDrawer("server")}
+              />
               <KeepAliveView active={isWebOperatorActive}>
                 <WebOperatorScreen
                   enabled={isWebOperatorActive}

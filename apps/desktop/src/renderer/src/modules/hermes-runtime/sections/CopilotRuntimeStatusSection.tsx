@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import type { RuntimeUiState } from "../../../../../shared/copilot-runtime";
 import { useCopilotRuntime } from "../../../hooks/useCopilotRuntime";
 
@@ -16,15 +17,38 @@ export function CopilotRuntimeStatusSection(): React.JSX.Element {
     state,
     capabilities,
     diagnostics,
-    pairing,
     busy,
     error,
     retry,
     repair,
-    startPairing,
-    confirmPairing,
     loadDiagnostics,
+    refresh,
   } = useCopilotRuntime();
+  const [pairingBusy, setPairingBusy] = useState(false);
+  const [pairingMessage, setPairingMessage] = useState<string | null>(null);
+
+  const handlePairAndConnect = useCallback(async () => {
+    if (!window.copilotRuntime?.pairAndConnect) return;
+    setPairingBusy(true);
+    setPairingMessage(null);
+    try {
+      const result = await window.copilotRuntime.pairAndConnect();
+      if (result.ok && result.state.state === "Ready") {
+        setPairingMessage(
+          result.error?.code === "DEVICE_TOKEN_NOT_PERSISTED"
+            ? result.error.message
+            : "Paired and connected",
+        );
+        await refresh();
+      } else {
+        setPairingMessage(result.error?.message ?? result.state.lastError ?? "Pairing failed");
+      }
+    } catch (err) {
+      setPairingMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPairingBusy(false);
+    }
+  }, [refresh]);
 
   if (!window.copilotRuntime) {
     return (
@@ -78,6 +102,11 @@ export function CopilotRuntimeStatusSection(): React.JSX.Element {
             {error}
           </p>
         ) : null}
+        {pairingMessage ? (
+          <p className="settings-field-hint" role="status">
+            {pairingMessage}
+          </p>
+        ) : null}
         {state.compatibility && !state.compatibility.compatible ? (
           <p className="settings-field-hint" role="alert">
             不兼容：{state.compatibility.reasons.join("; ") || "API version mismatch"}
@@ -107,11 +136,11 @@ export function CopilotRuntimeStatusSection(): React.JSX.Element {
           <button
             type="button"
             className="btn btn-primary"
-            disabled={busy}
-            onClick={() => void startPairing()}
-            data-testid="copilot-runtime-start-pairing"
+            disabled={busy || pairingBusy}
+            onClick={() => void handlePairAndConnect()}
+            data-testid="copilot-runtime-pair-and-connect"
           >
-            Start Pairing
+            {pairingBusy ? "Pairing…" : "Pair & Continue"}
           </button>
         ) : null}
         <button
@@ -123,35 +152,6 @@ export function CopilotRuntimeStatusSection(): React.JSX.Element {
           Diagnostics
         </button>
       </div>
-
-      {pairing?.pairingId ? (
-        <div className="settings-card" style={{ marginTop: 12 }} data-testid="copilot-runtime-pairing-dialog">
-          <div className="settings-section-title">Device Pairing</div>
-          <p className="settings-field-hint">
-            Pairing ID: <code>{pairing.pairingId}</code>
-          </p>
-          {pairing.code ? (
-            <p className="settings-field-hint">
-              Challenge: <code>{pairing.code}</code>
-            </p>
-          ) : null}
-          {pairing.expiresAt ? (
-            <p className="settings-field-hint">Expires: {pairing.expiresAt}</p>
-          ) : null}
-          <p className="settings-field-hint">
-            Confirm to store Device Token in Main (keytar). Token is never shown in Renderer.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy}
-            onClick={() => void confirmPairing()}
-            data-testid="copilot-runtime-confirm-pairing"
-          >
-            Confirm Pairing
-          </button>
-        </div>
-      ) : null}
 
       {diagnostics ? (
         <div className="settings-card" style={{ marginTop: 12 }}>

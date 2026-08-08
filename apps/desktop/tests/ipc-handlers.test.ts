@@ -80,6 +80,10 @@ const DEPRECATED_PRELOAD_CHANNELS = [
   "aios:view:load-home",
   "aios:view:reload",
   "aios:view:set-bounds",
+  // Preload still exposes these; Main workspaces handlers not registered (pre-v1.3.1 debt)
+  "workspaces:list-files",
+  "workspaces:read-file",
+  "workspaces:git-status",
 ];
 
 // Channels used internally or via dedicated preload modules not scanned here
@@ -213,10 +217,27 @@ describe("Auth IPC handlers (V3.3)", () => {
   }
 });
 
-describe("Legacy IPC handlers preserved", () => {
-  const legacyChannels = [
+describe("Hermes install IPC removed (PRD v1.3.1)", () => {
+  const removedInstallChannels = [
     "check-install",
+    "verify-install",
     "start-install",
+    "start-install-with-source",
+  ];
+
+  for (const ch of removedInstallChannels) {
+    it(`main must not register: ${ch}`, () => {
+      expect(mainChannels).not.toContain(ch);
+    });
+
+    it(`preload must not invoke: ${ch}`, () => {
+      expect(preloadChannels).not.toContain(ch);
+    });
+  }
+});
+
+describe("Legacy non-install IPC handlers preserved", () => {
+  const legacyChannels = [
     "get-hermes-version",
     "run-hermes-doctor",
     "run-hermes-update",

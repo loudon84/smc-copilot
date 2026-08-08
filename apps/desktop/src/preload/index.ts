@@ -60,61 +60,10 @@ const workspaces = {
 };
 
 const hermesAPI = {
-  // Installation
-  checkInstall: (): Promise<{
-    installed: boolean;
-    configured: boolean;
-    hasApiKey: boolean;
-  }> => ipcRenderer.invoke("check-install"),
-
-  checkInstallStatus: (): Promise<{
-    installed: boolean;
-    configured: boolean;
-    hasApiKey: boolean;
-    verified?: boolean;
-  }> => ipcRenderer.invoke("check-install"),
-
-  verifyInstall: (): Promise<boolean> => ipcRenderer.invoke("verify-install"),
-
-  startInstall: (): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke("start-install"),
-
-  startInstallWithSource: (
-    sourceConfig: unknown,
-    options?: { force?: boolean },
-  ): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke("start-install-with-source", sourceConfig, options),
-
   getRuntimeState: () => ipcRenderer.invoke("enterprise:get-runtime-state"),
 
   showOpenDialog: (opts: Electron.OpenDialogOptions): Promise<Electron.OpenDialogReturnValue> =>
     ipcRenderer.invoke("show-open-dialog", opts),
-
-  onInstallProgress: (
-    callback: (progress: {
-      step: number;
-      totalSteps: number;
-      title: string;
-      detail: string;
-      log: string;
-    }) => void,
-  ): (() => void) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      progress: unknown,
-    ): void =>
-      callback(
-        progress as {
-          step: number;
-          totalSteps: number;
-          title: string;
-          detail: string;
-          log: string;
-        },
-      );
-    ipcRenderer.on("install-progress", handler);
-    return () => ipcRenderer.removeListener("install-progress", handler);
-  },
 
   // Hermes engine info
   getHermesVersion: (): Promise<string | null> =>

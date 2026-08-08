@@ -21,6 +21,9 @@ export interface RuntimeDiagnosticsSummary {
   activeTasks: number | null;
   approvalCount: number | null;
   storeHealthy: boolean | null;
+  /** Present when Device Token could not be written to secure store. */
+  deviceTokenPersistence?: "secure" | "memory-only" | null;
+  deviceTokenPersistenceWarning?: string | null;
   details: Record<string, unknown> | null;
 }
 

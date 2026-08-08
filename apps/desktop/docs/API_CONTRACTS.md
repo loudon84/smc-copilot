@@ -105,9 +105,10 @@ Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc
 |---------|-----------|------|---------|-------|
 | `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 7 态：Connecting / PairingRequired / Incompatible / RuntimeMissing / RuntimeStarting / RuntimeDegraded / Ready；**无 token** |
 | `copilot-runtime:get-capabilities` | invoke | — | `RuntimeCapabilitiesView \| null` | |
-| `copilot-runtime:get-diagnostics-summary` | invoke | — | `RuntimeDiagnosticsSummary \| null` | |
-| `copilot-runtime:start-pairing` | invoke | — | `RuntimePairingStartResult` | `POST /pairings/start`；challenge 仅 Main 暂存 |
-| `copilot-runtime:confirm-pairing` | invoke | `pairingId: string` | `RuntimePairingConfirmResult` | 存 Device Token 到 keytar；不返回 token |
+| `copilot-runtime:get-diagnostics-summary` | invoke | — | `RuntimeDiagnosticsSummary \| null` | 含 `deviceTokenPersistence`（secure / memory-only）告警 |
+| `copilot-runtime:pair-and-connect` | invoke | — | `RuntimePairAndConnectResult` | **v1.3.2** Main 原子事务：start→confirm→saveDeviceToken→handshake；**不返回 challenge/token** |
+| `copilot-runtime:start-pairing` | invoke | — | `RuntimePairingStartResult` | 兼容保留；`code` 不暴露 challenge；生产 UI 用 `pair-and-connect` |
+| `copilot-runtime:confirm-pairing` | invoke | `pairingId: string` | `RuntimePairingConfirmResult` | 兼容保留；存 Device Token 到 keytar；不返回 token |
 | `copilot-runtime:retry` | invoke | — | `RuntimeConnectionState` | 重新 handshake |
 | `copilot-runtime:repair` | invoke | — | `{ ok, message }` | production 不 spawn；dev 可启动 Serve |
 | `copilot-runtime:is-serve-control-plane` | invoke | — | `boolean` | Ready 且非 legacy-direct |
@@ -555,7 +556,7 @@ CRM 页面运行在 WebOperator 的 WebContentsView 中，由专用 preload `src
 |-------|---------|
 | `crm-bridge:command` | `CrmDesktopCommand`（含 `expectAck` / `timeoutMs` / `target.actionKey`） |
 
-### Browser Tool Server（Hermes，`127.0.0.1:8765+`）
+### Browser Tool Server（Hermes，`127.0.0.1:18765+`）
 
 **V5.7.6** 新增 CRM 工具（`BrowserToolBridge` + `browser-tool-schema.ts`）：
 

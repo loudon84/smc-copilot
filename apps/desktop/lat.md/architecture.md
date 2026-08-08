@@ -69,7 +69,7 @@ These Main exports carry `@lat:` comments back to domain sections. Keep both sid
 | [[src/main/auth/token-header-injector.ts#installTokenHeaderInjector]] | [[domain/auth#Token vault and injection]] |
 | [[src/main/copilot-runtime-client/runtime-connection-manager.ts#runRuntimeHandshake]] | [[domain/serve-runtime#Connection handshake]] |
 | [[src/main/copilot-runtime-client/runtime-auth-store.ts#saveDeviceToken]] | [[domain/serve-runtime#Device pairing and auth store]] |
-| [[src/main/copilot-runtime-client/runtime-pairing-manager.ts#confirmPairing]] | [[domain/serve-runtime#Device pairing and auth store]] |
+| [[src/main/copilot-runtime-client/runtime-pairing-manager.ts#pairAndConnect]] | [[domain/serve-runtime#Device pairing and auth store]] |
 | [[src/main/copilot-runtime-client/runtime-mode.ts#canSpawnCopilotServe]] | [[domain/serve-runtime#Production process policy]] |
 | [[src/main/copilot-runtime-client/copilot-runtime-ipc.ts#registerCopilotRuntimeIpc]] | [[domain/serve-runtime#Renderer bridge without token]] |
 | [[src/main/runtime-adapters/gateway-control.ts#resolveGatewayControlMode]] | [[domain/serve-runtime#Phase 2 Gateway and config control plane]] |

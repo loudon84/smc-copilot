@@ -118,7 +118,7 @@ FR-902：[[src/services/metrics_service.py#MetricsService]] 内存指标；`GET 
 
 ## Worker Supervisor
 
-FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 统一注册后台 Worker，支持 Backoff/Jitter/熔断/Tick Timeout/手动重启/Critical 标识与 Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 单实例锁（`runtime_already_running`）。API：`GET/POST /api/v1/workers/*`；健康：`/health/live`、`/health/ready`、`/health/details`。
+FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 统一注册后台 Worker，支持 Backoff/Jitter/熔断/Tick Timeout/手动重启/Critical 标识与 Readiness 聚合；[[src/runtime/process_lock.py#ProcessLock]] 单实例锁（`runtime_already_running`；死亡 PID 可回收；[[src/core/lifecycle.py#lifespan]] 启动失败也会释放锁）。API：`GET/POST /api/v1/workers/*`；健康：`/health/live`、`/health/ready`、`/health/details`。
 
 ## 目录布局
 

@@ -7,7 +7,7 @@ This skill enables Hermes to operate external web pages through the Portal Deskt
 ## Tool Bridge Address
 
 ```
-http://127.0.0.1:8765
+http://127.0.0.1:18765
 ```
 
 ## Available Tools

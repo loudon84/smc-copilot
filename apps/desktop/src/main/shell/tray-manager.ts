@@ -23,7 +23,11 @@ interface TrayMenuConfig {
   hideWindowLabel: string;
   /** 退出标签 */
   quitLabel: string;
-  /** Gateway 状态标签 */
+  /**
+   * Runtime connection status label for tray menu (PRD v1.3.1).
+   */
+  runtimeStatusLabel?: string;
+  /** @deprecated Gateway tray label — use runtimeStatusLabel */
   gatewayStatusLabel?: string;
   /** 当前 Profile 标签 */
   currentProfileLabel?: string;
@@ -39,7 +43,7 @@ export class TrayManager {
   private mainWindow: BrowserWindow;
   private iconConfig: TrayIconConfig;
   private menuConfig: TrayMenuConfig;
-  private gatewayRunning = false;
+  private runtimeStatus = "Connecting";
   private currentProfile = "default";
 
   constructor(
@@ -89,11 +93,16 @@ export class TrayManager {
   }
 
   /**
-   * 更新 Gateway 状态
+   * Update Runtime connection status shown in tray menu.
    */
-  setGatewayRunning(running: boolean): void {
-    this.gatewayRunning = running;
+  setRuntimeStatus(status: string): void {
+    this.runtimeStatus = status;
     this.updateContextMenu();
+  }
+
+  /** @deprecated Use setRuntimeStatus */
+  setGatewayRunning(running: boolean): void {
+    this.setRuntimeStatus(running ? "Ready" : "RuntimeMissing");
   }
 
   /**
@@ -156,12 +165,10 @@ export class TrayManager {
             },
           ]
         : []),
-      ...(this.menuConfig.gatewayStatusLabel
+      ...(this.menuConfig.runtimeStatusLabel ?? this.menuConfig.gatewayStatusLabel
         ? [
             {
-              label: `${this.menuConfig.gatewayStatusLabel}: ${
-                this.gatewayRunning ? "Running" : "Stopped"
-              }`,
+              label: `${this.menuConfig.runtimeStatusLabel ?? this.menuConfig.gatewayStatusLabel}: ${this.runtimeStatus}`,
               enabled: false,
             },
           ]
@@ -245,7 +252,7 @@ export function createTrayManager(
     showWindowLabel: "Show Window",
     hideWindowLabel: "Hide Window",
     quitLabel: "Quit",
-    gatewayStatusLabel: "Gateway",
+    runtimeStatusLabel: "Runtime",
     currentProfileLabel: "Profile",
     ...menuConfig,
   };
