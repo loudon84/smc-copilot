@@ -124,3 +124,16 @@ The second example is invalid because `Bad Section` has no leading paragraph. `l
 - Logging: `configure_logging(settings)` dual sink under `<RUNTIME_DATA_DIR>/logs`.
 - Gateway foreign port conflict → `gateway_port_conflict`, never kill unknown PID.
 - ADRs: `docs/adr/ADR-011` … `ADR-014`.
+
+## Hermes Supervisor hard rules (PRD v1.5 / v1.5.1)
+
+- Runtime is the exclusive owner of Hermes Gateway processes.
+- Never treat a listening port or `/health=200` as proof of process ownership.
+- Never kill a process without ownership verification (PID + create_time + port + exe).
+- Gateway authentication failure is not Gateway health (`GatewayHealthResult`).
+- Instance DB `status`/`healthy` are compatibility projections, not observed runtime state.
+- Health must be maintained by Runtime `GatewayHealthWorker`, not by Desktop refresh actions.
+- Default Chat readiness resolves `HermesInstance.name == "default"` — never `limit(1)`.
+- `executionEligible` requires Gateway healthy **and** ownership in `{owned, adopted}`.
+- Development reload must preserve Gateways (`gateway_preserve_on_dev_shutdown`) and re-adopt via persistent fingerprint / Safe Adoption.
+- ADRs: `docs/adr/ADR-015` … `ADR-020`.

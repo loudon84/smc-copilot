@@ -156,6 +156,15 @@ export interface CopilotRuntimeAPI {
   getInstanceHealth: (
     instanceId: string,
   ) => Promise<import("./instance-contract").ServeInstanceHealth | null>;
+  getInstanceState: (
+    instanceId: string,
+  ) => Promise<import("./instance-contract").ServeInstanceState | null>;
+  getInstanceDiagnostics: (
+    instanceId: string,
+  ) => Promise<import("./instance-contract").ServeInstanceDiagnostics | null>;
+  reconcileInstance: (
+    instanceId: string,
+  ) => Promise<Record<string, unknown> | null>;
   getInstanceLogs: (
     instanceId: string,
     options?: { tail?: number },

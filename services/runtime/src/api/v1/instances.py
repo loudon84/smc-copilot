@@ -7,7 +7,10 @@ from api.deps import get_app_settings, get_db_session, get_gateway_supervisor
 from core.config import Settings
 from schemas.runtime import (
     InstanceCreateRequest,
+    InstanceDiagnosticsResponse,
+    InstanceHealthResponse,
     InstanceResponse,
+    InstanceStateResponse,
     InstanceUpdateRequest,
 )
 from services.gateway_supervisor import GatewaySupervisor
@@ -87,12 +90,40 @@ async def restart_instance(
     return await svc.restart(instance_id)
 
 
-@router.get("/{instance_id}/health", response_model=InstanceResponse)
+@router.post("/{instance_id}/reconcile")
+async def reconcile_instance(
+    instance_id: str,
+    supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
+) -> dict:
+    """Re-inspect ownership (PRD v1.5.1 §69). Not restart / force adopt."""
+    return await supervisor.reconcile_instance(instance_id)
+
+
+@router.get("/{instance_id}/health", response_model=InstanceHealthResponse)
 async def instance_health(
     instance_id: str,
     supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
-) -> InstanceResponse:
-    return await supervisor.refresh_instance_status(instance_id)
+) -> InstanceHealthResponse:
+    payload = await supervisor.get_instance_health(instance_id)
+    return InstanceHealthResponse.model_validate(payload)
+
+
+@router.get("/{instance_id}/state", response_model=InstanceStateResponse)
+async def instance_state(
+    instance_id: str,
+    supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
+) -> InstanceStateResponse:
+    payload = await supervisor.get_instance_state(instance_id)
+    return InstanceStateResponse.model_validate(payload)
+
+
+@router.get("/{instance_id}/diagnostics", response_model=InstanceDiagnosticsResponse)
+async def instance_diagnostics(
+    instance_id: str,
+    supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
+) -> InstanceDiagnosticsResponse:
+    payload = await supervisor.get_instance_diagnostics(instance_id)
+    return InstanceDiagnosticsResponse.model_validate(payload)
 
 
 @router.get("/{instance_id}/logs")

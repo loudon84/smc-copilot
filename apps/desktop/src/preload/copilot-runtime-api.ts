@@ -46,6 +46,12 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
     ipcRenderer.invoke("copilot-runtime:restart-instance", instanceId),
   getInstanceHealth: (instanceId: string) =>
     ipcRenderer.invoke("copilot-runtime:get-instance-health", instanceId),
+  getInstanceState: (instanceId: string) =>
+    ipcRenderer.invoke("copilot-runtime:get-instance-state", instanceId),
+  getInstanceDiagnostics: (instanceId: string) =>
+    ipcRenderer.invoke("copilot-runtime:get-instance-diagnostics", instanceId),
+  reconcileInstance: (instanceId: string) =>
+    ipcRenderer.invoke("copilot-runtime:reconcile-instance", instanceId),
   getInstanceLogs: (instanceId: string, options?: { tail?: number }) =>
     ipcRenderer.invoke("copilot-runtime:get-instance-logs", instanceId, options),
   getDiagnosticsEnvironment: () =>

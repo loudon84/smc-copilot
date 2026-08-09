@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import Settings
-from core.runtime_enums import InstanceStatus
+from core.runtime_enums import DesiredState, InstanceStatus
 from core.runtime_errors import RuntimeServiceError
 from db.models.runtime import HermesInstance, RuntimeVersion
 from db.repositories.runtime_repo import RuntimeVersionRepository
@@ -106,6 +106,7 @@ class InstanceService:
             status=InstanceStatus.CREATED.value,
             healthy=False,
             auto_start=body.auto_start,
+            desired_state=DesiredState.RUNNING.value if body.auto_start else DesiredState.STOPPED.value,
         )
         self._session.add(inst)
         await self._session.flush()
@@ -121,6 +122,7 @@ class InstanceService:
             inst.name = body.name
         if body.auto_start is not None:
             inst.auto_start = body.auto_start
+            inst.desired_state = DesiredState.RUNNING.value if body.auto_start else DesiredState.STOPPED.value
         if body.gateway_port is not None:
             if body.gateway_port != inst.gateway_port and not is_port_available("127.0.0.1", body.gateway_port):
                 raise RuntimeServiceError(f"Port {body.gateway_port} is not available", code="conflict")
@@ -153,6 +155,7 @@ class InstanceService:
             existing.runtime_version_id = runtime_version_id
             if not existing.auto_start:
                 existing.auto_start = True
+            existing.desired_state = DesiredState.RUNNING.value
             await self._session.flush()
             return existing.id
         inst = HermesInstance(
@@ -163,6 +166,7 @@ class InstanceService:
             status=InstanceStatus.CREATED.value,
             healthy=False,
             auto_start=True,
+            desired_state=DesiredState.RUNNING.value,
         )
         self._session.add(inst)
         await self._session.flush()

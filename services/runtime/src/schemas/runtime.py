@@ -34,6 +34,9 @@ class RuntimeDomainReadiness(BaseModel):
     status: str | None = None
     chat_ready: bool | None = Field(default=None, alias="chatReady")
     task_ready: bool | None = Field(default=None, alias="taskReady")
+    # PRD v1.5 execution extensions
+    default_instance: dict[str, Any] | None = Field(default=None, alias="defaultInstance")
+    instances: dict[str, Any] | None = None
 
 
 class RuntimeReadinessResponse(BaseModel):
@@ -208,6 +211,108 @@ class InstanceResponse(BaseModel):
     last_error: str | None = Field(default=None, alias="lastError")
     executable_verified: bool | None = Field(default=None, alias="executableVerified")
     api_server_enabled: bool | None = Field(default=None, alias="apiServerEnabled")
+
+
+class InstanceHealthRuntimeInfo(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    version: str | None = None
+    executable_verified: bool = Field(default=False, alias="executableVerified")
+
+
+class InstanceHealthProcessInfo(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    state: str
+    pid: int | None = None
+    owned: bool = False
+
+
+class InstanceHealthGatewayInfo(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    port: int
+    reachable: bool = False
+    authenticated: bool = False
+    healthy: bool = False
+    latency_ms: float | None = Field(default=None, alias="latencyMs")
+
+
+class InstanceHealthResponse(BaseModel):
+    """PRD v1.5 Instance Health API v2."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    instance_id: str = Field(alias="instanceId")
+    runtime: InstanceHealthRuntimeInfo
+    process: InstanceHealthProcessInfo
+    gateway: InstanceHealthGatewayInfo
+    checked_at: str = Field(alias="checkedAt")
+
+
+class InstanceStateDesired(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    state: str | None = None
+
+
+class InstanceStateObserved(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    status: str | None = None
+    healthy: bool | None = None
+    process_state: str | None = Field(default=None, alias="processState")
+    api_state: str | None = Field(default=None, alias="apiState")
+    ownership_state: str | None = Field(default=None, alias="ownershipState")
+    ownership_source: str | None = Field(default=None, alias="ownershipSource")
+    pid: int | None = None
+    process_create_time: float | None = Field(default=None, alias="processCreateTime")
+    last_health_check_at: str | None = Field(default=None, alias="lastHealthCheckAt")
+    last_healthy_at: str | None = Field(default=None, alias="lastHealthyAt")
+
+
+class InstanceStateRecovery(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    restart_count: int = Field(default=0, alias="restartCount")
+    consecutive_health_failures: int = Field(default=0, alias="consecutiveHealthFailures")
+    consecutive_health_successes: int = Field(default=0, alias="consecutiveHealthSuccesses")
+    last_error_code: str | None = Field(default=None, alias="lastErrorCode")
+    last_error: str | None = Field(default=None, alias="lastError")
+
+
+class InstanceStateResponse(BaseModel):
+    """PRD v1.5 / v1.5.1 Desired / Observed / Recovery state."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    instance_id: str = Field(alias="instanceId")
+    desired: InstanceStateDesired
+    observed: InstanceStateObserved
+    recovery: InstanceStateRecovery
+    execution_eligible: bool | None = Field(default=None, alias="executionEligible")
+
+
+class InstanceDiagnosticsResponse(BaseModel):
+    """PRD v1.5.1 Gateway diagnostics — never includes secrets."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    instance_id: str = Field(alias="instanceId")
+    desired: InstanceStateDesired
+    observed: InstanceStateObserved
+    recovery: InstanceStateRecovery
+    execution_eligible: bool | None = Field(default=None, alias="executionEligible")
+    runtime_version: str | None = Field(default=None, alias="runtimeVersion")
+    executable: str | None = None
+    executable_error: str | None = Field(default=None, alias="executableError")
+    profile: str | None = None
+    port: int | None = None
+    port_owner: dict[str, Any] | None = Field(default=None, alias="portOwner")
+    gateway_log_path: str | None = Field(default=None, alias="gatewayLogPath")
+    fingerprint: dict[str, Any] | None = None
+    live_inspection: dict[str, Any] | None = Field(default=None, alias="liveInspection")
+    safe_adoption_evidence: dict[str, Any] | None = Field(default=None, alias="safeAdoptionEvidence")
 
 
 class PairingStartResponse(BaseModel):

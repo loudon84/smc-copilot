@@ -28,14 +28,30 @@ Instance 启动遇端口占用：若监听 PID 即本 Instance 则恢复；未�
 
 ## 健康检查
 
-健康以 `GET /health` 且 body `{"status":"ok"}` 为准（超时 `HERMES_GATEWAY_START_TIMEOUT_SECONDS`），并兼容 `/v1/models`。[[src/integrations/hermes/client.py#HermesGatewayClient]] `health_check` 实现该策略。Instance health 响应含 `executableVerified`/`apiServerEnabled`，永不返回密钥。
+[[src/integrations/hermes/client.py#HermesGatewayClient]] `health_check` 返回 [[src/integrations/hermes/client.py#GatewayHealthResult]]：仅 authenticated + 成功 API 响应才 `healthy`；401/403 为 `GATEWAY_AUTH_FAILED`，禁止 `<500→healthy`。启动等待仍用 `HERMES_GATEWAY_START_TIMEOUT_SECONDS` 严格就绪。
+
+## Desired / Observed 状态
+
+[[src/services/instance_gateway_service.py#InstanceGatewayService]] 先写 `desired_state` 再 reconcile；`process_state`/`api_state`/`ownership_state` 为 Observed。兼容字段 `status`/`healthy` 仅作投影。
+
+## 进程所有权指纹
+
+[[src/runtime/gateway_process.py#verify_ownership]] 要求 PID + create_time + 端口监听 + exe；仅 `owned`/`adopted` 可 kill。v1.5.1 持久化 fingerprint 至 Instance，并由 [[src/services/gateway_ownership_service.py#GatewayOwnershipService]] 在 reload/restart 后恢复 ownership。
+
+## Ownership Recovery (v1.5.1)
+
+开发模式 shutdown 可 detach 而不杀 Gateway；boot reconcile 先于 autostart。Safe Adoption 仅在 evidence 全真时启用（禁止 health→owned）。见 [[tests#Gateway ownership v151]]。
+
+## Gateway Health Worker
+
+[[src/workers/gateway_health_worker.py#GatewayHealthWorker]] 由 [[src/workers/supervisor.py#WorkerSupervisor]] 周期调度（默认 5s），带失败/恢复阈值与 crash-loop budget；auth/port conflict 不自动重启。并发经 [[src/runtime/instance_operation_lock.py#InstanceOperationLock]]。
 
 ## 启动时重协调
 
-[[src/core/lifecycle.py#lifespan]] 启动序：recover jobs → reconcile instances → legacy profiles → autostart 二者 → workers。
+[[src/core/lifecycle.py#lifespan]] 启动序：recover jobs → reconcile instances → legacy profiles → autostart 二者 → workers（含 GatewayHealthWorker）。
 
 关闭：停 workers → `shutdown_all_instances` → `shutdown_all_legacy_profiles`。未知端口占用者不杀（FR-06）。
 
 ## 孤儿进程清理
 
-Legacy `stop` 可在请求时 `kill_unknown_port_listeners`；Instance stop 只停登记 PID。`release_port` 仍可用于运维强制释放。相关测试见 [[tests#Gateway 监管]]、[[tests#Instance Gateway]]。
+Legacy / Instance `stop` 均默认不杀未知 listener；`release_port` 在 v1.5 起拒绝强制杀进程并打 warning。Profile restart 端口仍占用时抛 `GatewayError`（Port Ownership Conflict）。相关测试见 [[tests#Gateway 监管]]、[[tests#Instance Gateway]]。

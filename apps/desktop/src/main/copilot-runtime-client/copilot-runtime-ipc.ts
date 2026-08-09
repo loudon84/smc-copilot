@@ -285,6 +285,33 @@ export function registerCopilotRuntimeIpc(): void {
     }
   });
 
+  ipcMain.handle("copilot-runtime:get-instance-state", async (_event, instanceId: string) => {
+    if (typeof instanceId !== "string" || !instanceId.trim()) return null;
+    try {
+      return await ServeInstanceAdapter.getState(instanceId.trim());
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:get-instance-diagnostics", async (_event, instanceId: string) => {
+    if (typeof instanceId !== "string" || !instanceId.trim()) return null;
+    try {
+      return await ServeInstanceAdapter.getDiagnostics(instanceId.trim());
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle("copilot-runtime:reconcile-instance", async (_event, instanceId: string) => {
+    if (typeof instanceId !== "string" || !instanceId.trim()) return null;
+    try {
+      return await ServeInstanceAdapter.reconcile(instanceId.trim());
+    } catch {
+      return null;
+    }
+  });
+
   ipcMain.handle(
     "copilot-runtime:get-instance-logs",
     async (_event, instanceId: string, options?: { tail?: number }) => {

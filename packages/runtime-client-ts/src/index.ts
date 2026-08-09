@@ -46,6 +46,12 @@ export type {
   RuntimeJobResponse,
   RuntimeVersionInfo,
 } from "./domains/runtime";
+export type {
+  InstanceDomain,
+  InstanceDiagnosticsResponse,
+  InstanceHealthResponse,
+  InstanceStateResponse,
+} from "./domains/instance";
 export {
   createSessionDomain,
   createMemoryDomain,

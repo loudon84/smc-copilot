@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -8,6 +10,28 @@ from core.errors import GatewayError, HermesClientError
 from core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class GatewayHealthResult:
+    """Structured Gateway health probe result (PRD v1.5).
+
+    ``healthy`` is True only when the gateway is reachable *and* authenticated
+    against a known successful API response. Auth failures (401/403) must never
+    be treated as healthy.
+    """
+
+    reachable: bool
+    authenticated: bool
+    healthy: bool
+    status_code: int | None = None
+    source: str | None = None
+    error_code: str | None = None
+    latency_ms: float | None = None
+
+    def __bool__(self) -> bool:
+        """Allow ``if await client.health_check():`` to mean healthy."""
+        return self.healthy
 
 
 class HermesGatewayClient:
@@ -37,31 +61,141 @@ class HermesGatewayClient:
             return {}
         return {"Authorization": f"Bearer {self._api_key}"}
 
-    async def health_check(self) -> bool:
+    async def health_check(self) -> GatewayHealthResult:
+        """Probe Gateway health with structured semantics (PRD v1.5 §18–21)."""
         headers = self._auth_headers()
+        started = time.monotonic()
+        health_404 = False
         async with httpx.AsyncClient(timeout=5.0) as client:
+            # Primary: GET /health
             try:
                 resp = await client.get(self._url("/health"), headers=headers)
-                if resp.status_code < 400:
+                latency = (time.monotonic() - started) * 1000.0
+                code = resp.status_code
+
+                if code in (401, 403):
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=False,
+                        healthy=False,
+                        status_code=code,
+                        source="/health",
+                        error_code="GATEWAY_AUTH_FAILED",
+                        latency_ms=latency,
+                    )
+
+                if code == 404:
+                    health_404 = True
+                elif code < 400:
+                    status_ok = False
                     try:
                         data = resp.json()
                         if isinstance(data, dict) and str(data.get("status", "")).lower() == "ok":
-                            return True
-                        if resp.status_code == 200:
-                            return True
+                            status_ok = True
+                        elif code == 200:
+                            status_ok = True
                     except Exception:
-                        if resp.status_code == 200:
-                            return True
+                        status_ok = code == 200
+                    if status_ok:
+                        return GatewayHealthResult(
+                            reachable=True,
+                            authenticated=True,
+                            healthy=True,
+                            status_code=code,
+                            source="/health",
+                            error_code=None,
+                            latency_ms=latency,
+                        )
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=True,
+                        healthy=False,
+                        status_code=code,
+                        source="/health",
+                        error_code="GATEWAY_HEALTH_DEGRADED",
+                        latency_ms=latency,
+                    )
+                else:
+                    # 4xx (non-auth) or 5xx on /health
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=True,
+                        healthy=False,
+                        status_code=code,
+                        source="/health",
+                        error_code="GATEWAY_HEALTH_DEGRADED",
+                        latency_ms=latency,
+                    )
             except httpx.HTTPError:
+                # Connection refused / timeout — try fallback, then unreachable
                 pass
-            # Fallback for mocks / older gateways
+
+            # Fallback: GET /v1/models (strict semantics — never <500 → healthy)
             try:
                 resp = await client.get(self._url("/v1/models"), headers=headers)
-                if resp.status_code < 500:
-                    return True
+                latency = (time.monotonic() - started) * 1000.0
+                code = resp.status_code
+
+                if 200 <= code < 300:
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=True,
+                        healthy=True,
+                        status_code=code,
+                        source="/v1/models",
+                        error_code=None,
+                        latency_ms=latency,
+                    )
+                if code in (401, 403):
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=False,
+                        healthy=False,
+                        status_code=code,
+                        source="/v1/models",
+                        error_code="GATEWAY_AUTH_FAILED",
+                        latency_ms=latency,
+                    )
+                if code == 404:
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=False,
+                        healthy=False,
+                        status_code=code,
+                        source="/v1/models",
+                        error_code="GATEWAY_HEALTH_ENDPOINT_UNAVAILABLE",
+                        latency_ms=latency,
+                    )
+                return GatewayHealthResult(
+                    reachable=True,
+                    authenticated=False,
+                    healthy=False,
+                    status_code=code,
+                    source="/v1/models",
+                    error_code="GATEWAY_HEALTH_DEGRADED",
+                    latency_ms=latency,
+                )
             except httpx.HTTPError:
-                pass
-        return False
+                latency = (time.monotonic() - started) * 1000.0
+                if health_404:
+                    return GatewayHealthResult(
+                        reachable=True,
+                        authenticated=False,
+                        healthy=False,
+                        status_code=404,
+                        source="/health",
+                        error_code="GATEWAY_HEALTH_ENDPOINT_UNAVAILABLE",
+                        latency_ms=latency,
+                    )
+                return GatewayHealthResult(
+                    reachable=False,
+                    authenticated=False,
+                    healthy=False,
+                    status_code=None,
+                    source=None,
+                    error_code="GATEWAY_UNREACHABLE",
+                    latency_ms=latency,
+                )
 
     async def list_models(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:

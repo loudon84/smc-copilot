@@ -93,6 +93,30 @@ class Settings(BaseSettings):
     hermes_gateway_start_timeout_seconds: int = Field(default=60, alias="HERMES_GATEWAY_START_TIMEOUT_SECONDS")
     hermes_gateway_stop_timeout_seconds: int = Field(default=20, alias="HERMES_GATEWAY_STOP_TIMEOUT_SECONDS")
 
+    # PRD v1.5 Hermes Supervisor
+    gateway_health_interval_seconds: float = Field(default=5.0, alias="GATEWAY_HEALTH_INTERVAL_SECONDS")
+    gateway_health_failure_threshold: int = Field(default=3, alias="GATEWAY_HEALTH_FAILURE_THRESHOLD")
+    gateway_health_recovery_threshold: int = Field(default=2, alias="GATEWAY_HEALTH_RECOVERY_THRESHOLD")
+    gateway_auto_recovery_enabled: bool = Field(default=True, alias="GATEWAY_AUTO_RECOVERY_ENABLED")
+    gateway_max_restarts: int = Field(default=3, alias="GATEWAY_MAX_RESTARTS")
+    gateway_restart_window_seconds: float = Field(default=300.0, alias="GATEWAY_RESTART_WINDOW_SECONDS")
+    # PRD v1.5.1 ownership recovery / safe adoption
+    gateway_safe_adoption_enabled: bool = Field(
+        default=False,
+        alias="HERMES_GATEWAY_SAFE_ADOPTION_ENABLED",
+        description="Allow verified orphan Gateway adoption (production default false)",
+    )
+    gateway_dev_allow_safe_adoption: bool = Field(
+        default=True,
+        alias="HERMES_DEV_ALLOW_SAFE_ADOPTION",
+        description="When deployment_mode=development_stub, enable Safe Adoption",
+    )
+    gateway_preserve_on_dev_shutdown: bool = Field(
+        default=True,
+        alias="HERMES_GATEWAY_PRESERVE_ON_DEV_SHUTDOWN",
+        description="In development_stub, detach Gateways on shutdown instead of killing (uvicorn --reload)",
+    )
+
     runtime_require_auth: bool = Field(default=False, alias="RUNTIME_REQUIRE_AUTH")
     runtime_allow_legacy_token: bool = Field(default=True, alias="RUNTIME_ALLOW_LEGACY_TOKEN")
     runtime_legacy_token: str = Field(default="", alias="RUNTIME_LEGACY_TOKEN")

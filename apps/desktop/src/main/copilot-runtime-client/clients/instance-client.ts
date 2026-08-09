@@ -14,12 +14,23 @@ import {
 function mapInstance(raw: unknown): ServeInstanceSummary {
   const obj = asRecord(raw);
   const status = normalizeServeInstanceStatus(obj.status ?? obj.state);
-  const healthRaw = pickString(obj, "health", "health_status")?.toLowerCase() ?? "unknown";
-  const health =
-    healthRaw === "healthy" || healthRaw === "unhealthy" || healthRaw === "degraded"
-      ? healthRaw
-      : "unknown";
-  const portVal = obj.port ?? obj.gateway_port;
+  let health: ServeInstanceSummary["health"] = "unknown";
+  if (typeof obj.healthy === "boolean") {
+    health = obj.healthy ? "healthy" : "unhealthy";
+  } else {
+    const healthRaw = pickString(obj, "health", "health_status")?.toLowerCase() ?? "unknown";
+    health =
+      healthRaw === "healthy" || healthRaw === "unhealthy" || healthRaw === "degraded"
+        ? healthRaw
+        : "unknown";
+  }
+  // Prefer gateway api state when present (PRD v1.5 observed)
+  const apiState = pickString(obj, "apiState", "api_state", "gatewayApiState")?.toLowerCase();
+  if (apiState === "unauthorized") health = "unhealthy";
+  if (apiState === "healthy") health = "healthy";
+  if (apiState === "degraded") health = "degraded";
+
+  const portVal = obj.port ?? obj.gateway_port ?? obj.gatewayPort;
   const port =
     typeof portVal === "number"
       ? portVal
@@ -29,11 +40,27 @@ function mapInstance(raw: unknown): ServeInstanceSummary {
   return {
     instanceId: pickString(obj, "instanceId", "instance_id", "id") ?? "",
     name: pickString(obj, "name", "displayName", "display_name"),
-    profileRef: pickString(obj, "profileRef", "profile_ref", "profileId", "profile_id", "profile"),
+    profileRef: pickString(
+      obj,
+      "profileRef",
+      "profile_ref",
+      "profileId",
+      "profile_id",
+      "profile",
+      "profileName",
+      "profile_name",
+    ),
     status,
     health,
     port,
-    hermesVersion: pickString(obj, "hermesVersion", "hermes_version", "activeHermesVersion"),
+    hermesVersion: pickString(
+      obj,
+      "hermesVersion",
+      "hermes_version",
+      "activeHermesVersion",
+      "runtimeVersion",
+      "runtime_version",
+    ),
     lastError: pickString(obj, "lastError", "last_error", "error"),
     updatedAt: pickString(obj, "updatedAt", "updated_at"),
   };
@@ -93,26 +120,45 @@ export const instanceClient = {
   restart: (instanceId: string) => instances().restart(instanceId),
 
   health: async (instanceId: string): Promise<ServeInstanceHealth> => {
-    const raw = await instances().health(instanceId);
+    const raw = await instances().getHealth(instanceId);
     const obj = asRecord(raw);
-    const checksRaw = obj.checks;
-    const checks: Record<string, string> = {};
-    if (checksRaw && typeof checksRaw === "object" && !Array.isArray(checksRaw)) {
-      for (const [k, v] of Object.entries(checksRaw as Record<string, unknown>)) {
-        checks[k] = typeof v === "string" ? v : String(v);
-      }
-    }
+    const gateway = asRecord(obj.gateway);
+    const process = asRecord(obj.process);
+    const checks: Record<string, string> = {
+      process: String(process.state ?? "unknown"),
+      owned: String(process.owned ?? false),
+      reachable: String(gateway.reachable ?? false),
+      authenticated: String(gateway.authenticated ?? false),
+      healthy: String(gateway.healthy ?? false),
+    };
     const healthy =
-      typeof obj.healthy === "boolean"
-        ? obj.healthy
-        : pickString(obj, "health")?.toLowerCase() === "healthy";
+      typeof gateway.healthy === "boolean"
+        ? gateway.healthy
+        : typeof obj.healthy === "boolean"
+          ? obj.healthy
+          : pickString(obj, "health")?.toLowerCase() === "healthy";
     return {
       instanceId: pickString(obj, "instanceId", "instance_id") ?? instanceId,
-      status: normalizeServeInstanceStatus(obj.status ?? obj.state),
+      status: normalizeServeInstanceStatus(obj.status ?? process.state),
       healthy,
       checks,
-      message: pickString(obj, "message", "detail"),
+      message: pickString(obj, "message", "detail", "lastError"),
     };
+  },
+
+  getState: async (instanceId: string): Promise<Record<string, unknown>> => {
+    const raw = await instances().getState(instanceId);
+    return asRecord(raw);
+  },
+
+  getDiagnostics: async (instanceId: string): Promise<Record<string, unknown>> => {
+    const raw = await instances().getDiagnostics(instanceId);
+    return asRecord(raw);
+  },
+
+  reconcile: async (instanceId: string): Promise<Record<string, unknown>> => {
+    const raw = await instances().reconcile(instanceId);
+    return asRecord(raw);
   },
 
   logs: async (

@@ -6,6 +6,10 @@
     "check:worktask-state-machine": "node scripts/check-worktask-state-machine.mjs",
     "check:task-contract-drift": "node scripts/check-task-contract-drift.mjs",
     "check:no-runtime-legacy-desktop-db": "node scripts/check-no-runtime-legacy-desktop-db.mjs",
-    "guard": "npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift && npm run check:no-runtime-legacy-desktop-db"
+    "check:gateway-health-semantics": "node scripts/check-gateway-health-semantics.mjs",
+    "check:gateway-process-ownership": "node scripts/check-gateway-process-ownership.mjs",
+    "check:instance-readiness-sot": "node scripts/check-instance-readiness-sot.mjs",
+    "check:gateway-adoption-safety": "node scripts/check-gateway-adoption-safety.mjs",
+    "guard": "npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift && npm run check:no-runtime-legacy-desktop-db && npm run check:gateway-health-semantics && npm run check:gateway-process-ownership && npm run check:instance-readiness-sot && npm run check:gateway-adoption-safety"
   }
 }

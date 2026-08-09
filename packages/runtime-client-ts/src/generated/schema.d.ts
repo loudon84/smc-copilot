@@ -1058,6 +1058,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instance Diagnostics */
+        get: operations["instance_diagnostics_api_v1_instances__instance_id__diagnostics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/expert-mcp/disable": {
         parameters: {
             query?: never;
@@ -1400,6 +1417,23 @@ export interface paths {
         put?: never;
         /** Start Instance */
         post: operations["start_instance_api_v1_instances__instance_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Instance State */
+        get: operations["instance_state_api_v1_instances__instance_id__state_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4093,6 +4127,90 @@ export interface components {
             /** Runtimeversion */
             runtimeVersion?: string | null;
         };
+        /**
+         * InstanceDiagnosticsResponse
+         * @description PRD v1.5 Gateway diagnostics — never includes secrets.
+         */
+        InstanceDiagnosticsResponse: {
+            desired: components["schemas"]["InstanceStateDesired"];
+            /** Executable */
+            executable?: string | null;
+            /** Executableerror */
+            executableError?: string | null;
+            /** Gatewaylogpath */
+            gatewayLogPath?: string | null;
+            /** Instanceid */
+            instanceId: string;
+            observed: components["schemas"]["InstanceStateObserved"];
+            /** Port */
+            port?: number | null;
+            /** Portowner */
+            portOwner?: {
+                [key: string]: unknown;
+            } | null;
+            /** Profile */
+            profile?: string | null;
+            recovery: components["schemas"]["InstanceStateRecovery"];
+            /** Runtimeversion */
+            runtimeVersion?: string | null;
+        };
+        /** InstanceHealthGatewayInfo */
+        InstanceHealthGatewayInfo: {
+            /**
+             * Authenticated
+             * @default false
+             */
+            authenticated: boolean;
+            /**
+             * Healthy
+             * @default false
+             */
+            healthy: boolean;
+            /** Latencyms */
+            latencyMs?: number | null;
+            /** Port */
+            port: number;
+            /**
+             * Reachable
+             * @default false
+             */
+            reachable: boolean;
+        };
+        /** InstanceHealthProcessInfo */
+        InstanceHealthProcessInfo: {
+            /**
+             * Owned
+             * @default false
+             */
+            owned: boolean;
+            /** Pid */
+            pid?: number | null;
+            /** State */
+            state: string;
+        };
+        /**
+         * InstanceHealthResponse
+         * @description PRD v1.5 Instance Health API v2.
+         */
+        InstanceHealthResponse: {
+            /** Checkedat */
+            checkedAt: string;
+            gateway: components["schemas"]["InstanceHealthGatewayInfo"];
+            /** Instanceid */
+            instanceId: string;
+            process: components["schemas"]["InstanceHealthProcessInfo"];
+            runtime: components["schemas"]["InstanceHealthRuntimeInfo"];
+        };
+        /** InstanceHealthRuntimeInfo */
+        InstanceHealthRuntimeInfo: {
+            /**
+             * Executableverified
+             * @default false
+             */
+            executableVerified: boolean;
+            /** Version */
+            version?: string | null;
+        };
         /** InstanceResponse */
         InstanceResponse: {
             /** Apiserverenabled */
@@ -4119,6 +4237,65 @@ export interface components {
             runtimeVersion?: string | null;
             /** Status */
             status: string;
+        };
+        /** InstanceStateDesired */
+        InstanceStateDesired: {
+            /** State */
+            state: string;
+        };
+        /** InstanceStateObserved */
+        InstanceStateObserved: {
+            /** Apistate */
+            apiState: string;
+            /** Healthy */
+            healthy: boolean;
+            /** Lasthealthcheckat */
+            lastHealthCheckAt?: string | null;
+            /** Lasthealthyat */
+            lastHealthyAt?: string | null;
+            /** Ownershipstate */
+            ownershipState: string;
+            /** Pid */
+            pid?: number | null;
+            /** Processcreatetime */
+            processCreateTime?: number | null;
+            /** Processstate */
+            processState: string;
+            /** Status */
+            status: string;
+        };
+        /** InstanceStateRecovery */
+        InstanceStateRecovery: {
+            /**
+             * Consecutivehealthfailures
+             * @default 0
+             */
+            consecutiveHealthFailures: number;
+            /**
+             * Consecutivehealthsuccesses
+             * @default 0
+             */
+            consecutiveHealthSuccesses: number;
+            /** Lasterror */
+            lastError?: string | null;
+            /** Lasterrorcode */
+            lastErrorCode?: string | null;
+            /**
+             * Restartcount
+             * @default 0
+             */
+            restartCount: number;
+        };
+        /**
+         * InstanceStateResponse
+         * @description PRD v1.5 Desired / Observed / Recovery state.
+         */
+        InstanceStateResponse: {
+            desired: components["schemas"]["InstanceStateDesired"];
+            /** Instanceid */
+            instanceId: string;
+            observed: components["schemas"]["InstanceStateObserved"];
+            recovery: components["schemas"]["InstanceStateRecovery"];
         };
         /** InstanceUpdateRequest */
         InstanceUpdateRequest: {
@@ -4605,7 +4782,7 @@ export interface components {
              */
             apiVersion: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify" | "runtime.readiness.v2" | "runtime.logs" | "hermes.lifecycle.runtime-managed" | "instances.runtime-managed" | "memory.runtime-managed" | "sessions.runtime-managed" | "expert-mcp.runtime-managed" | "expert-mcp.tools" | "expert-mcp.diagnostics")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify" | "runtime.readiness.v2" | "runtime.logs" | "hermes.lifecycle.runtime-managed" | "instances.runtime-managed" | "memory.runtime-managed" | "sessions.runtime-managed" | "expert-mcp.runtime-managed" | "expert-mcp.tools" | "expert-mcp.diagnostics" | "hermes.supervisor.v1" | "hermes.gateway.health-v2" | "hermes.gateway.process-ownership" | "hermes.gateway.auto-recovery" | "instances.desired-state" | "instances.observed-state")[];
         };
         /** RuntimeCompatibilityFlags */
         RuntimeCompatibilityFlags: {
@@ -4648,6 +4825,14 @@ export interface components {
             checks?: {
                 [key: string]: string;
             };
+            /** Defaultinstance */
+            defaultInstance?: {
+                [key: string]: unknown;
+            } | null;
+            /** Instances */
+            instances?: {
+                [key: string]: unknown;
+            } | null;
             /** Ready */
             ready: boolean;
             /** Status */
@@ -4762,7 +4947,7 @@ export interface components {
             /** Datadir */
             dataDir: string;
             /** Features */
-            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify" | "runtime.readiness.v2" | "runtime.logs" | "hermes.lifecycle.runtime-managed" | "instances.runtime-managed" | "memory.runtime-managed" | "sessions.runtime-managed" | "expert-mcp.runtime-managed" | "expert-mcp.tools" | "expert-mcp.diagnostics")[];
+            features: ("runtime.install" | "runtime.update" | "runtime.rollback" | "runtime.doctor" | "instances.multiple" | "chat.stream" | "sessions.read" | "mcp.crud" | "mcp.test" | "secrets.manage" | "pairing.device" | "config.manage" | "gateway.auth.internal" | "instances.chat" | "instances.sessions" | "runtime.update.plan" | "runtime.update.transactional" | "runtime.job.cancel" | "runtime.service.update" | "runtime.bootstrap" | "runtime.repair" | "mcp.compile" | "diagnostics.bundle" | "artifact.signature" | "endpoint.enrollment" | "endpoint.inventory" | "sync.cursor" | "sync.desired-state" | "sync.resources" | "sync.offline-outbox" | "sync.dead-letter" | "tasks.remote.v2" | "tasks.lease" | "tasks.result.delivery" | "artifacts.presigned-upload" | "experience.capture" | "experience.local-review" | "experience.staffdeck.submit" | "runtime.release.production" | "runtime.maintenance.apply" | "installer.windows.production" | "deployment.production-mode" | "service-center.http.production" | "service-center.device-signature" | "service-center.circuit-breaker" | "sync.ack-outbox" | "sync.signature-verification" | "sync.sequence-gap" | "sync.poison-message" | "resources.real-apply" | "resources.revision-rollback" | "resources.actual-state-probe" | "resources.artifact-cache-v2" | "tasks.local-control-plane" | "tasks.work.v2" | "tasks.durable-scheduler" | "tasks.hermes-execution" | "tasks.event-store" | "tasks.event-replay" | "tasks.artifacts" | "tasks.interactions" | "tasks.resource-locks" | "tasks.chat-binding" | "tasks.cancel" | "tasks.recovery" | "tasks.scheduler" | "approvals.task-scoped" | "policies.effective-policy" | "artifacts.streaming-upload" | "artifacts.multipart-resume" | "artifacts.encrypted-spool" | "workers.supervisor" | "observability.metrics" | "observability.slo" | "experience.auto-evidence" | "chat.runtime.v2" | "chat.runtime.v2.real-execution" | "chat.runtime.v2.replay" | "chat.runtime.v2.queue" | "chat.runtime.v2.recovery" | "chat.runtime.v2.abort" | "chat.interaction.clarify" | "runtime.readiness.v2" | "runtime.logs" | "hermes.lifecycle.runtime-managed" | "instances.runtime-managed" | "memory.runtime-managed" | "sessions.runtime-managed" | "expert-mcp.runtime-managed" | "expert-mcp.tools" | "expert-mcp.diagnostics" | "hermes.supervisor.v1" | "hermes.gateway.health-v2" | "hermes.gateway.process-ownership" | "hermes.gateway.auto-recovery" | "instances.desired-state" | "instances.observed-state")[];
             /** Hermeshome */
             hermesHome: string;
             /** Hermesinstalled */
@@ -8116,6 +8301,40 @@ export interface operations {
             };
         };
     };
+    instance_diagnostics_api_v1_instances__instance_id__diagnostics_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceDiagnosticsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     disable_expert_mcp_api_v1_instances__instance_id__expert_mcp_disable_post: {
         parameters: {
             query?: never;
@@ -8208,7 +8427,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InstanceResponse"];
+                    "application/json": components["schemas"]["InstanceHealthResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9006,6 +9225,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstanceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instance_state_api_v1_instances__instance_id__state_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceStateResponse"];
                 };
             };
             /** @description Validation Error */

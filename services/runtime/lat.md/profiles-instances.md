@@ -14,7 +14,9 @@ Profile 是 Hermes Gateway 运行单元；Instance 将 Profile/Gateway/RuntimeVe
 
 ## Instance
 
-[[src/db/models/runtime.py#HermesInstance]] 绑定 `profile_name`、`runtime_version_id`、`gateway_port`、`status`、`pid`、`auto_start`。状态机见 [[src/core/runtime_enums.py#InstanceStatus]]（含 `error`）。[[src/services/instance_service.py#InstanceService]] start/stop/restart 调用 Supervisor 的 Instance API，不调用 `start_profile`。安装 Job 可创建 default Instance。创建时确保 `API_SERVER_KEY`（见 [[runtime-service#配置与 Secret]]）。
+[[src/db/models/runtime.py#HermesInstance]] 绑定 profile、版本、端口、兼容 `status`/`pid`/`auto_start`，以及 v1.5 Desired/Observed 字段。
+
+状态机见 [[src/core/runtime_enums.py#InstanceStatus]] 与 [[src/core/runtime_enums.py#DesiredState]]。[[src/services/instance_service.py#InstanceService]] start/stop/restart 走 Instance API（不调用 `start_profile`）。安装可创建 default Instance；创建时确保 `API_SERVER_KEY`（见 [[runtime-service#配置与 Secret]]）。
 
 ## 角色编译
 

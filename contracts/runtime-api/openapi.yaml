@@ -1217,6 +1217,141 @@ components:
       - name
       title: InstanceCreateRequest
       type: object
+    InstanceDiagnosticsResponse:
+      description: PRD v1.5 Gateway diagnostics — never includes secrets.
+      properties:
+        desired:
+          $ref: '#/components/schemas/InstanceStateDesired'
+        executable:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Executable
+        executableError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Executableerror
+        gatewayLogPath:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gatewaylogpath
+        instanceId:
+          title: Instanceid
+          type: string
+        observed:
+          $ref: '#/components/schemas/InstanceStateObserved'
+        port:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Port
+        portOwner:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Portowner
+        profile:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profile
+        recovery:
+          $ref: '#/components/schemas/InstanceStateRecovery'
+        runtimeVersion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Runtimeversion
+      required:
+      - instanceId
+      - desired
+      - observed
+      - recovery
+      title: InstanceDiagnosticsResponse
+      type: object
+    InstanceHealthGatewayInfo:
+      properties:
+        authenticated:
+          default: false
+          title: Authenticated
+          type: boolean
+        healthy:
+          default: false
+          title: Healthy
+          type: boolean
+        latencyMs:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Latencyms
+        port:
+          title: Port
+          type: integer
+        reachable:
+          default: false
+          title: Reachable
+          type: boolean
+      required:
+      - port
+      title: InstanceHealthGatewayInfo
+      type: object
+    InstanceHealthProcessInfo:
+      properties:
+        owned:
+          default: false
+          title: Owned
+          type: boolean
+        pid:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pid
+        state:
+          title: State
+          type: string
+      required:
+      - state
+      title: InstanceHealthProcessInfo
+      type: object
+    InstanceHealthResponse:
+      description: PRD v1.5 Instance Health API v2.
+      properties:
+        checkedAt:
+          title: Checkedat
+          type: string
+        gateway:
+          $ref: '#/components/schemas/InstanceHealthGatewayInfo'
+        instanceId:
+          title: Instanceid
+          type: string
+        process:
+          $ref: '#/components/schemas/InstanceHealthProcessInfo'
+        runtime:
+          $ref: '#/components/schemas/InstanceHealthRuntimeInfo'
+      required:
+      - instanceId
+      - runtime
+      - process
+      - gateway
+      - checkedAt
+      title: InstanceHealthResponse
+      type: object
+    InstanceHealthRuntimeInfo:
+      properties:
+        executableVerified:
+          default: false
+          title: Executableverified
+          type: boolean
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      title: InstanceHealthRuntimeInfo
+      type: object
     InstanceResponse:
       properties:
         apiServerEnabled:
@@ -1274,6 +1409,105 @@ components:
       - healthy
       - autoStart
       title: InstanceResponse
+      type: object
+    InstanceStateDesired:
+      properties:
+        state:
+          title: State
+          type: string
+      required:
+      - state
+      title: InstanceStateDesired
+      type: object
+    InstanceStateObserved:
+      properties:
+        apiState:
+          title: Apistate
+          type: string
+        healthy:
+          title: Healthy
+          type: boolean
+        lastHealthCheckAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasthealthcheckat
+        lastHealthyAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasthealthyat
+        ownershipState:
+          title: Ownershipstate
+          type: string
+        pid:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pid
+        processCreateTime:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Processcreatetime
+        processState:
+          title: Processstate
+          type: string
+        status:
+          title: Status
+          type: string
+      required:
+      - status
+      - healthy
+      - processState
+      - apiState
+      - ownershipState
+      title: InstanceStateObserved
+      type: object
+    InstanceStateRecovery:
+      properties:
+        consecutiveHealthFailures:
+          default: 0
+          title: Consecutivehealthfailures
+          type: integer
+        consecutiveHealthSuccesses:
+          default: 0
+          title: Consecutivehealthsuccesses
+          type: integer
+        lastError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasterror
+        lastErrorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasterrorcode
+        restartCount:
+          default: 0
+          title: Restartcount
+          type: integer
+      title: InstanceStateRecovery
+      type: object
+    InstanceStateResponse:
+      description: PRD v1.5 Desired / Observed / Recovery state.
+      properties:
+        desired:
+          $ref: '#/components/schemas/InstanceStateDesired'
+        instanceId:
+          title: Instanceid
+          type: string
+        observed:
+          $ref: '#/components/schemas/InstanceStateObserved'
+        recovery:
+          $ref: '#/components/schemas/InstanceStateRecovery'
+      required:
+      - instanceId
+      - desired
+      - observed
+      - recovery
+      title: InstanceStateResponse
       type: object
     InstanceUpdateRequest:
       properties:
@@ -2234,6 +2468,12 @@ components:
             - expert-mcp.runtime-managed
             - expert-mcp.tools
             - expert-mcp.diagnostics
+            - hermes.supervisor.v1
+            - hermes.gateway.health-v2
+            - hermes.gateway.process-ownership
+            - hermes.gateway.auto-recovery
+            - instances.desired-state
+            - instances.observed-state
             type: string
           title: Features
           type: array
@@ -2288,6 +2528,18 @@ components:
             type: string
           title: Checks
           type: object
+        defaultInstance:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Defaultinstance
+        instances:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Instances
         ready:
           title: Ready
           type: boolean
@@ -2568,6 +2820,12 @@ components:
             - expert-mcp.runtime-managed
             - expert-mcp.tools
             - expert-mcp.diagnostics
+            - hermes.supervisor.v1
+            - hermes.gateway.health-v2
+            - hermes.gateway.process-ownership
+            - hermes.gateway.auto-recovery
+            - instances.desired-state
+            - instances.observed-state
             type: string
           title: Features
           type: array
@@ -7218,6 +7476,48 @@ paths:
       summary: Validate Configuration
       tags:
       - instance-config-mcp
+  /api/v1/instances/{instance_id}/diagnostics:
+    get:
+      operationId: instance_diagnostics_api_v1_instances__instance_id__diagnostics_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceDiagnosticsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Instance Diagnostics
+      tags:
+      - instances
   /api/v1/instances/{instance_id}/expert-mcp/disable:
     post:
       operationId: disable_expert_mcp_api_v1_instances__instance_id__expert_mcp_disable_post
@@ -7337,7 +7637,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InstanceResponse'
+                $ref: '#/components/schemas/InstanceHealthResponse'
           description: Successful Response
         '422':
           content:
@@ -8397,6 +8697,48 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Start Instance
+      tags:
+      - instances
+  /api/v1/instances/{instance_id}/state:
+    get:
+      operationId: instance_state_api_v1_instances__instance_id__state_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceStateResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Instance State
       tags:
       - instances
   /api/v1/instances/{instance_id}/stop:

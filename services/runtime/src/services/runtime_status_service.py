@@ -91,12 +91,23 @@ class RuntimeStatusService:
         hermes_exe = Path(active.executable_path) if active else None
         checks["hermes"] = _CHECK_OK if active and hermes_exe and hermes_exe.exists() else _CHECK_FAILED
 
-        # defaultInstance (also exposed as "instance" for readiness v2)
-        result = await self._session.execute(select(HermesInstance).limit(1))
+        # default Instance must be name == "default" (PRD v1.5 §37 — never limit(1))
+        result = await self._session.execute(select(HermesInstance).where(HermesInstance.name == "default"))
         default_inst = result.scalar_one_or_none()
         if default_inst is None:
             checks["defaultInstance"] = _CHECK_DEGRADED
             checks["instance"] = _CHECK_DEGRADED
+        elif (
+            default_inst.status in ("running", "starting")
+            and default_inst.healthy
+            and getattr(default_inst, "api_state", None) in (None, "healthy", "")
+        ) or (
+            default_inst.status in ("running", "starting")
+            and default_inst.healthy
+            and getattr(default_inst, "api_state", "healthy") == "healthy"
+        ):
+            checks["defaultInstance"] = _CHECK_OK
+            checks["instance"] = _CHECK_OK
         elif default_inst.status in ("running", "starting") and default_inst.healthy:
             checks["defaultInstance"] = _CHECK_OK
             checks["instance"] = _CHECK_OK
@@ -107,17 +118,27 @@ class RuntimeStatusService:
             checks["defaultInstance"] = _CHECK_FAILED
             checks["instance"] = _CHECK_FAILED
 
-        # gateway (any running instance)
-        result = await self._session.execute(
-            select(HermesInstance).where(HermesInstance.status.in_(("running", "starting")))
-        )
-        running = list(result.scalars().all())
-        if not running:
-            checks["gateway"] = _CHECK_DEGRADED
-        elif all(i.healthy for i in running):
-            checks["gateway"] = _CHECK_OK
+        # gateway: default instance API healthy drives execution; aggregate others separately
+        if default_inst is not None and default_inst.healthy and default_inst.status == "running":
+            api_state = getattr(default_inst, "api_state", "healthy")
+            if api_state in ("healthy", "unknown", None, ""):
+                # unknown allowed only as transitional; prefer healthy
+                checks["gateway"] = _CHECK_OK if api_state == "healthy" or default_inst.healthy else _CHECK_DEGRADED
+            elif api_state == "unauthorized":
+                checks["gateway"] = _CHECK_FAILED
+            else:
+                checks["gateway"] = _CHECK_DEGRADED
         else:
-            checks["gateway"] = _CHECK_DEGRADED
+            result = await self._session.execute(
+                select(HermesInstance).where(HermesInstance.status.in_(("running", "starting")))
+            )
+            running = list(result.scalars().all())
+            if not running:
+                checks["gateway"] = _CHECK_DEGRADED
+            elif any(i.name == "default" and i.healthy for i in running):
+                checks["gateway"] = _CHECK_OK
+            else:
+                checks["gateway"] = _CHECK_DEGRADED
 
         # disk
         try:
@@ -132,6 +153,34 @@ class RuntimeStatusService:
 
         return checks
 
+    async def _execution_aggregate(self) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+        """Build defaultInstance + instances aggregate for readiness v2."""
+        result = await self._session.execute(select(HermesInstance))
+        all_inst = list(result.scalars().all())
+        default = next((i for i in all_inst if i.name == "default"), None)
+        default_payload = None
+        if default is not None:
+            default_payload = {
+                "id": default.id,
+                "status": default.status,
+                "healthy": default.healthy,
+                "gatewayApiState": getattr(default, "api_state", "unknown") or "unknown",
+                "ownershipState": getattr(default, "ownership_state", "unknown") or "unknown",
+                "executionEligible": bool(
+                    default.healthy
+                    and default.status == "running"
+                    and (getattr(default, "api_state", None) == "healthy")
+                    and (getattr(default, "ownership_state", None) in ("owned", "adopted"))
+                ),
+            }
+        aggregate = {
+            "total": len(all_inst),
+            "running": sum(1 for i in all_inst if i.status == "running"),
+            "healthy": sum(1 for i in all_inst if i.healthy),
+            "error": sum(1 for i in all_inst if i.status in ("error", "failed")),
+        }
+        return default_payload, aggregate
+
     def _domain_ready(self, checks: dict[str, str], keys: tuple[str, ...]) -> bool:
         return all(checks.get(k, _CHECK_FAILED) == _CHECK_OK for k in keys)
 
@@ -139,13 +188,20 @@ class RuntimeStatusService:
         return {k: checks.get(k, _CHECK_UNKNOWN) for k in keys}
 
     async def readiness_v2(self) -> RuntimeReadinessResponse:
-        """PRD v1.4 domain readiness — does not collapse maintenance into service failure."""
+        """PRD v1.4/v1.5 domain readiness — does not collapse maintenance into service failure."""
         checks = await self.readiness_checks()
         service_ready = self._domain_ready(checks, _SERVICE_KEYS)
-        execution_ok = self._domain_ready(checks, _EXECUTION_KEYS)
-        # Chat/Task ready when hermes+instance+gateway are healthy
-        chat_ready = execution_ok
-        task_ready = execution_ok
+        # Chat/Task ready based on default instance only (PRD v1.5 §39–40)
+        default_payload, instances_agg = await self._execution_aggregate()
+        chat_ready = bool(
+            default_payload
+            and default_payload.get("healthy")
+            and default_payload.get("status") == "running"
+            and default_payload.get("gatewayApiState") == "healthy"
+            and default_payload.get("ownershipState") in ("owned", "adopted")
+        )
+        task_ready = chat_ready
+        execution_ok = chat_ready and checks.get("hermes") == _CHECK_OK
         maintenance_ready = checks.get("manifest") == _CHECK_OK
 
         expert_status = "unknown"
@@ -170,6 +226,8 @@ class RuntimeStatusService:
                 chatReady=chat_ready,
                 taskReady=task_ready,
                 checks=self._subset(checks, _EXECUTION_KEYS),
+                defaultInstance=default_payload,
+                instances=instances_agg,
             ),
             maintenance=RuntimeDomainReadiness(
                 ready=maintenance_ready,

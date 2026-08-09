@@ -485,3 +485,84 @@ Dev Hermes 登记、Gateway 端口冲突与 Runtime 文件日志的回归规格�
 ### Runtime file logging dual sink
 
 `configure_logging` 写旋转文件日志；`/diagnostics/logs` 可读且含 `source`。
+
+## Gateway health semantics
+
+PRD v1.5: structured GatewayHealthResult; reject treating 401/403 or any status under 500 as healthy.
+
+### Health 200
+
+GET /health returns 200 with status=ok => reachable/authenticated/healthy are all true.
+
+### Health 401
+
+GET /health returns 401 => reachable=true, authenticated=false, healthy=false, error=GATEWAY_AUTH_FAILED.
+
+### Fallback 401
+
+After /health 404, /v1/models 401 must remain healthy=false (false-health regression).
+
+## Gateway process ownership
+
+PRD v1.5: PID reuse and foreign port occupancy must not cause mistaken kills.
+
+### Correct PID
+
+Matching pid + create_time + port listener + exe => owned.
+
+
+### PID reused
+
+Same PID with different createTime => stale/foreign; kill forbidden.
+
+## Gateway recovery
+
+PRD v1.5: crash recovery with restart budget; auth failure and configuration_invalid must not auto-restart.
+
+### Auth failure no restart
+
+Process still alive with API 401 must not trigger automatic start.
+
+### Crash loop
+
+Exhausting restart budget marks GATEWAY_CRASH_LOOP and pauses auto recovery.
+
+### Config invalid no restart
+
+last_error_code=configuration_invalid blocks auto-restart until configuration is fixed manually.
+
+## Readiness multi-instance
+
+PRD v1.5: when the default Instance is healthy, other Instance errors must not block Chat.
+
+### Default healthy
+
+default healthy + coding error => chatReady/taskReady remain true; aggregate reflects healthy/error counts.
+
+## Gateway ownership v151
+
+PRD v1.5.1: persistent fingerprint, Safe Adoption, Health!=Ownership, and dev reload preserve.
+
+### Command hash
+
+command hash must not include API_SERVER_KEY or other secret tokens.
+
+### Health not ownership
+
+health=true alone is insufficient evidence for all_required / owned.
+
+### Foreign healthy
+
+Healthy listener with mismatched exe/command yields conflict/foreign; Safe Adoption forbidden.
+
+### Persistent adopt
+
+Full fingerprint match without live handle yields ownership=adopted.
+
+### Dev reload preserve
+
+shutdown_all_instances(preserve=True) detaches handles without killing processes.
+
+### PID reuse
+
+create_time mismatch yields ownership=stale and must not be treated as owned.

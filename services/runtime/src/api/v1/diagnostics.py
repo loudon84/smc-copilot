@@ -84,6 +84,23 @@ async def diagnostics_summary(
         )
     ).scalar_one()
 
+    # PRD v1.5 hermesSupervisor summary
+    from db.models.runtime import HermesInstance, RuntimeVersion
+    from db.repositories.runtime_repo import RuntimeVersionRepository
+    from runtime.hermes_supervisor_metrics import SUPERVISOR_METRICS
+
+    instances = list((await session.execute(select(HermesInstance))).scalars().all())
+    active = await RuntimeVersionRepository(session).get_active()
+    hermes_supervisor = {
+        "runtimeVersion": active.version if active else None,
+        "managedInstances": len(instances),
+        "desiredRunning": sum(1 for i in instances if getattr(i, "desired_state", None) == "running"),
+        "processAlive": sum(1 for i in instances if getattr(i, "process_state", None) == "alive"),
+        "gatewayHealthy": sum(1 for i in instances if i.healthy),
+        "gatewayErrors": sum(1 for i in instances if i.status in ("error", "failed")),
+        "metrics": SUPERVISOR_METRICS.snapshot(),
+    }
+
     return {
         "runtime": status.model_dump(by_alias=True),
         "environment": {
@@ -94,6 +111,7 @@ async def diagnostics_summary(
             "node": str(probe.toolchain.node_path) if probe.toolchain.node_path else None,
             "git": str(probe.toolchain.git_path) if probe.toolchain.git_path else None,
         },
+        "hermesSupervisor": hermes_supervisor,
         "activeChatRuns": int(active_runs or 0),
         "activeChatTurns": int(active_turns or 0),
         "queuedChatTurns": int(queued_turns or 0),

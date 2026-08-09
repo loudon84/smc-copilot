@@ -14,7 +14,7 @@ from db.models.profile import Profile
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.v12_repos import AuditRepository
 from integrations.hermes.client import HermesGatewayClient
-from runtime.gateway_process import GatewayProcessManager, is_pid_alive, terminate_pid
+from runtime.gateway_process import GatewayProcessManager, is_pid_alive
 from runtime.port_allocator import is_port_available
 from schemas.profile import ProfileStatusResponse
 from schemas.runtime import InstanceResponse
@@ -36,6 +36,7 @@ class GatewaySupervisor:
         settings: Settings,
         session_maker: async_sessionmaker[AsyncSession],
         process_manager: GatewayProcessManager | None = None,
+        runtime_instance_id: str | None = None,
     ) -> None:
         self._settings = settings
         self._session_maker = session_maker
@@ -45,6 +46,7 @@ class GatewaySupervisor:
             settings=settings,
             session_maker=session_maker,
             process_manager=self._process_manager,
+            runtime_instance_id=runtime_instance_id,
         )
 
     def set_mock_gateway_command(self, cmd: list[str]) -> None:
@@ -66,14 +68,26 @@ class GatewaySupervisor:
     async def refresh_instance_status(self, instance_id: str) -> InstanceResponse:
         return await self._instances.refresh_instance_status(instance_id)
 
+    async def get_instance_health(self, instance_id: str) -> dict:
+        return await self._instances.get_detailed_health(instance_id)
+
+    async def get_instance_state(self, instance_id: str) -> dict:
+        return await self._instances.get_state(instance_id)
+
+    async def get_instance_diagnostics(self, instance_id: str) -> dict:
+        return await self._instances.get_diagnostics(instance_id)
+
+    async def reconcile_instance(self, instance_id: str) -> dict:
+        return await self._instances.reconcile_instance(instance_id)
+
     async def reconcile_instances_on_boot(self) -> None:
         await self._instances.reconcile_instances_on_boot()
 
     async def start_auto_start_instances(self) -> list[InstanceResponse]:
         return await self._instances.start_auto_start_instances()
 
-    async def shutdown_all_instances(self) -> None:
-        await self._instances.shutdown_all_instances()
+    async def shutdown_all_instances(self, *, preserve: bool = False) -> None:
+        await self._instances.shutdown_all_instances(preserve=preserve)
 
     async def reconcile_legacy_profiles_on_boot(self) -> None:
         await self.reconcile_on_boot()
@@ -212,12 +226,16 @@ class GatewaySupervisor:
             await session2.close()
 
     async def _wait_port_free(self, port: int, *, timeout: float = _PORT_FREE_WAIT_SEC) -> None:
+        """Wait for port to free. Never force-kill unknown listeners (PRD v1.5 §96.4)."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if is_port_available("127.0.0.1", port):
                 return
             await asyncio.sleep(0.2)
-        await self._process_manager.release_port(port)
+        raise GatewayError(
+            f"Gateway port {port} still occupied after stop; refusing force release "
+            "(port ownership conflict — resolve manually)"
+        )
 
     async def start_profile(self, profile_id: str) -> ProfileStatusResponse:
         session, svc = await self._with_session()
@@ -311,11 +329,12 @@ class GatewaySupervisor:
         session, svc = await self._with_session()
         try:
             profile = await svc.get_profile(profile_id)
+            # PRD v1.5: never kill unknown port listeners without ownership fingerprint.
             await self._process_manager.stop(
                 profile.id,
                 pid=profile.gateway_pid,
                 port=profile.gateway_port,
-                kill_unknown_port_listeners=True,
+                kill_unknown_port_listeners=False,
             )
             profile = await svc.set_status(profile, GatewayStatus.STOPPED)
             await self._append_profile_audit(session, profile, "profile_stopped")
@@ -417,13 +436,14 @@ class GatewaySupervisor:
                         )
                         continue
 
-                    await asyncio.to_thread(terminate_pid, pid)
+                    # PRD v1.5 §96.3 — profiles lack process_create_time fingerprint;
+                    # never terminate on unhealthy alone (PID may have been reused).
                     profile = await svc.set_status(profile, GatewayStatus.ERROR)
                     await self._append_profile_audit(
                         session,
                         profile,
                         "profile_reconciled",
-                        extra={"pid": pid, "action": "kill_unhealthy"},
+                        extra={"pid": pid, "action": "mark_error_unhealthy_no_kill"},
                     )
                     continue
 

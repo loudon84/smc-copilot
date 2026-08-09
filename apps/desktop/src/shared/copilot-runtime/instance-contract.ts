@@ -35,6 +35,41 @@ export interface ServeInstanceHealth {
   message: string | null;
 }
 
+/** PRD v1.5 Observed State from GET /instances/{id}/state */
+export interface ServeInstanceState {
+  instanceId: string;
+  desired: { state: string | null };
+  observed: {
+    status: string | null;
+    healthy: boolean | null;
+    processState: string | null;
+    apiState: string | null;
+    ownershipState: string | null;
+    pid: number | null;
+    processCreateTime: number | null;
+    lastHealthCheckAt: string | null;
+    lastHealthyAt: string | null;
+  };
+  recovery: {
+    restartCount: number | null;
+    consecutiveHealthFailures: number | null;
+    consecutiveHealthSuccesses: number | null;
+    lastErrorCode: string | null;
+    lastError: string | null;
+  };
+}
+
+/** PRD v1.5 diagnostics (no secrets) */
+export type ServeInstanceDiagnostics = ServeInstanceState & {
+  runtimeVersion?: string | null;
+  executable?: string | null;
+  executableError?: string | null;
+  profile?: string | null;
+  port?: number | null;
+  portOwner?: { state: string; pids: number[] };
+  gatewayLogPath?: string | null;
+};
+
 export interface ServeInstanceLogsResult {
   instanceId: string;
   lines: string[];

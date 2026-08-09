@@ -96,9 +96,16 @@ async def test_instance_health_fields(app_client) -> None:
     resp = await client.get(f"/api/v1/instances/{instance_id}/health")
     assert resp.status_code == 200
     body = resp.json()
-    assert "profileName" in body
-    assert "runtimeVersion" in body
-    assert "executableVerified" in body or body.get("executableVerified") is not None
-    assert "apiServerEnabled" in body or "apiServerEnabled" in str(body)
-    assert "API_SERVER_KEY" not in body
-    assert body.get("lastError") is None or isinstance(body.get("lastError"), (str, type(None)))
+    # PRD v1.5 InstanceHealthResponse v2
+    assert body.get("instanceId") == instance_id
+    assert "runtime" in body
+    assert "executableVerified" in body["runtime"]
+    assert "process" in body
+    assert "state" in body["process"]
+    assert "gateway" in body
+    assert "port" in body["gateway"]
+    assert "reachable" in body["gateway"]
+    assert "authenticated" in body["gateway"]
+    assert "healthy" in body["gateway"]
+    assert "checkedAt" in body
+    assert "API_SERVER_KEY" not in str(body)

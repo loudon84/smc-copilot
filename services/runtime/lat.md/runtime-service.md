@@ -124,7 +124,7 @@ FR-801–805：[[src/workers/supervisor.py#WorkerSupervisor]] 统一注册后台
 
 Domain readiness, Memory APIs, session stats, and Expert MCP are Runtime-owned surfaces for Desktop Thin Client.
 
-- `GET /api/v1/runtime/readiness` — domain readiness: `service` / `execution` (chatReady/taskReady) / `maintenance` / `expertMcp`（[[src/services/runtime_status_service.py]]）。
+- `GET /api/v1/runtime/readiness` — domain readiness: `service` / `execution` (chatReady/taskReady + defaultInstance/instances aggregate) / `maintenance` / `expertMcp`（[[src/services/runtime_status_service.py]]）。execution 以 `name=default` Observed API health 为准，其它 Instance error 不拖垮 Chat（PRD v1.5）。
 - Memory Domain — `GET/POST/PATCH/DELETE` under `/api/v1/instances/{id}/memory*`；Desktop 禁止直读 Hermes files。
 - Session stats — `GET /api/v1/instances/{id}/sessions/stats`。
 - Expert MCP Gateway — `/api/v1/expert-mcp/*` + SecretStore scope `expert-mcp`；Desktop 不再监听 :48742。

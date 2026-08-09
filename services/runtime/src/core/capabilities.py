@@ -99,6 +99,17 @@ RuntimeFeatureId = Literal[
     "expert-mcp.runtime-managed",
     "expert-mcp.tools",
     "expert-mcp.diagnostics",
+    # PRD v1.5 Hermes Supervisor
+    "hermes.supervisor.v1",
+    "hermes.gateway.health-v2",
+    "hermes.gateway.process-ownership",
+    "hermes.gateway.auto-recovery",
+    "instances.desired-state",
+    "instances.observed-state",
+    # PRD v1.5.1 ownership recovery
+    "hermes.gateway.ownership-recovery",
+    "hermes.gateway.safe-adoption.dev",
+    "instances.reconcile",
 ]
 
 
@@ -194,6 +205,15 @@ DEFAULT_FEATURES: tuple[RuntimeFeatureId, ...] = (
     "expert-mcp.runtime-managed",
     "expert-mcp.tools",
     "expert-mcp.diagnostics",
+    "hermes.supervisor.v1",
+    "hermes.gateway.health-v2",
+    "hermes.gateway.process-ownership",
+    "hermes.gateway.auto-recovery",
+    "instances.desired-state",
+    "instances.observed-state",
+    "hermes.gateway.ownership-recovery",
+    "hermes.gateway.safe-adoption.dev",
+    "instances.reconcile",
 )
 
 

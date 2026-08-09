@@ -14,6 +14,8 @@ from integrations.team_hub.client import HttpTeamHubClient, StubTeamHubClient
 from local_service.service_state import mark_service_boot
 from runtime.process_lock import ProcessLock, RuntimeAlreadyRunningError
 from services.gateway_supervisor import GatewaySupervisor
+from runtime.runtime_identity import ensure_runtime_instance_id
+from services.gateway_ownership_service import is_development_mode
 from services.runtime_job_service import RuntimeJobService
 from services.task_routing_registry import TaskRoutingRegistry
 from workers.ack_delivery_worker import AckDeliveryWorker
@@ -27,6 +29,7 @@ from workers.registry import WorkerRegistration
 from workers.retention_worker import RetentionWorker
 from workers.staffdeck_review_worker import StaffDeckReviewWorker
 from workers.supervisor import WorkerSupervisor
+from workers.gateway_health_worker import GatewayHealthWorker
 from workers.v12_workers import RunEventWorker, SyncOutboxWorker, TaskListenerWorker
 
 logger = get_logger(__name__)
@@ -218,6 +221,22 @@ def _build_supervisor(
             interval_seconds=getattr(settings, "retention_interval_seconds", 3600.0),
         )
     )
+    # PRD v1.5: continuous Gateway health / ownership / recovery
+    ws.register(
+        WorkerRegistration(
+            name="GatewayHealthWorker",
+            tick=_tick_fn(
+                GatewayHealthWorker(
+                    settings=settings,
+                    session_maker=session_maker,
+                    supervisor=gateway_supervisor,
+                )
+            ),
+            interval_seconds=float(getattr(settings, "gateway_health_interval_seconds", 5.0)),
+            critical=False,
+            tick_timeout_seconds=60.0,
+        )
+    )
     return ws
 
 
@@ -261,8 +280,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = injected_engine if injected_engine is not None else create_engine(settings)
         session_maker = create_sessionmaker(engine)
 
+        runtime_id = ensure_runtime_instance_id()
+        app.state.runtime_instance_id = runtime_id
         supervisor = getattr(app.state, "_test_gateway_supervisor", None) or GatewaySupervisor(
-            settings=settings, session_maker=session_maker
+            settings=settings,
+            session_maker=session_maker,
+            runtime_instance_id=runtime_id,
         )
         registry = getattr(app.state, "_test_task_routing_registry", None) or TaskRoutingRegistry(settings)
         hub = getattr(app.state, "_test_team_hub", None) or _hub_factory(settings)
@@ -372,10 +395,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await worker_supervisor.drain()
             if job_service is not None:
                 await job_service.stop_worker()
+            preserve_gateways = False
             if supervisor is not None:
-                await supervisor.shutdown_all_instances()
-                await supervisor.shutdown_all_legacy_profiles()
-            logger.info("copilot_serve_stopped")
+                # PRD v1.5.1 §25–28: preserve Gateways across uvicorn --reload in development
+                preserve_gateways = bool(settings.gateway_preserve_on_dev_shutdown) and is_development_mode(
+                    settings
+                )
+                await supervisor.shutdown_all_instances(preserve=preserve_gateways)
+                if not preserve_gateways:
+                    await supervisor.shutdown_all_legacy_profiles()
+            logger.info("copilot_serve_stopped", preserve_gateways=preserve_gateways)
         # Always release on failed boot or clean shutdown — otherwise --reload leaves a stale lock.
         if process_lock is not None:
             process_lock.release()

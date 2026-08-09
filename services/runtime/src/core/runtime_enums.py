@@ -43,6 +43,53 @@ class InstanceStatus(StrEnum):
     ERROR = "error"
 
 
+class DesiredState(StrEnum):
+    """Instance desired lifecycle state (PRD v1.5)."""
+
+    RUNNING = "running"
+    STOPPED = "stopped"
+
+
+class GatewayProcessState(StrEnum):
+    MISSING = "missing"
+    STARTING = "starting"
+    ALIVE = "alive"
+    EXITED = "exited"
+    FOREIGN = "foreign"
+    UNKNOWN = "unknown"
+
+
+class GatewayApiState(StrEnum):
+    UNKNOWN = "unknown"
+    UNREACHABLE = "unreachable"
+    UNAUTHORIZED = "unauthorized"
+    DEGRADED = "degraded"
+    HEALTHY = "healthy"
+
+
+class OwnershipState(StrEnum):
+    OWNED = "owned"
+    ADOPTED = "adopted"  # PRD v1.5.1 — restored via persistent fingerprint
+    STALE = "stale"
+    FOREIGN = "foreign"
+    CONFLICT = "conflict"  # PRD v1.5.1 — port occupied, not safely adoptable
+    UNKNOWN = "unknown"
+
+
+class ShutdownReason(StrEnum):
+    RELOAD = "reload"
+    NORMAL_SHUTDOWN = "normal_shutdown"
+    PROCESS_TERMINATION = "process_termination"
+    UNKNOWN = "unknown"
+
+
+class PortOwnership(StrEnum):
+    FREE = "free"
+    OWNED = "owned"
+    FOREIGN = "foreign"
+    UNKNOWN = "unknown"
+
+
 class DevicePairingStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"

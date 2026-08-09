@@ -46,6 +46,8 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "gateway_health_failed": 503,
     "gateway_command_invalid": 422,
     "gateway_port_conflict": 409,
+    "GATEWAY_NOT_OWNED": 409,
+    "gateway_not_owned": 409,
     "gateway_start_failed": 503,
     "profile_path_invalid": 422,
     "secret_store_unavailable": 503,

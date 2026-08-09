@@ -1,4 +1,9 @@
 import type { RuntimeTransport } from "../transport/types";
+import type { components } from "../generated/schema";
+
+export type InstanceHealthResponse = components["schemas"]["InstanceHealthResponse"];
+export type InstanceStateResponse = components["schemas"]["InstanceStateResponse"];
+export type InstanceDiagnosticsResponse = components["schemas"]["InstanceDiagnosticsResponse"];
 
 export interface InstanceDomain {
   list(signal?: AbortSignal): Promise<unknown>;
@@ -10,13 +15,24 @@ export interface InstanceDomain {
   start(instanceId: string, signal?: AbortSignal): Promise<unknown>;
   stop(instanceId: string, signal?: AbortSignal): Promise<unknown>;
   restart(instanceId: string, signal?: AbortSignal): Promise<unknown>;
-  health(instanceId: string, signal?: AbortSignal): Promise<unknown>;
-  logs(instanceId: string, query?: Record<string, string | number | undefined>, signal?: AbortSignal): Promise<unknown>;
+  /** PRD v1.5 health-v2 structured probe */
+  getHealth(instanceId: string, signal?: AbortSignal): Promise<InstanceHealthResponse>;
+  /** @deprecated use getHealth */
+  health(instanceId: string, signal?: AbortSignal): Promise<InstanceHealthResponse>;
+  getState(instanceId: string, signal?: AbortSignal): Promise<InstanceStateResponse>;
+  getDiagnostics(instanceId: string, signal?: AbortSignal): Promise<InstanceDiagnosticsResponse>;
+  /** PRD v1.5.1 — re-inspect ownership (not restart) */
+  reconcile(instanceId: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  logs(
+    instanceId: string,
+    query?: Record<string, string | number | undefined>,
+    signal?: AbortSignal,
+  ): Promise<unknown>;
 }
 
 export function createInstanceDomain(transport: RuntimeTransport): InstanceDomain {
   const enc = encodeURIComponent;
-  return {
+  const domain: InstanceDomain = {
     list(signal) {
       return transport.request({ path: "/api/v1/instances", signal });
     },
@@ -68,8 +84,33 @@ export function createInstanceDomain(transport: RuntimeTransport): InstanceDomai
         signal,
       });
     },
+    getHealth(instanceId, signal) {
+      return transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/health`,
+        signal,
+      }) as Promise<InstanceHealthResponse>;
+    },
     health(instanceId, signal) {
-      return transport.request({ path: `/api/v1/instances/${enc(instanceId)}/health`, signal });
+      return domain.getHealth(instanceId, signal);
+    },
+    getState(instanceId, signal) {
+      return transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/state`,
+        signal,
+      }) as Promise<InstanceStateResponse>;
+    },
+    getDiagnostics(instanceId, signal) {
+      return transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/diagnostics`,
+        signal,
+      }) as Promise<InstanceDiagnosticsResponse>;
+    },
+    reconcile(instanceId, signal) {
+      return transport.request({
+        method: "POST",
+        path: `/api/v1/instances/${enc(instanceId)}/reconcile`,
+        signal,
+      }) as Promise<Record<string, unknown>>;
     },
     logs(instanceId, query, signal) {
       return transport.request({
@@ -79,4 +120,5 @@ export function createInstanceDomain(transport: RuntimeTransport): InstanceDomai
       });
     },
   };
+  return domain;
 }

@@ -100,6 +100,18 @@ export const ServeInstanceAdapter = {
     return instanceClient.health(instanceId);
   },
 
+  getState(instanceId: string): Promise<Record<string, unknown>> {
+    return instanceClient.getState(instanceId);
+  },
+
+  getDiagnostics(instanceId: string): Promise<Record<string, unknown>> {
+    return instanceClient.getDiagnostics(instanceId);
+  },
+
+  reconcile(instanceId: string): Promise<Record<string, unknown>> {
+    return instanceClient.reconcile(instanceId);
+  },
+
   logs(instanceId: string, options?: { tail?: number }): Promise<ServeInstanceLogsResult> {
     return instanceClient.logs(instanceId, options);
   },
