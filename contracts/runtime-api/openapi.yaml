@@ -1218,7 +1218,8 @@ components:
       title: InstanceCreateRequest
       type: object
     InstanceDiagnosticsResponse:
-      description: PRD v1.5 Gateway diagnostics — never includes secrets.
+      additionalProperties: true
+      description: PRD v1.5.1/v1.5.2 Gateway diagnostics — never includes secrets.
       properties:
         desired:
           $ref: '#/components/schemas/InstanceStateDesired'
@@ -1232,6 +1233,23 @@ components:
           - type: string
           - type: 'null'
           title: Executableerror
+        executionEligible:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Executioneligible
+        fingerprint:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Fingerprint
+        gateway:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Gateway
         gatewayLogPath:
           anyOf:
           - type: string
@@ -1240,8 +1258,38 @@ components:
         instanceId:
           title: Instanceid
           type: string
+        launcher:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Launcher
+        lineage:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Lineage
+        listener:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Listener
+        liveInspection:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Liveinspection
         observed:
           $ref: '#/components/schemas/InstanceStateObserved'
+        ownership:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Ownership
         port:
           anyOf:
           - type: integer
@@ -1265,6 +1313,12 @@ components:
           - type: string
           - type: 'null'
           title: Runtimeversion
+        safeAdoptionEvidence:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Safeadoptionevidence
       required:
       - instanceId
       - desired
@@ -1317,16 +1371,27 @@ components:
       title: InstanceHealthProcessInfo
       type: object
     InstanceHealthResponse:
+      additionalProperties: true
       description: PRD v1.5 Instance Health API v2.
       properties:
         checkedAt:
           title: Checkedat
           type: string
+        executionEligible:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Executioneligible
         gateway:
           $ref: '#/components/schemas/InstanceHealthGatewayInfo'
         instanceId:
           title: Instanceid
           type: string
+        ownershipState:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ownershipstate
         process:
           $ref: '#/components/schemas/InstanceHealthProcessInfo'
         runtime:
@@ -1413,20 +1478,25 @@ components:
     InstanceStateDesired:
       properties:
         state:
+          anyOf:
+          - type: string
+          - type: 'null'
           title: State
-          type: string
-      required:
-      - state
       title: InstanceStateDesired
       type: object
     InstanceStateObserved:
+      additionalProperties: true
       properties:
         apiState:
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Apistate
-          type: string
         healthy:
+          anyOf:
+          - type: boolean
+          - type: 'null'
           title: Healthy
-          type: boolean
         lastHealthCheckAt:
           anyOf:
           - type: string
@@ -1437,9 +1507,31 @@ components:
           - type: string
           - type: 'null'
           title: Lasthealthyat
+        launcherPid:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Launcherpid
+        listenerCreateTime:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Listenercreatetime
+        listenerPid:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Listenerpid
+        ownershipSource:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ownershipsource
         ownershipState:
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Ownershipstate
-          type: string
         pid:
           anyOf:
           - type: integer
@@ -1451,17 +1543,15 @@ components:
           - type: 'null'
           title: Processcreatetime
         processState:
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Processstate
-          type: string
         status:
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Status
-          type: string
-      required:
-      - status
-      - healthy
-      - processState
-      - apiState
-      - ownershipState
       title: InstanceStateObserved
       type: object
     InstanceStateRecovery:
@@ -1491,10 +1581,16 @@ components:
       title: InstanceStateRecovery
       type: object
     InstanceStateResponse:
-      description: PRD v1.5 Desired / Observed / Recovery state.
+      additionalProperties: true
+      description: PRD v1.5 / v1.5.1 Desired / Observed / Recovery state.
       properties:
         desired:
           $ref: '#/components/schemas/InstanceStateDesired'
+        executionEligible:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Executioneligible
         instanceId:
           title: Instanceid
           type: string
@@ -2474,6 +2570,9 @@ components:
             - hermes.gateway.auto-recovery
             - instances.desired-state
             - instances.observed-state
+            - hermes.gateway.ownership-recovery
+            - hermes.gateway.safe-adoption.dev
+            - instances.reconcile
             type: string
           title: Features
           type: array
@@ -2826,6 +2925,9 @@ components:
             - hermes.gateway.auto-recovery
             - instances.desired-state
             - instances.observed-state
+            - hermes.gateway.ownership-recovery
+            - hermes.gateway.safe-adoption.dev
+            - instances.reconcile
             type: string
           title: Features
           type: array
@@ -8324,6 +8426,51 @@ paths:
       summary: Update Memory Entry
       tags:
       - memory
+  /api/v1/instances/{instance_id}/reconcile:
+    post:
+      description: Re-inspect ownership (PRD v1.5.1 §69). Not restart / force adopt.
+      operationId: reconcile_instance_api_v1_instances__instance_id__reconcile_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Reconcile Instance Api V1 Instances  Instance Id  Reconcile Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Reconcile Instance
+      tags:
+      - instances
   /api/v1/instances/{instance_id}/restart:
     post:
       operationId: restart_instance_api_v1_instances__instance_id__restart_post

@@ -6,6 +6,8 @@ type ObservedView = {
   processState?: string;
   apiState?: string;
   ownershipState?: string;
+  listenerPid?: number | null;
+  launcherPid?: number | null;
   lastErrorCode?: string | null;
   restartCount?: number | null;
 };
@@ -36,6 +38,8 @@ export function HermesInstancesSection(): React.JSX.Element {
                   processState?: string;
                   apiState?: string;
                   ownershipState?: string;
+                  listenerPid?: number | null;
+                  launcherPid?: number | null;
                 }
               | undefined;
             const recovery = state.recovery as
@@ -46,6 +50,8 @@ export function HermesInstancesSection(): React.JSX.Element {
               processState: obs?.processState,
               apiState: obs?.apiState,
               ownershipState: obs?.ownershipState,
+              listenerPid: obs?.listenerPid ?? null,
+              launcherPid: obs?.launcherPid ?? null,
               lastErrorCode: recovery?.lastErrorCode ?? null,
               restartCount: recovery?.restartCount ?? null,
             };
@@ -176,6 +182,7 @@ export function HermesInstancesSection(): React.JSX.Element {
                   <div className="settings-field-hint">
                     Process={obs.processState ?? "—"} · Gateway={obs.apiState ?? "—"} · Ownership=
                     {obs.ownershipState ?? "—"}
+                    {obs.listenerPid != null ? ` · Listener PID=${obs.listenerPid}` : ""}
                     {obs.restartCount != null ? ` · Restarts=${obs.restartCount}` : ""}
                     {obs.lastErrorCode ? ` · ${obs.lastErrorCode}` : ""}
                   </div>

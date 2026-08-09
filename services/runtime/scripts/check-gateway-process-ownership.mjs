@@ -21,10 +21,18 @@ if (missing.length) {
   process.exit(1);
 }
 
-// Instance gateway must not kill without ownership path
+// Instance gateway must route ownership through GatewayOwnershipService (PRD v1.5.2 SOT).
 const igs = readFileSync(join(process.cwd(), "src/services/instance_gateway_service.py"), "utf8");
-if (!igs.includes("verify_ownership") && !igs.includes("_ownership_for")) {
-  console.error("check:gateway-process-ownership FAILED: InstanceGatewayService missing ownership check");
+if (!igs.includes("GatewayOwnershipService") || !igs.includes("self._ownership.inspect")) {
+  console.error(
+    "check:gateway-process-ownership FAILED: InstanceGatewayService missing GatewayOwnershipService.inspect SOT",
+  );
+  process.exit(1);
+}
+if (igs.includes("verify_ownership(") || igs.includes("def _ownership_for")) {
+  console.error(
+    "check:gateway-process-ownership FAILED: InstanceGatewayService must not call verify_ownership/_ownership_for",
+  );
   process.exit(1);
 }
 

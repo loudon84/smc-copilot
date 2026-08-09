@@ -6,7 +6,9 @@ import hashlib
 from pathlib import Path
 
 
-GATEWAY_FINGERPRINT_VERSION = 1
+# PRD v1.5.2 — version 2 = launcher + listener identity model
+GATEWAY_FINGERPRINT_VERSION = 2
+GATEWAY_FINGERPRINT_VERSION_LEGACY = 1
 
 
 def compute_gateway_command_hash(

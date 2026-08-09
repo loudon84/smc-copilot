@@ -80,6 +80,10 @@ async def test_foreign_healthy_gateway_is_conflict() -> None:
     inst.profile_name = "default"
     inst.gateway_executable_path = None
     inst.gateway_command_hash = None
+    inst.gateway_listener_pid = None
+    inst.gateway_listener_create_time = None
+    inst.gateway_launcher_pid = None
+    inst.gateway_fingerprint_version = 1
 
     health = GatewayHealthResult(
         reachable=True,
@@ -119,6 +123,10 @@ async def test_persistent_fingerprint_adopts() -> None:
     inst.profile_name = "default"
     inst.gateway_executable_path = "C:/hermes.exe"
     inst.gateway_command_hash = None
+    inst.gateway_listener_pid = None
+    inst.gateway_listener_create_time = None
+    inst.gateway_launcher_pid = None
+    inst.gateway_fingerprint_version = 1
 
     from runtime.gateway_process import OwnershipResult
 

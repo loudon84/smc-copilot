@@ -241,12 +241,14 @@ class InstanceHealthGatewayInfo(BaseModel):
 class InstanceHealthResponse(BaseModel):
     """PRD v1.5 Instance Health API v2."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     instance_id: str = Field(alias="instanceId")
     runtime: InstanceHealthRuntimeInfo
     process: InstanceHealthProcessInfo
     gateway: InstanceHealthGatewayInfo
+    ownership_state: str | None = Field(default=None, alias="ownershipState")
+    execution_eligible: bool | None = Field(default=None, alias="executionEligible")
     checked_at: str = Field(alias="checkedAt")
 
 
@@ -266,6 +268,9 @@ class InstanceStateObserved(BaseModel):
     ownership_state: str | None = Field(default=None, alias="ownershipState")
     ownership_source: str | None = Field(default=None, alias="ownershipSource")
     pid: int | None = None
+    launcher_pid: int | None = Field(default=None, alias="launcherPid")
+    listener_pid: int | None = Field(default=None, alias="listenerPid")
+    listener_create_time: float | None = Field(default=None, alias="listenerCreateTime")
     process_create_time: float | None = Field(default=None, alias="processCreateTime")
     last_health_check_at: str | None = Field(default=None, alias="lastHealthCheckAt")
     last_healthy_at: str | None = Field(default=None, alias="lastHealthyAt")
@@ -294,7 +299,7 @@ class InstanceStateResponse(BaseModel):
 
 
 class InstanceDiagnosticsResponse(BaseModel):
-    """PRD v1.5.1 Gateway diagnostics — never includes secrets."""
+    """PRD v1.5.1/v1.5.2 Gateway diagnostics — never includes secrets."""
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -313,6 +318,11 @@ class InstanceDiagnosticsResponse(BaseModel):
     fingerprint: dict[str, Any] | None = None
     live_inspection: dict[str, Any] | None = Field(default=None, alias="liveInspection")
     safe_adoption_evidence: dict[str, Any] | None = Field(default=None, alias="safeAdoptionEvidence")
+    launcher: dict[str, Any] | None = None
+    listener: dict[str, Any] | None = None
+    lineage: dict[str, Any] | None = None
+    ownership: dict[str, Any] | None = None
+    gateway: dict[str, Any] | None = None
 
 
 class PairingStartResponse(BaseModel):

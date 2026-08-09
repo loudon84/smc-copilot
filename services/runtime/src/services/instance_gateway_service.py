@@ -26,10 +26,8 @@ from integrations.hermes.client import GatewayHealthResult, HermesGatewayClient
 from runtime.gateway_process import (
     GatewayProcessManager,
     check_port_ownership,
-    find_pids_listening_on_port,
     is_pid_alive,
     terminate_pid,
-    verify_ownership,
 )
 from runtime.gateway_command_hash import GATEWAY_FINGERPRINT_VERSION, compute_gateway_command_hash
 from runtime.hermes_profile_paths import ensure_profile_home
@@ -38,7 +36,10 @@ from runtime.instance_operation_lock import INSTANCE_OPERATION_LOCK
 from runtime.port_allocator import is_port_available
 from runtime.runtime_identity import ensure_runtime_instance_id, get_runtime_instance_id
 from schemas.runtime import InstanceResponse
-from services.gateway_ownership_service import GatewayOwnershipService, is_development_mode
+from services.gateway_ownership_service import (
+    GatewayOwnershipResult,
+    GatewayOwnershipService,
+)
 from services.instance_service import instance_to_response
 from services.secret_service import SecretStore
 
@@ -70,13 +71,28 @@ class InstanceGatewayService:
         self._mock_command = cmd
 
     def _persist_fingerprint(self, inst: HermesInstance, *, handle=None, executable: str | None = None) -> None:
-        """Write full Gateway fingerprint to DB (PRD v1.5.1 §7.4)."""
+        """Write full Gateway fingerprint v2 to DB (PRD v1.5.2 §20)."""
         if handle is not None:
-            inst.pid = handle.pid
-            if handle.process_create_time is not None:
-                inst.process_create_time = handle.process_create_time
-            if handle.executable_path:
-                inst.gateway_executable_path = handle.executable_path
+            # Compatibility columns map to listener identity (PRD §10).
+            listener_pid = handle.listener_pid if handle.listener_pid is not None else handle.pid
+            listener_ct = (
+                handle.listener_create_time
+                if handle.listener_create_time is not None
+                else handle.process_create_time
+            )
+            inst.pid = listener_pid
+            inst.process_create_time = listener_ct
+            inst.gateway_launcher_pid = handle.launcher_pid
+            inst.gateway_launcher_create_time = handle.launcher_create_time
+            inst.gateway_listener_pid = listener_pid
+            inst.gateway_listener_create_time = listener_ct
+            inst.gateway_listener_executable_path = (
+                handle.listener_executable_path or handle.executable_path
+            )
+            if handle.launcher_executable_path or handle.executable_path:
+                inst.gateway_executable_path = (
+                    handle.launcher_executable_path or handle.executable_path
+                )
             if handle.command_hash:
                 inst.gateway_command_hash = handle.command_hash
         elif executable:
@@ -101,7 +117,89 @@ class InstanceGatewayService:
         inst.gateway_started_at = None
         inst.gateway_started_by_runtime = False
         inst.gateway_owner_runtime_id = None
+        inst.gateway_launcher_pid = None
+        inst.gateway_launcher_create_time = None
+        inst.gateway_listener_pid = None
+        inst.gateway_listener_create_time = None
+        inst.gateway_listener_executable_path = None
         inst.ownership_state = OwnershipState.UNKNOWN.value
+
+    def _apply_gateway_observation(
+        self,
+        inst: HermesInstance,
+        result: GatewayOwnershipResult,
+        *,
+        persist_listener_upgrade: bool = True,
+    ) -> None:
+        """Unified observed-state writer for refresh/worker/reconcile (PRD §66–68)."""
+        inst.ownership_state = result.state.value
+        process_state = result.process_state
+        # Invariant: never persist exited + healthy.
+        if (
+            process_state == GatewayProcessState.EXITED
+            and result.health
+            and result.health.healthy
+            and result.state not in (OwnershipState.STALE,)
+        ):
+            process_state = GatewayProcessState.ALIVE
+        inst.process_state = process_state.value
+
+        if result.listener_pid is not None:
+            inst.pid = result.listener_pid
+            inst.gateway_listener_pid = result.listener_pid
+        if result.launcher_pid is not None:
+            inst.gateway_launcher_pid = result.launcher_pid
+
+        if persist_listener_upgrade and result.upgrade_to_v2 and result.listener_pid is not None:
+            try:
+                import psutil
+
+                inst.gateway_listener_create_time = float(
+                    psutil.Process(result.listener_pid).create_time()
+                )
+                inst.process_create_time = inst.gateway_listener_create_time
+                exe = None
+                try:
+                    exe = psutil.Process(result.listener_pid).exe()
+                except Exception:
+                    exe = None
+                if exe:
+                    inst.gateway_listener_executable_path = exe
+                inst.gateway_fingerprint_version = GATEWAY_FINGERPRINT_VERSION
+            except Exception:
+                pass
+
+        if result.owned_or_adopted and (
+            result.health_authenticated or (result.health and result.health.healthy)
+        ):
+            inst.api_state = GatewayApiState.HEALTHY.value
+            inst.healthy = True
+            inst.status = InstanceStatus.RUNNING.value
+            inst.last_error = None
+            inst.last_error_code = None
+            inst.last_healthy_at = self._now()
+        elif result.state == OwnershipState.STALE:
+            inst.api_state = GatewayApiState.UNREACHABLE.value
+            inst.healthy = False
+            if inst.status == InstanceStatus.RUNNING.value:
+                inst.status = InstanceStatus.ERROR.value
+                inst.last_error = result.reason or "Gateway process exited unexpectedly"
+                inst.last_error_code = "GATEWAY_PROCESS_STALE"
+        elif result.state in (OwnershipState.FOREIGN, OwnershipState.CONFLICT):
+            inst.healthy = False
+            inst.status = InstanceStatus.ERROR.value
+            inst.last_error_code = "GATEWAY_PORT_OWNERSHIP_CONFLICT"
+            inst.last_error = result.reason
+            if result.health and result.health.healthy:
+                inst.api_state = GatewayApiState.HEALTHY.value
+            elif result.health and result.health.error_code == "GATEWAY_AUTH_FAILED":
+                inst.api_state = GatewayApiState.UNAUTHORIZED.value
+            elif result.health and not result.health.reachable:
+                inst.api_state = GatewayApiState.UNREACHABLE.value
+        elif result.health is not None:
+            self._apply_health_result(inst, result.health)
+
+        inst.last_health_check_at = self._now()
 
     def _require_owned_or_adopted(self, ownership_state: str | None) -> None:
         if ownership_state in (OwnershipState.OWNED.value, OwnershipState.ADOPTED.value):
@@ -265,23 +363,12 @@ class InstanceGatewayService:
             await asyncio.sleep(self._settings.gateway_health_poll_interval_sec)
         return last
 
-    def _ownership_for(self, inst: HermesInstance, executable: str | None = None):
-        return verify_ownership(
-            pid=inst.pid,
-            process_create_time=inst.process_create_time,
-            gateway_port=inst.gateway_port,
-            instance_id=inst.id,
-            expected_executable=executable,
-        )
-
     async def refresh_instance_status(self, instance_id: str) -> InstanceResponse:
         async with self._session_maker() as session:
             inst = await self._load_instance(session, instance_id)
             handle = self._process_manager.get_handle(instance_id)
-            alive = handle.is_alive() if handle else False
-            pid = handle.pid if handle and alive else inst.pid
+            tracked_alive = bool(handle and handle.is_alive())
             secrets = await self._resolve_secrets(session, inst.profile_name)
-            client = self._client_for(inst.gateway_port, secrets)
 
             exe_path: str | None = None
             try:
@@ -289,62 +376,13 @@ class InstanceGatewayService:
             except RuntimeServiceError:
                 exe_path = None
 
-            ownership = self._ownership_for(inst, exe_path)
-            inst.ownership_state = ownership.state.value
-
-            healthy_result: GatewayHealthResult | None = None
-            if ownership.owned or (alive and handle):
-                inst.process_state = GatewayProcessState.ALIVE.value
-                healthy_result = await client.health_check()
-                # Startup / refresh path: apply immediately for API refresh
-                if healthy_result.healthy:
-                    inst.api_state = GatewayApiState.HEALTHY.value
-                    inst.healthy = True
-                    inst.consecutive_health_failures = 0
-                    inst.consecutive_health_successes = int(inst.consecutive_health_successes or 0) + 1
-                    inst.last_healthy_at = self._now()
-                    inst.last_error = None
-                    inst.last_error_code = None
-                    if inst.status != InstanceStatus.RUNNING.value:
-                        inst.status = InstanceStatus.RUNNING.value
-                else:
-                    self._apply_health_result(inst, healthy_result)
-                    if healthy_result.error_code == "GATEWAY_AUTH_FAILED":
-                        # Auth failure: do not kill process
-                        pass
-                    elif not healthy_result.reachable and ownership.owned:
-                        inst.healthy = False
-                inst.last_health_check_at = self._now()
-                inst.pid = pid
-            elif ownership.state == OwnershipState.STALE:
-                inst.process_state = GatewayProcessState.EXITED.value
-                inst.pid = None
-                inst.process_create_time = None
-                inst.healthy = False
-                inst.api_state = GatewayApiState.UNREACHABLE.value
-                if inst.status == InstanceStatus.RUNNING.value:
-                    inst.status = InstanceStatus.ERROR.value
-                    inst.last_error = "Gateway process exited unexpectedly"
-                    inst.last_error_code = "GATEWAY_PROCESS_STALE"
-            elif ownership.state == OwnershipState.FOREIGN:
-                inst.process_state = GatewayProcessState.FOREIGN.value
-                inst.healthy = False
-                inst.status = InstanceStatus.ERROR.value
-                inst.last_error_code = ownership.error_code or "GATEWAY_PROCESS_OWNERSHIP_CONFLICT"
-                inst.last_error = ownership.detail or "Gateway process ownership conflict"
-            else:
-                if alive:
-                    inst.process_state = GatewayProcessState.ALIVE.value
-                    healthy_result = await client.health_check()
-                    self._apply_health_result(inst, healthy_result)
-                    inst.status = InstanceStatus.RUNNING.value
-                    inst.pid = pid
-                else:
-                    inst.process_state = GatewayProcessState.MISSING.value
-                    if inst.status == InstanceStatus.RUNNING.value:
-                        inst.status = InstanceStatus.ERROR.value
-                        inst.healthy = False
-                        inst.last_error = "Gateway process not tracked"
+            inspect = await self._ownership.inspect(
+                inst,
+                expected_executable=exe_path,
+                api_key=secrets.get("API_SERVER_KEY"),
+                tracked_alive=tracked_alive,
+            )
+            self._apply_gateway_observation(inst, inspect)
 
             version = await self._version_label(session, inst.runtime_version_id)
             exe_ok = bool(exe_path and Path(exe_path).exists())
@@ -507,8 +545,6 @@ class InstanceGatewayService:
             except RuntimeServiceError:
                 pass
 
-            ownership = self._ownership_for(inst, exe_path)
-            # PRD §35 — stop requires owned/adopted (or allow stop of desired after inspect)
             inspect = await self._ownership.inspect(
                 inst,
                 expected_executable=exe_path,
@@ -518,7 +554,8 @@ class InstanceGatewayService:
             )
             if inspect.state in (OwnershipState.FOREIGN, OwnershipState.CONFLICT, OwnershipState.UNKNOWN):
                 # Unknown with no live process can stop DB state; foreign/conflict refuse kill
-                if inspect.state != OwnershipState.UNKNOWN or (inst.pid and is_pid_alive(inst.pid)):
+                listener = inspect.listener_pid or inst.gateway_listener_pid or inst.pid
+                if inspect.state != OwnershipState.UNKNOWN or (listener and is_pid_alive(listener)):
                     if inspect.state != OwnershipState.UNKNOWN:
                         raise RuntimeServiceError(
                             "Gateway is not owned by this Runtime; refuse stop",
@@ -528,21 +565,24 @@ class InstanceGatewayService:
 
             await self._process_manager.stop(
                 inst.id,
-                pid=inst.pid,
+                pid=inst.gateway_listener_pid or inst.pid,
                 port=inst.gateway_port,
-                process_create_time=inst.process_create_time,
+                process_create_time=inst.gateway_listener_create_time or inst.process_create_time,
                 expected_executable=exe_path,
                 kill_unknown_port_listeners=False,
+                listener_pid=inst.gateway_listener_pid,
+                listener_create_time=inst.gateway_listener_create_time,
             )
-            # Only kill recorded PID when ownership verified
-            if inst.pid and is_pid_alive(inst.pid) and (ownership.owned or inspect.owned_or_adopted):
-                await asyncio.to_thread(terminate_pid, inst.pid)
-            elif inst.pid and is_pid_alive(inst.pid) and not ownership.owned and not inspect.owned_or_adopted:
+            # Only kill recorded listener when ownership verified
+            target = inst.gateway_listener_pid or inst.pid
+            if target and is_pid_alive(target) and inspect.owned_or_adopted:
+                await asyncio.to_thread(terminate_pid, target)
+            elif target and is_pid_alive(target) and not inspect.owned_or_adopted:
                 logger.warning(
                     "gateway_stop_skip_foreign_pid",
                     instance_id=instance_id,
-                    pid=inst.pid,
-                    ownership=ownership.state.value,
+                    pid=target,
+                    ownership=inspect.state.value,
                 )
 
             inst.status = InstanceStatus.STOPPED.value
@@ -593,23 +633,28 @@ class InstanceGatewayService:
         self,
         session: AsyncSession,
         inst: HermesInstance,
-        inspect,
+        inspect: GatewayOwnershipResult,
         *,
         source: str,
     ) -> None:
         """Mark instance as adopted/owned after verified recovery."""
+        self._apply_gateway_observation(inst, inspect, persist_listener_upgrade=True)
         if inspect.pid is not None:
             inst.pid = inspect.pid
-        if inspect.process_alive:
+            inst.gateway_listener_pid = inspect.listener_pid or inspect.pid
+        if inspect.launcher_pid is not None:
+            inst.gateway_launcher_pid = inspect.launcher_pid
+        if inspect.process_alive and (inspect.listener_pid or inspect.pid):
             try:
                 import psutil
 
-                if inst.pid:
-                    inst.process_create_time = float(psutil.Process(inst.pid).create_time())
+                target = inspect.listener_pid or inspect.pid
+                if target:
+                    ct = float(psutil.Process(target).create_time())
+                    inst.process_create_time = ct
+                    inst.gateway_listener_create_time = ct
             except Exception:
                 pass
-        if getattr(inst, "gateway_executable_path", None) is None and inspect.executable_match:
-            pass
         inst.ownership_state = (
             OwnershipState.ADOPTED.value
             if inspect.state == OwnershipState.ADOPTED
@@ -632,6 +677,8 @@ class InstanceGatewayService:
         inst.gateway_started_by_runtime = True
         if not inst.gateway_owner_runtime_id:
             inst.gateway_owner_runtime_id = self._runtime_instance_id
+        if inspect.upgrade_to_v2:
+            inst.gateway_fingerprint_version = GATEWAY_FINGERPRINT_VERSION
         if inspect.safe_to_adopt:
             logger.info(
                 "gateway.process.safe_adopted",
@@ -653,7 +700,7 @@ class InstanceGatewayService:
                 instance_id=inst.id,
                 pid=inst.pid,
                 port=inst.gateway_port,
-                source="persistent_fingerprint",
+                source="listener-fingerprint" if inspect.listener_pid else "persistent_fingerprint",
             )
 
     async def reconcile_instances_on_boot(self) -> None:
@@ -724,20 +771,7 @@ class InstanceGatewayService:
 
                 # Case E / conflict / foreign
                 if inspect.state in (OwnershipState.FOREIGN, OwnershipState.CONFLICT):
-                    inst.ownership_state = inspect.state.value
-                    inst.process_state = (
-                        GatewayProcessState.FOREIGN.value
-                        if inspect.state == OwnershipState.FOREIGN
-                        else GatewayProcessState.FOREIGN.value
-                    )
-                    inst.status = InstanceStatus.ERROR.value
-                    inst.healthy = False
-                    inst.last_error_code = "GATEWAY_PORT_OWNERSHIP_CONFLICT"
-                    inst.last_error = inspect.reason
-                    if inspect.health and inspect.health.healthy:
-                        inst.api_state = GatewayApiState.HEALTHY.value
-                    elif inspect.health and inspect.health.error_code == "GATEWAY_AUTH_FAILED":
-                        inst.api_state = GatewayApiState.UNAUTHORIZED.value
+                    self._apply_gateway_observation(inst, inspect)
                     logger.warning(
                         "gateway.ownership.conflict",
                         instance_id=inst.id,
@@ -776,16 +810,12 @@ class InstanceGatewayService:
                 if inspect.owned_or_adopted:
                     await self._apply_adoption(session, inst, inspect, source="api_reconcile")
                 elif inspect.state in (OwnershipState.FOREIGN, OwnershipState.CONFLICT):
-                    inst.ownership_state = inspect.state.value
-                    inst.last_error_code = "GATEWAY_PORT_OWNERSHIP_CONFLICT"
-                    inst.last_error = inspect.reason
-                    if inspect.health and inspect.health.healthy:
-                        inst.api_state = GatewayApiState.HEALTHY.value
-                    inst.healthy = False
-                    inst.status = InstanceStatus.ERROR.value
+                    self._apply_gateway_observation(inst, inspect)
                 elif inspect.state == OwnershipState.STALE:
                     if is_port_available("127.0.0.1", inst.gateway_port):
                         self._clear_fingerprint(inst)
+                else:
+                    self._apply_gateway_observation(inst, inspect)
                 await session.commit()
                 eligible = bool(
                     inst.healthy
@@ -918,127 +948,142 @@ class InstanceGatewayService:
             except RuntimeServiceError:
                 pass
 
-            ownership = self._ownership_for(inst, exe_path)
-            inst.ownership_state = ownership.state.value
+            secrets = await self._resolve_secrets(session, inst.profile_name)
             handle = self._process_manager.get_handle(instance_id)
             tracked_alive = bool(handle and handle.is_alive())
 
-            if ownership.state == OwnershipState.FOREIGN:
-                inst.process_state = GatewayProcessState.FOREIGN.value
+            # Capture permanent block codes before observation may rewrite last_error_code.
+            prior_error_code = (inst.last_error_code or "").strip()
+
+            # PRD §42 — always re-inspect current facts before recovery policy.
+            inspect = await self._ownership.inspect(
+                inst,
+                expected_executable=exe_path,
+                api_key=secrets.get("API_SERVER_KEY"),
+                tracked_alive=tracked_alive,
+            )
+            self._apply_gateway_observation(inst, inspect)
+
+            # Conflict/foreign: do not treat as exited; block auto-restart but keep process_state.
+            if inspect.state in (OwnershipState.FOREIGN, OwnershipState.CONFLICT):
+                await session.commit()
+                logger.warning(
+                    "gateway.ownership.conflict",
+                    instance_id=instance_id,
+                    ownership=inspect.state.value,
+                    reason=inspect.reason,
+                )
+                return
+
+            # Owned/adopted + healthy — conflict auto-cleared by _apply_gateway_observation.
+            if inspect.owned_or_adopted:
+                if inspect.health and inspect.health.error_code == "GATEWAY_AUTH_FAILED":
+                    logger.warning("gateway.auth.failed", instance_id=instance_id)
+                await session.commit()
+                return
+
+            # PRD §37 — only STALE / confirmed listener gone → exited recovery path.
+            process_exited = (
+                desired == DesiredState.RUNNING.value
+                and inspect.state == OwnershipState.STALE
+            )
+            if (
+                desired == DesiredState.RUNNING.value
+                and inspect.process_state == GatewayProcessState.EXITED
+                and inspect.state == OwnershipState.STALE
+            ):
+                process_exited = True
+
+            if not process_exited:
+                await session.commit()
+                return
+
+            # Historical last_error_code must not skip re-inspect (already done above).
+            # Permanent block codes (auth/config/crash-loop) still suppress auto-restart.
+            # Conflict codes are excluded so recovered ownership can clear them.
+            blocked_code = prior_error_code
+            if blocked_code in self._NO_AUTO_RESTART_CODES and blocked_code not in (
+                "GATEWAY_PORT_OWNERSHIP_CONFLICT",
+                "GATEWAY_PROCESS_OWNERSHIP_CONFLICT",
+            ):
+                inst.process_state = GatewayProcessState.EXITED.value
                 inst.status = InstanceStatus.ERROR.value
                 inst.healthy = False
-                inst.last_error_code = ownership.error_code or "GATEWAY_PROCESS_OWNERSHIP_CONFLICT"
-                inst.last_error = ownership.detail
+                inst.last_error_code = blocked_code
+                inst.last_error = inst.last_error or f"Auto recovery blocked: {blocked_code}"
                 await session.commit()
-                return
-
-            # Only treat as exited when ownership is not verified owned.
-            # Bare is_pid_alive() after a successful ownership check can race; trust OwnershipResult.
-            process_exited = desired == DesiredState.RUNNING.value and not ownership.owned and not tracked_alive
-            if ownership.state == OwnershipState.STALE:
-                process_exited = desired == DesiredState.RUNNING.value
-
-            if process_exited and desired == DesiredState.RUNNING.value:
-                blocked_code = (inst.last_error_code or "").strip()
-                if blocked_code in self._NO_AUTO_RESTART_CODES:
-                    inst.process_state = GatewayProcessState.EXITED.value
-                    inst.status = InstanceStatus.ERROR.value
-                    inst.healthy = False
-                    inst.last_error = inst.last_error or f"Auto recovery blocked: {blocked_code}"
-                    await session.commit()
-                    logger.warning(
-                        "gateway.recovery.failed",
-                        instance_id=instance_id,
-                        reason=blocked_code,
-                    )
-                    return
-
-                inst.process_state = GatewayProcessState.EXITED.value
-                SUPERVISOR_METRICS.inc_crash(inst.id, profile=inst.profile_name, port=inst.gateway_port)
-                logger.info("gateway.process.exited", instance_id=instance_id, pid=inst.pid)
-                await session.commit()
-
-                if not self._settings.gateway_auto_recovery_enabled:
-                    async with self._session_maker() as s2:
-                        row = await self._load_instance(s2, instance_id)
-                        row.status = InstanceStatus.ERROR.value
-                        row.healthy = False
-                        row.last_error_code = "GATEWAY_PROCESS_STALE"
-                        row.last_error = "Gateway process exited; auto recovery disabled"
-                        await s2.commit()
-                    return
-
-                # Reset restart_count if window expired
-                async with self._session_maker() as s_budget:
-                    row_b = await self._load_instance(s_budget, instance_id)
-                    window = float(self._settings.gateway_restart_window_seconds)
-                    last = row_b.last_transition_at
-                    if last is not None:
-                        if last.tzinfo is None:
-                            last = last.replace(tzinfo=UTC)
-                        if (self._now() - last).total_seconds() > window:
-                            row_b.restart_count = 0
-                            await s_budget.commit()
-                    else:
-                        await s_budget.commit()
-
-                async with self._session_maker() as s_check:
-                    row_check = await self._load_instance(s_check, instance_id)
-                    if not self._within_restart_budget(row_check):
-                        row_check.status = InstanceStatus.ERROR.value
-                        row_check.healthy = False
-                        row_check.last_error_code = "GATEWAY_CRASH_LOOP"
-                        row_check.last_error = (
-                            f"Gateway crashed {self._settings.gateway_max_restarts} times "
-                            f"in {int(self._settings.gateway_restart_window_seconds)}s; auto restart paused"
-                        )
-                        row_check.last_transition_at = self._now()
-                        await s_check.commit()
-                        logger.warning("gateway.recovery.failed", instance_id=instance_id, reason="crash_loop")
-                        return
-
-                logger.info("gateway.recovery.started", instance_id=instance_id)
-                self._record_restart(instance_id)
-                try:
-                    # Clear stale fingerprint then start
-                    async with self._session_maker() as s2:
-                        row = await self._load_instance(s2, instance_id)
-                        row.pid = None
-                        row.process_create_time = None
-                        row.desired_state = DesiredState.RUNNING.value
-                        row.restart_count = int(row.restart_count or 0) + 1
-                        row.last_transition_at = self._now()
-                        await s2.commit()
-                    SUPERVISOR_METRICS.inc_restart(
-                        instance_id, profile=inst.profile_name, port=inst.gateway_port
-                    )
-                    await self._start_instance_unlocked(instance_id)
-                    logger.info("gateway.recovery.completed", instance_id=instance_id)
-                except Exception as exc:
-                    logger.warning("gateway.recovery.failed", instance_id=instance_id, error=str(exc))
-                return
-
-            if not ownership.owned and not tracked_alive:
-                return
-
-            # Process appears alive — probe API
-            inst.process_state = GatewayProcessState.ALIVE.value
-            secrets = await self._resolve_secrets(session, inst.profile_name)
-            health = await self._client_for(inst.gateway_port, secrets).health_check()
-            prev_api = inst.api_state
-            self._apply_health_result(inst, health)
-            if prev_api != inst.api_state:
-                logger.info(
-                    "gateway.health.changed",
+                logger.warning(
+                    "gateway.recovery.failed",
                     instance_id=instance_id,
-                    from_state=prev_api,
-                    to_state=inst.api_state,
-                    error_code=health.error_code,
+                    reason=blocked_code,
                 )
-            if health.error_code == "GATEWAY_AUTH_FAILED":
-                logger.warning("gateway.auth.failed", instance_id=instance_id)
-                # Never auto-restart on auth failure
+                return
+
+            SUPERVISOR_METRICS.inc_crash(inst.id, profile=inst.profile_name, port=inst.gateway_port)
+            logger.info(
+                "gateway.process.exited",
+                instance_id=instance_id,
+                pid=inst.gateway_listener_pid or inst.pid,
+                source="listener_fingerprint_stale",
+            )
             await session.commit()
+
+            if not self._settings.gateway_auto_recovery_enabled:
+                async with self._session_maker() as s2:
+                    row = await self._load_instance(s2, instance_id)
+                    row.status = InstanceStatus.ERROR.value
+                    row.healthy = False
+                    row.last_error_code = "GATEWAY_PROCESS_STALE"
+                    row.last_error = "Gateway process exited; auto recovery disabled"
+                    await s2.commit()
+                return
+
+            async with self._session_maker() as s_budget:
+                row_b = await self._load_instance(s_budget, instance_id)
+                window = float(self._settings.gateway_restart_window_seconds)
+                last = row_b.last_transition_at
+                if last is not None:
+                    if last.tzinfo is None:
+                        last = last.replace(tzinfo=UTC)
+                    if (self._now() - last).total_seconds() > window:
+                        row_b.restart_count = 0
+                        await s_budget.commit()
+                else:
+                    await s_budget.commit()
+
+            async with self._session_maker() as s_check:
+                row_check = await self._load_instance(s_check, instance_id)
+                if not self._within_restart_budget(row_check):
+                    row_check.status = InstanceStatus.ERROR.value
+                    row_check.healthy = False
+                    row_check.last_error_code = "GATEWAY_CRASH_LOOP"
+                    row_check.last_error = (
+                        f"Gateway crashed {self._settings.gateway_max_restarts} times "
+                        f"in {int(self._settings.gateway_restart_window_seconds)}s; auto restart paused"
+                    )
+                    row_check.last_transition_at = self._now()
+                    await s_check.commit()
+                    logger.warning("gateway.recovery.failed", instance_id=instance_id, reason="crash_loop")
+                    return
+
+            logger.info("gateway.recovery.started", instance_id=instance_id)
+            self._record_restart(instance_id)
+            try:
+                async with self._session_maker() as s2:
+                    row = await self._load_instance(s2, instance_id)
+                    self._clear_fingerprint(row)
+                    row.desired_state = DesiredState.RUNNING.value
+                    row.restart_count = int(row.restart_count or 0) + 1
+                    row.last_transition_at = self._now()
+                    await s2.commit()
+                SUPERVISOR_METRICS.inc_restart(
+                    instance_id, profile=inst.profile_name, port=inst.gateway_port
+                )
+                await self._start_instance_unlocked(instance_id)
+                logger.info("gateway.recovery.completed", instance_id=instance_id)
+            except Exception as exc:
+                logger.warning("gateway.recovery.failed", instance_id=instance_id, error=str(exc))
+            return
 
     async def get_detailed_health(self, instance_id: str) -> dict:
         """Build InstanceHealthResponse payload."""
@@ -1109,11 +1154,18 @@ class InstanceGatewayService:
                     "apiState": inst.api_state,
                     "ownershipState": inst.ownership_state,
                     "ownershipSource": (
-                        "persistent-fingerprint"
-                        if inst.ownership_state == OwnershipState.ADOPTED.value
-                        else ("tracked-handle" if owned else None)
+                        "listener-fingerprint"
+                        if inst.gateway_listener_pid and inst.ownership_state == OwnershipState.ADOPTED.value
+                        else (
+                            "persistent-fingerprint"
+                            if inst.ownership_state == OwnershipState.ADOPTED.value
+                            else ("tracked-handle" if owned else None)
+                        )
                     ),
                     "pid": inst.pid,
+                    "launcherPid": inst.gateway_launcher_pid,
+                    "listenerPid": inst.gateway_listener_pid or inst.pid,
+                    "listenerCreateTime": inst.gateway_listener_create_time or inst.process_create_time,
                     "processCreateTime": inst.process_create_time,
                     "lastHealthCheckAt": inst.last_health_check_at.isoformat()
                     if inst.last_health_check_at
@@ -1143,7 +1195,8 @@ class InstanceGatewayService:
                 err = str(exc)
             else:
                 err = None
-            port_result = check_port_ownership(inst.gateway_port, expected_pid=inst.pid)
+            expected_pid = inst.gateway_listener_pid or inst.pid
+            port_result = check_port_ownership(inst.gateway_port, expected_pid=expected_pid)
             handle = self._process_manager.get_handle(instance_id)
             log_path = None
             if handle and handle.log_path:
@@ -1158,6 +1211,9 @@ class InstanceGatewayService:
                 tracked_alive=bool(handle and handle.is_alive()),
             )
             evidence = inspect.evidence
+            launcher_alive = bool(
+                inst.gateway_launcher_pid and is_pid_alive(inst.gateway_launcher_pid)
+            )
             return {
                 **state,
                 "runtimeVersion": version,
@@ -1169,6 +1225,31 @@ class InstanceGatewayService:
                     "state": port_result.state.value,
                     "pids": port_result.pids,
                 },
+                "launcher": {
+                    "pid": inst.gateway_launcher_pid,
+                    "createTime": inst.gateway_launcher_create_time,
+                    "alive": launcher_alive,
+                },
+                "listener": {
+                    "pid": inst.gateway_listener_pid or inst.pid,
+                    "createTime": inst.gateway_listener_create_time or inst.process_create_time,
+                    "executablePath": inst.gateway_listener_executable_path,
+                    "alive": inspect.listener_alive,
+                    "port": inst.gateway_port,
+                    "portMatch": inspect.port_match or inspect.port_owned_by_process,
+                },
+                "lineage": {
+                    "verifiedAtLaunch": inspect.lineage_match,
+                    "match": inspect.lineage_match,
+                },
+                "ownership": {
+                    "state": inspect.state.value,
+                    "source": inspect.reason,
+                },
+                "gateway": {
+                    "healthy": bool(inspect.health and inspect.health.healthy),
+                    "authenticated": inspect.health_authenticated,
+                },
                 "fingerprint": {
                     "pid": inst.pid,
                     "processCreateTime": inst.process_create_time,
@@ -1179,21 +1260,25 @@ class InstanceGatewayService:
                     else None,
                     "ownerRuntimeId": getattr(inst, "gateway_owner_runtime_id", None),
                     "version": getattr(inst, "gateway_fingerprint_version", None),
+                    "launcherPid": inst.gateway_launcher_pid,
+                    "listenerPid": inst.gateway_listener_pid,
                 },
                 "liveInspection": {
                     "pid": inspect.pid,
+                    "launcherPid": inspect.launcher_pid,
+                    "listenerPid": inspect.listener_pid,
                     "listeningPids": list(inspect.listening_pids),
                     "createTimeMatch": inspect.create_time_match,
                     "executableMatch": inspect.executable_match,
                     "commandMatch": inspect.command_match,
                     "profileMatch": inspect.profile_match,
+                    "lineageMatch": inspect.lineage_match,
                     "healthAuthenticated": inspect.health_authenticated,
                     "safeToAdopt": inspect.safe_to_adopt,
                     "reason": inspect.reason,
                 },
                 "safeAdoptionEvidence": evidence.__dict__ if evidence else None,
                 "gatewayLogPath": log_path,
-                # Never include secrets
             }
 
     async def list_managed_instance_ids_for_health(self) -> list[str]:

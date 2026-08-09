@@ -113,6 +113,12 @@ class HermesInstance(Base):
     gateway_started_by_runtime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     gateway_owner_runtime_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     gateway_fingerprint_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # PRD v1.5.2 launcher / listener identity
+    gateway_launcher_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gateway_launcher_create_time: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gateway_listener_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gateway_listener_create_time: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gateway_listener_executable_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -36,15 +36,15 @@ Instance 启动遇端口占用：若监听 PID 即本 Instance 则恢复；未�
 
 ## 进程所有权指纹
 
-[[src/runtime/gateway_process.py#verify_ownership]] 要求 PID + create_time + 端口监听 + exe；仅 `owned`/`adopted` 可 kill。v1.5.1 持久化 fingerprint 至 Instance，并由 [[src/services/gateway_ownership_service.py#GatewayOwnershipService]] 在 reload/restart 后恢复 ownership。
+[[src/runtime/gateway_process.py#verify_ownership]] 验证 listener PID + create_time + 端口监听；仅 `owned`/`adopted` 可 kill。v1.5.1 持久化 fingerprint；v1.5.2 升级为 launcher + listener 双身份（[[src/runtime/gateway_listener.py#GatewayListenerResolver]]）。
 
-## Ownership Recovery (v1.5.1)
+## Ownership Recovery (v1.5.1 / v1.5.2)
 
-开发模式 shutdown 可 detach 而不杀 Gateway；boot reconcile 先于 autostart。Safe Adoption 仅在 evidence 全真时启用（禁止 health→owned）。见 [[tests#Gateway ownership v151]]。
+[[src/services/gateway_ownership_service.py#GatewayOwnershipService]] 的 `inspect()` 是 Ownership 唯一 SOT。开发模式 shutdown 可 detach；boot reconcile 先于 autostart。Safe Adoption 证据全真才启用（禁止 health→owned；禁止 python.exe 单独判 Hermes）。Launcher PID 可与 Listener PID 不同。见 [[tests#Gateway ownership v151]]、[[tests#Gateway listener identity v152]]。
 
 ## Gateway Health Worker
 
-[[src/workers/gateway_health_worker.py#GatewayHealthWorker]] 由 [[src/workers/supervisor.py#WorkerSupervisor]] 周期调度（默认 5s），带失败/恢复阈值与 crash-loop budget；auth/port conflict 不自动重启。并发经 [[src/runtime/instance_operation_lock.py#InstanceOperationLock]]。
+[[src/workers/gateway_health_worker.py#GatewayHealthWorker]] 由 [[src/workers/supervisor.py#WorkerSupervisor]] 周期调度（默认 5s），经 `inspect()` + `_apply_gateway_observation` 写 Observed；`not owned ≠ exited`；auth/port conflict 不自动重启；历史 conflict 在 ownership 恢复后清除。并发经 [[src/runtime/instance_operation_lock.py#InstanceOperationLock]]。
 
 ## 启动时重协调
 
