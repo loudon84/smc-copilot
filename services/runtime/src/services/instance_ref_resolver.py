@@ -89,7 +89,8 @@ class InstanceRefResolver:
                 inst.id,
                 require_key=False,
             )
-            healthy = await client.health_check()
+            health = await client.health_check()
+            healthy = bool(health.healthy)
         elif status in (InstanceStatus.ERROR.value, InstanceStatus.FAILED.value):
             status = "failed"
         elif status == InstanceStatus.STARTING.value:

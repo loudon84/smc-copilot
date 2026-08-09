@@ -16,6 +16,7 @@ from db.repositories.chat_settings_repo import ChatSettingsRepository
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.v12_repos import WorkspaceRepository
 from db.session import create_sessionmaker
+from integrations.hermes.client import GatewayHealthResult
 from services.instance_chat_service import InstanceChatService
 from services.instance_ref_resolver import InstanceRefResolver
 
@@ -104,7 +105,16 @@ async def test_instance_chat_does_not_read_profiles_status(app_client, monkeypat
     profile_home.mkdir(parents=True, exist_ok=True)
 
     mock_client = MagicMock()
-    mock_client.health_check = AsyncMock(return_value=True)
+    mock_client.health_check = AsyncMock(
+        return_value=GatewayHealthResult(
+            reachable=True,
+            authenticated=True,
+            healthy=True,
+            status_code=200,
+            source="/health",
+            latency_ms=1.0,
+        )
+    )
     mock_client.list_models = AsyncMock(
         return_value=(
             [{"id": "test-model", "name": "Test Model"}],
@@ -126,6 +136,10 @@ async def test_instance_chat_does_not_read_profiles_status(app_client, monkeypat
 
     monkeypatch.setattr(
         "services.instance_chat_service.HermesGatewayClientFactory.create_for_instance",
+        fake_create_for_instance,
+    )
+    monkeypatch.setattr(
+        "services.instance_ref_resolver.HermesGatewayClientFactory.create_for_instance",
         fake_create_for_instance,
     )
 
@@ -175,3 +189,55 @@ async def test_resolve_instance_by_profile_name(app_client) -> None:
 
     assert resolved.name == "resolve-by-profile"
     assert resolved.profile_name == "resolve-profile-name"
+
+
+@pytest.mark.asyncio
+async def test_resolve_running_instance_coerces_health_result_to_bool(
+    app_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: health_check returns GatewayHealthResult, not bool."""
+    _client, _supervisor, settings, _hub, app = app_client
+    session_maker = create_sessionmaker(app.state.engine)
+
+    async with session_maker() as session:
+        inst = HermesInstance(
+            name="default",
+            profile_name="default",
+            gateway_port=8642,
+            status=InstanceStatus.RUNNING.value,
+            healthy=True,
+            auto_start=False,
+        )
+        session.add(inst)
+        await session.commit()
+        instance_id = inst.id
+
+    (settings.hermes_home_path / "profiles" / "default").mkdir(parents=True, exist_ok=True)
+
+    health = GatewayHealthResult(
+        reachable=True,
+        authenticated=True,
+        healthy=True,
+        status_code=200,
+        source="/health",
+        latency_ms=12.5,
+    )
+    mock_client = MagicMock()
+    mock_client.health_check = AsyncMock(return_value=health)
+
+    async def fake_create_for_instance(self, _instance_id: str, *, timeout: float = 60.0, require_key: bool = True):
+        _ = self, timeout, require_key
+        return mock_client
+
+    monkeypatch.setattr(
+        "services.instance_ref_resolver.HermesGatewayClientFactory.create_for_instance",
+        fake_create_for_instance,
+    )
+
+    async with session_maker() as session:
+        resolver = InstanceRefResolver(session, settings=settings)
+        resolved = await resolver.resolve("default")
+
+    assert resolved.instance_id == instance_id
+    assert resolved.healthy is True
+    assert isinstance(resolved.healthy, bool)
