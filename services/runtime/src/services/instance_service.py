@@ -92,6 +92,11 @@ class InstanceService:
                 runtime_version_id = active.id
                 version_label = active.version
 
+        from runtime.local_hermes_profile_policy import require_supported_local_profile
+        from services.secret_service import SecretService
+
+        profile_name = require_supported_local_profile(body.profile_name or body.name)
+
         used = await self._used_ports()
         try:
             port = allocate_port(self._settings, body.gateway_port, used)
@@ -100,7 +105,7 @@ class InstanceService:
 
         inst = HermesInstance(
             name=body.name,
-            profile_name=body.profile_name or body.name,
+            profile_name=profile_name,
             runtime_version_id=runtime_version_id,
             gateway_port=port,
             status=InstanceStatus.CREATED.value,
@@ -110,10 +115,11 @@ class InstanceService:
         )
         self._session.add(inst)
         await self._session.flush()
-        # FR-08: ensure API_SERVER_KEY exists for the profile scope
-        from services.secret_service import SecretService
-
-        await SecretService(self._settings, self._session).ensure_api_server_key(inst.profile_name)
+        # PRD v1.5.3: external Hermes key must exist in ~/.hermes/.env (no generation)
+        await SecretService(self._settings, self._session).ensure_api_server_key(
+            inst.profile_name,
+            managed_install=False,
+        )
         return instance_to_response(inst, version_label)
 
     async def update(self, instance_id: str, body: InstanceUpdateRequest) -> InstanceResponse:

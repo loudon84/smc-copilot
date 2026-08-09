@@ -72,6 +72,10 @@ Chat SSE ???? Credential Broker ?? key ??? Authorization header?
 
 ? Profile `status=stopped` ? Instance `status=running` ??`InstanceChatService.list_models` ?? Instance ???? Gateway??????? `instance_ref_resolver` / `instance_chat_service` ??? `ProfileRefResolver` ? `GatewayStatus`?
 
+### Seeds default model config
+
+When Instance becomes ready (start/adoption) or GET model-config finds no row, [[src/services/instance_chat_service.py#InstanceChatService#ensure_default_model_config]] seeds from Gateway `/v1/models` (else Hermes config.yaml default) without overwriting an existing saved config.
+
 ## Chat Runtime v2
 
 `tests/test_chat_runs.py` ?? durable ChatRun API??? SSE ??? Echo Worker ????? [[chat-sessions#Chat Runtime v2]]?
@@ -492,7 +496,11 @@ PRD v1.5: structured GatewayHealthResult; reject treating 401/403 or any status 
 
 ### Health 200
 
-GET /health returns 200 with status=ok => reachable/authenticated/healthy are all true.
+GET /health returns 200 with status=ok, then authenticated GET /v1/models returns 200 => reachable/authenticated/healthy are all true (source=/v1/models when api_key present).
+
+### Health then models 401
+
+GET /health returns 200 but GET /v1/models returns 401 => reachable=true, authenticated=false, healthy=false, error=GATEWAY_AUTH_FAILED.
 
 ### Health 401
 
@@ -614,3 +622,43 @@ Listener create_time mismatch yields ownership=stale and must not kill the new p
 ### Conflict not exited
 
 Ownership conflict with live listener must keep process_state=alive, never exited.
+
+## Hermes local config
+
+PRD v1.5.3: HermesLocalConfigService reads ~/.hermes/.env and config.yaml as the local configuration SOT.
+
+### Default paths
+
+default profile env/config paths resolve to HERMES_HOME/.env and HERMES_HOME/config.yaml.
+
+### Env key resolution
+
+API_SERVER_KEY from dotenv is returned by HermesLocalConfigService.resolve_api_server_key.
+
+### Config parse
+
+Valid YAML mapping yields config.valid=true; invalid YAML yields HERMES_CONFIG_INVALID.
+
+### Named profile rejected
+
+require_supported_local_profile(finance) raises LOCAL_HERMES_PROFILE_UNSUPPORTED.
+
+## Gateway credential SOT
+
+PRD v1.5.3: Gateway process and HTTP client must resolve the same API_SERVER_KEY from Hermes dotenv.
+
+### Dotenv key resolution
+
+GatewayCredentialService returns the key from ~/.hermes/.env.
+
+### Ignore legacy runtime secret
+
+When dotenv has KEY-A and SecretStore has KEY-B, resolved key is KEY-A.
+
+### Missing external key
+
+External managed_install=false without dotenv key raises HERMES_API_SERVER_KEY_MISSING and does not generate.
+
+### Same key for spawn and client
+
+build_gateway_environment and HermesGatewayClientFactory use the identical resolved key.

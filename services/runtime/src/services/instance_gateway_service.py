@@ -243,18 +243,34 @@ class InstanceGatewayService:
         return path
 
     async def _resolve_secrets(self, session: AsyncSession, profile_name: str) -> dict[str, str]:
-        from runtime.hermes_profile_paths import is_default_profile
+        """Resolve gateway spawn secrets.
 
-        name = (profile_name or "default").strip() or "default"
+        PRD v1.5.3: ``API_SERVER_KEY`` comes from Hermes ``.env`` only.
+        Other Runtime-scoped secrets may still come from SecretStore.
+        Provider keys are not copied — Hermes loads them from its own ``.env``.
+        """
+        from runtime.hermes_profile_paths import is_default_profile
+        from runtime.local_hermes_profile_policy import require_supported_local_profile
+        from services.hermes_local_config_service import HermesLocalConfigService
+
+        name = require_supported_local_profile(profile_name)
+        out: dict[str, str] = {}
+
+        # Runtime-owned scoped secrets (never API_SERVER_KEY — that is Hermes SOT)
         scope_ids = {name, f"profile:{name}"}
         if is_default_profile(name):
             scope_ids.add("default")
         result = await session.execute(select(SecretReference).where(SecretReference.scope_id.in_(scope_ids)))
-        out: dict[str, str] = {}
         for row in result.scalars().all():
+            if row.secret_name == "API_SERVER_KEY":
+                continue
             value = self._secret_store.get(row.storage_key)
             if value:
                 out[row.secret_name] = value
+
+        key = HermesLocalConfigService(self._settings).resolve_api_server_key(name)
+        if key:
+            out["API_SERVER_KEY"] = key
         return out
 
     def _api_server_enabled(self, secrets: dict[str, str]) -> bool:
@@ -262,6 +278,43 @@ class InstanceGatewayService:
 
     def _now(self) -> datetime:
         return datetime.now(UTC)
+
+    async def _seed_default_model_config(self, session: AsyncSession, instance_id: str) -> None:
+        """Best-effort seed of chat model-config once Instance is healthy/ready.
+
+        Uses a savepoint so IntegrityError / other failures cannot poison the
+        outer Instance lifecycle transaction (lifespan / start / adopt).
+        """
+        try:
+            from db.repositories.chat_attachment_repo import ChatAttachmentRepository
+            from db.repositories.chat_settings_repo import ChatSettingsRepository
+            from db.repositories.profile_repo import ProfileRepository
+            from db.repositories.v12_repos import WorkspaceRepository
+            from services.instance_chat_service import InstanceChatService
+
+            async with session.begin_nested():
+                svc = InstanceChatService(
+                    session,
+                    ChatSettingsRepository(session),
+                    ChatAttachmentRepository(session),
+                    WorkspaceRepository(session),
+                    profile_repo=ProfileRepository(session),
+                    settings=self._settings,
+                )
+                seeded = await svc.ensure_default_model_config(instance_id)
+            if seeded is not None:
+                logger.info(
+                    "instance.chat.model_config.seeded",
+                    instance_id=instance_id,
+                    model_id=seeded.model_id,
+                    provider=seeded.provider,
+                )
+        except Exception as exc:
+            logger.warning(
+                "instance.chat.model_config.seed_failed",
+                instance_id=instance_id,
+                error=str(exc),
+            )
 
     def _apply_health_result(self, inst: HermesInstance, result: GatewayHealthResult) -> None:
         inst.last_health_check_at = self._now()
@@ -445,15 +498,19 @@ class InstanceGatewayService:
             await self._check_port_for_start(inst)
             ensure_profile_home(self._settings, inst.profile_name)
 
+            from runtime.local_hermes_profile_policy import require_supported_local_profile
             from services.secret_service import SecretService
 
-            await SecretService(self._settings, session).ensure_api_server_key(inst.profile_name)
-            await session.flush()
+            require_supported_local_profile(inst.profile_name)
+            await SecretService(self._settings, session).ensure_api_server_key(
+                inst.profile_name,
+                managed_install=False,
+            )
             secrets = await self._resolve_secrets(session, inst.profile_name)
             if not (secrets.get("API_SERVER_KEY") or "").strip():
                 raise RuntimeServiceError(
-                    "API_SERVER_KEY is required before starting gateway",
-                    code="secret_store_unavailable",
+                    "Hermes API Server key is not configured in ~/.hermes/.env",
+                    code="HERMES_API_SERVER_KEY_MISSING",
                 )
 
             inst.status = InstanceStatus.STARTING.value
@@ -506,6 +563,8 @@ class InstanceGatewayService:
                 inst.consecutive_health_failures = 0
                 inst.consecutive_health_successes = 1
                 inst.last_transition_at = self._now()
+                await session.commit()
+                await self._seed_default_model_config(session, inst.id)
                 await session.commit()
                 SUPERVISOR_METRICS.set_up(inst.id, True, profile=inst.profile_name, port=inst.gateway_port)
                 version = await self._version_label(session, inst.runtime_version_id)
@@ -668,6 +727,7 @@ class InstanceGatewayService:
             inst.last_healthy_at = self._now()
             inst.last_error = None
             inst.last_error_code = None
+            await self._seed_default_model_config(session, inst.id)
         elif inspect.health and inspect.health.error_code == "GATEWAY_AUTH_FAILED":
             inst.api_state = GatewayApiState.UNAUTHORIZED.value
             inst.healthy = False
@@ -705,6 +765,9 @@ class InstanceGatewayService:
 
     async def reconcile_instances_on_boot(self) -> None:
         """Boot reconcile v2 (PRD v1.5.1 §12–18): fingerprint → adopt / start / conflict."""
+        from runtime.hermes_profile_paths import is_default_profile
+        from runtime.local_hermes_profile_policy import SUPPORTED_LOCAL_PROFILE
+
         async with self._session_maker() as session:
             result = await session.execute(select(HermesInstance))
             instances = list(result.scalars().all())
@@ -713,6 +776,25 @@ class InstanceGatewayService:
                     inst.desired_state = (
                         DesiredState.RUNNING.value if inst.auto_start else DesiredState.STOPPED.value
                     )
+
+                # PRD v1.5.3 §73 — named local profiles are unsupported; stop desired, keep data
+                if not is_default_profile(inst.profile_name):
+                    inst.desired_state = DesiredState.STOPPED.value
+                    inst.last_error_code = "LOCAL_HERMES_PROFILE_UNSUPPORTED"
+                    inst.last_error = (
+                        f"Local Hermes profile {inst.profile_name!r} is not supported; "
+                        f"only '{SUPPORTED_LOCAL_PROFILE}' is allowed"
+                    )
+                    inst.healthy = False
+                    if inst.status not in (InstanceStatus.STOPPED.value, InstanceStatus.CREATED.value):
+                        inst.status = InstanceStatus.STOPPED.value
+                    logger.warning(
+                        "reconcile.unsupported_profile",
+                        instance_id=inst.id,
+                        profile=inst.profile_name,
+                    )
+                    continue
+
                 desired = inst.desired_state or (
                     DesiredState.RUNNING.value if inst.auto_start else DesiredState.STOPPED.value
                 )
@@ -1214,6 +1296,24 @@ class InstanceGatewayService:
             launcher_alive = bool(
                 inst.gateway_launcher_pid and is_pid_alive(inst.gateway_launcher_pid)
             )
+            from services.gateway_credential_service import GatewayCredentialService
+            from services.hermes_local_config_service import HermesLocalConfigService
+
+            local = HermesLocalConfigService(self._settings)
+            legacy = await GatewayCredentialService(self._settings, session).has_legacy_runtime_api_server_key(
+                inst.profile_name
+            )
+            diag = local.diagnose(
+                inst.profile_name,
+                legacy_runtime_secret_configured=legacy,
+            )
+            # DEFAULT_INSTANCE_CONFLICT detection
+            default_count = (
+                await session.execute(
+                    select(HermesInstance).where(HermesInstance.name == "default")
+                )
+            ).scalars().all()
+            default_conflict = len(list(default_count)) > 1
             return {
                 **state,
                 "runtimeVersion": version,
@@ -1250,6 +1350,26 @@ class InstanceGatewayService:
                     "healthy": bool(inspect.health and inspect.health.healthy),
                     "authenticated": inspect.health_authenticated,
                 },
+                "hermesConfig": {
+                    "profile": diag.profile,
+                    "home": diag.hermes_home_display,
+                    "envExists": diag.env_exists,
+                    "envValid": diag.env_exists,
+                    "configExists": diag.config_exists,
+                    "configValid": diag.config_valid,
+                    "gatewayCredentialConfigured": diag.api_server_key_configured,
+                    "gatewayCredentialSource": diag.credential_source,
+                    "gatewayAuthentication": (
+                        "ok"
+                        if inspect.health_authenticated
+                        else ("failed" if inspect.health and inspect.health.reachable else "unknown")
+                    ),
+                    "keyFingerprint": diag.key_fingerprint,
+                    "legacyRuntimeSecretConfigured": diag.legacy_runtime_secret_configured,
+                    "legacyRuntimeSecretUsed": False,
+                    "defaultInstanceConflict": default_conflict,
+                    "configErrorCode": diag.config_error_code,
+                },
                 "fingerprint": {
                     "pid": inst.pid,
                     "processCreateTime": inst.process_create_time,
@@ -1279,6 +1399,55 @@ class InstanceGatewayService:
                 },
                 "safeAdoptionEvidence": evidence.__dict__ if evidence else None,
                 "gatewayLogPath": log_path,
+            }
+
+    async def get_credentials_diagnostics(self, instance_id: str) -> dict:
+        """PRD v1.5.3 §50 — redacted credential diagnostics for an instance."""
+        async with self._session_maker() as session:
+            inst = await self._load_instance(session, instance_id)
+            from runtime.local_hermes_profile_policy import require_supported_local_profile
+            from services.gateway_credential_service import GatewayCredentialService
+            from services.hermes_local_config_service import HermesLocalConfigService
+
+            require_supported_local_profile(inst.profile_name)
+            cred_svc = GatewayCredentialService(self._settings, session)
+            legacy = await cred_svc.has_legacy_runtime_api_server_key(inst.profile_name)
+            local = HermesLocalConfigService(self._settings)
+            diag = local.diagnose(
+                inst.profile_name,
+                legacy_runtime_secret_configured=legacy,
+            )
+            key = local.resolve_api_server_key(inst.profile_name)
+            auth_reachable = False
+            auth_ok = False
+            if key:
+                client = HermesGatewayClient(inst.gateway_port, api_key=key)
+                health = await client.health_check()
+                auth_reachable = health.reachable
+                auth_ok = health.authenticated and health.healthy
+            return {
+                "profile": diag.profile,
+                "hermesHome": diag.hermes_home_display,
+                "env": {
+                    "exists": diag.env_exists,
+                    "apiServerKeyConfigured": diag.api_server_key_configured,
+                },
+                "config": {
+                    "exists": diag.config_exists,
+                    "valid": diag.config_valid,
+                },
+                "credential": {
+                    "source": diag.credential_source,
+                    "fingerprint": diag.key_fingerprint,
+                },
+                "gatewayAuthentication": {
+                    "reachable": auth_reachable,
+                    "authenticated": auth_ok,
+                },
+                "legacyRuntimeSecret": {
+                    "configured": diag.legacy_runtime_secret_configured,
+                    "used": False,
+                },
             }
 
     async def list_managed_instance_ids_for_health(self) -> list[str]:

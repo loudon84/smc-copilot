@@ -27,9 +27,12 @@ class InstanceRefResolver:
         return await self._to_resolved(inst)
 
     async def require_instance(self, instance_id: str) -> HermesInstance:
+        from runtime.local_hermes_profile_policy import require_supported_local_profile
+
         inst = await self._session.get(HermesInstance, instance_id)
         if inst is None:
             raise instance_not_found(instance_id=instance_id)
+        require_supported_local_profile(inst.profile_name)
         return inst
 
     async def require_deployed_instance(self, instance_id: str) -> HermesInstance:

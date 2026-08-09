@@ -101,6 +101,34 @@ async def diagnostics_summary(
         "metrics": SUPERVISOR_METRICS.snapshot(),
     }
 
+    # PRD v1.5.3 hermesConfig summary (default profile only)
+    from services.gateway_credential_service import GatewayCredentialService
+    from services.hermes_local_config_service import HermesLocalConfigService
+
+    local = HermesLocalConfigService(settings)
+    legacy = await GatewayCredentialService(settings, session).has_legacy_runtime_api_server_key("default")
+    diag = local.diagnose("default", legacy_runtime_secret_configured=legacy)
+    default_inst = next((i for i in instances if i.name == "default"), None)
+    auth_state = "unknown"
+    if default_inst is not None:
+        api_state = getattr(default_inst, "api_state", None)
+        if api_state == "healthy" and default_inst.healthy:
+            auth_state = "ok"
+        elif api_state == "unauthorized":
+            auth_state = "failed"
+    hermes_config = {
+        "profile": diag.profile,
+        "homeDetected": diag.env_exists or diag.config_exists,
+        "envValid": diag.env_exists,
+        "configValid": diag.config_valid,
+        "gatewayCredentialConfigured": diag.api_server_key_configured,
+        "gatewayCredentialSource": diag.credential_source,
+        "gatewayAuthentication": auth_state,
+        "keyFingerprint": diag.key_fingerprint,
+        "legacyRuntimeSecretConfigured": diag.legacy_runtime_secret_configured,
+        "legacyRuntimeSecretUsed": False,
+    }
+
     return {
         "runtime": status.model_dump(by_alias=True),
         "environment": {
@@ -112,6 +140,7 @@ async def diagnostics_summary(
             "git": str(probe.toolchain.git_path) if probe.toolchain.git_path else None,
         },
         "hermesSupervisor": hermes_supervisor,
+        "hermesConfig": hermes_config,
         "activeChatRuns": int(active_runs or 0),
         "activeChatTurns": int(active_turns or 0),
         "queuedChatTurns": int(queued_turns or 0),

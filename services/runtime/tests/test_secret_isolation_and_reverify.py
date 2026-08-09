@@ -27,13 +27,15 @@ async def test_named_profile_does_not_borrow_default_secrets(tmp_path: Path, mon
     from core.config import get_settings
 
     settings = get_settings()
-    (tmp_path / "hermes").mkdir(parents=True)
+    hermes = tmp_path / "hermes"
+    hermes.mkdir(parents=True)
+    (hermes / ".env").write_text("API_SERVER_KEY=from-dotenv\n", encoding="utf-8")
     engine = create_engine(settings)
     await init_db(engine)
     session_maker = create_sessionmaker(engine)
     store = SecretStore(settings)
     store.put("sk-default", "DEFAULT_ONLY_VALUE")
-    store.put("sk-named", "NAMED_ONLY_VALUE")
+    store.put("sk-api", "LEGACY_RUNTIME_KEY")
 
     async with session_maker() as session:
         session.add(
@@ -43,6 +45,15 @@ async def test_named_profile_does_not_borrow_default_secrets(tmp_path: Path, mon
                 secret_name="DASHSCOPE_API_KEY",
                 storage_provider="file",
                 storage_key="sk-default",
+            )
+        )
+        session.add(
+            SecretReference(
+                scope_type="profile",
+                scope_id="default",
+                secret_name="API_SERVER_KEY",
+                storage_provider="file",
+                storage_key="sk-api",
             )
         )
         session.add(
@@ -60,12 +71,14 @@ async def test_named_profile_does_not_borrow_default_secrets(tmp_path: Path, mon
     svc = InstanceGatewayService(settings=settings, session_maker=session_maker, process_manager=pm)
     async with session_maker() as session:
         default_secrets = await svc._resolve_secrets(session, "default")
-        named_secrets = await svc._resolve_secrets(session, "alice")
+        with pytest.raises(RuntimeServiceError) as ei:
+            await svc._resolve_secrets(session, "alice")
 
+    assert ei.value.code == "LOCAL_HERMES_PROFILE_UNSUPPORTED"
     assert default_secrets.get("DASHSCOPE_API_KEY") == "DEFAULT_ONLY_VALUE"
+    # PRD v1.5.3: API_SERVER_KEY from Hermes .env, not Runtime SecretStore
+    assert default_secrets.get("API_SERVER_KEY") == "from-dotenv"
     assert "OPENAI_API_KEY" not in default_secrets
-    assert named_secrets.get("OPENAI_API_KEY") == "NAMED_ONLY_VALUE"
-    assert "DASHSCOPE_API_KEY" not in named_secrets  # no borrow from default
     config_mod._settings = None
 
 

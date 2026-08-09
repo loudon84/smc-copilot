@@ -14,11 +14,15 @@ logger = get_logger(__name__)
 
 @dataclass(frozen=True)
 class GatewayHealthResult:
-    """Structured Gateway health probe result (PRD v1.5).
+    """Structured Gateway health probe result (PRD v1.5 / v1.5.3).
 
     ``healthy`` is True only when the gateway is reachable *and* authenticated
     against a known successful API response. Auth failures (401/403) must never
     be treated as healthy.
+
+    PRD v1.5.3: ``/health`` is a public liveness probe. After liveness succeeds,
+    an authenticated ``GET /v1/models`` validates credential alignment when an
+    api_key is present. ``/health`` alone must not imply authenticated readiness.
     """
 
     reachable: bool
@@ -61,13 +65,68 @@ class HermesGatewayClient:
             return {}
         return {"Authorization": f"Bearer {self._api_key}"}
 
+    async def _probe_authenticated_models(
+        self,
+        client: httpx.AsyncClient,
+        *,
+        started: float,
+        live_source: str,
+        live_status: int | None,
+    ) -> GatewayHealthResult:
+        """Authenticate via GET /v1/models after public /health liveness (PRD v1.5.3)."""
+        headers = self._auth_headers()
+        try:
+            resp = await client.get(self._url("/v1/models"), headers=headers)
+            latency = (time.monotonic() - started) * 1000.0
+            code = resp.status_code
+            if 200 <= code < 300:
+                return GatewayHealthResult(
+                    reachable=True,
+                    authenticated=True,
+                    healthy=True,
+                    status_code=code,
+                    source="/v1/models",
+                    error_code=None,
+                    latency_ms=latency,
+                )
+            if code in (401, 403):
+                return GatewayHealthResult(
+                    reachable=True,
+                    authenticated=False,
+                    healthy=False,
+                    status_code=code,
+                    source="/v1/models",
+                    error_code="GATEWAY_AUTH_FAILED",
+                    latency_ms=latency,
+                )
+            return GatewayHealthResult(
+                reachable=True,
+                authenticated=False,
+                healthy=False,
+                status_code=code,
+                source="/v1/models",
+                error_code="GATEWAY_HEALTH_DEGRADED",
+                latency_ms=latency,
+            )
+        except httpx.HTTPError:
+            latency = (time.monotonic() - started) * 1000.0
+            return GatewayHealthResult(
+                reachable=True,
+                authenticated=False,
+                healthy=False,
+                status_code=live_status,
+                source=live_source,
+                error_code="GATEWAY_HEALTH_DEGRADED",
+                latency_ms=latency,
+            )
+
     async def health_check(self) -> GatewayHealthResult:
-        """Probe Gateway health with structured semantics (PRD v1.5 §18–21)."""
+        """Probe Gateway health with structured semantics (PRD v1.5 §18–21, v1.5.3)."""
         headers = self._auth_headers()
         started = time.monotonic()
         health_404 = False
         async with httpx.AsyncClient(timeout=5.0) as client:
-            # Primary: GET /health
+            # Primary: GET /health (public liveness)
             try:
                 resp = await client.get(self._url("/health"), headers=headers)
                 latency = (time.monotonic() - started) * 1000.0
@@ -97,6 +156,15 @@ class HermesGatewayClient:
                     except Exception:
                         status_ok = code == 200
                     if status_ok:
+                        # PRD v1.5.3: /health is not proof of credential alignment.
+                        # When api_key is present, require authenticated /v1/models.
+                        if self._api_key:
+                            return await self._probe_authenticated_models(
+                                client,
+                                started=started,
+                                live_source="/health",
+                                live_status=code,
+                            )
                         return GatewayHealthResult(
                             reachable=True,
                             authenticated=True,

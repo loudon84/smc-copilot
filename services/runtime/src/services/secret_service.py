@@ -7,6 +7,7 @@ import os
 import secrets
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -196,22 +197,83 @@ class SecretService:
         """Internal only — never expose via GET APIs."""
         return self._store.get(storage_key)
 
-    async def ensure_api_server_key(self, profile_name: str) -> None:
-        """FR-08: create API_SERVER_KEY via CSPRNG if missing for profile scope."""
-        name = "API_SERVER_KEY"
-        scope = profile_name or "default"
-        result = await self._session.execute(
-            select(SecretReference).where(
-                SecretReference.scope_type == "scope",
-                SecretReference.scope_id == scope,
-                SecretReference.secret_name == name,
+    async def ensure_api_server_key(
+        self,
+        profile_name: str,
+        *,
+        managed_install: bool = False,
+    ) -> None:
+        """Ensure API_SERVER_KEY for Gateway use (PRD v1.5.3).
+
+        External/development Hermes (managed_install=False): read-only from
+        ``~/.hermes/.env`` — never generate into Runtime SecretStore.
+
+        Managed installs may generate a key and must write it to Hermes ``.env``
+        (atomic write reserved for a later slice; currently raises if missing).
+        """
+        from runtime.local_hermes_profile_policy import require_supported_local_profile
+        from services.hermes_local_config_service import HermesLocalConfigService
+
+        scope = require_supported_local_profile(profile_name)
+        local = HermesLocalConfigService(self._settings)
+        existing = local.resolve_api_server_key(scope)
+        if existing:
+            return
+
+        if not managed_install:
+            raise RuntimeServiceError(
+                "Hermes API Server key is not configured in ~/.hermes/.env",
+                code="HERMES_API_SERVER_KEY_MISSING",
+                details={"profileName": scope, "managedInstall": False},
             )
-        )
-        row = result.scalar_one_or_none()
-        if row is not None:
-            existing = self._store.get(row.storage_key)
-            if existing:
-                return
-        # 32 bytes CSPRNG → urlsafe text
+
+        # Managed install path: generate then write to Hermes .env (SOT), not SecretStore-only.
         value = secrets.token_urlsafe(32)
-        await self.put(scope, name, value)
+        env_path = local.env_path(scope)
+        self._atomic_upsert_env_key(env_path, "API_SERVER_KEY", value)
+
+    @staticmethod
+    def _atomic_upsert_env_key(env_path: Path, key: str, value: str) -> None:
+        """Atomically set KEY=value in a dotenv file, preserving other lines when practical."""
+        import os
+        import tempfile
+
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        existing_lines: list[str] = []
+        if env_path.is_file():
+            existing_lines = env_path.read_text(encoding="utf-8-sig").splitlines(keepends=True)
+
+        key_line = f"{key}={value}\n"
+        replaced = False
+        out_lines: list[str] = []
+        for line in existing_lines:
+            stripped = line.lstrip()
+            if stripped.startswith("#") or "=" not in line:
+                out_lines.append(line)
+                continue
+            name = stripped.split("=", 1)[0].strip()
+            if name.startswith("export "):
+                name = name[len("export ") :].strip()
+            if name == key:
+                out_lines.append(key_line)
+                replaced = True
+            else:
+                out_lines.append(line)
+        if not replaced:
+            if out_lines and not out_lines[-1].endswith("\n"):
+                out_lines[-1] = out_lines[-1] + "\n"
+            out_lines.append(key_line)
+
+        fd, tmp_name = tempfile.mkstemp(dir=str(env_path.parent), prefix=".env.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="") as tmp:
+                tmp.writelines(out_lines)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            os.replace(tmp_name, env_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
+            raise

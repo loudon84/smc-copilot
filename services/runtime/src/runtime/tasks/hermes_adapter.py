@@ -10,10 +10,9 @@ from core.config import Settings
 from core.errors import GatewayError, HermesClientError
 from core.logging import get_logger
 from db.repositories.profile_repo import ProfileRepository
-from integrations.hermes.client import HermesGatewayClient, extract_run_id
+from integrations.hermes.client import extract_run_id
 from integrations.hermes.client_factory import HermesGatewayClientFactory
 from services.chat_stream_service import abort_stream
-from services.gateway_credential_service import GatewayCredentialService
 from services.gateway_supervisor import GatewaySupervisor
 
 logger = get_logger(__name__)
@@ -127,11 +126,10 @@ class HermesRuntimeAdapter:
         if not run_id:
             return
         ctx = await self.ensure_instance(profile_id)
-        client = HermesGatewayClient(
+        client = await HermesGatewayClientFactory(self._settings, self._session).create_for_profile_name(
+            ctx.profile_name,
             ctx.gateway_port,
-            api_key=await GatewayCredentialService(self._settings, self._session).optional_key_for_profile(
-                ctx.profile_name
-            ),
+            require_key=False,
         )
         try:
             await client.cancel_run(run_id)
@@ -140,11 +138,10 @@ class HermesRuntimeAdapter:
 
     async def get_session(self, profile_id: str, session_id: str) -> dict[str, Any]:
         ctx = await self.ensure_instance(profile_id)
-        client = HermesGatewayClient(
+        client = await HermesGatewayClientFactory(self._settings, self._session).create_for_profile_name(
+            ctx.profile_name,
             ctx.gateway_port,
-            api_key=await GatewayCredentialService(self._settings, self._session).optional_key_for_profile(
-                ctx.profile_name
-            ),
+            require_key=False,
         )
         run_data = await client.get_run(session_id)
         return run_data if isinstance(run_data, dict) else {"id": session_id}

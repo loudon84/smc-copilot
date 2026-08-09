@@ -77,6 +77,9 @@ class GatewaySupervisor:
     async def get_instance_diagnostics(self, instance_id: str) -> dict:
         return await self._instances.get_diagnostics(instance_id)
 
+    async def get_instance_credentials_diagnostics(self, instance_id: str) -> dict:
+        return await self._instances.get_credentials_diagnostics(instance_id)
+
     async def reconcile_instance(self, instance_id: str) -> dict:
         return await self._instances.reconcile_instance(instance_id)
 

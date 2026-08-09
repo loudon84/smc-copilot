@@ -1217,6 +1217,46 @@ components:
       - name
       title: InstanceCreateRequest
       type: object
+    InstanceCredentialsDiagnosticsResponse:
+      description: PRD v1.5.3 credential diagnostics — never includes secrets.
+      properties:
+        config:
+          additionalProperties: true
+          title: Config
+          type: object
+        credential:
+          additionalProperties: true
+          title: Credential
+          type: object
+        env:
+          additionalProperties: true
+          title: Env
+          type: object
+        gatewayAuthentication:
+          additionalProperties: true
+          title: Gatewayauthentication
+          type: object
+        hermesHome:
+          title: Hermeshome
+          type: string
+        legacyRuntimeSecret:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Legacyruntimesecret
+        profile:
+          title: Profile
+          type: string
+      required:
+      - profile
+      - hermesHome
+      - env
+      - config
+      - credential
+      - gatewayAuthentication
+      title: InstanceCredentialsDiagnosticsResponse
+      type: object
     InstanceDiagnosticsResponse:
       additionalProperties: true
       description: PRD v1.5.1/v1.5.2 Gateway diagnostics — never includes secrets.
@@ -1255,6 +1295,12 @@ components:
           - type: string
           - type: 'null'
           title: Gatewaylogpath
+        hermesConfig:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Hermesconfig
         instanceId:
           title: Instanceid
           type: string
@@ -7578,6 +7624,49 @@ paths:
       summary: Validate Configuration
       tags:
       - instance-config-mcp
+  /api/v1/instances/{instance_id}/credentials/diagnostics:
+    get:
+      description: PRD v1.5.3 — Hermes config/credential status without exposing secrets.
+      operationId: instance_credentials_diagnostics_api_v1_instances__instance_id__credentials_diagnostics_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceCredentialsDiagnosticsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Instance Credentials Diagnostics
+      tags:
+      - instances
   /api/v1/instances/{instance_id}/diagnostics:
     get:
       operationId: instance_diagnostics_api_v1_instances__instance_id__diagnostics_get

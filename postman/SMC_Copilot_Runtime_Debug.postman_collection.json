@@ -1,0 +1,1317 @@
+{
+  "info": {
+    "_postman_id": "8b923673-bc9c-4aa4-bc2b-78d1eb261de4",
+    "name": "SMC Copilot Runtime Debug",
+    "description": "完全绕开 Desktop：Runtime → Pairing/Auth → Hermes Instance/Gateway → Models → Chat Runtime。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Public Health & Pairing",
+      "item": [
+        {
+          "name": "00.1 Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/health",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "公开 Liveness。无需 Token。"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.2 Health Ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/health/ready",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "服务级 Ready，不等价于 Hermes execution ready。"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(j);",
+                  "pm.test(\"service health ready\",()=>pm.expect(j.status).to.eql(\"ready\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.3 Health Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/health/details",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "health",
+                "details"
+              ]
+            },
+            "description": "查看 workers / metrics / deploymentMode。"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.4 Pairing Start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{apiBaseUrl}}/pairings/start",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "pairings",
+                "start"
+              ]
+            },
+            "description": "保存 pairingId/challenge。",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json();",
+                  "pm.environment.set(\"pairingId\",j.pairingId); pm.environment.set(\"challenge\",j.challenge);",
+                  "pm.test(\"pairing data\",()=>{pm.expect(j.pairingId).to.be.ok;pm.expect(j.challenge).to.be.ok;});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.5 Pairing Confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{apiBaseUrl}}/pairings/{{pairingId}}/confirm",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "pairings",
+                "{{pairingId}}",
+                "confirm"
+              ]
+            },
+            "description": "保存 deviceToken/deviceId。",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"challenge\": \"{{challenge}}\",\n  \"deviceName\": \"{{deviceName}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json();",
+                  "pm.environment.set(\"deviceToken\",j.deviceToken); pm.environment.set(\"deviceId\",j.deviceId);",
+                  "pm.test(\"device token\",()=>pm.expect(j.deviceToken).to.be.ok);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00.6 List Devices",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/devices",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "devices"
+              ]
+            },
+            "description": "验证 Bearer deviceToken。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Runtime Control Plane",
+      "item": [
+        {
+          "name": "01.1 Runtime Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/runtime/status",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "runtime",
+                "status"
+              ]
+            },
+            "description": "Runtime summary。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.environment.set(\"runtimeVersion\",j.serviceVersion||\"\"); pm.environment.set(\"runtimeApiVersion\",j.apiVersion||\"\");"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.2 Runtime Readiness - STRICT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/runtime/readiness",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "runtime",
+                "readiness"
+              ]
+            },
+            "description": "Chat 前关键 Gate；maintenance=false 可接受。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.test(\"service.ready\",()=>pm.expect(j.service.ready).to.eql(true));",
+                  "pm.test(\"execution.ready\",()=>pm.expect(j.execution.ready).to.eql(true));",
+                  "pm.test(\"execution.chatReady\",()=>pm.expect(j.execution.chatReady).to.eql(true));",
+                  "if(!j.maintenance.ready) console.warn(\"Maintenance attention allowed:\",j.maintenance);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.3 Runtime Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/runtime/capabilities",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "runtime",
+                "capabilities"
+              ]
+            },
+            "description": "Feature contract。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.4 Runtime Compatibility",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/runtime/compatibility",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "runtime",
+                "compatibility"
+              ]
+            },
+            "description": "API compatibility。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.5 Runtime Versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/runtime/versions",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "runtime",
+                "versions"
+              ]
+            },
+            "description": "确认本地 Hermes 已登记 active RuntimeVersion。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const a=pm.response.json(); console.log(a);",
+                  "pm.test(\"RuntimeVersion exists\",()=>pm.expect(a.length).to.be.above(0));",
+                  "pm.test(\"Active RuntimeVersion\",()=>pm.expect(a.some(x=>x.status===\"active\")).to.eql(true));",
+                  "const v=a.find(x=>x.status===\"active\")||a[0]; if(v){pm.environment.set(\"runtimeVersionId\",v.id);pm.environment.set(\"hermesVersion\",v.version);}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.6 Diagnostics Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/diagnostics/summary",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "diagnostics",
+                "summary"
+              ]
+            },
+            "description": "观察 hermesSupervisor 聚合。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(\"hermesSupervisor\",JSON.stringify(j.hermesSupervisor,null,2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01.7 Runtime Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/diagnostics/logs?tail={{logTail}}",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "diagnostics",
+                "logs"
+              ],
+              "query": [
+                {
+                  "key": "tail",
+                  "value": "{{logTail}}"
+                }
+              ]
+            },
+            "description": "runtime-service.log tail。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Default Hermes Instance & Gateway",
+      "item": [
+        {
+          "name": "02.1 Resolve Default Instance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/resolve?ref={{instanceRef}}",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "resolve"
+              ],
+              "query": [
+                {
+                  "key": "ref",
+                  "value": "{{instanceRef}}"
+                }
+              ]
+            },
+            "description": "保存 instanceId。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(j); pm.environment.set(\"instanceId\",j.instanceId);",
+                  "pm.environment.set(\"gatewayPort\",String(j.gatewayPort||8642));",
+                  "pm.test(\"resolved\",()=>pm.expect(j.instanceId).to.be.ok);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.2 List Instances",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances"
+              ]
+            },
+            "description": "查看所有 Instance。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.3 Instance State - STRICT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/state",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "state"
+              ]
+            },
+            "description": "目标：running/alive/owned|adopted/executionEligible。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.test(\"desired running\",()=>pm.expect(j.desired.state).to.eql(\"running\"));",
+                  "pm.test(\"process alive\",()=>pm.expect(j.observed.processState).to.eql(\"alive\"));",
+                  "pm.test(\"ownership owned/adopted\",()=>pm.expect([\"owned\",\"adopted\"]).to.include(j.observed.ownershipState));",
+                  "pm.test(\"execution eligible\",()=>pm.expect(j.executionEligible).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.4 Instance Health - STRICT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/health",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "health"
+              ]
+            },
+            "description": "验证 reachable/authenticated/healthy/ownership/executionEligible。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.test(\"gateway reachable\",()=>pm.expect(j.gateway.reachable).to.eql(true));",
+                  "pm.test(\"gateway authenticated\",()=>pm.expect(j.gateway.authenticated).to.eql(true));",
+                  "pm.test(\"gateway healthy\",()=>pm.expect(j.gateway.healthy).to.eql(true));",
+                  "pm.test(\"ownership owned/adopted\",()=>pm.expect([\"owned\",\"adopted\"]).to.include(j.ownershipState));",
+                  "pm.test(\"execution eligible\",()=>pm.expect(j.executionEligible).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.5 Instance Diagnostics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/diagnostics",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "diagnostics"
+              ]
+            },
+            "description": "查看 launcher/listener/fingerprint/liveInspection/safeAdoptionEvidence。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(\"INSTANCE DIAGNOSTICS\",JSON.stringify(j,null,2));",
+                  "if(j.listener&&j.listener.pid) pm.environment.set(\"listenerPid\",String(j.listener.pid));",
+                  "if(j.launcher&&j.launcher.pid) pm.environment.set(\"launcherPid\",String(j.launcher.pid));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.6 Reconcile Ownership",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/reconcile",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "reconcile"
+              ]
+            },
+            "description": "只重算 ownership，不 restart/force takeover。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(\"RECONCILE\",JSON.stringify(j,null,2));",
+                  "pm.test(\"ownership owned/adopted\",()=>pm.expect([\"owned\",\"adopted\"]).to.include(j.ownership));",
+                  "pm.test(\"execution eligible\",()=>pm.expect(j.executionEligible).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.7 State After Reconcile - STRICT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/state",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "state"
+              ]
+            },
+            "description": "建议 reconcile 后等 10 秒再执行；验证 Health Worker 不会把 adopted 打回 conflict。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.test(\"ownership survives\",()=>pm.expect([\"owned\",\"adopted\"]).to.include(j.observed.ownershipState));",
+                  "pm.test(\"process alive\",()=>pm.expect(j.observed.processState).to.eql(\"alive\"));",
+                  "pm.test(\"execution eligible\",()=>pm.expect(j.executionEligible).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.8 Health After Reconcile - STRICT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/health",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "health"
+              ]
+            },
+            "description": "再次触发 Health 路径。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.test(\"gateway healthy\",()=>pm.expect(j.gateway.healthy).to.eql(true));",
+                  "pm.test(\"ownership survives health\",()=>pm.expect([\"owned\",\"adopted\"]).to.include(j.ownershipState));",
+                  "pm.test(\"execution eligible\",()=>pm.expect(j.executionEligible).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02.9 Gateway Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/logs?tail={{logTail}}",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "logs"
+              ],
+              "query": [
+                {
+                  "key": "tail",
+                  "value": "{{logTail}}"
+                }
+              ]
+            },
+            "description": "Gateway stdout/stderr。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Hermes Gateway Functional Probe",
+      "item": [
+        {
+          "name": "03.1 List Chat Models - STRICT",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/chat/models",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "chat",
+                "models"
+              ]
+            },
+            "description": "Runtime → Hermes Gateway 模型探测。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(JSON.stringify(j,null,2));",
+                  "pm.test(\"model status ok\",()=>pm.expect(j.status).to.eql(\"ok\"));",
+                  "pm.test(\"models exist\",()=>pm.expect(j.models.length).to.be.above(0));",
+                  "const m=(j.models||[]).find(x=>x.is_current)||(j.models||[])[0]; if(m) pm.environment.set(\"modelId\",m.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03.2 Get Chat Model Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/chat/model-config",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "chat",
+                "model-config"
+              ]
+            },
+            "description": "允许返回 null。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Chat Runtime v2 Minimal E2E",
+      "item": [
+        {
+          "name": "04.1 Create Chat Run",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{apiBaseUrl}}/chat-runs",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "chat-runs"
+              ]
+            },
+            "description": "创建 Runtime ChatRun。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientRunId\": \"{{clientRunId}}\",\n  \"instanceId\": \"{{instanceId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"clientRunId\",\"postman-run-\"+pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json(); console.log(j); pm.environment.set(\"chatRunId\",j.runId);",
+                  "pm.test(\"accepted\",()=>pm.expect(j.accepted).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.2 Create Chat Turn",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{apiBaseUrl}}/chat-runs/{{chatRunId}}/turns",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "chat-runs",
+                "{{chatRunId}}",
+                "turns"
+              ]
+            },
+            "description": "提交最小 Turn。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientTurnId\": \"{{clientTurnId}}\",\n  \"instanceId\": \"{{instanceId}}\",\n  \"message\": \"{{testMessage}}\",\n  \"modelId\": \"{{modelId}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"clientTurnId\",\"postman-turn-\"+pm.variables.replaceIn(\"{{$guid}}\"));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));",
+                  "const j=pm.response.json(); console.log(j); if(j.turnId) pm.environment.set(\"chatTurnId\",j.turnId);",
+                  "pm.test(\"accepted\",()=>pm.expect(j.accepted).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.3 Get Chat Run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/chat-runs/{{chatRunId}}",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "chat-runs",
+                "{{chatRunId}}"
+              ]
+            },
+            "description": "查看 run 状态。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.4 Chat Snapshot",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/chat-runs/{{chatRunId}}/snapshot",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "chat-runs",
+                "{{chatRunId}}",
+                "snapshot"
+              ]
+            },
+            "description": "durable events + queue。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04.5 Chat Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBaseUrl}}/chat-runs/{{chatRunId}}/events?limit=500",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "chat-runs",
+                "{{chatRunId}}",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "查看 failed/errorCode/done。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+                  "const j=pm.response.json(); console.log(\"CHAT EVENTS\",JSON.stringify(j,null,2));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Direct Instance Chat SSE (optional)",
+      "item": [
+        {
+          "name": "05.1 Direct Chat SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{apiBaseUrl}}/instances/{{instanceId}}/chat/completions",
+              "host": [
+                "{{apiBaseUrl}}"
+              ],
+              "path": [
+                "instances",
+                "{{instanceId}}",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "直接 Runtime → HermesChatExecutor → Hermes Gateway。Postman 显示 text/event-stream。",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{deviceToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspace_id\": \"postman-runtime-debug\",\n  \"session_id\": \"postman-{{$guid}}\",\n  \"model\": \"{{modelId}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{testMessage}}\"\n    }\n  ],\n  \"attachments\": [],\n  \"stream\": true\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\",()=>pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

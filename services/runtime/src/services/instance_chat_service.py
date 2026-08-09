@@ -136,7 +136,8 @@ class InstanceChatService:
         await self._resolver.require_instance(instance_id)
         row = await self._settings_repo.get_by_instance_id(instance_id)
         if row is None:
-            return None
+            # Seed default when Instance is already ready but never configured.
+            return await self.ensure_default_model_config(instance_id)
         return InstanceChatModelConfig(
             instance_id=row.instance_id or instance_id,
             provider=row.provider,
@@ -144,6 +145,80 @@ class InstanceChatService:
             model_label=row.model_label,
             base_url=row.base_url,
             updated_at=row.updated_at,
+        )
+
+    async def ensure_default_model_config(self, instance_id: str) -> InstanceChatModelConfig | None:
+        """Persist a default model-config once when Instance is ready (PRD v1.5.3 follow-up).
+
+        Prefer Gateway ``/v1/models`` first entry; fall back to Hermes ``config.yaml``
+        ``model.default``. Never overwrite an existing user-saved config.
+        """
+        inst = await self._resolver.require_instance(instance_id)
+        existing = await self._settings_repo.get_by_instance_id(instance_id)
+        if existing is not None:
+            return InstanceChatModelConfig(
+                instance_id=existing.instance_id or instance_id,
+                provider=existing.provider,
+                model_id=existing.model_id,
+                model_label=existing.model_label,
+                base_url=existing.base_url,
+                updated_at=existing.updated_at,
+            )
+
+        model_id: str | None = None
+        provider = "auto"
+        model_label: str | None = None
+        base_url: str | None = None
+
+        try:
+            client = await self._factory().create_for_instance(inst.id, require_key=False)
+            health = await client.health_check()
+            if health:
+                raw_models, _raw = await client.list_models()
+                for item in raw_models:
+                    if not isinstance(item, dict):
+                        continue
+                    mid = str(item.get("id") or item.get("name") or "").strip()
+                    if not mid:
+                        continue
+                    model_id = mid
+                    model_label = str(item.get("name") or mid)
+                    provider = _infer_provider(mid, item) or "hermes"
+                    if isinstance(item.get("base_url"), str):
+                        base_url = item.get("base_url")
+                    break
+        except Exception:
+            pass
+
+        if not model_id:
+            from services.hermes_local_config_service import HermesLocalConfigService
+
+            cfg = HermesLocalConfigService(self._app_settings).read_config(inst.profile_name)
+            data = cfg.data or {}
+            model_section = data.get("model") if isinstance(data.get("model"), dict) else {}
+            default = (
+                (model_section or {}).get("default")
+                or data.get("default")
+                or (model_section or {}).get("model")
+            )
+            if isinstance(default, str) and default.strip():
+                model_id = default.strip()
+                provider = str((model_section or {}).get("provider") or data.get("provider") or "auto")
+                bu = (model_section or {}).get("base_url") or data.get("base_url")
+                if isinstance(bu, str) and bu.strip():
+                    base_url = bu.strip()
+
+        if not model_id:
+            return None
+
+        return await self.set_model_config(
+            instance_id,
+            SetInstanceChatModelConfigPayload(
+                provider=provider or "auto",
+                model_id=model_id,
+                model_label=model_label,
+                base_url=base_url,
+            ),
         )
 
     async def set_model_config(
@@ -158,11 +233,7 @@ class InstanceChatService:
             )
         now = _utc_now()
         existing = await self._settings_repo.get_by_instance_id(instance_id)
-        profile_id = existing.profile_id if existing else instance_id
-        if self._profiles is not None:
-            profile = await self._profiles.get_by_name(inst.profile_name)
-            if profile is not None:
-                profile_id = profile.id
+        profile_id = await self._resolve_profile_id_for_settings(inst, existing)
         row = ProfileChatSettings(
             profile_id=profile_id,
             instance_id=instance_id,
@@ -182,6 +253,48 @@ class InstanceChatService:
             model_label=saved.model_label,
             base_url=saved.base_url,
             updated_at=saved.updated_at,
+        )
+
+    async def _resolve_profile_id_for_settings(
+        self,
+        inst: HermesInstance,
+        existing: ProfileChatSettings | None,
+    ) -> str:
+        """Resolve a profiles.id that satisfies profile_chat_settings FK.
+
+        Instance-native Runtime may have HermesInstance without a legacy Profile row.
+        Create a minimal shadow Profile when missing so chat settings can persist.
+        """
+        from db.models.profile import Profile
+        from utils.paths import profile_dir
+
+        if existing is not None and existing.profile_id:
+            if self._profiles is None or await self._profiles.get_by_id(existing.profile_id):
+                return existing.profile_id
+
+        if self._profiles is not None:
+            profile = await self._profiles.get_by_name(inst.profile_name)
+            if profile is not None:
+                return profile.id
+            # Shadow profile for FK only — does not take Gateway ownership.
+            shadow = Profile(
+                name=inst.profile_name,
+                type="default",
+                hermes_home=str(self._app_settings.hermes_home_path),
+                profile_path=str(profile_dir(self._app_settings, inst.profile_name)),
+                gateway_port=inst.gateway_port,
+                enabled=True,
+                auto_start=False,
+                status="stopped",
+            )
+            created = await self._profiles.create(shadow)
+            return created.id
+
+        raise ChatApiError(
+            "No Profile repository available to resolve chat settings FK",
+            code="MODEL_CONFIG_INVALID",
+            http_status=500,
+            details={"instanceId": inst.id, "profileName": inst.profile_name},
         )
 
     async def resolve_default_model(self, instance_id: str, session_model: str | None) -> str | None:

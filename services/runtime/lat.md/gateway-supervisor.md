@@ -16,9 +16,15 @@ Instance API **不得**调用 `start_profile`；走 `start_instance` / `stop_ins
 
 ## Gateway 环境注入
 
-[[src/runtime/gateway_environment.py#build_gateway_environment]] 构建 Gateway 子进程环境：仅白名单继承主机变量，再注入 `HERMES_HOME`、`API_SERVER_*` 与 Profile 作用域密钥。
+[[src/runtime/gateway_environment.py#build_gateway_environment]] 构建 Gateway 子进程环境：仅白名单继承主机变量，再注入 `HERMES_HOME`、`API_SERVER_*` 与 Runtime 作用域密钥。
 
-白名单：`PATH`/`PATHEXT`/`SYSTEMROOT`/`WINDIR`/`COMSPEC`/`USERPROFILE`/`LOCALAPPDATA`/`APPDATA`/`TEMP`/`TMP`/`LANG`。父进程 `*_API_KEY`/`API_SERVER_KEY` 等敏感变量不得继承。禁止 Secret 覆盖 `PATH` 等保留名；禁止空 `API_SERVER_KEY`；日志仅记录 `envKeys`（不记录值）。见 [[runtime-service#配置与 Secret]]。
+白名单：`PATH`/`PATHEXT`/`SYSTEMROOT`/`WINDIR`/`COMSPEC`/`USERPROFILE`/`LOCALAPPDATA`/`APPDATA`/`TEMP`/`TMP`/`LANG`。父进程 `*_API_KEY`/`API_SERVER_KEY` 等敏感变量不得继承。禁止 Secret 覆盖 `PATH` 等保留名；禁止空 `API_SERVER_KEY`；日志仅记录 `envKeys`（不记录值）。
+
+v1.5.3：`API_SERVER_KEY` 来自 [[src/services/hermes_local_config_service.py#HermesLocalConfigService]] 读取的 `~/.hermes/.env`，不再以 Runtime SecretStore 为 SOT；Provider Key 由 Hermes 自行从 `.env` 加载。见 [[runtime-service#配置与 Secret]]。
+
+## Hermes 本地配置 SOT (v1.5.3)
+
+[[src/services/hermes_local_config_service.py#HermesLocalConfigService]] 是读取 Hermes 本地配置的唯一入口。`.env` 为 Credential SOT；`config.yaml` 为行为配置 SOT。[[src/services/gateway_credential_service.py#GatewayCredentialService]] 与 Gateway spawn 共用同一 Resolver。[[src/runtime/local_hermes_profile_policy.py#require_supported_local_profile]] 将本地 Profile 收敛为 `default` only。
 
 ## 端口分配
 
@@ -28,7 +34,7 @@ Instance 启动遇端口占用：若监听 PID 即本 Instance 则恢复；未�
 
 ## 健康检查
 
-[[src/integrations/hermes/client.py#HermesGatewayClient]] `health_check` 返回 [[src/integrations/hermes/client.py#GatewayHealthResult]]：仅 authenticated + 成功 API 响应才 `healthy`；401/403 为 `GATEWAY_AUTH_FAILED`，禁止 `<500→healthy`。启动等待仍用 `HERMES_GATEWAY_START_TIMEOUT_SECONDS` 严格就绪。
+[[src/integrations/hermes/client.py#HermesGatewayClient]] `health_check` 返回 [[src/integrations/hermes/client.py#GatewayHealthResult]]：`/health` 仅为公开 liveness；当提供 `api_key` 时必须再通过认证的 `GET /v1/models` 才 `healthy`。401/403 为 `GATEWAY_AUTH_FAILED`，禁止 `<500→healthy`。启动等待仍用 `HERMES_GATEWAY_START_TIMEOUT_SECONDS` 严格就绪。
 
 ## Desired / Observed 状态
 

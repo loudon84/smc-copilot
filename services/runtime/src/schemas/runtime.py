@@ -323,6 +323,21 @@ class InstanceDiagnosticsResponse(BaseModel):
     lineage: dict[str, Any] | None = None
     ownership: dict[str, Any] | None = None
     gateway: dict[str, Any] | None = None
+    hermes_config: dict[str, Any] | None = Field(default=None, alias="hermesConfig")
+
+
+class InstanceCredentialsDiagnosticsResponse(BaseModel):
+    """PRD v1.5.3 credential diagnostics — never includes secrets."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    profile: str
+    hermes_home: str = Field(alias="hermesHome")
+    env: dict[str, Any]
+    config: dict[str, Any]
+    credential: dict[str, Any]
+    gateway_authentication: dict[str, Any] = Field(alias="gatewayAuthentication")
+    legacy_runtime_secret: dict[str, Any] | None = Field(default=None, alias="legacyRuntimeSecret")
 
 
 class PairingStartResponse(BaseModel):

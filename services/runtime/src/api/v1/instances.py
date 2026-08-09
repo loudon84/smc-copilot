@@ -7,6 +7,7 @@ from api.deps import get_app_settings, get_db_session, get_gateway_supervisor
 from core.config import Settings
 from schemas.runtime import (
     InstanceCreateRequest,
+    InstanceCredentialsDiagnosticsResponse,
     InstanceDiagnosticsResponse,
     InstanceHealthResponse,
     InstanceResponse,
@@ -124,6 +125,19 @@ async def instance_diagnostics(
 ) -> InstanceDiagnosticsResponse:
     payload = await supervisor.get_instance_diagnostics(instance_id)
     return InstanceDiagnosticsResponse.model_validate(payload)
+
+
+@router.get(
+    "/{instance_id}/credentials/diagnostics",
+    response_model=InstanceCredentialsDiagnosticsResponse,
+)
+async def instance_credentials_diagnostics(
+    instance_id: str,
+    supervisor: GatewaySupervisor = Depends(get_gateway_supervisor),
+) -> InstanceCredentialsDiagnosticsResponse:
+    """PRD v1.5.3 — Hermes config/credential status without exposing secrets."""
+    payload = await supervisor.get_instance_credentials_diagnostics(instance_id)
+    return InstanceCredentialsDiagnosticsResponse.model_validate(payload)
 
 
 @router.get("/{instance_id}/logs")

@@ -83,7 +83,7 @@ class HermesGatewayClientFactory:
             if require_key and not key:
                 raise RuntimeServiceError(
                     "API_SERVER_KEY is required for Gateway API calls",
-                    code="secret_store_unavailable",
+                    code="HERMES_API_SERVER_KEY_MISSING",
                     details={"profileName": name, "gatewayPort": gateway_port},
                 )
         return HermesGatewayClient(gateway_port, timeout=timeout, api_key=key)

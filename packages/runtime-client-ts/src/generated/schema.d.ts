@@ -1058,6 +1058,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/credentials/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Instance Credentials Diagnostics
+         * @description PRD v1.5.3 — Hermes config/credential status without exposing secrets.
+         */
+        get: operations["instance_credentials_diagnostics_api_v1_instances__instance_id__credentials_diagnostics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/diagnostics": {
         parameters: {
             query?: never;
@@ -4148,6 +4168,36 @@ export interface components {
             runtimeVersion?: string | null;
         };
         /**
+         * InstanceCredentialsDiagnosticsResponse
+         * @description PRD v1.5.3 credential diagnostics — never includes secrets.
+         */
+        InstanceCredentialsDiagnosticsResponse: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /** Credential */
+            credential: {
+                [key: string]: unknown;
+            };
+            /** Env */
+            env: {
+                [key: string]: unknown;
+            };
+            /** Gatewayauthentication */
+            gatewayAuthentication: {
+                [key: string]: unknown;
+            };
+            /** Hermeshome */
+            hermesHome: string;
+            /** Legacyruntimesecret */
+            legacyRuntimeSecret?: {
+                [key: string]: unknown;
+            } | null;
+            /** Profile */
+            profile: string;
+        };
+        /**
          * InstanceDiagnosticsResponse
          * @description PRD v1.5.1/v1.5.2 Gateway diagnostics — never includes secrets.
          */
@@ -4169,6 +4219,10 @@ export interface components {
             } | null;
             /** Gatewaylogpath */
             gatewayLogPath?: string | null;
+            /** Hermesconfig */
+            hermesConfig?: {
+                [key: string]: unknown;
+            } | null;
             /** Instanceid */
             instanceId: string;
             /** Launcher */
@@ -8364,6 +8418,40 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    instance_credentials_diagnostics_api_v1_instances__instance_id__credentials_diagnostics_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceCredentialsDiagnosticsResponse"];
                 };
             };
             /** @description Validation Error */

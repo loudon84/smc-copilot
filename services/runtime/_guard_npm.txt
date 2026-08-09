@@ -1,0 +1,66 @@
+
+> guard
+> npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift && npm run check:no-runtime-legacy-desktop-db && npm run check:gateway-health-semantics && npm run check:gateway-process-ownership && npm run check:instance-readiness-sot && npm run check:gateway-adoption-safety && npm run check:gateway-ownership-sot && npm run check:no-launcher-pid-as-listener && npm run check:no-not-owned-equals-exited && npm run check:hermes-local-config-sot && npm run check:no-external-hermes-key-generation && npm run check:gateway-credential-factory
+
+
+> check:no-task-direct-hermes
+> node scripts/check-no-task-direct-hermes.mjs
+
+[check:no-task-direct-hermes] ok
+
+> check:worktask-state-machine
+> node scripts/check-worktask-state-machine.mjs
+
+[check:worktask-state-machine] ok
+
+> check:task-contract-drift
+> node scripts/check-task-contract-drift.mjs
+
+[check:task-contract-drift] ok (21 task event types aligned)
+
+> check:no-runtime-legacy-desktop-db
+> node scripts/check-no-runtime-legacy-desktop-db.mjs
+
+[check:no-runtime-legacy-desktop-db] ok
+
+> check:gateway-health-semantics
+> node scripts/check-gateway-health-semantics.mjs
+
+check:gateway-health-semantics OK
+
+> check:gateway-process-ownership
+> node scripts/check-gateway-process-ownership.mjs
+
+check:gateway-process-ownership OK
+
+> check:instance-readiness-sot
+> node scripts/check-instance-readiness-sot.mjs
+
+check:instance-readiness-sot OK
+
+> check:gateway-adoption-safety
+> node scripts/check-gateway-adoption-safety.mjs
+
+check:gateway-adoption-safety OK
+
+> check:gateway-ownership-sot
+> node scripts/check-gateway-ownership-sot.mjs
+
+check:gateway-ownership-sot OK
+
+> check:no-launcher-pid-as-listener
+> node scripts/check-no-launcher-pid-as-listener.mjs
+
+check:no-launcher-pid-as-listener OK
+
+> check:no-not-owned-equals-exited
+> node scripts/check-no-not-owned-equals-exited.mjs
+
+check:no-not-owned-equals-exited OK
+
+> check:hermes-local-config-sot
+> node scripts/check-hermes-local-config-sot.mjs
+
+check:hermes-local-config-sot FAILED: instance_gateway_service.py: must not resolve API_SERVER_KEY via SecretReference
+check:hermes-local-config-sot FAILED: instance_gateway_service.py: must not load API_SERVER_KEY from SecretStore
+__EXIT__=1 
