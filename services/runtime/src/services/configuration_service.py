@@ -137,18 +137,17 @@ class ConfigurationService:
 
         try:
             self._adapter.write(inst.profile_name, current)
-            # Native hermes config check when executable available
-            await self._native_check(inst.profile_name)
-        except RuntimeServiceError:
-            await self.restore_latest_snapshot(instance_id)
-            raise
         except Exception as exc:
             await self.restore_latest_snapshot(instance_id)
             raise RuntimeServiceError(
-                f"configuration write failed: {exc}",
+                f"configuration write failed: {type(exc).__name__}: {exc!s}",
                 code="configuration_invalid",
+                details={"errorType": type(exc).__name__, "error": repr(exc)},
             ) from exc
 
+        # Do not run `hermes config check` on the patch hot path.
+        # On Windows it can hang for tens of seconds inside the Runtime process and
+        # previously rolled back a successful write. Use POST .../validate instead.
         return {
             "configuration": current,
             "restartRequired": (group in self.RESTART_GROUPS) if group else False,

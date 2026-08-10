@@ -33,6 +33,8 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
   listRuntimeJobs: () => ipcRenderer.invoke("copilot-runtime:list-jobs"),
   listRuntimeVersions: () => ipcRenderer.invoke("copilot-runtime:list-versions"),
   isServeControlPlane: () => ipcRenderer.invoke("copilot-runtime:is-serve-control-plane"),
+  isServeChatPreferred: () =>
+    ipcRenderer.invoke("copilot-runtime:is-serve-chat-preferred"),
   listInstances: () => ipcRenderer.invoke("copilot-runtime:list-instances"),
   getInstance: (instanceId: string) =>
     ipcRenderer.invoke("copilot-runtime:get-instance", instanceId),
@@ -69,6 +71,10 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
   testExpertMcp: () => ipcRenderer.invoke("copilot-runtime:expert-mcp-test"),
   getExpertMcpDiagnostics: () =>
     ipcRenderer.invoke("copilot-runtime:expert-mcp-diagnostics"),
+  listChatModels: (options) =>
+    ipcRenderer.invoke("copilot-runtime:list-chat-models", options),
+  getChatModelConfig: (profileRef) =>
+    ipcRenderer.invoke("copilot-runtime:get-chat-model-config", profileRef),
   proxyFetch: (request) => ipcRenderer.invoke("copilot-runtime:proxy-fetch", request),
   onStateChanged: (callback) => {
     const handler = (

@@ -6,6 +6,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -22,6 +23,11 @@ from integrations.hermes.client_factory import HermesGatewayClientFactory
 from services.attachment_service import AttachmentService
 from services.gateway_credential_service import GatewayCredentialService
 from services.hermes_chat_event_mapper import HermesExecutionEvent, parse_hermes_sse_block
+from services.hermes_model_catalog_service import (
+    GATEWAY_VIRTUAL_MODEL_IDS,
+    HermesModelCatalogService,
+    is_gateway_virtual_model_id,
+)
 from services.instance_ref_resolver import InstanceRefResolver
 
 logger = logging.getLogger(__name__)
@@ -80,23 +86,53 @@ class HermesChatExecutor:
             raise gateway_health_failed(instance_id=instance_id)
         return inst
 
+    def _catalog(self) -> HermesModelCatalogService:
+        return HermesModelCatalogService(self._session, self._settings)
+
     async def resolve_default_model(self, instance_id: str, session_model: str | None) -> str | None:
+        """Resolve execution model for Gateway chat completions (PRD v1.5.4).
+
+        Priority: non-virtual session override → profile_chat_settings (reconcile
+        virtual bindings) → Hermes ``config.yaml`` via HermesModelCatalogService.
+
+        Never falls back to Gateway ``/v1/models`` virtual aliases. Returns ``None``
+        to omit ``payload.model`` so Hermes uses its local default (PRD §47).
+        """
+        # @lat: [[chat-sessions#Hermes Model Catalog (v1.5.4)]]
         if session_model and session_model.strip():
-            return session_model.strip()
-        row = await self._settings_repo.get_by_instance_id(instance_id)
-        if row is not None and row.model_id:
-            return row.model_id
+            candidate = session_model.strip()
+            if not is_gateway_virtual_model_id(candidate):
+                return candidate
+
         inst = await self._resolver.require_instance(instance_id)
-        client = await self._factory().create_for_instance(inst.id, require_key=False)
+        catalog = self._catalog()
         try:
-            raw_models, _raw = await client.list_models()
+            virtual_ids = await catalog.list_gateway_virtual_model_ids(inst)
         except Exception:
+            virtual_ids = set()
+        virtual_ids = set(virtual_ids) | set(GATEWAY_VIRTUAL_MODEL_IDS)
+
+        row = await self._settings_repo.get_by_instance_id(instance_id)
+        if row is not None and (row.model_id or "").strip():
+            mid = row.model_id.strip()
+            if mid not in virtual_ids:
+                return mid
+            # Virtual binding on the chat path: replace with config.yaml execution default.
+            resolved = catalog.resolve_default_model(inst.profile_name)
+            if resolved and resolved.model_id and resolved.model_id not in virtual_ids:
+                row.provider = resolved.provider or row.provider or "auto"
+                row.model_id = resolved.model_id
+                row.model_label = resolved.model_label or resolved.model_id
+                if resolved.base_url:
+                    row.base_url = resolved.base_url
+                row.updated_at = datetime.now(timezone.utc)
+                await self._session.flush()
+                return resolved.model_id
             return None
-        for item in raw_models:
-            if isinstance(item, dict):
-                model_id = str(item.get("id") or item.get("name") or "").strip()
-                if model_id:
-                    return model_id
+
+        resolved = catalog.resolve_default_model(inst.profile_name)
+        if resolved and resolved.model_id and resolved.model_id not in virtual_ids:
+            return resolved.model_id
         return None
 
     async def _attachment_profile_id(self, inst: Any) -> str:

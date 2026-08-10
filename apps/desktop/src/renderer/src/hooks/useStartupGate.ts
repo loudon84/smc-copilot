@@ -12,7 +12,15 @@ export type AppScreen =
 const SPLASH_MIN_MS = 1300;
 
 /** States where the recovery screen may hold a stale snapshot while Main keeps polling. */
-const TRANSITIONAL_RUNTIME_STATES = new Set(["Connecting", "RuntimeStarting"]);
+const TRANSITIONAL_RUNTIME_STATES = new Set(["Connecting", "RuntimeStarting", "RuntimeMissing"]);
+
+/** Live states that should leave the recovery screen. */
+const RECOVERY_EXIT_STATES = new Set([
+  "Ready",
+  "PairingRequired",
+  "RuntimeDegraded",
+  "Incompatible",
+]);
 
 export interface UseStartupGateResult {
   screen: AppScreen;
@@ -90,8 +98,8 @@ export function useStartupGate(): UseStartupGateResult {
     };
   }, [checkKey]);
 
-  // When recovery is stuck on Connecting/RuntimeStarting, Main may already be Ready /
-  // PairingRequired via the 15s poll — refresh the startup decision without a full splash.
+  // When recovery is stuck on Connecting/Starting/Missing, Main may already be
+  // Ready / PairingRequired via the 15s poll — refresh without a full splash.
   useEffect(() => {
     if (!window.copilotRuntime?.onStateChanged) return;
 
@@ -99,7 +107,7 @@ export function useStartupGate(): UseStartupGateResult {
       if (screenRef.current !== "runtime-recovery") return;
       const frozen = decisionRef.current?.runtimeState?.state;
       if (!frozen || !TRANSITIONAL_RUNTIME_STATES.has(frozen)) return;
-      if (TRANSITIONAL_RUNTIME_STATES.has(next.state)) return;
+      if (!RECOVERY_EXIT_STATES.has(next.state)) return;
       recheck();
     });
   }, [recheck]);

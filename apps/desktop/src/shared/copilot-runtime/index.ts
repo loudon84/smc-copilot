@@ -143,6 +143,8 @@ export interface CopilotRuntimeAPI {
   listRuntimeVersions: () => Promise<unknown[]>;
   /** True when Main routes Gateway/Config/MCP via Serve (not legacy Hermes CLI/YAML). */
   isServeControlPlane: () => Promise<boolean>;
+  /** True when Serve Chat transport is preferred (even if not yet Ready). */
+  isServeChatPreferred: () => Promise<boolean>;
   listInstances: () => Promise<import("./instance-contract").ServeInstanceSummary[]>;
   getInstance: (
     instanceId: string,
@@ -184,6 +186,17 @@ export interface CopilotRuntimeAPI {
   connectExpertMcp: () => Promise<Record<string, unknown> | null>;
   testExpertMcp: () => Promise<Record<string, unknown> | null>;
   getExpertMcpDiagnostics: () => Promise<Record<string, unknown> | null>;
+  /**
+   * PRD v1.5.4 — Hermes execution model catalog via Runtime `/chat/models`.
+   * Never returns Gateway virtual aliases (e.g. smc-copilot).
+   */
+  listChatModels: (options?: {
+    profileRef?: string;
+    refresh?: boolean;
+  }) => Promise<import("./instance-contract").ServeModelOption[]>;
+  getChatModelConfig: (profileRef?: string) => Promise<
+    import("./instance-contract").ServeModelConfigView | null
+  >;
   /**
    * Main-authenticated Serve JSON proxy. Renderer must not send Device Token.
    * Prefer domain-specific IPC in later phases; this bridges legacy Renderer Serve HTTP.

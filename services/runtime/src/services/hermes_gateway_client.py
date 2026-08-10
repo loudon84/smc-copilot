@@ -36,7 +36,12 @@ class HermesGatewayService:
         )
 
     async def list_models(self, profile: Profile) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        """Gateway Virtual Models only — not for execution catalog."""
         return await (await self._client(profile)).list_models()
+
+    async def list_model_options(self, profile: Profile, *, refresh: bool = False) -> dict[str, Any]:
+        """Hermes Execution Model catalog (PRD v1.5.4)."""
+        return await (await self._client(profile)).list_model_options(refresh=refresh)
 
     async def create_run(self, profile: Profile, body: HermesRunCreate) -> tuple[str, dict[str, Any]]:
         data = await (await self._client(profile)).create_run(

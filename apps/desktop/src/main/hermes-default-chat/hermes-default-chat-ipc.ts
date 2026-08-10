@@ -105,28 +105,57 @@ export function registerHermesDefaultChatIpc(
     async (_event, profile: string | undefined, payload: SetHermesChatModelConfigPayload) => {
       const {
         isServeConfigPreferred,
-        isServeConfigControlPlane,
         serveSetModelConfig,
         serveGetModelConfig,
+        ensureServeConfigReachable,
       } = await import("../runtime-adapters/config-control");
+      const { resolveSavedModelById } = await import("../models");
 
       if (isServeConfigPreferred()) {
-        if (!isServeConfigControlPlane()) {
+        if (!(await ensureServeConfigReachable())) {
+          const state = (
+            await import("../copilot-runtime-client/runtime-connection-manager")
+          ).getRuntimeConnectionState();
           throw new Error(
-            "Serve Runtime is not Ready. Model config writes require Runtime Ready or COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true.",
+            `Serve Runtime service is not Ready (state=${state.state}, serviceReady=${String(state.serviceReady)}). ` +
+              "Start Runtime (npm run dev:runtime), wait until health is ok, " +
+              "or set COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true for local legacy only.",
           );
         }
+        // Models page passes models.json UUID; Runtime expects execution model name.
+        const saved = resolveSavedModelById(payload.model_id);
+        if (!saved) {
+          throw new Error(`Model not found: ${payload.model_id}`);
+        }
+        // Set Hermes default first (PUT model-config writes config.yaml model section).
+        // custom_providers sync is best-effort — must not block Set Default.
         await serveSetModelConfig(profile, {
-          modelId: payload.model_id,
-          model: payload.model_id,
+          provider: saved.provider || "custom",
+          modelId: saved.model,
+          model: saved.model,
+          modelLabel: saved.name,
+          baseUrl: saved.baseUrl,
         });
+        try {
+          const { syncCustomProvidersViaRuntime } = await import(
+            "../hermes-config/hermes-config-yaml"
+          );
+          await syncCustomProvidersViaRuntime(profile);
+        } catch (syncErr) {
+          console.warn(
+            "[hermes-chat] custom_providers sync via Runtime failed (default model was still set):",
+            syncErr,
+          );
+        }
+        const { invalidateModelConfigCache } = await import("../config");
+        invalidateModelConfigCache(profile);
         const view = await serveGetModelConfig(profile);
         return {
           profile_id: profile?.trim() || "default",
-          provider: view.provider ?? "",
-          model_id: view.modelId ?? payload.model_id,
-          model_label: view.modelId ?? payload.model_id,
-          base_url: null,
+          provider: view.provider ?? saved.provider,
+          model_id: view.modelId ?? saved.model,
+          model_label: view.modelLabel ?? saved.name,
+          base_url: view.baseUrl ?? saved.baseUrl ?? null,
           updated_at: new Date().toISOString(),
         };
       }

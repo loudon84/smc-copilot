@@ -16,6 +16,7 @@
     "check:hermes-local-config-sot": "node scripts/check-hermes-local-config-sot.mjs",
     "check:no-external-hermes-key-generation": "node scripts/check-no-external-hermes-key-generation.mjs",
     "check:gateway-credential-factory": "node scripts/check-gateway-credential-factory.mjs",
-    "guard": "npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift && npm run check:no-runtime-legacy-desktop-db && npm run check:gateway-health-semantics && npm run check:gateway-process-ownership && npm run check:instance-readiness-sot && npm run check:gateway-adoption-safety && npm run check:gateway-ownership-sot && npm run check:no-launcher-pid-as-listener && npm run check:no-not-owned-equals-exited && npm run check:hermes-local-config-sot && npm run check:no-external-hermes-key-generation && npm run check:gateway-credential-factory"
+    "check:model-catalog-sot": "node scripts/check-model-catalog-sot.mjs",
+    "guard": "npm run check:no-task-direct-hermes && npm run check:worktask-state-machine && npm run check:task-contract-drift && npm run check:no-runtime-legacy-desktop-db && npm run check:gateway-health-semantics && npm run check:gateway-process-ownership && npm run check:instance-readiness-sot && npm run check:gateway-adoption-safety && npm run check:gateway-ownership-sot && npm run check:no-launcher-pid-as-listener && npm run check:no-not-owned-equals-exited && npm run check:hermes-local-config-sot && npm run check:no-external-hermes-key-generation && npm run check:gateway-credential-factory && npm run check:model-catalog-sot"
   }
 }

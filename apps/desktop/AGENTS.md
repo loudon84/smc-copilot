@@ -12,7 +12,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 0.3.6（… + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
+| 版本 | 0.3.6（… + **v1.5.4 Hermes Model Catalog & Desktop Runtime SSE Chat Closure** + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
 | 后端 | Copilot Runtime `http://127.0.0.1:8765`（Desktop 唯一启动 SOT；Hermes Gateway 由 Runtime 管理） |
 

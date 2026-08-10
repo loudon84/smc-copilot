@@ -6,23 +6,37 @@ function encodeId(id: string): string {
   return encodeURIComponent(id);
 }
 
+function mapModelItem(item: unknown): ServeModelOption | null {
+  const obj = asRecord(item);
+  const id = pickString(obj, "id", "modelId", "model_id", "name") ?? "";
+  if (!id || id === "smc-copilot") return null;
+  const available = obj.available;
+  const isDefault = obj.isDefault ?? obj.is_default;
+  const isCurrent = obj.isCurrent ?? obj.is_current;
+  return {
+    id,
+    label: pickString(obj, "label", "displayName", "display_name", "name") ?? id,
+    provider: pickString(obj, "provider", "providerId", "provider_id"),
+    baseUrl: pickString(obj, "baseUrl", "base_url"),
+    available: typeof available === "boolean" ? available : true,
+    isDefault: typeof isDefault === "boolean" ? isDefault : false,
+    isCurrent: typeof isCurrent === "boolean" ? isCurrent : false,
+    source: pickString(obj, "source"),
+  };
+}
+
 function mapOptions(raw: unknown): ServeModelOption[] {
+  const record = asRecord(raw);
   const list = Array.isArray(raw)
     ? raw
-    : Array.isArray(asRecord(raw).options)
-      ? (asRecord(raw).options as unknown[])
-      : Array.isArray(asRecord(raw).items)
-        ? (asRecord(raw).items as unknown[])
-        : [];
-  return list.map((item) => {
-    const obj = asRecord(item);
-    const id = pickString(obj, "id", "modelId", "model_id", "name") ?? "";
-    return {
-      id,
-      label: pickString(obj, "label", "displayName", "display_name", "name") ?? id,
-      provider: pickString(obj, "provider", "providerId", "provider_id"),
-    };
-  }).filter((o) => o.id);
+    : Array.isArray(record.models)
+      ? (record.models as unknown[])
+      : Array.isArray(record.options)
+        ? (record.options as unknown[])
+        : Array.isArray(record.items)
+          ? (record.items as unknown[])
+          : [];
+  return list.map(mapModelItem).filter((o): o is ServeModelOption => o != null);
 }
 
 export const configurationClient = {
@@ -59,11 +73,28 @@ export const configurationClient = {
       body: {},
     }),
 
-  listModelOptions: async (instanceId: string): Promise<ServeModelOption[]> => {
-    const raw = await runtimeFetch({
-      path: `/api/v1/instances/${encodeId(instanceId)}/chat/model-options`,
-    });
-    return mapOptions(raw);
+  /**
+   * PRD v1.5.4: prefer `/chat/models` (execution catalog). Fallback to
+   * `/chat/model-options` for older Runtimes.
+   */
+  listModelOptions: async (
+    instanceId: string,
+    options?: { refresh?: boolean },
+  ): Promise<ServeModelOption[]> => {
+    const query = options?.refresh ? { refresh: "true" } : undefined;
+    try {
+      const raw = await runtimeFetch({
+        path: `/api/v1/instances/${encodeId(instanceId)}/chat/models`,
+        query,
+      });
+      return mapOptions(raw);
+    } catch {
+      const raw = await runtimeFetch({
+        path: `/api/v1/instances/${encodeId(instanceId)}/chat/model-options`,
+        query,
+      });
+      return mapOptions(raw);
+    }
   },
 
   getModelConfig: async (instanceId: string): Promise<ServeModelConfigView> => {
@@ -77,6 +108,9 @@ export const configurationClient = {
     return {
       modelId: pickString(obj, "modelId", "model_id", "model", "id"),
       provider: pickString(obj, "provider", "providerId", "provider_id"),
+      modelLabel: pickString(obj, "modelLabel", "model_label", "label"),
+      baseUrl: pickString(obj, "baseUrl", "base_url"),
+      source: pickString(obj, "source"),
       options,
     };
   },

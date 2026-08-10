@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node-terminal",
+            "name": "Run Script: dev:desktop",
+            "request": "launch",
+            "command": "npm run dev:desktop",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            // scripts/dev.cjs 已带 --inspect=9229 --sourcemap，
+            // 调试器 attach 到 Electron 主进程，即可在 src/main/**/*.ts 打断点
+            "type": "node",
+            "name": "Debug Desktop Main (attach :9229)",
+            "request": "attach",
+            "port": 9229,
+            "cwd": "${workspaceFolder}/apps/desktop",
+            "sourceMaps": true,
+            "restart": true,
+            "timeout": 20000,
+            "skipFiles": ["<node_internals>/**"],
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/apps/desktop/**",
+                "!**/node_modules/**"
+            ],
+            "outFiles": ["${workspaceFolder}/apps/desktop/out/**/*.js"]
+        }
+    ],
+    "compounds": [
+        {
+            // 一键启动：终端跑 dev:desktop + 调试器 attach 主进程（electron-vite 重建后自动重连）
+            "name": "Desktop: dev + debug main",
+            "configurations": [
+                "Run Script: dev:desktop",
+                "Debug Desktop Main (attach :9229)"
+            ],
+            "stopAll": true
+        }
+    ]
+}

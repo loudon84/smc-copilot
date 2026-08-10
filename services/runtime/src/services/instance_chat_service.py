@@ -17,11 +17,9 @@ from db.repositories.chat_attachment_repo import ChatAttachmentRepository
 from db.repositories.chat_settings_repo import ChatSettingsRepository
 from db.repositories.profile_repo import ProfileRepository
 from db.repositories.v12_repos import WorkspaceRepository
-from integrations.hermes.client import HermesClientError
 from integrations.hermes.client_factory import HermesGatewayClientFactory
 from runtime.hermes_profile_paths import profile_home
 from schemas.chat import (
-    ChatModel,
     ChatModelListResponse,
     InstanceChatModelConfig,
     SetInstanceChatModelConfigPayload,
@@ -31,23 +29,19 @@ from schemas.chat import (
 )
 from services.attachment_service import AttachmentService
 from services.chat_stream_service import _ACTIVE_STREAMS, abort_stream, register_stream
+from services.configuration_service import HermesConfigAdapter
 from services.hermes_chat_event_mapper import HermesExecutionEvent
 from services.hermes_chat_executor import HermesChatExecutionRequest, HermesChatExecutor
+from services.hermes_model_catalog_service import (
+    HermesModelCatalogService,
+    is_gateway_virtual_model_id,
+)
 from services.instance_ref_resolver import InstanceRefResolver
 from services.sse_helpers import format_sse
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _infer_provider(model_id: str, raw: dict[str, Any]) -> str | None:
-    owned = raw.get("owned_by")
-    if isinstance(owned, str) and owned:
-        return owned
-    if "/" in model_id:
-        return model_id.split("/", 1)[0]
-    return None
 
 
 # @lat: [[chat-sessions#Instance Chat]]
@@ -76,61 +70,40 @@ class InstanceChatService:
     def _factory(self) -> HermesGatewayClientFactory:
         return HermesGatewayClientFactory(self._app_settings, self._session)
 
-    async def list_models(self, instance_id: str) -> ChatModelListResponse:
-        inst = await self._resolver.require_instance(instance_id)
-        client = await self._factory().create_for_instance(inst.id, require_key=False)
-        healthy = await client.health_check()
-        if not healthy:
-            if inst.status != InstanceStatus.RUNNING.value:
-                return ChatModelListResponse(
-                    instance_id=instance_id,
-                    models=[],
-                    status="gateway_not_running",
-                )
-            return ChatModelListResponse(
-                instance_id=instance_id,
-                models=[],
-                status="gateway_health_failed",
-            )
+    def _catalog(self) -> HermesModelCatalogService:
+        return HermesModelCatalogService(
+            self._session,
+            settings=self._app_settings,
+            factory=self._factory(),
+        )
 
+    async def list_models(
+        self,
+        instance_id: str,
+        *,
+        refresh: bool = False,
+    ) -> ChatModelListResponse:
+        """Return Hermes Execution Model catalog (PRD v1.5.4).
+
+        Source: Hermes ``/api/model/options`` + ``config.yaml`` default.
+        Gateway ``/v1/models`` virtual aliases are diagnostics-only.
+        """
+        inst = await self._resolver.require_instance(instance_id)
         config = await self._settings_repo.get_by_instance_id(instance_id)
         current_id = config.model_id if config else None
+        return await self._catalog().build_catalog(
+            inst,
+            refresh=refresh,
+            current_model_id=current_id,
+        )
 
-        try:
-            raw_models, raw = await client.list_models()
-        except HermesClientError as exc:
-            raise ChatApiError(
-                str(exc),
-                code="MODEL_LIST_FAILED",
-                details={"instance_id": instance_id},
-                http_status=502,
-            ) from exc
-
-        models: list[ChatModel] = []
-        for item in raw_models:
-            if not isinstance(item, dict):
-                continue
-            model_id = str(item.get("id") or item.get("name") or "").strip()
-            if not model_id:
-                continue
-            models.append(
-                ChatModel(
-                    id=model_id,
-                    label=str(item.get("name") or model_id),
-                    provider=_infer_provider(model_id, item),
-                    base_url=item.get("base_url") if isinstance(item.get("base_url"), str) else None,
-                    source="gateway",
-                    is_current=model_id == current_id,
-                )
-            )
-
-        if models and not any(m.is_current for m in models):
-            models[0].is_current = True
-
-        return ChatModelListResponse(instance_id=instance_id, models=models, status="ok", raw=raw)
-
-    async def get_model_options(self, instance_id: str) -> ChatModelListResponse:
-        return await self.list_models(instance_id)
+    async def get_model_options(
+        self,
+        instance_id: str,
+        *,
+        refresh: bool = False,
+    ) -> ChatModelListResponse:
+        return await self.list_models(instance_id, refresh=refresh)
 
     async def get_model_config(self, instance_id: str) -> InstanceChatModelConfig | None:
         await self._resolver.require_instance(instance_id)
@@ -138,6 +111,10 @@ class InstanceChatService:
         if row is None:
             # Seed default when Instance is already ready but never configured.
             return await self.ensure_default_model_config(instance_id)
+        # PRD v1.5.4 §21: reconcile legacy gateway virtual model bindings.
+        reconciled = await self._reconcile_virtual_model_binding(instance_id, row)
+        if reconciled is not None:
+            return reconciled
         return InstanceChatModelConfig(
             instance_id=row.instance_id or instance_id,
             provider=row.provider,
@@ -145,17 +122,22 @@ class InstanceChatService:
             model_label=row.model_label,
             base_url=row.base_url,
             updated_at=row.updated_at,
+            source="profile_chat_settings",
         )
 
     async def ensure_default_model_config(self, instance_id: str) -> InstanceChatModelConfig | None:
-        """Persist a default model-config once when Instance is ready (PRD v1.5.3 follow-up).
+        """Persist a default model-config once when Instance is ready (PRD v1.5.4).
 
-        Prefer Gateway ``/v1/models`` first entry; fall back to Hermes ``config.yaml``
-        ``model.default``. Never overwrite an existing user-saved config.
+        Seed **only** from Hermes ``config.yaml`` (execution model SOT).
+        Never seed from Gateway ``/v1/models`` virtual aliases.
+        Never overwrite an existing non-virtual user-saved config.
         """
         inst = await self._resolver.require_instance(instance_id)
         existing = await self._settings_repo.get_by_instance_id(instance_id)
         if existing is not None:
+            reconciled = await self._reconcile_virtual_model_binding(instance_id, existing)
+            if reconciled is not None:
+                return reconciled
             return InstanceChatModelConfig(
                 instance_id=existing.instance_id or instance_id,
                 provider=existing.provider,
@@ -163,61 +145,64 @@ class InstanceChatService:
                 model_label=existing.model_label,
                 base_url=existing.base_url,
                 updated_at=existing.updated_at,
+                source="profile_chat_settings",
             )
 
-        model_id: str | None = None
-        provider = "auto"
-        model_label: str | None = None
-        base_url: str | None = None
-
-        try:
-            client = await self._factory().create_for_instance(inst.id, require_key=False)
-            health = await client.health_check()
-            if health:
-                raw_models, _raw = await client.list_models()
-                for item in raw_models:
-                    if not isinstance(item, dict):
-                        continue
-                    mid = str(item.get("id") or item.get("name") or "").strip()
-                    if not mid:
-                        continue
-                    model_id = mid
-                    model_label = str(item.get("name") or mid)
-                    provider = _infer_provider(mid, item) or "hermes"
-                    if isinstance(item.get("base_url"), str):
-                        base_url = item.get("base_url")
-                    break
-        except Exception:
-            pass
-
-        if not model_id:
-            from services.hermes_local_config_service import HermesLocalConfigService
-
-            cfg = HermesLocalConfigService(self._app_settings).read_config(inst.profile_name)
-            data = cfg.data or {}
-            model_section = data.get("model") if isinstance(data.get("model"), dict) else {}
-            default = (
-                (model_section or {}).get("default")
-                or data.get("default")
-                or (model_section or {}).get("model")
-            )
-            if isinstance(default, str) and default.strip():
-                model_id = default.strip()
-                provider = str((model_section or {}).get("provider") or data.get("provider") or "auto")
-                bu = (model_section or {}).get("base_url") or data.get("base_url")
-                if isinstance(bu, str) and bu.strip():
-                    base_url = bu.strip()
-
-        if not model_id:
+        resolved = self._catalog().resolve_default_model(inst.profile_name)
+        if resolved is None:
             return None
 
+        saved = await self.set_model_config(
+            instance_id,
+            SetInstanceChatModelConfigPayload(
+                provider=resolved.provider or "auto",
+                model_id=resolved.model_id,
+                model_label=resolved.model_label,
+                base_url=resolved.base_url,
+            ),
+        )
+        return InstanceChatModelConfig(
+            instance_id=saved.instance_id,
+            provider=saved.provider,
+            model_id=saved.model_id,
+            model_label=saved.model_label,
+            base_url=saved.base_url,
+            updated_at=saved.updated_at,
+            source="hermes-config",
+        )
+
+    async def _reconcile_virtual_model_binding(
+        self,
+        instance_id: str,
+        existing: ProfileChatSettings,
+    ) -> InstanceChatModelConfig | None:
+        """Replace gateway virtual model bindings with config.yaml execution default.
+
+        Only migrates rows whose ``model_id`` is a Gateway Virtual Model
+        (e.g. ``smc-copilot``). Real user selections are never overwritten.
+        """
+        mid = (existing.model_id or "").strip()
+        if not mid:
+            return None
+        inst = await self._resolver.require_instance(instance_id)
+        catalog = self._catalog()
+        virtual_ids = await catalog.list_gateway_virtual_model_ids(inst)
+        # Always treat smc-copilot as virtual even if /v1/models is unreachable.
+        virtual_ids = set(virtual_ids) | {"smc-copilot"}
+        if mid not in virtual_ids:
+            return None
+        resolved = catalog.resolve_default_model(inst.profile_name)
+        if resolved is None or not resolved.model_id or resolved.model_id in virtual_ids:
+            return None
+        if resolved.model_id == mid:
+            return None
         return await self.set_model_config(
             instance_id,
             SetInstanceChatModelConfigPayload(
-                provider=provider or "auto",
-                model_id=model_id,
-                model_label=model_label,
-                base_url=base_url,
+                provider=resolved.provider or "auto",
+                model_id=resolved.model_id,
+                model_label=resolved.model_label,
+                base_url=resolved.base_url,
             ),
         )
 
@@ -225,22 +210,44 @@ class InstanceChatService:
         self, instance_id: str, body: SetInstanceChatModelConfigPayload
     ) -> InstanceChatModelConfig:
         inst = await self._resolver.require_instance(instance_id)
-        if not body.model_id.strip():
+        model_id = body.model_id.strip()
+        if not model_id:
             raise ChatApiError(
                 "model_id is required",
                 code="MODEL_CONFIG_INVALID",
                 http_status=400,
             )
+        if is_gateway_virtual_model_id(model_id):
+            raise ChatApiError(
+                "Gateway virtual model cannot be set as execution default",
+                code="MODEL_CONFIG_INVALID",
+                http_status=400,
+                details={"modelId": model_id},
+            )
+
+        provider = (body.provider or "auto").strip() or "auto"
+        base_url = (body.base_url or "").strip().rstrip("/") or None
+        if provider == "auto" and base_url:
+            provider = "custom"
+
+        # Persist Hermes config.yaml execution default (SOT for Agent runtime).
+        self._write_hermes_default_model(
+            inst.profile_name,
+            provider=provider,
+            model_id=model_id,
+            base_url=base_url,
+        )
+
         now = _utc_now()
         existing = await self._settings_repo.get_by_instance_id(instance_id)
         profile_id = await self._resolve_profile_id_for_settings(inst, existing)
         row = ProfileChatSettings(
             profile_id=profile_id,
             instance_id=instance_id,
-            provider=body.provider or "auto",
-            model_id=body.model_id.strip(),
-            model_label=body.model_label,
-            base_url=body.base_url,
+            provider=provider,
+            model_id=model_id,
+            model_label=body.model_label or model_id,
+            base_url=base_url,
             is_default=1,
             created_at=existing.created_at if existing else now,
             updated_at=now,
@@ -253,7 +260,49 @@ class InstanceChatService:
             model_label=saved.model_label,
             base_url=saved.base_url,
             updated_at=saved.updated_at,
+            source="hermes-config",
         )
+
+    def _write_hermes_default_model(
+        self,
+        profile_name: str,
+        *,
+        provider: str,
+        model_id: str,
+        base_url: str | None,
+    ) -> None:
+        """Write model.default / provider / base_url into Hermes ``config.yaml``."""
+        adapter = HermesConfigAdapter(self._app_settings)
+        current = adapter.read(profile_name)
+        current["provider"] = provider
+        current["default"] = model_id
+        model_section = current.get("model") if isinstance(current.get("model"), dict) else {}
+        next_model = {
+            **model_section,
+            "provider": provider,
+            "default": model_id,
+        }
+        if base_url:
+            next_model["base_url"] = base_url
+        elif "base_url" in next_model and not base_url:
+            # Keep existing base_url when caller omitted it.
+            pass
+        current["model"] = next_model
+        platforms = current.get("platforms") if isinstance(current.get("platforms"), dict) else {}
+        api_server = platforms.get("api_server") if isinstance(platforms.get("api_server"), dict) else {}
+        platforms = {
+            **platforms,
+            "api_server": {
+                "host": api_server.get("host") or "127.0.0.1",
+                "port": api_server.get("port") or 8642,
+            },
+        }
+        current["platforms"] = platforms
+        if "smart_model_routing" not in current:
+            current["smart_model_routing"] = {"enabled": False}
+        if "streaming" not in current:
+            current["streaming"] = True
+        adapter.write(profile_name, current)
 
     async def _resolve_profile_id_for_settings(
         self,
@@ -298,15 +347,16 @@ class InstanceChatService:
         )
 
     async def resolve_default_model(self, instance_id: str, session_model: str | None) -> str | None:
-        if session_model and session_model.strip():
-            return session_model.strip()
-        config = await self.get_model_config(instance_id)
-        if config is not None:
-            return config.model_id
-        listed = await self.list_models(instance_id)
-        if listed.models:
-            return listed.models[0].id
-        return None
+        """Resolve chat model id for a turn — delegates to HermesChatExecutor (single SOT).
+
+        Never fall back to Gateway virtual model aliases.
+        """
+        return await HermesChatExecutor(
+            self._session,
+            settings=self._app_settings,
+            settings_repo=self._settings_repo,
+            profile_repo=self._profiles,
+        ).resolve_default_model(instance_id, session_model)
 
     async def ensure_gateway_ready(self, instance_id: str) -> HermesInstance:
         inst = await self._resolver.require_instance(instance_id)

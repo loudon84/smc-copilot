@@ -1,5 +1,6 @@
 /**
- * PRD v1.4.1 §70 — Connection Ready derives from readiness.service only.
+ * PRD v1.4.1 §70 / v1.5.4 — Connection Ready from readiness.service;
+ * chatReady / maintenanceReady are separate.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -16,6 +17,7 @@ vi.mock("electron", () => ({
 const getStatus = vi.fn();
 const getCapabilities = vi.fn();
 const getReadiness = vi.fn();
+let cachedReadiness: unknown = null;
 
 vi.mock("../src/main/copilot-runtime-client/smc-runtime-client", () => ({
   getSmcRuntimeClient: () => ({
@@ -54,8 +56,11 @@ vi.mock("../src/main/copilot-runtime-client/runtime-auth-store", () => ({
 
 vi.mock("../src/main/copilot-runtime-client/runtime-capability-manager", () => ({
   getCachedCapabilities: () => null,
+  getCachedReadiness: () => cachedReadiness,
   setCachedCapabilities: vi.fn(),
-  setCachedReadiness: vi.fn(),
+  setCachedReadiness: vi.fn((v: unknown) => {
+    cachedReadiness = v;
+  }),
   toCapabilitiesView: (raw: { apiVersion?: string; features?: string[] }) => ({
     runtimeApiVersion: raw.apiVersion ?? "",
     features: [],
@@ -71,11 +76,16 @@ vi.mock("../src/main/copilot-runtime-client/runtime-mode", () => ({
   resolveServeBaseUrl: () => "http://127.0.0.1:8765",
 }));
 
-describe("runtime connection readiness (PRD v1.4.1 §70)", () => {
+describe("runtime connection readiness (PRD v1.4.1 / v1.5.4)", () => {
   beforeEach(() => {
+    cachedReadiness = null;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({ ok: true }) as Response),
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: "ok", service: "smc-copilot-serve" }),
+      }) as Response),
     );
     getStatus.mockReset();
     getCapabilities.mockReset();
@@ -105,7 +115,28 @@ describe("runtime connection readiness (PRD v1.4.1 §70)", () => {
     const state = await runRuntimeHandshake();
     expect(state.state).toBe("Ready");
     expect(state.ready).toBe(true);
+    expect(state.serviceReady).toBe(true);
+    expect(state.chatReady).toBe(false);
+    expect(state.maintenanceReady).toBe(false);
     expect(state.canRepair).toBe(false);
+  });
+
+  it("exposes chatReady when execution.chatReady is true", async () => {
+    getReadiness.mockResolvedValue({
+      service: { ready: true, checks: { database: "ok" } },
+      execution: { ready: true, chatReady: true, taskReady: true },
+      maintenance: { ready: false, checks: { manifest: "missing" } },
+      expertMcp: { ready: false, status: "not_configured" },
+    });
+
+    const { runRuntimeHandshake } = await import(
+      "../src/main/copilot-runtime-client/runtime-connection-manager"
+    );
+    const state = await runRuntimeHandshake();
+    expect(state.state).toBe("Ready");
+    expect(state.serviceReady).toBe(true);
+    expect(state.chatReady).toBe(true);
+    expect(state.maintenanceReady).toBe(false);
   });
 
   it("marks RuntimeDegraded only when service domain is not ready", async () => {
@@ -122,6 +153,7 @@ describe("runtime connection readiness (PRD v1.4.1 §70)", () => {
     const state = await runRuntimeHandshake();
     expect(state.state).toBe("RuntimeDegraded");
     expect(state.ready).toBe(false);
+    expect(state.serviceReady).toBe(false);
     expect(state.canRepair).toBe(true);
   });
 
@@ -132,7 +164,34 @@ describe("runtime connection readiness (PRD v1.4.1 §70)", () => {
     );
     expect(src).not.toMatch(/status\.hermesInstalled\s*===\s*false/);
     expect(src).not.toMatch(/Object\.values\(status\.checks\)/);
-    expect(src).toMatch(/readiness\?\.service\?\.ready\s*===\s*true/);
+    expect(src).toMatch(/serviceReady/);
+  });
+
+  it("boot coordinator does not auto-start Runtime", () => {
+    const src = readFileSync(
+      join(__dirname, "../src/main/startup/desktop-boot-coordinator.ts"),
+      "utf8",
+    );
+    expect(src).not.toMatch(/autoStartCopilotServeIfReady/);
+    expect(src).toMatch(/initCopilotRuntimeConnection/);
+  });
+
+  it("ServeChatRuntimeAdapter gates on chatReady", () => {
+    const src = readFileSync(
+      join(__dirname, "../src/main/runtime-adapters/ServeChatRuntimeAdapter.ts"),
+      "utf8",
+    );
+    expect(src).toMatch(/chatReady/);
+    expect(src).not.toMatch(/isServeChatTransportEnabled\(getRuntimeConnectionState\(\)\.ready\)/);
+  });
+
+  it("chat-runtime-ipc gates on ServeChatRuntimeAdapter.ready (not ready fallback)", () => {
+    const src = readFileSync(
+      join(__dirname, "../src/main/chat-runtime/chat-runtime-ipc.ts"),
+      "utf8",
+    );
+    expect(src).toMatch(/assertReadyForChat\(ServeChatRuntimeAdapter\.ready\)/);
+    expect(src).not.toMatch(/chatReady\s*\|\|\s*connection\.ready/);
   });
 
   it("TaskWorkbench uses taskReady gate", () => {

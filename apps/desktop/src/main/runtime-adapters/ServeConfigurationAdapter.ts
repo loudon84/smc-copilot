@@ -6,6 +6,7 @@ import { secretsClient, sanitizeSecretMeta } from "../copilot-runtime-client/cli
 import { ServeInstanceAdapter } from "./ServeInstanceAdapter";
 import type {
   ServeModelConfigView,
+  ServeModelOption,
   ServeSecretMeta,
 } from "../../shared/copilot-runtime/instance-contract";
 
@@ -44,6 +45,14 @@ export const ServeConfigurationAdapter = {
   async getModelConfig(profileRef?: string): Promise<ServeModelConfigView> {
     const instanceId = await ServeInstanceAdapter.resolveInstanceId(profileRef);
     return configurationClient.getModelConfig(instanceId);
+  },
+
+  async listModelOptions(
+    profileRef?: string,
+    options?: { refresh?: boolean },
+  ): Promise<ServeModelOption[]> {
+    const instanceId = await ServeInstanceAdapter.resolveInstanceId(profileRef);
+    return configurationClient.listModelOptions(instanceId, options);
   },
 
   async setModelConfig(profileRef: string | undefined, body: Record<string, unknown>): Promise<unknown> {

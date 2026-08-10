@@ -93,6 +93,54 @@ def model_config_invalid(message: str = "Invalid model configuration", **details
     return ChatApiError(message, code="MODEL_CONFIG_INVALID", details=dict(details), http_status=400)
 
 
+def hermes_model_options_unavailable(
+    message: str = "Hermes model options unavailable",
+    **details: object,
+) -> ChatApiError:
+    return ChatApiError(
+        message,
+        code="HERMES_MODEL_OPTIONS_UNAVAILABLE",
+        details=dict(details),
+        http_status=502,
+    )
+
+
+def hermes_model_config_invalid(
+    message: str = "Hermes model config invalid",
+    **details: object,
+) -> ChatApiError:
+    return ChatApiError(
+        message,
+        code="HERMES_MODEL_CONFIG_INVALID",
+        details=dict(details),
+        http_status=400,
+    )
+
+
+def hermes_default_model_not_found(
+    message: str = "Hermes default model not found",
+    **details: object,
+) -> ChatApiError:
+    return ChatApiError(
+        message,
+        code="HERMES_DEFAULT_MODEL_NOT_FOUND",
+        details=dict(details),
+        http_status=404,
+    )
+
+
+def model_catalog_parse_failed(
+    message: str = "Failed to parse Hermes model catalog",
+    **details: object,
+) -> ChatApiError:
+    return ChatApiError(
+        message,
+        code="MODEL_CATALOG_PARSE_FAILED",
+        details=dict(details),
+        http_status=502,
+    )
+
+
 def attachment_too_large(message: str = "Attachment too large", **details: object) -> ChatApiError:
     return ChatApiError(message, code="ATTACHMENT_TOO_LARGE", details=dict(details), http_status=400)
 

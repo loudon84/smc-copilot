@@ -10,14 +10,21 @@ from db.base import Base
 
 
 def create_engine(settings: Settings) -> AsyncEngine:
-    engine = create_async_engine(settings.sqlite_url, echo=False)
+    is_sqlite = "sqlite" in settings.sqlite_url
+    # aiosqlite 连接级超时：写事务竞争时等待而非立即 database is locked
+    connect_args = {"timeout": 30} if is_sqlite else {}
+    engine = create_async_engine(settings.sqlite_url, echo=False, connect_args=connect_args)
 
-    if "sqlite" in settings.sqlite_url:
+    if is_sqlite:
 
         @event.listens_for(engine.sync_engine, "connect")  # type: ignore[untyped-decorator]
         def _sqlite_pragma(dbapi_connection: object, _connection_record: object) -> None:
             cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
             cursor.execute("PRAGMA foreign_keys=ON")
+            # WAL 允许读写在多数情况下并发；busy_timeout 兜底等待残留写锁
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=10000")
             cursor.close()
 
     return engine

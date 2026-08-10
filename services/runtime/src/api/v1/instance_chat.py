@@ -47,17 +47,19 @@ async def resolve_instance(
 @router.get("/instances/{instance_id}/chat/models", response_model=ChatModelListResponse)
 async def list_instance_chat_models(
     instance_id: str,
+    refresh: bool = Query(False),
     svc: InstanceChatService = Depends(_instance_chat_service),
 ) -> ChatModelListResponse:
-    return await svc.list_models(instance_id)
+    return await svc.list_models(instance_id, refresh=refresh)
 
 
 @router.get("/instances/{instance_id}/chat/model-options", response_model=ChatModelListResponse)
 async def list_instance_model_options(
     instance_id: str,
+    refresh: bool = Query(False),
     svc: InstanceChatService = Depends(_instance_chat_service),
 ) -> ChatModelListResponse:
-    return await svc.get_model_options(instance_id)
+    return await svc.get_model_options(instance_id, refresh=refresh)
 
 
 @router.get(

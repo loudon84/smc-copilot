@@ -29,6 +29,27 @@ export function getCachedReadiness(): RuntimeReadinessView | null {
   return cachedReadiness;
 }
 
+/** PRD v1.5.4 §39 — domain readiness accessors. */
+export function isRuntimeServiceReady(): boolean {
+  return cachedReadiness?.service?.ready === true;
+}
+
+export function isRuntimeExecutionReady(): boolean {
+  return cachedReadiness?.execution?.ready === true;
+}
+
+export function isRuntimeChatReady(): boolean {
+  return cachedReadiness?.execution?.chatReady === true;
+}
+
+export function isRuntimeTaskReady(): boolean {
+  return cachedReadiness?.execution?.taskReady === true;
+}
+
+export function isRuntimeMaintenanceReady(): boolean {
+  return cachedReadiness?.maintenance?.ready === true;
+}
+
 export function assertDomainReady(
   domain: "service" | "execution" | "maintenance" | "expertMcp",
 ): DesktopRuntimeError | null {

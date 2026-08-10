@@ -5,7 +5,11 @@ import type { WebContents } from "electron";
 import { chatRuntimeClient } from "../copilot-runtime-client/clients/chat-runtime-client";
 import { getRuntimeConnectionState } from "../copilot-runtime-client/runtime-connection-manager";
 import {
-  isServeChatTransportEnabled,
+  getCachedReadiness,
+  isRuntimeChatReady,
+  isRuntimeServiceReady,
+} from "../copilot-runtime-client/runtime-capability-manager";
+import {
   isServeChatTransportPreferred,
 } from "../copilot-runtime-client/runtime-mode";
 import { CopilotRuntimeHttpError } from "../copilot-runtime-client/runtime-http-client";
@@ -41,8 +45,19 @@ import { isChatTurnTerminalEventType } from "../../shared/chat-runtime/chat-runt
 const runAbortControllers = new Map<string, AbortController>();
 const workspaceId = "desktop-default";
 
+/**
+ * Chat transport ready = serviceReady AND execution.chatReady (PRD v1.5.4 §40).
+ * maintenance.ready must not block Chat.
+ */
 function liveReady(): boolean {
-  return isServeChatTransportEnabled(getRuntimeConnectionState().ready);
+  if (!isServeChatTransportPreferred()) return false;
+  const connection = getRuntimeConnectionState();
+  const serviceReady = connection.serviceReady || isRuntimeServiceReady();
+  const chatReady =
+    connection.chatReady ||
+    isRuntimeChatReady() ||
+    getCachedReadiness()?.execution?.chatReady === true;
+  return serviceReady && chatReady;
 }
 
 function errorMessage(err: unknown): string {
@@ -146,7 +161,12 @@ export const ServeChatRuntimeAdapter = {
         sessionId: identity.sessionId,
         workspaceId,
         message: request.message,
-        modelId: request.model?.modelId,
+        // PRD v1.5.4 §47: never send Gateway virtual model as execution modelId.
+        // Omit when unset / virtual so Hermes uses config.yaml default.
+        modelId:
+          request.model?.modelId && request.model.modelId !== "smc-copilot"
+            ? request.model.modelId
+            : undefined,
         attachmentIds,
         context: {
           expertId: request.expertId,

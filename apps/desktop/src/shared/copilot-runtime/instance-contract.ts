@@ -87,11 +87,19 @@ export interface ServeModelOption {
   id: string;
   label: string;
   provider?: string | null;
+  baseUrl?: string | null;
+  available?: boolean;
+  isDefault?: boolean;
+  isCurrent?: boolean;
+  source?: string | null;
 }
 
 export interface ServeModelConfigView {
   modelId: string | null;
   provider: string | null;
+  modelLabel?: string | null;
+  baseUrl?: string | null;
+  source?: string | null;
   options: ServeModelOption[];
 }
 

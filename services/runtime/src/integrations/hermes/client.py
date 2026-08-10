@@ -266,6 +266,11 @@ class HermesGatewayClient:
                 )
 
     async def list_models(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        """Gateway Virtual Models only (OpenAI compatibility: GET /v1/models).
+
+        Do **not** use this for Desktop/Runtime execution model catalog.
+        Prefer :meth:`list_model_options` for Hermes Execution Models.
+        """
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             resp = await client.get(self._url("/v1/models"), headers=self._auth_headers())
             if resp.status_code >= 400:
@@ -277,6 +282,30 @@ class HermesGatewayClient:
             if isinstance(data, list):
                 return data, None
             return [], data if isinstance(data, dict) else None
+
+    async def list_model_options(self, *, refresh: bool = False) -> dict[str, Any]:
+        """Hermes Execution Model catalog (GET /api/model/options).
+
+        PRD v1.5.4: provider-aware picker inventory. Pass ``refresh=True`` to
+        force Hermes provider discovery (``?refresh=1``).
+        """
+        params: dict[str, str] = {}
+        if refresh:
+            params["refresh"] = "1"
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.get(
+                self._url("/api/model/options"),
+                headers=self._auth_headers(),
+                params=params or None,
+            )
+            if resp.status_code >= 400:
+                raise HermesClientError(
+                    f"list_model_options failed: {resp.status_code}",
+                )
+            data = resp.json()
+            if not isinstance(data, dict):
+                raise HermesClientError("list_model_options returned non-object response")
+            return data
 
     async def create_run(
         self,

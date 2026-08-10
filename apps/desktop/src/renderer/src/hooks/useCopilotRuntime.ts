@@ -123,6 +123,7 @@ export function useCopilotRuntime(): {
 
 /** Gate helper: block Chat/Task/MCP mutating actions when Runtime is not Ready. */
 export function assertRuntimeReadyForWrite(state: RuntimeConnectionState): string | null {
+  debugger;
   if (state.state === "Ready" && state.ready) return null;
   return `Runtime is ${state.state}. Chat / Task / MCP writes are blocked until Ready.`;
 }

@@ -12,6 +12,8 @@ Handshake loads status, capabilities, and readiness; Connection Ready follows se
 
 Desktop probes Serve with `health → /runtime/status → /runtime/capabilities → /runtime/compatibility`, then emits a seven-state connection model for UI. Execution/maintenance Attention must not flip Connection to Degraded.
 
+Handshake 防抖与防卡死：后台轮询重验证期间保持 `Ready`（不再先广播 `Connecting`）；握手整体有 10s 超时，超时落 `RuntimeMissing`，避免对端进程死亡导致请求悬挂、状态机永久卡在 `Connecting`。
+
 States: `Connecting`, `PairingRequired`, `Incompatible`, `RuntimeMissing`, `RuntimeStarting`, `RuntimeDegraded`, `Ready`. Non-`Ready` allows viewing local UI Workspace but must block Chat/Task/MCP mutating writes.
 
 Owner: [[src/main/copilot-runtime-client/runtime-connection-manager.ts#runRuntimeHandshake]] via `window.copilotRuntime`.

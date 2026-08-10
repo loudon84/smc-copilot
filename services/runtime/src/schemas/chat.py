@@ -27,19 +27,49 @@ class ResolvedInstance(BaseModel):
     healthy: bool
 
 
+class ChatModelCapabilities(BaseModel):
+    vision: bool | None = None
+    reasoning: bool | None = None
+    tools: bool | None = None
+
+
 class ChatModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     label: str
     provider: str | None = None
-    base_url: str | None = None
-    source: str = "gateway"
-    is_current: bool = False
+    base_url: str | None = Field(default=None, alias="baseUrl")
+    available: bool = True
+    is_default: bool = Field(default=False, alias="isDefault")
+    capabilities: ChatModelCapabilities | None = None
+    source: str = "hermes-model-options"
+    # Legacy alias kept for Desktop / older clients.
+    is_current: bool = Field(default=False, alias="isCurrent")
+
+
+class ChatDefaultModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    provider: str
+    model_id: str = Field(alias="modelId")
+    base_url: str | None = Field(default=None, alias="baseUrl")
+
+
+class ChatGatewayVirtualInfo(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    virtual_model: str | None = Field(default=None, alias="virtualModel")
 
 
 class ChatModelListResponse(BaseModel):
-    profile_id: str | None = None
-    instance_id: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    profile_id: str | None = Field(default=None, alias="profileId")
+    instance_id: str | None = Field(default=None, alias="instanceId")
     models: list[ChatModel]
+    default_model: ChatDefaultModel | None = Field(default=None, alias="defaultModel")
+    gateway: ChatGatewayVirtualInfo | None = None
     status: str | None = None
     raw: dict[str, Any] | None = None
 
@@ -51,6 +81,7 @@ class ProfileChatModelConfig(BaseModel):
     model_label: str | None = None
     base_url: str | None = None
     updated_at: str
+    source: str | None = None
 
 
 class InstanceChatModelConfig(BaseModel):
@@ -58,24 +89,29 @@ class InstanceChatModelConfig(BaseModel):
 
     instance_id: str = Field(alias="instanceId")
     provider: str
-    model_id: str
-    model_label: str | None = None
-    base_url: str | None = None
-    updated_at: str
+    model_id: str = Field(alias="modelId")
+    model_label: str | None = Field(default=None, alias="modelLabel")
+    base_url: str | None = Field(default=None, alias="baseUrl")
+    updated_at: str = Field(alias="updatedAt")
+    source: str | None = None
 
 
 class SetProfileChatModelConfigPayload(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     provider: str = "auto"
-    model_id: str
-    model_label: str | None = None
-    base_url: str | None = None
+    model_id: str = Field(alias="modelId")
+    model_label: str | None = Field(default=None, alias="modelLabel")
+    base_url: str | None = Field(default=None, alias="baseUrl")
 
 
 class SetInstanceChatModelConfigPayload(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     provider: str = "auto"
-    model_id: str
-    model_label: str | None = None
-    base_url: str | None = None
+    model_id: str = Field(alias="modelId")
+    model_label: str | None = Field(default=None, alias="modelLabel")
+    base_url: str | None = Field(default=None, alias="baseUrl")
 
 
 class WorkspaceChatMessage(BaseModel):

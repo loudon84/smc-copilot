@@ -42,7 +42,6 @@ import {
 } from "./chat-event-replay-service";
 import { registerChatQueueIpc } from "./chat-queue-service";
 import { ServeChatRuntimeAdapter } from "../runtime-adapters/ServeChatRuntimeAdapter";
-import { getRuntimeConnectionState } from "../copilot-runtime-client/runtime-connection-manager";
 import {
   assertReadyForChat,
   getCachedCapabilities,
@@ -262,10 +261,12 @@ async function beginChatTurn(
     return { ok: false, code: ChatRuntimeErrorCode.INVALID_INPUT, error: invalid };
   }
 
-  // Phase 3 / v1.2 Phase 5: Serve Chat Runtime transport + capability gate.
+  // Phase 3 / v1.2 Phase 5 / v1.5.4: Serve Chat Runtime transport + chatReady gate.
   if (ServeChatRuntimeAdapter.preferred()) {
-    const ready = getRuntimeConnectionState().ready;
-    const gate = assertReadyForChat(ready);
+    // Align with ServeChatRuntimeAdapter.liveReady(): serviceReady && chatReady.
+    // Do not fall back to connection.ready (serviceReady) — that would admit turns
+    // when execution.chatReady is false (PRD v1.5.4 §40 / §53).
+    const gate = assertReadyForChat(ServeChatRuntimeAdapter.ready);
     if (gate) {
       return {
         ok: false,
@@ -290,6 +291,10 @@ async function beginChatTurn(
     }
     return ServeChatRuntimeAdapter.startTurn(input, event.sender);
   }
+
+  // @deprecated legacy-direct development fallback (PRD v1.5.4 §42–43).
+  // Production: isLegacyHermesDirectAllowed() is always false — this branch is unreachable.
+  // Prefer ServeChatRuntimeAdapter. Do not add new features here.
 
   const runId = input.runId.trim();
   const turnId = input.turnId.trim();

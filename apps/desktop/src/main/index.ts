@@ -1085,7 +1085,7 @@ function setupIPC(): void {
   });
   ipcMain.handle(
     "add-model",
-    (
+    async (
       _event,
       name: string,
       provider: string,
@@ -1094,26 +1094,74 @@ function setupIPC(): void {
       opts?: { apiKeyEnv?: string; apiKeyLiteral?: string },
     ) => {
       const entry = addModel(name, provider, model, baseUrl, opts);
-      // Serve CP owns config.yaml custom_providers; keep local models.json only.
-      if (!isServeControlPlanePreferred()) {
+      if (isServeControlPlanePreferred()) {
+        const { ensureServeConfigReachable } = await import("./runtime-adapters/config-control");
+        const { syncCustomProvidersViaRuntime } = await import(
+          "./hermes-config/hermes-config-yaml"
+        );
+        if (!(await ensureServeConfigReachable())) {
+          throw new Error(
+            "Serve Runtime is not reachable. Adding models requires Runtime health ok or COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true.",
+          );
+        }
+        try {
+          await syncCustomProvidersViaRuntime();
+        } catch (syncErr) {
+          console.warn("[models] custom_providers sync via Runtime failed:", syncErr);
+        }
+      } else {
         syncCustomProvidersFromModels();
       }
       return entry;
     },
   );
-  ipcMain.handle("remove-model", (_event, id: string) => {
+  ipcMain.handle("remove-model", async (_event, id: string) => {
     const ok = removeModel(id);
-    if (ok && !isServeControlPlanePreferred()) {
-      syncCustomProvidersFromModels();
+    if (ok) {
+      if (isServeControlPlanePreferred()) {
+        const { ensureServeConfigReachable } = await import("./runtime-adapters/config-control");
+        const { syncCustomProvidersViaRuntime } = await import(
+          "./hermes-config/hermes-config-yaml"
+        );
+        if (!(await ensureServeConfigReachable())) {
+          throw new Error(
+            "Serve Runtime is not reachable. Removing models requires Runtime health ok or COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true.",
+          );
+        }
+        try {
+          await syncCustomProvidersViaRuntime();
+        } catch (syncErr) {
+          console.warn("[models] custom_providers sync via Runtime failed:", syncErr);
+        }
+      } else {
+        syncCustomProvidersFromModels();
+      }
     }
     return ok;
   });
   ipcMain.handle(
     "update-model",
-    (_event, id: string, fields: Record<string, string>) => {
+    async (_event, id: string, fields: Record<string, string>) => {
       const ok = updateModel(id, fields);
-      if (ok && !isServeControlPlanePreferred()) {
-        syncCustomProvidersFromModels();
+      if (ok) {
+        if (isServeControlPlanePreferred()) {
+          const { ensureServeConfigReachable } = await import("./runtime-adapters/config-control");
+          const { syncCustomProvidersViaRuntime } = await import(
+            "./hermes-config/hermes-config-yaml"
+          );
+          if (!(await ensureServeConfigReachable())) {
+            throw new Error(
+              "Serve Runtime is not reachable. Updating models requires Runtime health ok or COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true.",
+            );
+          }
+          try {
+            await syncCustomProvidersViaRuntime();
+          } catch (syncErr) {
+            console.warn("[models] custom_providers sync via Runtime failed:", syncErr);
+          }
+        } else {
+          syncCustomProvidersFromModels();
+        }
       }
       return ok;
     },

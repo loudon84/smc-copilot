@@ -2,6 +2,8 @@
 
 使用 SQLAlchemy 2.x async + SQLite（aiosqlite），生产仅经 Alembic 迁移建表。模型含 Runtime Core、v1.2 Profile/任务表，以及 v1.5 Endpoint Sync 表（见 [[data-model#数据模型#Endpoint Sync 表]]）。
 
+连接层 [[src/db/session.py#create_engine]] 对每个 SQLite 连接启用 `foreign_keys=ON`、`journal_mode=WAL`、`synchronous=NORMAL`、`busy_timeout=10000`（连接参数 `timeout=30`），避免多 Worker 并发写时出现 `database is locked` 500。
+
 相关：[[runtime-service#版本管理]]、[[profiles-instances#Profile 与 Instance]]、[[task-runtime#任务运行时]]。
 
 ## Runtime 表

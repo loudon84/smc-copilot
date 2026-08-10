@@ -175,6 +175,14 @@ export function syncCustomProvidersFromModels(profile?: string): boolean {
   return true;
 }
 
+/** Sync models.json → Hermes config.yaml ``custom_providers`` via Runtime (Serve CP). */
+export async function syncCustomProvidersViaRuntime(profile?: string): Promise<void> {
+  const { servePatchCustomProviders } = await import("../runtime-adapters/config-control");
+  ensureModelsApiKeyEnvPersisted();
+  const providers = buildCustomProvidersFromModels(profile);
+  await servePatchCustomProviders(profile, providers);
+}
+
 export function setDefaultHermesModel(
   profile: string | undefined,
   modelId: string,

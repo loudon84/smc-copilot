@@ -445,6 +445,24 @@ components:
       - message
       title: ChatCreateTurnBody
       type: object
+    ChatDefaultModel:
+      properties:
+        baseUrl:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Baseurl
+        modelId:
+          title: Modelid
+          type: string
+        provider:
+          title: Provider
+          type: string
+      required:
+      - provider
+      - modelId
+      title: ChatDefaultModel
+      type: object
     ChatEventResponse:
       description: Single durable chat-run event as returned by list/snapshot APIs.
       properties:
@@ -505,6 +523,15 @@ components:
       - type
       title: ChatEventResponse
       type: object
+    ChatGatewayVirtualInfo:
+      properties:
+        virtualModel:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Virtualmodel
+      title: ChatGatewayVirtualInfo
+      type: object
     ChatInteractionResponse:
       additionalProperties: true
       description: POST /chat-runs/{runId}/interactions/{requestId}/respond response.
@@ -547,17 +574,29 @@ components:
       type: object
     ChatModel:
       properties:
-        base_url:
+        available:
+          default: true
+          title: Available
+          type: boolean
+        baseUrl:
           anyOf:
           - type: string
           - type: 'null'
-          title: Base Url
+          title: Baseurl
+        capabilities:
+          anyOf:
+          - $ref: '#/components/schemas/ChatModelCapabilities'
+          - type: 'null'
         id:
           title: Id
           type: string
-        is_current:
+        isCurrent:
           default: false
-          title: Is Current
+          title: Iscurrent
+          type: boolean
+        isDefault:
+          default: false
+          title: Isdefault
           type: boolean
         label:
           title: Label
@@ -568,7 +607,7 @@ components:
           - type: 'null'
           title: Provider
         source:
-          default: gateway
+          default: hermes-model-options
           title: Source
           type: string
       required:
@@ -576,23 +615,50 @@ components:
       - label
       title: ChatModel
       type: object
+    ChatModelCapabilities:
+      properties:
+        reasoning:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Reasoning
+        tools:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Tools
+        vision:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Vision
+      title: ChatModelCapabilities
+      type: object
     ChatModelListResponse:
       properties:
-        instance_id:
+        defaultModel:
+          anyOf:
+          - $ref: '#/components/schemas/ChatDefaultModel'
+          - type: 'null'
+        gateway:
+          anyOf:
+          - $ref: '#/components/schemas/ChatGatewayVirtualInfo'
+          - type: 'null'
+        instanceId:
           anyOf:
           - type: string
           - type: 'null'
-          title: Instance Id
+          title: Instanceid
         models:
           items:
             $ref: '#/components/schemas/ChatModel'
           title: Models
           type: array
-        profile_id:
+        profileId:
           anyOf:
           - type: string
           - type: 'null'
-          title: Profile Id
+          title: Profileid
         raw:
           anyOf:
           - additionalProperties: true
@@ -1160,33 +1226,38 @@ components:
       type: object
     InstanceChatModelConfig:
       properties:
-        base_url:
+        baseUrl:
           anyOf:
           - type: string
           - type: 'null'
-          title: Base Url
+          title: Baseurl
         instanceId:
           title: Instanceid
           type: string
-        model_id:
-          title: Model Id
+        modelId:
+          title: Modelid
           type: string
-        model_label:
+        modelLabel:
           anyOf:
           - type: string
           - type: 'null'
-          title: Model Label
+          title: Modellabel
         provider:
           title: Provider
           type: string
-        updated_at:
-          title: Updated At
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+        updatedAt:
+          title: Updatedat
           type: string
       required:
       - instanceId
       - provider
-      - model_id
-      - updated_at
+      - modelId
+      - updatedAt
       title: InstanceChatModelConfig
       type: object
     InstanceCreateRequest:
@@ -3244,25 +3315,25 @@ components:
       type: object
     SetInstanceChatModelConfigPayload:
       properties:
-        base_url:
+        baseUrl:
           anyOf:
           - type: string
           - type: 'null'
-          title: Base Url
-        model_id:
-          title: Model Id
+          title: Baseurl
+        modelId:
+          title: Modelid
           type: string
-        model_label:
+        modelLabel:
           anyOf:
           - type: string
           - type: 'null'
-          title: Model Label
+          title: Modellabel
         provider:
           default: auto
           title: Provider
           type: string
       required:
-      - model_id
+      - modelId
       title: SetInstanceChatModelConfigPayload
       type: object
     SystemInfoResponse:
@@ -7325,6 +7396,13 @@ paths:
         schema:
           title: Instance Id
           type: string
+      - in: query
+        name: refresh
+        required: false
+        schema:
+          default: false
+          title: Refresh
+          type: boolean
       - in: header
         name: Authorization
         required: false
@@ -7367,6 +7445,13 @@ paths:
         schema:
           title: Instance Id
           type: string
+      - in: query
+        name: refresh
+        required: false
+        schema:
+          default: false
+          title: Refresh
+          type: boolean
       - in: header
         name: Authorization
         required: false

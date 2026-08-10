@@ -17,9 +17,10 @@ import {
   runtimeFetch,
   type RuntimeHttpMethod,
 } from "./runtime-http-client";
-import { isServeControlPlaneEnabled } from "./runtime-mode";
+import { isServeControlPlaneEnabled, isServeChatTransportPreferred } from "./runtime-mode";
 import { ServeInstanceAdapter } from "../runtime-adapters/ServeInstanceAdapter";
 import { ServeDiagnosticsAdapter } from "../runtime-adapters/ServeDiagnosticsAdapter";
+import { ServeConfigurationAdapter } from "../runtime-adapters/ServeConfigurationAdapter";
 import { getSmcRuntimeClient } from "./smc-runtime-client";
 
 export interface CopilotRuntimeProxyFetchRequest {
@@ -228,6 +229,11 @@ export function registerCopilotRuntimeIpc(): void {
     isServeControlPlaneEnabled(getRuntimeConnectionState().ready),
   );
 
+  /** Preferred Serve Chat transport (ignores live Ready — PRD v1.5.4 Model Picker). */
+  ipcMain.handle("copilot-runtime:is-serve-chat-preferred", () =>
+    isServeChatTransportPreferred(),
+  );
+
   ipcMain.handle("copilot-runtime:list-instances", async () => {
     try {
       return await ServeInstanceAdapter.list();
@@ -388,6 +394,34 @@ export function registerCopilotRuntimeIpc(): void {
                 retryable: true,
               },
             };
+      }
+    },
+  );
+
+  // PRD v1.5.4 — Chat model catalog via Runtime (execution models, not gateway virtual).
+  ipcMain.handle(
+    "copilot-runtime:list-chat-models",
+    async (
+      _event,
+      options?: { profileRef?: string; refresh?: boolean },
+    ) => {
+      try {
+        return await ServeConfigurationAdapter.listModelOptions(options?.profileRef, {
+          refresh: options?.refresh,
+        });
+      } catch {
+        return [];
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "copilot-runtime:get-chat-model-config",
+    async (_event, profileRef?: string) => {
+      try {
+        return await ServeConfigurationAdapter.getModelConfig(profileRef);
+      } catch {
+        return null;
       }
     },
   );

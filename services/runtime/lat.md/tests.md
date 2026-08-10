@@ -74,7 +74,11 @@ Chat SSE ???? Credential Broker ?? key ??? Authorization header?
 
 ### Seeds default model config
 
-When Instance becomes ready (start/adoption) or GET model-config finds no row, [[src/services/instance_chat_service.py#InstanceChatService#ensure_default_model_config]] seeds from Gateway `/v1/models` (else Hermes config.yaml default) without overwriting an existing saved config.
+When Instance becomes ready (start/adoption) or GET model-config finds no row, [[src/services/instance_chat_service.py#InstanceChatService#ensure_default_model_config]] seeds from Hermes `config.yaml` via HermesModelCatalogService (never Gateway `/v1/models` virtual aliases). Existing non-virtual user selections are not overwritten.
+
+## Hermes Model Catalog
+
+`tests/test_model_catalog_v154.py` covers `/api/model/options` normalize, config.yaml default seed, virtual-model reconcile, exclusion of Gateway `smc-copilot` from execution catalogs, and HermesChatExecutor resolve (no `/v1/models` fallback). See [[chat-sessions#Hermes Model Catalog (v1.5.4)]].
 
 ## Chat Runtime v2
 

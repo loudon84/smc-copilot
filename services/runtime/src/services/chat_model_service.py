@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 
 from core.config import Settings, get_settings
 from core.constants import GatewayStatus
@@ -17,20 +16,12 @@ from schemas.chat import (
     ProfileChatModelConfig,
     SetProfileChatModelConfigPayload,
 )
+from services.hermes_model_catalog_service import HermesModelCatalogService, normalize_model_options
 from services.profile_ref_resolver import ProfileRefResolver
 
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
-
-
-def _infer_provider(model_id: str, raw: dict[str, Any]) -> str | None:
-    owned = raw.get("owned_by")
-    if isinstance(owned, str) and owned:
-        return owned
-    if "/" in model_id:
-        return model_id.split("/", 1)[0]
-    return None
 
 
 class ChatModelService:
@@ -50,6 +41,7 @@ class ChatModelService:
         return HermesGatewayClientFactory(self._app_settings, self._profiles._session)
 
     async def list_models(self, profile_id: str) -> ChatModelListResponse:
+        """Hermes Execution Model catalog for legacy profile chat routes (PRD v1.5.4)."""
         profile = await self._resolver.require_profile(profile_id)
         if profile.status != GatewayStatus.RUNNING.value:
             return ChatModelListResponse(
@@ -58,7 +50,9 @@ class ChatModelService:
                 status="gateway_not_running",
             )
 
-        client = await self._factory().create_for_profile_name(profile.name, profile.gateway_port, require_key=False)
+        client = await self._factory().create_for_profile_name(
+            profile.name, profile.gateway_port, require_key=False
+        )
         healthy = await client.health_check()
         if not healthy:
             return ChatModelListResponse(
@@ -69,35 +63,51 @@ class ChatModelService:
 
         config = await self._settings.get(profile_id)
         current_id = config.model_id if config else None
+        default = HermesModelCatalogService(
+            self._profiles._session,
+            settings=self._app_settings,
+            factory=self._factory(),
+        ).resolve_default_model(profile.name)
 
         try:
-            raw_models, raw = await client.list_models()
+            raw = await client.list_model_options(refresh=False)
+            models = normalize_model_options(raw)
         except HermesClientError as exc:
             raise ChatApiError(
                 str(exc),
-                code="MODEL_LIST_FAILED",
-                details={"profile_id": profile_id},
+                code="HERMES_MODEL_OPTIONS_UNAVAILABLE",
+                details={"profile_id": profile_id, "degraded": "model_catalog"},
                 http_status=502,
             ) from exc
 
-        models: list[ChatModel] = []
-        for item in raw_models:
-            if not isinstance(item, dict):
-                continue
-            model_id = str(item.get("id") or item.get("name") or "").strip()
-            if not model_id:
-                continue
-            models.append(
-                ChatModel(
-                    id=model_id,
-                    label=str(item.get("name") or model_id),
-                    provider=_infer_provider(model_id, item),
-                    base_url=item.get("base_url") if isinstance(item.get("base_url"), str) else None,
-                    source="gateway",
-                    is_current=model_id == current_id,
+        models = [m for m in models if m.id != "smc-copilot"]
+        if default is not None:
+            matched = False
+            for m in models:
+                if m.id == default.model_id:
+                    m.is_default = True
+                    m.is_current = True
+                    matched = True
+                    break
+            if not matched:
+                models.insert(
+                    0,
+                    ChatModel(
+                        id=default.model_id,
+                        label=default.model_label or default.model_id,
+                        provider=default.provider,
+                        base_url=default.base_url,
+                        available=False,
+                        is_default=True,
+                        is_current=True,
+                        source="hermes-config",
+                    ),
                 )
-            )
-
+        if current_id:
+            for m in models:
+                if m.id == current_id:
+                    m.is_current = True
+                    break
         if models and not any(m.is_current for m in models):
             models[0].is_current = True
 

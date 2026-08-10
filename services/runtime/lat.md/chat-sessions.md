@@ -20,6 +20,12 @@ Runtime 通过 `sessions` 路由读取 Profile 目录下 Hermes `state.db` 的�
 
 v1.4 Chat 以 HermesInstance 为一等公民。[[src/services/instance_ref_resolver.py#InstanceRefResolver]] 解析 id/name/profile_name/default；[[src/services/instance_chat_service.py#InstanceChatService]] 是 **compatibility adapter**：底层统一走 [[src/services/hermes_chat_executor.py#HermesChatExecutor]]，仅把内部执行事件格式化为 legacy `chat.*` SSE，禁止第二套 Hermes 调用逻辑。旧 `/profiles/{id}/chat/*` 映射到 Instance 并返回 `Deprecation`/`Sunset` 头；chat settings 优先 `instance_id`。
 
+## Hermes Model Catalog (v1.5.4)
+
+Execution catalog SOT is Hermes `/api/model/options` via [[src/services/hermes_model_catalog_service.py#HermesModelCatalogService]]; default from `~/.hermes/config.yaml`.
+
+Gateway `/v1/models` is virtual-only (e.g. `smc-copilot`) for diagnostics — never Desktop picker or model-config seed. `GET /instances/{id}/chat/models?refresh=` forwards to options; virtual historical bindings reconcile on read. [[src/services/hermes_chat_executor.py#HermesChatExecutor]] resolves execution `model` via the same catalog SOT and omits virtual aliases (PRD §47). `PUT /chat/model-config` also writes Hermes `config.yaml` default via HermesConfigAdapter so Desktop Set Default goes through Runtime to the local Agent SOT.
+
 ## Chat Runtime v2
 
 v1.1 引入 durable ChatRun：Desktop 经 `/api/v1/chat-runs*` 与 Event Store 交互，Hermes SSE 不再是 Desktop 事实源。路由 [[src/api/v1/chat_runs.py]]；编排 [[src/services/chat_run_service.py#ChatRunService]]；事件 [[src/services/chat_event_service.py#ChatEventService]]；队列 [[src/services/chat_queue_service.py#ChatQueueService]]；交互 [[src/services/chat_interaction_service.py#ChatInteractionService]]。能力 `chat.runtime.v2` 见 [[profiles-instances#能力协商]]。

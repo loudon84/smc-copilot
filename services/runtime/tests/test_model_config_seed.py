@@ -1,4 +1,4 @@
-"""Default model-config seeding when Instance is ready."""
+"""Default model-config seeding when Instance is ready (PRD v1.5.4)."""
 
 from __future__ import annotations
 
@@ -79,7 +79,8 @@ async def seed_session(seed_settings) -> AsyncSession:
 
 
 @pytest.mark.asyncio
-async def test_ensure_default_model_config_from_gateway(seed_settings, seed_session: AsyncSession) -> None:
+async def test_ensure_default_model_config_from_yaml(seed_settings, seed_session: AsyncSession) -> None:
+    """PRD v1.5.4: seed from config.yaml even when Gateway returns virtual model."""
     settings, _ = seed_settings
     svc = _svc(seed_session, settings)
 
@@ -103,24 +104,23 @@ async def test_ensure_default_model_config_from_gateway(seed_settings, seed_sess
         again = await svc.get_model_config("inst-default-1")
 
     assert cfg is not None
-    assert cfg.model_id == "smc-copilot"
+    assert cfg.model_id == "gpt-4.1"
+    assert cfg.provider == "custom"
     assert again is not None
-    assert again.model_id == "smc-copilot"
+    assert again.model_id == "gpt-4.1"
     # Second ensure must not overwrite
     with patch.object(svc, "_factory", return_value=mock_factory):
-        mock_client.list_models = AsyncMock(
-            return_value=([{"id": "other-model", "owned_by": "hermes"}], {"data": []})
-        )
         kept = await svc.ensure_default_model_config("inst-default-1")
     assert kept is not None
-    assert kept.model_id == "smc-copilot"
-    # Shadow profile must exist for FK
+    assert kept.model_id == "gpt-4.1"
     profile = await ProfileRepository(seed_session).get_by_name("default")
     assert profile is not None
 
 
 @pytest.mark.asyncio
-async def test_ensure_default_model_config_falls_back_to_yaml(seed_settings, seed_session: AsyncSession) -> None:
+async def test_ensure_default_model_config_when_gateway_down(
+    seed_settings, seed_session: AsyncSession
+) -> None:
     settings, _ = seed_settings
     svc = _svc(seed_session, settings)
     unhealthy = GatewayHealthResult(
@@ -131,6 +131,7 @@ async def test_ensure_default_model_config_falls_back_to_yaml(seed_settings, see
     )
     mock_client = MagicMock()
     mock_client.health_check = AsyncMock(return_value=unhealthy)
+    mock_client.list_models = AsyncMock(side_effect=Exception("unreachable"))
     mock_factory = MagicMock()
     mock_factory.create_for_instance = AsyncMock(return_value=mock_client)
 

@@ -6,7 +6,7 @@
 
 本仓库代码由 **hermes-desktop**（单运行时安装/配置/聊天）演进而来；Hermes Agent 仍为执行引擎，SMC Copilot 负责桌面壳、进程生命周期、SQLite 控制面与统一 UI。
 
-**v9.0.0（进行中）Serve-First Runtime：** Desktop Main 通过 window.copilotRuntime / src/main/copilot-runtime-client/ 连接常驻 copilot-serve :8765；Device Token 仅 Main（keytar）。Phase 0/1：OpenAPI、pairing、capability、production 禁 spawn。**Phase 2：** Instance/Gateway/Config/MCP/Diagnostics 经 Serve；默认禁止 Hermes CLI 与 YAML 控制面写入（COPILOT_ALLOW_LEGACY_HERMES_DIRECT 可回退）。**Phase 3：** `window.chatRuntime` → Serve `/api/v1/chat-runs*`（hand-authored 契约；legacy-direct 可回退）。Session/Files 见 Phase 4+（prd_work/v9.0_serve-runtime-migration.md）。
+**v9.0.0（进行中）Serve-First Runtime：** Desktop Main 通过 window.copilotRuntime / src/main/copilot-runtime-client/ 连接常驻 copilot-serve :8765；Device Token 仅 Main（keytar）。Phase 0/1：OpenAPI、pairing、capability、production 禁 spawn。**Phase 2：** Instance/Gateway/Config/MCP/Diagnostics 经 Serve；默认禁止 Hermes CLI 与 YAML 控制面写入（COPILOT_ALLOW_LEGACY_HERMES_DIRECT 可回退）。**Phase 3：** `window.chatRuntime` → Serve `/api/v1/chat-runs*`（hand-authored 契约；legacy-direct 可回退）。**v1.5.4 Hotfix：** Hermes Execution Model Catalog（`/api/model/options` + config.yaml SOT）；Desktop boot 只连接不 spawn；`serviceReady`/`chatReady` 拆分；Model Picker 走 Runtime。Session/Files 见 Phase 4+（prd_work/v9.0_serve-runtime-migration.md）。
 
 **v1.4.1 Hotfix：** 删除 Desktop MCP Proxy `:18781`；Connection Ready 仅看 `readiness.service`；Settings → View Logs 读 Runtime `runtime-service.log`；dev:runtime 自动登记本机 Hermes（external-dev）。
 

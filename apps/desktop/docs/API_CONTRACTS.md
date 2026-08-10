@@ -86,16 +86,18 @@ Renderer UI：`panels/ChatPanel.tsx` → `pages/Chat/HermesWebChatSurface.tsx`�
 GET /api/v1/profiles/{profile_id}/sessions/{session_id}/messages
 ```
 
-## Copilot Runtime（v9.0 Serve-First Phase 0/1/2）
+## Copilot Runtime（v9.0 Serve-First Phase 0/1/2 + **v1.5.4** Model Catalog / Chat Gate）
 
 Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc-copilot-runtime`），**禁止**经 IPC / Preload / Renderer 返回。
 
 **Phase 2：** Instance / Configuration / MCP / Diagnostics 控制面切到 Serve；默认禁止 Desktop Gateway CLI 与 `config.yaml` 控制面写入（仅 `COPILOT_ALLOW_LEGACY_HERMES_DIRECT=true` 可回退）。
 
+**v1.5.4：** Desktop 启动只连接 Runtime（不 spawn）；`RuntimeConnectionState` 拆分 `serviceReady` / `chatReady` / `maintenanceReady`（legacy `ready === serviceReady`）；Chat transport 看 `chatReady`；Model Picker 走 Runtime `/chat/models`（Hermes execution catalog，非 Gateway `smc-copilot`）。
+
 | 项 | 路径 |
 |---|---|
 | Main SDK | `src/main/copilot-runtime-client/` |
-| Adapters | `src/main/runtime-adapters/`（Instance / Configuration / MCP / Diagnostics；Chat/Session/Task/Files 仍 stub） |
+| Adapters | `src/main/runtime-adapters/`（Instance / Configuration / MCP / Diagnostics / ServeChatRuntimeAdapter） |
 | Shared 契约 | `src/shared/copilot-runtime/` |
 | Generated OpenAPI | `src/shared/generated/copilot-serve/`（`npm run generate:serve-client`） |
 | Preload | `src/preload/copilot-runtime-api.ts` → `window.copilotRuntime` |
@@ -110,15 +112,18 @@ Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc
 
 | Channel | Direction | Args | Returns | Notes |
 |---------|-----------|------|---------|-------|
-| `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 7 态；**Ready 仅当 readiness.service.ready**（v1.4.1）；**无 token** |
+| `copilot-runtime:get-state` | invoke | — | `RuntimeConnectionState` | 含 `reachable/serviceReady/executionReady/chatReady/maintenanceReady`；legacy `ready=serviceReady`；**无 token** |
 | `copilot-runtime:get-capabilities` | invoke | — | `RuntimeCapabilitiesView \| null` | |
 | `copilot-runtime:get-diagnostics-summary` | invoke | — | `RuntimeDiagnosticsSummary \| null` | 含 `deviceTokenPersistence`（secure / memory-only）告警 |
 | `copilot-runtime:pair-and-connect` | invoke | — | `RuntimePairAndConnectResult` | **v1.3.2** Main 原子事务：start→confirm→saveDeviceToken→handshake；**不返回 challenge/token** |
 | `copilot-runtime:start-pairing` | invoke | — | `RuntimePairingStartResult` | 兼容保留；`code` 不暴露 challenge；生产 UI 用 `pair-and-connect` |
 | `copilot-runtime:confirm-pairing` | invoke | `pairingId: string` | `RuntimePairingConfirmResult` | 兼容保留；存 Device Token 到 keytar；不返回 token |
 | `copilot-runtime:retry` | invoke | — | `RuntimeConnectionState` | 重新 handshake |
-| `copilot-runtime:repair` | invoke | — | `{ ok, message }` | production 不 spawn；dev 可启动 Serve |
+| `copilot-runtime:repair` | invoke | — | `{ ok, message }` | production 不 spawn；dev 可启动 Serve（显式 Repair） |
 | `copilot-runtime:is-serve-control-plane` | invoke | — | `boolean` | Ready 且非 legacy-direct |
+| `copilot-runtime:is-serve-chat-preferred` | invoke | — | `boolean` | Serve Chat 优先（不要求 live Ready）；Model Picker 用 |
+| `copilot-runtime:list-chat-models` | invoke | `{ profileRef?, refresh? }?` | `ServeModelOption[]` | **v1.5.4** Runtime `/chat/models` execution catalog |
+| `copilot-runtime:get-chat-model-config` | invoke | `profileRef?` | `ServeModelConfigView \| null` | **v1.5.4** Runtime `/chat/model-config`（config.yaml SOT） |
 | `copilot-runtime:list-instances` | invoke | — | `ServeInstanceSummary[]` | Phase 2 |
 | `copilot-runtime:get-instance` | invoke | `instanceId` | `ServeInstanceSummary \| null` | |
 | `copilot-runtime:resolve-instance` | invoke | `ref` | `ServeInstanceResolveResult \| null` | `profileId`/`name` → instanceId |

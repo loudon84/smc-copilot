@@ -26,6 +26,7 @@ function App(): React.JSX.Element {
   }, [screen]);
 
   function renderScreen(): React.JSX.Element {
+    
     switch (screen) {
       case "splash":
         return <SplashScreen onFinished={handleSplashFinished} />;

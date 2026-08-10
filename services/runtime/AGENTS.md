@@ -125,7 +125,7 @@ The second example is invalid because `Bad Section` has no leading paragraph. `l
 - Gateway foreign port conflict → `gateway_port_conflict`, never kill unknown PID.
 - ADRs: `docs/adr/ADR-011` … `ADR-014`.
 
-## Hermes Supervisor hard rules (PRD v1.5 / v1.5.1 / v1.5.2 / v1.5.3)
+## Hermes Supervisor hard rules (PRD v1.5 / v1.5.1 / v1.5.2 / v1.5.3 / v1.5.4)
 
 - Runtime is the exclusive owner of Hermes Gateway processes.
 - `GatewayOwnershipService.inspect()` is the sole source of Gateway process ownership truth.
@@ -146,4 +146,5 @@ The second example is invalid because `Bad Section` has no leading paragraph. `l
 - External Hermes `API_SERVER_KEY` must never be auto-generated.
 - Gateway process and Gateway HTTP clients must resolve the same `API_SERVER_KEY` source.
 - Local Hermes currently supports only the default profile.
+- **v1.5.4:** Execution model catalog SOT is Hermes `/api/model/options` + `config.yaml`; Gateway `/v1/models` is virtual-model diagnostics only (never Desktop picker / model-config seed).
 - ADRs: `docs/adr/ADR-015` … `ADR-025`.
