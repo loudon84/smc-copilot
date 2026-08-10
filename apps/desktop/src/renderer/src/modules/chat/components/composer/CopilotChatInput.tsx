@@ -54,6 +54,7 @@ type Props = {
   commands?: ChatCommandPort;
   sessionId?: string | null;
   profileId?: string;
+  runId?: string | null;
   disabled?: boolean;
 };
 
@@ -77,6 +78,7 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
       commands,
       sessionId,
       profileId,
+      runId,
       disabled,
     },
     ref,
@@ -173,6 +175,7 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
           const res = await commands.execute(name, args, {
             sessionId,
             profileId,
+            runId: runId || undefined,
           });
           if (res.ok) {
             if (name === "clear") onChange("");
@@ -197,6 +200,7 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
       onSend,
       profileId,
       sessionId,
+      runId,
       value,
     ]);
 

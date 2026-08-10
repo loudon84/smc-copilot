@@ -174,6 +174,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat-runs/{run_id}/background-turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Background Turn */
+        post: operations["create_background_turn_api_v1_chat_runs__run_id__background_turns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat-runs/{run_id}/commands/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute Chat Command */
+        post: operations["execute_chat_command_api_v1_chat_runs__run_id__commands_execute_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat-runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -920,6 +954,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/chat/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Chat Commands */
+        get: operations["list_chat_commands_api_v1_instances__instance_id__chat_commands_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/chat/completions": {
         parameters: {
             query?: never;
@@ -1429,6 +1480,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/chat-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session Chat Settings */
+        get: operations["get_session_chat_settings_api_v1_instances__instance_id__sessions__session_id__chat_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Session Chat Settings */
+        patch: operations["patch_session_chat_settings_api_v1_instances__instance_id__sessions__session_id__chat_settings_patch"];
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Session Files */
+        get: operations["list_session_files_api_v1_instances__instance_id__sessions__session_id__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/files/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Session Files */
+        get: operations["search_session_files_api_v1_instances__instance_id__sessions__session_id__files_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/files/{file_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Session File Context */
+        post: operations["add_session_file_context_api_v1_instances__instance_id__sessions__session_id__files__file_id__context_post"];
+        /** Remove Session File Context */
+        delete: operations["remove_session_file_context_api_v1_instances__instance_id__sessions__session_id__files__file_id__context_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/sessions/{session_id}/messages": {
         parameters: {
             query?: never;
@@ -1438,6 +1559,57 @@ export interface paths {
         };
         /** List Instance Session Messages */
         get: operations["list_instance_session_messages_api_v1_instances__instance_id__sessions__session_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Session Workspace */
+        get: operations["list_session_workspace_api_v1_instances__instance_id__sessions__session_id__workspace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/workspace/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Session Workspace File */
+        get: operations["read_session_workspace_file_api_v1_instances__instance_id__sessions__session_id__workspace_file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/sessions/{session_id}/workspace/terminal-path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Session Workspace Terminal Path */
+        get: operations["session_workspace_terminal_path_api_v1_instances__instance_id__sessions__session_id__workspace_terminal_path_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3668,6 +3840,37 @@ export interface components {
             /** Workspace Relative Path */
             workspace_relative_path: string;
         };
+        /** ChatBackgroundTurnBody */
+        ChatBackgroundTurnBody: {
+            /** Message */
+            message: string;
+            /** Parentturnid */
+            parentTurnId?: string | null;
+            /** Sessionid */
+            sessionId?: string | null;
+        };
+        /** ChatBackgroundTurnResponse */
+        ChatBackgroundTurnResponse: {
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+            /** Parentrunid */
+            parentRunId: string;
+            /** Parentturnid */
+            parentTurnId?: string | null;
+            /** Runid */
+            runId: string;
+            /**
+             * Runkind
+             * @default background
+             * @constant
+             */
+            runKind: "background";
+            /** Turnid */
+            turnId: string;
+        };
         /** ChatClarifyRespondBody */
         ChatClarifyRespondBody: {
             /** Answer */
@@ -3679,6 +3882,82 @@ export interface components {
              * @enum {string}
              */
             type: "clarify";
+        };
+        /** ChatCommandExecuteBody */
+        ChatCommandExecuteBody: {
+            /**
+             * Args
+             * @default
+             */
+            args: string;
+            /** Name */
+            name: string;
+            /** Sessionid */
+            sessionId?: string | null;
+            /** Turnid */
+            turnId?: string | null;
+        };
+        /** ChatCommandExecuteResponse */
+        ChatCommandExecuteResponse: {
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+            /** Message */
+            message?: string | null;
+            /** Output */
+            output?: string | null;
+            /** Prompt */
+            prompt?: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "handled" | "send_prompt" | "error";
+            /** Turnid */
+            turnId?: string | null;
+        };
+        /** ChatCommandItem */
+        ChatCommandItem: {
+            /**
+             * Allowwhilebusy
+             * @default true
+             */
+            allowWhileBusy: boolean;
+            /** Argshint */
+            argsHint?: string | null;
+            /**
+             * Category
+             * @default agent
+             */
+            category: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+            /**
+             * Supportsattachments
+             * @default false
+             */
+            supportsAttachments: boolean;
+            /**
+             * Target
+             * @default agent
+             */
+            target: string;
+        };
+        /** ChatCommandsResponse */
+        ChatCommandsResponse: {
+            /** Commands */
+            commands?: components["schemas"]["ChatCommandItem"][];
+            /**
+             * Rpcready
+             * @default false
+             */
+            rpcReady: boolean;
         };
         /** ChatCreateRunBody */
         ChatCreateRunBody: {
@@ -3710,6 +3989,15 @@ export interface components {
             sessionId?: string | null;
             /** Workspaceid */
             workspaceId?: string | null;
+        };
+        /** ChatDefaultModel */
+        ChatDefaultModel: {
+            /** Baseurl */
+            baseUrl?: string | null;
+            /** Modelid */
+            modelId: string;
+            /** Provider */
+            provider: string;
         };
         /**
          * ChatEventResponse
@@ -3746,6 +4034,11 @@ export interface components {
             /** Type */
             type: string;
         };
+        /** ChatGatewayVirtualInfo */
+        ChatGatewayVirtualInfo: {
+            /** Virtualmodel */
+            virtualModel?: string | null;
+        };
         /**
          * ChatInteractionResponse
          * @description POST /chat-runs/{runId}/interactions/{requestId}/respond response.
@@ -3775,33 +4068,55 @@ export interface components {
         };
         /** ChatModel */
         ChatModel: {
-            /** Base Url */
-            base_url?: string | null;
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Baseurl */
+            baseUrl?: string | null;
+            capabilities?: components["schemas"]["ChatModelCapabilities"] | null;
             /** Id */
             id: string;
             /**
-             * Is Current
+             * Iscurrent
              * @default false
              */
-            is_current: boolean;
+            isCurrent: boolean;
+            /**
+             * Isdefault
+             * @default false
+             */
+            isDefault: boolean;
             /** Label */
             label: string;
             /** Provider */
             provider?: string | null;
             /**
              * Source
-             * @default gateway
+             * @default hermes-model-options
              */
             source: string;
         };
+        /** ChatModelCapabilities */
+        ChatModelCapabilities: {
+            /** Reasoning */
+            reasoning?: boolean | null;
+            /** Tools */
+            tools?: boolean | null;
+            /** Vision */
+            vision?: boolean | null;
+        };
         /** ChatModelListResponse */
         ChatModelListResponse: {
-            /** Instance Id */
-            instance_id?: string | null;
+            defaultModel?: components["schemas"]["ChatDefaultModel"] | null;
+            gateway?: components["schemas"]["ChatGatewayVirtualInfo"] | null;
+            /** Instanceid */
+            instanceId?: string | null;
             /** Models */
             models: components["schemas"]["ChatModel"][];
-            /** Profile Id */
-            profile_id?: string | null;
+            /** Profileid */
+            profileId?: string | null;
             /** Raw */
             raw?: {
                 [key: string]: unknown;
@@ -4138,18 +4453,20 @@ export interface components {
         };
         /** InstanceChatModelConfig */
         InstanceChatModelConfig: {
-            /** Base Url */
-            base_url?: string | null;
+            /** Baseurl */
+            baseUrl?: string | null;
             /** Instanceid */
             instanceId: string;
-            /** Model Id */
-            model_id: string;
-            /** Model Label */
-            model_label?: string | null;
+            /** Modelid */
+            modelId: string;
+            /** Modellabel */
+            modelLabel?: string | null;
             /** Provider */
             provider: string;
-            /** Updated At */
-            updated_at: string;
+            /** Source */
+            source?: string | null;
+            /** Updatedat */
+            updatedAt: string;
         };
         /** InstanceCreateRequest */
         InstanceCreateRequest: {
@@ -5216,6 +5533,104 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** SessionChatSettingsPatchBody */
+        SessionChatSettingsPatchBody: {
+            /** Contextfolder */
+            contextFolder?: string | null;
+            /** Modelid */
+            modelId?: string | null;
+        };
+        /** SessionChatSettingsResponse */
+        SessionChatSettingsResponse: {
+            /** Contextfolder */
+            contextFolder?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Instanceid */
+            instanceId: string;
+            /** Modelid */
+            modelId?: string | null;
+            /** Sessionid */
+            sessionId: string;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
+        /** SessionFileContextResponse */
+        SessionFileContextResponse: {
+            /** Fileid */
+            fileId: string;
+            /** Iscontext */
+            isContext: boolean;
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
+        /** SessionFileItem */
+        SessionFileItem: {
+            /** Createdat */
+            createdAt?: string | null;
+            /** Fileid */
+            fileId: string;
+            /**
+             * Iscontext
+             * @default false
+             */
+            isContext: boolean;
+            /** Mimetype */
+            mimeType?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @default prompt_attachment
+             * @enum {string}
+             */
+            role: "prompt_attachment" | "context_file" | "agent_output" | "artifact";
+            /** Sessionid */
+            sessionId: string;
+            /** Sizebytes */
+            sizeBytes?: number | null;
+            /** Storagepath */
+            storagePath?: string | null;
+            /** Textpreview */
+            textPreview?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Workspacerelativepath */
+            workspaceRelativePath?: string | null;
+        };
+        /** SessionFileSearchHit */
+        SessionFileSearchHit: {
+            /** Fileid */
+            fileId: string;
+            /** Name */
+            name: string;
+            /**
+             * Role
+             * @default prompt_attachment
+             * @enum {string}
+             */
+            role: "prompt_attachment" | "context_file" | "agent_output" | "artifact";
+            /**
+             * Score
+             * @default 0
+             */
+            score: number;
+            /** Snippet */
+            snippet?: string | null;
+        };
+        /** SessionFileSearchResponse */
+        SessionFileSearchResponse: {
+            /** Hits */
+            hits?: components["schemas"]["SessionFileSearchHit"][];
+        };
+        /** SessionFilesResponse */
+        SessionFilesResponse: {
+            /** Files */
+            files?: components["schemas"]["SessionFileItem"][];
+        };
         /** SessionStatsInfo */
         SessionStatsInfo: {
             /** Totalmessages */
@@ -5225,12 +5640,12 @@ export interface components {
         };
         /** SetInstanceChatModelConfigPayload */
         SetInstanceChatModelConfigPayload: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Model Id */
-            model_id: string;
-            /** Model Label */
-            model_label?: string | null;
+            /** Baseurl */
+            baseUrl?: string | null;
+            /** Modelid */
+            modelId: string;
+            /** Modellabel */
+            modelLabel?: string | null;
             /**
              * Provider
              * @default auto
@@ -5784,6 +6199,50 @@ export interface components {
              */
             type: string;
         };
+        /** WorkspaceEntry */
+        WorkspaceEntry: {
+            /**
+             * Kind
+             * @default file
+             * @enum {string}
+             */
+            kind: "file" | "directory";
+            /** Modifiedat */
+            modifiedAt?: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Sizebytes */
+            sizeBytes?: number | null;
+        };
+        /** WorkspaceFileResponse */
+        WorkspaceFileResponse: {
+            /** Content */
+            content?: string | null;
+            /** Mimetype */
+            mimeType?: string | null;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Sizebytes */
+            sizeBytes?: number | null;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** WorkspaceListResponse */
+        WorkspaceListResponse: {
+            /** Entries */
+            entries?: components["schemas"]["WorkspaceEntry"][];
+            /** Path */
+            path: string;
+            /** Root */
+            root: string;
+        };
         /** WorkspacePatch */
         WorkspacePatch: {
             /** Enabled */
@@ -5821,6 +6280,16 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** WorkspaceTerminalPathResponse */
+        WorkspaceTerminalPathResponse: {
+            /** Path */
+            path: string;
+            /**
+             * Validated
+             * @default true
+             */
+            validated: boolean;
         };
         /** WorkspaceValidateCommand */
         WorkspaceValidateCommand: {
@@ -6234,6 +6703,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatAbortResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_background_turn_api_v1_chat_runs__run_id__background_turns_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatBackgroundTurnBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatBackgroundTurnResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    execute_chat_command_api_v1_chat_runs__run_id__commands_execute_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatCommandExecuteBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCommandExecuteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -8069,6 +8614,40 @@ export interface operations {
             };
         };
     };
+    list_chat_commands_api_v1_instances__instance_id__chat_commands_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCommandsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     instance_chat_completions_api_v1_instances__instance_id__chat_completions_post: {
         parameters: {
             query?: never;
@@ -8181,7 +8760,9 @@ export interface operations {
     };
     list_instance_model_options_api_v1_instances__instance_id__chat_model_options_get: {
         parameters: {
-            query?: never;
+            query?: {
+                refresh?: boolean;
+            };
             header?: {
                 Authorization?: string | null;
                 "X-Copilot-Desktop-Token"?: string | null;
@@ -8215,7 +8796,9 @@ export interface operations {
     };
     list_instance_chat_models_api_v1_instances__instance_id__chat_models_get: {
         parameters: {
-            query?: never;
+            query?: {
+                refresh?: boolean;
+            };
             header?: {
                 Authorization?: string | null;
                 "X-Copilot-Desktop-Token"?: string | null;
@@ -9369,6 +9952,224 @@ export interface operations {
             };
         };
     };
+    get_session_chat_settings_api_v1_instances__instance_id__sessions__session_id__chat_settings_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionChatSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_session_chat_settings_api_v1_instances__instance_id__sessions__session_id__chat_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionChatSettingsPatchBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionChatSettingsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_files_api_v1_instances__instance_id__sessions__session_id__files_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionFilesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_session_files_api_v1_instances__instance_id__sessions__session_id__files_search_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionFileSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_session_file_context_api_v1_instances__instance_id__sessions__session_id__files__file_id__context_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionFileContextResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_session_file_context_api_v1_instances__instance_id__sessions__session_id__files__file_id__context_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionFileContextResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_instance_session_messages_api_v1_instances__instance_id__sessions__session_id__messages_get: {
         parameters: {
             query?: never;
@@ -9391,6 +10192,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceChatSessionMessagesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_session_workspace_api_v1_instances__instance_id__sessions__session_id__workspace_get: {
+        parameters: {
+            query?: {
+                path?: string | null;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_session_workspace_file_api_v1_instances__instance_id__sessions__session_id__workspace_file_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceFileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_workspace_terminal_path_api_v1_instances__instance_id__sessions__session_id__workspace_terminal_path_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTerminalPathResponse"];
                 };
             };
             /** @description Validation Error */

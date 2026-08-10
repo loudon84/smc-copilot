@@ -38,10 +38,7 @@ function mapRuntimeModels(
 }
 
 /**
- * AI-OS adapter: Runtime `/chat/models` → ChatModelsPort (PRD v1.5.4).
- *
- * Serve-preferred: Runtime catalog only (fail closed on error).
- * Legacy-direct (COPILOT_ALLOW_LEGACY_HERMES_DIRECT): hermesDefaultChat fallback.
+ * AI-OS adapter: Runtime `/chat/models` + session chat-settings (PRD v1.5.4 / v1.6 FR-08).
  */
 export const aiosModelsAdapter: ChatModelsPort = {
   async listModels(profileId?: string): Promise<ChatModelOption[]> {
@@ -66,9 +63,14 @@ export const aiosModelsAdapter: ChatModelsPort = {
   async getSessionModel(sessionId, profileId) {
     if (await useRuntimeCatalog()) {
       try {
-        const cfg = await window.copilotRuntime.getChatModelConfig(profileId);
-        if (cfg?.modelId && cfg.modelId !== "smc-copilot") {
-          return { modelId: cfg.modelId };
+        if (typeof window.copilotRuntime.getSessionChatSettings === "function") {
+          const settings = await window.copilotRuntime.getSessionChatSettings(
+            sessionId,
+            profileId,
+          );
+          if (settings?.modelId && settings.modelId !== "smc-copilot") {
+            return { modelId: settings.modelId };
+          }
         }
       } catch {
         /* ignore */
@@ -84,7 +86,16 @@ export const aiosModelsAdapter: ChatModelsPort = {
   },
   async setSessionModel(sessionId, modelId, profileId) {
     if (modelId === "smc-copilot") return;
-    // PRD §46: no new complex persistence this hotfix.
+    if (await useRuntimeCatalog()) {
+      if (typeof window.copilotRuntime.patchSessionChatSettings === "function") {
+        await window.copilotRuntime.patchSessionChatSettings(
+          sessionId,
+          { modelId },
+          profileId,
+        );
+      }
+      return;
+    }
     if (window.hermesDefaultChat?.setSessionModel) {
       await window.hermesDefaultChat.setSessionModel(sessionId, modelId, profileId);
     }

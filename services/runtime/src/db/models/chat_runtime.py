@@ -20,6 +20,10 @@ class ChatRun(Base):
     session_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     workspace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True, default="active")
+    # PRD v1.6 §50 — main | background; background runs do not alter main queue/state.
+    run_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="main", index=True)
+    parent_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    parent_turn_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     event_cursor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

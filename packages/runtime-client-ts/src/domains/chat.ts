@@ -47,6 +47,36 @@ export interface ChatDomain {
     signal?: AbortSignal,
   ): Promise<ChatQueueEntryResponse>;
   deleteQueue(runId: string, queueId: string, signal?: AbortSignal): Promise<ChatQueueEntryResponse>;
+  /** PRD v1.6 FR-02 — Agent slash execute */
+  executeCommand(
+    runId: string,
+    body: {
+      turnId?: string;
+      sessionId?: string;
+      name: string;
+      args?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<{
+    result: "handled" | "send_prompt" | "error";
+    output?: string | null;
+    message?: string | null;
+    prompt?: string | null;
+    turnId?: string | null;
+  }>;
+  /** PRD v1.6 FR-03 — /btw background turn */
+  createBackgroundTurn(
+    runId: string,
+    body: { parentTurnId?: string; sessionId?: string; message: string },
+    signal?: AbortSignal,
+  ): Promise<{
+    accepted: boolean;
+    runId: string;
+    turnId: string;
+    parentRunId: string;
+    parentTurnId?: string | null;
+    runKind: "background";
+  }>;
 }
 
 export function createChatDomain(transport: RuntimeTransport): ChatDomain {
@@ -110,6 +140,20 @@ export function createChatDomain(transport: RuntimeTransport): ChatDomain {
       transport.request<ChatQueueEntryResponse>({
         method: "DELETE",
         path: `/api/v1/chat-runs/${enc(runId)}/queue/${enc(queueId)}`,
+        signal,
+      }),
+    executeCommand: (runId, body, signal) =>
+      transport.request({
+        method: "POST",
+        path: `/api/v1/chat-runs/${enc(runId)}/commands/execute`,
+        body,
+        signal,
+      }),
+    createBackgroundTurn: (runId, body, signal) =>
+      transport.request({
+        method: "POST",
+        path: `/api/v1/chat-runs/${enc(runId)}/background-turns`,
+        body,
         signal,
       }),
   };

@@ -17,6 +17,7 @@ from services.chat_event_service import ChatEventService
 from services.chat_queue_service import ChatQueueService
 from services.chat_turn_scheduler import ChatTurnScheduler
 from services.chat_turn_worker import request_abort
+from services.session_chat_settings_service import SessionChatSettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,9 @@ class ChatRunService:
             "sessionId": run.session_id,
             "workspaceId": run.workspace_id,
             "status": run.status,
+            "runKind": getattr(run, "run_kind", None) or "main",
+            "parentRunId": getattr(run, "parent_run_id", None),
+            "parentTurnId": getattr(run, "parent_turn_id", None),
             "eventCursor": run.event_cursor,
             "createdAt": run.created_at.isoformat() if run.created_at else None,
             "updatedAt": run.updated_at.isoformat() if run.updated_at else None,
@@ -152,8 +156,23 @@ class ChatRunService:
             )
 
         context_json = None
+        context_payload: dict[str, Any] = {}
         if body.context is not None:
-            context_json = json.dumps(body.context.model_dump(by_alias=True, exclude_none=True), ensure_ascii=False)
+            context_payload.update(body.context.model_dump(by_alias=True, exclude_none=True))
+
+        # PRD v1.6 FR-04/FR-08 — resolve session model override + contextFolder.
+        settings_svc = SessionChatSettingsService(self._session)
+        session_id = body.session_id or run.session_id
+        resolved_model = await settings_svc.resolve_model_id(
+            run.instance_id,
+            session_id,
+            turn_model_id=body.model_id,
+        )
+        context_folder = await settings_svc.resolve_context_folder(run.instance_id, session_id)
+        if context_folder:
+            context_payload["contextFolder"] = context_folder
+        if context_payload:
+            context_json = json.dumps(context_payload, ensure_ascii=False)
         attachment_ids_json = json.dumps(body.attachment_ids or [], ensure_ascii=False)
 
         active = await self._repo.list_active_turns(run.id)
@@ -163,7 +182,7 @@ class ChatRunService:
             run_id=run.id,
             client_turn_id=body.client_turn_id,
             message=body.message,
-            model_id=body.model_id,
+            model_id=resolved_model or body.model_id,
             status="queued",
             context_json=context_json,
             attachment_ids_json=attachment_ids_json,

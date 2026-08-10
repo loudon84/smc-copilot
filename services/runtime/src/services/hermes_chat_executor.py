@@ -182,6 +182,12 @@ class HermesChatExecutor:
             headers["Authorization"] = f"Bearer {api_key}"
         if request.session_id:
             headers["x-hermes-session-id"] = request.session_id
+        # PRD v1.6 FR-05 — pass real cwd to Hermes (not system-prompt text).
+        cwd = None
+        if isinstance(request.context, dict):
+            cwd = request.context.get("cwd") or request.context.get("contextFolder")
+        if cwd:
+            headers["x-hermes-cwd"] = str(cwd)
 
         url = f"http://127.0.0.1:{inst.gateway_port}/v1/chat/completions"
         resolved_session_id: str | None = None

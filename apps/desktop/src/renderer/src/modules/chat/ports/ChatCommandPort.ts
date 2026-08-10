@@ -5,7 +5,7 @@ export type ChatCommandPort = {
   execute?(
     name: string,
     args: string,
-    ctx: { sessionId?: string | null; profileId?: string },
+    ctx: { sessionId?: string | null; profileId?: string; runId?: string },
   ): Promise<{ ok: boolean; message?: string }>;
 };
 

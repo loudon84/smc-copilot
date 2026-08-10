@@ -22,4 +22,7 @@ class ChatAttachment(Base):
     storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     workspace_relative_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     text_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # PRD v1.6 §51 — SessionFileRole: prompt_attachment | context_file | agent_output | artifact
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="prompt_attachment", index=True)
+    is_context: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)

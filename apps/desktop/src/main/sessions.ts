@@ -1,9 +1,11 @@
-import Database from "better-sqlite3";
-import { join } from "path";
-import { existsSync } from "fs";
-import { HERMES_HOME } from "./installer";
+/**
+ * PRD v1.6 FR-10 — Desktop must not open Hermes state.db.
+ * Session reads go through Runtime Sessions API (ChatCapabilityRuntime).
+ * Sync helpers remain for legacy IPC signatures but return empty (fail closed).
+ */
 
-const DB_PATH = join(HERMES_HOME, "state.db");
+import { getSmcRuntimeClient } from "./copilot-runtime-client/smc-runtime-client";
+import { ChatCapabilityRuntime } from "./runtime-adapters/ChatCapabilityRuntime";
 
 export interface SessionSummary {
   id: string;
@@ -33,149 +35,89 @@ export interface SearchResult {
   snippet: string;
 }
 
-function getDb(): Database.Database | null {
-  if (!existsSync(DB_PATH)) return null;
-  return new Database(DB_PATH, { readonly: true });
+/** @deprecated Sync state.db path removed — returns empty. Use listSessionsAsync. */
+export function listSessions(_limit = 30, _offset = 0): SessionSummary[] {
+  return [];
 }
 
-export function listSessions(limit = 30, offset = 0): SessionSummary[] {
-  const db = getDb();
-  if (!db) return [];
-
-  try {
-    // Simple query without correlated subquery — titles come from session cache
-    const rows = db
-      .prepare(
-        `SELECT
-          s.id,
-          s.source,
-          s.started_at,
-          s.ended_at,
-          s.message_count,
-          s.model,
-          s.title
-        FROM sessions s
-        ORDER BY s.started_at DESC
-        LIMIT ? OFFSET ?`,
-      )
-      .all(limit, offset) as Array<{
-      id: string;
-      source: string;
-      started_at: number;
-      ended_at: number | null;
-      message_count: number;
-      model: string;
-      title: string | null;
-    }>;
-
-    return rows.map((r) => ({
-      id: r.id,
-      source: r.source,
-      startedAt: r.started_at,
-      endedAt: r.ended_at,
-      messageCount: r.message_count,
-      model: r.model || "",
-      title: r.title,
-      preview: "",
-    }));
-  } finally {
-    db.close();
-  }
+/** @deprecated Sync state.db path removed — returns empty. Use getSessionMessagesAsync. */
+export function getSessionMessages(_sessionId: string): SessionMessage[] {
+  return [];
 }
 
-export function searchSessions(query: string, limit = 20): SearchResult[] {
-  const db = getDb();
-  if (!db) return [];
-
-  try {
-    // Check if FTS table exists
-    const tableCheck = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='messages_fts'",
-      )
-      .get() as { name: string } | undefined;
-
-    if (!tableCheck) return [];
-
-    // Sanitize query for FTS5: wrap each word with quotes for safety, add * for prefix
-    const sanitized = query
-      .trim()
-      .split(/\s+/)
-      .filter((w) => w.length > 0)
-      .map((w) => `"${w.replace(/"/g, "")}"*`)
-      .join(" ");
-
-    if (!sanitized) return [];
-
-    const rows = db
-      .prepare(
-        `SELECT DISTINCT
-          m.session_id,
-          s.title,
-          s.started_at,
-          s.source,
-          s.message_count,
-          s.model,
-          snippet(messages_fts, 0, '<<', '>>', '...', 40) as snippet
-        FROM messages_fts
-        JOIN messages m ON m.id = messages_fts.rowid
-        JOIN sessions s ON s.id = m.session_id
-        WHERE messages_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?`,
-      )
-      .all(sanitized, limit) as Array<{
-      session_id: string;
-      title: string | null;
-      started_at: number;
-      source: string;
-      message_count: number;
-      model: string;
-      snippet: string;
-    }>;
-
-    return rows.map((r) => ({
-      sessionId: r.session_id,
-      title: r.title,
-      startedAt: r.started_at,
-      source: r.source,
-      messageCount: r.message_count,
-      model: r.model || "",
-      snippet: r.snippet || "",
-    }));
-  } catch {
-    return [];
-  } finally {
-    db.close();
-  }
+/** @deprecated Sync state.db path removed — returns empty. Use searchSessionsAsync. */
+export function searchSessions(_query: string, _limit = 20): SearchResult[] {
+  return [];
 }
 
-export function getSessionMessages(sessionId: string): SessionMessage[] {
-  const db = getDb();
-  if (!db) return [];
+function mapSummary(raw: Record<string, unknown>): SessionSummary {
+  return {
+    id: String(raw.id ?? raw.sessionId ?? ""),
+    source: String(raw.source ?? "runtime"),
+    startedAt: Number(raw.created_at ?? raw.startedAt ?? raw.createdAt ?? Date.now()),
+    endedAt:
+      raw.ended_at == null && raw.endedAt == null
+        ? null
+        : Number(raw.ended_at ?? raw.endedAt),
+    messageCount: Number(raw.message_count ?? raw.messageCount ?? 0),
+    model: String(raw.model ?? ""),
+    title: raw.title != null ? String(raw.title) : null,
+    preview: String(raw.preview ?? ""),
+  };
+}
 
-  try {
-    const rows = db
-      .prepare(
-        `SELECT id, role, content, timestamp
-         FROM messages
-         WHERE session_id = ? AND role IN ('user', 'assistant') AND content IS NOT NULL
-         ORDER BY timestamp, id`,
-      )
-      .all(sessionId) as Array<{
-      id: number;
-      role: string;
-      content: string;
-      timestamp: number;
-    }>;
+function mapMessage(raw: Record<string, unknown>, index: number): SessionMessage {
+  const roleRaw = String(raw.role ?? "assistant");
+  const role: SessionMessage["role"] =
+    roleRaw === "user" || roleRaw === "tool" ? roleRaw : "assistant";
+  return {
+    id: Number(raw.id ?? index),
+    role,
+    content: String(raw.content ?? ""),
+    timestamp: Number(raw.timestamp ?? raw.created_at ?? Date.now()),
+  };
+}
 
-    return rows.map((r) => ({
-      id: r.id,
-      role: r.role as "user" | "assistant",
-      content: r.content,
-      timestamp: r.timestamp,
-    }));
-  } finally {
-    db.close();
-  }
+export async function listSessionsAsync(
+  limit = 30,
+  offset = 0,
+  profileRef?: string,
+): Promise<SessionSummary[]> {
+  const rows = (await ChatCapabilityRuntime.listSessions(profileRef)) as Array<
+    Record<string, unknown>
+  >;
+  return rows.slice(offset, offset + limit).map(mapSummary).filter((s) => s.id);
+}
+
+export async function getSessionMessagesAsync(
+  sessionId: string,
+  profileRef?: string,
+): Promise<SessionMessage[]> {
+  const rows = (await ChatCapabilityRuntime.listMessages(
+    sessionId,
+    profileRef,
+  )) as Array<Record<string, unknown>>;
+  return rows.map(mapMessage);
+}
+
+export async function searchSessionsAsync(
+  query: string,
+  limit = 20,
+  profileRef?: string,
+): Promise<SearchResult[]> {
+  const instanceId = await ChatCapabilityRuntime.resolveInstanceId(profileRef);
+  if (!instanceId) return [];
+  const rows = (await getSmcRuntimeClient().sessions.search(
+    instanceId,
+    query,
+  )) as Array<Record<string, unknown>>;
+  return rows.slice(0, limit).map((raw) => ({
+    sessionId: String(raw.id ?? raw.sessionId ?? ""),
+    title: raw.title != null ? String(raw.title) : null,
+    startedAt: Number(raw.created_at ?? raw.startedAt ?? Date.now()),
+    source: String(raw.source ?? "runtime"),
+    messageCount: Number(raw.message_count ?? raw.messageCount ?? 0),
+    model: String(raw.model ?? ""),
+    snippet: String(raw.snippet ?? raw.preview ?? ""),
+  }));
 }

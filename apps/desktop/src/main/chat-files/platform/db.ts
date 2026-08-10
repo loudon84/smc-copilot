@@ -1,48 +1,15 @@
-import Database from "better-sqlite3";
-import { existsSync } from "fs";
-import { activeStateDbPath } from "../../utils";
-
-let cachedDb: Database.Database | null = null;
-let cachedDbPath: string | null = null;
-let cachedDbReadonly: boolean | null = null;
-
 /**
- * Cached better-sqlite3 connection for the active profile state.db.
- * Used by desktop-owned session tables (context folder, model override).
+ * PRD v1.6 FR-10 — Desktop Chat Files must not open Hermes state.db.
+ * Session/file metadata Ownership is Runtime. This module always returns null.
  */
-export function getDbConnection(readonly = true): Database.Database | null {
-  const dbPath = activeStateDbPath();
-  if (!existsSync(dbPath)) {
-    closeDbConnection();
-    return null;
-  }
 
-  if (cachedDb && cachedDbPath === dbPath && cachedDbReadonly === readonly) {
-    return cachedDb;
-  }
+import type Database from "better-sqlite3";
 
-  closeDbConnection();
-
-  try {
-    cachedDb = new Database(dbPath, readonly ? { readonly: true } : {});
-    cachedDbPath = dbPath;
-    cachedDbReadonly = readonly;
-    return cachedDb;
-  } catch (err) {
-    console.error(`[chat-files/db] Failed to open database at ${dbPath}:`, err);
-    return null;
-  }
+/** @deprecated state.db is Runtime-owned; always null. */
+export function getDbConnection(_readonly = true): Database.Database | null {
+  return null;
 }
 
 export function closeDbConnection(): void {
-  if (cachedDb) {
-    try {
-      cachedDb.close();
-    } catch (err) {
-      console.error("[chat-files/db] Error closing database connection:", err);
-    }
-    cachedDb = null;
-    cachedDbPath = null;
-    cachedDbReadonly = null;
-  }
+  // no-op
 }

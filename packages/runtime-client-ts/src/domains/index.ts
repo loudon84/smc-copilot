@@ -24,6 +24,11 @@ export function createSessionDomain(transport: RuntimeTransport) {
         path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}`,
         signal,
       }),
+    listMessages: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/messages`,
+        signal,
+      }),
     delete: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
       transport.request({
         method: "DELETE",
@@ -32,6 +37,88 @@ export function createSessionDomain(transport: RuntimeTransport) {
       }),
     catalog: (query?: Record<string, string | number | undefined>, signal?: AbortSignal) =>
       transport.request({ path: "/api/v1/session-catalog", query, signal }),
+    // PRD v1.6 — Session Files
+    listFiles: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/files`,
+        signal,
+      }),
+    searchFiles: (instanceId: string, sessionId: string, q: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/files/search`,
+        query: { q },
+        signal,
+      }),
+    addFileContext: (instanceId: string, sessionId: string, fileId: string, signal?: AbortSignal) =>
+      transport.request({
+        method: "POST",
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/files/${enc(fileId)}/context`,
+        body: {},
+        signal,
+      }),
+    removeFileContext: (
+      instanceId: string,
+      sessionId: string,
+      fileId: string,
+      signal?: AbortSignal,
+    ) =>
+      transport.request({
+        method: "DELETE",
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/files/${enc(fileId)}/context`,
+        signal,
+      }),
+    // PRD v1.6 — Chat Settings (model + contextFolder)
+    getChatSettings: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/chat-settings`,
+        signal,
+      }),
+    patchChatSettings: (
+      instanceId: string,
+      sessionId: string,
+      body: { modelId?: string | null; contextFolder?: string | null },
+      signal?: AbortSignal,
+    ) =>
+      transport.request({
+        method: "PATCH",
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/chat-settings`,
+        body,
+        signal,
+      }),
+    // PRD v1.6 — Workspace / Worktree
+    listWorkspace: (
+      instanceId: string,
+      sessionId: string,
+      path?: string,
+      signal?: AbortSignal,
+    ) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/workspace`,
+        query: path ? { path } : undefined,
+        signal,
+      }),
+    readWorkspaceFile: (
+      instanceId: string,
+      sessionId: string,
+      path: string,
+      signal?: AbortSignal,
+    ) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/workspace/file`,
+        query: { path },
+        signal,
+      }),
+    workspaceTerminalPath: (instanceId: string, sessionId: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/sessions/${enc(sessionId)}/workspace/terminal-path`,
+        signal,
+      }),
+    // PRD v1.6 FR-01 — Agent command catalog
+    listChatCommands: (instanceId: string, signal?: AbortSignal) =>
+      transport.request({
+        path: `/api/v1/instances/${enc(instanceId)}/chat/commands`,
+        signal,
+      }),
   };
 }
 

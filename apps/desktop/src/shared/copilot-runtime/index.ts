@@ -197,6 +197,84 @@ export interface CopilotRuntimeAPI {
   getChatModelConfig: (profileRef?: string) => Promise<
     import("./instance-contract").ServeModelConfigView | null
   >;
+  /** PRD v1.6 — Session / Files / Commands / Workspace / Settings */
+  listSessions: (profileRef?: string) => Promise<unknown[]>;
+  listSessionMessages: (sessionId: string, profileRef?: string) => Promise<unknown[]>;
+  listSessionFiles: (
+    sessionId: string,
+    profileRef?: string,
+  ) => Promise<{ files?: Array<Record<string, unknown>> }>;
+  searchSessionFiles: (
+    sessionId: string,
+    query: string,
+    profileRef?: string,
+  ) => Promise<{ hits?: Array<Record<string, unknown>> }>;
+  addSessionFileContext: (
+    sessionId: string,
+    fileId: string,
+    profileRef?: string,
+  ) => Promise<unknown>;
+  removeSessionFileContext: (
+    sessionId: string,
+    fileId: string,
+    profileRef?: string,
+  ) => Promise<unknown>;
+  getSessionChatSettings: (
+    sessionId: string,
+    profileRef?: string,
+  ) => Promise<{
+    modelId?: string | null;
+    contextFolder?: string | null;
+  } | null>;
+  patchSessionChatSettings: (
+    sessionId: string,
+    body: { modelId?: string | null; contextFolder?: string | null },
+    profileRef?: string,
+  ) => Promise<unknown>;
+  listChatCommands: (profileRef?: string) => Promise<{
+    commands: Array<{
+      name: string;
+      description?: string;
+      category?: string;
+      argsHint?: string | null;
+      allowWhileBusy?: boolean;
+    }>;
+    rpcReady?: boolean;
+  }>;
+  listSessionWorkspace: (
+    sessionId: string,
+    path?: string,
+    profileRef?: string,
+  ) => Promise<unknown>;
+  readSessionWorkspaceFile: (
+    sessionId: string,
+    path: string,
+    profileRef?: string,
+  ) => Promise<unknown>;
+  sessionWorkspaceTerminalPath: (
+    sessionId: string,
+    profileRef?: string,
+  ) => Promise<{ path: string; validated?: boolean }>;
+  executeChatCommand: (
+    runId: string,
+    body: { turnId?: string; sessionId?: string; name: string; args?: string },
+  ) => Promise<{
+    result: "handled" | "send_prompt" | "error";
+    output?: string | null;
+    message?: string | null;
+    prompt?: string | null;
+    turnId?: string | null;
+  }>;
+  createBackgroundTurn: (
+    runId: string,
+    body: { parentTurnId?: string; sessionId?: string; message: string },
+  ) => Promise<{
+    accepted: boolean;
+    runId: string;
+    turnId: string;
+    parentRunId: string;
+    parentTurnId?: string | null;
+  }>;
   /**
    * Main-authenticated Serve JSON proxy. Renderer must not send Device Token.
    * Prefer domain-specific IPC in later phases; this bridges legacy Renderer Serve HTTP.

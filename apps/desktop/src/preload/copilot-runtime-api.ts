@@ -75,6 +75,72 @@ export const copilotRuntimeApi: CopilotRuntimeAPI = {
     ipcRenderer.invoke("copilot-runtime:list-chat-models", options),
   getChatModelConfig: (profileRef) =>
     ipcRenderer.invoke("copilot-runtime:get-chat-model-config", profileRef),
+  listSessions: (profileRef) =>
+    ipcRenderer.invoke("copilot-runtime:list-sessions", profileRef),
+  listSessionMessages: (sessionId, profileRef) =>
+    ipcRenderer.invoke("copilot-runtime:list-session-messages", sessionId, profileRef),
+  listSessionFiles: (sessionId, profileRef) =>
+    ipcRenderer.invoke("copilot-runtime:list-session-files", sessionId, profileRef),
+  searchSessionFiles: (sessionId, query, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:search-session-files",
+      sessionId,
+      query,
+      profileRef,
+    ),
+  addSessionFileContext: (sessionId, fileId, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:add-session-file-context",
+      sessionId,
+      fileId,
+      profileRef,
+    ),
+  removeSessionFileContext: (sessionId, fileId, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:remove-session-file-context",
+      sessionId,
+      fileId,
+      profileRef,
+    ),
+  getSessionChatSettings: (sessionId, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:get-session-chat-settings",
+      sessionId,
+      profileRef,
+    ),
+  patchSessionChatSettings: (sessionId, body, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:patch-session-chat-settings",
+      sessionId,
+      body,
+      profileRef,
+    ),
+  listChatCommands: (profileRef) =>
+    ipcRenderer.invoke("copilot-runtime:list-chat-commands", profileRef),
+  listSessionWorkspace: (sessionId, path, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:list-session-workspace",
+      sessionId,
+      path,
+      profileRef,
+    ),
+  readSessionWorkspaceFile: (sessionId, path, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:read-session-workspace-file",
+      sessionId,
+      path,
+      profileRef,
+    ),
+  sessionWorkspaceTerminalPath: (sessionId, profileRef) =>
+    ipcRenderer.invoke(
+      "copilot-runtime:session-workspace-terminal-path",
+      sessionId,
+      profileRef,
+    ),
+  executeChatCommand: (runId, body) =>
+    ipcRenderer.invoke("copilot-runtime:execute-chat-command", runId, body),
+  createBackgroundTurn: (runId, body) =>
+    ipcRenderer.invoke("copilot-runtime:create-background-turn", runId, body),
   proxyFetch: (request) => ipcRenderer.invoke("copilot-runtime:proxy-fetch", request),
   onStateChanged: (callback) => {
     const handler = (

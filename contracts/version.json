@@ -1,7 +1,7 @@
 {
-  "bundleVersion": "1.3.0",
-  "runtimeApi": "3.0.0",
-  "runtimeEvents": "2.1.0",
+  "bundleVersion": "1.4.0",
+  "runtimeApi": "3.1.0",
+  "runtimeEvents": "2.2.0",
   "compatibility": {
     "minimumDesktopVersion": "0.1.9",
     "minimumRuntimeVersion": "1.6.0"

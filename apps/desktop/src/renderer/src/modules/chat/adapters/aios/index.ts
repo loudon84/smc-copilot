@@ -7,6 +7,7 @@ export {
   aiosCommandAdapter,
   aiosVoiceAdapter,
 } from "./aiosCommandVoiceAdapter";
+export { aiosWorkspaceAdapter } from "./aiosWorkspaceAdapter";
 export {
   composeWorkPrompt,
   type AiosWorkPromptInput,

@@ -21,6 +21,7 @@ import { isServeControlPlaneEnabled, isServeChatTransportPreferred } from "./run
 import { ServeInstanceAdapter } from "../runtime-adapters/ServeInstanceAdapter";
 import { ServeDiagnosticsAdapter } from "../runtime-adapters/ServeDiagnosticsAdapter";
 import { ServeConfigurationAdapter } from "../runtime-adapters/ServeConfigurationAdapter";
+import { ChatCapabilityRuntime } from "../runtime-adapters/ChatCapabilityRuntime";
 import { getSmcRuntimeClient } from "./smc-runtime-client";
 
 export interface CopilotRuntimeProxyFetchRequest {
@@ -424,6 +425,115 @@ export function registerCopilotRuntimeIpc(): void {
         return null;
       }
     },
+  );
+
+  // PRD v1.6 — Chat capability closure (Session / Files / Commands / Workspace / Settings)
+  ipcMain.handle("copilot-runtime:list-sessions", async (_e, profileRef?: string) => {
+    try {
+      return await ChatCapabilityRuntime.listSessions(profileRef);
+    } catch {
+      return [];
+    }
+  });
+  ipcMain.handle(
+    "copilot-runtime:list-session-messages",
+    async (_e, sessionId: string, profileRef?: string) => {
+      try {
+        return await ChatCapabilityRuntime.listMessages(sessionId, profileRef);
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    "copilot-runtime:list-session-files",
+    async (_e, sessionId: string, profileRef?: string) => {
+      try {
+        return await ChatCapabilityRuntime.listFiles(sessionId, profileRef);
+      } catch {
+        return { files: [] };
+      }
+    },
+  );
+  ipcMain.handle(
+    "copilot-runtime:search-session-files",
+    async (_e, sessionId: string, query: string, profileRef?: string) => {
+      try {
+        return await ChatCapabilityRuntime.searchFiles(sessionId, query, profileRef);
+      } catch {
+        return { hits: [] };
+      }
+    },
+  );
+  ipcMain.handle(
+    "copilot-runtime:add-session-file-context",
+    async (_e, sessionId: string, fileId: string, profileRef?: string) =>
+      ChatCapabilityRuntime.addFileContext(sessionId, fileId, profileRef),
+  );
+  ipcMain.handle(
+    "copilot-runtime:remove-session-file-context",
+    async (_e, sessionId: string, fileId: string, profileRef?: string) =>
+      ChatCapabilityRuntime.removeFileContext(sessionId, fileId, profileRef),
+  );
+  ipcMain.handle(
+    "copilot-runtime:get-session-chat-settings",
+    async (_e, sessionId: string, profileRef?: string) => {
+      try {
+        return await ChatCapabilityRuntime.getChatSettings(sessionId, profileRef);
+      } catch {
+        return null;
+      }
+    },
+  );
+  ipcMain.handle(
+    "copilot-runtime:patch-session-chat-settings",
+    async (
+      _e,
+      sessionId: string,
+      body: { modelId?: string | null; contextFolder?: string | null },
+      profileRef?: string,
+    ) => ChatCapabilityRuntime.patchChatSettings(sessionId, body, profileRef),
+  );
+  ipcMain.handle(
+    "copilot-runtime:list-chat-commands",
+    async (_e, profileRef?: string) => {
+      try {
+        return await ChatCapabilityRuntime.listChatCommands(profileRef);
+      } catch {
+        return { commands: [], rpcReady: false };
+      }
+    },
+  );
+  ipcMain.handle(
+    "copilot-runtime:list-session-workspace",
+    async (_e, sessionId: string, path?: string, profileRef?: string) =>
+      ChatCapabilityRuntime.listWorkspace(sessionId, path, profileRef),
+  );
+  ipcMain.handle(
+    "copilot-runtime:read-session-workspace-file",
+    async (_e, sessionId: string, path: string, profileRef?: string) =>
+      ChatCapabilityRuntime.readWorkspaceFile(sessionId, path, profileRef),
+  );
+  ipcMain.handle(
+    "copilot-runtime:session-workspace-terminal-path",
+    async (_e, sessionId: string, profileRef?: string) =>
+      ChatCapabilityRuntime.workspaceTerminalPath(sessionId, profileRef),
+  );
+  ipcMain.handle(
+    "copilot-runtime:execute-chat-command",
+    async (
+      _e,
+      runId: string,
+      body: { turnId?: string; sessionId?: string; name: string; args?: string },
+    ) => ChatCapabilityRuntime.executeCommand(runId, body),
+  );
+  ipcMain.handle(
+    "copilot-runtime:create-background-turn",
+    async (
+      _e,
+      runId: string,
+      body: { parentTurnId?: string; sessionId?: string; message: string },
+    ) => ChatCapabilityRuntime.createBackgroundTurn(runId, body),
   );
 }
 

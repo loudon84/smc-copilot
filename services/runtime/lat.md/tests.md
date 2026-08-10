@@ -110,6 +110,20 @@ enqueue / list / patch / delete ??????? `queue.changed` ???snapshot ? events?
 
 `/runtime/capabilities` ? features ?? `chat.runtime.v2`?
 
+## Chat Capability v1.6
+
+PRD v1.6 P0 schema and slash outcome tests for the Hermes Command Bridge.
+
+### Slash outcome shapes
+
+Verify handled / send_prompt / error models and `_normalize_outcome` for exec/send directives.
+
+`tests/test_v16_chat_capability.py` covers command/settings/file schemas, new durable event types, and slash outcome normalization. See [[chat-sessions#Chat Capability Closure (v1.6 P0)]].
+
+## Chat Runtime v2 Echo
+
+Echo executor offline persistence checks for durable ChatTurn worker.
+
 ### Echo turn worker persistence
 
 `ChatTurnWorker` + `EchoChatExecutor` ? message delta / completed / usage / turn.completed ?? Event Store??? Fake Gateway?

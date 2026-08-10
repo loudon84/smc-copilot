@@ -26,6 +26,14 @@ from schemas.chat_runs import (
     ChatRunResponse,
     ChatSnapshotResponse,
 )
+from schemas.chat_commands import (
+    ChatBackgroundTurnBody,
+    ChatBackgroundTurnResponse,
+    ChatCommandExecuteBody,
+    ChatCommandExecuteResponse,
+)
+from services.background_chat_service import BackgroundChatService
+from services.chat_command_service import ChatCommandService
 from services.chat_event_service import ChatEventService
 from services.chat_interaction_service import ChatInteractionService
 from services.chat_queue_service import ChatQueueService
@@ -185,3 +193,46 @@ async def delete_chat_queue(
 ) -> ChatQueueEntryResponse:
     result = await ChatQueueService(session).delete(run_id, queue_id)
     return ChatQueueEntryResponse.model_validate(result)
+
+
+@router.post("/{run_id}/commands/execute", response_model=ChatCommandExecuteResponse)
+async def execute_chat_command(
+    run_id: str,
+    body: ChatCommandExecuteBody,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    session: AsyncSession = Depends(get_db_session),
+    run_svc: ChatRunService = Depends(_run_svc),
+) -> ChatCommandExecuteResponse:
+    run = await run_svc.get_run(run_id)
+    instance_id = str(run.get("instanceId") or run.get("instance_id") or "")
+    result = await ChatCommandService(session, settings).execute(
+        run_id, body, instance_id=instance_id
+    )
+    # FR-02: send_prompt → Runtime creates a ChatTurn (not Desktop).
+    if result.result == "send_prompt" and result.prompt:
+        accepted = await run_svc.create_turn(
+            run_id,
+            ChatCreateTurnBody(
+                clientTurnId=f"cmd-{body.name}-{body.turn_id or 'x'}",
+                sessionId=body.session_id,
+                message=result.prompt,
+            ),
+        )
+        return ChatCommandExecuteResponse(
+            result="send_prompt",
+            prompt=result.prompt,
+            output=result.output,
+            turnId=accepted.turn_id,
+            message=result.message,
+        )
+    return result
+
+
+@router.post("/{run_id}/background-turns", response_model=ChatBackgroundTurnResponse)
+async def create_background_turn(
+    run_id: str,
+    body: ChatBackgroundTurnBody,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    session: AsyncSession = Depends(get_db_session),
+) -> ChatBackgroundTurnResponse:
+    return await BackgroundChatService(session, settings).create_background_turn(run_id, body)

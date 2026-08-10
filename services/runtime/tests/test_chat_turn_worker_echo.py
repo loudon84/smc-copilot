@@ -19,7 +19,7 @@ from services.chat_turn_worker import (
 @pytest.mark.asyncio
 async def test_echo_executor_maps_events_into_store(app_client) -> None:
     """Echo executor yields deltas/usage/completed; worker appends durable ChatEvents."""
-    # @lat: [[tests#Chat Runtime v2#Echo turn worker persistence]]
+    # @lat: [[tests#Chat Runtime v2 Echo#Echo turn worker persistence]]
     client, *_rest = app_client
     app = _rest[-1]
     session_maker: async_sessionmaker[AsyncSession] = app.state.session_maker
@@ -74,7 +74,7 @@ async def test_echo_executor_maps_events_into_store(app_client) -> None:
 
 @pytest.mark.asyncio
 async def test_echo_executor_respects_cancel(app_client) -> None:
-    # @lat: [[tests#Chat Runtime v2#Echo turn worker cancel]]
+    # @lat: [[tests#Chat Runtime v2 Echo#Echo turn worker cancel]]
     _client, *_rest = app_client
     app = _rest[-1]
     session_maker: async_sessionmaker[AsyncSession] = app.state.session_maker

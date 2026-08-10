@@ -124,6 +124,15 @@ Main-only Serve 连接层。Device Token 仅保存在 Main（keytar service `smc
 | `copilot-runtime:is-serve-chat-preferred` | invoke | — | `boolean` | Serve Chat 优先（不要求 live Ready）；Model Picker 用 |
 | `copilot-runtime:list-chat-models` | invoke | `{ profileRef?, refresh? }?` | `ServeModelOption[]` | **v1.5.4** Runtime `/chat/models` execution catalog |
 | `copilot-runtime:get-chat-model-config` | invoke | `profileRef?` | `ServeModelConfigView \| null` | **v1.5.4** Runtime `/chat/model-config`（config.yaml SOT） |
+| `copilot-runtime:list-sessions` | invoke | `profileRef?` | `unknown[]` | **v1.6** Runtime Sessions list（no state.db） |
+| `copilot-runtime:list-session-messages` | invoke | `sessionId, profileRef?` | `unknown[]` | **v1.6** Runtime session messages |
+| `copilot-runtime:list-session-files` / `search-session-files` | invoke | session + query | files/hits | **v1.6** Session File API |
+| `copilot-runtime:add/remove-session-file-context` | invoke | sessionId, fileId | ok | **v1.6** +Ctx/-Ctx |
+| `copilot-runtime:get/patch-session-chat-settings` | invoke | sessionId, body? | settings | **v1.6** modelId + contextFolder |
+| `copilot-runtime:list-chat-commands` | invoke | `profileRef?` | `{ commands, rpcReady }` | **v1.6** Agent Slash Catalog |
+| `copilot-runtime:execute-chat-command` | invoke | runId, body | handled/send_prompt/error | **v1.6** Slash Execute |
+| `copilot-runtime:create-background-turn` | invoke | runId, body | background run | **v1.6** `/btw` |
+| `copilot-runtime:list-session-workspace` / `read-session-workspace-file` / `session-workspace-terminal-path` | invoke | session + path | workspace | **v1.6** Worktree |
 | `copilot-runtime:list-instances` | invoke | — | `ServeInstanceSummary[]` | Phase 2 |
 | `copilot-runtime:get-instance` | invoke | `instanceId` | `ServeInstanceSummary \| null` | |
 | `copilot-runtime:resolve-instance` | invoke | `ref` | `ServeInstanceResolveResult \| null` | `profileId`/`name` → instanceId |

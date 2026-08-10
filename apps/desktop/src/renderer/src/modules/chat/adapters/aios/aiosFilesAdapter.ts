@@ -1,30 +1,70 @@
 import type { ChatFilesPort, ChatFileRef } from "../../ports/ChatFilesPort";
 
 function mapListed(f: {
-  id: string;
-  name: string;
+  id?: string;
+  fileId?: string;
+  name?: string;
   mimeType?: string;
   sizeBytes?: number;
   path?: string;
+  storagePath?: string;
+  workspaceRelativePath?: string;
   category?: ChatFileRef["category"];
+  role?: string;
+  isContext?: boolean;
 }): ChatFileRef {
+  const role = f.role;
+  let category: ChatFileRef["category"] = f.category;
+  if (!category && role) {
+    if (role === "context_file" || f.isContext) category = "context";
+    else if (role === "agent_output") category = "agent_output";
+    else category = "attachment";
+  }
   return {
-    id: f.id,
-    name: f.name,
+    id: String(f.id ?? f.fileId ?? ""),
+    name: String(f.name ?? ""),
     mimeType: f.mimeType,
     sizeBytes: f.sizeBytes,
-    path: f.path,
-    category: f.category,
+    path: f.path ?? f.storagePath ?? f.workspaceRelativePath,
+    category,
   };
 }
 
-/** AI-OS adapter: window.chatFiles (+ files:* platform) → ChatFilesPort */
+async function useRuntimeFiles(): Promise<boolean> {
+  if (typeof window.copilotRuntime?.listSessionFiles !== "function") return false;
+  try {
+    if (typeof window.copilotRuntime.isServeChatPreferred === "function") {
+      return await window.copilotRuntime.isServeChatPreferred();
+    }
+  } catch {
+    return true;
+  }
+  return true;
+}
+
+/** AI-OS adapter: Runtime Session File API → ChatFilesPort (PRD v1.6 FR-11/12/13). */
 export const aiosFilesAdapter: ChatFilesPort = {
   async listSessionFiles(sessionId, profileId) {
+    if (await useRuntimeFiles()) {
+      const res = await window.copilotRuntime.listSessionFiles(sessionId, profileId);
+      return (res.files || []).map((f) => mapListed(f as Parameters<typeof mapListed>[0]));
+    }
     const files = await window.chatFiles.listSessionFiles(profileId, sessionId);
     return files.map(mapListed);
   },
   async searchSessionFiles(sessionId, query, profileId) {
+    if (await useRuntimeFiles()) {
+      const res = await window.copilotRuntime.searchSessionFiles(
+        sessionId,
+        query,
+        profileId,
+      );
+      return (res.hits || []).map((r) => ({
+        id: String((r as { fileId?: string }).fileId ?? ""),
+        name: String((r as { name?: string }).name ?? ""),
+        category: "search" as const,
+      }));
+    }
     const rows = await window.chatFiles.searchSessionFiles({
       profile: profileId,
       sessionId,
@@ -37,6 +77,7 @@ export const aiosFilesAdapter: ChatFilesPort = {
     }));
   },
   async upload(sessionId, profileId, files) {
+    // Upload still uses chatFiles → Main → Runtime Attachment API when Serve preferred.
     const res = await window.chatFiles.uploadDropped(
       { profile: profileId, session_id: sessionId },
       files,
@@ -104,6 +145,10 @@ export const aiosFilesAdapter: ChatFilesPort = {
     return res.files.map(mapListed);
   },
   async addToContext(sessionId, fileId, profileId) {
+    if (await useRuntimeFiles()) {
+      await window.copilotRuntime.addSessionFileContext(sessionId, fileId, profileId);
+      return;
+    }
     await window.chatFiles.addToSessionContext({
       profile: profileId,
       sessionId,
@@ -111,6 +156,14 @@ export const aiosFilesAdapter: ChatFilesPort = {
     });
   },
   async removeFromContext(sessionId, fileId, profileId) {
+    if (await useRuntimeFiles()) {
+      await window.copilotRuntime.removeSessionFileContext(
+        sessionId,
+        fileId,
+        profileId,
+      );
+      return;
+    }
     await window.chatFiles.removeFromSessionContext({
       profile: profileId,
       sessionId,

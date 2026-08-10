@@ -33,6 +33,7 @@ import {
   type ServeChatEvent,
   type ServeChatQueueEntry,
 } from "../../shared/copilot-runtime/chat-runtime-serve-contract";
+import { remapServeEventIdentity } from "../../shared/copilot-runtime/serve-event-identity";
 import { ServeInstanceAdapter } from "./ServeInstanceAdapter";
 import { emitChatRuntimeEvent } from "../chat-runtime/chat-event-emitter";
 import {
@@ -43,7 +44,13 @@ import {
 import { isChatTurnTerminalEventType } from "../../shared/chat-runtime/chat-runtime-events";
 
 const runAbortControllers = new Map<string, AbortController>();
+/** clientRunId → serverRunId (Serve UUID); abort may arrive with either. */
+const clientToServerRunId = new Map<string, string>();
 const workspaceId = "desktop-default";
+
+function resolveAbortRunId(runRef: string): string {
+  return clientToServerRunId.get(runRef) || runRef;
+}
 
 /**
  * Chat transport ready = serviceReady AND execution.chatReady (PRD v1.5.4 §40).
@@ -179,16 +186,20 @@ export const ServeChatRuntimeAdapter = {
 
       const serverRunId = accepted.runId || runId;
       const serverTurnId = accepted.turnId || turnId;
+      clientToServerRunId.set(runId, serverRunId);
 
       // Subscribe SSE (fire-and-forget); abort via controller.
-      const existing = runAbortControllers.get(serverRunId);
+      // Controllers are keyed by both client and server ids — Renderer aborts with client runId.
+      const existing =
+        runAbortControllers.get(runId) || runAbortControllers.get(serverRunId);
       existing?.abort();
       const controller = new AbortController();
+      runAbortControllers.set(runId, controller);
       runAbortControllers.set(serverRunId, controller);
 
       setTransportHandle({
-        runId: serverRunId,
-        turnId: serverTurnId,
+        runId,
+        turnId,
         abort: () => {
           controller.abort();
           void chatRuntimeClient.abort(serverRunId).catch(() => undefined);
@@ -202,11 +213,13 @@ export const ServeChatRuntimeAdapter = {
           lastEventId: accepted.eventCursor > 0 ? String(accepted.eventCursor) : null,
           signal: controller.signal,
           onEvent: (serveEvent) => {
-            const ev = {
-              ...serveEvent,
-              turnId: serveEvent.turnId || serverTurnId,
-              runId: serveEvent.runId || serverRunId,
-            };
+            // Serve events carry server UUIDs; Renderer filters on client runId/turnId.
+            const ev = remapServeEventIdentity(serveEvent, {
+              clientRunId: runId,
+              clientTurnId: turnId,
+              serverRunId,
+              serverTurnId,
+            });
             if (turnTerminal && !isChatTurnTerminalEventType(
               mapServeChatEventToRuntimeEvent(ev)?.type ?? "ping",
             )) {
@@ -215,7 +228,9 @@ export const ServeChatRuntimeAdapter = {
             const mapped = mapServeChatEventToRuntimeEvent(ev);
             if (mapped && isChatTurnTerminalEventType(mapped.type)) {
               turnTerminal = true;
+              clearTransportHandle(runId, turnId);
               clearTransportHandle(serverRunId, serverTurnId);
+              runAbortControllers.delete(runId);
               runAbortControllers.delete(serverRunId);
             }
             forwardServeEvent(sender, ev);
@@ -228,7 +243,8 @@ export const ServeChatRuntimeAdapter = {
           console.warn("[ServeChatRuntimeAdapter] SSE ended:", errorMessage(err));
         });
 
-      return { ok: true, runId: serverRunId, turnId: serverTurnId, acceptedAt };
+      // Return client ids — UI identity stays stable; server ids are transport-only.
+      return { ok: true, runId, turnId, acceptedAt };
     } catch (err) {
       return {
         ok: false,
@@ -241,12 +257,16 @@ export const ServeChatRuntimeAdapter = {
   async abort(runId: string): Promise<{ ok: boolean }> {
     const id = runId.trim();
     if (!id) return { ok: false };
+    const serverId = resolveAbortRunId(id);
     runAbortControllers.get(id)?.abort();
+    runAbortControllers.get(serverId)?.abort();
     runAbortControllers.delete(id);
+    runAbortControllers.delete(serverId);
     abortTransport(id);
+    abortTransport(serverId);
     try {
       if (this.ready) {
-        await chatRuntimeClient.abort(id);
+        await chatRuntimeClient.abort(serverId);
       }
       return { ok: true };
     } catch (err) {

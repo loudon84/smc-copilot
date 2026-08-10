@@ -8,3 +8,8 @@ export type {
   ChatRunContextPort,
   ChatRunContextSnapshot,
 } from "./ChatRunContextPort";
+export type {
+  ChatWorkspacePort,
+  WorkspaceEntry,
+  WorkspaceFile,
+} from "./ChatWorkspacePort";

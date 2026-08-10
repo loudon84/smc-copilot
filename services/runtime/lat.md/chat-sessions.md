@@ -49,3 +49,14 @@ v1.1 引入 durable ChatRun：Desktop 经 `/api/v1/chat-runs*` 与 Event Store �
 ## Chat Turn Recovery
 
 [[src/services/chat_turn_recovery.py#recover_chat_turns]] 在 Runtime 启动时恢复：queued/pending 重新入队；running 标 failed（`RUNTIME_RESTARTED_DURING_TURN`）并写 `turn.failed`，**不**重放 Hermes；waiting_clarify/approval 留给 Desktop 续跑。由 lifespan / WorkerSupervisor 在启动路径调用。
+
+## Chat Capability Closure (v1.6 P0)
+
+v1.6 将原 copilot-desktop Hermes Chat 能力收口到 Runtime：Desktop 不得直连 Hermes Home/DB/Gateway/Dashboard WS。
+
+- Command Catalog / Slash Execute：[[src/api/v1/chat_commands.py]] + [[src/services/chat_command_service.py#ChatCommandService]]，底层 [[src/integrations/hermes/dashboard_rpc_client.py#HermesDashboardRpcClient]]（`commands.catalog` / `slash.exec` / `command.dispatch`）。
+- Background `/btw`：`POST /chat-runs/{runId}/background-turns` → [[src/services/background_chat_service.py#BackgroundChatService]]；`chat_runs.run_kind=background`，发 `background.*` 事件，不改 Main Queue/State。
+- Session Files：[[src/api/v1/session_chat.py]] + [[src/services/session_file_service.py#SessionFileService]]（list/search/+Ctx/-Ctx）。
+- Session Chat Settings：表 `session_chat_settings` + [[src/services/session_chat_settings_service.py#SessionChatSettingsService]]（`modelId` / `contextFolder`）；Turn 执行前解析 Session Override 与 `x-hermes-cwd`。
+- Worktree：[[src/services/workspace_browse_service.py#WorkspaceBrowseService]]（path escape / symlink 校验）。
+- 测试：[[tests#Chat Capability v1.6]]。

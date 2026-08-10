@@ -102,6 +102,61 @@ class QueueChangedEvent(ChatRunEventBase):
     type: Literal["queue.changed"] = "queue.changed"
 
 
+# PRD v1.6 §52 — Command / Background / Settings / Workspace / File events
+
+
+class CommandStartedEvent(ChatRunEventBase):
+    type: Literal["command.started"] = "command.started"
+
+
+class CommandOutputEvent(ChatRunEventBase):
+    type: Literal["command.output"] = "command.output"
+
+
+class CommandCompletedEvent(ChatRunEventBase):
+    type: Literal["command.completed"] = "command.completed"
+
+
+class CommandFailedEvent(ChatRunEventBase):
+    type: Literal["command.failed"] = "command.failed"
+
+
+class BackgroundStartedEvent(ChatRunEventBase):
+    type: Literal["background.started"] = "background.started"
+
+
+class BackgroundDeltaEvent(ChatRunEventBase):
+    type: Literal["background.delta"] = "background.delta"
+
+
+class BackgroundCompletedEvent(ChatRunEventBase):
+    type: Literal["background.completed"] = "background.completed"
+
+
+class BackgroundFailedEvent(ChatRunEventBase):
+    type: Literal["background.failed"] = "background.failed"
+
+
+class SessionSettingsChangedEvent(ChatRunEventBase):
+    type: Literal["session.settings.changed"] = "session.settings.changed"
+
+
+class WorkspaceChangedEvent(ChatRunEventBase):
+    type: Literal["workspace.changed"] = "workspace.changed"
+
+
+class FileCreatedEvent(ChatRunEventBase):
+    type: Literal["file.created"] = "file.created"
+
+
+class FileUpdatedEvent(ChatRunEventBase):
+    type: Literal["file.updated"] = "file.updated"
+
+
+class FileDeletedEvent(ChatRunEventBase):
+    type: Literal["file.deleted"] = "file.deleted"
+
+
 ChatRunEvent = Annotated[
     RunStartedEvent
     | SessionStartedEvent
@@ -122,7 +177,20 @@ ChatRunEvent = Annotated[
     | TurnCompletedEvent
     | TurnFailedEvent
     | TurnCancelledEvent
-    | QueueChangedEvent,
+    | QueueChangedEvent
+    | CommandStartedEvent
+    | CommandOutputEvent
+    | CommandCompletedEvent
+    | CommandFailedEvent
+    | BackgroundStartedEvent
+    | BackgroundDeltaEvent
+    | BackgroundCompletedEvent
+    | BackgroundFailedEvent
+    | SessionSettingsChangedEvent
+    | WorkspaceChangedEvent
+    | FileCreatedEvent
+    | FileUpdatedEvent
+    | FileDeletedEvent,
     Field(discriminator="type"),
 ]
 
@@ -148,6 +216,19 @@ CHAT_RUN_EVENT_TYPES: frozenset[str] = frozenset(
         "turn.failed",
         "turn.cancelled",
         "queue.changed",
+        "command.started",
+        "command.output",
+        "command.completed",
+        "command.failed",
+        "background.started",
+        "background.delta",
+        "background.completed",
+        "background.failed",
+        "session.settings.changed",
+        "workspace.changed",
+        "file.created",
+        "file.updated",
+        "file.deleted",
     }
 )
 

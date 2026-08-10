@@ -121,3 +121,41 @@ class HermesSessionAdapter:
             return {"totalSessions": total_sessions, "totalMessages": total_messages}
         finally:
             conn.close()
+
+    async def list_messages(self, session_id: str, *, limit: int = 500) -> list[dict[str, Any]]:
+        conn = self._connect()
+        if conn is None:
+            return []
+        try:
+            if not self._table_exists(conn, "messages"):
+                return []
+            rows = conn.execute(
+                "SELECT id, session_id, role, content, created_at, timestamp "
+                "FROM messages WHERE session_id = ? ORDER BY COALESCE(timestamp, created_at, id) ASC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+            out: list[dict[str, Any]] = []
+            for r in rows:
+                d = dict(r)
+                out.append(
+                    {
+                        "id": str(d.get("id") or ""),
+                        "sessionId": str(d.get("session_id") or session_id),
+                        "role": str(d.get("role") or "assistant"),
+                        "content": str(d.get("content") or ""),
+                        "timestamp": d.get("timestamp") or d.get("created_at"),
+                    }
+                )
+            return out
+        except sqlite3.OperationalError:
+            # Older schemas may lack timestamp/created_at — fall back to SELECT *.
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM messages WHERE session_id = ? LIMIT ?",
+                    (session_id, limit),
+                ).fetchall()
+                return [dict(r) for r in rows]
+            except sqlite3.OperationalError:
+                return []
+        finally:
+            conn.close()

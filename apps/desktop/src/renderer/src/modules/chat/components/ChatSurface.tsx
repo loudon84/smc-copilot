@@ -6,6 +6,7 @@ import type { ChatFilesPort } from "../ports/ChatFilesPort";
 import type { ChatNavigationPort } from "../ports/ChatNavigationPort";
 import type { ChatCommandPort } from "../ports/ChatCommandPort";
 import type { ChatRunContextPort } from "../ports/ChatRunContextPort";
+import type { ChatWorkspacePort } from "../ports/ChatWorkspacePort";
 import type { ChatSubmitInput } from "@shared/chat-runtime/chat-runtime-contract";
 import type { ChatUsage } from "@shared/chat-runtime/chat-runtime-events";
 import { useChatController } from "../controller/useChatController";
@@ -17,6 +18,8 @@ import { ChatFloatingRail } from "./floating/ChatFloatingRail";
 import { ChatContentRail } from "../layout/ChatContentRail";
 import { ChatRuntimeRecoveryBridge } from "../recovery/ChatRuntimeRecoveryBridge";
 import { ChatDiagnosticsExportButton } from "./diagnostics/ChatDiagnosticsExportButton";
+import { ContextFolderChip } from "./workspace/ContextFolderChip";
+import { WorktreePanel } from "./workspace/WorktreePanel";
 import "../styles/copilot-chat.css";
 
 export type ControllerStateChangeSnapshot = {
@@ -64,6 +67,7 @@ export type ChatSurfaceProps = ChatSurfaceSlots & {
   navigation?: ChatNavigationPort;
   commands?: ChatCommandPort;
   runContext?: ChatRunContextPort;
+  workspace?: ChatWorkspacePort;
   profileId: string;
   /** Mount-time session id for one-shot history hydrate (not runtime bind). */
   sessionId?: string | null;
@@ -99,6 +103,7 @@ export function ChatSurface({
   navigation,
   commands,
   runContext,
+  workspace,
   profileId,
   sessionId,
   initialDraft,
@@ -317,6 +322,15 @@ export function ChatSurface({
       {activeExpertSlot}
       {statusNode}
       {contextBarSlot}
+      {workspace ? (
+        <div className="chat-context-folder-bar px-3 py-1">
+          <ContextFolderChip
+            sessionId={state.activeSessionId}
+            profileId={profileId}
+            workspace={workspace}
+          />
+        </div>
+      ) : null}
       <div className="chat-diagnostics-bar">
         <ChatDiagnosticsExportButton
           runtime={runtime}
@@ -434,6 +448,7 @@ export function ChatSurface({
               commands={commands}
               sessionId={state.activeSessionId}
               profileId={profileId}
+              runId={state.activeRunId}
               toolbarExtras={
                 <>
                   {composerControlsSlot}
@@ -471,6 +486,13 @@ export function ChatSurface({
         {rightOpen && (
           <aside className="chat-right-panel">
             {filesPanelSlot}
+            {workspace ? (
+              <WorktreePanel
+                sessionId={state.activeSessionId}
+                profileId={profileId}
+                workspace={workspace}
+              />
+            ) : null}
             {rightPanelSlot}
           </aside>
         )}

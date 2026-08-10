@@ -70,7 +70,7 @@ import {
   getPlatformEnabled,
   setPlatformEnabled,
 } from "./config";
-import { listSessions, getSessionMessages, searchSessions } from "./sessions";
+import { listSessions, getSessionMessages, searchSessions, listSessionsAsync, getSessionMessagesAsync, searchSessionsAsync } from "./sessions";
 import {
   syncSessionCache,
   listCachedSessions,
@@ -871,17 +871,25 @@ function setupIPC(): void {
     },
   );
 
-  // Sessions
-  ipcMain.handle("list-sessions", (_event, limit?: number, offset?: number) => {
+  // Sessions — PRD v1.6: prefer Runtime async; sync state.db path removed
+  ipcMain.handle("list-sessions", async (_event, limit?: number, offset?: number) => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshListSessions(conn.ssh, limit, offset);
-    return listSessions(limit, offset);
+    try {
+      return await listSessionsAsync(limit, offset);
+    } catch {
+      return listSessions(limit, offset);
+    }
   });
 
-  ipcMain.handle("get-session-messages", (_event, sessionId: string) => {
+  ipcMain.handle("get-session-messages", async (_event, sessionId: string) => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshGetSessionMessages(conn.ssh, sessionId);
-    return getSessionMessages(sessionId);
+    try {
+      return await getSessionMessagesAsync(sessionId);
+    } catch {
+      return getSessionMessages(sessionId);
+    }
   });
 
   // Profiles
@@ -1056,11 +1064,15 @@ function setupIPC(): void {
       updateSessionTitle(sessionId, title),
   );
 
-  // Session search
-  ipcMain.handle("search-sessions", (_event, query: string, limit?: number) => {
+  // Session search — PRD v1.6 Runtime
+  ipcMain.handle("search-sessions", async (_event, query: string, limit?: number) => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshSearchSessions(conn.ssh, query, limit);
-    return searchSessions(query, limit);
+    try {
+      return await searchSessionsAsync(query, limit);
+    } catch {
+      return searchSessions(query, limit);
+    }
   });
 
   // Credential Pool

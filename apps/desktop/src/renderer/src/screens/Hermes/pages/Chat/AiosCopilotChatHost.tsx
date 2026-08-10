@@ -8,6 +8,7 @@ import {
   aiosModelsAdapter,
   aiosNavigationAdapter,
   aiosCommandAdapter,
+  aiosWorkspaceAdapter,
   composeWorkPrompt,
 } from "@renderer/modules/chat/adapters/aios";
 import type { ChatFileRef } from "@renderer/modules/chat/ports/ChatFilesPort";
@@ -357,6 +358,7 @@ export function AiosCopilotChatHost({
       models={aiosModelsAdapter}
       navigation={aiosNavigationAdapter}
       commands={aiosCommandAdapter}
+      workspace={aiosWorkspaceAdapter}
       runContext={runContext}
       profileId={profileId}
       sessionId={sessionId}

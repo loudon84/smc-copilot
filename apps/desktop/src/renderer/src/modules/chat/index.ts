@@ -8,6 +8,8 @@ export { ChatRunHeader } from "./components/header/ChatRunHeader";
 export { ChatRunStatus } from "./components/header/ChatRunStatus";
 export { WorkContextChip } from "./components/composer/WorkContextChip";
 export { WorkContextPopover } from "./components/composer/WorkContextPopover";
+export { ContextFolderChip } from "./components/workspace/ContextFolderChip";
+export { WorktreePanel } from "./components/workspace/WorktreePanel";
 export {
   PromptAssistPanel,
   resolveEffectivePromptHint,

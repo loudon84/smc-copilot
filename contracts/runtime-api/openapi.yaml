@@ -353,6 +353,57 @@ components:
       - workspace_relative_path
       title: ChatAttachmentResponse
       type: object
+    ChatBackgroundTurnBody:
+      properties:
+        message:
+          minLength: 1
+          title: Message
+          type: string
+        parentTurnId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentturnid
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+      required:
+      - message
+      title: ChatBackgroundTurnBody
+      type: object
+    ChatBackgroundTurnResponse:
+      properties:
+        accepted:
+          default: true
+          title: Accepted
+          type: boolean
+        parentRunId:
+          title: Parentrunid
+          type: string
+        parentTurnId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentturnid
+        runId:
+          title: Runid
+          type: string
+        runKind:
+          const: background
+          default: background
+          title: Runkind
+          type: string
+        turnId:
+          title: Turnid
+          type: string
+      required:
+      - runId
+      - turnId
+      - parentRunId
+      title: ChatBackgroundTurnResponse
+      type: object
     ChatClarifyRespondBody:
       properties:
         answer:
@@ -370,6 +421,114 @@ components:
       - turnId
       - answer
       title: ChatClarifyRespondBody
+      type: object
+    ChatCommandExecuteBody:
+      properties:
+        args:
+          default: ''
+          title: Args
+          type: string
+        name:
+          minLength: 1
+          title: Name
+          type: string
+        sessionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sessionid
+        turnId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Turnid
+      required:
+      - name
+      title: ChatCommandExecuteBody
+      type: object
+    ChatCommandExecuteResponse:
+      properties:
+        details:
+          additionalProperties: true
+          title: Details
+          type: object
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        output:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Output
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
+        result:
+          enum:
+          - handled
+          - send_prompt
+          - error
+          title: Result
+          type: string
+        turnId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Turnid
+      required:
+      - result
+      title: ChatCommandExecuteResponse
+      type: object
+    ChatCommandItem:
+      properties:
+        allowWhileBusy:
+          default: true
+          title: Allowwhilebusy
+          type: boolean
+        argsHint:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Argshint
+        category:
+          default: agent
+          title: Category
+          type: string
+        description:
+          default: ''
+          title: Description
+          type: string
+        name:
+          title: Name
+          type: string
+        supportsAttachments:
+          default: false
+          title: Supportsattachments
+          type: boolean
+        target:
+          default: agent
+          title: Target
+          type: string
+      required:
+      - name
+      title: ChatCommandItem
+      type: object
+    ChatCommandsResponse:
+      properties:
+        commands:
+          items:
+            $ref: '#/components/schemas/ChatCommandItem'
+          title: Commands
+          type: array
+        rpcReady:
+          default: false
+          title: Rpcready
+          type: boolean
+      title: ChatCommandsResponse
       type: object
     ChatCreateRunBody:
       properties:
@@ -3300,6 +3459,184 @@ components:
       - profiles
       title: ServiceStatusResponse
       type: object
+    SessionChatSettingsPatchBody:
+      properties:
+        contextFolder:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contextfolder
+        modelId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Modelid
+      title: SessionChatSettingsPatchBody
+      type: object
+    SessionChatSettingsResponse:
+      properties:
+        contextFolder:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contextfolder
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        instanceId:
+          title: Instanceid
+          type: string
+        modelId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Modelid
+        sessionId:
+          title: Sessionid
+          type: string
+        updatedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updatedat
+      required:
+      - instanceId
+      - sessionId
+      title: SessionChatSettingsResponse
+      type: object
+    SessionFileContextResponse:
+      properties:
+        fileId:
+          title: Fileid
+          type: string
+        isContext:
+          title: Iscontext
+          type: boolean
+        ok:
+          default: true
+          title: Ok
+          type: boolean
+      required:
+      - fileId
+      - isContext
+      title: SessionFileContextResponse
+      type: object
+    SessionFileItem:
+      properties:
+        createdAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdat
+        fileId:
+          title: Fileid
+          type: string
+        isContext:
+          default: false
+          title: Iscontext
+          type: boolean
+        mimeType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mimetype
+        name:
+          title: Name
+          type: string
+        role:
+          default: prompt_attachment
+          enum:
+          - prompt_attachment
+          - context_file
+          - agent_output
+          - artifact
+          title: Role
+          type: string
+        sessionId:
+          title: Sessionid
+          type: string
+        sizeBytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sizebytes
+        storagePath:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Storagepath
+        textPreview:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Textpreview
+        workspaceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspaceid
+        workspaceRelativePath:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspacerelativepath
+      required:
+      - fileId
+      - sessionId
+      - name
+      title: SessionFileItem
+      type: object
+    SessionFileSearchHit:
+      properties:
+        fileId:
+          title: Fileid
+          type: string
+        name:
+          title: Name
+          type: string
+        role:
+          default: prompt_attachment
+          enum:
+          - prompt_attachment
+          - context_file
+          - agent_output
+          - artifact
+          title: Role
+          type: string
+        score:
+          default: 0.0
+          title: Score
+          type: number
+        snippet:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Snippet
+      required:
+      - fileId
+      - name
+      title: SessionFileSearchHit
+      type: object
+    SessionFileSearchResponse:
+      properties:
+        hits:
+          items:
+            $ref: '#/components/schemas/SessionFileSearchHit'
+          title: Hits
+          type: array
+      title: SessionFileSearchResponse
+      type: object
+    SessionFilesResponse:
+      properties:
+        files:
+          items:
+            $ref: '#/components/schemas/SessionFileItem'
+          title: Files
+          type: array
+      title: SessionFilesResponse
+      type: object
     SessionStatsInfo:
       properties:
         totalMessages:
@@ -4415,6 +4752,86 @@ components:
       - root_path
       title: WorkspaceCreate
       type: object
+    WorkspaceEntry:
+      properties:
+        kind:
+          default: file
+          enum:
+          - file
+          - directory
+          title: Kind
+          type: string
+        modifiedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Modifiedat
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        sizeBytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sizebytes
+      required:
+      - name
+      - path
+      title: WorkspaceEntry
+      type: object
+    WorkspaceFileResponse:
+      properties:
+        content:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Content
+        mimeType:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mimetype
+        name:
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        sizeBytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sizebytes
+        truncated:
+          default: false
+          title: Truncated
+          type: boolean
+      required:
+      - path
+      - name
+      title: WorkspaceFileResponse
+      type: object
+    WorkspaceListResponse:
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/WorkspaceEntry'
+          title: Entries
+          type: array
+        path:
+          title: Path
+          type: string
+        root:
+          title: Root
+          type: string
+      required:
+      - root
+      - path
+      title: WorkspaceListResponse
+      type: object
     WorkspacePatch:
       properties:
         enabled:
@@ -4483,6 +4900,19 @@ components:
       - created_at
       - updated_at
       title: WorkspaceResponse
+      type: object
+    WorkspaceTerminalPathResponse:
+      properties:
+        path:
+          title: Path
+          type: string
+        validated:
+          default: true
+          title: Validated
+          type: boolean
+      required:
+      - path
+      title: WorkspaceTerminalPathResponse
       type: object
     WorkspaceValidateCommand:
       properties:
@@ -5034,6 +5464,102 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Abort Chat Run
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/background-turns:
+    post:
+      operationId: create_background_turn_api_v1_chat_runs__run_id__background_turns_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatBackgroundTurnBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatBackgroundTurnResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Background Turn
+      tags:
+      - chat-runs
+  /api/v1/chat-runs/{run_id}/commands/execute:
+    post:
+      operationId: execute_chat_command_api_v1_chat_runs__run_id__commands_execute_post
+      parameters:
+      - in: path
+        name: run_id
+        required: true
+        schema:
+          title: Run Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCommandExecuteBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCommandExecuteResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Execute Chat Command
       tags:
       - chat-runs
   /api/v1/chat-runs/{run_id}/events:
@@ -7247,6 +7773,48 @@ paths:
       summary: Abort Instance Chat Stream
       tags:
       - instance-chat
+  /api/v1/instances/{instance_id}/chat/commands:
+    get:
+      operationId: list_chat_commands_api_v1_instances__instance_id__chat_commands_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCommandsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Chat Commands
+      tags:
+      - chat-commands
   /api/v1/instances/{instance_id}/chat/completions:
     post:
       operationId: instance_chat_completions_api_v1_instances__instance_id__chat_completions_post
@@ -8930,6 +9498,317 @@ paths:
       summary: Get Session
       tags:
       - sessions
+  /api/v1/instances/{instance_id}/sessions/{session_id}/chat-settings:
+    get:
+      operationId: get_session_chat_settings_api_v1_instances__instance_id__sessions__session_id__chat_settings_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionChatSettingsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Session Chat Settings
+      tags:
+      - session-chat
+    patch:
+      operationId: patch_session_chat_settings_api_v1_instances__instance_id__sessions__session_id__chat_settings_patch
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionChatSettingsPatchBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionChatSettingsResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Patch Session Chat Settings
+      tags:
+      - session-chat
+  /api/v1/instances/{instance_id}/sessions/{session_id}/files:
+    get:
+      operationId: list_session_files_api_v1_instances__instance_id__sessions__session_id__files_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionFilesResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Session Files
+      tags:
+      - session-chat
+  /api/v1/instances/{instance_id}/sessions/{session_id}/files/search:
+    get:
+      operationId: search_session_files_api_v1_instances__instance_id__sessions__session_id__files_search_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: query
+        name: q
+        required: false
+        schema:
+          default: ''
+          title: Q
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionFileSearchResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Search Session Files
+      tags:
+      - session-chat
+  /api/v1/instances/{instance_id}/sessions/{session_id}/files/{file_id}/context:
+    delete:
+      operationId: remove_session_file_context_api_v1_instances__instance_id__sessions__session_id__files__file_id__context_delete
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: path
+        name: file_id
+        required: true
+        schema:
+          title: File Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionFileContextResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Remove Session File Context
+      tags:
+      - session-chat
+    post:
+      operationId: add_session_file_context_api_v1_instances__instance_id__sessions__session_id__files__file_id__context_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: path
+        name: file_id
+        required: true
+        schema:
+          title: File Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionFileContextResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Add Session File Context
+      tags:
+      - session-chat
   /api/v1/instances/{instance_id}/sessions/{session_id}/messages:
     get:
       operationId: list_instance_session_messages_api_v1_instances__instance_id__sessions__session_id__messages_get
@@ -8978,6 +9857,165 @@ paths:
       summary: List Instance Session Messages
       tags:
       - instance-chat
+  /api/v1/instances/{instance_id}/sessions/{session_id}/workspace:
+    get:
+      operationId: list_session_workspace_api_v1_instances__instance_id__sessions__session_id__workspace_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: query
+        name: path
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceListResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Session Workspace
+      tags:
+      - session-chat
+  /api/v1/instances/{instance_id}/sessions/{session_id}/workspace/file:
+    get:
+      operationId: read_session_workspace_file_api_v1_instances__instance_id__sessions__session_id__workspace_file_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceFileResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Read Session Workspace File
+      tags:
+      - session-chat
+  /api/v1/instances/{instance_id}/sessions/{session_id}/workspace/terminal-path:
+    get:
+      operationId: session_workspace_terminal_path_api_v1_instances__instance_id__sessions__session_id__workspace_terminal_path_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: session_id
+        required: true
+        schema:
+          title: Session Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceTerminalPathResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Session Workspace Terminal Path
+      tags:
+      - session-chat
   /api/v1/instances/{instance_id}/start:
     post:
       operationId: start_instance_api_v1_instances__instance_id__start_post

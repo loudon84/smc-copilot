@@ -8,6 +8,7 @@ from api.v1 import (
     attachments,
     bootstrap,
     chat,
+    chat_commands,
     chat_runs,
     configurations,
     desktop_workbench,
@@ -31,6 +32,7 @@ from api.v1 import (
     secrets,
     service,
     service_center,
+    session_chat,
     sessions,
     sync,
     system,
@@ -49,8 +51,10 @@ api_router.include_router(service.router)
 api_router.include_router(runtime.router)
 api_router.include_router(instance_chat.router)
 api_router.include_router(chat_runs.router)
+api_router.include_router(chat_commands.router)
 api_router.include_router(instances.router)
 api_router.include_router(sessions.router)
+api_router.include_router(session_chat.router)
 api_router.include_router(memory.router)
 api_router.include_router(expert_mcp.router)
 api_router.include_router(expert_mcp.instance_router)

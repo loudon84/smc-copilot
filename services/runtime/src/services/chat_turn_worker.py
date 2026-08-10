@@ -189,6 +189,15 @@ class ChatTurnWorker:
                     except json.JSONDecodeError:
                         attachment_ids = []
 
+                turn_context: dict[str, Any] | None = None
+                if turn.context_json:
+                    try:
+                        parsed_ctx = json.loads(turn.context_json)
+                        if isinstance(parsed_ctx, dict):
+                            turn_context = parsed_ctx
+                    except json.JSONDecodeError:
+                        turn_context = None
+
                 request = HermesChatExecutionRequest(
                     instance_id=run.instance_id,
                     message=turn.message,
@@ -196,6 +205,7 @@ class ChatTurnWorker:
                     workspace_id=run.workspace_id,
                     model_id=turn.model_id,
                     attachment_ids=attachment_ids,
+                    context=turn_context,
                     turn_id=turn.id,
                 )
                 executor = get_chat_executor(session)
