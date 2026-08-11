@@ -12,6 +12,8 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.config import Settings
+from integrations.hermes.cli_adapter import parse_hermes_gateway_running
+from integrations.hermes.win_subprocess import windows_no_window_kwargs
 from services.instance_service import InstanceService
 from services.runtime_version_service import RuntimeVersionService
 
@@ -30,6 +32,7 @@ class DevHermesRegistrationResult:
     runtime_version_id: str | None = None
     instance_id: str | None = None
     message: str | None = None
+    gateway_running: bool | None = None
 
 
 def resolve_local_hermes(*, env: dict[str, str] | None = None) -> tuple[Path | None, bool]:
@@ -75,6 +78,7 @@ def validate_hermes_executable(exe: Path) -> str:
             text=True,
             timeout=15,
             check=False,
+            **windows_no_window_kwargs(),
         )
     except OSError as exc:
         raise DevHermesRegistrationError(f"Hermes executable cannot run: {exe} ({exc})") from exc
@@ -90,6 +94,38 @@ def validate_hermes_executable(exe: Path) -> str:
     if not text:
         raise DevHermesRegistrationError("hermes --version produced empty output")
     return parse_hermes_version(text)
+
+
+def probe_local_gateway_running(exe: Path, settings: Settings) -> bool | None:
+    """Run ``hermes gateway status`` (then ``hermes status``) without a console window."""
+    try:
+        gw = subprocess.run(
+            [str(exe), "gateway", "status"],
+            capture_output=True,
+            text=True,
+            timeout=45,
+            check=False,
+            cwd=str(settings.hermes_home_path),
+            **windows_no_window_kwargs(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    parsed = parse_hermes_gateway_running(f"{gw.stdout or ''}\n{gw.stderr or ''}")
+    if parsed is not None:
+        return parsed
+    try:
+        st = subprocess.run(
+            [str(exe), "status"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+            cwd=str(settings.hermes_home_path),
+            **windows_no_window_kwargs(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return parse_hermes_gateway_running(f"{st.stdout or ''}\n{st.stderr or ''}")
 
 
 class DevHermesRegistrationService:
@@ -125,6 +161,7 @@ class DevHermesRegistrationService:
             return DevHermesRegistrationResult(status="skipped", message=message)
 
         version = validate_hermes_executable(path)
+        gateway_running = probe_local_gateway_running(path, self._settings)
 
         async with self._session_maker() as session:
             version_svc = RuntimeVersionService(self._settings, session)
@@ -136,11 +173,25 @@ class DevHermesRegistrationService:
             instance_id = await InstanceService(self._settings, session).ensure_default(row.id)
             await session.commit()
 
+        if gateway_running is True:
+            message = "registered / active; gateway already running (will adopt)"
+        elif gateway_running is False:
+            message = (
+                "registered / active; gateway not running — "
+                "Runtime will start via hermes gateway run (no console window)"
+            )
+        else:
+            message = (
+                "registered / active; gateway status unknown — "
+                "Runtime will ensure gateway via process manager"
+            )
+
         return DevHermesRegistrationResult(
             status="ready",
             executable=str(path),
             version=version,
             runtime_version_id=row.id,
             instance_id=instance_id,
-            message="registered / active",
+            message=message,
+            gateway_running=gateway_running,
         )

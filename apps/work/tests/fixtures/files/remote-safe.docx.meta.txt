@@ -1,0 +1,1 @@
+E2E-07 uses synthetic office bytes; remote mode must not leak disk path.

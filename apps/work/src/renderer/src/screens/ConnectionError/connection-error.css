@@ -1,0 +1,96 @@
+.connection-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 32px 24px;
+  background: var(--bg-base, #0f1115);
+  color: var(--text-primary, #e8eaed);
+}
+
+.connection-error-card {
+  width: min(560px, 100%);
+  background: var(--bg-elevated, #1a1d24);
+  border: 1px solid var(--border-bright, #2a2f3a);
+  border-radius: 12px;
+  padding: 28px 28px 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.connection-error-card h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.connection-error-lead {
+  margin: 0 0 20px;
+  color: var(--text-secondary, #9aa0a6);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.connection-error-details {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 24px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--bg-base, #12151b);
+  border: 1px solid var(--border, #252a33);
+  font-size: 13px;
+}
+
+.connection-error-details > div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px;
+}
+
+.connection-error-details dt {
+  margin: 0;
+  color: var(--text-secondary, #9aa0a6);
+}
+
+.connection-error-details dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.connection-error-details .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.connection-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.connection-error-actions button {
+  appearance: none;
+  border: 1px solid var(--border-bright, #2a2f3a);
+  background: var(--bg-base, #12151b);
+  color: var(--text-primary, #e8eaed);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.connection-error-actions button.primary {
+  background: var(--accent, #4c6fff);
+  border-color: transparent;
+  color: #fff;
+}
+
+.connection-error-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.connection-error-actions button.danger {
+  margin-left: auto;
+  color: var(--danger, #f07178);
+}

@@ -6,37 +6,37 @@
     "configurations": [
         {
             "type": "node-terminal",
-            "name": "Run Script: dev:desktop",
+            "name": "Run Script: dev:work",
             "request": "launch",
-            "command": "npm run dev:desktop",
+            "command": "npm run dev:work",
             "cwd": "${workspaceFolder}"
         },
         {
             // scripts/dev.cjs 已带 --inspect=9229 --sourcemap，
             // 调试器 attach 到 Electron 主进程，即可在 src/main/**/*.ts 打断点
             "type": "node",
-            "name": "Debug Desktop Main (attach :9229)",
+            "name": "Debug work Main (attach :9229)",
             "request": "attach",
             "port": 9229,
-            "cwd": "${workspaceFolder}/apps/desktop",
+            "cwd": "${workspaceFolder}/apps/work",
             "sourceMaps": true,
             "restart": true,
             "timeout": 20000,
             "skipFiles": ["<node_internals>/**"],
             "resolveSourceMapLocations": [
-                "${workspaceFolder}/apps/desktop/**",
+                "${workspaceFolder}/apps/work/**",
                 "!**/node_modules/**"
             ],
-            "outFiles": ["${workspaceFolder}/apps/desktop/out/**/*.js"]
+            "outFiles": ["${workspaceFolder}/apps/work/out/**/*.js"]
         }
     ],
     "compounds": [
         {
-            // 一键启动：终端跑 dev:desktop + 调试器 attach 主进程（electron-vite 重建后自动重连）
-            "name": "Desktop: dev + debug main",
+            // 一键启动：终端跑 dev:work + 调试器 attach 主进程（electron-vite 重建后自动重连）
+            "name": "work: dev + debug main",
             "configurations": [
-                "Run Script: dev:desktop",
-                "Debug Desktop Main (attach :9229)"
+                "Run Script: dev:work",
+                "Debug work Main (attach :9229)"
             ],
             "stopAll": true
         }

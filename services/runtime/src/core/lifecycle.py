@@ -360,8 +360,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if not bool(getattr(app.state, "_disable_gateway_autostart", False)):
             await supervisor.reconcile_instances_on_boot()
             await supervisor.reconcile_legacy_profiles_on_boot()
+            # After install/env registration (dev_bootstrap), ensure Gateway via
+            # Runtime process manager: `hermes gateway run --external-supervisor`
+            # with CREATE_NO_WINDOW (no terminal). Already-running Gateways are adopted.
+            logger.info(
+                "gateway_autostart_begin",
+                note="start hermes gateway run via command service when not running",
+            )
             await supervisor.start_auto_start_instances()
             await supervisor.start_auto_start_profiles()
+            logger.info("gateway_autostart_done")
 
         disable_workers = bool(getattr(app.state, "_disable_workers", False))
         await job_service.start_worker()

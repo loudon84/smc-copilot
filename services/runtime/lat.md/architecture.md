@@ -15,7 +15,7 @@
 | `db/models/` | SQLAlchemy 模型 | — |
 | `db/repositories/` | 数据访问 | 调 Gateway / Shell / Team Hub |
 | `services/` | 业务编排与状态迁移 | 跨层直访外部系统 |
-| `integrations/hermes/` | Gateway HTTP、配置、Profile 加载、角色编译 | — |
+| `integrations/hermes/` | Gateway HTTP、配置、Profile 加载、角色编译、**Kanban CLI Adapter** | 直改 `kanban.db` |
 | `integrations/team_hub/` | 旧 Team Task Hub（Deprecated 兼容 Adapter） | 新远程任务主路径 |
 | `integrations/service_center/` | Work Copilot Service Center 出站 Client（Stub/HTTPS） | — |
 | `runtime/` | 进程注册、端口、Gateway 子进程、环境探测、同步协议 | — |

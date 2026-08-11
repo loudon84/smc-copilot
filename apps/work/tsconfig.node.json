@@ -1,0 +1,17 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "electron.vite.config.*",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/shared/**/*"
+  ],
+  "exclude": ["references/**", "wiki/**", "node_modules", "dist", "out"],
+  "compilerOptions": {
+    "composite": true,
+    "types": ["electron-vite/node"],
+    "paths": {
+      "@smc/runtime-client": ["../../packages/runtime-client-ts/src/index.ts"]
+    }
+  }
+}

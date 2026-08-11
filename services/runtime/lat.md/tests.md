@@ -508,6 +508,26 @@ Dev Hermes ???Gateway ????? Runtime ??????????
 
 `configure_logging` ????????`/diagnostics/logs` ???? `source`?
 
+## Dev runtime gateway status probe
+
+`npm run dev:runtime` bootstrap probes Hermes Gateway after install validation, then starts via Runtime process manager without a console window.
+
+### Parses running
+
+`parse_hermes_gateway_running` returns True for `Gateway is running` / Gateway Service Status running.
+
+### Parses not running
+
+`parse_hermes_gateway_running` returns False for `Gateway is not running` / Status not running.
+
+### Parses hermes status section
+
+Full `hermes status` Gateway Service block is parsed for running / not running.
+
+### Windows hide kwargs
+
+`windows_no_window_kwargs` sets CREATE_NO_WINDOW + SW_HIDE on win32; empty elsewhere.
+
 ## Gateway health semantics
 
 PRD v1.5: structured GatewayHealthResult; reject treating 401/403 or any status under 500 as healthy.

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -388,12 +387,9 @@ class GatewayProcessManager:
             kwargs["env"] = env
 
         if sys.platform == "win32":
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
+            from integrations.hermes.win_subprocess import windows_no_window_kwargs
 
-            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-            kwargs["startupinfo"] = startupinfo
+            kwargs.update(windows_no_window_kwargs())
 
         return await asyncio.create_subprocess_exec(*cmd, **kwargs)
 

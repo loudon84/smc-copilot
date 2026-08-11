@@ -37,6 +37,7 @@ Python 3.12、FastAPI + Uvicorn、Pydantic v2 + pydantic-settings、SQLAlchemy 2
 | [[approval-workspace#审批与工作空间]] | 审批运行时、Workspace Guard、可执行策略 |
 | [[auth-pairing#本地鉴权与设备配对]] | loopback、配对、遗留 Token |
 | [[chat-sessions#Workspace Chat]] | Chat SSE、附件、Session、Chat Runtime v2 |
+| [[kanban#Hermes Kanban Facade]] | Instance-scoped Kanban CLI Facade（独立于 WorkTask） |
 | [[deployment#部署形态]] | Provision、UserDaemon、目录约束 |
 | [[data-model#数据模型]] | 表、迁移链 |
 | [[endpoint-sync#Endpoint Sync]] | Endpoint 身份、Sync、Desired State、Remote Task v2、Experience |

@@ -1,0 +1,73 @@
+{
+  "name": "work",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/work/src",
+  "projectType": "application",
+  "tags": ["type:app", "scope:work"],
+  "implicitDependencies": ["runtime-client-ts"],
+  "targets": {
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm ci"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run dev"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run lint"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run typecheck"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm test"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run build"
+      }
+    },
+    "package-win": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run build:win"
+      }
+    },
+    "package-mac": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run build:mac"
+      }
+    },
+    "package-linux": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/work",
+        "command": "npm run build:linux"
+      }
+    }
+  }
+}

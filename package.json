@@ -12,6 +12,7 @@
     "affected:check": "nx affected -t lint,typecheck,test",
     "affected:build": "nx affected -t build",
     "dev:desktop": "nx run desktop:dev",
+    "dev:work": "nx run work:dev",
     "dev:runtime": "nx run runtime:dev",
     "dev:runtime:service": "nx run runtime:dev-service",
     "contracts:generate": "nx run contracts:generate",

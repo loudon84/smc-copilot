@@ -55,7 +55,15 @@ async def _run() -> int:
     _log(f"Hermes version:\n{result.version}")
     _log(f"RuntimeVersion:\n{result.message or 'registered / active'}")
     _log("Default Instance:\nready")
-    _log("Gateway:\nwill auto-start with Runtime")
+    if result.gateway_running is True:
+        _log("Gateway:\nalready running (Runtime will adopt)")
+    elif result.gateway_running is False:
+        _log(
+            "Gateway:\nnot running — Runtime command service will start "
+            "`hermes gateway run --external-supervisor` without a console window"
+        )
+    else:
+        _log("Gateway:\nstatus unknown — Runtime will ensure via process manager")
     _log("status:\nready")
     return 0
 

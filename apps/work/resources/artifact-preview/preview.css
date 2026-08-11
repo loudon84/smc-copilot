@@ -1,0 +1,23 @@
+/* Hermes artifact preview host — minimal chrome for sandboxed HTML. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: #fff;
+  color: #111;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+#root:empty::before {
+  content: "Waiting for artifact…";
+  display: block;
+  padding: 16px;
+  color: #666;
+  font-size: 13px;
+}

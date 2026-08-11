@@ -8,6 +8,7 @@ alwaysApply: true
 
 1. Classify the task before scanning code:
    - Desktop UI / Electron / IPC → `apps/desktop/`
+   - Work (hermes-desktop next) UI / Electron / IPC → `apps/work/`
    - Runtime / FastAPI / Hermes install → `services/runtime/`
    - OpenAPI / SSE schemas / TS client → `contracts/` + `packages/runtime-client-ts/`
    - Cross-project feature → inspect contracts first

@@ -2,16 +2,41 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from core.config import Settings
 from core.logging import get_logger
 from core.runtime_errors import RuntimeServiceError
+from integrations.hermes.win_subprocess import windows_no_window_kwargs
 
 logger = get_logger(__name__)
 
 _DEFAULT_PROFILE_NAMES = frozenset({"default", ""})
+
+# `hermes gateway status` / `hermes status` Gateway Service section.
+_GATEWAY_RUNNING_RE = re.compile(
+    r"(?:Gateway\s+is\s+running|Gateway\s+Service[\s\S]{0,200}?Status:\s*[^\n]*\brunning\b)",
+    re.IGNORECASE,
+)
+_GATEWAY_NOT_RUNNING_RE = re.compile(
+    r"(?:Gateway\s+is\s+not\s+running|Gateway\s+Service[\s\S]{0,200}?Status:\s*[^\n]*(?:not\s+running|stopped|inactive)\b)",
+    re.IGNORECASE,
+)
+
+
+def parse_hermes_gateway_running(output: str) -> bool | None:
+    """Parse Hermes status text for Gateway running state.
+
+    Returns True/False when detectable, else None.
+    """
+    text = output or ""
+    if _GATEWAY_NOT_RUNNING_RE.search(text):
+        return False
+    if _GATEWAY_RUNNING_RE.search(text):
+        return True
+    return None
 
 
 class HermesCliAdapter:
@@ -59,6 +84,7 @@ class HermesCliAdapter:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(cwd) if cwd else str(self._settings.hermes_home_path),
                 env=env,
+                **windows_no_window_kwargs(),
             )
             try:
                 stdout_b, stderr_b = await asyncio.wait_for(
@@ -168,3 +194,22 @@ class HermesCliAdapter:
         # default: hermes gateway run --external-supervisor
         # named:   hermes -p <name> gateway run --external-supervisor
         return self.build_profile_command(profile_name, "gateway", "run", "--external-supervisor")
+
+    async def probe_gateway_running(self, *, profile_name: str | None = None) -> bool | None:
+        """Check Gateway via ``hermes gateway status`` (hidden console on Windows).
+
+        Falls back to ``hermes status`` when gateway status output is inconclusive.
+        """
+        code, out, err = await self.run_profile(
+            profile_name,
+            ["gateway", "status"],
+            timeout=45,
+        )
+        combined = f"{out}\n{err}"
+        parsed = parse_hermes_gateway_running(combined)
+        if parsed is not None:
+            return parsed
+
+        code2, out2, err2 = await self.run(["status"], timeout=60)
+        _ = code, code2
+        return parse_hermes_gateway_running(f"{out2}\n{err2}")

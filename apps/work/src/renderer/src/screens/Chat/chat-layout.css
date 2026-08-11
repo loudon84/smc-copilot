@@ -1,0 +1,127 @@
+/* Chat three-column layout: messages | session files | file preview.
+   Maximize overlays chat-body only; ChatInput stays visible below. */
+
+.chat-body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-messages {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-messages-scroll {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.session-files-panel {
+  flex: 0 0 240px;
+  width: 240px;
+  min-width: 220px;
+  max-width: 280px;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+}
+
+.session-files-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.session-files-panel-title {
+  min-width: 0;
+}
+
+.session-files-panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.session-files-panel-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.session-files-show-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+  cursor: pointer;
+}
+
+.session-files-show-button:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.file-preview-panel {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 320px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.file-preview-panel-maximized {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  width: 100% !important;
+  max-width: none;
+  min-width: 0;
+  border-left: 0;
+  background: var(--bg-primary);
+}
+
+.file-preview-panel-maximized .file-preview-resize-handle {
+  display: none;
+}
+
+/* Keep React state under the overlay; avoid focus landing on covered panels. */
+.chat-body-preview-maximized > .chat-messages,
+.chat-body-preview-maximized > .session-files-panel,
+.chat-body-preview-maximized > .worktree-panel,
+.chat-body-preview-maximized > .web-preview-panel {
+  visibility: hidden;
+  pointer-events: none;
+}

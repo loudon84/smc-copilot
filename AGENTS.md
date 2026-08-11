@@ -3,6 +3,9 @@
 - Desktop task:
   read `apps/desktop/AGENTS.md`
 
+- Work (hermes-desktop next) task:
+  read `apps/work/AGENTS.md`；dev: `npm run dev:work`
+
 - Runtime task:
   read `services/runtime/AGENTS.md`
 

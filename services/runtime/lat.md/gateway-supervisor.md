@@ -12,7 +12,9 @@ Instance API **不得**调用 `start_profile`；走 `start_instance` / `stop_ins
 
 ## Hermes CLI 合同
 
-[[src/integrations/hermes/cli_adapter.py#HermesCliAdapter]]（v1.3.1）：默认 `hermes gateway run --external-supervisor`；命名 `-p <name> gateway run --external-supervisor`。禁止 `--profile`/`--port`；端口经 `API_SERVER_PORT`。`doctor` 无 `--json`；`config check`/`migrate` 对命名 Profile 加 `-p`。
+[[src/integrations/hermes/cli_adapter.py#HermesCliAdapter]]（v1.3.1）：默认 `hermes gateway run --external-supervisor`；命名 Profile 用 `-p`；端口经 `API_SERVER_PORT`。
+
+禁止 `--profile`/`--port`；`doctor` 无 `--json`；`config check`/`migrate` 对命名 Profile 加 `-p`。CLI / Gateway spawn 经 [[src/integrations/hermes/win_subprocess.py#windows_no_window_kwargs]] 隐藏 Windows 控制台；`probe_gateway_running` 解析 `hermes gateway status` / `hermes status`。
 
 ## Gateway 环境注入
 

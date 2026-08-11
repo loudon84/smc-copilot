@@ -28,7 +28,9 @@ Hermes Gateway 是外部进程，控制面只经 `integrations/hermes/` 适配�
 
 `dev_bootstrap` discovers local Hermes and registers an external-dev RuntimeVersion plus default Instance.
 
-Resolve via `HERMES_DEV_EXECUTABLE` or `hermes` on PATH, validate `--version`, then `register_external` (`channel=development`, `metadata.source=external-dev`) and `InstanceService.ensure_default`. Missing Hermes may continue; invalid override / validation / DB write must exit non-zero.
+Resolve via `HERMES_DEV_EXECUTABLE` or `hermes` on PATH, validate `--version` (Windows: [[src/integrations/hermes/win_subprocess.py#windows_no_window_kwargs|CREATE_NO_WINDOW]]), then probe [[src/services/dev_hermes_registration_service.py#probe_local_gateway_running|hermes gateway status]] / `hermes status`. Register via `register_external` (`channel=development`, `metadata.source=external-dev`) and `InstanceService.ensure_default`. Missing Hermes may continue; invalid override / validation / DB write must exit non-zero.
+
+When Gateway is not running, uvicorn lifespan starts it through [[src/runtime/gateway_process.py#GatewayProcessManager]] (`hermes gateway run --external-supervisor`, no console window). Already-running Gateways are adopted — never spawn a second process or open a terminal.
 
 ## Runtime File Logging（v1.4.1）
 

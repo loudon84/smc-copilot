@@ -21,6 +21,7 @@ from api.v1 import (
     hermes_runs,
     instance_chat,
     instances,
+    kanban,
     memory,
     metrics,
     pairings,
@@ -84,3 +85,4 @@ api_router.include_router(desktop_workbench.router)
 api_router.include_router(metrics.router)
 api_router.include_router(workers.router)
 api_router.include_router(service_center.router)
+api_router.include_router(kanban.router)
