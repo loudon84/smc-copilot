@@ -277,11 +277,14 @@ function App(): React.JSX.Element {
     <ThemeProvider>
       <FontProvider>
         <ProfileModalProvider>
-          <SettingsModalProvider>
-            <RuntimeProvider>
+          {/* RuntimeProvider must wrap SettingsModalProvider: the settings
+              modal mounts as a sibling of `children` and RuntimePane calls
+              useRuntime(). */}
+          <RuntimeProvider>
+            <SettingsModalProvider>
               <AppBootstrap />
-            </RuntimeProvider>
-          </SettingsModalProvider>
+            </SettingsModalProvider>
+          </RuntimeProvider>
         </ProfileModalProvider>
       </FontProvider>
     </ThemeProvider>

@@ -65,15 +65,93 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+type ResolvedInstance = {
+  supported: boolean;
+  profile: string;
+  /** Runtime API id (UUID). Prefer this for /instances/{id}/* routes. */
+  instanceId: string;
+  /** Logical name (`default`). */
+  instanceName: string;
+  reason?: string;
+};
+
 export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
-  constructor(private readonly getClient: () => RuntimeClient = getRuntimeServiceClient) {}
+  constructor(
+    private readonly getClient: () => RuntimeClient = getRuntimeServiceClient,
+  ) {}
 
   private client(): RuntimeClient {
     return this.getClient();
   }
 
-  async probe(profile?: string): Promise<HermesRuntimeProbe> {
+  /**
+   * Runtime `/instances/{id}/health` expects the instance UUID, not the
+   * profile/name slug. `GET .../instances/default/health` 404s even when a
+   * `name=default` instance exists — resolve first.
+   */
+  private async resolveInstance(profile?: string): Promise<ResolvedInstance> {
     const resolved = resolveProfileToInstance(profile);
+    if (!resolved.supported) {
+      return {
+        supported: false,
+        profile: resolved.profile,
+        instanceId: resolved.instanceName,
+        instanceName: resolved.instanceName,
+        reason: resolved.reason,
+      };
+    }
+    try {
+      const ref = (await this.client().instances.resolve(
+        resolved.instanceName,
+      )) as { instanceId?: string; id?: string; name?: string };
+      const instanceId =
+        (typeof ref.instanceId === "string" && ref.instanceId) ||
+        (typeof ref.id === "string" && ref.id) ||
+        "";
+      if (instanceId) {
+        return {
+          supported: true,
+          profile: resolved.profile,
+          instanceId,
+          instanceName: resolved.instanceName,
+        };
+      }
+    } catch {
+      /* fall through to list */
+    }
+    try {
+      const listed = (await this.client().instances.list()) as Array<{
+        id?: string;
+        name?: string;
+      }>;
+      const hit = Array.isArray(listed)
+        ? listed.find(
+            (row) =>
+              (row.name || "").toLowerCase() === resolved.instanceName ||
+              row.id === resolved.instanceName,
+          )
+        : undefined;
+      if (hit?.id) {
+        return {
+          supported: true,
+          profile: resolved.profile,
+          instanceId: hit.id,
+          instanceName: resolved.instanceName,
+        };
+      }
+    } catch {
+      /* keep name fallback */
+    }
+    return {
+      supported: true,
+      profile: resolved.profile,
+      instanceId: resolved.instanceName,
+      instanceName: resolved.instanceName,
+    };
+  }
+
+  async probe(profile?: string): Promise<HermesRuntimeProbe> {
+    const resolved = await this.resolveInstance(profile);
     if (!resolved.supported) {
       const probe = serviceUnavailableProbe(resolved.profile);
       return {
@@ -103,7 +181,7 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
         ReturnType<RuntimeClient["instances"]["getHealth"]>
       > | null = null;
       try {
-        health = await client.instances.getHealth(resolved.instanceName);
+        health = await client.instances.getHealth(resolved.instanceId);
       } catch {
         health = null;
       }
@@ -128,11 +206,11 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
   }
 
   async ensureReady(profile?: string): Promise<HermesRuntimeConnectionResult> {
-    const resolved = resolveProfileToInstance(profile);
+    const resolved = await this.resolveInstance(profile);
     if (!resolved.supported) {
       return unsupportedProfileResult(resolved.profile);
     }
-    const initial = await this.probe(profile);
+    let initial = await this.probe(profile);
     if (initial.state === "ready") return resultFromProbe(initial);
     if (
       initial.state === "runtime_missing" ||
@@ -142,8 +220,18 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
       return resultFromProbe(initial);
     }
     try {
-      await this.client().instances.start(resolved.instanceName);
-      const ok = await this.waitHealthy(resolved.instanceName);
+      // Ownership conflict / stale fingerprint: re-inspect before start so a
+      // healthy foreign gateway can become adopted without a port fight.
+      try {
+        await this.client().instances.reconcile(resolved.instanceId);
+        initial = await this.probe(profile);
+        if (initial.state === "ready") return resultFromProbe(initial);
+      } catch {
+        /* reconcile is best-effort */
+      }
+
+      await this.client().instances.start(resolved.instanceId);
+      const ok = await this.waitHealthy(resolved.instanceId);
       const after = await this.probe(profile);
       if (ok && after.state === "ready") return resultFromProbe(after);
       return {
@@ -160,6 +248,12 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
           : runtimeErrorMessage(RUNTIME_ERROR_CODES.GATEWAY_START_FAILED),
       };
     } catch (err) {
+      // start may fail with GATEWAY_PORT_OWNERSHIP_CONFLICT while the gateway
+      // is already serving — re-probe; healthy+auth still counts as ready.
+      const afterConflict = await this.probe(profile).catch(() => null);
+      if (afterConflict?.state === "ready") {
+        return resultFromProbe(afterConflict);
+      }
       return {
         ok: false,
         state: "gateway_unreachable",
@@ -171,13 +265,13 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
   }
 
   async restart(profile?: string): Promise<HermesRuntimeConnectionResult> {
-    const resolved = resolveProfileToInstance(profile);
+    const resolved = await this.resolveInstance(profile);
     if (!resolved.supported) {
       return unsupportedProfileResult(resolved.profile);
     }
     try {
-      await this.client().instances.restart(resolved.instanceName);
-      const ok = await this.waitHealthy(resolved.instanceName);
+      await this.client().instances.restart(resolved.instanceId);
+      const ok = await this.waitHealthy(resolved.instanceId);
       const after = await this.probe(profile);
       if (!ok) {
         return {
@@ -214,9 +308,9 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
   }
 
   async stopGateway(profile?: string): Promise<boolean> {
-    const resolved = resolveProfileToInstance(profile);
+    const resolved = await this.resolveInstance(profile);
     if (!resolved.supported) return false;
-    await this.client().instances.stop(resolved.instanceName);
+    await this.client().instances.stop(resolved.instanceId);
     return true;
   }
 
@@ -290,14 +384,15 @@ export class HttpRuntimeManagementBackend implements RuntimeManagementBackend {
     return { jobId: accepted.jobId, status: accepted.status };
   }
 
-  private async waitHealthy(instanceName: string): Promise<boolean> {
+  private async waitHealthy(instanceId: string): Promise<boolean> {
     const deadline = Date.now() + HEALTH_TIMEOUT_MS;
     while (Date.now() < deadline) {
       try {
-        const health = await this.client().instances.getHealth(instanceName);
+        const health = await this.client().instances.getHealth(instanceId);
         if (health.gateway?.healthy === true) return true;
         if (
-          health.process?.state === "running" &&
+          (health.process?.state === "running" ||
+            health.process?.state === "alive") &&
           health.gateway?.reachable === true
         ) {
           return true;

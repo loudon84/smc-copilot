@@ -83,12 +83,22 @@ export function mapReadinessToProbe(options: {
   const hermesInstalled = status.hermesInstalled === true;
   const chatReady = readiness.execution?.chatReady === true;
   const executionReady = readiness.execution?.ready === true;
+  // When /health was fetched with a wrong id (404), fall back to readiness
+  // projection: gatewayApiState=healthy still means the port is serving.
+  const defaultInstance = readiness.execution?.defaultInstance as
+    | { gatewayApiState?: string }
+    | null
+    | undefined;
+  const readinessGatewayApi = defaultInstance?.gatewayApiState === "healthy";
   const gatewayHealthy =
     health?.gateway?.healthy === true ||
-    (chatReady && executionReady);
+    (chatReady && executionReady) ||
+    (readinessGatewayApi && health?.gateway?.authenticated === true);
   const gatewayRunning =
     health?.process?.state === "running" ||
+    health?.process?.state === "alive" ||
     health?.gateway?.reachable === true ||
+    readinessGatewayApi ||
     gatewayHealthy;
   const authenticated =
     health?.gateway?.authenticated === true || gatewayHealthy;

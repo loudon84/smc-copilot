@@ -87,6 +87,43 @@ describe("mapReadinessToProbe", () => {
     });
     expect(probe.state).toBe("runtime_missing");
   });
+
+  it("treats ownership-conflict but healthy gateway as ready", () => {
+    const probe = mapReadinessToProbe({
+      profile: "default",
+      status,
+      readiness: {
+        service: { ready: true, checks: {} },
+        execution: {
+          ready: false,
+          chatReady: false,
+          checks: { gateway: "degraded" },
+          defaultInstance: {
+            gatewayApiState: "healthy",
+            ownershipState: "conflict",
+          },
+        },
+        maintenance: { ready: false, checks: {} },
+        expertMcp: { ready: false, checks: {} },
+      } as RuntimeReadiness,
+      health: {
+        instanceId: "uuid",
+        runtime: { version: "0.16.0", executableVerified: true },
+        process: { state: "alive", pid: 1, owned: false },
+        gateway: {
+          port: 8642,
+          reachable: true,
+          authenticated: true,
+          healthy: true,
+          latencyMs: 1,
+        },
+        ownershipState: "conflict",
+        checkedAt: new Date().toISOString(),
+      } as never,
+    });
+    expect(probe.state).toBe("ready");
+    expect(probe.gatewayRunning).toBe(true);
+  });
 });
 
 describe("mapJobEventToInstallProgress", () => {

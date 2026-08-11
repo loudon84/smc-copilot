@@ -28,6 +28,8 @@ Default-profile adapter delegates probe/ensureReady/restart to the Runtime HTTP 
 
 HTTP facade over `/api/v1/runtime/*` and `/api/v1/instances/*` used by IPC and the adapter.
 
+Instance routes require the instance **UUID**. [[src/main/runtime/runtime-management-backend.ts]] resolves `default` via `instances.resolve` / `instances.list` before `getHealth` / `start` / `stop` / `reconcile` — calling `/instances/default/health` 404s and used to be mapped as a false `gateway_stopped`. When start fails with port ownership conflict, the backend re-probes; a healthy authenticated gateway still counts as ready. `ensureReady` also best-effort `reconcile`s before start.
+
 ## Runtime Management Mapper
 
 Maps Runtime readiness/health/job SSE payloads into Desktop `HermesRuntimeProbe` and legacy `install-progress` events.
@@ -43,6 +45,8 @@ Main-only HTTP client targets `http://127.0.0.1:8765` (override with `HERMES_RUN
 App splash checks Portal Auth, then connects Runtime before main UI, or shows Connection Error / Login.
 
 [[src/renderer/src/App.tsx]] starts at splash, may route to [[src/renderer/src/modules/auth/LoginScreen.tsx]], then `runtimeEnsureLocalReady` for local mode, and routes to main or Connection Error. Remote and SSH skip local Runtime probe. [[src/renderer/src/screens/SplashScreen/SplashScreen.tsx]] shows a centered `hermes-one.png` image on a black splash (no intro video), plus status text and the remote escape hatch when needed.
+
+`RuntimeProvider` wraps `SettingsModalProvider` so [[src/renderer/src/components/settings/RuntimePane.tsx]] (mounted as a settings-modal sibling) can call `useRuntime`.
 
 ## Portal Auth Login
 
