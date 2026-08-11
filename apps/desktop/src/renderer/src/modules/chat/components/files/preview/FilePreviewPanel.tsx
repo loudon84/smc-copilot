@@ -151,11 +151,11 @@ export function FilePreviewPanel({
     <div
       className={[
         "file-preview-panel",
-        maximized ? "file-preview-panel-maximized" : "",
+        maximized ? "file-preview-panel--max file-preview-panel-maximized" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      style={maximized ? undefined : { width }}
+      style={maximized ? undefined : { width, flex: `0 0 ${width}px` }}
     >
       {!maximized && (
         <div

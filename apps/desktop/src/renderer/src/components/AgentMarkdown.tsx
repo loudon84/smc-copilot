@@ -131,51 +131,53 @@ const AgentMarkdown = memo(function AgentMarkdown({
   onLinkClick?: (href: string) => void;
 }): React.JSX.Element {
   return (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            onClick={(e) => {
-              e.preventDefault();
-              if (!href) return;
-              try {
-                const url = new URL(href, "https://placeholder.invalid");
-                if (!["http:", "https:", "mailto:"].includes(url.protocol)) {
+    <div className="agent-markdown">
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children: linkChildren }) => (
+            <a
+              href={href}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!href) return;
+                try {
+                  const url = new URL(href, "https://placeholder.invalid");
+                  if (!["http:", "https:", "mailto:"].includes(url.protocol)) {
+                    return;
+                  }
+                } catch {
                   return;
                 }
-              } catch {
-                return;
-              }
-              if (onLinkClick) {
-                onLinkClick(href);
-              } else {
-                window.hermesAPI.openExternal(href);
-              }
-            }}
-          >
-            {children}
-          </a>
-        ),
-        code: ({ className, children, ...props }) => {
-          const isInline =
-            !className &&
-            typeof children === "string" &&
-            !children.includes("\n");
-          if (isInline) {
-            return (
-              <code className={className} {...props}>
-                {children}
-              </code>
-            );
-          }
-          return <CodeBlock className={className}>{children}</CodeBlock>;
-        },
-      }}
-    >
-      {children}
-    </Markdown>
+                if (onLinkClick) {
+                  onLinkClick(href);
+                } else {
+                  window.hermesAPI.openExternal(href);
+                }
+              }}
+            >
+              {linkChildren}
+            </a>
+          ),
+          code: ({ className, children: codeChildren, ...props }) => {
+            const isInline =
+              !className &&
+              typeof codeChildren === "string" &&
+              !codeChildren.includes("\n");
+            if (isInline) {
+              return (
+                <code className={className} {...props}>
+                  {codeChildren}
+                </code>
+              );
+            }
+            return <CodeBlock className={className}>{codeChildren}</CodeBlock>;
+          },
+        }}
+      >
+        {children}
+      </Markdown>
+    </div>
   );
 });
 

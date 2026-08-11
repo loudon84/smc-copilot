@@ -26,7 +26,8 @@
 |---|---|---|---|---|---|
 | `web-operator` | `composite` | `"web-operator"` | `operator` | — | WebOperator 浏览器自动化 |
 | `crm-workbench` | `react` | — | `crm` | `false` | CRM 工作台（不在 Tab 栏显示） |
-| `local-hermes` | `react` | — | `hermes` | — | Local Hermes 三栏操作模块 |
+| `local-hermes` | `react` | — | `hermes` | — | Local Hermes 三栏操作模块（左侧含 Chat / **Kanban** / Experts…） |
+| `kanban` | `react` | — | `hermes` | `false` | **v1.7** Kanban 深链保留；入口在 Hermes 左侧导航，顶栏不单独占 Tab |
 
 ### 注释列表（已禁用）
 

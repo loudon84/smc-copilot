@@ -225,6 +225,7 @@ import { registerHermesExpertsIpc, shutdownHermesExpertsIpc } from "./hermes-exp
 import { registerHermesMcpConfigIpc } from "./hermes-mcp-config/hermes-mcp-config-ipc";
 import { registerWorkIpc } from "./work/work-ipc";
 import { registerWorkTasksIpc, shutdownWorkTasksIpc } from "./work-tasks/work-tasks-ipc";
+import { registerKanbanIpc } from "./kanban/kanban-ipc";
 
 process.on("uncaughtException", (err) => {
   console.error("[MAIN UNCAUGHT]", err);
@@ -479,6 +480,7 @@ function setupIPC(): void {
     registerHermesMcpConfigIpc();
     registerWorkIpc(() => mainWindow);
     registerWorkTasksIpc(() => mainWindow);
+    registerKanbanIpc(() => mainWindow);
   } catch { /* profile-runtime not available in early setup */ }
 
   try {

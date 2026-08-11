@@ -9,6 +9,7 @@ export default {
     workbench: "Workbench",
     tasks: "Tasks",
     chat: "Chat",
+    kanban: "Kanban",
     experts: "Experts",
     expertTeams: "Expert Teams",
     expertRuns: "Expert Runs",

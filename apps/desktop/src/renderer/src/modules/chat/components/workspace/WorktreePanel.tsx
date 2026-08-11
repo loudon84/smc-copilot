@@ -7,6 +7,7 @@ type Props = {
   profileId?: string;
   workspace?: ChatWorkspacePort;
   className?: string;
+  onClose?: () => void;
 };
 
 /**
@@ -18,6 +19,7 @@ export function WorktreePanel({
   profileId,
   workspace,
   className,
+  onClose,
 }: Props) {
   const [root, setRoot] = useState<string | null>(null);
   const [entries, setEntries] = useState<WorkspaceEntry[]>([]);
@@ -95,7 +97,15 @@ export function WorktreePanel({
     <div
       className={
         className ||
-        "flex h-full min-h-[200px] flex-col border-l border-border/50 bg-background/80 text-xs"
+        "worktree-panel chat-worktree-panel flex h-full min-h-[200px] flex-col border-l border-border/50 bg-background/80 text-xs"
+      }
+      style={
+        className
+          ? undefined
+          : {
+              width: "var(--chat-worktree-width, 240px)",
+              flex: "0 0 var(--chat-worktree-width, 240px)",
+            }
       }
     >
       <div className="flex items-center justify-between gap-2 border-b border-border/40 px-2 py-1.5">
@@ -121,6 +131,17 @@ export function WorktreePanel({
           >
             <Terminal className="h-3.5 w-3.5" />
           </button>
+          {onClose ? (
+            <button
+              type="button"
+              className="rounded p-1 hover:bg-muted"
+              onClick={onClose}
+              aria-label="Hide worktree"
+              title="Close"
+            >
+              ×
+            </button>
+          ) : null}
         </div>
       </div>
       {error ? (

@@ -3,6 +3,7 @@ export type StaticWorkspaceId =
   | "portal"
   | "workspaces"
   | "local-hermes"
+  | "kanban"
   | "task-workbench"
   | "web-operator"
   | "crm-workbench"

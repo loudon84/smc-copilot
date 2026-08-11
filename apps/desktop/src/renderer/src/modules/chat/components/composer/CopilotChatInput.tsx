@@ -3,11 +3,12 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { ArrowUp, Mic, Paperclip, Square as Stop } from "lucide-react";
+import { ArrowUp, MessageCircle, Mic, Paperclip, Square as Stop } from "lucide-react";
 import type { ChatAttachmentState } from "../../controller/chatViewTypes";
 import type { ChatFilesPort } from "../../ports/ChatFilesPort";
 import type { ChatCommandPort } from "../../ports/ChatCommandPort";
@@ -18,6 +19,7 @@ import { QueuedMessages } from "./QueuedMessages";
 import {
   DESKTOP_SLASH_COMMANDS,
   filterSlashCommands,
+  groupSlashCommands,
   type SlashCommand,
 } from "./slashCommands";
 
@@ -56,7 +58,11 @@ type Props = {
   profileId?: string;
   runId?: string | null;
   disabled?: boolean;
+  /** Quick Ask side-question (💭) — optional host handler. */
+  onQuickAsk?: (text: string) => void;
 };
+
+const TEXTAREA_MAX_PX = 120;
 
 export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
   function CopilotChatInput(
@@ -80,12 +86,12 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
       profileId,
       runId,
       disabled,
+      onQuickAsk,
     },
     ref,
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [dragOver, setDragOver] = useState(false);
     const [slashQuery, setSlashQuery] = useState<string | null>(null);
     const [slashIndex, setSlashIndex] = useState(0);
     const [slashCommands, setSlashCommands] = useState<SlashCommand[]>(
@@ -117,10 +123,10 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
       const el = textareaRef.current;
       if (!el) return;
       el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+      el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_PX)}px`;
     }, []);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       resize();
     }, [value, resize]);
 
@@ -156,6 +162,13 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
       [slashCommands, slashQuery],
     );
 
+    const slashGroups = useMemo(
+      () => groupSlashCommands(filteredSlash),
+      [filteredSlash],
+    );
+
+    const flatSlash = filteredSlash;
+
     const ingestFiles = useCallback(
       async (files: FileList | File[] | null) => {
         if (!files || files.length === 0) return;
@@ -178,14 +191,8 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
             runId: runId || undefined,
           });
           if (res.ok) {
-            if (name === "clear") onChange("");
             history.push(text);
-            if (name !== "clear" && name !== "new" && name !== "model") {
-              /* help etc. — leave value or clear */
-              onChange("");
-            } else if (name === "model") {
-              onChange("");
-            }
+            onChange("");
             return;
           }
         }
@@ -207,22 +214,22 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
     const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (isImeComposing(e)) return;
 
-      if (slashQuery != null && filteredSlash.length > 0) {
+      if (slashQuery != null && flatSlash.length > 0) {
         if (e.key === "ArrowDown") {
           e.preventDefault();
-          setSlashIndex((i) => (i + 1) % filteredSlash.length);
+          setSlashIndex((i) => (i + 1) % flatSlash.length);
           return;
         }
         if (e.key === "ArrowUp") {
           e.preventDefault();
           setSlashIndex(
-            (i) => (i - 1 + filteredSlash.length) % filteredSlash.length,
+            (i) => (i - 1 + flatSlash.length) % flatSlash.length,
           );
           return;
         }
         if (e.key === "Enter" || e.key === "Tab") {
           e.preventDefault();
-          const cmd = filteredSlash[slashIndex];
+          const cmd = flatSlash[slashIndex];
           if (cmd) {
             onChange(`/${cmd.name} `);
             setSlashQuery(null);
@@ -252,9 +259,6 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (isBusy) {
-          // Queue is handled by controller send(); still invoke onSend so text queues.
-        }
         void submit();
       }
     };
@@ -275,26 +279,25 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
       (readiness && !readiness.ok) ||
       (!value.trim() && attachments.length === 0);
 
+    const showQuickAsk =
+      !!sessionId &&
+      !!value.trim() &&
+      !isBusy &&
+      !disabled &&
+      !(readiness && !readiness.ok);
+
+    let slashFlatIndex = -1;
+
     return (
-      <div
-        className={`copilot-composer${dragOver ? " copilot-composer--drag" : ""}`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          void ingestFiles(e.dataTransfer.files);
-        }}
-      >
-        <QueuedMessages
-          messages={queue}
-          onRemove={(i) => onRemoveQueued?.(i)}
-        />
+      <div className="copilot-composer chat-input-wrapper">
+        {queue.length > 0 && (
+          <QueuedMessages
+            messages={queue}
+            onRemove={(i) => onRemoveQueued?.(i)}
+          />
+        )}
         {attachments.length > 0 && (
-          <div className="copilot-attachment-tray">
+          <div className="copilot-attachment-tray attachment-tray">
             {attachments.map((a) => (
               <div key={a.id} className="chat-attachment-chip">
                 <span>{a.name}</span>
@@ -311,7 +314,7 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
         )}
         <textarea
           ref={textareaRef}
-          className="copilot-composer-input"
+          className="copilot-composer-input chat-input"
           value={value}
           rows={1}
           placeholder="Message Hermes… (/ for commands)"
@@ -326,34 +329,53 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
             }
           }}
         />
-        {slashQuery != null && filteredSlash.length > 0 && (
-          <ul className="copilot-slash-menu" role="listbox">
-            {filteredSlash.map((cmd, i) => (
-              <li key={cmd.name}>
-                <button
-                  type="button"
-                  className={
-                    i === slashIndex
-                      ? "copilot-slash-item copilot-slash-item--active"
-                      : "copilot-slash-item"
-                  }
-                  onMouseDown={(ev) => {
-                    ev.preventDefault();
-                    onChange(`/${cmd.name} `);
-                    setSlashQuery(null);
-                  }}
-                >
-                  <strong>/{cmd.name}</strong>
-                  <span>{cmd.description}</span>
-                </button>
-              </li>
+        {slashQuery != null && flatSlash.length > 0 && (
+          <div className="copilot-slash-menu copilot-slash-palette" role="listbox">
+            {slashGroups.map((group) => (
+              <div key={group.category}>
+                <div className="copilot-slash-palette-category">
+                  {group.category}
+                </div>
+                <ul>
+                  {group.items.map((cmd) => {
+                    slashFlatIndex += 1;
+                    const idx = slashFlatIndex;
+                    return (
+                      <li key={cmd.name}>
+                        <button
+                          type="button"
+                          className={
+                            idx === slashIndex
+                              ? "copilot-slash-item copilot-slash-item--active"
+                              : "copilot-slash-item"
+                          }
+                          onMouseDown={(ev) => {
+                            ev.preventDefault();
+                            onChange(`/${cmd.name} `);
+                            setSlashQuery(null);
+                          }}
+                        >
+                          <strong>/{cmd.name}</strong>
+                          <span>{cmd.description}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             ))}
-          </ul>
+            <div className="copilot-slash-palette-footer">
+              <span>↑↓ navigate</span>
+              <span>↵ select</span>
+              <span>tab complete</span>
+              <span>{flatSlash.length}</span>
+            </div>
+          </div>
         )}
         {readiness && !readiness.ok && readiness.message && (
           <div className="copilot-composer-error">{readiness.message}</div>
         )}
-        <div className="copilot-composer-toolbar">
+        <div className="copilot-composer-toolbar chat-input-toolbar">
           <div className="copilot-composer-toolbar-left">
             <button
               type="button"
@@ -385,11 +407,27 @@ export const CopilotChatInput = forwardRef<ChatInputHandle, Props>(
                 <Mic size={16} />
               </button>
             )}
+            <span className="copilot-toolbar-divider" aria-hidden />
             {toolbarExtras}
             {filesToggle}
           </div>
           <div className="copilot-composer-toolbar-right">
             {contextUsage && <ContextGauge {...contextUsage} />}
+            {showQuickAsk && (
+              <button
+                type="button"
+                className="copilot-quick-ask-btn copilot-icon-btn"
+                title="Quick ask"
+                onClick={() => {
+                  const text = value.trim();
+                  if (!text) return;
+                  if (onQuickAsk) onQuickAsk(text);
+                  else void submit();
+                }}
+              >
+                <MessageCircle size={16} />
+              </button>
+            )}
             {isBusy ? (
               <button
                 type="button"

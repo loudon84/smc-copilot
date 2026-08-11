@@ -1197,6 +1197,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instances/{instance_id}/kanban/boards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kanban Boards */
+        get: operations["list_kanban_boards_api_v1_instances__instance_id__kanban_boards_get"];
+        put?: never;
+        /** Create Kanban Board */
+        post: operations["create_kanban_board_api_v1_instances__instance_id__kanban_boards_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Kanban Board */
+        delete: operations["delete_kanban_board_api_v1_instances__instance_id__kanban_boards__board_slug__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kanban Assignees */
+        get: operations["list_kanban_assignees_api_v1_instances__instance_id__kanban_boards__board_slug__assignees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch Kanban */
+        post: operations["dispatch_kanban_api_v1_instances__instance_id__kanban_boards__board_slug__dispatch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Kanban Tasks */
+        get: operations["list_kanban_tasks_api_v1_instances__instance_id__kanban_boards__board_slug__tasks_get"];
+        put?: never;
+        /** Create Kanban Task */
+        post: operations["create_kanban_task_api_v1_instances__instance_id__kanban_boards__board_slug__tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kanban Task */
+        get: operations["get_kanban_task_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks/{task_id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Execute Kanban Task Action */
+        post: operations["execute_kanban_task_action_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__actions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks/{task_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Kanban Comment */
+        post: operations["add_kanban_comment_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__comments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instances/{instance_id}/kanban/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kanban Capabilities */
+        get: operations["get_kanban_capabilities_api_v1_instances__instance_id__kanban_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instances/{instance_id}/logs": {
         parameters: {
             query?: never;
@@ -4261,6 +4416,43 @@ export interface components {
              */
             resolution: string;
         };
+        /** CreateKanbanBoardInput */
+        CreateKanbanBoardInput: {
+            /** Color */
+            color?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Slug */
+            slug: string;
+        };
+        /** CreateKanbanTaskInput */
+        CreateKanbanTaskInput: {
+            /** Assignee */
+            assignee?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Maxretries */
+            maxRetries?: number | null;
+            /** Priority */
+            priority?: number | null;
+            /** Skills */
+            skills?: string[];
+            /** Tenant */
+            tenant?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Triage
+             * @default false
+             */
+            triage: boolean;
+            /** Workspace */
+            workspace?: string | null;
+        };
         /** DeviceResponse */
         DeviceResponse: {
             /** Createdat */
@@ -4754,6 +4946,281 @@ export interface components {
             name?: string | null;
             /** Runtimeversion */
             runtimeVersion?: string | null;
+        };
+        /** KanbanAssignee */
+        KanbanAssignee: {
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Name */
+            name: string;
+            /** Profile */
+            profile?: string | null;
+        };
+        /** KanbanAssigneeListResponse */
+        KanbanAssigneeListResponse: {
+            /** Assignees */
+            assignees?: components["schemas"]["KanbanAssignee"][];
+        };
+        /** KanbanBoard */
+        KanbanBoard: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Color */
+            color?: string | null;
+            /** Counts */
+            counts?: {
+                [key: string]: number;
+            };
+            /** Dbpath */
+            dbPath?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /**
+             * Iscurrent
+             * @default false
+             */
+            isCurrent: boolean;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /** KanbanBoardListResponse */
+        KanbanBoardListResponse: {
+            /** Boards */
+            boards?: components["schemas"]["KanbanBoard"][];
+        };
+        /** KanbanCapabilities */
+        KanbanCapabilities: {
+            /**
+             * Liveevents
+             * @default false
+             */
+            liveEvents: boolean;
+            /**
+             * Supported
+             * @default true
+             */
+            supported: boolean;
+            /**
+             * Supportsattachments
+             * @default true
+             */
+            supportsAttachments: boolean;
+            /**
+             * Supportsdecompose
+             * @default true
+             */
+            supportsDecompose: boolean;
+            /**
+             * Supportsdispatch
+             * @default true
+             */
+            supportsDispatch: boolean;
+            /**
+             * Supportsworkspacedir
+             * @default true
+             */
+            supportsWorkspaceDir: boolean;
+            /**
+             * Transport
+             * @default cli
+             * @enum {string}
+             */
+            transport: "cli" | "plugin";
+        };
+        /** KanbanComment */
+        KanbanComment: {
+            /** Author */
+            author?: string | null;
+            /** Body */
+            body: string;
+            /** Createdat */
+            createdAt: number;
+            /** Id */
+            id: number;
+            /** Taskid */
+            taskId: string;
+        };
+        /** KanbanCommentCreate */
+        KanbanCommentCreate: {
+            /** Text */
+            text: string;
+        };
+        /** KanbanDispatchRequest */
+        KanbanDispatchRequest: {
+            /**
+             * Dryrun
+             * @default false
+             */
+            dryRun: boolean;
+        };
+        /** KanbanDispatchResult */
+        KanbanDispatchResult: {
+            /**
+             * Claimed
+             * @default 0
+             */
+            claimed: number;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Dryrun
+             * @default false
+             */
+            dryRun: boolean;
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
+             * Started
+             * @default 0
+             */
+            started: number;
+        };
+        /** KanbanEvent */
+        KanbanEvent: {
+            /** Createdat */
+            createdAt: number;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /** Runid */
+            runId?: number | null;
+            /** Taskid */
+            taskId: string;
+        };
+        /** KanbanRun */
+        KanbanRun: {
+            /** Endedat */
+            endedAt?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id: number;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: number | null;
+            /** Outcome */
+            outcome?: string | null;
+            /** Profile */
+            profile?: string | null;
+            /** Startedat */
+            startedAt?: number | null;
+            /** Status */
+            status?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Taskid */
+            taskId: string;
+        };
+        /** KanbanTask */
+        KanbanTask: {
+            /** Allowedactions */
+            allowedActions?: ("assign" | "complete" | "block" | "unblock" | "archive" | "reclaim" | "promote" | "schedule" | "specify" | "decompose" | "link" | "unlink")[];
+            /** Assignee */
+            assignee?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Completedat */
+            completedAt?: number | null;
+            /** Createdat */
+            createdAt?: number | null;
+            /** Createdby */
+            createdBy?: string | null;
+            /** Id */
+            id: string;
+            /** Maxretries */
+            maxRetries?: number | null;
+            /**
+             * Priority
+             * @default 0
+             */
+            priority: number;
+            /** Result */
+            result?: string | null;
+            /** Skills */
+            skills?: string[];
+            /** Startedat */
+            startedAt?: number | null;
+            /** Status */
+            status: string;
+            /** Tenant */
+            tenant?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Workspacekind
+             * @default scratch
+             */
+            workspaceKind: string;
+            /** Workspacepath */
+            workspacePath?: string | null;
+        };
+        /**
+         * KanbanTaskActionInput
+         * @description Unified task action payload (PRD §25). Extra fields are action-specific.
+         */
+        KanbanTaskActionInput: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "assign" | "complete" | "block" | "unblock" | "archive" | "reclaim" | "promote" | "schedule" | "specify" | "decompose" | "link" | "unlink";
+            /** Assignee */
+            assignee?: string | null;
+            /** At */
+            at?: string | null;
+            /** Parentid */
+            parentId?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Result */
+            result?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** KanbanTaskDetail */
+        KanbanTaskDetail: {
+            /** Children */
+            children?: string[];
+            /** Comments */
+            comments?: components["schemas"]["KanbanComment"][];
+            /** Events */
+            events?: components["schemas"]["KanbanEvent"][];
+            /** Latestsummary */
+            latestSummary?: string | null;
+            /** Parents */
+            parents?: string[];
+            /** Runs */
+            runs?: components["schemas"]["KanbanRun"][];
+            task: components["schemas"]["KanbanTask"];
+        };
+        /** KanbanTaskListResponse */
+        KanbanTaskListResponse: {
+            /** Tasks */
+            tasks?: components["schemas"]["KanbanTask"][];
         };
         /** LocalTaskCreate */
         LocalTaskCreate: {
@@ -9175,6 +9642,414 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstanceHealthResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_kanban_boards_api_v1_instances__instance_id__kanban_boards_get: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanBoardListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_kanban_board_api_v1_instances__instance_id__kanban_boards_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKanbanBoardInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanBoard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_kanban_board_api_v1_instances__instance_id__kanban_boards__board_slug__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_kanban_assignees_api_v1_instances__instance_id__kanban_boards__board_slug__assignees_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanAssigneeListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dispatch_kanban_api_v1_instances__instance_id__kanban_boards__board_slug__dispatch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["KanbanDispatchRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanDispatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_kanban_tasks_api_v1_instances__instance_id__kanban_boards__board_slug__tasks_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                assignee?: string | null;
+                tenant?: string | null;
+                includeArchived?: boolean;
+            };
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanTaskListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_kanban_task_api_v1_instances__instance_id__kanban_boards__board_slug__tasks_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKanbanTaskInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_kanban_task_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanTaskDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    execute_kanban_task_action_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__actions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KanbanTaskActionInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_kanban_comment_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__comments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+                board_slug: string;
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KanbanCommentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_kanban_capabilities_api_v1_instances__instance_id__kanban_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Authorization?: string | null;
+                "X-Copilot-Desktop-Token"?: string | null;
+            };
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanCapabilities"];
                 };
             };
             /** @description Validation Error */

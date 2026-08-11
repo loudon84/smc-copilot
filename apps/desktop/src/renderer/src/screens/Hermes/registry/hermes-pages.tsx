@@ -9,6 +9,7 @@ const MemoryPage = lazy(() => import("../pages/Memory/HermesMemoryPage"));
 const ProvidersPage = lazy(() => import("../pages/Providers/HermesProvidersPage"));
 const ModelsPage = lazy(() => import("../pages/Models/HermesModelsPage"));
 const ChatPage = lazy(() => import("../pages/Chat/HermesDefaultChatPage"));
+const KanbanPage = lazy(() => import("../pages/Kanban/HermesKanbanPage"));
 const TasksPage = lazy(() => import("../pages/Tasks/WorkTasksPage"));
 const WorkbenchPage = lazy(() => import("../pages/Workbench/HermesWorkbenchPage"));
 const ExpertsPage = lazy(() => import("../pages/Experts/HermesExpertsPage"));
@@ -28,6 +29,7 @@ const PAGE_COMPONENTS: PageComponentMap = {
   tasks: TasksPage,
   workbench: WorkbenchPage,
   chat: ChatPage,
+  kanban: KanbanPage,
   experts: ExpertsPage,
   expertTeams: ExpertTeamsPage,
   expertRuns: ExpertRunsPage,

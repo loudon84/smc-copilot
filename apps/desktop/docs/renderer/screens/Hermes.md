@@ -24,7 +24,8 @@ src/renderer/src/screens/Hermes/
 - **v8.1.0 Durable Chat Runtime**：`chat-runtime:start` 事件驱动；durable `state.db`；Turn Ledger 精确 Retry；Queue reducer；Recovery/`getState`；Clarify/Approval 流式续跑
 - **v8.0.5 Chat Interaction Loop**：Clarify/Approval 真 Command（Follow-up Message）；Turn Snapshot Queue/Retry；Session Files Badge 走 `useSessionFilesSummary` + `chat-files:changed`（禁止硬编码 0）
 - **v8.0.4 Chat Turn Lifecycle**：`initialSessionId` 一次性 hydrate vs `BIND_SESSION`；`submitComposer` 立即清 Input/Draft；`turnId` 终态保护；右侧 `ChatFloatingRail`（Prompt Navigator + Session Files）
-- **v8.0.3 Chat Workspace Layout**：`ChatRunRecord` per-run 隔离；单一 Header + Content Rail；Composer Context Chip；Tab 状态真实回传；localStorage `chat-workspace-state.v1`（**v8.2** 起仅作迁移源）
+- **v1.6.1 Chat UI Layout 复刻**：`modules/chat/layout/*`（`ChatShell` → Compact `ChatTopBar` → `ChatBody`(Messages + PanelHost) → `ChatComposerArea`）；Composer **在 ChatBody 外**（Panel 不缩窄输入区）；拆除 generic `chat-right-panel`；Navigator（SessionFiles 220 / Worktree 240 二选一）+ Preview 440；消息行 ~85%；`useChatScroll`；全容器 `FileDropOverlay`；Slash Palette + Quick Ask；Tabs 仍在 `MultiRunChatShell` 顶部
+- **v8.0.3 Chat Workspace Layout**：`ChatRunRecord` per-run 隔离；单一 Header；Composer Context Chip；Tab 状态真实回传；localStorage `chat-workspace-state.v1`（**v8.2** 起仅作迁移源）
 - **v7.4.1 Work 任务 Hotfix**（导航已由 v7.4.2 回退）：`pages/Tasks/` — `WorkTaskStartComposer`、`TaskWindow`、`work-tasks.json` 仍保留供遗留路径
 - **v1.4 Work 任务窗口**（已由 v7.4.1 取代主路径）：~~TaskStream mock SSE~~
 - 左栏 Sidebar：**三段分组**（主流程含 **chat**（默认）/ experts / expertTeams …；`tasks` / `workbench` **v7.4.2 隐藏**；能力管理 / 高级设置，后两组默认折叠）；**v1.3 Phase 6** `requiresGateway` 离线门控（disabled + tooltip）；窄栏仅显示主流程 icon
@@ -71,12 +72,16 @@ src/renderer/src/screens/Hermes/
 | `pages/Chat/ComposerBar.tsx` | **v7.4.2** `workControlsSlot` 插槽 |
 | `pages/Chat/HermesDefaultWebChatSurface.tsx` | Chat 主面 + Work 控件 + Send 双路径；支持 `forcedSessionId`（任务窗口遗留）；**默认引擎已切 Copilot** |
 | `pages/Chat/MultiRunChatShell.tsx` | **v8.0.3** 多 Run 壳：`ChatWorkspaceProvider` + Tabs + 保活 Host |
-| `pages/Chat/AiosCopilotChatHost.tsx` | **v8.1** Host props=`run/active/onPatchRun`；Runtime 走 `start`；`sessionFilesCount`←`useSessionFilesSummary`；单一 `ChatRunHeader` |
+| `pages/Chat/AiosCopilotChatHost.tsx` | **v1.6.1** Layout State + viewport tier（wide/medium/narrow overlay）；**v8.1** Host props=`run/active/onPatchRun`；Runtime 走 `start`；`sessionFilesCount`←`useSessionFilesSummary`；单一 Compact `ChatRunHeader` |
+| `modules/chat/layout/*` | **v1.6.1** `ChatShell` / `ChatTopBar` / `ChatBody` / `ChatMessagesViewport` / `ChatComposerArea` / `ChatWorkspacePanelHost` / `ChatLayoutState` |
+| `modules/chat/components/ChatSurface.tsx` | **v1.6.1** slot API：`topBarSlot` + `navigatorPanel`/`previewPanel`；Composer 移出 Body；壳层 Drop |
+| `modules/chat/hooks/useChatScroll.ts` | **v1.6.1** 贴底跟随 / >60px 暂停 / 用户发送强制滚底 |
 | `modules/chat/controller/useChatController.ts` | **v8.1** `runtime.start` + Turn Ledger + Queue reducer + 精确 Retry；**v8.0.5** `submitRuntimeCommand`；**v8.0.4** hydrate / 清 Draft |
 | `modules/chat/hooks/useSessionFilesSummary.ts` | **v8.0.5** list + `chatFiles.onChanged` 驱动 Badge `total` |
 | `modules/chat/components/approval/ApprovalCard.tsx` | **v8.0.5** Tool/Summary/Risk；high 二次确认；Deny reason |
 | `modules/chat/hooks/useChatRuntimeRecovery.ts` | **v8.1** mount `getState`/`recover` |
-| `modules/chat/components/diagnostics/ChatDiagnosticsExportButton.tsx` | **v8.1** Export Chat Diagnostics || `modules/chat/components/floating/ChatFloatingRail.tsx` | **v8.0.4** 右侧固定 Prompt Navigator + Session Files |
+| `modules/chat/components/diagnostics/ChatDiagnosticsExportButton.tsx` | **v8.1** Export；**v1.6.1** 默认移出主布局，仅 `showDiagnostics` 时进 TopBar |
+| `modules/chat/components/floating/ChatFloatingRail.tsx` | **v8.0.4** 浮动 Prompt Navigator + Session Files 入口 |
 | `modules/chat/workspace/ChatRunRecord.ts` | **v8.0.3** per-run Session/Expert/Skill/WorkMode/Model/draft 单一状态源 |
 | `modules/chat/workspace/chatWorkspaceReducer.ts` | **v8.0.3** open/close/patch/returnDefault/applyControllerSnapshot；`createdOrder` 保序 |
 | `modules/chat/workspace/chatWorkspacePersistence.ts` | **v8.0.3** `chat-workspace-state.v1`；恢复时 busy→`interrupted` |

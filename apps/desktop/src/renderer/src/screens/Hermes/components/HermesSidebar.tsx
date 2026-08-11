@@ -14,6 +14,8 @@ import {
 
   ClipboardList,
 
+  Columns3,
+
   FileBox,
 
   Globe,
@@ -71,6 +73,8 @@ import {
 const ICONS: Record<string, typeof MessageSquare> = {
 
   ClipboardList,
+
+  Columns3,
 
   LayoutDashboard,
 

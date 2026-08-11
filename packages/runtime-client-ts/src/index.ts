@@ -39,6 +39,27 @@ export type {
   TaskEventResponse,
 } from "./client/create-runtime-client";
 export type {
+  KanbanDomain,
+  KanbanCapabilities,
+  KanbanBoard,
+  KanbanBoardListResponse,
+  CreateKanbanBoardInput,
+  KanbanTask,
+  KanbanTaskListResponse,
+  CreateKanbanTaskInput,
+  KanbanTaskDetail,
+  KanbanTaskActionInput,
+  KanbanComment,
+  KanbanCommentCreate,
+  KanbanEvent,
+  KanbanRun,
+  KanbanAssignee,
+  KanbanAssigneeListResponse,
+  KanbanDispatchRequest,
+  KanbanDispatchResult,
+  KanbanTaskFilter,
+} from "./client/create-runtime-client";
+export type {
   RuntimeDomain,
   RuntimeDomainReadiness,
   RuntimeInstallRequest,

@@ -12,7 +12,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 0.3.6（… + **v1.5.4 Hermes Model Catalog & Desktop Runtime SSE Chat Closure** + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
+| 版本 | 0.3.6（… + **v1.6.1 Chat UI Layout 复刻** + **v1.5.4 Hermes Model Catalog & Desktop Runtime SSE Chat Closure** + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **v8.0.1 Chat 迁移闭环** + **v7.6 Hermes Agent MCP Host Mode** + **v7.5.1 Runtime Skill Fixed Route** + **v7.4.2 Chat-first Work Controls** + …） |
 | appId | `com.smc.smc-ai-copilot`（productName: **SMC-Copilot**；主程序 **desktop.exe**） |
 | 后端 | Copilot Runtime `http://127.0.0.1:8765`（Desktop 唯一启动 SOT；Hermes Gateway 由 Runtime 管理） |
 
@@ -102,6 +102,7 @@ Copilot Runtime (:8765)  →  Hermes Instances / Gateway / Memory / Expert MCP
 | `window.nodeskclawRuntimeSkillAPI` | `src/preload/nodeskclaw-runtime-skill-api.ts` | **v7.5.1** legacy Runtime Skill 路由；**v7.6 Chat 业务禁止** |
 | `window.work` | `src/preload/work-api.ts` | **v7.4.1 Work 任务 Hotfix** `task.start` / `resume` / `list` / `getBySession`；首条消息走 `hermesDefaultChat`；元数据 `work-tasks.json`；legacy `send`/`onEvent` 保留 |
 | `window.workTasks` | `src/preload/work-tasks-api.ts` | **v1.3 Workbench 2.0** WorkTask CRUD / assign / start / snapshot / SSE；Main-only `@smc/runtime-client` → `/api/v1/work-tasks`（**禁止** Renderer 直调 `/api/v1/tasks`） |
+| `window.kanbanRuntime` | `src/preload/kanban-api.ts` | **v1.7 Hermes Kanban** Board/Task/Dispatch；Main-only `@smc/runtime-client` → `/api/v1/instances/{id}/kanban/*`（**禁止** Renderer `hermesAPI`/CLI/`kanban.db`） |
 
 类型定义：`src/preload/index.d.ts`。契约类型：`src/shared/profile-runtime/`、`src/shared/enterprise/`、**`src/shared/mcp/`（V6.1）**、**`src/shared/mcp-skill-gateway-runtime/`（V6.4）**、**`src/shared/genehub/`（V6.5）**、**`src/shared/hermes-mcp-config/`（v7.6）**、**`src/shared/nodeskclaw/`（v7.5.1）**、**`src/shared/work/`（v1.4）**、**`src/shared/chat-runtime/` + `src/shared/chat-files/`（v8.0）**。
 
@@ -204,7 +205,7 @@ Chat.tsx
 
 **v5.6.4（Hermes Chat 多模型 hotfix）：** Models 页维护 `models.json` + `config.yaml` `custom_providers`（`hermes-config-yaml.ts`）；**Set Default** 走 `hermes-chat:set-model-config`；Chat 下拉为 **session 级**（`session-models.json` + `hermes-chat:get/set-session-model`）；普通发送**不**写 `config.yaml`、**不** restart Gateway；Chat **无** Save as Default。
 **v5.6.2（Local Hermes WebChat Surface）：** `screens/Hermes/pages/Chat/*` 通过 `window.hermesDefaultChat`；事件复用全局 `chat-*`。
-**v8.0 / v8.0.1 / v8.0.2 / v8.0.3 / v8.0.4 / v8.0.5 / v8.1.0 / v8.1.1 / v8.2.0（Copilot Chat Module）：** 默认入口常驻 `HermesPersistentChatWorkspace` → `MultiRunChatShell`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）→ `AiosCopilotChatHost` → `modules/chat` `ChatSurface`；**v8.2** `ChatWorkspaceProvider` 提升至 `HermesScreen`，Main `chat-workspace.db` 权威持久化（localStorage v1 仅迁移）；Sessions 页走 `window.sessionCatalog` 直读 profile `state.db` + `openSession` 联动；Runtime 走 `window.chatRuntime`；Files 走 `window.chatFiles`。
+**v8.0 / v8.0.1 / v8.0.2 / v8.0.3 / v8.0.4 / v8.0.5 / v8.1.0 / v8.1.1 / v8.2.0 / v1.6.1（Copilot Chat Module）：** 默认入口常驻 `HermesPersistentChatWorkspace` → `MultiRunChatShell`（`VITE_CHAT_ENGINE=legacy` 回退旧 Surface）→ `AiosCopilotChatHost` → `modules/chat` `ChatSurface`；**v1.6.1** Layout 复刻 copilot-desktop：`ChatShell`/`ChatBody`/`ChatComposerArea`，Composer 在 ChatBody 外，Panel 各自持宽（SessionFiles 220 / Worktree 240 / Preview 440），Compact TopBar ≤36px，消息 85% + `useChatScroll`；**v8.2** `ChatWorkspaceProvider` 提升至 `HermesScreen`，Main `chat-workspace.db` 权威持久化（localStorage v1 仅迁移）；Sessions 页走 `window.sessionCatalog`；Runtime 走 `window.chatRuntime`；Files 走 `window.chatFiles`。
 
 ### 单 Gateway（legacy default）
 
@@ -569,6 +570,7 @@ Cursor rules：`.cursor/rules/workbuddy-product-line.mdc`、`.cursor/rules/herme
 | **V6.3.3** | **WebOperator Task Session 绑定键调整**：`source + requestId` 替代 `pageUrl` 唯一键；schema v2 + v1 迁移；Main 派生 `taskId`；HostBridge `web-host-bridge` | `prd/v6.3.3_task-to-session-request.md`, `web-operator-task-session-*`, `shared/web-operator/build-task-id.ts`, `HermesTaskPanel.tsx`, `HostBridgePanel.tsx` |
 | **V6.3.4** | **WebOperator Hermes→Host 表单写回**：Hermes 输出 `host_form_fill` artifact；Panel「写回当前表单」按钮；`HostBridgeCommandContext` 共享 `runCommand`；`desktop.host.form.fill` | `prd/v6.3.4_weboperator-hermes-host-form-fill.md`, `host-bridge/HostBridgeCommandContext.tsx`, `components/hermes/panel/host-form-fill/*`, `WebOperatorHermesPanelMessageList.tsx` |
 | **V6.7.1** | **GeneHub MCP Registration Hardening**：bundle-preview 不 claim、ignore 同步服务端、profile-mapping.json、serverProfileId sync、签名校验、scripts provenance、MCP Gateway 卡片增强 | `genehub-profile-mapping.ts`, `genehub-client.ts`, `mcp-registration-service.ts`, `skill-install-worker.ts`, `script-provenance.ts`, `skill-package-validator.ts`, `GeneHubMcpRegistrationPanel.tsx`, `McpGatewayGeneHubRegistrationCard.tsx` |
+| **v1.6.1** | **Chat UI Layout 复刻**：Composer outside ChatBody、拆除 generic RightPanel、Compact TopBar、85% message row、`useChatScroll`、Slash Palette、Panel 仲裁（Navigator+Preview）与 responsive overlay | `prd/v1.6.1.md`, `modules/chat/layout/*`, `ChatSurface.tsx`, `AiosCopilotChatHost.tsx`, `copilot-chat.css` |
 | **v8.0** | **Copilot Chat Module 迁移**：runId Chat Runtime IPC、`modules/chat` Surface + AI-OS adapters/slots、`window.chatFiles`、File Platform shared 契约、`VITE_CHAT_ENGINE` 切换 | `prd_work/v8.0_upgrade-chat-module.md`, `src/main/chat-runtime/`, `src/shared/chat-runtime/`, `src/renderer/src/modules/chat/`, `scripts/chat-migration/` |
 | **v8.0.1** | **Chat 迁移闭环**：Controller Session/History、Abort Promise、Work 参数、SSE 事件、Prompt Hint、`chat-runtime:command`、持久化 File index、ChatRunRegistry、`typecheck:chat` | `prd_work/v8.0.1_migrate.md`, `modules/chat/controller/`, `chat-files-session-store.ts`, `workspace/chatRunRegistry.ts` |
 | **v8.0.2** | **Chat Full Integration**：完整 MessageList/Composer/ModelPicker、File Platform `chat-files/platform`（`files:*`）、PromptNavigator、多 Chat 后台并行、删除 `source/**` 与 `_upstream/**` | `prd_work/v8.0.2_chat-full-integrated.md`, `modules/chat/components/**`, `src/main/chat-files/platform/`, `MultiRunChatShell.tsx` |

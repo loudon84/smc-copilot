@@ -4,6 +4,7 @@ export type View =
   | "portal"
   | "workspaces"
   | "local-hermes"
+  | "kanban"
   | "task-workbench"
   | "web-operator"
   | "crm-workbench"
@@ -22,6 +23,7 @@ export const VIEW_TITLE_KEYS: Partial<Record<View, string>> = {
   portal: "navigation.portal",
   workspaces: "navigation.workspaces",
   "local-hermes": "navigation.localHermes",
+  kanban: "navigation.kanban",
   "task-workbench": "navigation.taskWorkbench",
   "web-operator": "navigation.webOperator",
   "crm-workbench": "navigation.crm.workbench",

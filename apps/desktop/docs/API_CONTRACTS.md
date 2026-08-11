@@ -1072,3 +1072,29 @@ Chat 为 Local Hermes 默认页；Work 控件（Expert / Skill / Permission / Ga
 ---
 
 See `copilot-desktop/AGENTS.md` §「新增 IPC」for the checklist when adding channels.
+
+---
+
+## Hermes Kanban（v1.7）
+
+**Preload**：`window.kanbanRuntime`（`src/preload/kanban-api.ts`）  
+**Main**：`src/main/kanban/kanban-ipc.ts` → `copilot-runtime-client/clients/kanban-client.ts` → `@smc/runtime-client` `kanban` domain  
+**Renderer**：`src/renderer/src/modules/kanban`（Port/Adapter only；禁止 `hermesAPI` / CLI / `kanban.db`）  
+**CI**：`npm run check:no-desktop-kanban-hermes-access`
+
+| Channel | Direction | Args | Returns | Notes |
+|---------|-----------|------|---------|-------|
+| `kanban:get-capabilities` | invoke | `instanceId` | `KanbanCapabilitiesDto` | transport/liveEvents flags |
+| `kanban:list-boards` | invoke | `instanceId`, `opts?` | `KanbanBoardDto[]` | |
+| `kanban:create-board` | invoke | `instanceId`, `CreateKanbanBoardInputDto` | `KanbanBoardDto` | |
+| `kanban:remove-board` | invoke | `instanceId`, `boardSlug` | `void` | archives/removes via Hermes |
+| `kanban:list-tasks` | invoke | `instanceId`, `boardSlug`, `filter?` | `KanbanTaskDto[]` | includes `allowedActions` |
+| `kanban:get-task` | invoke | `instanceId`, `boardSlug`, `taskId` | `KanbanTaskDetailDto` | comments/events/runs |
+| `kanban:create-task` | invoke | `instanceId`, `boardSlug`, `CreateKanbanTaskInputDto` | `KanbanTaskDto` | |
+| `kanban:execute-task-action` | invoke | `instanceId`, `boardSlug`, `taskId`, `KanbanTaskActionInputDto` | `KanbanTaskDto` | unified lifecycle verbs |
+| `kanban:add-comment` | invoke | `instanceId`, `boardSlug`, `taskId`, `text` | `void` | |
+| `kanban:list-assignees` | invoke | `instanceId`, `boardSlug` | `KanbanAssigneeDto[]` | |
+| `kanban:dispatch` | invoke | `instanceId`, `boardSlug`, `dryRun?` | `KanbanDispatchResultDto` | |
+| `kanban:pick-directory` | invoke | — | `string \| null` | Native folder picker for `dir:` workspace |
+
+Runtime API prefix：`/api/v1/instances/{instanceId}/kanban/*`（CLI Adapter；每请求显式 `--board`）。

@@ -43,6 +43,7 @@ const module = resolveWorkspaceModule(workspaceId);
 | `"task-workbench"` | `TaskWorkbenchScreen` | — |
 | `"local-hermes"` | `HermesScreen` | 传入 `activePanel` / `onPanelChange` / `onOpenRuntimeSettings` |
 | `"crm-workbench"` | `CrmWorkbenchScreen` | 传入 `enabled` / `onNavigate` |
+| `"kanban"` | `KanbanPage`（`modules/kanban`） | **v1.7**；仅经 `KanbanRuntimePort`，禁止 Renderer 直连 Hermes CLI/DB |
 | 其他（`"workspaces"`） | `WorkspacesScreen` | 传入 `profile` / `activePanel` / `onPanelChange` / `onOpenSettingsDrawer` |
 
 ## 包裹组件

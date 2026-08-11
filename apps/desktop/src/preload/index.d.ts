@@ -746,6 +746,8 @@ declare global {
     };
     /** PRD v1.3 WorkTask Workbench 2.0 — Main-proxied via @smc/runtime-client workTasks domain */
     workTasks: import("./work-tasks-api").WorkTasksAPI;
+    /** PRD v1.7 Hermes Kanban — Main-proxied via @smc/runtime-client kanban domain */
+    kanbanRuntime: import("./kanban-api").KanbanRuntimeAPI;
     internalView?: import("../shared/shell/overlay-contract").InternalViewAPI;
   }
 

@@ -14,7 +14,7 @@
 |---|---|
 | **产品名称** | SMC-Copilot |
 | **包名 / 主程序** | `smc-ai-copilot`（npm）/ **`desktop.exe`**（Windows 安装产物） |
-| **版本** | 0.3.6（… + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **V7.2.1 Expert MCP v6.1 Hotfix** + **V7.2 Remote Experts Pivot** + **V7.1.1 Hermes Experts E2E + Desktop Sync** + **V7.1 Hermes Experts Workspace** + **V7.0 Hermes MCP Client Integration** + …） |
+| **版本** | 0.3.6（… + **v1.7 Hermes Kanban** + **v1.6.1 Chat UI Layout 复刻** + **v9.0.0 Serve-First Runtime Phase 0/1/2/3** + **v8.2.0 Persistent Chat Workspace + Session Catalog** + **v8.1.1 Durable Runtime Closure** + **v8.1.0 Durable Chat Runtime** + **v8.0.5 Chat Interaction Loop** + **v8.0.4 Chat Turn Lifecycle** + **v8.0.3 Chat Workspace Layout** + **v8.0.2 Chat Full Integration** + **V7.2.1 Expert MCP v6.1 Hotfix** + **V7.2 Remote Experts Pivot** + **V7.1.1 Hermes Experts E2E + Desktop Sync** + **V7.1 Hermes Experts Workspace** + **V7.0 Hermes MCP Client Integration** + …） |
 | **appId** | `com.smc.smc-ai-copilot` |
 | **仓库** | https://github.com/loudon84/ai-os-desktop |
 | **用户文档** | [README.md](../README.md) · [README.zh-CN.md](../README.zh-CN.md) |

@@ -24,6 +24,7 @@ Renderer 通过 Preload（`src/preload/index.ts`）暴露的 `window.*` 全局�
 | `window.smcShell` | `shell-api.ts` | 启动门控（resolveStartupDecision）+ openExternal |
 | `window.copilotServe` | `copilot-serve-api.ts` | copilot-serve 生命周期（`getConnection` **不含 token**） |
 | `window.copilotRuntime` | `copilot-runtime-api.ts` | **v9.0** Serve-First（state/pairing/repair/proxyFetch/Instance/Diagnostics；**不暴露 Device Token**） |
+| `window.kanbanRuntime` | `kanban-api.ts` | **v1.7** Hermes Kanban Board/Task/Dispatch；Main → `@smc/runtime-client` `kanban`；**禁止** Renderer `hermesAPI`/CLI/`kanban.db` |
 | `window.chatRuntime` | `chat-runtime-api.ts` | **v8.1+ / v9 Phase 3** Preload 表面不变；Serve preferred 时 Main 走 `ServeChatRuntimeAdapter` → chat-runs*（不经 Hermes `sendMessage`） |
 | `window.workspaces` | `index.ts` (inline) | 文件列表/读取/git 状态 |
 | `window.workspaceChat` | `workspace-chat-api.ts` | Workspaces Chat（SSE） |

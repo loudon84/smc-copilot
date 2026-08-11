@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChatFilesPort, ChatFileRef } from "../../ports/ChatFilesPort";
+import {
+  readStoredWidth,
+  SESSION_FILES_WIDTH_KEY,
+  writeStoredWidth,
+} from "../../layout/ChatLayoutState";
 
 type Props = {
   files: ChatFilesPort;
@@ -15,8 +20,13 @@ function groupOf(f: ChatFileRef): "attachments" | "context" | "agent_output" {
   return "attachments";
 }
 
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 280;
+const DEFAULT_WIDTH = 220;
+
 /**
  * Production Session Files panel — grouped list + search + context actions.
+ * Owns its width (default 220px) with resize + localStorage persistence.
  */
 export function SessionFilesPanel({
   files,
@@ -28,6 +38,9 @@ export function SessionFilesPanel({
   const [items, setItems] = useState<ChatFileRef[]>([]);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
+  const [width, setWidth] = useState(() =>
+    readStoredWidth(SESSION_FILES_WIDTH_KEY, DEFAULT_WIDTH, MIN_WIDTH),
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 200);
@@ -72,6 +85,30 @@ export function SessionFilesPanel({
     }
     return { attachments, context, agent_output };
   }, [items]);
+
+  const startResize = (e: React.PointerEvent): void => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = width;
+    let nextWidth = startWidth;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+
+    const onMove = (ev: PointerEvent): void => {
+      const delta = startX - ev.clientX;
+      nextWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta));
+      setWidth(nextWidth);
+    };
+    const onUp = (): void => {
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      writeStoredWidth(SESSION_FILES_WIDTH_KEY, nextWidth);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  };
 
   if (!sessionId) return null;
 
@@ -129,7 +166,17 @@ export function SessionFilesPanel({
   );
 
   return (
-    <div className="session-files-panel">
+    <div
+      className="session-files-panel"
+      style={{ width, flex: `0 0 ${width}px` }}
+    >
+      <div
+        className="session-files-resize-handle"
+        onPointerDown={startResize}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize session files"
+      />
       <div className="session-files-panel-header">
         <div className="session-files-panel-title">Session files</div>
         {onClose && (

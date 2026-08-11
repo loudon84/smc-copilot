@@ -1056,6 +1056,85 @@ components:
       - resolution
       title: ConflictResolveRequest
       type: object
+    CreateKanbanBoardInput:
+      properties:
+        color:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Color
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        icon:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Icon
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        slug:
+          minLength: 1
+          title: Slug
+          type: string
+      required:
+      - slug
+      title: CreateKanbanBoardInput
+      type: object
+    CreateKanbanTaskInput:
+      properties:
+        assignee:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignee
+        body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Body
+        maxRetries:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Maxretries
+        priority:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Priority
+        skills:
+          items:
+            type: string
+          title: Skills
+          type: array
+        tenant:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tenant
+        title:
+          minLength: 1
+          title: Title
+          type: string
+        triage:
+          default: false
+          title: Triage
+          type: boolean
+        workspace:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspace
+      required:
+      - title
+      title: CreateKanbanTaskInput
+      type: object
     DeviceResponse:
       properties:
         createdAt:
@@ -1904,6 +1983,476 @@ components:
           - type: 'null'
           title: Runtimeversion
       title: InstanceUpdateRequest
+      type: object
+    KanbanAssignee:
+      properties:
+        available:
+          default: true
+          title: Available
+          type: boolean
+        name:
+          title: Name
+          type: string
+        profile:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profile
+      required:
+      - name
+      title: KanbanAssignee
+      type: object
+    KanbanAssigneeListResponse:
+      properties:
+        assignees:
+          items:
+            $ref: '#/components/schemas/KanbanAssignee'
+          title: Assignees
+          type: array
+      title: KanbanAssigneeListResponse
+      type: object
+    KanbanBoard:
+      properties:
+        archived:
+          default: false
+          title: Archived
+          type: boolean
+        color:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Color
+        counts:
+          additionalProperties:
+            type: integer
+          title: Counts
+          type: object
+        dbPath:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dbpath
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        icon:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Icon
+        isCurrent:
+          default: false
+          title: Iscurrent
+          type: boolean
+        name:
+          title: Name
+          type: string
+        slug:
+          title: Slug
+          type: string
+        total:
+          default: 0
+          title: Total
+          type: integer
+      required:
+      - slug
+      - name
+      title: KanbanBoard
+      type: object
+    KanbanBoardListResponse:
+      properties:
+        boards:
+          items:
+            $ref: '#/components/schemas/KanbanBoard'
+          title: Boards
+          type: array
+      title: KanbanBoardListResponse
+      type: object
+    KanbanCapabilities:
+      properties:
+        liveEvents:
+          default: false
+          title: Liveevents
+          type: boolean
+        supported:
+          default: true
+          title: Supported
+          type: boolean
+        supportsAttachments:
+          default: true
+          title: Supportsattachments
+          type: boolean
+        supportsDecompose:
+          default: true
+          title: Supportsdecompose
+          type: boolean
+        supportsDispatch:
+          default: true
+          title: Supportsdispatch
+          type: boolean
+        supportsWorkspaceDir:
+          default: true
+          title: Supportsworkspacedir
+          type: boolean
+        transport:
+          default: cli
+          enum:
+          - cli
+          - plugin
+          title: Transport
+          type: string
+      title: KanbanCapabilities
+      type: object
+    KanbanComment:
+      properties:
+        author:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Author
+        body:
+          title: Body
+          type: string
+        createdAt:
+          title: Createdat
+          type: number
+        id:
+          title: Id
+          type: integer
+        taskId:
+          title: Taskid
+          type: string
+      required:
+      - id
+      - taskId
+      - body
+      - createdAt
+      title: KanbanComment
+      type: object
+    KanbanCommentCreate:
+      properties:
+        text:
+          minLength: 1
+          title: Text
+          type: string
+      required:
+      - text
+      title: KanbanCommentCreate
+      type: object
+    KanbanDispatchRequest:
+      properties:
+        dryRun:
+          default: false
+          title: Dryrun
+          type: boolean
+      title: KanbanDispatchRequest
+      type: object
+    KanbanDispatchResult:
+      properties:
+        claimed:
+          default: 0
+          title: Claimed
+          type: integer
+        details:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Details
+        dryRun:
+          default: false
+          title: Dryrun
+          type: boolean
+        skipped:
+          default: 0
+          title: Skipped
+          type: integer
+        started:
+          default: 0
+          title: Started
+          type: integer
+      title: KanbanDispatchResult
+      type: object
+    KanbanEvent:
+      properties:
+        createdAt:
+          title: Createdat
+          type: number
+        id:
+          title: Id
+          type: integer
+        kind:
+          title: Kind
+          type: string
+        payload:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Payload
+        runId:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Runid
+        taskId:
+          title: Taskid
+          type: string
+      required:
+      - id
+      - taskId
+      - kind
+      - createdAt
+      title: KanbanEvent
+      type: object
+    KanbanRun:
+      properties:
+        endedAt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Endedat
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+        id:
+          title: Id
+          type: integer
+        lastHeartbeatAt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lastheartbeatat
+        outcome:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Outcome
+        profile:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Profile
+        startedAt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Startedat
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary
+        taskId:
+          title: Taskid
+          type: string
+      required:
+      - id
+      - taskId
+      title: KanbanRun
+      type: object
+    KanbanTask:
+      properties:
+        allowedActions:
+          items:
+            enum:
+            - assign
+            - complete
+            - block
+            - unblock
+            - archive
+            - reclaim
+            - promote
+            - schedule
+            - specify
+            - decompose
+            - link
+            - unlink
+            type: string
+          title: Allowedactions
+          type: array
+        assignee:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignee
+        body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Body
+        completedAt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Completedat
+        createdAt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Createdat
+        createdBy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Createdby
+        id:
+          title: Id
+          type: string
+        maxRetries:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Maxretries
+        priority:
+          default: 0
+          title: Priority
+          type: integer
+        result:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Result
+        skills:
+          items:
+            type: string
+          title: Skills
+          type: array
+        startedAt:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Startedat
+        status:
+          title: Status
+          type: string
+        tenant:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tenant
+        title:
+          title: Title
+          type: string
+        workspaceKind:
+          default: scratch
+          title: Workspacekind
+          type: string
+        workspacePath:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Workspacepath
+      required:
+      - id
+      - title
+      - status
+      title: KanbanTask
+      type: object
+    KanbanTaskActionInput:
+      additionalProperties: true
+      description: Unified task action payload (PRD §25). Extra fields are action-specific.
+      properties:
+        action:
+          enum:
+          - assign
+          - complete
+          - block
+          - unblock
+          - archive
+          - reclaim
+          - promote
+          - schedule
+          - specify
+          - decompose
+          - link
+          - unlink
+          title: Action
+          type: string
+        assignee:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignee
+        at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: At
+        parentId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parentid
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        result:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Result
+      required:
+      - action
+      title: KanbanTaskActionInput
+      type: object
+    KanbanTaskDetail:
+      properties:
+        children:
+          items:
+            type: string
+          title: Children
+          type: array
+        comments:
+          items:
+            $ref: '#/components/schemas/KanbanComment'
+          title: Comments
+          type: array
+        events:
+          items:
+            $ref: '#/components/schemas/KanbanEvent'
+          title: Events
+          type: array
+        latestSummary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latestsummary
+        parents:
+          items:
+            type: string
+          title: Parents
+          type: array
+        runs:
+          items:
+            $ref: '#/components/schemas/KanbanRun'
+          title: Runs
+          type: array
+        task:
+          $ref: '#/components/schemas/KanbanTask'
+      required:
+      - task
+      title: KanbanTaskDetail
+      type: object
+    KanbanTaskListResponse:
+      properties:
+        tasks:
+          items:
+            $ref: '#/components/schemas/KanbanTask'
+          title: Tasks
+          type: array
+      title: KanbanTaskListResponse
       type: object
     LocalTaskCreate:
       properties:
@@ -8492,6 +9041,594 @@ paths:
       summary: Instance Health
       tags:
       - instances
+  /api/v1/instances/{instance_id}/kanban/boards:
+    get:
+      operationId: list_kanban_boards_api_v1_instances__instance_id__kanban_boards_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: query
+        name: includeArchived
+        required: false
+        schema:
+          default: false
+          title: Includearchived
+          type: boolean
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanBoardListResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Kanban Boards
+      tags:
+      - kanban
+    post:
+      operationId: create_kanban_board_api_v1_instances__instance_id__kanban_boards_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKanbanBoardInput'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanBoard'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Kanban Board
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}:
+    delete:
+      operationId: delete_kanban_board_api_v1_instances__instance_id__kanban_boards__board_slug__delete
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Delete Kanban Board
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}/assignees:
+    get:
+      operationId: list_kanban_assignees_api_v1_instances__instance_id__kanban_boards__board_slug__assignees_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanAssigneeListResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Kanban Assignees
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}/dispatch:
+    post:
+      operationId: dispatch_kanban_api_v1_instances__instance_id__kanban_boards__board_slug__dispatch_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/KanbanDispatchRequest'
+              - type: 'null'
+              title: Body
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanDispatchResult'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Dispatch Kanban
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks:
+    get:
+      operationId: list_kanban_tasks_api_v1_instances__instance_id__kanban_boards__board_slug__tasks_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: query
+        name: status
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - in: query
+        name: assignee
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assignee
+      - in: query
+        name: tenant
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Tenant
+      - in: query
+        name: includeArchived
+        required: false
+        schema:
+          default: false
+          title: Includearchived
+          type: boolean
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanTaskListResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Kanban Tasks
+      tags:
+      - kanban
+    post:
+      operationId: create_kanban_task_api_v1_instances__instance_id__kanban_boards__board_slug__tasks_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKanbanTaskInput'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanTask'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Kanban Task
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks/{task_id}:
+    get:
+      operationId: get_kanban_task_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanTaskDetail'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Kanban Task
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks/{task_id}/actions:
+    post:
+      operationId: execute_kanban_task_action_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__actions_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KanbanTaskActionInput'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanTask'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Execute Kanban Task Action
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/boards/{board_slug}/tasks/{task_id}/comments:
+    post:
+      operationId: add_kanban_comment_api_v1_instances__instance_id__kanban_boards__board_slug__tasks__task_id__comments_post
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: path
+        name: board_slug
+        required: true
+        schema:
+          title: Board Slug
+          type: string
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          title: Task Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KanbanCommentCreate'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Add Kanban Comment
+      tags:
+      - kanban
+  /api/v1/instances/{instance_id}/kanban/capabilities:
+    get:
+      operationId: get_kanban_capabilities_api_v1_instances__instance_id__kanban_capabilities_get
+      parameters:
+      - in: path
+        name: instance_id
+        required: true
+        schema:
+          title: Instance Id
+          type: string
+      - in: header
+        name: Authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      - in: header
+        name: X-Copilot-Desktop-Token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Copilot-Desktop-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KanbanCapabilities'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Kanban Capabilities
+      tags:
+      - kanban
   /api/v1/instances/{instance_id}/logs:
     get:
       operationId: instance_logs_api_v1_instances__instance_id__logs_get

@@ -381,3 +381,26 @@ export {
   type ChatApprovalRespondBody,
   type ChatInteractionRespondBody,
 } from "./chat";
+
+export {
+  createKanbanDomain,
+  type KanbanDomain,
+  type KanbanCapabilities,
+  type KanbanBoard,
+  type KanbanBoardListResponse,
+  type CreateKanbanBoardInput,
+  type KanbanTask,
+  type KanbanTaskListResponse,
+  type CreateKanbanTaskInput,
+  type KanbanTaskDetail,
+  type KanbanTaskActionInput,
+  type KanbanComment,
+  type KanbanCommentCreate,
+  type KanbanEvent,
+  type KanbanRun,
+  type KanbanAssignee,
+  type KanbanAssigneeListResponse,
+  type KanbanDispatchRequest,
+  type KanbanDispatchResult,
+  type KanbanTaskFilter,
+} from "./kanban";

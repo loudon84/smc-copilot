@@ -14,10 +14,10 @@ import {
 import type { ChatFileRef } from "@renderer/modules/chat/ports/ChatFilesPort";
 import { SessionFilesPanel } from "@renderer/modules/chat/components/session-files/SessionFilesPanel";
 import { FilePreviewPanel } from "@renderer/modules/chat/components/files/preview/FilePreviewPanel";
+import { WorktreePanel } from "@renderer/modules/chat/components/workspace/WorktreePanel";
 import { useFilePreview } from "@renderer/modules/chat/hooks/files/useFilePreview";
 import { useSessionFilesSummary } from "@renderer/modules/chat/hooks/useSessionFilesSummary";
 import { ChatRunHeader } from "@renderer/modules/chat/components/header/ChatRunHeader";
-import { ChatRunStatus } from "@renderer/modules/chat/components/header/ChatRunStatus";
 import { WorkContextChip } from "@renderer/modules/chat/components/composer/WorkContextChip";
 import { WorkContextPopover } from "@renderer/modules/chat/components/composer/WorkContextPopover";
 import {
@@ -72,9 +72,23 @@ function useComposerDensity(): "full" | "expert" | "icon" {
   return "icon";
 }
 
+function useViewportTier(): "wide" | "medium" | "narrow" {
+  const [width, setWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1440,
+  );
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  if (width >= 1440) return "wide";
+  if (width >= 1100) return "medium";
+  return "narrow";
+}
+
 /**
  * Host that mounts Copilot ChatSurface with AI-OS Work slots + adapters.
- * v8.0.3: per-run state via ChatRunRecord; single header; compact composer.
+ * v1.6.1: Composer outside ChatBody; panels as body siblings; compact top bar.
  */
 export function AiosCopilotChatHost({
   run,
@@ -85,6 +99,7 @@ export function AiosCopilotChatHost({
   const workContext = useRunWorkContext(run.runId);
   const { applyControllerSnapshot } = useChatWorkspace();
   const density = useComposerDensity();
+  const viewportTier = useViewportTier();
   const showWorkControls = !hideWorkControls;
   const profileId = run.identity.profileId || "default";
   const sessionId = run.identity.sessionId;
@@ -136,9 +151,9 @@ export function AiosCopilotChatHost({
 
   const filePreview = useFilePreview();
 
-  // Sync panel visibility with run presentation
   const sessionFilesVisible = run.presentation.sessionFilesVisible;
   const previewMaximized = run.presentation.previewMaximized;
+  const [worktreeVisible, setWorktreeVisible] = useState(false);
 
   const setSessionFilesVisible = useCallback(
     (visible: boolean | ((prev: boolean) => boolean)) => {
@@ -149,6 +164,7 @@ export function AiosCopilotChatHost({
       onPatchRun(run.runId, {
         presentation: { sessionFilesVisible: next },
       });
+      if (next) setWorktreeVisible(false);
     },
     [onPatchRun, run.presentation.sessionFilesVisible, run.runId],
   );
@@ -243,7 +259,7 @@ export function AiosCopilotChatHost({
       ? run.context.teamName || run.context.teamId || "Team"
       : run.context.mode === "expert"
         ? run.context.expertName || run.context.expertId || "Expert"
-        : "Hermes Default";
+        : "Hermes";
 
   const handleControllerState = useCallback(
     (snapshot: ControllerStateChangeSnapshot) => {
@@ -268,9 +284,6 @@ export function AiosCopilotChatHost({
     },
     [onPatchRun, run.runId],
   );
-
-  const showRightPanel =
-    sessionFilesVisible || filePreview.state.open;
 
   const emptyContext = useMemo(() => {
     if (run.context.mode === "team") {
@@ -320,7 +333,9 @@ export function AiosCopilotChatHost({
         workContext.selectedSkill?.name
       }
       gatewayStatus={workContext.gatewayStatus}
-      density={density === "full" ? "full" : density === "expert" ? "expert" : "icon"}
+      density={
+        density === "full" ? "full" : density === "expert" ? "expert" : "icon"
+      }
     >
       {contextPopover}
     </WorkContextChip>
@@ -339,9 +354,7 @@ export function AiosCopilotChatHost({
     showWorkControls && density === "icon" ? (
       <div className="aios-work-composer-toolbar aios-work-composer-toolbar--compact">
         {workChip}
-        <ComposerMoreMenu>
-          {promptHintControl}
-        </ComposerMoreMenu>
+        <ComposerMoreMenu>{promptHintControl}</ComposerMoreMenu>
       </div>
     ) : showWorkControls ? (
       <div className="aios-work-composer-toolbar">
@@ -350,84 +363,160 @@ export function AiosCopilotChatHost({
       </div>
     ) : null;
 
-  return (
-    <ChatSurface
-      runtime={aiosChatRuntimeAdapter}
-      session={aiosSessionAdapter}
-      files={aiosFilesAdapter}
-      models={aiosModelsAdapter}
-      navigation={aiosNavigationAdapter}
-      commands={aiosCommandAdapter}
-      workspace={aiosWorkspaceAdapter}
-      runContext={runContext}
-      profileId={profileId}
-      sessionId={sessionId}
-      initialDraft={run.presentation.draft || ""}
-      runId={run.runId}
-      expertId={run.context.expertId}
-      teamId={run.context.teamId}
-      expertRunId={run.execution.expertRunId}
-      skillName={run.context.skillName}
-      workMode={run.context.workMode}
-      permissionMode={run.context.permissionMode}
-      promptHintMode={run.presentation.promptHint?.mode}
-      invocationSource={run.execution.invocationSource}
-      composeMessage={composeMessage}
-      onInputChange={handleInputChange}
-      emptyContext={emptyContext}
-      onSessionIdChange={(id) => {
-        onPatchRun(run.runId, { identity: { sessionId: id } });
+  // Responsive panel arbitration (PRD §47)
+  const showInlineNavigator =
+    viewportTier === "wide" && (sessionFilesVisible || worktreeVisible);
+  const showInlinePreview =
+    (viewportTier === "wide" || viewportTier === "medium") &&
+    filePreview.state.open;
+  const showOverlayNavigator =
+    viewportTier !== "wide" && (sessionFilesVisible || worktreeVisible);
+  const showOverlayPreview =
+    viewportTier === "narrow" && filePreview.state.open;
+
+  const navigatorPanel = showInlineNavigator ? (
+    sessionFilesVisible ? (
+      <SessionFilesPanel
+        files={aiosFilesAdapter}
+        sessionId={sessionId}
+        profileId={profileId}
+        onPreview={(f: ChatFileRef) => {
+          setPreviewMaximized(false);
+          void filePreview.openPreview(f.id, profileId);
+        }}
+        onClose={() => setSessionFilesVisible(false)}
+      />
+    ) : worktreeVisible ? (
+      <WorktreePanel
+        sessionId={sessionId}
+        profileId={profileId}
+        workspace={aiosWorkspaceAdapter}
+        onClose={() => setWorktreeVisible(false)}
+      />
+    ) : null
+  ) : null;
+
+  const previewPanel = showInlinePreview ? (
+    <FilePreviewPanel
+      state={filePreview.state}
+      profile={profileId}
+      sessionId={sessionId ?? undefined}
+      maximized={previewMaximized}
+      onToggleMaximized={() => setPreviewMaximized((v) => !v)}
+      onClose={() => {
+        filePreview.closePreview();
+        setPreviewMaximized(false);
       }}
-      onControllerStateChange={handleControllerState}
-      activeExpertSlot={
-        showWorkControls ? (
-          <ChatRunHeader
-            mode={run.context.mode}
-            label={headerLabel}
-            skillName={run.context.skillName}
-            skillDisplayName={run.context.skillDisplayName}
-            workMode={run.context.workMode}
-            showReturnDefault={run.context.mode !== "default"}
-            onReturnDefault={() => workContext.clearContext()}
-            onWorkModeChange={(mode) => workContext.setWorkMode(mode)}
+      onRetry={() => filePreview.retry()}
+      onLoadMore={() => {
+        void filePreview.loadMore();
+      }}
+      onMessageFileCreated={(fileId) => {
+        void filePreview.openPreview(fileId, profileId);
+      }}
+    />
+  ) : null;
+
+  return (
+    <>
+      <ChatSurface
+        runtime={aiosChatRuntimeAdapter}
+        session={aiosSessionAdapter}
+        files={aiosFilesAdapter}
+        models={aiosModelsAdapter}
+        navigation={aiosNavigationAdapter}
+        commands={aiosCommandAdapter}
+        workspace={aiosWorkspaceAdapter}
+        runContext={runContext}
+        profileId={profileId}
+        sessionId={sessionId}
+        initialDraft={run.presentation.draft || ""}
+        runId={run.runId}
+        expertId={run.context.expertId}
+        teamId={run.context.teamId}
+        expertRunId={run.execution.expertRunId}
+        skillName={run.context.skillName}
+        workMode={run.context.workMode}
+        permissionMode={run.context.permissionMode}
+        promptHintMode={run.presentation.promptHint?.mode}
+        invocationSource={run.execution.invocationSource}
+        composeMessage={composeMessage}
+        onInputChange={handleInputChange}
+        emptyContext={emptyContext}
+        onSessionIdChange={(id) => {
+          onPatchRun(run.runId, { identity: { sessionId: id } });
+        }}
+        onControllerStateChange={handleControllerState}
+        topBarSlot={
+          showWorkControls ? (
+            <ChatRunHeader
+              mode={run.context.mode}
+              label={headerLabel}
+              skillName={run.context.skillName}
+              skillDisplayName={run.context.skillDisplayName}
+              workMode={run.context.workMode}
+              showReturnDefault={run.context.mode !== "default"}
+              onReturnDefault={() => workContext.clearContext()}
+              onWorkModeChange={(mode) => workContext.setWorkMode(mode)}
+            />
+          ) : (
+            <ChatRunHeader
+              mode="default"
+              label="Hermes"
+              workMode={run.context.workMode}
+              onWorkModeChange={(mode) => workContext.setWorkMode(mode)}
+            />
+          )
+        }
+        composerControlsSlot={composerControls}
+        sessionFilesActive={sessionFilesVisible}
+        sessionFilesCount={filesSummary.total}
+        onToggleSessionFiles={() => setSessionFilesVisible((v) => !v)}
+        navigatorPanel={navigatorPanel}
+        previewPanel={previewPanel}
+        previewMaximized={previewMaximized && showInlinePreview}
+      />
+
+      {(showOverlayNavigator || showOverlayPreview) && (
+        <div className="chat-panel-overlay" role="dialog">
+          <button
+            type="button"
+            className="chat-panel-overlay-backdrop"
+            aria-label="Close panel"
+            onClick={() => {
+              setSessionFilesVisible(false);
+              setWorktreeVisible(false);
+              filePreview.closePreview();
+              setPreviewMaximized(false);
+            }}
           />
-        ) : null
-      }
-      renderStatusBar={({ runState, toolProgress, usage }) => (
-        <ChatRunStatus
-          runState={runState}
-          toolLabel={toolProgress}
-          usage={usage}
-          startedAt={run.execution.startedAt}
-        />
-      )}
-      composerControlsSlot={composerControls}
-      sessionFilesActive={sessionFilesVisible}
-      sessionFilesCount={filesSummary.total}
-      onToggleSessionFiles={() => setSessionFilesVisible((v) => !v)}
-      showRightPanel={showRightPanel}
-      filesPanelSlot={
-        showRightPanel ? (
-          <>
-            {sessionFilesVisible && (
-              <SessionFilesPanel
-                files={aiosFilesAdapter}
-                sessionId={sessionId}
-                profileId={profileId}
-                onPreview={(f: ChatFileRef) => {
-                  setPreviewMaximized(false);
-                  void filePreview.openPreview(f.id, profileId);
-                }}
-                onClose={() => setSessionFilesVisible(false)}
-              />
-            )}
-            {filePreview.state.open ? (
+          <div className="chat-panel-overlay-content">
+            {showOverlayNavigator &&
+              (sessionFilesVisible ? (
+                <SessionFilesPanel
+                  files={aiosFilesAdapter}
+                  sessionId={sessionId}
+                  profileId={profileId}
+                  onPreview={(f: ChatFileRef) => {
+                    setPreviewMaximized(false);
+                    void filePreview.openPreview(f.id, profileId);
+                  }}
+                  onClose={() => setSessionFilesVisible(false)}
+                />
+              ) : (
+                <WorktreePanel
+                  sessionId={sessionId}
+                  profileId={profileId}
+                  workspace={aiosWorkspaceAdapter}
+                  onClose={() => setWorktreeVisible(false)}
+                />
+              ))}
+            {showOverlayPreview ? (
               <FilePreviewPanel
                 state={filePreview.state}
                 profile={profileId}
                 sessionId={sessionId ?? undefined}
-                maximized={previewMaximized}
-                onToggleMaximized={() => setPreviewMaximized((v) => !v)}
+                maximized={false}
                 onClose={() => {
                   filePreview.closePreview();
                   setPreviewMaximized(false);
@@ -441,10 +530,10 @@ export function AiosCopilotChatHost({
                 }}
               />
             ) : null}
-          </>
-        ) : null
-      }
-    />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

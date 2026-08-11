@@ -13,6 +13,7 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[approval-workspace]] — 审批运行时、Workspace Guard、可执行策略
 - [[auth-pairing]] — 本地鉴权、设备配对、遗留 Token 兼容
 - [[chat-sessions]] — Workspace Chat、Chat SSE 流、附件、Session
+- [[kanban]] — Hermes Kanban Facade（CLI Adapter、Board/Task API、与 WorkTask 隔离）
 - [[deployment]] — Windows 用户级后台/服务、程序目录约束、跨平台、目录布局
 - [[data-model]] — Runtime 表、Profile 与任务表、迁移链
 - [[endpoint-sync]] — Endpoint 身份、Sync、Desired State、Remote Task v2、Experience

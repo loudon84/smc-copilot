@@ -72,6 +72,7 @@ export type HermesNavItemKey =
   | "tasks"
   | "workbench"
   | "chat"
+  | "kanban"
   | "experts"
   | "expertTeams"
   | "expertRuns"
@@ -91,6 +92,12 @@ export const HERMES_NAV_ITEMS: readonly HermesNavItemDefinition[] = [
     key: "chat",
     labelI18nKey: "workspaces.nav.chat",
     icon: "MessageSquare",
+    section: "primary",
+  },
+  {
+    key: "kanban",
+    labelI18nKey: "workspaces.nav.kanban",
+    icon: "Columns3",
     section: "primary",
   },
   {

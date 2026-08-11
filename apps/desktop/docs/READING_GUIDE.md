@@ -182,6 +182,17 @@ Renderer 文档已拆分到 `docs/renderer/`，按需阅读：
 7. `src/main/hermes-config/hermes-config-yaml.ts` — Models Set Default / `custom_providers` 同步
 8. `docs/API_CONTRACTS.md` — Hermes Default Chat (v5.6.4) 通道契约
 
+### 阅读 Copilot Chat Layout（v1.6.1 / v8.x）
+
+1. `docs/renderer/screens/Hermes.md` — Chat Host / layout 职责与关键文件
+2. `src/renderer/src/screens/Hermes/pages/Chat/MultiRunChatShell.tsx` — Tabs（顶部）+ 保活 Host
+3. `src/renderer/src/screens/Hermes/pages/Chat/AiosCopilotChatHost.tsx` — Layout State、Panel 仲裁、viewport tier
+4. `src/renderer/src/modules/chat/components/ChatSurface.tsx` — Shell / Body / ComposerArea 组装
+5. `src/renderer/src/modules/chat/layout/*` — `ChatShell` / `ChatBody` / `ChatComposerArea` / `ChatWorkspacePanelHost`
+6. `src/renderer/src/modules/chat/hooks/useChatScroll.ts` — 贴底跟随策略
+7. `src/renderer/src/modules/chat/styles/copilot-chat.css` — 85% 消息行、Composer Card、Panel 宽度
+8. `prd/v1.6.1.md` — 验收清单 §73
+
 ### 阅读 SSH 远程连接
 
 1. `src/main/ssh-remote.ts` — SSH 远程连接

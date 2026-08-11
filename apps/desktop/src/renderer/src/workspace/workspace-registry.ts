@@ -32,6 +32,17 @@ export const STATIC_WORKSPACE_MODULES: WorkspaceModule[] = [
     source: "hermes",
   },
   {
+    id: "kanban",
+    titleKey: "navigation.kanban",
+    kind: "react",
+    closeable: false,
+    draggable: false,
+    persistable: true,
+    // Kanban 入口在 Hermes 左侧导航；顶栏不单独占 Tab
+    showInTabBar: false,
+    source: "hermes",
+  },
+  {
     id: "task-workbench",
     titleKey: "navigation.taskWorkbench",
     kind: "react",

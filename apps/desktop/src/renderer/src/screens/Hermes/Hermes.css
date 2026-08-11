@@ -619,6 +619,22 @@
   overflow: auto;
 }
 
+/* Kanban fills Hermes center column (board scrolls horizontally inside module) */
+.hermes-kanban-page {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.hermes-kanban-page .smc-kanban {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .hermes-page__header {
   display: flex;
   align-items: center;

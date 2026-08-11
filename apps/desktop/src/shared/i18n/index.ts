@@ -31,6 +31,7 @@ import shellViewEn from "./locales/en/shellView";
 import authEn from "./locales/en/auth";
 import runtimeSettingsEn from "./locales/en/runtimeSettings";
 import workspacesEn from "./locales/en/workspaces";
+import kanbanEn from "./locales/en/kanban";
 import commonZh from "./locales/zh-CN/common";
 import navigationZh from "./locales/zh-CN/navigation";
 import welcomeZh from "./locales/zh-CN/welcome";
@@ -56,6 +57,7 @@ import shellViewZh from "./locales/zh-CN/shellView";
 import authZh from "./locales/zh-CN/auth";
 import runtimeSettingsZh from "./locales/zh-CN/runtimeSettings";
 import workspacesZh from "./locales/zh-CN/workspaces";
+import kanbanZh from "./locales/zh-CN/kanban";
 
 export const resources = {
   en: {
@@ -85,6 +87,7 @@ export const resources = {
       auth: authEn,
       runtimeSettings: runtimeSettingsEn,
       workspaces: workspacesEn,
+      kanban: kanbanEn,
     },
   },
   "zh-CN": {
@@ -114,6 +117,7 @@ export const resources = {
       auth: authZh,
       runtimeSettings: runtimeSettingsZh,
       workspaces: workspacesZh,
+      kanban: kanbanZh,
     },
   },
 } satisfies Resource;

@@ -2,6 +2,7 @@ export default {
   portal: "Portal",
   workspaces: "Agent Workspace",
   localHermes: "Work Expert Workspace",
+  kanban: "Kanban",
   taskWorkbench: "Task Workbench",
   webOperator: "Web Operator",
   webOperatorSide: {

@@ -18,6 +18,7 @@ import {
   createDiagnosticsDomain,
   createEndpointDomain,
   createExpertMcpDomain,
+  createKanbanDomain,
   createMcpDomain,
   createMemoryDomain,
   createResourceDomain,
@@ -65,6 +66,27 @@ export type {
   TaskStartResult,
   TaskEventResponse,
 } from "../domains/work-task";
+export type {
+  KanbanDomain,
+  KanbanCapabilities,
+  KanbanBoard,
+  KanbanBoardListResponse,
+  CreateKanbanBoardInput,
+  KanbanTask,
+  KanbanTaskListResponse,
+  CreateKanbanTaskInput,
+  KanbanTaskDetail,
+  KanbanTaskActionInput,
+  KanbanComment,
+  KanbanCommentCreate,
+  KanbanEvent,
+  KanbanRun,
+  KanbanAssignee,
+  KanbanAssigneeListResponse,
+  KanbanDispatchRequest,
+  KanbanDispatchResult,
+  KanbanTaskFilter,
+} from "../domains/kanban";
 
 export interface CreateRuntimeClientOptions extends RuntimeClientAuthOptions {
   baseUrl: string;
@@ -95,6 +117,8 @@ export interface RuntimeClient {
   readonly endpoint: ReturnType<typeof createEndpointDomain>;
   readonly mcp: ReturnType<typeof createMcpDomain>;
   readonly chat: ReturnType<typeof createChatDomain>;
+  /** Hermes Kanban facade (PRD v1.7) — independent of WorkTask. */
+  readonly kanban: ReturnType<typeof createKanbanDomain>;
 
   /** @deprecated Prefer client.runtime.getStatus */
   getStatus(signal?: AbortSignal): Promise<RuntimeStatus>;
@@ -136,6 +160,7 @@ export function createRuntimeClient(options: CreateRuntimeClientOptions): Runtim
     endpoint: createEndpointDomain(transport),
     mcp: createMcpDomain(transport),
     chat: createChatDomain(transport),
+    kanban: createKanbanDomain(transport),
     getStatus: (signal) => runtime.getStatus(signal),
     getCapabilities: (signal) => runtime.getCapabilities(signal),
     async *getJobEvents(jobId, signal) {

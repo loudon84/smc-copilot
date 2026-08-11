@@ -5,6 +5,7 @@ import { PortalScreen } from "../../screens/Portal/Index";
 import { TaskWorkbenchScreen } from "../../screens/TaskWorkbench/TaskWorkbenchScreen";
 import { HermesScreen } from "../../screens/Hermes";
 import { CrmWorkbenchScreen } from "../../screens/Crm/CrmWorkbenchScreen";
+import { KanbanPage } from "../../modules/kanban";
 import { resolveWorkspaceModule } from "../../workspace/workspace-registry";
 import type { View } from "../../types/desktop-shell";
 import type { SettingsDrawerPanel } from "../../screens/SettingsDrawer/settings-drawer-types";
@@ -114,6 +115,15 @@ export function WorkspaceRenderer(props: WorkspaceRendererProps): React.JSX.Elem
                 onPanelChange={onSecondaryPanelChange}
                 onOpenRuntimeSettings={() => onOpenSettingsDrawer?.("runtime")}
               />
+            </WorkspaceShell>
+          </ReactWorkspace>
+        );
+      }
+      if (module.id === "kanban") {
+        return (
+          <ReactWorkspace active={workspaceId === "kanban"}>
+            <WorkspaceShell>
+              <KanbanPage />
             </WorkspaceShell>
           </ReactWorkspace>
         );

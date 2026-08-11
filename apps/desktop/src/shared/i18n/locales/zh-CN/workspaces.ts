@@ -9,6 +9,7 @@ export default {
     workbench: "工作台",
     tasks: "任务",
     chat: "对话",
+    kanban: "看板",
     experts: "专家",
     expertTeams: "专家团队",
     expertRuns: "专家运行",

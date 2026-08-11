@@ -16,6 +16,13 @@ export {
 } from "./components/composer/PromptAssistPanel";
 export { ComposerMoreMenu } from "./components/composer/ComposerMoreMenu";
 export { ChatContentRail } from "./layout/ChatContentRail";
+export { ChatShell } from "./layout/ChatShell";
+export { ChatBody } from "./layout/ChatBody";
+export { ChatMessagesViewport } from "./layout/ChatMessagesViewport";
+export { ChatComposerArea } from "./layout/ChatComposerArea";
+export { ChatWorkspacePanelHost } from "./layout/ChatWorkspacePanelHost";
+export { ChatTopBar } from "./layout/ChatTopBar";
+export type { ChatLayoutState } from "./layout/ChatLayoutState";
 export * from "./ports";
 export * from "./adapters/aios";
 export * from "./controller";
@@ -57,3 +64,4 @@ export {
 export { useChatWorkspaceManager } from "./workspace/useChatWorkspaceManager";
 export { ChatDiagnosticsExportButton } from "./components/diagnostics/ChatDiagnosticsExportButton";
 export { useChatRuntimeRecovery } from "./hooks/useChatRuntimeRecovery";
+export { useChatScroll } from "./hooks/useChatScroll";

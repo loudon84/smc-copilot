@@ -29,4 +29,5 @@ Top-level concept files in this folder. Start with architecture and decisions, t
 - [[durable-chat-runtime-tests]] — v8.1 Durable Chat Runtime test specifications
 - [[persistent-chat-workspace-tests]] — v8.2 Persistent Chat Workspace + Session Catalog test specifications
 - [[serve-runtime-tests]] — v9.0 Serve-First Runtime Phase 0/1/2 test specifications
+- [[kanban]] — v1.7 Hermes Kanban module (Renderer Port → Runtime facade)
 - [[remote-dashboard-oauth]] — Remote dashboard OAuth transport guarantees

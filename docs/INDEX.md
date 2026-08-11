@@ -24,3 +24,4 @@
 ## PRD
 
 - Monorepo PRD v1.0: [`../prd/v1.0.md`](../prd/v1.0.md)
+- Hermes Kanban v1.7: [`../prd/v1.7.md`](../prd/v1.7.md)（Runtime Kanban Facade + Desktop `modules/kanban`；KanbanTask ≠ WorkTask）

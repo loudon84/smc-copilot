@@ -20,7 +20,7 @@
 | `App.tsx` | 启动屏幕路由分支 |
 | `screens/` | 页面级模块（15 目录） |
 | `components/` | 复用 UI 组件（layout / workspace / hermes / shell / dropdowns / runtime / ui 等） |
-| `modules/` | 跨 Screen 业务模块（auth / hermes-runtime） |
+| `modules/` | 跨 Screen 业务模块（auth / hermes-runtime / **kanban** v1.7） |
 | `hooks/` | Renderer hooks（7 个） |
 | `workspace/` | Workspace registry / tabs / 渲染分发 / 二级导航判定 |
 | `types/` | Renderer 类型定义 |
@@ -51,6 +51,7 @@ App.tsx
 | `web-operator` | `composite` | `web-operator` | false | false | true | `operator` |
 | `crm-workbench` | `react` | — | false | false | **false** | `crm` |
 | `local-hermes` | `react` | — | false | false | true | `hermes` |
+| `kanban` | `react` | — | false | false | **false** | `hermes` |
 
 **已注释（未启用）**：`workspaces`、`portal`、`task-workbench`、`office`
 
@@ -68,6 +69,7 @@ WorkspaceRenderer(workspaceId)
   │    ├─ "task-workbench" → TaskWorkbenchScreen (ReactWorkspace)
   │    ├─ "local-hermes"   → HermesScreen (ReactWorkspace)
   │    ├─ "crm-workbench"  → CrmWorkbenchScreen (ReactWorkspace)
+  │    ├─ "kanban"         → KanbanPage (ReactWorkspace, modules/kanban)
   │    └─ 其他 (workspaces)→ WorkspacesScreen (ReactWorkspace)
   └─ null / unknown        → <></>
 ```
