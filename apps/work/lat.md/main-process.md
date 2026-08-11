@@ -38,6 +38,12 @@ Lifecycle code owns Electron windows, global app events, and shutdown cleanup.
 
 [[src/main/app/start.ts#startMainProcess]] registers crash logging, IPC handlers, updater handlers, Electron ready/activate/window-all-closed/before-quit events, CSP headers, security hardening, and the main BrowserWindow.
 
+### Close to tray on Windows
+
+On Windows/Linux, title-bar close hides the main window to the system tray instead of quitting.
+
+[[src/main/app/tray.ts#createAppTray]] owns the tray icon (Show/Hide + Quit). Real exits go through tray Quit, Chat → Quit (`Ctrl+Q`), or `quit-app` IPC via `requestQuit`, which sets an `isQuitting` flag so the next `close` is allowed. macOS keeps the usual dock/hide behaviour.
+
 [[src/main/app/start.ts]] also supports the `HERMES_OPEN_DEVTOOLS=1` diagnostic launch path so packaged builds can expose renderer console errors when startup fails before the UI paints.
 
 The packaged renderer keeps its meta CSP aligned with the production response CSP so file-backed startup assets load consistently from `file://` before the main-process header can help.
@@ -49,6 +55,8 @@ Because electron-vite emits a bundled main file at `out/main/index.js`, packaged
 Menu, updater, and context-menu behavior live in focused modules.
 
 [[src/main/app/menu.ts#buildMenu]] owns the application menu, [[src/main/app/updater.ts#setupUpdater]] owns update IPC and electron-updater events, and [[src/main/app/context-menu.ts#showChatContextMenu]] owns the chat right-click menu.
+
+On Windows/Linux the native menu bar stays **visible** on the main window (`autoHideMenuBar: false` in [[src/main/app/start.ts#createWindow]], plus an explicit `setMenuBarVisibility(true)` after `buildMenu`). Layout listens for `menu-new-chat` / `menu-search-sessions` via [[src/renderer/src/screens/Layout/Layout.tsx]]. macOS keeps the system menu bar as usual.
 
 Release builds keep a Help-menu Developer Tools toggle as a production diagnostics escape hatch without changing renderer sandbox or Node isolation.
 

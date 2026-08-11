@@ -4,9 +4,15 @@ import { is } from "@electron-toolkit/utils";
 interface MenuDeps {
   getMainWindow: () => BrowserWindow | null;
   openExternalUrl: (rawUrl: unknown) => void;
+  /** Windows/Linux: explicit Quit (title-bar X only hides to tray). */
+  requestQuit?: () => void;
 }
 
-export function buildMenu({ getMainWindow, openExternalUrl }: MenuDeps): void {
+export function buildMenu({
+  getMainWindow,
+  openExternalUrl: _openExternalUrl,
+  requestQuit,
+}: MenuDeps): void {
   const isMac = process.platform === "darwin";
   const template = [
     ...(isMac
@@ -42,6 +48,16 @@ export function buildMenu({ getMainWindow, openExternalUrl }: MenuDeps): void {
           click: () =>
             getMainWindow()?.webContents.send("menu-search-sessions"),
         },
+        ...(!isMac
+          ? [
+              { type: "separator" as const },
+              {
+                label: "Quit",
+                accelerator: "CmdOrCtrl+Q",
+                click: () => (requestQuit ? requestQuit() : app.quit()),
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -83,6 +99,7 @@ export function buildMenu({ getMainWindow, openExternalUrl }: MenuDeps): void {
           : [{ role: "close" as const }]),
       ],
     },
+    /*
     {
       label: "Help",
       submenu: [
@@ -95,19 +112,10 @@ export function buildMenu({ getMainWindow, openExternalUrl }: MenuDeps): void {
               },
               { type: "separator" as const },
             ]
-          : []),
-        {
-          label: "Hermes Agent on GitHub",
-          click: () =>
-            openExternalUrl("https://github.com/NousResearch/hermes-agent/"),
-        },
-        {
-          label: "Report an Issue",
-          click: () =>
-            openExternalUrl("https://github.com/fathah/hermes-desktop/issues"),
-        },
+          : []),       
       ],
     },
+    */
   ] as Electron.MenuItemConstructorOptions[];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

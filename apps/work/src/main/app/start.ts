@@ -21,6 +21,7 @@ import { registerAuthIpc } from "../auth/auth-ipc";
 import { setGatewayPromptParent } from "../gatewayPrompt";
 import { showChatContextMenu } from "./context-menu";
 import { buildMenu } from "./menu";
+import { createAppTray, type AppTray } from "./tray";
 import { setupUpdater } from "./updater";
 import { registerArtifactProtocolHandler } from "../artifact-protocol";
 
@@ -30,8 +31,21 @@ const OPEN_DEVTOOLS_ON_START =
   process.env.HERMES_OPEN_DEVTOOLS === "1" ||
   process.env.HERMES_DESKTOP_OPEN_DEVTOOLS === "1";
 
+/** Close-to-tray applies on Windows (and Linux); macOS keeps dock hide semantics. */
+const CLOSE_TO_TRAY =
+  process.platform === "win32" || process.platform === "linux";
+
 let mainWindow: BrowserWindow | null = null;
+let appTray: AppTray | null = null;
+let isQuitting = false;
 const activeRuns = new Map<string, () => void>();
+
+function requestQuit(): void {
+  isQuitting = true;
+  appTray?.destroy();
+  appTray = null;
+  app.quit();
+}
 
 export function startMainProcess(): void {
   process.on("uncaughtException", (err) => {
@@ -49,6 +63,7 @@ export function startMainProcess(): void {
     notifyModelLibraryChanged,
     notifyCustomProvidersChanged,
     openExternalUrl,
+    requestQuit,
   });
   registerAuthIpc();
 
@@ -112,7 +127,27 @@ export function startMainProcess(): void {
     });
 
     createWindow();
-    buildMenu({ getMainWindow: () => mainWindow, openExternalUrl });
+    buildMenu({
+      getMainWindow: () => mainWindow,
+      openExternalUrl,
+      requestQuit,
+    });
+    // Ensure the menu bar stays visible after the template is installed
+    // (Windows can still hide it if autoHide was previously true on a reused
+    // BrowserWindow options path).
+    if (process.platform !== "darwin" && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setAutoHideMenuBar(false);
+      mainWindow.setMenuBarVisibility(true);
+    }
+
+    if (CLOSE_TO_TRAY) {
+      appTray = createAppTray({
+        getMainWindow: () => mainWindow,
+        iconPath: icon,
+        tooltip: APP_NAME,
+        onQuit: requestQuit,
+      });
+    }
 
     // Best-effort File Platform orphan/temp retention (PR-17).
     try {
@@ -122,15 +157,31 @@ export function startMainProcess(): void {
     }
 
     app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+        return;
+      }
+      // Restore a tray-hidden window when the dock/taskbar activates the app.
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
     });
   });
 
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+    // Close-to-tray keeps the BrowserWindow alive (hidden); only quit when
+    // there are truly no windows and we are not parking in the tray.
+    if (process.platform === "darwin") return;
+    if (CLOSE_TO_TRAY && appTray?.isCreated() && !isQuitting) return;
+    app.quit();
   });
 
   app.on("before-quit", () => {
+    isQuitting = true;
+    appTray?.destroy();
+    appTray = null;
     stopHealthPolling();
     for (const abort of activeRuns.values()) abort();
     activeRuns.clear();
@@ -182,7 +233,10 @@ function createWindow(): void {
     title: APP_NAME,
     minHeight: 600,
     show: false,
-    autoHideMenuBar: true,
+    // Windows/Linux: keep the native application menu (Chat / Edit / View / …)
+    // visible on the main window. Alt-to-reveal (auto-hide) made the menu easy
+    // to miss and broke discoverability of Cmd/Ctrl+N / Cmd/Ctrl+K.
+    autoHideMenuBar: false,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
     // macOS: translucent window material so the sidebar reads as frosted glass.
     // The material's light/dark tone follows `nativeTheme.themeSource`, which
@@ -209,6 +263,14 @@ function createWindow(): void {
   });
 
   mainWindow.on("ready-to-show", () => mainWindow?.show());
+  // Windows/Linux: title-bar [X] hides to the tray instead of quitting.
+  // Real quit comes from tray "Quit", menu Quit, or quit-app IPC.
+  mainWindow.on("close", (event) => {
+    if (isQuitting || !CLOSE_TO_TRAY) return;
+    if (!appTray?.isCreated()) return;
+    event.preventDefault();
+    mainWindow?.hide();
+  });
   mainWindow.webContents.once("did-finish-load", () => {
     if (OPEN_DEVTOOLS_ON_START) {
       mainWindow?.webContents.openDevTools({ mode: "detach" });

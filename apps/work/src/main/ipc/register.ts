@@ -412,6 +412,8 @@ export interface IpcContext {
   notifyModelLibraryChanged: () => void;
   notifyCustomProvidersChanged: () => void;
   openExternalUrl: (rawUrl: unknown) => void;
+  /** Prefer over bare `app.quit()` so close-to-tray can distinguish real exits. */
+  requestQuit?: () => void;
 }
 
 const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC Copilot";
@@ -662,6 +664,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     notifyModelLibraryChanged,
     notifyCustomProvidersChanged,
     openExternalUrl,
+    requestQuit,
   } = context;
   const mainWindow = getMainWindow();
   const runtimeManager = getRuntimeManager();
@@ -703,7 +706,10 @@ export function registerIpcHandlers(context: IpcContext): void {
     }
   });
 
-  ipcMain.handle("quit-app", () => app.quit());
+  ipcMain.handle("quit-app", () => {
+    if (requestQuit) requestQuit();
+    else app.quit();
+  });
 
   // GPU fallback visibility: lets the Office tab explain SwiftShader slowness
   // and offer a one-click recovery instead of silently rendering 3D on the CPU.

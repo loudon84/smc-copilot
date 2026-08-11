@@ -2,7 +2,7 @@
 
 The top strip of the main window is a browser-style title bar: it is the window's drag region, and the open-conversation tabs live *on* it rather than in a separate bar below, so no vertical space is spent on a dedicated, always-empty drag strip.
 
-On macOS the window is frameless (`titleBarStyle: "hiddenInset"`, traffic lights inset at x/y 16 — see [[src/main/app/start.ts#startMainProcess]]), and [[src/renderer/src/App.tsx]] renders a fixed full-width `.drag-region` (`-webkit-app-region: drag`, z-index 1000) so the whole top band — including over the sidebar/traffic-light area — drags the window. This strip is mac-only; other platforms keep the OS title bar.
+On macOS the window is frameless (`titleBarStyle: "hiddenInset"`, traffic lights inset at x/y 16 — see [[src/main/app/start.ts#startMainProcess]]), and [[src/renderer/src/App.tsx]] renders a fixed full-width `.drag-region` (`-webkit-app-region: drag`, z-index 1000) so the whole top band — including over the sidebar/traffic-light area — drags the window. This strip is mac-only; other platforms keep the OS title bar **and** the native Electron application menu (Chat / Edit / View / Window / Help) visible below it.
 
 `.app` fills the window (`height: 100vh`) so the chrome reaches every edge. The sidebar rounds only its **top-left** corner (`border-radius: 16px 0 0 0`); the full-width status strip owns the window's bottom edge and rounds both bottom corners (`0 0 16px 16px`), so the sidebar's bottom-left is square against it. A hairline seam (`.content` `border-inline-start`) separates the content pane from the sidebar.
 
