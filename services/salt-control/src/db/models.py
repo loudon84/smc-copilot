@@ -212,3 +212,56 @@ class AuditEvent(Base):
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_redacted: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ControlJob(Base):
+    """Salt control-plane job with atomic claim/lease ownership (v2.3.1)."""
+
+    __tablename__ = "control_jobs"
+    __table_args__ = (UniqueConstraint("salt_jid", name="uq_control_job_salt_jid"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    minion_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued", index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    config_revision: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    release_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    salt_jid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SecretScope(Base):
+    """Idempotent secret scope binding — no secret values stored (v2.3.1)."""
+
+    __tablename__ = "secret_scopes"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "endpoint_id", "scope_type", "scope_key", name="uq_secret_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    scope_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    scope_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    secret_ref: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[str] = mapped_column(String(64), nullable=False, default="1")
+    checksum_redacted: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

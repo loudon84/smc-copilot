@@ -240,3 +240,36 @@ def rollback(
         snapshot=payload,
         steps=steps,
     )
+
+
+def remigrate(
+    *,
+    hooks: HandoverHooks,
+    program_data: Path,
+    endpoint_id: str = "ep_lab",
+    hermes_home: str = "",
+    idempotency_key: str | None = None,
+) -> HandoverResult:
+    """Re-run preflight + Salt ownership on the same endpoint (v2.3.1).
+
+    Idempotency is recorded in the migration marker for Salt Control Job correlation.
+    """
+    assert_no_stub_hooks(hooks)
+    result = migrate(
+        hooks=hooks,
+        program_data=program_data,
+        endpoint_id=endpoint_id,
+        hermes_home=hermes_home,
+    )
+    if result.ok and result.marker:
+        marker_path = Path(result.marker)
+        try:
+            payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            payload = {}
+        payload["status"] = "REMIGRATE_COMPLETED"
+        payload["idempotency_key"] = idempotency_key
+        payload["operation"] = "remigrate"
+        atomic_write_json(marker_path, payload)
+        result.steps = list(result.steps) + ["REMIGRATE"]
+    return result

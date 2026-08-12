@@ -12,3 +12,7 @@ def test_openapi_export_stable():
     paths = first.get("paths", {})
     assert "/salt/v1/health" in paths
     assert "/salt/v1/enrollments" in paths
+    assert "/salt/v1/jobs" in paths
+    assert "/salt/v1/endpoints/{endpoint_id}/status" in paths
+    assert "/salt/v1/rollouts/{rollout_id}:approve" in paths
+    assert "/salt/v1/observer/stability" in paths

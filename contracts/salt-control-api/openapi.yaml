@@ -180,6 +180,63 @@ components:
       - arch
       title: DeviceInfo
       type: object
+    EndpointStatusResponse:
+      properties:
+        currentRelease:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currentrelease
+        currentRevision:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Currentrevision
+        deployment:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Deployment
+        endpointId:
+          title: Endpointid
+          type: string
+        gatewayHealth:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gatewayhealth
+        heartbeat:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Heartbeat
+        lastError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasterror
+        lastJob:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Lastjob
+        migrationPhase:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Migrationphase
+        rollout:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Rollout
+      required:
+      - endpointId
+      title: EndpointStatusResponse
+      type: object
     EnrollmentCreateRequest:
       properties:
         device:
@@ -311,6 +368,121 @@ components:
           type: array
       title: HTTPValidationError
       type: object
+    JobCreateRequest:
+      properties:
+        configRevision:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Configrevision
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        endpointId:
+          title: Endpointid
+          type: string
+        idempotencyKey:
+          title: Idempotencykey
+          type: string
+        minionId:
+          title: Minionid
+          type: string
+        operation:
+          enum:
+          - install
+          - configure
+          - start
+          - stop
+          - restart
+          - health
+          - diagnose
+          - rollback
+          - handover
+          - remigrate
+          title: Operation
+          type: string
+        releaseId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Releaseid
+        requestedBy:
+          title: Requestedby
+          type: string
+      required:
+      - endpointId
+      - minionId
+      - operation
+      - idempotencyKey
+      - requestedBy
+      title: JobCreateRequest
+      type: object
+    JobResponse:
+      properties:
+        acceptedAt:
+          title: Acceptedat
+          type: string
+        conflictJobId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conflictjobid
+        correlationId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Correlationid
+        duplicate:
+          default: false
+          title: Duplicate
+          type: boolean
+        endpointId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Endpointid
+        errorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errorcode
+        jobId:
+          title: Jobid
+          type: string
+        minionId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Minionid
+        operation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Operation
+        saltJid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Saltjid
+        status:
+          enum:
+          - queued
+          - dispatching
+          - running
+          - succeeded
+          - failed
+          - cancelled
+          - expired
+          title: Status
+          type: string
+      required:
+      - jobId
+      - status
+      - acceptedAt
+      title: JobResponse
+      type: object
     JobReturnBatchRequest:
       properties:
         items:
@@ -401,6 +573,23 @@ components:
       - reason
       title: RolloutActionRequest
       type: object
+    RolloutApprovalRequest:
+      properties:
+        decision:
+          default: approve
+          title: Decision
+          type: string
+        reason:
+          default: ''
+          title: Reason
+          type: string
+        requestId:
+          title: Requestid
+          type: string
+      required:
+      - requestId
+      title: RolloutApprovalRequest
+      type: object
     RolloutCreateRequest:
       properties:
         component:
@@ -438,6 +627,14 @@ components:
       type: object
     RolloutResponse:
       properties:
+        approvalRequired:
+          default: true
+          title: Approvalrequired
+          type: boolean
+        batchSize:
+          default: 0
+          title: Batchsize
+          type: integer
         completedCount:
           default: 0
           title: Completedcount
@@ -672,6 +869,40 @@ paths:
       summary: Get Desired State
       tags:
       - desired-state
+  /salt/v1/endpoints/{endpoint_id}/status:
+    get:
+      operationId: endpoint_status_salt_v1_endpoints__endpoint_id__status_get
+      parameters:
+      - in: path
+        name: endpoint_id
+        required: true
+        schema:
+          title: Endpoint Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointStatusResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Endpoint Status
+      tags:
+      - jobs
   /salt/v1/enrollments:
     post:
       operationId: create_enrollment_salt_v1_enrollments_post
@@ -773,6 +1004,7 @@ paths:
       - enrollments
   /salt/v1/health:
     get:
+      description: Process liveness only — no dependency checks.
       operationId: health_salt_v1_health_get
       responses:
         '200':
@@ -821,6 +1053,206 @@ paths:
       summary: Batch Job Returns
       tags:
       - job-returns
+  /salt/v1/jobs:
+    post:
+      operationId: create_job_salt_v1_jobs_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Job
+      tags:
+      - jobs
+  /salt/v1/jobs/{job_id}:
+    get:
+      operationId: get_job_salt_v1_jobs__job_id__get
+      parameters:
+      - in: path
+        name: job_id
+        required: true
+        schema:
+          title: Job Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Job
+      tags:
+      - jobs
+  /salt/v1/migrations/handover:
+    post:
+      operationId: handover_salt_v1_migrations_handover_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Handover
+      tags:
+      - migrations
+  /salt/v1/migrations/remigrate:
+    post:
+      operationId: remigrate_salt_v1_migrations_remigrate_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Remigrate
+      tags:
+      - migrations
+  /salt/v1/migrations/rollback:
+    post:
+      operationId: rollback_salt_v1_migrations_rollback_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollback
+      tags:
+      - migrations
+  /salt/v1/observer/stability:
+    get:
+      operationId: observer_stability_salt_v1_observer_stability_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Observer Stability Salt V1 Observer Stability Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Observer Stability
+      tags:
+      - jobs
   /salt/v1/ready:
     get:
       operationId: ready_salt_v1_ready_get
@@ -828,11 +1260,7 @@ paths:
         '200':
           content:
             application/json:
-              schema:
-                additionalProperties:
-                  type: string
-                title: Response Ready Salt V1 Ready Get
-                type: object
+              schema: {}
           description: Successful Response
       summary: Ready
       tags:
@@ -905,6 +1333,46 @@ paths:
       summary: Get Rollout
       tags:
       - rollouts
+  /salt/v1/rollouts/{rollout_id}:abort:
+    post:
+      operationId: abort_rollout_salt_v1_rollouts__rollout_id__abort_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutActionRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Abort Rollout
+      tags:
+      - rollouts
   /salt/v1/rollouts/{rollout_id}:advance:
     post:
       operationId: advance_rollout_salt_v1_rollouts__rollout_id__advance_post
@@ -945,6 +1413,46 @@ paths:
       summary: Advance Rollout
       tags:
       - rollouts
+  /salt/v1/rollouts/{rollout_id}:approve:
+    post:
+      operationId: approve_rollout_salt_v1_rollouts__rollout_id__approve_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutApprovalRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Approve Rollout
+      tags:
+      - rollouts
   /salt/v1/rollouts/{rollout_id}:pause:
     post:
       operationId: pause_rollout_salt_v1_rollouts__rollout_id__pause_post
@@ -983,6 +1491,46 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Pause Rollout
+      tags:
+      - rollouts
+  /salt/v1/rollouts/{rollout_id}:resume:
+    post:
+      operationId: resume_rollout_salt_v1_rollouts__rollout_id__resume_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutActionRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Resume Rollout
       tags:
       - rollouts
   /salt/v1/rollouts/{rollout_id}:rollback:

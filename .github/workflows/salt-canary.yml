@@ -2,10 +2,37 @@ name: Salt Canary (Windows)
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "infra/salt/**"
+      - "services/salt-control/**"
+      - "docs/salt/**"
+      - ".github/workflows/salt-canary.yml"
+      - ".github/workflows/salt-live-canary.yml"
 
 jobs:
-  canary:
+  simulate-hard-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: salt-control P0 gates
+        working-directory: services/salt-control
+        run: |
+          uv sync --extra dev
+          uv run pytest tests/test_v231_jobs.py tests/test_rollouts.py -q
+      - name: infra handover remigrate
+        working-directory: infra/salt
+        run: |
+          uv sync --extra dev
+          uv run pytest tests/test_handover_state_machine.py -q
+
+  canary-contract:
     runs-on: [self-hosted, Windows, X64, smc-salt-canary]
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,8 +52,8 @@ jobs:
       - name: Evidence note
         shell: pwsh
         run: |
-          Write-Host "Hardware Cases A-F require this self-hosted runner; skipped tests are Manual Gate until real endpoints exist."
-          Write-Host "Store evidence under docs/salt/evidence/v2.2/<ring>/<date>/"
+          Write-Host "v2.3.1 Live mutation uses salt-live-canary.yml with confirm_live=LIVE"
+          Write-Host "Store evidence under docs/salt/evidence/v2.3.1/"
 
   manual-gate-doc:
     runs-on: ubuntu-latest
@@ -35,5 +62,5 @@ jobs:
       - name: Document manual gate when canary runner absent
         run: |
           echo "Salt Windows canary uses workflow_dispatch on label: self-hosted, Windows, X64, smc-salt-canary"
-          echo "If no runner is registered, execute Canary.v2.2.Tests.ps1 locally and file evidence templates."
-          echo "Do NOT mark hardware Cases A-F as PASS without real endpoint bundles."
+          echo "Live Canary hard gate workflow: .github/workflows/salt-live-canary.yml"
+          echo "Do NOT mark hardware Cases as proven without real endpoint bundles."

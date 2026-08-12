@@ -20,6 +20,12 @@ class RolloutActionRequest(CamelModel):
     reason: str
 
 
+class RolloutApprovalRequest(CamelModel):
+    request_id: str
+    reason: str = ""
+    decision: str = "approve"  # approve | reject
+
+
 class RolloutResponse(CamelModel):
     rollout_id: str
     component: str
@@ -34,3 +40,5 @@ class RolloutResponse(CamelModel):
     p0_count: int = 0
     p1_count: int = 0
     thresholds: dict[str, Any] = {}
+    batch_size: int = 0
+    approval_required: bool = True

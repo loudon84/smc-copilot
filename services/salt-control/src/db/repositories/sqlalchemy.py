@@ -33,6 +33,7 @@ from db.repositories.interfaces import (
     RolloutRepository,
     RolloutTargetRecord,
 )
+from db.repositories.job_sqlalchemy import SqlAlchemyControlJobRepository, SqlAlchemySecretScopeRepository
 
 
 def _dt(value: datetime | None) -> datetime | None:
@@ -644,6 +645,8 @@ def build_sqlalchemy_repos(session: AsyncSession) -> RepositoryBundle:
         audits=SqlAlchemyAuditRepository(session),
         idempotency=SqlAlchemyIdempotencyRepository(session),
         operations=SqlAlchemyOperationRepository(session),
+        control_jobs=SqlAlchemyControlJobRepository(session),
+        secret_scopes=SqlAlchemySecretScopeRepository(session),
         extras={},
     )
 

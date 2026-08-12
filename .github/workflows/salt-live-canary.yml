@@ -1,0 +1,128 @@
+name: Salt Live Canary (v2.3.1)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment (lab|production)"
+        required: true
+        default: lab
+        type: choice
+        options:
+          - lab
+          - production
+      endpoint_selector:
+        description: "Endpoint id or minion id (ep_*)"
+        required: true
+        type: string
+      operation:
+        description: "Control-plane operation"
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - install
+          - configure
+          - health
+          - diagnose
+          - rollback
+          - handover
+          - remigrate
+      release_id:
+        description: "Release artifact id"
+        required: false
+        default: ""
+        type: string
+      config_revision:
+        description: "Desired-state config revision"
+        required: false
+        default: ""
+        type: string
+      evidence_dir:
+        description: "Evidence output directory under docs/salt/evidence"
+        required: true
+        default: docs/salt/evidence/v2.3.1/live-canary
+        type: string
+      confirm_live:
+        description: "Type LIVE to authorize real Master/Endpoint mutation"
+        required: true
+        default: ""
+        type: string
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Salt-control unit + OpenAPI gates
+        working-directory: services/salt-control
+        run: |
+          uv sync --extra dev
+          uv run ruff check .
+          uv run pytest -q
+      - name: Infra handover/remigrate tests
+        working-directory: infra/salt
+        run: |
+          uv sync --extra dev
+          uv run pytest tests/test_handover_state_machine.py -q
+      - name: Secret leak scan (evidence + logs patterns)
+        shell: bash
+        run: |
+          if rg -n --hidden -g '!**/node_modules/**' -g '!**/.git/**' \
+            -e 'super-secret-value' -e 'BEGIN (RSA |OPENSSH )?PRIVATE KEY' \
+            docs/salt/evidence/v2.3.1 services/salt-control/tests; then
+            echo "Potential secret material found in scanned paths" >&2
+            exit 1
+          fi
+          echo "Secret leak scan passed"
+
+  live:
+    needs: simulate
+    if: ${{ inputs.confirm_live == 'LIVE' }}
+    runs-on: [self-hosted, Windows, X64, smc-salt-canary]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Hard gates + live operation
+        shell: pwsh
+        env:
+          SMC_SALT_ENV: ${{ inputs.environment }}
+          SMC_LIVE_ENDPOINT: ${{ inputs.endpoint_selector }}
+          SMC_LIVE_OPERATION: ${{ inputs.operation }}
+          SMC_LIVE_RELEASE_ID: ${{ inputs.release_id }}
+          SMC_LIVE_CONFIG_REVISION: ${{ inputs.config_revision }}
+          SMC_LIVE_EVIDENCE_DIR: ${{ inputs.evidence_dir }}
+        run: |
+          uv sync --extra dev --directory infra/salt
+          pwsh -File infra/salt/scripts/Invoke-LiveCanary.ps1 `
+            -Environment $env:SMC_SALT_ENV `
+            -EndpointSelector $env:SMC_LIVE_ENDPOINT `
+            -Operation $env:SMC_LIVE_OPERATION `
+            -ReleaseId $env:SMC_LIVE_RELEASE_ID `
+            -ConfigRevision $env:SMC_LIVE_CONFIG_REVISION `
+            -EvidenceDir $env:SMC_LIVE_EVIDENCE_DIR
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: salt-v231-live-canary
+          path: ${{ inputs.evidence_dir }}
+          if-no-files-found: warn
+
+  manual-gate-doc:
+    runs-on: ubuntu-latest
+    if: ${{ always() && inputs.confirm_live != 'LIVE' }}
+    steps:
+      - name: Document skipped live mutation
+        run: |
+          echo "Live Canary mutation skipped because confirm_live != LIVE"
+          echo "Simulate job remains the PR/deploy hard gate."
+          echo "Operator must re-run with confirm_live=LIVE on smc-salt-canary runner."

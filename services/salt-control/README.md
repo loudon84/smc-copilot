@@ -1,6 +1,6 @@
 # SMC Salt Control Service
 
-Independent FastAPI service implementing the Salt Integration API for SMC Copilot Endpoint Control Plane (PRD v2.2).
+Independent FastAPI service implementing the Salt Integration API for SMC Copilot Endpoint Control Plane (PRD v2.3 / v2.3.1).
 
 ## Stack
 
@@ -18,9 +18,13 @@ Prefix: `/salt/v1`
 | Enrollment | `POST /enrollments`, fingerprint report, get status |
 | Desired State | `GET /endpoints/{id}/desired-state` |
 | Job Returns | `POST /job-returns:batch` |
+| Jobs | `POST /jobs`, `GET /jobs/{id}` |
+| Endpoint Status | `GET /endpoints/{id}/status` |
+| Migrations | `POST /migrations/handover\|rollback\|remigrate` |
+| Observer | `GET /observer/stability` |
 | Secrets | `POST /secrets:resolve` |
 | Artifacts | `GET /artifacts/{component}/{version}` |
-| Rollouts | create / get / advance / pause / rollback |
+| Rollouts | `POST /rollouts`, approve/advance/pause/resume/abort/rollback |
 
 ## Local development
 

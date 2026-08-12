@@ -1,0 +1,24 @@
+{
+  "schema": "smc.salt-evidence.first-endpoint.v1",
+  "version": "v2.3.1",
+  "status": "not_proven",
+  "manualGate": true,
+  "master": "192.168.102.104",
+  "endpointAlias": "host_itbjb0676",
+  "sequence": [
+    "preflight",
+    "test.ping",
+    "sync_all",
+    "pillar_dry_run",
+    "install_configure",
+    "health",
+    "handover",
+    "work_probe",
+    "rollback",
+    "work_probe",
+    "remigrate",
+    "observe_24h"
+  ],
+  "results": null,
+  "note": "Operator must execute RUNBOOK.md and replace this stub with proven evidence. Cursor must not mark this proven."
+}

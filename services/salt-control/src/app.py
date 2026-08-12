@@ -26,10 +26,14 @@ from integrations.secret_provider_http import HttpSecretProvider
 from services.artifact_service import ArtifactService
 from services.desired_state_service import DesiredStateService
 from services.enrollment_service import EnrollmentService
+from services.handover_service import HandoverService
+from services.job_service import JobService
 from services.return_service import ReturnService
 from services.rollout_service import RolloutService
 from services.secret_service import SecretService
 from workers.enrollment_worker import EnrollmentOperationWorker
+from workers.job_worker import JobWorker
+from workers.observer import ControlPlaneObserver
 
 
 @dataclass
@@ -47,7 +51,11 @@ class AppState:
     secret_service: SecretService
     artifact_service: ArtifactService
     rollout_service: RolloutService
+    job_service: JobService
+    handover_service: HandoverService
     worker: EnrollmentOperationWorker | None = None
+    job_worker: JobWorker | None = None
+    observer: ControlPlaneObserver | None = None
     session_factory: Any | None = None
     _boot_session: Any | None = None
 
@@ -69,7 +77,7 @@ def build_lab_state(settings: Settings | None = None) -> AppState:
 
 
 def build_production_state(settings: Settings | None = None) -> AppState:
-    """PostgreSQL + live adapters — rejects Fake/InMemory."""
+    """PostgreSQL + live adapters — rejects Fake/InMemory; workers use independent sessions."""
     cfg = settings or get_settings()
     if cfg.salt_env != "production":
         raise ValueError("build_production_state requires SMC_SALT_ENV=production")
@@ -77,6 +85,7 @@ def build_production_state(settings: Settings | None = None) -> AppState:
 
     engine = create_engine(cfg)
     session_factory = create_session_factory(engine)
+    # Boot session is only for readiness probes — workers never share it.
     boot_session = session_factory()
     repos = build_sqlalchemy_repos(boot_session)
     if type(repos.endpoints).__module__.endswith("memory"):
@@ -110,6 +119,9 @@ def build_production_state(settings: Settings | None = None) -> AppState:
 
     idempotency = IdempotencyStore()
     worker = EnrollmentOperationWorker(repos, masters)
+    job_worker = JobWorker(masters=masters, session_factory=session_factory)
+    observer = ControlPlaneObserver(masters=masters, session_factory=session_factory)
+    job_service = JobService(repos)
     return AppState(
         settings=cfg,
         repos=repos,
@@ -124,7 +136,11 @@ def build_production_state(settings: Settings | None = None) -> AppState:
         secret_service=SecretService(repos, secret_provider, idempotency),
         artifact_service=ArtifactService(repos, artifact_store),
         rollout_service=RolloutService(repos, idempotency),
+        job_service=job_service,
+        handover_service=HandoverService(job_service),
         worker=worker,
+        job_worker=job_worker,
+        observer=observer,
         session_factory=session_factory,
         _boot_session=boot_session,
     )
@@ -141,6 +157,9 @@ def _build_fake_state(cfg: Settings) -> AppState:
     secret_provider: SecretProvider = FakeSecretProvider()
     artifact_store: ArtifactStore = FakeArtifactStore()
     worker = EnrollmentOperationWorker(repos, masters)
+    job_worker = JobWorker(masters=masters, repos=repos)
+    observer = ControlPlaneObserver(masters=masters, repos=repos, interval_seconds=60.0)
+    job_service = JobService(repos)
     return AppState(
         settings=cfg,
         repos=repos,
@@ -155,7 +174,11 @@ def _build_fake_state(cfg: Settings) -> AppState:
         secret_service=SecretService(repos, secret_provider, idempotency),
         artifact_service=ArtifactService(repos, artifact_store),
         rollout_service=RolloutService(repos, idempotency),
+        job_service=job_service,
+        handover_service=HandoverService(job_service),
         worker=worker,
+        job_worker=job_worker,
+        observer=observer,
     )
 
 
@@ -178,9 +201,18 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.container = app_state
-        if app_state.worker is not None and app_state.settings.salt_env == "production":
-            app_state.worker.start()
+        if app_state.settings.salt_env == "production":
+            if app_state.worker is not None:
+                app_state.worker.start()
+            if app_state.job_worker is not None:
+                app_state.job_worker.start()
+            if app_state.observer is not None:
+                app_state.observer.start()
         yield
+        if app_state.observer is not None:
+            await app_state.observer.stop()
+        if app_state.job_worker is not None:
+            await app_state.job_worker.stop()
         if app_state.worker is not None:
             await app_state.worker.stop()
         for master in app_state.masters:
@@ -222,5 +254,11 @@ def _state_as_mapping(state: AppState) -> dict[str, Any]:
         "secret_service": state.secret_service,
         "artifact_service": state.artifact_service,
         "rollout_service": state.rollout_service,
+        "job_service": state.job_service,
+        "handover_service": state.handover_service,
         "worker": state.worker,
+        "job_worker": state.job_worker,
+        "observer": state.observer,
+        "_boot_session": state._boot_session,
+        "session_factory": state.session_factory,
     }

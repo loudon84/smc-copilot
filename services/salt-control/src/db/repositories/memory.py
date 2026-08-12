@@ -29,6 +29,7 @@ from db.repositories.interfaces import (
     RolloutRepository,
     RolloutTargetRecord,
 )
+from db.repositories.job_memory import InMemoryControlJobRepository, InMemorySecretScopeRepository
 
 
 class InMemoryEndpointRepository(EndpointRepository):
@@ -284,6 +285,8 @@ def build_in_memory_repos() -> RepositoryBundle:
         audits=InMemoryAuditRepository(),
         idempotency=InMemoryIdempotencyRepository(),
         operations=InMemoryOperationRepository(),
+        control_jobs=InMemoryControlJobRepository(),
+        secret_scopes=InMemorySecretScopeRepository(),
     )
 
 

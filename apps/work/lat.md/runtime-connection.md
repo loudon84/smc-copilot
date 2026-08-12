@@ -66,6 +66,12 @@ Probe-only Connection Ready for enterprise/Salt mode. Never install, update, or 
 
 Uses [[src/main/hermes/transport/gateway-http.ts]] for Gateway URL and `/health` (same path as Chat transport). `authenticated` is derived from local API key presence and is not equal to `gatewayHealthy`.
 
+## Salt enterprise mode canary
+
+v2.3.1 regression: Salt control-owner keeps Work on Availability-only Connection Ready and refuses local Gateway restart while Chat stays off Runtime `:8765`.
+
+Covered by `apps/work/tests/enterprise-salt-mode.test.ts`.
+
 ## Portal Auth Login
 
 Phase 5 migrates Portal Auth Login only (not Hermes Panel / JSSDK / Service Settings).

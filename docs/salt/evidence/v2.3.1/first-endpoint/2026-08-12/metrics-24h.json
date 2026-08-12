@@ -1,0 +1,23 @@
+{
+  "schema": "smc.salt-evidence.metrics-24h.v1",
+  "version": "v2.3.1",
+  "status": "not_proven",
+  "manualGate": true,
+  "windows": {
+    "T+0": null,
+    "T+1h": null,
+    "T+6h": null,
+    "T+24h": null
+  },
+  "thresholds": {
+    "minionHeartbeatContinuous": true,
+    "gatewayHealthSuccessRate": 0.99,
+    "jobDuplicateTotal": 0,
+    "unrecoveredFailedJobs": 0,
+    "secretLeaks": 0,
+    "workCriticalFlowSuccessRate": 1.0,
+    "runtimeRollbackExecutable": true
+  },
+  "observed": null,
+  "note": "Fill from ControlPlaneObserver stability windows after live remigrate."
+}

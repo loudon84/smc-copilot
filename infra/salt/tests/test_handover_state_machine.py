@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from client.handover import HandoverHooks, migrate, rollback
+from client.handover import HandoverHooks, migrate, remigrate, rollback
 from client.paths import control_owner_path, migration_marker_path
 
 
@@ -92,3 +92,19 @@ def test_owner_303_rollback_absent_owner_removes_file(tmp_path: Path) -> None:
     result = rollback(hooks=_hooks(), program_data=tmp_path)
     assert result.ok is True
     assert not control_owner_path(tmp_path).is_file()
+
+
+def test_remigrate_completes_and_records_idempotency(tmp_path: Path) -> None:
+    result = remigrate(
+        hooks=_hooks(),
+        program_data=tmp_path,
+        endpoint_id="ep_1",
+        idempotency_key="idem-remigrate-lab",
+    )
+    assert result.ok is True
+    assert result.state == "COMPLETED"
+    assert "REMIGRATE" in result.steps
+    marker = json.loads(migration_marker_path(tmp_path).read_text(encoding="utf-8"))
+    assert marker["status"] == "REMIGRATE_COMPLETED"
+    assert marker["idempotency_key"] == "idem-remigrate-lab"
+    assert marker["operation"] == "remigrate"

@@ -18,9 +18,13 @@ from integrations.secret_provider import FakeSecretProvider
 from services.artifact_service import ArtifactService
 from services.desired_state_service import DesiredStateService
 from services.enrollment_service import EnrollmentService
+from services.handover_service import HandoverService
+from services.job_service import JobService
 from services.return_service import ReturnService
 from services.rollout_service import RolloutService
 from services.secret_service import SecretService
+from workers.job_worker import JobWorker
+from workers.observer import ControlPlaneObserver
 
 
 @pytest.fixture
@@ -56,6 +60,9 @@ def artifact_store() -> FakeArtifactStore:
 @pytest.fixture
 def app_state(settings, repos, backend, masters, secret_provider, artifact_store) -> AppState:
     idempotency = IdempotencyStore()
+    job_service = JobService(repos)
+    job_worker = JobWorker(masters=masters, repos=repos)
+    observer = ControlPlaneObserver(masters=masters, repos=repos)
     return AppState(
         settings=settings,
         repos=repos,
@@ -65,11 +72,15 @@ def app_state(settings, repos, backend, masters, secret_provider, artifact_store
         secret_provider=secret_provider,
         artifact_store=artifact_store,
         enrollment_service=EnrollmentService(repos, settings, masters),
-        desired_state_service=DesiredStateService(repos, backend),
+        desired_state_service=DesiredStateService(repos, backend, settings),
         return_service=ReturnService(repos),
         secret_service=SecretService(repos, secret_provider, idempotency),
         artifact_service=ArtifactService(repos, artifact_store),
         rollout_service=RolloutService(repos, idempotency),
+        job_service=job_service,
+        handover_service=HandoverService(job_service),
+        job_worker=job_worker,
+        observer=observer,
     )
 
 

@@ -21,7 +21,7 @@ async def test_rollout_create(client, settings):
     assert resp.status_code == 200
     body = resp.json()
     assert body["rolloutId"].startswith("ro_")
-    assert body["state"] == "created"
+    assert body["state"] == "waiting_approval"
 
     got = client.get(
         f"/salt/v1/rollouts/{body['rolloutId']}",
@@ -29,6 +29,59 @@ async def test_rollout_create(client, settings):
     )
     assert got.status_code == 200
     assert got.json()["component"] == "hermes"
+
+
+@pytest.mark.asyncio
+async def test_rollout_approve_resume_abort(client, settings):
+    create = client.post(
+        "/salt/v1/rollouts",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={
+            "component": "hermes",
+            "version": "0.22.0",
+            "ring": "ring0",
+            "requestId": "req-ro-approve",
+            "thresholds": {"minSuccessRate": 0.95, "approvalRequired": True},
+            "reason": "canary",
+        },
+    )
+    rid = create.json()["rolloutId"]
+    approved = client.post(
+        f"/salt/v1/rollouts/{rid}:approve",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-appr", "decision": "approve", "reason": "ok"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["state"] == "approved"
+
+    advanced = client.post(
+        f"/salt/v1/rollouts/{rid}:advance",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-run", "reason": "go"},
+    )
+    assert advanced.status_code == 200
+    assert advanced.json()["state"] == "running"
+
+    paused = client.post(
+        f"/salt/v1/rollouts/{rid}:pause",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-pause", "reason": "master_down"},
+    )
+    assert paused.json()["state"] == "paused"
+
+    resumed = client.post(
+        f"/salt/v1/rollouts/{rid}:resume",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-resume", "reason": "master_up"},
+    )
+    assert resumed.json()["state"] == "running"
+
+    aborted = client.post(
+        f"/salt/v1/rollouts/{rid}:abort",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-abort", "reason": "stop"},
+    )
+    assert aborted.json()["state"] == "aborted"
 
 
 @pytest.mark.asyncio
@@ -46,6 +99,11 @@ async def test_rollout_pause_on_gate_fail(client, settings, repos):
         },
     )
     rid = create.json()["rolloutId"]
+    client.post(
+        f"/salt/v1/rollouts/{rid}:approve",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-gate-appr", "decision": "approve", "reason": "ok"},
+    )
     record = await repos.rollouts.get(rid)
     assert record is not None
     record.p0_count = 1
@@ -80,6 +138,11 @@ async def test_rollout_pause_on_low_success_rate(client, settings, repos):
         },
     )
     rid = create.json()["rolloutId"]
+    client.post(
+        f"/salt/v1/rollouts/{rid}:approve",
+        headers={"Authorization": f"Bearer {operator_token(settings)}"},
+        json={"requestId": "req-ro-slo-appr", "decision": "approve", "reason": "ok"},
+    )
     record = await repos.rollouts.get(rid)
     assert record is not None
     record.target_count = 100

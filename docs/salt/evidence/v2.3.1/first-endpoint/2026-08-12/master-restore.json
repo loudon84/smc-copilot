@@ -1,0 +1,21 @@
+{
+  "schema": "smc.salt-evidence.master-restore.v1",
+  "version": "v2.3.1",
+  "status": "not_proven",
+  "manualGate": true,
+  "master": "192.168.102.104",
+  "checklist": [
+    "backup master config",
+    "backup PKI",
+    "backup Pillar",
+    "backup Extension",
+    "backup Release metadata",
+    "restore in isolated environment",
+    "verify master fingerprint and minion trust",
+    "verify salt-api / test.ping / sync_all / health"
+  ],
+  "rtoMinutes": null,
+  "failurePoints": [],
+  "restoreSteps": [],
+  "note": "Single-Master restore drill is a Manual Gate; do not auto-complete."
+}

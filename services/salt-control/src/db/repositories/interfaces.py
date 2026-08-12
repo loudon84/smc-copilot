@@ -170,6 +170,48 @@ class OperationStepRecord:
     id: int | None = None
 
 
+TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled", "expired"})
+
+
+@dataclass
+class ControlJobRecord:
+    id: str
+    endpoint_id: str
+    minion_id: str
+    operation: str
+    status: str
+    idempotency_key: str
+    requested_by: str
+    config_revision: str | None = None
+    release_id: str | None = None
+    correlation_id: str | None = None
+    claim_token: str | None = None
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
+    heartbeat_at: datetime | None = None
+    attempt: int = 0
+    salt_jid: str | None = None
+    result_digest: str | None = None
+    error_code: str | None = None
+    accepted_at: datetime | None = None
+    updated_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+@dataclass
+class SecretScopeRecord:
+    tenant_id: str
+    endpoint_id: str
+    scope_type: str
+    scope_key: str
+    secret_ref: str
+    version: str = "1"
+    checksum_redacted: str | None = None
+    id: int | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class EndpointRepository(Protocol):
     async def create(self, record: EndpointRecord) -> EndpointRecord: ...
     async def get(self, endpoint_id: str) -> EndpointRecord | None: ...
@@ -243,6 +285,46 @@ class OperationRepository(Protocol):
     async def get_step(self, operation_id: str, step_name: str) -> OperationStepRecord | None: ...
 
 
+class ControlJobRepository(Protocol):
+    async def create(self, record: ControlJobRecord) -> ControlJobRecord: ...
+    async def get(self, job_id: str) -> ControlJobRecord | None: ...
+    async def get_by_idempotency_key(self, key: str) -> ControlJobRecord | None: ...
+    async def get_by_salt_jid(self, salt_jid: str) -> ControlJobRecord | None: ...
+    async def update(self, record: ControlJobRecord) -> ControlJobRecord: ...
+    async def claim_next(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int,
+        now: datetime,
+    ) -> ControlJobRecord | None: ...
+    async def reclaim_expired(self, *, worker_id: str, lease_seconds: int, now: datetime) -> ControlJobRecord | None: ...
+    async def heartbeat(self, job_id: str, *, claim_token: str, lease_seconds: int, now: datetime) -> bool: ...
+    async def set_salt_jid(self, job_id: str, *, claim_token: str, salt_jid: str, now: datetime) -> tuple[ControlJobRecord, bool]:
+        """Return (job, assigned). assigned=False means JID conflict — job unchanged."""
+        ...
+    async def complete(
+        self,
+        job_id: str,
+        *,
+        claim_token: str,
+        status: str,
+        result_digest: str | None,
+        error_code: str | None,
+        now: datetime,
+    ) -> ControlJobRecord | None: ...
+    async def list_for_endpoint(self, endpoint_id: str, *, limit: int = 20) -> list[ControlJobRecord]: ...
+    async def expire_stale_leases(self, *, now: datetime) -> int: ...
+
+
+class SecretScopeRepository(Protocol):
+    async def upsert(self, record: SecretScopeRecord) -> SecretScopeRecord: ...
+    async def get(
+        self, *, tenant_id: str, endpoint_id: str, scope_type: str, scope_key: str
+    ) -> SecretScopeRecord | None: ...
+    async def list_for_endpoint(self, endpoint_id: str) -> list[SecretScopeRecord]: ...
+
+
 @dataclass
 class RepositoryBundle:
     endpoints: EndpointRepository
@@ -256,5 +338,7 @@ class RepositoryBundle:
     audits: AuditRepository
     idempotency: IdempotencyRepository
     operations: OperationRepository
+    control_jobs: ControlJobRepository
+    secret_scopes: SecretScopeRepository
     # Lab/test only ephemeral cache — production must not rely on this.
     extras: dict[str, Any] = field(default_factory=dict)
