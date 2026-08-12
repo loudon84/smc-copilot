@@ -9,6 +9,10 @@ Renderer
   → Hermes Agent / Gateway
 ```
 
+## Work v2.0 (Salt)
+
+`apps/work` Salt mode does **not** use Runtime `:8765` for Connection Ready. See [ADR-026](../adr/ADR-026-salt-endpoint-control-plane.md) and [`infra/salt`](../../infra/salt/README.md). Desktop (`apps/desktop`) still uses Runtime as above.
+
 ## Rules
 
 1. Runtime device tokens stay in Main (`runtime-auth-store`).

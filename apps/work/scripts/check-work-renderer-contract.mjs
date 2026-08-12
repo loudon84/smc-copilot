@@ -16,6 +16,7 @@ const required = [
   "runtimeRestart",
   "runtimeValidateHome",
   "runtimeAdoptHome",
+  "getControlOwner",
   "onRuntimeStatusChanged",
   "onInstallProgress",
   "getHermesVersion",

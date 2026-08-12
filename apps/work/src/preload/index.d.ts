@@ -39,6 +39,7 @@ import type {
   HermesRuntimeConnectionResult,
   HermesRuntimeProbe,
 } from "../shared/runtime/runtime-contract";
+import type { ControlOwnerSnapshot } from "../shared/runtime/control-owner";
 
 interface ElectronAPI {
   process: {
@@ -236,6 +237,7 @@ interface HermesAPI {
   ) => Promise<HermesRuntimeConnectionResult>;
   runtimeValidateHome: (dir: string) => Promise<boolean>;
   runtimeAdoptHome: (dir: string) => Promise<boolean>;
+  getControlOwner: () => Promise<ControlOwnerSnapshot>;
   onRuntimeStatusChanged: (
     callback: (probe: HermesRuntimeProbe) => void,
   ) => () => void;

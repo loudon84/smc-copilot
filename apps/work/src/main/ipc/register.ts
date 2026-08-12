@@ -59,16 +59,25 @@ import type { GpuPreferenceMode } from "../../shared/gpu";
 import {
   clearVersionCache,
   checkOpenClawExists,
+  getHermesVersion,
   runClawMigrate,
   runHermesBackup,
+  runHermesDoctor,
   runHermesImport,
   runHermesDump,
+  runHermesUpdate,
   discoverMemoryProviders,
   readLogs,
   type InstallProgress,
 } from "../installer";
 import { getRuntimeManager } from "../runtime/runtime-manager";
 import { getRuntimeManagementBackend } from "../runtime/runtime-management-backend";
+import {
+  isRuntimeControlOwner,
+  isSaltControlOwner,
+  readControlOwnerSnapshot,
+  saltManagedMessage,
+} from "../hermes/control-owner";
 import { resolveProfileToInstance } from "../runtime/runtime-management-mapper";
 import type {
   HermesRuntimeConnectionResult,
@@ -115,6 +124,7 @@ import {
   sendMessage,
   transcribeAudio,
   startGateway,
+  startGatewayDetailed,
   stopGateway,
   isGatewayRunning,
   testRemoteConnection,
@@ -690,6 +700,8 @@ export function registerIpcHandlers(context: IpcContext): void {
     (_event, profile?: string): Promise<HermesRuntimeConnectionResult> =>
       runtimeManager.restart(profile),
   );
+  ipcMain.handle("get-control-owner", () => readControlOwnerSnapshot());
+
   ipcMain.handle("runtime-validate-home", (_event, dir: string) =>
     runtimeManager.validateHome(dir),
   );
@@ -734,7 +746,14 @@ export function registerIpcHandlers(context: IpcContext): void {
         () => sshGetHermesVersion(conn.ssh),
         activeSshProfile(),
       );
-    return getRuntimeManagementBackend().getVersion();
+    if (isSaltControlOwner()) {
+      const probe = await runtimeManager.getStatus();
+      return probe.version ?? null;
+    }
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().getVersion();
+    }
+    return getHermesVersion();
   });
   ipcMain.handle("refresh-hermes-version", async () => {
     const conn = getConnectionConfig();
@@ -747,15 +766,29 @@ export function registerIpcHandlers(context: IpcContext): void {
         activeSshProfile(),
       );
     clearVersionCache();
-    return getRuntimeManagementBackend().getVersion();
+    if (isSaltControlOwner()) {
+      const probe = await runtimeManager.getStatus();
+      return probe.version ?? null;
+    }
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().getVersion();
+    }
+    return getHermesVersion();
   });
   ipcMain.handle("run-hermes-doctor", async () => {
+    if (isSaltControlOwner()) return saltManagedMessage("Doctor");
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshRunDoctor(conn.ssh);
-    return getRuntimeManagementBackend().doctor();
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().doctor();
+    }
+    return runHermesDoctor();
   });
   ipcMain.handle("run-hermes-update", async (event) => {
     try {
+      if (isSaltControlOwner()) {
+        return { success: false, error: saltManagedMessage("Update") };
+      }
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) {
         event.sender.send("install-progress", {
@@ -786,9 +819,17 @@ export function registerIpcHandlers(context: IpcContext): void {
         setSshRemoteApiKey(key);
         return { success: true };
       }
-      await getRuntimeManagementBackend().update((progress: InstallProgress) => {
-        event.sender.send("install-progress", progress);
-      });
+      if (isRuntimeControlOwner()) {
+        await getRuntimeManagementBackend().update(
+          (progress: InstallProgress) => {
+            event.sender.send("install-progress", progress);
+          },
+        );
+      } else {
+        await runHermesUpdate((progress: InstallProgress) => {
+          event.sender.send("install-progress", progress);
+        });
+      }
       const compat = ensureLocalDashboardCompatibility();
       if (!compat.ok) {
         event.sender.send("install-progress", {
@@ -1726,6 +1767,13 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   // Gateway
   ipcMain.handle("start-gateway", async () => {
+    if (isSaltControlOwner()) {
+      return {
+        success: false,
+        running: false,
+        error: saltManagedMessage("Start Gateway"),
+      };
+    }
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStartGateway(conn.ssh);
@@ -1742,9 +1790,13 @@ export function registerIpcHandlers(context: IpcContext): void {
           "Remote mode points at an already-running Hermes server. Start or restart the gateway on that remote host.",
       };
     }
-    return getRuntimeManagementBackend().startGateway();
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().startGateway();
+    }
+    return startGatewayDetailed();
   });
   ipcMain.handle("stop-gateway", async () => {
+    if (isSaltControlOwner()) return false;
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -1754,10 +1806,13 @@ export function registerIpcHandlers(context: IpcContext): void {
       // No local gateway to stop in pure remote mode.
       return true;
     }
-    // No profile argument — stops the active profile's gateway via Runtime.
-    return getRuntimeManagementBackend().stopGateway();
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().stopGateway();
+    }
+    return stopGateway(undefined, true);
   });
   ipcMain.handle("restart-gateway", async (_event, profile?: string) => {
+    if (isSaltControlOwner()) return false;
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -1767,15 +1822,21 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "remote") {
       return false;
     }
-    // Non-default profiles are not Runtime-managed in v1.0 — keep Legacy spawn.
-    if (!resolveProfileToInstance(profile).supported) {
-      return restartGateway(profile);
+    if (
+      isRuntimeControlOwner() &&
+      resolveProfileToInstance(profile).supported
+    ) {
+      return getRuntimeManagementBackend().restartGateway(profile);
     }
-    return getRuntimeManagementBackend().restartGateway(profile);
+    return restartGateway(profile);
   });
   ipcMain.handle("gateway-status", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshGatewayStatus(conn.ssh);
+    if (isSaltControlOwner() || !isRuntimeControlOwner()) {
+      const probe = await runtimeManager.getStatus();
+      return probe.gatewayRunning;
+    }
     return getRuntimeManagementBackend().gatewayStatus();
   });
 

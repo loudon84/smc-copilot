@@ -1,0 +1,16 @@
+{
+  "user-demo": {
+    "user_id": "user-demo",
+    "department": "engineering",
+    "role": "expert",
+    "expert": "coding",
+    "config_version": "1"
+  },
+  "user-alt": {
+    "user_id": "user-alt",
+    "department": "engineering",
+    "role": "reader",
+    "expert": null,
+    "config_version": "2"
+  }
+}

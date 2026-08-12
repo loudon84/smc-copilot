@@ -25,6 +25,10 @@ import {
   hermesCliArgs,
   getEnhancedPath,
 } from "./runtime/hermes-runtime-paths";
+import {
+  isSaltControlOwner,
+  saltManagedMessage,
+} from "./hermes/control-owner";
 import { buildLocalDashboardCliArgs } from "./dashboard-launch";
 import {
   ensureLocalDashboardWebDist,
@@ -3148,8 +3152,13 @@ function gatewayCliCommandArgs(
 }
 
 export function startGatewayDetailed(profile?: string): GatewayStartResult {
+  if (isSaltControlOwner()) {
+    const error = saltManagedMessage("Start Gateway");
+    console.warn("[gateway] startGateway() refused — control_owner=salt");
+    return { success: false, running: false, error };
+  }
   // Defensive: the local gateway is never the right thing to spawn in
-  // remote/SSH mode �?the user is pointing at an off-machine server.
+  // remote/SSH mode — the user is pointing at an off-machine server.
   // Callers should already gate, but several IPC handlers historically
   // forgot to (issue #266), and reaching `spawn(HERMES_PYTHON, �?` when
   // there's no local hermes-agent install produces an uncaught ENOENT
@@ -3567,7 +3576,8 @@ export function restartGateway(
   healthPollMs = 250,
   stopTimeoutMs = 5000,
 ): Promise<boolean> {
-  // Same defensive gate as startGateway �?the local gateway has no role
+  if (isSaltControlOwner()) return Promise.resolve(false);
+  // Same defensive gate as startGateway — the local gateway has no role
   // in remote/SSH mode. Cheap to check; catches IPC paths that don't
   // wrap their restart calls in an isRemoteMode() check.
   if (isRemoteMode()) return Promise.resolve(false);
@@ -3618,6 +3628,7 @@ export async function startGatewayWithRecovery(
   // restart implementation.
   void restartCommandTimeoutMs;
 
+  if (isSaltControlOwner()) return false;
   if (isRemoteMode()) return false;
 
   if (isGatewayRunning(profile)) {

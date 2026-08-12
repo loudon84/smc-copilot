@@ -1,0 +1,3 @@
+base:
+  '*':
+    - mock_desired

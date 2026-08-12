@@ -1,0 +1,14 @@
+{
+  "lab-minion-01": {
+    "user_id": "user-demo",
+    "role": "expert",
+    "config_version": "1",
+    "previous_user_id": null
+  },
+  "lab-minion-02": {
+    "user_id": "user-alt",
+    "role": "reader",
+    "config_version": "2",
+    "previous_user_id": "user-demo"
+  }
+}

@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { HermesRuntimeProbe } from "../../../../shared/runtime/runtime-contract";
+import type { HermesControlOwner } from "../../../../shared/runtime/control-owner";
 import ConnectionErrorDetails from "./ConnectionErrorDetails";
 import "./connection-error.css";
 
@@ -25,6 +26,13 @@ function ConnectionErrorScreen({
   onQuit,
 }: ConnectionErrorScreenProps): React.JSX.Element {
   const [busy, setBusy] = useState(false);
+  const [owner, setOwner] = useState<HermesControlOwner>("direct");
+
+  useEffect(() => {
+    void window.hermesAPI.getControlOwner().then((snapshot) => {
+      setOwner(snapshot.owner);
+    });
+  }, []);
 
   async function wrap(action: () => void | Promise<void>): Promise<void> {
     setBusy(true);
@@ -35,13 +43,20 @@ function ConnectionErrorScreen({
     }
   }
 
+  const saltMode = owner === "salt";
+
   return (
     <div className="connection-error">
       <div className="connection-error-card">
-        <h1>Cannot connect to Hermes Agent</h1>
+        <h1>
+          {saltMode
+            ? "Waiting for enterprise Hermes Agent"
+            : "Cannot connect to Hermes Agent"}
+        </h1>
         <p className="connection-error-lead">
-          Copilot Desktop needs a local Hermes Agent runtime and a healthy
-          Gateway. Install or configure Hermes separately, then reconnect.
+          {saltMode
+            ? "This workstation is Salt-managed. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
+            : "Copilot Desktop needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
         </p>
         <ConnectionErrorDetails status={status} error={error} />
         <div className="connection-error-actions">
@@ -51,15 +66,17 @@ function ConnectionErrorScreen({
             disabled={busy || connecting}
             onClick={() => void wrap(onReconnect)}
           >
-            {connecting || busy ? "Connecting…" : "Reconnect"}
+            {connecting || busy ? "Connecting…" : "Retry"}
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void wrap(onSelectHermesHome)}
-          >
-            Choose Hermes directory
-          </button>
+          {!saltMode && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void wrap(onSelectHermesHome)}
+            >
+              Choose Hermes directory
+            </button>
+          )}
           <button
             type="button"
             disabled={busy}

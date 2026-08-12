@@ -24,6 +24,7 @@ WorkTask durable execution, Kernel, and 21 event types are documented in [work-t
 - `npm run contracts:check` fails CI on drift.
 - Breaking OpenAPI changes bump `contracts/version.json` `runtimeApi` major and require an ADR (see ADR-006).
 - Bundle version: `contracts/version.json` `bundleVersion`.
+- **v2.0 / ADR-026:** Endpoint Control Plane OpenAPI tags are frozen. See [ENDPOINT_CONTROL_PLANE_FREEZE.md](../../contracts/runtime-api/ENDPOINT_CONTROL_PLANE_FREEZE.md). New endpoint-management capability goes to `infra/salt`, not Runtime OpenAPI. Chat/Task data plane must not grow on Runtime if the target is Hermes direct or a Task Service.
 
 ## v1.4 readiness / memory / expert-mcp
 

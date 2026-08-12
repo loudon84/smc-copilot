@@ -5,7 +5,9 @@
 | Path | Role |
 | --- | --- |
 | `apps/desktop` | Electron Desktop (npm) |
-| `services/runtime` | FastAPI Runtime (uv) |
+| `apps/work` | Work desktop; Salt-mode Direct Hermes Client (v2.0) |
+| `services/runtime` | FastAPI Runtime (uv); Endpoint Control Plane **frozen** (ADR-026) |
+| `infra/salt` | Salt Lab + SMC Hermes Extension (Endpoint Control Plane) |
 | `contracts` | Generated OpenAPI + event schemas |
 | `packages/runtime-client-ts` | Generated + facade TS client |
 

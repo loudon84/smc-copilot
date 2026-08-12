@@ -42,28 +42,39 @@ const DEFAULT_INSTALL_BODY: RuntimeInstallRequest = {
   version: "latest",
 };
 
+/**
+ * Runtime HTTP control-plane facade.
+ * @deprecated ADR-026 / PRD v2.0: Endpoint Control Plane is frozen. Prefer Salt
+ * (`infra/salt` + `smc_hermes`) or `HermesAvailabilityBackend` in apps/work Salt mode.
+ * Desktop may keep calling these until Runtime archive. Do not add new methods.
+ */
 export interface RuntimeDomain {
   getStatus(signal?: AbortSignal): Promise<RuntimeStatus>;
   getReadiness(signal?: AbortSignal): Promise<RuntimeReadiness>;
   getCapabilities(signal?: AbortSignal): Promise<RuntimeCapabilities>;
   getCompatibility(signal?: AbortSignal): Promise<Record<string, unknown>>;
   getHealth(signal?: AbortSignal): Promise<Record<string, unknown>>;
+  /** @deprecated Frozen control plane — use Salt `smc_hermes.install`. */
   install(
     body?: Partial<RuntimeInstallRequest>,
     signal?: AbortSignal,
   ): Promise<RuntimeJobAcceptedResponse>;
+  /** @deprecated Frozen control plane — use Salt `smc_hermes.upgrade`. */
   update(
     body?: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<RuntimeJobAcceptedResponse>;
+  /** @deprecated Frozen control plane — use Salt `smc_hermes.rollback`. */
   rollback(
     body?: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<RuntimeJobAcceptedResponse>;
+  /** @deprecated Frozen control plane — use Salt `smc_hermes.doctor`. */
   doctor(signal?: AbortSignal): Promise<RuntimeJobAcceptedResponse>;
   getJob(jobId: string, signal?: AbortSignal): Promise<RuntimeJobResponse>;
   listJobs(signal?: AbortSignal): Promise<RuntimeJobResponse[]>;
   cancelJob(jobId: string, signal?: AbortSignal): Promise<RuntimeJobResponse>;
+  /** @deprecated Prefer Salt JID / returner events. */
   getJobEvents(jobId: string, signal?: AbortSignal): AsyncIterable<RuntimeSseMessage>;
   listVersions(signal?: AbortSignal): Promise<RuntimeVersionInfo[]>;
   getVersion(version: string, signal?: AbortSignal): Promise<RuntimeVersionInfo>;

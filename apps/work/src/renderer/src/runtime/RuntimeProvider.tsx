@@ -23,6 +23,33 @@ export function RuntimeProvider({
   const connect = useCallback(async (profile?: string): Promise<boolean> => {
     dispatch({ type: "CONNECT_START" });
     try {
+      const owner = await window.hermesAPI.getControlOwner();
+      switch (owner.owner) {
+        case "salt": {
+          // Probe-only — Salt owns install/start; never call Runtime :8765.
+          const status = await window.hermesAPI.runtimeGetStatus(profile);
+          if (status.state === "ready") {
+            dispatch({ type: "CONNECT_SUCCESS", status });
+            return true;
+          }
+          dispatch({
+            type: "CONNECT_FAILURE",
+            status,
+            error:
+              status.errorMessage ||
+              "Waiting for Salt to install or recover Hermes Agent.",
+          });
+          return false;
+        }
+        case "direct":
+        case "runtime":
+          // direct → Legacy Gateway :8642; runtime → optional Runtime :8765.
+          break;
+        default: {
+          const _exhaustive: never = owner.owner;
+          throw new Error(`Unknown control owner: ${_exhaustive}`);
+        }
+      }
       const result = await window.hermesAPI.runtimeEnsureLocalReady(profile);
       const status = await window.hermesAPI.runtimeGetStatus(profile);
       if (result.ok && status.state === "ready") {
@@ -64,6 +91,26 @@ export function RuntimeProvider({
   const restart = useCallback(async (profile?: string): Promise<boolean> => {
     dispatch({ type: "CONNECT_START" });
     try {
+      const owner = await window.hermesAPI.getControlOwner();
+      switch (owner.owner) {
+        case "salt": {
+          const status = await window.hermesAPI.runtimeGetStatus(profile);
+          dispatch({
+            type: "CONNECT_FAILURE",
+            status,
+            error:
+              "Hermes Gateway is Salt-managed. Restart is not available in enterprise mode.",
+          });
+          return false;
+        }
+        case "direct":
+        case "runtime":
+          break;
+        default: {
+          const _exhaustive: never = owner.owner;
+          throw new Error(`Unknown control owner: ${_exhaustive}`);
+        }
+      }
       const result = await window.hermesAPI.runtimeRestart(profile);
       const status = await window.hermesAPI.runtimeGetStatus(profile);
       if (result.ok && status.state === "ready") {

@@ -1,0 +1,10 @@
+# Copy to a Windows minion: C:\salt\conf\minion
+master: 127.0.0.1
+id: lab-minion-01
+grains:
+  roles:
+    - smc-endpoint
+return: smc_backend
+beacons:
+  smc_hermes_health:
+    - interval: 60

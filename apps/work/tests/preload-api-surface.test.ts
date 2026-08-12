@@ -145,6 +145,7 @@ describe("Legacy APIs preserved (backward compat)", () => {
     "runtimeRestart",
     "runtimeValidateHome",
     "runtimeAdoptHome",
+    "getControlOwner",
     "onRuntimeStatusChanged",
     "onInstallProgress",
     // Hermes engine

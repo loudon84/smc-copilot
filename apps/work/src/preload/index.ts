@@ -34,6 +34,7 @@ import type {
   HermesRuntimeConnectionResult,
   HermesRuntimeProbe,
 } from "../shared/runtime/runtime-contract";
+import type { ControlOwnerSnapshot } from "../shared/runtime/control-owner";
 import { createFilesApi } from "./files-api";
 import type { HermesFilesAPI } from "../shared/files";
 
@@ -120,6 +121,9 @@ const hermesAPI = {
 
   runtimeAdoptHome: (dir: string): Promise<boolean> =>
     ipcRenderer.invoke("runtime-adopt-home", dir),
+
+  getControlOwner: (): Promise<ControlOwnerSnapshot> =>
+    ipcRenderer.invoke("get-control-owner"),
 
   onRuntimeStatusChanged: (
     callback: (probe: HermesRuntimeProbe) => void,

@@ -14,12 +14,21 @@
 - [ADR-003 Runtime contract](adr/ADR-003-runtime-contract.md)
 - [ADR-004 Release versioning](adr/ADR-004-release-versioning.md)
 - [ADR-005 Main-only client](adr/ADR-005-main-only-client.md)
+- [ADR-026 Salt Endpoint Control Plane](adr/ADR-026-salt-endpoint-control-plane.md)
 
 ## Project AGENTS
 
 - Root routing: [`../AGENTS.md`](../AGENTS.md)
 - Desktop: [`../apps/desktop/AGENTS.md`](../apps/desktop/AGENTS.md)
 - Runtime: [`../services/runtime/AGENTS.md`](../services/runtime/AGENTS.md)
+- Work: [`../apps/work/AGENTS.md`](../apps/work/AGENTS.md)
+- Salt (v2.0): [`../infra/salt/README.md`](../infra/salt/README.md)
+
+## Salt (Work v2.0)
+
+- [Salt overview](salt/README.md)
+- [Canary runbook](salt/CANARY.md)
+- [Go / No-Go](salt/GO-NO-GO.md)
 
 ## PRD
 

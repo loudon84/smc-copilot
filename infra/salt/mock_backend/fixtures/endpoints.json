@@ -1,0 +1,12 @@
+{
+  "lab-minion-01": {
+    "endpoint_id": "lab-minion-01",
+    "department": "engineering",
+    "hostname": "lab-pc-01"
+  },
+  "lab-minion-02": {
+    "endpoint_id": "lab-minion-02",
+    "department": "finance",
+    "hostname": "lab-pc-02"
+  }
+}

@@ -7,11 +7,33 @@ import type {
   HermesRuntimeProbe,
 } from "../../shared/runtime/runtime-contract";
 import { RuntimeServiceAdapter } from "./runtime-service-adapter";
+import { LegacyLocalRuntimeAdapter } from "./legacy-local-runtime-adapter";
+import { HermesAvailabilityBackend } from "../hermes/availability-backend";
+import { getHermesControlOwner } from "../hermes/control-owner";
 import {
   setHermesHomeOverride,
   HERMES_HOME,
 } from "./hermes-runtime-paths";
 import { validateHermesHomeDir } from "./hermes-runtime-locator";
+
+function defaultAdapter(): HermesRuntimeAdapter {
+  const owner = getHermesControlOwner();
+  switch (owner) {
+    case "salt":
+      // Probe-only Availability (Gateway :8642 /health). No Runtime :8765.
+      return new HermesAvailabilityBackend();
+    case "direct":
+      // Default Work path: locate Hermes home + probe/start Gateway locally.
+      return new LegacyLocalRuntimeAdapter();
+    case "runtime":
+      // Opt-in Copilot Runtime HTTP control plane (:8765).
+      return new RuntimeServiceAdapter();
+    default: {
+      const _exhaustive: never = owner;
+      throw new Error(`Unknown control owner: ${_exhaustive}`);
+    }
+  }
+}
 
 export class RuntimeManager {
   private adapter: HermesRuntimeAdapter;
@@ -19,9 +41,7 @@ export class RuntimeManager {
   private listeners = new Set<(probe: HermesRuntimeProbe) => void>();
 
   constructor(adapter?: HermesRuntimeAdapter) {
-    // Default: Runtime Service owns Hermes lifecycle for the default profile.
-    // Non-default profiles fall back inside RuntimeServiceAdapter.
-    this.adapter = adapter ?? new RuntimeServiceAdapter();
+    this.adapter = adapter ?? defaultAdapter();
   }
 
   setAdapter(adapter: HermesRuntimeAdapter): void {

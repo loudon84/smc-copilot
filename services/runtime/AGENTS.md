@@ -125,9 +125,16 @@ The second example is invalid because `Bad Section` has no leading paragraph. `l
 - Gateway foreign port conflict → `gateway_port_conflict`, never kill unknown PID.
 - ADRs: `docs/adr/ADR-011` … `ADR-014`.
 
+## v2.0 Endpoint Control Plane freeze (ADR-026)
+
+- Work Salt migration: Endpoint Control Plane SOT is `infra/salt`, not this service.
+- Do not add Desired State v2 / Endpoint Connection v2 / Resource Reconciler v2 here.
+- Control-plane PRs: P0/P1 and security only. Chat/Task data plane is unchanged.
+- Inventory: `python scripts/salt-migration-inventory.py` from repo root.
+
 ## Hermes Supervisor hard rules (PRD v1.5 / v1.5.1 / v1.5.2 / v1.5.3 / v1.5.4)
 
-- Runtime is the exclusive owner of Hermes Gateway processes.
+- Runtime is the exclusive owner of Hermes Gateway processes **when `control-owner` is `runtime`**. Salt owner mode must not run Runtime gateway supervisor.
 - `GatewayOwnershipService.inspect()` is the sole source of Gateway process ownership truth.
 - Do not infer Gateway exit from ownership failure (`not owned ≠ exited`).
 - Launcher PID and Gateway listener PID may differ; listener identity is authoritative after startup.

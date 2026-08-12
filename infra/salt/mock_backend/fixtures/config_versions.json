@@ -1,0 +1,24 @@
+{
+  "1": {
+    "revision": "1",
+    "hermes": { "version": "0.16.0" },
+    "gateway": { "port": 8642, "task_name": "SMC Hermes Gateway" },
+    "platforms": {
+      "api_server": { "enabled": true, "extra": { "port": 8642 } }
+    },
+    "secret_refs": {
+      "api_server_key": "vault://lab/user-demo/api-server-key"
+    }
+  },
+  "2": {
+    "revision": "2",
+    "hermes": { "version": "0.16.0" },
+    "gateway": { "port": 8642, "task_name": "SMC Hermes Gateway" },
+    "platforms": {
+      "api_server": { "enabled": true, "extra": { "port": 8642 } }
+    },
+    "secret_refs": {
+      "api_server_key": "vault://lab/user-alt/api-server-key"
+    }
+  }
+}
