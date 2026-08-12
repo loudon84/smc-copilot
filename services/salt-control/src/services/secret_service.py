@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 
 from core.errors import ErrorCode, SaltControlError
-from core.idempotency import IdempotencyStore
 from core.logging import safe_log_fields
 from db.repositories.interfaces import RepositoryBundle, SecretScopeRecord
 from integrations.secret_provider import SecretProvider
 from schemas.secret import SecretResolveRequest, SecretResolveResponse, SecretValue
+from services.idempotency_helper import get_cached_response, request_digest, store_response
 
 
 class SecretService:
@@ -15,16 +15,15 @@ class SecretService:
         self,
         repos: RepositoryBundle,
         provider: SecretProvider,
-        idempotency: IdempotencyStore,
     ) -> None:
         self.repos = repos
         self.provider = provider
-        self.idempotency = idempotency
 
     async def resolve(self, body: SecretResolveRequest) -> SecretResolveResponse:
-        cached = self.idempotency.get(f"secret:{body.request_id}")
+        digest = request_digest(body)
+        cached = await get_cached_response(self.repos, f"secret:{body.request_id}", digest)
         if cached is not None:
-            return cached
+            return SecretResolveResponse.model_validate(cached)
 
         binding = await self.repos.bindings.get_active(body.endpoint_id)
         if binding is None or binding.user_id != body.user_id:
@@ -56,7 +55,12 @@ class SecretService:
             secrets.append(SecretValue(ref=ref, value=value, status="ok"))
 
         response = SecretResolveResponse(secrets=secrets)
-        self.idempotency.put(f"secret:{body.request_id}", response)
+        await store_response(
+            self.repos,
+            f"secret:{body.request_id}",
+            digest,
+            response.model_dump(mode="json", by_alias=True),
+        )
         return response
 
     async def upsert_scope(

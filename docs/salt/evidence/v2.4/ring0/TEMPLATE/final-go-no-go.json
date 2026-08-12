@@ -1,0 +1,13 @@
+{
+  "schema": "smc.salt-evidence.ring0.final.v1",
+  "version": "v2.4",
+  "decision": "NO-GO",
+  "status": "not_proven",
+  "manualGate": true,
+  "signatures": {
+    "business": null,
+    "platform": null,
+    "security": null
+  },
+  "blockedReason": "Ring 0 live 5-endpoint migration and 7-day observation not attested by operators."
+}

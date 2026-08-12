@@ -10,17 +10,27 @@ from db.repositories.interfaces import (
     OperationStepRecord,
     RepositoryBundle,
 )
+from db.unit_of_work import unit_of_work
 from integrations.salt_master import SaltMaster
+from services.job_result import parse_job_success
 
 
 class EnrollmentOperationWorker:
-    """Runs ping → sync_all → highstate after fingerprint accept; resumable across restarts."""
+    """Runs ping → sync_all → highstate after fingerprint accept; one JID per step."""
 
     STEPS = ("ping", "sync_all", "highstate")
+    FUNS = {"ping": "test.ping", "sync_all": "saltutil.sync_all", "highstate": "state.highstate"}
 
-    def __init__(self, repos: RepositoryBundle, masters: list[SaltMaster]) -> None:
+    def __init__(
+        self,
+        repos: RepositoryBundle | None = None,
+        masters: list[SaltMaster] | None = None,
+        *,
+        session_factory=None,
+    ) -> None:
         self.repos = repos
-        self.masters = masters
+        self.masters = masters or []
+        self.session_factory = session_factory
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
 
@@ -41,31 +51,33 @@ class EnrollmentOperationWorker:
         enrollment_id: str,
         request_id: str,
     ) -> EndpointOperationRecord:
-        existing = await self.repos.operations.get_by_request_id(request_id)
-        if existing is not None:
-            return existing
-        op = EndpointOperationRecord(
-            id=f"op_{secrets.token_urlsafe(10)}",
-            endpoint_id=endpoint_id,
-            enrollment_id=enrollment_id,
-            kind="enrollment_post_accept",
-            state="pending",
-            request_id=request_id,
-            created_at=datetime.now(UTC),
-        )
-        await self.repos.operations.create(op)
-        for step_name in self.STEPS:
-            await self.repos.operations.upsert_step(
-                OperationStepRecord(operation_id=op.id, step_name=step_name, state="pending")
+        async def _once(repos: RepositoryBundle) -> EndpointOperationRecord:
+            existing = await repos.operations.get_by_request_id(request_id)
+            if existing is not None:
+                return existing
+            op = EndpointOperationRecord(
+                id=f"op_{secrets.token_urlsafe(10)}",
+                endpoint_id=endpoint_id,
+                enrollment_id=enrollment_id,
+                kind="enrollment_post_accept",
+                state="pending",
+                request_id=request_id,
+                created_at=datetime.now(UTC),
             )
-        return op
+            await repos.operations.create(op)
+            for step_name in self.STEPS:
+                await repos.operations.upsert_step(
+                    OperationStepRecord(operation_id=op.id, step_name=step_name, state="pending")
+                )
+            return op
+
+        return await self._with_repos(_once)
 
     async def _loop(self) -> None:
         while not self._stop.is_set():
             try:
                 await self.tick()
             except Exception:
-                # Fail soft in worker loop; individual ops record errors.
                 pass
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=2.0)
@@ -73,46 +85,49 @@ class EnrollmentOperationWorker:
                 continue
 
     async def tick(self) -> None:
-        ops = await self.repos.operations.list_resumable(kinds=["enrollment_post_accept"])
-        for op in ops:
-            await self._process(op)
+        async def _once(repos: RepositoryBundle) -> None:
+            ops = await repos.operations.list_resumable(kinds=["enrollment_post_accept"])
+            for op in ops:
+                await self._process(repos, op)
 
-    async def _process(self, op: EndpointOperationRecord) -> None:
+        await self._with_repos(_once)
+
+    async def _process(self, repos: RepositoryBundle, op: EndpointOperationRecord) -> None:
         if not self.masters:
             return
         primary = self.masters[0]
         enrollment = None
         if op.enrollment_id:
-            enrollment = await self.repos.enrollments.get(op.enrollment_id)
+            enrollment = await repos.enrollments.get(op.enrollment_id)
         op.state = "running"
-        await self.repos.operations.update(op)
+        await repos.operations.update(op)
 
         for step_name in self.STEPS:
-            step = await self.repos.operations.get_step(op.id, step_name)
-            if step is None:
-                continue
-            if step.state == "completed":
+            step = await repos.operations.get_step(op.id, step_name)
+            if step is None or step.state == "completed":
                 continue
             step.state = "running"
             step.started_at = datetime.now(UTC)
-            await self.repos.operations.upsert_step(step)
+            await repos.operations.upsert_step(step)
             try:
+                fun = self.FUNS[step_name]
                 ok = False
-                jid = None
-                if hasattr(primary, "local_async"):
-                    fun = {"ping": "test.ping", "sync_all": "saltutil.sync_all", "highstate": "state.highstate"}[
-                        step_name
-                    ]
+                jid = step.salt_jid
+                if jid and hasattr(primary, "wait_job"):
+                    job = await primary.wait_job(jid, timeout_seconds=300)  # type: ignore[attr-defined]
+                    parsed = parse_job_success(job, op.endpoint_id)
+                    ok = bool(parsed) if parsed is not None else False
+                elif hasattr(primary, "local_async"):
                     jid = await primary.local_async(op.endpoint_id, fun)  # type: ignore[attr-defined]
                     step.salt_jid = jid
+                    await repos.operations.upsert_step(step)
                     job = await primary.wait_job(jid, timeout_seconds=300)  # type: ignore[attr-defined]
-                    ok = bool(job)
-                    if step_name == "ping":
-                        ok = await primary.ping(op.endpoint_id)
-                    elif step_name == "sync_all":
-                        ok = await primary.sync_all(op.endpoint_id)
-                    elif step_name == "highstate":
-                        ok = await primary.highstate(op.endpoint_id)
+                    parsed = parse_job_success(job, op.endpoint_id)
+                    if parsed is None and step_name == "ping":
+                        # Fallback only when wait_job returns empty structure.
+                        ok = bool(job)
+                    else:
+                        ok = bool(parsed) if parsed is not None else bool(job)
                 else:
                     if step_name == "ping":
                         ok = await primary.ping(op.endpoint_id)
@@ -120,6 +135,7 @@ class EnrollmentOperationWorker:
                         ok = await primary.sync_all(op.endpoint_id)
                     elif step_name == "highstate":
                         ok = await primary.highstate(op.endpoint_id)
+
                 if not ok:
                     step.state = "failed"
                     step.error_code = {
@@ -129,20 +145,20 @@ class EnrollmentOperationWorker:
                     }[step_name]
                     step.completed_at = datetime.now(UTC)
                     step.result_redacted = {"ok": False}
-                    await self.repos.operations.upsert_step(step)
+                    await repos.operations.upsert_step(step)
                     op.state = "failed"
                     op.error_code = step.error_code
                     op.completed_at = datetime.now(UTC)
-                    await self.repos.operations.update(op)
+                    await repos.operations.update(op)
                     if enrollment is not None:
                         enrollment.state = "failed"
                         enrollment.error_code = step.error_code
-                        await self.repos.enrollments.update(enrollment)
+                        await repos.enrollments.update(enrollment)
                     return
                 step.state = "completed"
                 step.completed_at = datetime.now(UTC)
                 step.result_redacted = {"ok": True, "jid": jid}
-                await self.repos.operations.upsert_step(step)
+                await repos.operations.upsert_step(step)
                 if enrollment is not None:
                     if step_name == "ping":
                         enrollment.state = "accepted"
@@ -151,18 +167,25 @@ class EnrollmentOperationWorker:
                     elif step_name == "highstate":
                         enrollment.state = "highstate"
                         enrollment.completed_at = datetime.now(UTC)
-                    await self.repos.enrollments.update(enrollment)
+                    await repos.enrollments.update(enrollment)
             except Exception:
                 step.state = "failed"
                 step.error_code = ErrorCode.INTERNAL_ERROR
                 step.completed_at = datetime.now(UTC)
-                await self.repos.operations.upsert_step(step)
+                await repos.operations.upsert_step(step)
                 op.state = "failed"
                 op.error_code = ErrorCode.INTERNAL_ERROR
                 op.completed_at = datetime.now(UTC)
-                await self.repos.operations.update(op)
+                await repos.operations.update(op)
                 return
 
         op.state = "completed"
         op.completed_at = datetime.now(UTC)
-        await self.repos.operations.update(op)
+        await repos.operations.update(op)
+
+    async def _with_repos(self, fn):
+        if self.session_factory is not None:
+            async with unit_of_work(self.session_factory) as uow:
+                return await fn(uow.repos)
+        assert self.repos is not None
+        return await fn(self.repos)

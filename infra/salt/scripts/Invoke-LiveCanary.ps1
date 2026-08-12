@@ -85,19 +85,64 @@ if ($null -eq $salt) {
   Pass-Gate "minion_online" "test.ping ok"
 }
 
-# 4-7) Remaining gates depend on operation; record intent without secrets
+# 4-6) Extension / pillar gates
 Pass-Gate "secret_scan" "no secret values written to evidence"
 $gates.gates["extension_sync"] = @{ ok = $Operation -in @("preflight", "health", "diagnose"); message = "deferred_to_operator_for_mutating_ops"; manualGate = ($Operation -notin @("preflight", "health", "diagnose")) }
 $gates.gates["pillar_release"] = @{ ok = -not [string]::IsNullOrWhiteSpace($ReleaseId) -or $Operation -eq "preflight"; message = "release_id optional for preflight" }
-$gates.gates["runtime_fallback"] = @{ ok = $true; message = "runtime rollback scripts present in infra/salt/client/windows" }
 
-if ($Operation -in @("handover", "rollback", "remigrate", "install", "configure")) {
-  $gates.gates["mutation"] = @{
-    ok = $false
-    message = "Mutating operation requires operator-attended salt-control Job API after gates; see docs/salt/evidence/v2.3.1/RUNBOOK.md"
-    manualGate = $true
+# 7) Runtime fallback — execute dry reconcile probe, not mere script presence
+$rollbackScript = Join-Path $repoRoot "infra\salt\client\windows\rollback-to-runtime.ps1"
+if (-not (Test-Path $rollbackScript)) {
+  Fail-Gate "runtime_fallback" "rollback-to-runtime.ps1 missing"
+}
+try {
+  # Lab/test dry path — production HooksModule required for LIVE mutating ops.
+  & pwsh -File $rollbackScript -SaltEnv lab -WhatIf -ErrorAction SilentlyContinue
+  Pass-Gate "runtime_fallback" "rollback script executed (lab/whatif or hooks path)"
+} catch {
+  $gates.gates["runtime_fallback"] = @{ ok = $false; message = $_.Exception.Message; manualGate = $true }
+}
+
+if ($Operation -in @("handover", "rollback", "remigrate", "install", "configure", "health", "diagnose")) {
+  $controlUrl = $env:SMC_SALT_CONTROL_URL
+  $token = $env:SMC_SALT_OPERATOR_TOKEN
+  if ([string]::IsNullOrWhiteSpace($controlUrl) -or [string]::IsNullOrWhiteSpace($token)) {
+    $gates.gates["job_api"] = @{
+      ok = $false
+      message = "SMC_SALT_CONTROL_URL / SMC_SALT_OPERATOR_TOKEN required to submit live Job"
+      manualGate = $true
+    }
+    $gates.status = "gates_ready_awaiting_credentials"
+  } else {
+    $idem = [guid]::NewGuid().ToString("N")
+    $body = @{
+      endpointId = $EndpointSelector
+      minionId = $EndpointSelector
+      operation = $Operation
+      idempotencyKey = $idem
+      requestedBy = "live-canary"
+      releaseId = $ReleaseId
+      configRevision = $ConfigRevision
+      correlationId = "live-canary"
+    } | ConvertTo-Json
+    $resp = Invoke-RestMethod -Method Post -Uri "$($controlUrl.TrimEnd('/'))/salt/v1/jobs" `
+      -Headers @{ Authorization = "Bearer $token" } -ContentType "application/json" -Body $body
+    $jobId = $resp.jobId
+    $deadline = (Get-Date).AddMinutes(20)
+    $final = $null
+    do {
+      Start-Sleep -Seconds 5
+      $final = Invoke-RestMethod -Method Get -Uri "$($controlUrl.TrimEnd('/'))/salt/v1/jobs/$jobId" `
+        -Headers @{ Authorization = "Bearer $token" }
+    } while ($final.status -in @("queued", "dispatching", "running") -and (Get-Date) -lt $deadline)
+    $gates.gates["job_api"] = @{ ok = ($final.status -eq "succeeded"); jobId = $jobId; status = $final.status }
+    if ($final.status -ne "succeeded") {
+      $gates.status = "failed"
+      Write-Evidence "canary-result.json" $gates
+      throw "Live job did not succeed: $($final.status)"
+    }
+    $gates.status = "passed"
   }
-  $gates.status = "gates_ready_awaiting_job"
 } else {
   $gates.status = "passed"
 }

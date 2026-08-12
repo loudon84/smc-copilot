@@ -17,6 +17,22 @@ on:
 jobs:
   salt-control:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: salt_control_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/salt_control_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,11 +53,14 @@ jobs:
         run: uv run pytest -q
       - name: Alembic upgrade head
         working-directory: services/salt-control
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/salt_control_ci
+        run: uv run alembic upgrade head
+      - name: Alembic upgrade → downgrade → upgrade
+        working-directory: services/salt-control
         run: |
-          echo "Alembic check uses in-memory repos in pytest; verify migration script syntax."
-          uv run python -c "import importlib.util; spec=importlib.util.spec_from_file_location('m', 'migrations/versions/20260812_v22_initial.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); print('migration ok')"
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
       - name: OpenAPI export drift
         working-directory: services/salt-control
         run: uv run pytest tests/test_openapi_export.py -q
@@ -68,3 +87,13 @@ jobs:
       - name: Migration inventory
         working-directory: infra/salt
         run: uv run python ../../scripts/salt-migration-inventory.py --check
+      - name: v2.4 single-master deploy list excludes failover
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          deploy = Path("infra/salt/master/deploy-list-v24-single-master.txt")
+          assert deploy.is_file(), "missing deploy-list-v24-single-master.txt"
+          text = deploy.read_text(encoding="utf-8")
+          assert "failover.conf" not in text, "failover.conf must not be in v2.4 single-master deploy list"
+          print("ok: failover.conf excluded")
+          PY

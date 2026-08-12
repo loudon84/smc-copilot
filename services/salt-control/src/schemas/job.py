@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from schemas.common import CamelModel
+from schemas.job_payload import JobPayload
 
 JobOperation = Literal[
     "install",
@@ -37,6 +38,7 @@ class JobCreateRequest(CamelModel):
     release_id: str | None = None
     requested_by: str
     correlation_id: str | None = None
+    payload: JobPayload | None = None
 
 
 class JobResponse(CamelModel):
@@ -56,11 +58,15 @@ class JobResponse(CamelModel):
 class EndpointStatusResponse(CamelModel):
     endpoint_id: str
     heartbeat: str | None = None
-    last_job: dict | None = None
-    rollout: dict | None = None
-    deployment: dict | None = None
+    last_job: dict[str, Any] | None = None
+    rollout: dict[str, Any] | None = None
+    deployment: dict[str, Any] | None = None
     current_release: str | None = None
+    desired_release: str | None = None
     current_revision: str | None = None
+    desired_revision: str | None = None
     gateway_health: str | None = None
+    owner: str | None = None
     migration_phase: str | None = None
+    target_state: str | None = None
     last_error: str | None = None

@@ -1,10 +1,10 @@
-# Production Salt Master (v2.2 / v2.3)
+# Production Salt Master (v2.4 Ring 0)
 
-Topology: production target is two Linux Masters in Active/Passive failover. **v2.3 first-endpoint lab** may use single Master `192.168.102.104` only — Ring 0 remains **NO-GO** until second Master + failover drill are proven.
+Topology: **v2.4 Ring 0 uses a single Master** at `192.168.102.104`. Second Master, MultiMaster-PKI, and bidirectional failover are deferred to **v2.5 HA Readiness**. Do not deploy `master.d/failover.conf` for Ring 0 (see `deploy-list-v24-single-master.txt`).
 
-Minions: single Master uses scalar `master:`; multimaster uses `master_type: failover` with `master_alive_interval: 60`.
+Minions: Ring 0 uses scalar `master: 192.168.102.104`. Multimaster `master_type: failover` is out of scope until v2.5.
 
-## salt-api / eAuth (v2.3)
+## salt-api / eAuth
 
 - `master.d/salt-api.conf` — rest_cherrypy TLS only
 - `master.d/eauth.conf` — `salt_control` allowlist (`test.ping`, `saltutil.*`, `state.*`, `smc_hermes.*`, `smc_handover.*`); no shell/cmd
@@ -27,7 +27,7 @@ Minions: single Master uses scalar `master:`; multimaster uses `master_type: fai
 | Cadence | Scope |
 | --- | --- |
 | Daily | PKI, Master config (`master.d`), accepted keys, rollout metadata pointers |
-| Quarterly | Restore drill onto a spare Master; verify `test.ping` + `state.highstate` on a lab minion |
+| Ring 0 | Restore drill onto an isolated spare; verify `test.ping` + sync + health (see v2.3.1 / v2.4 evidence) |
 
 ## Verification commands
 
@@ -39,6 +39,7 @@ saltutil.sync_all
 sys.list_modules
 sys.list_state_modules
 smc_hermes.inspect
-smc_handover.commit
+smc_handover.migrate
+smc_handover.rollback
 state.highstate
 ```

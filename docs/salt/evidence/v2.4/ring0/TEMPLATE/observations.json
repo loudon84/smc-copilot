@@ -1,0 +1,6 @@
+{
+  "schema": "smc.salt-evidence.ring0.observations.v1",
+  "status": "manual_gate",
+  "windows": ["15m", "1h", "6h", "24h", "7d"],
+  "captures": []
+}

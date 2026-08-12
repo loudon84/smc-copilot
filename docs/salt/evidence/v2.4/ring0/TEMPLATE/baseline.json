@@ -1,0 +1,13 @@
+{
+  "schema": "smc.salt-evidence.ring0.baseline.v1",
+  "version": "v2.4",
+  "status": "manual_gate",
+  "manualGate": true,
+  "provenBy": null,
+  "master": {
+    "host": "192.168.102.104",
+    "mode": "single_master",
+    "secondMaster": false
+  },
+  "notes": "Fill after freezing the five Ring 0 IT/dev endpoints. Do not mark proven from CI."
+}

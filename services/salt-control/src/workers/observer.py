@@ -6,13 +6,28 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.logging import safe_log_fields
-from db.repositories.interfaces import AuditEventRecord, RepositoryBundle, RolloutRecord
+from db.repositories.interfaces import (
+    AuditEventRecord,
+    ControlPlaneIncidentRecord,
+    EndpointObservationRecord,
+    RepositoryBundle,
+    RolloutObservationRecord,
+)
 from db.unit_of_work import unit_of_work
 from integrations.salt_master import SaltMaster
 
+OBSERVATION_WINDOWS = ("15m", "1h", "6h", "24h", "7d")
+WINDOW_SECONDS = {
+    "15m": 900,
+    "1h": 3600,
+    "6h": 21600,
+    "24h": 86400,
+    "7d": 604800,
+}
+
 
 class ControlPlaneObserver:
-    """Aggregates Master / heartbeat / job / rollout health every 60s (v2.3.1)."""
+    """Aggregates Master / heartbeat / job / rollout health every 60s (v2.4)."""
 
     def __init__(
         self,
@@ -38,14 +53,13 @@ class ControlPlaneObserver:
             "rollout_pause_master_unavailable_total": 0,
             "gateway_health_failure_total": 0,
             "endpoint_heartbeat_age_seconds": 0,
+            "p0_incident_total": 0,
+            "p1_incident_total": 0,
         }
-        self.windows: dict[str, dict[str, Any]] = {
-            "1h": {},
-            "6h": {},
-            "24h": {},
-        }
+        self.windows: dict[str, dict[str, Any]] = {w: {} for w in OBSERVATION_WINDOWS}
         self.last_tick_at: datetime | None = None
         self.master_available = True
+        self._window_last_write: dict[str, datetime] = {}
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -84,16 +98,33 @@ class ControlPlaneObserver:
         self.master_available = master_ok
         if not master_ok:
             self._consecutive_master_failures += 1
-            self.metrics["master_unavailable_seconds"] = (
-                int(self.metrics["master_unavailable_seconds"]) + int(self.interval_seconds)
+            self.metrics["master_unavailable_seconds"] = int(self.metrics["master_unavailable_seconds"]) + int(
+                self.interval_seconds
             )
+            # 180s threshold ≈ 3 ticks at 60s
             if self._consecutive_master_failures >= self.master_unavailable_threshold:
-                paused = await self._pause_rollouts(repos, now)
+                paused = await self._pause_rollouts(repos, now, reason="master_unavailable")
                 self.metrics["rollout_pause_master_unavailable_total"] = (
                     int(self.metrics["rollout_pause_master_unavailable_total"]) + paused
                 )
+                if paused:
+                    await repos.control_plane_incidents.create(
+                        ControlPlaneIncidentRecord(
+                            id=f"inc_{secrets.token_urlsafe(8)}",
+                            severity="P0",
+                            code="MASTER_UNAVAILABLE",
+                            message="Salt Master unavailable beyond threshold",
+                            metadata_redacted=safe_log_fields(seconds=self.metrics["master_unavailable_seconds"]),
+                        )
+                    )
+                    self.metrics["p0_incident_total"] = int(self.metrics["p0_incident_total"]) + 1
         else:
             self._consecutive_master_failures = 0
+
+        # Auto-pause on open P0/P1 incidents or SLO flags in extras.
+        open_incidents = await repos.control_plane_incidents.list_open()
+        if any(i.severity in {"P0", "P1"} for i in open_incidents):
+            await self._pause_rollouts(repos, now, reason="open_p0_p1")
 
         reclaimed = await repos.control_jobs.expire_stale_leases(now=now)
         snapshot = {
@@ -102,13 +133,44 @@ class ControlPlaneObserver:
             "leasesExpired": reclaimed,
             "masterUnavailableSeconds": self.metrics["master_unavailable_seconds"],
             "rolloutPauses": self.metrics["rollout_pause_master_unavailable_total"],
+            "openIncidents": len(open_incidents),
         }
-        self.windows["1h"] = snapshot
-        # Keep longer windows as last known snapshot until a real time-series store exists.
-        if not self.windows["6h"] or (now - _parse(self.windows["6h"].get("at"))).total_seconds() >= 21600:
-            self.windows["6h"] = snapshot
-        if not self.windows["24h"] or (now - _parse(self.windows["24h"].get("at"))).total_seconds() >= 86400:
-            self.windows["24h"] = snapshot
+        for window in OBSERVATION_WINDOWS:
+            last = self._window_last_write.get(window)
+            period = WINDOW_SECONDS[window]
+            if last is None or (now - last).total_seconds() >= min(period, self.interval_seconds):
+                self.windows[window] = snapshot
+                self._window_last_write[window] = now
+                await self._persist_windows(repos, now, window, snapshot)
+
+    async def _persist_windows(
+        self, repos: RepositoryBundle, now: datetime, window: str, snapshot: dict[str, Any]
+    ) -> None:
+        active = await repos.rollouts.list_active()
+        for rollout in active:
+            await repos.rollout_observations.append(
+                RolloutObservationRecord(
+                    rollout_id=rollout.id,
+                    window=window,
+                    payload_json=dict(snapshot),
+                    captured_at=now,
+                )
+            )
+            for target in await repos.rollouts.list_targets(rollout.id):
+                await repos.endpoint_observations.append(
+                    EndpointObservationRecord(
+                        endpoint_id=target.endpoint_id,
+                        window=window,
+                        payload_json={
+                            **snapshot,
+                            "rolloutId": rollout.id,
+                            "targetState": target.state,
+                            "gatewayHealth": "unknown",
+                            "owner": "salt" if target.state in {"completed", "succeeded"} else "pending",
+                        },
+                        captured_at=now,
+                    )
+                )
 
     async def _check_masters(self) -> bool:
         if not self.masters:
@@ -123,10 +185,9 @@ class ControlPlaneObserver:
                 continue
         return True
 
-    async def _pause_rollouts(self, repos: RepositoryBundle, now: datetime) -> int:
-        # In-memory / SQL rollout repos lack list_all — pause via extras cache or skip.
+    async def _pause_rollouts(self, repos: RepositoryBundle, now: datetime, *, reason: str) -> int:
         paused = 0
-        known: list[RolloutRecord] = list(repos.extras.get("active_rollouts") or [])
+        known = await repos.rollouts.list_active()
         for record in known:
             if record.state in {"running", "advancing", "approved"}:
                 record.state = "paused"
@@ -141,7 +202,7 @@ class ControlPlaneObserver:
                         target_type="rollout",
                         target_id=record.id,
                         request_id=None,
-                        metadata_redacted=safe_log_fields(reason="master_unavailable"),
+                        metadata_redacted=safe_log_fields(reason=reason),
                         occurred_at=now,
                     )
                 )

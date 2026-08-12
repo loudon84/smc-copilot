@@ -66,8 +66,7 @@ class InMemoryControlJobRepository(ControlJobRepository):
                 (
                     j
                     for j in self._by_id.values()
-                    if j.status == "queued"
-                    and (j.lease_expires_at is None or j.lease_expires_at < now)
+                    if j.status == "queued" and (j.lease_expires_at is None or j.lease_expires_at < now)
                 ),
                 key=lambda j: j.accepted_at or now,
             )

@@ -40,7 +40,6 @@ from workers.observer import ControlPlaneObserver
 class AppState:
     settings: Settings
     repos: RepositoryBundle
-    idempotency: IdempotencyStore
     backend: ManagementBackend
     masters: list[SaltMaster]
     secret_provider: SecretProvider
@@ -58,6 +57,8 @@ class AppState:
     observer: ControlPlaneObserver | None = None
     session_factory: Any | None = None
     _boot_session: Any | None = None
+    # Deprecated: kept for lab/test backwards-compat only.
+    idempotency: IdempotencyStore | None = None
 
 
 def build_test_state(settings: Settings | None = None) -> AppState:
@@ -118,9 +119,11 @@ def build_production_state(settings: Settings | None = None) -> AppState:
         raise RuntimeError("production must not use FakeArtifactStore")
 
     idempotency = IdempotencyStore()
-    worker = EnrollmentOperationWorker(repos, masters)
+    # Workers use session_factory — no long-lived business Session ownership.
+    worker = EnrollmentOperationWorker(masters=masters, session_factory=session_factory)
     job_worker = JobWorker(masters=masters, session_factory=session_factory)
     observer = ControlPlaneObserver(masters=masters, session_factory=session_factory)
+    # Boot repos retained only for readiness probes / lab-compat service handles.
     job_service = JobService(repos)
     return AppState(
         settings=cfg,
@@ -133,9 +136,9 @@ def build_production_state(settings: Settings | None = None) -> AppState:
         enrollment_service=EnrollmentService(repos, cfg, masters, worker),
         desired_state_service=DesiredStateService(repos, backend, cfg),
         return_service=ReturnService(repos),
-        secret_service=SecretService(repos, secret_provider, idempotency),
+        secret_service=SecretService(repos, secret_provider),
         artifact_service=ArtifactService(repos, artifact_store),
-        rollout_service=RolloutService(repos, idempotency),
+        rollout_service=RolloutService(repos),
         job_service=job_service,
         handover_service=HandoverService(job_service),
         worker=worker,
@@ -150,13 +153,11 @@ def _build_fake_state(cfg: Settings) -> AppState:
     repos = build_in_memory_repos()
     idempotency = IdempotencyStore()
     backend: ManagementBackend = FakeManagementBackend()
-    masters: list[SaltMaster] = [
-        FakeSaltMaster(name="salt-a"),
-        FakeSaltMaster(name="salt-b"),
-    ]
+    # v2.4: test/lab use a single Fake Master to match production single-master path.
+    masters: list[SaltMaster] = [FakeSaltMaster(name="salt-a")]
     secret_provider: SecretProvider = FakeSecretProvider()
     artifact_store: ArtifactStore = FakeArtifactStore()
-    worker = EnrollmentOperationWorker(repos, masters)
+    worker = EnrollmentOperationWorker(repos=repos, masters=masters)
     job_worker = JobWorker(masters=masters, repos=repos)
     observer = ControlPlaneObserver(masters=masters, repos=repos, interval_seconds=60.0)
     job_service = JobService(repos)
@@ -171,9 +172,9 @@ def _build_fake_state(cfg: Settings) -> AppState:
         enrollment_service=EnrollmentService(repos, cfg, masters, worker),
         desired_state_service=DesiredStateService(repos, backend, cfg),
         return_service=ReturnService(repos),
-        secret_service=SecretService(repos, secret_provider, idempotency),
+        secret_service=SecretService(repos, secret_provider),
         artifact_service=ArtifactService(repos, artifact_store),
-        rollout_service=RolloutService(repos, idempotency),
+        rollout_service=RolloutService(repos),
         job_service=job_service,
         handover_service=HandoverService(job_service),
         worker=worker,

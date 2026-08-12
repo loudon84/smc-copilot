@@ -1,0 +1,6 @@
+{
+  "schema": "smc.salt-evidence.ring0.work-probes.v1",
+  "status": "manual_gate",
+  "probes": [],
+  "notes": "Work probe must succeed before COMPLETED marker is written."
+}

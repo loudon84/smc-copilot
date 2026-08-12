@@ -34,6 +34,13 @@ from db.repositories.interfaces import (
     RolloutTargetRecord,
 )
 from db.repositories.job_sqlalchemy import SqlAlchemyControlJobRepository, SqlAlchemySecretScopeRepository
+from db.repositories.v24 import (
+    SqlAlchemyControlPlaneIncidentRepository,
+    SqlAlchemyEndpointObservationRepository,
+    SqlAlchemyRolloutApprovalRepository,
+    SqlAlchemyRolloutObservationRepository,
+    SqlAlchemyRolloutTargetJobRepository,
+)
 
 
 def _dt(value: datetime | None) -> datetime | None:
@@ -399,6 +406,9 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
             rollback_rate=record.rollback_rate,
             p0_count=record.p0_count,
             p1_count=record.p1_count,
+            snapshot_digest=record.snapshot_digest,
+            snapshot_json=record.snapshot_json,
+            batch_index=record.batch_index,
             created_at=record.created_at,
         )
         self._session.add(row)
@@ -423,6 +433,9 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
         row.rollback_rate = record.rollback_rate
         row.p0_count = record.p0_count
         row.p1_count = record.p1_count
+        row.snapshot_digest = record.snapshot_digest
+        row.snapshot_json = record.snapshot_json
+        row.batch_index = record.batch_index
         await self._session.flush()
         return record
 
@@ -452,6 +465,14 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
             )
             for r in result.scalars().all()
         ]
+
+    async def list_active(self) -> list[RolloutRecord]:
+        result = await self._session.execute(
+            select(models.Rollout).where(
+                models.Rollout.state.in_(("running", "advancing", "approved", "waiting_approval", "paused"))
+            )
+        )
+        return [_rollout(r) for r in result.scalars().all()]
 
 
 class SqlAlchemyAuditRepository(AuditRepository):
@@ -508,17 +529,28 @@ class SqlAlchemyIdempotencyRepository(IdempotencyRepository):
         return IdempotencyRecord(
             key=row.key,
             response_json=dict(row.response_json or {}),
+            request_digest=row.request_digest,
             created_at=_dt(row.created_at),
             expires_at=_dt(row.expires_at),
         )
 
     async def put(self, record: IdempotencyRecord) -> IdempotencyRecord:
         row = await self._session.get(models.IdempotencyKey, record.key)
-        if row is None:
-            row = models.IdempotencyKey(key=record.key)
-            self._session.add(row)
-        row.response_json = record.response_json
-        row.expires_at = record.expires_at
+        if row is not None:
+            return IdempotencyRecord(
+                key=row.key,
+                response_json=dict(row.response_json or {}),
+                request_digest=row.request_digest,
+                created_at=_dt(row.created_at),
+                expires_at=_dt(row.expires_at),
+            )
+        row = models.IdempotencyKey(
+            key=record.key,
+            response_json=record.response_json,
+            request_digest=record.request_digest,
+            expires_at=record.expires_at,
+        )
+        self._session.add(row)
         await self._session.flush()
         return record
 
@@ -647,6 +679,11 @@ def build_sqlalchemy_repos(session: AsyncSession) -> RepositoryBundle:
         operations=SqlAlchemyOperationRepository(session),
         control_jobs=SqlAlchemyControlJobRepository(session),
         secret_scopes=SqlAlchemySecretScopeRepository(session),
+        rollout_approvals=SqlAlchemyRolloutApprovalRepository(session),
+        rollout_observations=SqlAlchemyRolloutObservationRepository(session),
+        endpoint_observations=SqlAlchemyEndpointObservationRepository(session),
+        control_plane_incidents=SqlAlchemyControlPlaneIncidentRepository(session),
+        rollout_target_jobs=SqlAlchemyRolloutTargetJobRepository(session),
         extras={},
     )
 
@@ -699,6 +736,9 @@ def _rollout(row: models.Rollout) -> RolloutRecord:
         p0_count=row.p0_count,
         p1_count=row.p1_count,
         observation_started_at=_dt(row.observation_started_at),
+        snapshot_digest=row.snapshot_digest,
+        snapshot_json=list(row.snapshot_json or []) if row.snapshot_json else None,
+        batch_index=row.batch_index,
         created_at=_dt(row.created_at),
     )
 

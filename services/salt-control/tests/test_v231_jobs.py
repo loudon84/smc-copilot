@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from conftest import operator_token
 
-from core.idempotency import IdempotencyStore
 from db.repositories.interfaces import ControlJobRecord, RolloutRecord
 from services.job_service import JobService
 from services.secret_service import SecretService
@@ -153,7 +152,7 @@ async def test_salt_jid_conflict_does_not_mutate_owner(repos):
 
 @pytest.mark.asyncio
 async def test_secret_scope_idempotent_upsert(repos, secret_provider):
-    service = SecretService(repos, secret_provider, IdempotencyStore())
+    service = SecretService(repos, secret_provider)
     for _ in range(3):
         await service.upsert_scope(
             tenant_id="t1",

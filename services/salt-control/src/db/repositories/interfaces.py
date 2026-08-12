@@ -101,6 +101,9 @@ class RolloutRecord:
     p0_count: int = 0
     p1_count: int = 0
     observation_started_at: datetime | None = None
+    snapshot_digest: str | None = None
+    snapshot_json: list[dict[str, Any]] | None = None
+    batch_index: int = 0
     created_at: datetime | None = None
 
 
@@ -139,6 +142,7 @@ class PendingTokenRecord:
 class IdempotencyRecord:
     key: str
     response_json: dict[str, Any]
+    request_digest: str | None = None
     created_at: datetime | None = None
     expires_at: datetime | None = None
 
@@ -185,6 +189,7 @@ class ControlJobRecord:
     config_revision: str | None = None
     release_id: str | None = None
     correlation_id: str | None = None
+    payload_json: dict[str, Any] | None = None
     claim_token: str | None = None
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
@@ -196,6 +201,60 @@ class ControlJobRecord:
     accepted_at: datetime | None = None
     updated_at: datetime | None = None
     completed_at: datetime | None = None
+
+
+@dataclass
+class RolloutApprovalRecord:
+    rollout_id: str
+    role: str
+    subject: str
+    decision: str
+    snapshot_digest: str
+    reason: str | None = None
+    id: int | None = None
+    created_at: datetime | None = None
+
+
+@dataclass
+class RolloutObservationRecord:
+    rollout_id: str
+    window: str
+    payload_json: dict[str, Any]
+    id: int | None = None
+    captured_at: datetime | None = None
+
+
+@dataclass
+class EndpointObservationRecord:
+    endpoint_id: str
+    window: str
+    payload_json: dict[str, Any]
+    id: int | None = None
+    captured_at: datetime | None = None
+
+
+@dataclass
+class ControlPlaneIncidentRecord:
+    id: str
+    severity: str
+    code: str
+    message: str
+    metadata_redacted: dict[str, Any]
+    rollout_id: str | None = None
+    endpoint_id: str | None = None
+    created_at: datetime | None = None
+    resolved_at: datetime | None = None
+
+
+@dataclass
+class RolloutTargetJobRecord:
+    rollout_id: str
+    endpoint_id: str
+    batch_index: int
+    job_id: str | None = None
+    state: str = "pending"
+    id: int | None = None
+    created_at: datetime | None = None
 
 
 @dataclass
@@ -262,6 +321,7 @@ class RolloutRepository(Protocol):
     async def update(self, record: RolloutRecord) -> RolloutRecord: ...
     async def add_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord: ...
     async def list_targets(self, rollout_id: str) -> list[RolloutTargetRecord]: ...
+    async def list_active(self) -> list[RolloutRecord]: ...
 
 
 class AuditRepository(Protocol):
@@ -298,11 +358,16 @@ class ControlJobRepository(Protocol):
         lease_seconds: int,
         now: datetime,
     ) -> ControlJobRecord | None: ...
-    async def reclaim_expired(self, *, worker_id: str, lease_seconds: int, now: datetime) -> ControlJobRecord | None: ...
+    async def reclaim_expired(
+        self, *, worker_id: str, lease_seconds: int, now: datetime
+    ) -> ControlJobRecord | None: ...
     async def heartbeat(self, job_id: str, *, claim_token: str, lease_seconds: int, now: datetime) -> bool: ...
-    async def set_salt_jid(self, job_id: str, *, claim_token: str, salt_jid: str, now: datetime) -> tuple[ControlJobRecord, bool]:
+    async def set_salt_jid(
+        self, job_id: str, *, claim_token: str, salt_jid: str, now: datetime
+    ) -> tuple[ControlJobRecord, bool]:
         """Return (job, assigned). assigned=False means JID conflict — job unchanged."""
         ...
+
     async def complete(
         self,
         job_id: str,
@@ -325,6 +390,35 @@ class SecretScopeRepository(Protocol):
     async def list_for_endpoint(self, endpoint_id: str) -> list[SecretScopeRecord]: ...
 
 
+class RolloutApprovalRepository(Protocol):
+    async def add(self, record: RolloutApprovalRecord) -> RolloutApprovalRecord: ...
+    async def list_for_rollout(self, rollout_id: str) -> list[RolloutApprovalRecord]: ...
+
+
+class RolloutObservationRepository(Protocol):
+    async def append(self, record: RolloutObservationRecord) -> RolloutObservationRecord: ...
+    async def list_for_rollout(
+        self, rollout_id: str, *, window: str | None = None
+    ) -> list[RolloutObservationRecord]: ...
+
+
+class EndpointObservationRepository(Protocol):
+    async def append(self, record: EndpointObservationRecord) -> EndpointObservationRecord: ...
+    async def latest(self, endpoint_id: str, *, window: str | None = None) -> EndpointObservationRecord | None: ...
+
+
+class ControlPlaneIncidentRepository(Protocol):
+    async def create(self, record: ControlPlaneIncidentRecord) -> ControlPlaneIncidentRecord: ...
+    async def list_open(self, *, rollout_id: str | None = None) -> list[ControlPlaneIncidentRecord]: ...
+
+
+class RolloutTargetJobRepository(Protocol):
+    async def upsert(self, record: RolloutTargetJobRecord) -> RolloutTargetJobRecord: ...
+    async def list_for_rollout(
+        self, rollout_id: str, *, batch_index: int | None = None
+    ) -> list[RolloutTargetJobRecord]: ...
+
+
 @dataclass
 class RepositoryBundle:
     endpoints: EndpointRepository
@@ -340,5 +434,10 @@ class RepositoryBundle:
     operations: OperationRepository
     control_jobs: ControlJobRepository
     secret_scopes: SecretScopeRepository
+    rollout_approvals: RolloutApprovalRepository
+    rollout_observations: RolloutObservationRepository
+    endpoint_observations: EndpointObservationRepository
+    control_plane_incidents: ControlPlaneIncidentRepository
+    rollout_target_jobs: RolloutTargetJobRepository
     # Lab/test only ephemeral cache — production must not rely on this.
     extras: dict[str, Any] = field(default_factory=dict)

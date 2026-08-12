@@ -36,6 +36,7 @@ def _job(row: models.ControlJob) -> ControlJobRecord:
         config_revision=row.config_revision,
         release_id=row.release_id,
         correlation_id=row.correlation_id,
+        payload_json=dict(row.payload_json or {}),
         claim_token=row.claim_token,
         lease_owner=row.lease_owner,
         lease_expires_at=_dt(row.lease_expires_at),
@@ -70,6 +71,7 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
             release_id=record.release_id,
             requested_by=record.requested_by,
             correlation_id=record.correlation_id,
+            payload_json=dict(record.payload_json or {}),
             accepted_at=record.accepted_at or now,
             updated_at=record.updated_at or now,
         )
@@ -82,16 +84,12 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
         return _job(row) if row else None
 
     async def get_by_idempotency_key(self, key: str) -> ControlJobRecord | None:
-        result = await self._session.execute(
-            select(models.ControlJob).where(models.ControlJob.idempotency_key == key)
-        )
+        result = await self._session.execute(select(models.ControlJob).where(models.ControlJob.idempotency_key == key))
         row = result.scalar_one_or_none()
         return _job(row) if row else None
 
     async def get_by_salt_jid(self, salt_jid: str) -> ControlJobRecord | None:
-        result = await self._session.execute(
-            select(models.ControlJob).where(models.ControlJob.salt_jid == salt_jid)
-        )
+        result = await self._session.execute(select(models.ControlJob).where(models.ControlJob.salt_jid == salt_jid))
         row = result.scalar_one_or_none()
         return _job(row) if row else None
 

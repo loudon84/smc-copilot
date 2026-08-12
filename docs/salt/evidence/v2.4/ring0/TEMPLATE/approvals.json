@@ -1,0 +1,8 @@
+{
+  "schema": "smc.salt-evidence.ring0.approvals.v1",
+  "status": "manual_gate",
+  "requiredRoles": ["release_owner", "platform_owner", "security_owner"],
+  "approvals": [],
+  "snapshotDigest": null,
+  "notes": "Three distinct OIDC subjects required. Digest change invalidates prior approvals."
+}

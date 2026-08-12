@@ -1,0 +1,11 @@
+{
+  "schema": "smc.salt-evidence.ring0.v1",
+  "version": "v2.4",
+  "status": "not_proven",
+  "manualGate": true,
+  "master": "192.168.102.104",
+  "batchPlan": ["1", "2", "2"],
+  "observationDays": 7,
+  "targets": null,
+  "note": "Operator fills after freezing five IT/dev endpoints. Do not auto-prove."
+}

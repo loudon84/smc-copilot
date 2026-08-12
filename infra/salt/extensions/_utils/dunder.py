@@ -11,7 +11,7 @@ from typing import Any
 
 def util_fallback() -> dict[str, Callable[..., Any]]:
     from _utils import artifact as smc_artifact
-    from _utils import config_revision, smc_control_owner, smc_paths, smc_redact
+    from _utils import config_revision, smc_control_owner, smc_handover_hooks, smc_paths, smc_redact
 
     return {
         "smc_control_owner.read_control_owner": smc_control_owner.read_control_owner,
@@ -28,6 +28,10 @@ def util_fallback() -> dict[str, Callable[..., Any]]:
         "config_revision.apply_config": config_revision.apply_config,
         "config_revision.rollback_config": config_revision.rollback_config,
         "config_revision.validate_config": config_revision.validate_config,
+        "smc_handover_hooks.build_hooks": smc_handover_hooks.build_hooks,
+        "smc_handover_hooks.run_migrate": smc_handover_hooks.run_migrate,
+        "smc_handover_hooks.run_remigrate": smc_handover_hooks.run_remigrate,
+        "smc_handover_hooks.run_rollback": smc_handover_hooks.run_rollback,
     }
 
 

@@ -1,0 +1,8 @@
+# v2.4 Ring 0 — single Master deploy inventory for 192.168.102.104
+# HA / MultiMaster / failover.conf are deferred to v2.5.
+
+master/master.conf
+master/master.d/eauth.conf
+master/master.d/api.conf
+# Explicitly EXCLUDED from Ring 0:
+# master/master.d/failover.conf

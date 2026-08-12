@@ -25,8 +25,13 @@ ALLOWED_LOCAL_FUNCS = frozenset(
         "smc_hermes.install",
         "smc_hermes.upgrade",
         "smc_hermes.rollback",
+        "smc_hermes.apply_config",
+        "smc_hermes.restart",
+        "smc_hermes.gateway_restart",
         "smc_handover.commit",
         "smc_handover.rollback",
+        "smc_handover.migrate",
+        "smc_handover.remigrate",
     }
 )
 

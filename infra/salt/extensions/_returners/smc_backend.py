@@ -104,10 +104,11 @@ def _post_batch(items: list[dict[str, Any]]) -> bool:
 
     cred = os.environ.get("SMC_DEVICE_CREDENTIAL", "").strip()
     headers = {"Authorization": f"Device {cred}"} if cred else {}
+    # Contract: items + payloadRedacted (camelCase aliases accepted by Salt Control).
     resp = httpx.post(
         f"{base.rstrip('/')}/salt/v1/job-returns:batch",
         headers=headers,
-        json={"requestId": str(uuid.uuid4()), "returns": items},
+        json={"requestId": str(uuid.uuid4()), "items": items},
         timeout=30.0,
     )
     resp.raise_for_status()
@@ -120,8 +121,7 @@ def returner(ret: dict[str, Any]) -> bool:
         "endpointId": ret.get("id"),
         "function": ret.get("fun"),
         "success": ret.get("success"),
-        "returned_at": datetime.now(UTC).isoformat(),
-        "payload": _redact(ret.get("return")),
+        "payloadRedacted": _redact(ret.get("return")),
     }
     # Prefer HTTPS batch when Salt Control URL is configured.
     if os.environ.get("SMC_SALT_CONTROL_URL", "").strip():
@@ -139,8 +139,7 @@ def returner(ret: dict[str, Any]) -> bool:
             "minion": item["endpointId"],
             "fun": item["function"],
             "success": item["success"],
-            "returned_at": item["returned_at"],
-            "return": item["payload"],
+            "return": item["payloadRedacted"],
         }
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(lab_payload, ensure_ascii=False) + "\n")

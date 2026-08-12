@@ -1,12 +1,12 @@
 {
   "schema": "smc.salt-evidence.baseline.v1",
   "version": "v2.3.1",
-  "capturedAt": "2026-08-12T10:08:00Z",
+  "capturedAt": "2026-08-12T12:00:00Z",
   "status": "implemented",
   "repo": {
     "pathAlias": "smc-copilot",
     "branch": "codex/codex-worktree",
-    "commit": "e4d26ea8d425219ad2063cad4f9934712c1a5c17",
+    "commit": "1f124452ca7d22c7dc88be57d789cf3e31690b33",
     "migrationRevision": "20260812_v231_jobs"
   },
   "master": {
@@ -25,7 +25,7 @@
     "service": "services/salt-control",
     "jobClaimLease": true,
     "observerIntervalSeconds": 60,
-    "liveCanaryWorkflow": ".github/workflows/salt-canary.yml"
+    "liveCanaryWorkflow": ".github/workflows/salt-live-canary.yml"
   },
   "masterSide": {
     "saltKeyList": "NOT_PROVEN",
@@ -38,5 +38,6 @@
     "tokensPresent": false,
     "privateKeysPresent": false,
     "realUserNamesPresent": false
-  }
+  },
+  "v24Note": "Ring 0 code may proceed; live Manual Gates remain operator-only and must not be auto-proven."
 }

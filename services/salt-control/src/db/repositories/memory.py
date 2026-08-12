@@ -30,6 +30,13 @@ from db.repositories.interfaces import (
     RolloutTargetRecord,
 )
 from db.repositories.job_memory import InMemoryControlJobRepository, InMemorySecretScopeRepository
+from db.repositories.v24 import (
+    InMemoryControlPlaneIncidentRepository,
+    InMemoryEndpointObservationRepository,
+    InMemoryRolloutApprovalRepository,
+    InMemoryRolloutObservationRepository,
+    InMemoryRolloutTargetJobRepository,
+)
 
 
 class InMemoryEndpointRepository(EndpointRepository):
@@ -183,6 +190,13 @@ class InMemoryRolloutRepository(RolloutRepository):
     async def list_targets(self, rollout_id: str) -> list[RolloutTargetRecord]:
         return list(self._targets.get(rollout_id, []))
 
+    async def list_active(self) -> list[RolloutRecord]:
+        return [
+            r
+            for r in self._by_id.values()
+            if r.state in {"running", "advancing", "approved", "waiting_approval", "paused"}
+        ]
+
 
 class InMemoryAuditRepository(AuditRepository):
     def __init__(self) -> None:
@@ -287,6 +301,11 @@ def build_in_memory_repos() -> RepositoryBundle:
         operations=InMemoryOperationRepository(),
         control_jobs=InMemoryControlJobRepository(),
         secret_scopes=InMemorySecretScopeRepository(),
+        rollout_approvals=InMemoryRolloutApprovalRepository(),
+        rollout_observations=InMemoryRolloutObservationRepository(),
+        endpoint_observations=InMemoryEndpointObservationRepository(),
+        control_plane_incidents=InMemoryControlPlaneIncidentRepository(),
+        rollout_target_jobs=InMemoryRolloutTargetJobRepository(),
     )
 
 

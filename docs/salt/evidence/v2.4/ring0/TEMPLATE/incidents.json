@@ -1,0 +1,15 @@
+{
+  "schema": "smc.salt-evidence.ring0.incidents.v1",
+  "status": "manual_gate",
+  "incidents": [],
+  "autoPauseReasons": [
+    "master_unavailable_180s",
+    "p0",
+    "p1",
+    "secret_leak",
+    "signature_bypass",
+    "owner_conflict",
+    "duplicate_publish",
+    "slo_failure"
+  ]
+}

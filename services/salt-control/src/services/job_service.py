@@ -8,6 +8,7 @@ from core.errors import ErrorCode, SaltControlError
 from core.logging import safe_log_fields
 from db.repositories.interfaces import AuditEventRecord, ControlJobRecord, RepositoryBundle
 from schemas.job import EndpointStatusResponse, JobCreateRequest, JobResponse
+from services.job_payload_codec import payload_from_create
 
 ALLOWED_OPERATIONS = frozenset(
     {
@@ -23,19 +24,6 @@ ALLOWED_OPERATIONS = frozenset(
         "remigrate",
     }
 )
-
-OPERATION_TO_SALT_FUN = {
-    "install": "smc_hermes.install",
-    "configure": "smc_hermes.doctor",
-    "start": "smc_hermes.health",
-    "stop": "smc_hermes.health",
-    "restart": "smc_hermes.health",
-    "health": "smc_hermes.health",
-    "diagnose": "smc_hermes.doctor",
-    "rollback": "smc_handover.rollback",
-    "handover": "smc_handover.commit",
-    "remigrate": "smc_handover.commit",
-}
 
 
 def _new_id(prefix: str) -> str:
@@ -80,6 +68,7 @@ class JobService:
             release_id=body.release_id,
             requested_by=body.requested_by,
             correlation_id=body.correlation_id,
+            payload_json=payload_from_create(body),
             accepted_at=datetime.now(UTC),
         )
         created = await self.repos.control_jobs.create(record)
@@ -173,6 +162,7 @@ class JobService:
             current_revision = j.config_revision
 
         desired = await self.repos.desired_states.get_latest(endpoint_id)
+        desired_revision = desired.revision if desired is not None else None
         if desired is not None:
             current_revision = current_revision or desired.revision
 
@@ -180,16 +170,52 @@ class JobService:
         if endpoint is not None and endpoint.last_seen_at is not None:
             heartbeat = endpoint.last_seen_at.isoformat()
 
+        rollout_info = None
+        desired_release = None
+        owner = None
+        target_state = None
+        active = await self.repos.rollouts.list_active()
+        for rollout in active:
+            targets = await self.repos.rollouts.list_targets(rollout.id)
+            match = next((t for t in targets if t.endpoint_id == endpoint_id), None)
+            if match is None:
+                continue
+            rollout_info = {
+                "rolloutId": rollout.id,
+                "state": rollout.state,
+                "ring": rollout.ring,
+                "batchIndex": rollout.batch_index,
+                "targetState": match.state,
+            }
+            desired_release = rollout.version
+            target_state = match.state
+            break
+
+        obs = await self.repos.endpoint_observations.latest(endpoint_id, window="15m")
+        gateway_health = None
+        if obs is not None:
+            gateway_health = str(obs.payload_json.get("gatewayHealth") or obs.payload_json.get("gateway_health") or "")
+            owner = obs.payload_json.get("owner") or owner
+
+        if owner is None:
+            binding = await self.repos.bindings.get_active(endpoint_id)
+            if binding is not None:
+                owner = "salt" if (endpoint and endpoint.status == "active") else "runtime"
+
         return EndpointStatusResponse(
             endpoint_id=endpoint_id,
             heartbeat=heartbeat,
             last_job=last_job,
-            rollout=None,
+            rollout=rollout_info,
             deployment={"status": endpoint.status if endpoint else "unknown"},
             current_release=current_release,
+            desired_release=desired_release,
             current_revision=current_revision,
-            gateway_health=None,
+            desired_revision=desired_revision,
+            gateway_health=gateway_health or None,
+            owner=owner,
             migration_phase=migration_phase,
+            target_state=target_state,
             last_error=last_error,
         )
 

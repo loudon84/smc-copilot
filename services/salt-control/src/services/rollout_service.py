@@ -4,7 +4,6 @@ import secrets
 from datetime import UTC, datetime
 
 from core.errors import ErrorCode, SaltControlError
-from core.idempotency import IdempotencyStore
 from core.logging import safe_log_fields
 from db.repositories.interfaces import AuditEventRecord, RepositoryBundle, RolloutRecord
 from schemas.rollout import (
@@ -13,6 +12,7 @@ from schemas.rollout import (
     RolloutCreateRequest,
     RolloutResponse,
 )
+from services.idempotency_helper import get_cached_response, request_digest, store_response
 
 # v2.3.1 rollout states
 ROLLOUT_STATES = frozenset(
@@ -39,9 +39,8 @@ def _new_id(prefix: str) -> str:
 
 
 class RolloutService:
-    def __init__(self, repos: RepositoryBundle, idempotency: IdempotencyStore) -> None:
+    def __init__(self, repos: RepositoryBundle) -> None:
         self.repos = repos
-        self.idempotency = idempotency
 
     def _to_response(self, record: RolloutRecord) -> RolloutResponse:
         return RolloutResponse(
@@ -62,17 +61,11 @@ class RolloutService:
             approval_required=bool(record.thresholds_json.get("approvalRequired", True)),
         )
 
-    def _track_active(self, record: RolloutRecord) -> None:
-        active: list[RolloutRecord] = list(self.repos.extras.get("active_rollouts") or [])
-        active = [r for r in active if r.id != record.id]
-        if record.state in {"running", "advancing", "approved", "waiting_approval"}:
-            active.append(record)
-        self.repos.extras["active_rollouts"] = active
-
     async def create(self, body: RolloutCreateRequest, actor_id: str) -> RolloutResponse:
-        cached = self.idempotency.get(f"rollout:{body.request_id}")
+        digest = request_digest(body)
+        cached = await get_cached_response(self.repos, f"rollout:{body.request_id}", digest)
         if cached is not None:
-            return cached
+            return RolloutResponse.model_validate(cached)
 
         thresholds = dict(body.thresholds)
         thresholds.setdefault("approvalRequired", True)
@@ -89,10 +82,11 @@ class RolloutService:
             created_at=datetime.now(UTC),
         )
         await self.repos.rollouts.create(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.created", record.id, body.request_id, {"ring": body.ring})
         response = self._to_response(record)
-        self.idempotency.put(f"rollout:{body.request_id}", response)
+        await store_response(
+            self.repos, f"rollout:{body.request_id}", digest, response.model_dump(mode="json", by_alias=True)
+        )
         return response
 
     async def get(self, rollout_id: str) -> RolloutResponse:
@@ -101,21 +95,17 @@ class RolloutService:
             raise SaltControlError(ErrorCode.NOT_FOUND, "rollout not found", status_code=404)
         return self._to_response(record)
 
-    async def approve(
-        self, rollout_id: str, body: RolloutApprovalRequest, actor_id: str
-    ) -> RolloutResponse:
+    async def approve(self, rollout_id: str, body: RolloutApprovalRequest, actor_id: str) -> RolloutResponse:
         record = await self._require(rollout_id)
         if body.decision == "reject":
             record.state = "aborted"
             await self.repos.rollouts.update(record)
-            self._track_active(record)
             await self._audit(actor_id, "rollout.rejected", record.id, body.request_id, {"reason": body.reason})
             return self._to_response(record)
         if record.state not in {"waiting_approval", "draft", "created"}:
             raise SaltControlError(ErrorCode.CONFLICT, "rollout not awaiting approval", status_code=409)
         record.state = "approved"
         await self.repos.rollouts.update(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.approved", record.id, body.request_id, {"reason": body.reason})
         return self._to_response(record)
 
@@ -132,14 +122,12 @@ class RolloutService:
         if gate_failed:
             record.state = "paused"
             await self.repos.rollouts.update(record)
-            self._track_active(record)
             await self._audit(actor_id, "rollout.paused", record.id, body.request_id, {"reason": "gate_failed"})
             raise SaltControlError(ErrorCode.ROLLOUT_GATE_FAILED, "rollout gate failed", status_code=409)
 
         record.state = "running"
         record.observation_started_at = datetime.now(UTC)
         await self.repos.rollouts.update(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.advanced", record.id, body.request_id, {"reason": body.reason})
         return self._to_response(record)
 
@@ -147,7 +135,6 @@ class RolloutService:
         record = await self._require(rollout_id)
         record.state = "paused"
         await self.repos.rollouts.update(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.paused", record.id, body.request_id, {"reason": body.reason})
         return self._to_response(record)
 
@@ -158,7 +145,6 @@ class RolloutService:
             raise SaltControlError(ErrorCode.CONFLICT, "rollout is not paused", status_code=409)
         record.state = "running"
         await self.repos.rollouts.update(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.resumed", record.id, body.request_id, {"reason": body.reason})
         return self._to_response(record)
 
@@ -168,7 +154,6 @@ class RolloutService:
         await self.repos.rollouts.update(record)
         record.state = "aborted"
         await self.repos.rollouts.update(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.aborted", record.id, body.request_id, {"reason": body.reason})
         return self._to_response(record)
 
@@ -176,7 +161,6 @@ class RolloutService:
         record = await self._require(rollout_id)
         record.state = "rolled_back"
         await self.repos.rollouts.update(record)
-        self._track_active(record)
         await self._audit(actor_id, "rollout.rolled_back", record.id, body.request_id, {"reason": body.reason})
         return self._to_response(record)
 

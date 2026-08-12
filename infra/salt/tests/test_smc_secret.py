@@ -88,7 +88,7 @@ def test_returner_https_batch(tmp_path: Path, monkeypatch) -> None:
         }
     )
     assert ok is True
-    assert posted[0]["payload"]["token"] == "***"
+    assert posted[0]["payloadRedacted"]["token"] == "***"
     assert "plain-secret" not in json.dumps(posted)
 
 

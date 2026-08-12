@@ -84,6 +84,7 @@ class IdempotencyKey(Base):
 
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     response_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    request_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -182,6 +183,9 @@ class Rollout(Base):
     rollback_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     p0_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     p1_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    snapshot_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    snapshot_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    batch_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -230,6 +234,7 @@ class ControlJob(Base):
     release_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     requested_by: Mapped[str] = mapped_column(String(128), nullable=False)
     correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     claim_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -249,9 +254,7 @@ class SecretScope(Base):
     """Idempotent secret scope binding — no secret values stored (v2.3.1)."""
 
     __tablename__ = "secret_scopes"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "endpoint_id", "scope_type", "scope_key", name="uq_secret_scope"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "endpoint_id", "scope_type", "scope_key", name="uq_secret_scope"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -265,3 +268,64 @@ class SecretScope(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class RolloutApproval(Base):
+    __tablename__ = "rollout_approvals"
+    __table_args__ = (UniqueConstraint("rollout_id", "role", "subject", name="uq_rollout_approval_actor"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject: Mapped[str] = mapped_column(String(128), nullable=False)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    snapshot_digest: Mapped[str] = mapped_column(String(128), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RolloutObservation(Base):
+    __tablename__ = "rollout_observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    window: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EndpointObservation(Base):
+    __tablename__ = "endpoint_observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    window: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ControlPlaneIncident(Base):
+    __tablename__ = "control_plane_incidents"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    rollout_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    endpoint_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_redacted: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RolloutTargetJob(Base):
+    __tablename__ = "rollout_target_jobs"
+    __table_args__ = (UniqueConstraint("rollout_id", "endpoint_id", "batch_index", name="uq_rollout_target_batch"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    batch_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
