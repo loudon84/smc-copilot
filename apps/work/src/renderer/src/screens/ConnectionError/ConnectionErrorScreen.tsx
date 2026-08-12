@@ -55,7 +55,7 @@ function ConnectionErrorScreen({
         </h1>
         <p className="connection-error-lead">
           {saltMode
-            ? "This workstation is Salt-managed. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
+            ? "Managed by organization. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
             : "Copilot Desktop needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
         </p>
         <ConnectionErrorDetails status={status} error={error} />
@@ -84,13 +84,15 @@ function ConnectionErrorScreen({
           >
             Open Hermes logs
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void wrap(onOpenConnectionSettings)}
-          >
-            Open connection settings
-          </button>
+          {!saltMode && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void wrap(onOpenConnectionSettings)}
+            >
+              Open connection settings
+            </button>
+          )}
           <button
             type="button"
             className="danger"

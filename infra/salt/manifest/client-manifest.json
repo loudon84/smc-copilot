@@ -1,0 +1,18 @@
+{
+  "schema": "smc.salt-client.v1",
+  "salt": {
+    "channel": "3008-lts",
+    "version": "3008.2",
+    "arch": "AMD64",
+    "installer": "Salt-Minion-3008.2-Py3-AMD64.msi",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "bootstrap": {
+    "minWindowsBuild": 22000,
+    "timeoutSeconds": 300
+  },
+  "download": {
+    "releaseMirror": "https://artifacts.internal.smc/salt/3008.2/",
+    "devFallback": "https://repo.saltproject.io/salt/py3/windows/3008.2/"
+  }
+}

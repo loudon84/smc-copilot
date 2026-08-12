@@ -3,8 +3,6 @@
  * Does not install, spawn Gateway, or call Runtime HTTP.
  */
 // @lat: [[runtime-connection#Hermes Availability Backend]]
-import http from "http";
-import https from "https";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type {
@@ -14,33 +12,9 @@ import type {
   HermesRuntimeState,
 } from "../../shared/runtime/runtime-contract";
 import { locateHermesRuntime } from "../runtime/hermes-runtime-locator";
-import { getApiUrl } from "../hermes";
+import { getApiUrl, isGatewayHealthy } from "./transport/gateway-http";
+import { getApiServerKey } from "../config";
 import { saltManagedMessage } from "./control-owner";
-
-function probeGatewayHealth(url: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const target = `${url.replace(/\/$/, "")}/health`;
-      const mod = target.startsWith("https") ? https : http;
-      const req = mod.request(
-        target,
-        { method: "GET", timeout: 1500 },
-        (res) => {
-          resolve(res.statusCode === 200);
-          res.resume();
-        },
-      );
-      req.on("error", () => resolve(false));
-      req.on("timeout", () => {
-        req.destroy();
-        resolve(false);
-      });
-      req.end();
-    } catch {
-      resolve(false);
-    }
-  });
-}
 
 function readInstalledVersion(homePath: string): string | undefined {
   const marker = join(homePath, "active.json");
@@ -75,7 +49,9 @@ export class HermesAvailabilityBackend implements HermesRuntimeAdapter {
     } catch {
       /* keep locator endpoint */
     }
-    const gatewayHealthy = await probeGatewayHealth(endpoint);
+    const gatewayHealthy = await isGatewayHealthy(profile);
+    const apiKey = getApiServerKey(profile)?.trim() ?? "";
+    const authenticated = gatewayHealthy && apiKey.length > 0;
     const state = stateFromProbe({
       runtimeFound: location.runtimeFound,
       runtimeValid: location.runtimeValid,
@@ -100,7 +76,7 @@ export class HermesAvailabilityBackend implements HermesRuntimeAdapter {
       cliAvailable: location.cliAvailable,
       gatewayRunning: gatewayHealthy,
       gatewayHealthy,
-      authenticated: gatewayHealthy,
+      authenticated,
       version: readInstalledVersion(location.homePath),
       errorCode: state === "ready" ? undefined : state.toUpperCase(),
       errorMessage,

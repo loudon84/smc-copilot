@@ -1,32 +1,46 @@
-"""Custom grains: endpoint + Hermes facts for Salt Master."""
+"""Custom grains: device facts only. Current user is NOT SOT (comes from Pillar binding)."""
 
 from __future__ import annotations
 
 import os
 import platform
 import socket
-import sys
 from pathlib import Path
 from typing import Any
 
-_UTILS_PARENT = Path(__file__).resolve().parents[1]
-if str(_UTILS_PARENT) not in sys.path:
-    sys.path.insert(0, str(_UTILS_PARENT))
 
-from _utils.control_owner import read_control_owner
-from _utils.paths import HermesLayout, default_hermes_home
+def _utils() -> dict[str, Any]:
+    return globals().get("__utils__") or {}
+
+
+def _read_owner():
+    utils = _utils()
+    if "smc_control_owner.read_control_owner" in utils:
+        return utils["smc_control_owner.read_control_owner"]()
+    from _utils.smc_control_owner import read_control_owner
+
+    return read_control_owner()
+
+
+def _layout(home: Path):
+    utils = _utils()
+    if "smc_paths.layout" in utils:
+        return utils["smc_paths.layout"](str(home))
+    from _utils.smc_paths import layout
+
+    return layout(str(home))
 
 
 def smc_endpoint() -> dict[str, Any]:
-    layout = HermesLayout.from_home(default_hermes_home())
+    home_env = os.environ.get("HERMES_HOME", "").strip()
+    layout = _layout(Path(home_env)) if home_env else None
     return {
         "smc_endpoint": {
             "hostname": socket.gethostname(),
             "platform": platform.system().lower(),
             "arch": platform.machine(),
-            "hermes_home": str(layout.home),
-            "hermes_installed": layout.is_installed(),
-            "control_owner": read_control_owner(),
-            "user": os.environ.get("USERNAME") or os.environ.get("USER") or "",
+            "hermes_home": str(layout.home) if layout else "",
+            "hermes_installed": layout.is_installed() if layout else False,
+            "control_owner": _read_owner(),
         }
     }

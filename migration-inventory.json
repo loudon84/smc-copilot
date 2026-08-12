@@ -1,22 +1,31 @@
 {
-  "generated_note": "salt-migration-inventory v1 (repo-only, static classification)",
+  "generated_note": "salt-migration-inventory v2 (verified FULL only)",
   "runtime_root": "E:/git/smc-copilot/services/runtime",
+  "capabilities_path": "E:/git/smc-copilot/infra/salt/migration-capabilities.yaml",
   "weights": {
     "FULL": 1.0,
     "PARTIAL": 0.5,
     "NO": 0.0
   },
+  "p0_p1": 0,
+  "go": {
+    "api": true,
+    "service": true,
+    "loc": true,
+    "p0_p1": true,
+    "decision": "GO"
+  },
   "entire": {
     "routers": {
-      "count": 38.5,
-      "weighted": 0.3846,
-      "loc_weighted": 32.1,
+      "count": 44.9,
+      "weighted": 0.4487,
+      "loc_weighted": 41.8,
       "loc_total": 3116.0
     },
     "services": {
-      "count": 36.2,
-      "weighted": 0.3625,
-      "loc_weighted": 48.1,
+      "count": 40.6,
+      "weighted": 0.4062,
+      "loc_weighted": 52.4,
       "loc_total": 15691.0
     },
     "runtime_pkg": {
@@ -26,29 +35,29 @@
       "loc_total": 2710.0
     },
     "loc": {
-      "count": 45.7,
-      "weighted": 0.4567,
-      "loc_weighted": 50.9,
+      "count": 49.7,
+      "weighted": 0.4967,
+      "loc_weighted": 55.5,
       "loc_total": 21517.0
     }
   },
   "endpoint": {
     "routers": {
-      "count": 78.9,
-      "weighted": 0.7895,
-      "loc_weighted": 72.2,
+      "count": 92.1,
+      "weighted": 0.9211,
+      "loc_weighted": 93.9,
       "loc_total": 1387.0
     },
     "services": {
-      "count": 80.6,
-      "weighted": 0.8056,
-      "loc_weighted": 86.1,
+      "count": 90.3,
+      "weighted": 0.9028,
+      "loc_weighted": 93.7,
       "loc_total": 8770.0
     },
     "loc": {
-      "count": 83.5,
-      "weighted": 0.8354,
-      "loc_weighted": 86.5,
+      "count": 90.9,
+      "weighted": 0.9085,
+      "loc_weighted": 94.1,
       "loc_total": 12677.0
     }
   },
@@ -59,7 +68,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/approvals.py",
       "loc": 45,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -67,7 +79,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/attachments.py",
       "loc": 45,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -75,7 +90,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/bootstrap.py",
       "loc": 40,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/enrollment.py",
+      "capability_tests": [
+        "infra/salt/tests/test_enrollment.py"
+      ]
     },
     {
       "kind": "router",
@@ -83,7 +103,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/chat.py",
       "loc": 74,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -91,7 +114,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/chat_commands.py",
       "loc": 19,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -99,15 +125,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/chat_runs.py",
       "loc": 199,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
       "name": "configurations",
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/configurations.py",
       "loc": 122,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/config_revision.py",
+      "capability_tests": [
+        "infra/salt/tests/test_config_revision.py"
+      ]
     },
     {
       "kind": "router",
@@ -115,15 +149,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/desktop_workbench.py",
       "loc": 38,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
       "name": "diagnostics",
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/diagnostics.py",
       "loc": 213,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "router",
@@ -131,7 +173,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/endpoint.py",
       "loc": 50,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/enrollment.py",
+      "capability_tests": [
+        "infra/salt/tests/test_enrollment.py"
+      ]
     },
     {
       "kind": "router",
@@ -139,7 +186,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/experience.py",
       "loc": 92,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -147,7 +197,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/expert_mcp.py",
       "loc": 89,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "infra/salt/states/mcp.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "router",
@@ -155,7 +210,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/gateways.py",
       "loc": 39,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "router",
@@ -163,7 +223,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/health.py",
       "loc": 42,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "router",
@@ -171,7 +236,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/hermes_runs.py",
       "loc": 53,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -179,15 +247,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/instance_chat.py",
       "loc": 103,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
       "name": "instances",
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/instances.py",
       "loc": 119,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "router",
@@ -195,7 +271,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/kanban.py",
       "loc": 153,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -203,7 +282,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/memory.py",
       "loc": 78,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -211,7 +293,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/metrics.py",
       "loc": 9,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_beacons/smc_hermes_health.py",
+      "capability_tests": [
+        "infra/salt/tests/test_returner_and_beacon.py"
+      ]
     },
     {
       "kind": "router",
@@ -219,15 +306,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/pairings.py",
       "loc": 44,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
       "name": "profiles",
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/profiles.py",
       "loc": 117,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/profiles.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "router",
@@ -235,7 +330,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/remote_tasks.py",
       "loc": 41,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -243,7 +341,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/resources.py",
       "loc": 41,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_pillar/smc_external.py",
+      "capability_tests": [
+        "infra/salt/tests/test_desired_state.py"
+      ]
     },
     {
       "kind": "router",
@@ -251,7 +354,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/role_library.py",
       "loc": 35,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -259,15 +365,25 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/runtime.py",
       "loc": 217,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "router",
       "name": "secrets",
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/secrets.py",
       "loc": 33,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_secret.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_secret.py"
+      ]
     },
     {
       "kind": "router",
@@ -275,7 +391,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/service.py",
       "loc": 58,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "router",
@@ -283,7 +404,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/service_center.py",
       "loc": 42,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/hermes.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_forbidden_guards.py"
+      ]
     },
     {
       "kind": "router",
@@ -291,7 +417,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/session_chat.py",
       "loc": 118,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -299,7 +428,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/sessions.py",
       "loc": 55,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -307,7 +439,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/sync.py",
       "loc": 61,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_pillar/smc_external.py",
+      "capability_tests": [
+        "infra/salt/tests/test_user_binding.py"
+      ]
     },
     {
       "kind": "router",
@@ -315,7 +452,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/system.py",
       "loc": 16,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_grains/smc_endpoint.py",
+      "capability_tests": [
+        "infra/salt/tests/test_grains_device_only.py"
+      ]
     },
     {
       "kind": "router",
@@ -323,7 +465,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/task_routing.py",
       "loc": 31,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -331,7 +476,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/tasks.py",
       "loc": 157,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -339,7 +487,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/team_tasks.py",
       "loc": 84,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -347,7 +498,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/work_tasks.py",
       "loc": 212,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -355,7 +509,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/workers.py",
       "loc": 36,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "router",
@@ -363,7 +520,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/api/v1/workspaces.py",
       "loc": 96,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -371,7 +531,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/approval_service.py",
       "loc": 126,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -379,7 +542,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/artifact_delivery_service.py",
       "loc": 148,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -387,7 +553,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/attachment_service.py",
       "loc": 206,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -395,7 +564,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/background_chat_service.py",
       "loc": 184,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -403,7 +575,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/backup_service.py",
       "loc": 221,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -411,7 +586,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/bootstrap_service.py",
       "loc": 197,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/windows/bootstrap.ps1",
+      "capability_tests": [
+        "infra/salt/tests/test_client_manifest.py"
+      ]
     },
     {
       "kind": "service",
@@ -419,7 +599,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_command_service.py",
       "loc": 189,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -427,7 +610,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_event_service.py",
       "loc": 157,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -435,7 +621,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_interaction_service.py",
       "loc": 91,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -443,7 +632,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_model_service.py",
       "loc": 161,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -451,7 +643,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_queue_service.py",
       "loc": 98,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -459,7 +654,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_run_service.py",
       "loc": 220,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -467,7 +665,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_session_service.py",
       "loc": 44,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -475,7 +676,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_stream_service.py",
       "loc": 242,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -483,7 +687,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_turn_recovery.py",
       "loc": 69,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -491,7 +698,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_turn_scheduler.py",
       "loc": 88,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -499,7 +709,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/chat_turn_worker.py",
       "loc": 305,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -507,15 +720,25 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/compatibility_service.py",
       "loc": 80,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/manifest/client-manifest.json",
+      "capability_tests": [
+        "infra/salt/tests/test_client_manifest.py"
+      ]
     },
     {
       "kind": "service",
       "name": "configuration_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/configuration_service.py",
       "loc": 210,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/config_revision.py",
+      "capability_tests": [
+        "infra/salt/tests/test_config_revision.py"
+      ]
     },
     {
       "kind": "service",
@@ -523,7 +746,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/desired_state_service.py",
       "loc": 362,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/mock_backend/desired_state.py",
+      "capability_tests": [
+        "infra/salt/tests/test_desired_state.py"
+      ]
     },
     {
       "kind": "service",
@@ -531,15 +759,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/dev_hermes_registration_service.py",
       "loc": 168,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
       "name": "diagnostic_bundle_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/diagnostic_bundle_service.py",
       "loc": 150,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "service",
@@ -547,7 +783,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/doctor_service.py",
       "loc": 3,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "service",
@@ -555,7 +796,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/endpoint_enrollment_service.py",
       "loc": 211,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/enrollment.py",
+      "capability_tests": [
+        "infra/salt/tests/test_enrollment.py"
+      ]
     },
     {
       "kind": "service",
@@ -563,7 +809,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/endpoint_inventory_service.py",
       "loc": 71,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_grains/smc_endpoint.py",
+      "capability_tests": [
+        "infra/salt/tests/test_grains_device_only.py"
+      ]
     },
     {
       "kind": "service",
@@ -571,7 +822,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/experience_auto_capture.py",
       "loc": 165,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -579,7 +833,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/experience_candidate_service.py",
       "loc": 118,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -587,7 +844,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/experience_capture_service.py",
       "loc": 76,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -595,7 +855,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/expert_mcp_gateway_service.py",
       "loc": 179,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "infra/salt/states/mcp.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "service",
@@ -603,7 +868,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/gateway_credential_service.py",
       "loc": 92,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_secret.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_secret.py"
+      ]
     },
     {
       "kind": "service",
@@ -611,7 +881,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/gateway_ownership_service.py",
       "loc": 708,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/control_owner.py",
+      "capability_tests": [
+        "infra/salt/tests/test_control_owner.py"
+      ]
     },
     {
       "kind": "service",
@@ -619,7 +894,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/gateway_supervisor.py",
       "loc": 454,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "service",
@@ -627,7 +907,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_chat_event_mapper.py",
       "loc": 163,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -635,7 +918,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_chat_executor.py",
       "loc": 275,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -643,15 +929,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_gateway_client.py",
       "loc": 46,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
       "name": "hermes_local_config_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_local_config_service.py",
       "loc": 210,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/config_revision.py",
+      "capability_tests": [
+        "infra/salt/tests/test_config_revision.py"
+      ]
     },
     {
       "kind": "service",
@@ -659,7 +953,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_model_catalog_service.py",
       "loc": 333,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -667,7 +964,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/installation_service.py",
       "loc": 456,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "service",
@@ -675,7 +977,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/instance_chat_service.py",
       "loc": 497,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -683,7 +988,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/instance_gateway_service.py",
       "loc": 1324,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "service",
@@ -691,15 +1001,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/instance_ref_resolver.py",
       "loc": 97,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
       "name": "instance_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/instance_service.py",
       "loc": 174,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "service",
@@ -707,15 +1025,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/kanban_service.py",
       "loc": 206,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
       "name": "mcp_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/mcp_service.py",
       "loc": 273,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/mcp.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "service",
@@ -723,7 +1049,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/memory_service.py",
       "loc": 70,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -731,7 +1060,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/metrics_service.py",
       "loc": 79,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_beacons/smc_hermes_health.py",
+      "capability_tests": [
+        "infra/salt/tests/test_returner_and_beacon.py"
+      ]
     },
     {
       "kind": "service",
@@ -739,7 +1073,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/pairing_service.py",
       "loc": 106,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -747,15 +1084,23 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/profile_ref_resolver.py",
       "loc": 78,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
       "name": "profile_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/profile_service.py",
       "loc": 77,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/profiles.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "service",
@@ -763,7 +1108,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/remote_task_service.py",
       "loc": 214,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -771,7 +1119,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/resource_sync_service.py",
       "loc": 207,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_pillar/smc_external.py",
+      "capability_tests": [
+        "infra/salt/tests/test_desired_state.py"
+      ]
     },
     {
       "kind": "service",
@@ -779,7 +1132,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/role_library_service.py",
       "loc": 262,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -787,7 +1143,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/rollback_service.py",
       "loc": 3,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "service",
@@ -795,7 +1156,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_job_service.py",
       "loc": 442,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_returners/smc_backend.py",
+      "capability_tests": [
+        "infra/salt/tests/test_returner_and_beacon.py"
+      ]
     },
     {
       "kind": "service",
@@ -803,7 +1169,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_service_update.py",
       "loc": 210,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "service",
@@ -811,7 +1182,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_status_service.py",
       "loc": 264,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_hermes_module.py"
+      ]
     },
     {
       "kind": "service",
@@ -819,7 +1195,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_sync_service.py",
       "loc": 435,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_pillar/smc_external.py",
+      "capability_tests": [
+        "infra/salt/tests/test_user_binding.py"
+      ]
     },
     {
       "kind": "service",
@@ -827,7 +1208,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_update_plan_service.py",
       "loc": 103,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "service",
@@ -835,7 +1221,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_version_pin_service.py",
       "loc": 66,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/manifest/client-manifest.json",
+      "capability_tests": [
+        "infra/salt/tests/test_client_manifest.py"
+      ]
     },
     {
       "kind": "service",
@@ -843,15 +1234,25 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_version_service.py",
       "loc": 91,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "service",
       "name": "secret_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/secret_service.py",
       "loc": 241,
-      "classification": "PARTIAL",
-      "weight": 0.5
+      "classification": "FULL",
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_secret.py",
+      "capability_tests": [
+        "infra/salt/tests/test_smc_secret.py"
+      ]
     },
     {
       "kind": "service",
@@ -859,7 +1260,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/session_chat_settings_service.py",
       "loc": 105,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -867,7 +1271,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/session_file_service.py",
       "loc": 144,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -875,7 +1282,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/sse_helpers.py",
       "loc": 50,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -883,7 +1293,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/staffdeck_bridge_service.py",
       "loc": 75,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -891,7 +1304,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_approval_service.py",
       "loc": 110,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -899,7 +1315,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_delivery_service.py",
       "loc": 79,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -907,7 +1326,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_event_service.py",
       "loc": 108,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -915,7 +1337,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_routing_registry.py",
       "loc": 51,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -923,7 +1348,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_run_service.py",
       "loc": 54,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -931,7 +1359,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_runtime.py",
       "loc": 420,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -939,7 +1370,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_state_machine.py",
       "loc": 48,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -947,7 +1381,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/task_sync_service.py",
       "loc": 36,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -955,7 +1392,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/update_service.py",
       "loc": 466,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "service",
@@ -963,7 +1405,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/work_task_service.py",
       "loc": 790,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -971,7 +1416,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/workbench_event_stream.py",
       "loc": 112,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -979,7 +1427,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/workbench_summary.py",
       "loc": 33,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -987,7 +1438,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/worker_service.py",
       "loc": 32,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -995,7 +1449,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/workspace_browse_service.py",
       "loc": 131,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "service",
@@ -1003,7 +1460,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/services/workspace_guard.py",
       "loc": 52,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1011,7 +1471,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/activation_manager.py",
       "loc": 3,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1019,7 +1484,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/archive_policy.py",
       "loc": 119,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1027,7 +1497,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/artifact_downloader.py",
       "loc": 148,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1035,7 +1510,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/artifact_signature.py",
       "loc": 75,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1043,7 +1523,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/bundle_security.py",
       "loc": 183,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1051,7 +1536,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/cancellation_token.py",
       "loc": 24,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1059,7 +1547,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/checksum_verifier.py",
       "loc": 20,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1067,7 +1560,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/db_path_migration.py",
       "loc": 55,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1075,7 +1571,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/delivery_backoff.py",
       "loc": 19,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1083,7 +1582,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/desired_state_reconciler.py",
       "loc": 100,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/mock_backend/desired_state.py",
+      "capability_tests": [
+        "infra/salt/tests/test_desired_state.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1091,7 +1595,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/environment_probe.py",
       "loc": 180,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_grains/smc_endpoint.py",
+      "capability_tests": [
+        "infra/salt/tests/test_grains_device_only.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1099,7 +1608,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/executable_policy.py",
       "loc": 38,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1107,7 +1621,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/experience_fingerprint.py",
       "loc": 85,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1115,7 +1632,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/experience_redactor.py",
       "loc": 31,
       "classification": "NO",
-      "weight": 0.0
+      "weight": 0.0,
+      "status": "fallback",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1123,7 +1643,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_command_hash.py",
       "loc": 33,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1131,7 +1656,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_environment.py",
       "loc": 166,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1139,7 +1669,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_listener.py",
       "loc": 110,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_modules/smc_hermes.py",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1147,7 +1682,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_process.py",
       "loc": 602,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/gateway.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_gateway_wrapper.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1155,7 +1695,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/hermes_profile_paths.py",
       "loc": 24,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "infra/salt/extensions/_utils/paths.py",
+      "capability_tests": [
+        "infra/salt/tests/test_home_adoption.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1163,7 +1708,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/hermes_supervisor_metrics.py",
       "loc": 65,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_beacons/smc_hermes_health.py",
+      "capability_tests": [
+        "infra/salt/tests/test_returner_and_beacon.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1171,7 +1721,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/instance_operation_lock.py",
       "loc": 23,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/handover.py",
+      "capability_tests": [
+        "infra/salt/tests/test_handover_state_machine.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1179,7 +1734,10 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/local_hermes_profile_policy.py",
       "loc": 18,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "",
+      "capability_tests": []
     },
     {
       "kind": "runtime_pkg",
@@ -1187,7 +1745,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/mcp_config_compiler.py",
       "loc": 131,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "infra/salt/states/mcp.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1195,7 +1758,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/platform_paths.py",
       "loc": 61,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/paths.py",
+      "capability_tests": [
+        "infra/salt/tests/test_home_adoption.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1203,7 +1771,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/port_allocator.py",
       "loc": 27,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/states/profiles.sls",
+      "capability_tests": [
+        "infra/salt/tests/test_profile_mcp_states.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1211,7 +1784,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/process_lock.py",
       "loc": 112,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/handover.py",
+      "capability_tests": [
+        "infra/salt/tests/test_handover_state_machine.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1219,7 +1797,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/resource_bundle.py",
       "loc": 95,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1227,7 +1810,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/runtime_identity.py",
       "loc": 15,
       "classification": "PARTIAL",
-      "weight": 0.5
+      "weight": 0.5,
+      "status": "documented",
+      "salt_source": "infra/salt/client/paths.py",
+      "capability_tests": [
+        "infra/salt/tests/test_enrollment.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1235,7 +1823,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/sync_protocol.py",
       "loc": 64,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_pillar/smc_external.py",
+      "capability_tests": [
+        "infra/salt/tests/test_user_binding.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1243,7 +1836,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/version_layout.py",
       "loc": 3,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "capability_tests": [
+        "infra/salt/tests/test_artifact_lifecycle.py"
+      ]
     },
     {
       "kind": "runtime_pkg",
@@ -1251,7 +1849,12 @@
       "path": "E:/git/smc-copilot/services/runtime/src/runtime/windows_program_paths.py",
       "loc": 81,
       "classification": "FULL",
-      "weight": 1.0
+      "weight": 1.0,
+      "status": "verified",
+      "salt_source": "infra/salt/client/paths.py",
+      "capability_tests": [
+        "infra/salt/tests/test_enrollment.py"
+      ]
     }
   ]
 }

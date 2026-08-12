@@ -13,7 +13,7 @@ function RuntimePane(): React.JSX.Element {
   );
   const [owner, setOwner] = useState<ControlOwnerSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | None>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -79,43 +79,53 @@ function RuntimePane(): React.JSX.Element {
       <h2>{saltMode ? "Hermes Availability" : "Hermes Runtime"}</h2>
       <p className="settings-pane-desc">
         {saltMode
-          ? "Enterprise mode: Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
+          ? "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
           : "Copilot Desktop connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
       </p>
 
       <dl className="settings-kv">
         <div>
           <dt>Control owner</dt>
-          <dd>{owner?.owner ?? "—"}</dd>
+          <dd>{saltMode ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
         </div>
         <div>
-          <dt>Owner source</dt>
-          <dd>{owner?.source ?? "—"}</dd>
-        </div>
-        <div>
-          <dt>State</dt>
+          <dt>Hermes status</dt>
           <dd>{status?.state ?? runtime.state}</dd>
         </div>
         <div>
-          <dt>Hermes Home</dt>
-          <dd className="mono">{status?.homePath || "—"}</dd>
+          <dt>Gateway status</dt>
+          <dd>
+            {status?.gatewayHealthy
+              ? "Healthy"
+              : status?.gatewayRunning
+                ? "Running (unhealthy)"
+                : "Unreachable"}
+          </dd>
         </div>
         <div>
-          <dt>Gateway</dt>
+          <dt>Gateway endpoint</dt>
           <dd className="mono">{status?.endpoint || "—"}</dd>
-        </div>
-        <div>
-          <dt>Gateway reachable</dt>
-          <dd>{status?.gatewayHealthy ? "Yes" : "No"}</dd>
-        </div>
-        <div>
-          <dt>Profile</dt>
-          <dd>{status?.profile || "default"}</dd>
         </div>
         <div>
           <dt>Version</dt>
           <dd>{status?.version || "—"}</dd>
         </div>
+        {!saltMode && (
+          <>
+            <div>
+              <dt>Owner source</dt>
+              <dd>{owner?.source ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Hermes Home</dt>
+              <dd className="mono">{status?.homePath || "—"}</dd>
+            </div>
+            <div>
+              <dt>Profile</dt>
+              <dd>{status?.profile || "default"}</dd>
+            </div>
+          </>
+        )}
       </dl>
 
       {message && <p className="settings-inline-msg">{message}</p>}
@@ -129,7 +139,7 @@ function RuntimePane(): React.JSX.Element {
           disabled={busy}
           onClick={() => void handleReconnect()}
         >
-          Reconnect
+          {saltMode ? "Retry" : "Reconnect"}
         </button>
         {!saltMode && (
           <button

@@ -64,6 +64,8 @@ Default Work mode (`direct`) and Salt-managed Work (`SMC_HERMES_CONTROL_OWNER=sa
 
 Probe-only Connection Ready for enterprise/Salt mode. Never install, update, or spawn Gateway.
 
+Uses [[src/main/hermes/transport/gateway-http.ts]] for Gateway URL and `/health` (same path as Chat transport). `authenticated` is derived from local API key presence and is not equal to `gatewayHealthy`.
+
 ## Portal Auth Login
 
 Phase 5 migrates Portal Auth Login only (not Hermes Panel / JSSDK / Service Settings).

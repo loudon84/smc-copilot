@@ -1,26 +1,27 @@
-# Salt v2.0 Go / No-Go
+# Salt v2.1 Go / No-Go
 
-Do **not** delete `services/runtime` in v2.0. Use this review after ≥30 days canary (or lab equivalent) plus inventory.
+Do **not** delete `services/runtime` in v2.1. Use this review after real Windows canary (≥5 endpoints) plus inventory v2.
 
 ## Inventory command
 
 ```bash
-python scripts/salt-migration-inventory.py
+uv run --project infra/salt python ../../scripts/salt-migration-inventory.py
 ```
 
-Outputs `migration-inventory.json` and `migration-inventory.md` at repo root.
+Reads `infra/salt/migration-capabilities.yaml`. Only **verified FULL** counts as 1.0.
 
-Current snapshot (script run during v2.0 implementation):
+Current snapshot (v2.1 repo-only implementation):
 
 | Scope | Value | Gate |
 | --- | ---: | --- |
-| Endpoint API | 78.9% | 85% — **below** |
-| Endpoint Service | 80.6% | 85% — **below** |
-| Endpoint LOC | 86.5% | 75% — pass |
+| Endpoint API | 92.1% | 85% — pass |
+| Endpoint Service | 90.3% | 85% — pass |
+| Endpoint LOC | 94.1% | 75% — pass |
+| P0/P1 | 0 | pass |
 
-No-Go on API/Service until Salt coverage of PARTIAL instance/config/secrets domains increases. v2.0 does not delete Runtime.
+Hardware canary (≥5 Windows 11 endpoints, Cases A–D) remains an ops gate and is not claimed by this repo-only drop.
 
-## Go thresholds (PRD Phase 9)
+## Go thresholds (PRD v2.1)
 
 | Gate | Threshold |
 | --- | ---: |
@@ -29,11 +30,13 @@ No-Go on API/Service until Salt coverage of PARTIAL instance/config/secrets doma
 | Endpoint LOC replacement (excl. NO) | ≥ 75% |
 | P0 blockers | 0 |
 | P1 blockers | 0 |
-| Canary stability | PASS |
+| Real Windows canary (Cases A–D, ≥5 PCs) | PASS |
 
 ## No-Go
 
-If any gate fails: keep Runtime as control plane; Salt stays parallel. Chat/Task/Approval/Kanban stay on Runtime or Hermes data plane until a later version names their migration target.
+If any gate fails: keep Runtime as rollback control plane; Salt stays parallel. Chat/Task/Approval/Kanban stay on Hermes data plane / Runtime until a later version.
+
+v2.1 does not uninstall Runtime files. v2.2 is Runtime decommission + production rollout.
 
 ## Archive path (later version only)
 

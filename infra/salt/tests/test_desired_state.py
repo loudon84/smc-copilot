@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from mock_backend.desired_state import resolve_desired_state
-from _utils.redact import redact_mapping
 from _pillar import smc_external
+from _utils.redact import redact_mapping
+
+from mock_backend.desired_state import resolve_desired_state
 
 
 def test_demo_user_binding() -> None:
@@ -10,7 +11,7 @@ def test_demo_user_binding() -> None:
     assert state["user_id"] == "user-demo"
     assert state["config_version"] == "1"
     assert state["user_switched"] is False
-    assert "vault://" in state["secret_refs"]["api_server_key"]
+    assert state["secret_refs"]["api_server_key"] == "smc://providers/dashscope"
 
 
 def test_user_switch_does_not_reuse_previous_policy() -> None:
@@ -18,14 +19,19 @@ def test_user_switch_does_not_reuse_previous_policy() -> None:
     assert state["user_id"] == "user-alt"
     assert state["user_switched"] is True
     assert state["config_version"] == "2"
-    assert state["secret_refs"]["api_server_key"] == "vault://lab/user-alt/api-server-key"
+    assert state["secret_refs"]["api_server_key"] == "smc://providers/dashscope-alt"
 
 
-def test_ext_pillar_fixture(monkeypatch) -> None:
-    monkeypatch.delenv("SMC_MOCK_BACKEND_URL", raising=False)
-    pillar = smc_external.ext_pillar("lab-minion-01", {})
-    assert pillar["smc"]["endpoint_id"] == "lab-minion-01"
-    assert pillar["smc_pillar_source"] == "mock_fixture"
+def test_ext_pillar_injected_resolver() -> None:
+    smc_external.__opts__ = {
+        "smc_desired_state_resolver": lambda endpoint_id, user_id: resolve_desired_state(endpoint_id, user_id)
+    }
+    try:
+        pillar = smc_external.ext_pillar("lab-minion-01", {})
+        assert pillar["smc"]["endpoint_id"] == "lab-minion-01"
+        assert pillar["smc_pillar_source"] == "injected"
+    finally:
+        smc_external.__opts__ = {}
 
 
 def test_redact_secrets() -> None:

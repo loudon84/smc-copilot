@@ -1,22 +1,44 @@
-# Windows logon scheduled task owns Gateway lifecycle (Salt, not apps/work).
+# Gateway wrapper + OnLogon task. Bound Windows user only — never System.
 
-{% set task_name = pillar.get('smc', {}).get('gateway', {}).get('task_name', 'SMC Hermes Gateway') %}
-{% set hermes_home = pillar.get('smc', {}).get('hermes', {}).get('home', '%LOCALAPPDATA%\\hermes') %}
+{% set smc = pillar.get('smc', {}) %}
+{% set endpoint_id = smc.get('endpoint_id', grains.get('id', 'unknown')) %}
+{% set hermes_home = smc.get('hermes', {}).get('home', '') %}
+{% set windows_account = smc.get('user', {}).get('windows_account', '') %}
+{% set task_name = smc.get('gateway', {}).get('task_name', 'SMC Hermes Gateway') %}
+{% set program_data = salt['environ.get']('ProgramData', 'C:/ProgramData') %}
+
+{% if windows_account and windows_account|lower not in ['system', 'nt authority\\system', 'localsystem'] %}
+
+smc_hermes_gateway_wrapper:
+  smc_hermes.gateway_wrapper_present:
+    - endpoint_id: {{ endpoint_id }}
+    - hermes_home: {{ hermes_home }}
+    - windows_account: {{ windows_account }}
+    - program_data: {{ program_data }}
 
 {% if grains.get('os', '') == 'Windows' or grains.get('os_family') == 'Windows' %}
-
 smc_hermes_gateway_task:
   task.present:
     - name: {{ task_name }}
     - force: True
     - action_type: Execute
-    - cmd: '{{ hermes_home }}\hermes-agent\venv\Scripts\pythonw.exe'
-    - arguments: '-m hermes_cli.main gateway'
+    - cmd: '{{ program_data }}\SMC\bin\hermes-gateway-{{ endpoint_id }}.cmd'
     - trigger_type: OnLogon
-    - user_name: {{ grains.get('smc_endpoint', {}).get('user', '') or 'System' }}
-
+    - user_name: {{ windows_account }}
+    - require:
+      - smc_hermes: smc_hermes_gateway_wrapper
 {% endif %}
 
 hermes_gateway_running:
   smc_hermes.gateway_running:
-    - hermes_home: {{ pillar.get('smc', {}).get('hermes', {}).get('home', '') or None }}
+    - hermes_home: {{ hermes_home or None }}
+    - require:
+      - smc_hermes: smc_hermes_gateway_wrapper
+
+{% else %}
+
+smc_hermes_waiting_user_binding:
+  test.show_notification:
+    - text: "waiting_user_binding: refuse System Gateway; wait for EndpointUserBinding pillar"
+
+{% endif %}

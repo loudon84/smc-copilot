@@ -4,13 +4,21 @@
     "department": "engineering",
     "role": "expert",
     "expert": "coding",
-    "config_version": "1"
+    "config_version": "1",
+    "windows_account": "DOMAIN\\zhangsan",
+    "windows_sid": "S-1-5-21-1000-2000-3000-1001",
+    "profile_dir": "C:\\Users\\zhangsan",
+    "hermes_home": "C:\\Users\\zhangsan\\AppData\\Local\\hermes"
   },
   "user-alt": {
     "user_id": "user-alt",
     "department": "engineering",
     "role": "reader",
     "expert": null,
-    "config_version": "2"
+    "config_version": "2",
+    "windows_account": "DOMAIN\\lisi",
+    "windows_sid": "S-1-5-21-1000-2000-3000-1002",
+    "profile_dir": "C:\\Users\\lisi",
+    "hermes_home": "C:\\Users\\lisi\\AppData\\Local\\hermes"
   }
 }

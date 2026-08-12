@@ -1,0 +1,64 @@
+name: Salt CI
+
+on:
+  push:
+    paths:
+      - "infra/salt/**"
+      - "scripts/salt-migration-inventory.py"
+      - ".github/workflows/salt-ci.yml"
+      - "apps/work/src/main/hermes/**"
+      - "apps/work/src/renderer/src/runtime/**"
+      - "apps/work/src/renderer/src/screens/ConnectionError/**"
+      - "apps/work/src/renderer/src/components/settings/RuntimePane.tsx"
+  pull_request:
+    paths:
+      - "infra/salt/**"
+      - "scripts/salt-migration-inventory.py"
+      - ".github/workflows/salt-ci.yml"
+      - "apps/work/src/main/hermes/**"
+      - "apps/work/src/renderer/src/runtime/**"
+      - "apps/work/src/renderer/src/screens/ConnectionError/**"
+      - "apps/work/src/renderer/src/components/settings/RuntimePane.tsx"
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync
+        working-directory: infra/salt
+        run: uv sync --extra dev
+      - name: Ruff
+        working-directory: infra/salt
+        run: uv run ruff check .
+      - name: Pytest
+        working-directory: infra/salt
+        run: uv run pytest
+      - name: Migration inventory
+        working-directory: infra/salt
+        run: uv run python ../../scripts/salt-migration-inventory.py
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap dry-run
+        shell: pwsh
+        run: |
+          $manifest = Join-Path $pwd "infra/salt/manifest/client-manifest.json"
+          & "infra/salt/client/windows/preflight.ps1" -DryRun
+          & "infra/salt/client/windows/bootstrap.ps1" `
+            -Master "salt.example.internal" `
+            -MasterFingerprint ("aa" * 32) `
+            -EnrollmentToken "ci-token" `
+            -BackendUrl "https://backend.example" `
+            -ManifestPath $manifest `
+            -DryRun
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "infra/salt/client/windows/migrate-runtime-to-salt.ps1" -DryRun
+          & "infra/salt/client/windows/rollback-to-runtime.ps1" -DryRun
+          & "infra/salt/client/windows/repair.ps1" -Master "salt.example.internal" -MasterFingerprint ("aa" * 32) -BackendUrl "https://backend.example" -DryRun

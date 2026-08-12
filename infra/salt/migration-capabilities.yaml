@@ -1,0 +1,585 @@
+schema: smc.salt-migration-capabilities.v2
+notes: >
+  Only status=verified FULL counts as weight 1.0. pairings and role_library stay PARTIAL.
+  Tests listed must exist or inventory downgrades the item.
+
+items:
+  # --- routers (Endpoint Control Plane) ---
+  - name: runtime
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/runtime.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: service
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: system
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/system.py
+    salt_source: infra/salt/extensions/_grains/smc_endpoint.py
+    tests: [infra/salt/tests/test_grains_device_only.py]
+  - name: health
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/health.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: metrics
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/metrics.py
+    salt_source: infra/salt/extensions/_beacons/smc_hermes_health.py
+    tests: [infra/salt/tests/test_returner_and_beacon.py]
+  - name: bootstrap
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/bootstrap.py
+    salt_source: infra/salt/client/enrollment.py
+    tests: [infra/salt/tests/test_enrollment.py]
+  - name: endpoint
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/endpoint.py
+    salt_source: infra/salt/client/enrollment.py
+    tests: [infra/salt/tests/test_enrollment.py]
+  - name: sync
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/sync.py
+    salt_source: infra/salt/extensions/_pillar/smc_external.py
+    tests: [infra/salt/tests/test_user_binding.py]
+  - name: resources
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/resources.py
+    salt_source: infra/salt/extensions/_pillar/smc_external.py
+    tests: [infra/salt/tests/test_desired_state.py]
+  - name: service_center
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/service_center.py
+    salt_source: infra/salt/states/hermes.sls
+    tests: [infra/salt/tests/test_forbidden_guards.py]
+  - name: gateways
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/gateways.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: instances
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/instances.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: configurations
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/configurations.py
+    salt_source: infra/salt/extensions/_utils/config_revision.py
+    tests: [infra/salt/tests/test_config_revision.py]
+  - name: secrets
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/secrets.py
+    salt_source: infra/salt/extensions/_modules/smc_secret.py
+    tests: [infra/salt/tests/test_smc_secret.py]
+  - name: diagnostics
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/diagnostics.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: profiles
+    kind: router
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/api/v1/profiles.py
+    salt_source: infra/salt/states/profiles.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: pairings
+    kind: router
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/api/v1/pairings.py
+    salt_source: ""
+    tests: []
+  - name: expert_mcp
+    kind: router
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/api/v1/expert_mcp.py
+    salt_source: infra/salt/states/mcp.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: role_library
+    kind: router
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/api/v1/role_library.py
+    salt_source: ""
+    tests: []
+
+  # --- services ---
+  - name: installation_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/installation_service.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: update_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/update_service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: rollback_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/rollback_service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: gateway_supervisor
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/gateway_supervisor.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: instance_gateway_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/instance_gateway_service.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: gateway_ownership_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/gateway_ownership_service.py
+    salt_source: infra/salt/extensions/_utils/control_owner.py
+    tests: [infra/salt/tests/test_control_owner.py]
+  - name: gateway_credential_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/gateway_credential_service.py
+    salt_source: infra/salt/extensions/_modules/smc_secret.py
+    tests: [infra/salt/tests/test_smc_secret.py]
+  - name: desired_state_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/desired_state_service.py
+    salt_source: infra/salt/mock_backend/desired_state.py
+    tests: [infra/salt/tests/test_desired_state.py]
+  - name: endpoint_enrollment_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/endpoint_enrollment_service.py
+    salt_source: infra/salt/client/enrollment.py
+    tests: [infra/salt/tests/test_enrollment.py]
+  - name: endpoint_inventory_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/endpoint_inventory_service.py
+    salt_source: infra/salt/extensions/_grains/smc_endpoint.py
+    tests: [infra/salt/tests/test_grains_device_only.py]
+  - name: runtime_status_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_status_service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: runtime_version_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_version_service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: runtime_job_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_job_service.py
+    salt_source: infra/salt/extensions/_returners/smc_backend.py
+    tests: [infra/salt/tests/test_returner_and_beacon.py]
+  - name: bootstrap_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/bootstrap_service.py
+    salt_source: infra/salt/client/windows/bootstrap.ps1
+    tests: [infra/salt/tests/test_client_manifest.py]
+  - name: runtime_sync_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_sync_service.py
+    salt_source: infra/salt/extensions/_pillar/smc_external.py
+    tests: [infra/salt/tests/test_user_binding.py]
+  - name: resource_sync_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/resource_sync_service.py
+    salt_source: infra/salt/extensions/_pillar/smc_external.py
+    tests: [infra/salt/tests/test_desired_state.py]
+  - name: doctor_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/doctor_service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: diagnostic_bundle_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/diagnostic_bundle_service.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_smc_hermes_module.py]
+  - name: compatibility_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/compatibility_service.py
+    salt_source: infra/salt/manifest/client-manifest.json
+    tests: [infra/salt/tests/test_client_manifest.py]
+  - name: runtime_update_plan_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_update_plan_service.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: runtime_version_pin_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_version_pin_service.py
+    salt_source: infra/salt/manifest/client-manifest.json
+    tests: [infra/salt/tests/test_client_manifest.py]
+  - name: runtime_service_update
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/runtime_service_update.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: metrics_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/metrics_service.py
+    salt_source: infra/salt/extensions/_beacons/smc_hermes_health.py
+    tests: [infra/salt/tests/test_returner_and_beacon.py]
+  - name: configuration_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/configuration_service.py
+    salt_source: infra/salt/extensions/_utils/config_revision.py
+    tests: [infra/salt/tests/test_config_revision.py]
+  - name: hermes_local_config_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/hermes_local_config_service.py
+    salt_source: infra/salt/extensions/_utils/config_revision.py
+    tests: [infra/salt/tests/test_config_revision.py]
+  - name: secret_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/secret_service.py
+    salt_source: infra/salt/extensions/_modules/smc_secret.py
+    tests: [infra/salt/tests/test_smc_secret.py]
+  - name: mcp_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/mcp_service.py
+    salt_source: infra/salt/states/mcp.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: profile_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/profile_service.py
+    salt_source: infra/salt/states/profiles.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: instance_service
+    kind: service
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/services/instance_service.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: backup_service
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/backup_service.py
+    salt_source: ""
+    tests: []
+  - name: pairing_service
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/pairing_service.py
+    salt_source: ""
+    tests: []
+  - name: expert_mcp_gateway_service
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/expert_mcp_gateway_service.py
+    salt_source: infra/salt/states/mcp.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: role_library_service
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/role_library_service.py
+    salt_source: ""
+    tests: []
+  - name: dev_hermes_registration_service
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/dev_hermes_registration_service.py
+    salt_source: ""
+    tests: []
+  - name: instance_ref_resolver
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/instance_ref_resolver.py
+    salt_source: ""
+    tests: []
+  - name: profile_ref_resolver
+    kind: service
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/services/profile_ref_resolver.py
+    salt_source: ""
+    tests: []
+
+  # --- runtime_pkg (install/gateway primitives) ---
+  - name: artifact_downloader
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/artifact_downloader.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: checksum_verifier
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/checksum_verifier.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: artifact_signature
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/artifact_signature.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: bundle_security
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/bundle_security.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: version_layout
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/version_layout.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: activation_manager
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/activation_manager.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: archive_policy
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/archive_policy.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: executable_policy
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/executable_policy.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: platform_paths
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/platform_paths.py
+    salt_source: infra/salt/extensions/_utils/paths.py
+    tests: [infra/salt/tests/test_home_adoption.py]
+  - name: windows_program_paths
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/windows_program_paths.py
+    salt_source: infra/salt/client/paths.py
+    tests: [infra/salt/tests/test_enrollment.py]
+  - name: gateway_process
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/gateway_process.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: gateway_environment
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/gateway_environment.py
+    salt_source: infra/salt/states/gateway.sls
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: gateway_listener
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/gateway_listener.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: gateway_command_hash
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/gateway_command_hash.py
+    salt_source: infra/salt/extensions/_modules/smc_hermes.py
+    tests: [infra/salt/tests/test_gateway_wrapper.py]
+  - name: hermes_supervisor_metrics
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/hermes_supervisor_metrics.py
+    salt_source: infra/salt/extensions/_beacons/smc_hermes_health.py
+    tests: [infra/salt/tests/test_returner_and_beacon.py]
+  - name: desired_state_reconciler
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/desired_state_reconciler.py
+    salt_source: infra/salt/mock_backend/desired_state.py
+    tests: [infra/salt/tests/test_desired_state.py]
+  - name: environment_probe
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/environment_probe.py
+    salt_source: infra/salt/extensions/_grains/smc_endpoint.py
+    tests: [infra/salt/tests/test_grains_device_only.py]
+  - name: port_allocator
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/port_allocator.py
+    salt_source: infra/salt/states/profiles.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: sync_protocol
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/sync_protocol.py
+    salt_source: infra/salt/extensions/_pillar/smc_external.py
+    tests: [infra/salt/tests/test_user_binding.py]
+  - name: resource_bundle
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/resource_bundle.py
+    salt_source: infra/salt/extensions/_utils/artifact.py
+    tests: [infra/salt/tests/test_artifact_lifecycle.py]
+  - name: instance_operation_lock
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/instance_operation_lock.py
+    salt_source: infra/salt/client/handover.py
+    tests: [infra/salt/tests/test_handover_state_machine.py]
+  - name: process_lock
+    kind: runtime_pkg
+    classification: FULL
+    status: verified
+    runtime_source: services/runtime/src/runtime/process_lock.py
+    salt_source: infra/salt/client/handover.py
+    tests: [infra/salt/tests/test_handover_state_machine.py]
+  - name: hermes_profile_paths
+    kind: runtime_pkg
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/runtime/hermes_profile_paths.py
+    salt_source: infra/salt/extensions/_utils/paths.py
+    tests: [infra/salt/tests/test_home_adoption.py]
+  - name: mcp_config_compiler
+    kind: runtime_pkg
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/runtime/mcp_config_compiler.py
+    salt_source: infra/salt/states/mcp.sls
+    tests: [infra/salt/tests/test_profile_mcp_states.py]
+  - name: local_hermes_profile_policy
+    kind: runtime_pkg
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/runtime/local_hermes_profile_policy.py
+    salt_source: ""
+    tests: []
+  - name: runtime_identity
+    kind: runtime_pkg
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/runtime/runtime_identity.py
+    salt_source: infra/salt/client/paths.py
+    tests: [infra/salt/tests/test_enrollment.py]
+  - name: cancellation_token
+    kind: runtime_pkg
+    classification: PARTIAL
+    status: documented
+    runtime_source: services/runtime/src/runtime/cancellation_token.py
+    salt_source: ""
+    tests: []

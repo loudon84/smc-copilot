@@ -15,8 +15,14 @@ vi.mock("electron", () => ({
   },
 }));
 
-vi.mock("../src/main/hermes", () => ({
+vi.mock("../src/main/hermes/transport/gateway-http", () => ({
   getApiUrl: (): string => "http://127.0.0.1:9",
+  isGatewayHealthy: async (): Promise<boolean> => false,
+  isRemoteMode: (): boolean => false,
+}));
+
+vi.mock("../src/main/config", () => ({
+  getApiServerKey: (): string => "",
 }));
 
 describe("HermesAvailabilityBackend", () => {
@@ -43,8 +49,23 @@ describe("HermesAvailabilityBackend", () => {
     const probe = await backend.probe();
     expect(probe.state).toBe("runtime_missing");
     expect(probe.gatewayHealthy).toBe(false);
+    expect(probe.authenticated).toBe(false);
     const ready = await backend.ensureReady();
     expect(ready.ok).toBe(false);
+  });
+
+  it("does not treat authenticated as gatewayHealthy", async () => {
+    writeFileSync(
+      join(home, "active.json"),
+      JSON.stringify({ version: "0.1.0" }),
+    );
+    const { HermesAvailabilityBackend } = await import(
+      "../src/main/hermes/availability-backend"
+    );
+    const backend = new HermesAvailabilityBackend();
+    const probe = await backend.probe();
+    expect(probe.authenticated).toBe(false);
+    expect(probe.gatewayHealthy).toBe(false);
   });
 
   it("refuses restart in salt mode", async () => {

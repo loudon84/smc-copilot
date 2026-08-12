@@ -1,4 +1,4 @@
-"""Resolve Desired State from fixtures (Endpoint + User + Role + ConfigVersion)."""
+"""Resolve Desired State from fixtures (Endpoint + User Binding + Role + ConfigVersion)."""
 
 from __future__ import annotations
 
@@ -34,11 +34,19 @@ def resolve_desired_state(
 
     previous_user = binding.get("previous_user_id")
     if effective_user and previous_user and previous_user != effective_user:
-        # User switch: do not reuse previous secret refs.
         secret_refs = dict(config.get("secret_refs") or {})
         secret_refs.pop("previous_user", None)
     else:
         secret_refs = dict(config.get("secret_refs") or {})
+
+    windows_account = user.get("windows_account") or binding.get("windows_account") or ""
+    windows_sid = user.get("windows_sid") or binding.get("windows_sid") or ""
+    profile_dir = user.get("profile_dir") or binding.get("profile_dir") or ""
+    hermes_home = (
+        (config.get("hermes") or {}).get("home")
+        or user.get("hermes_home")
+        or (f"{profile_dir}\\AppData\\Local\\hermes" if profile_dir else "")
+    )
 
     return {
         "endpoint_id": endpoint_id,
@@ -47,9 +55,19 @@ def resolve_desired_state(
         "role": user.get("role") or binding.get("role") or "default",
         "expert": user.get("expert"),
         "config_version": config_version,
-        "hermes": config.get("hermes") or {"version": "latest"},
+        "user": {
+            "user_id": effective_user,
+            "windows_account": windows_account,
+            "windows_sid": windows_sid,
+            "profile_dir": profile_dir,
+        },
+        "hermes": {
+            **(config.get("hermes") or {"version": "0.20.0"}),
+            "home": hermes_home,
+        },
         "gateway": config.get("gateway") or {"port": 8642},
         "platforms": config.get("platforms") or {},
+        "mcp": config.get("mcp") or {"mcpServers": []},
         "secret_refs": secret_refs,
         "user_switched": bool(previous_user and effective_user and previous_user != effective_user),
     }

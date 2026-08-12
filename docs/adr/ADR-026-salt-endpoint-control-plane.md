@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (PRD Work v2.0)
+Accepted (PRD Work v2.0, extended by v2.1 client migration)
 
 ## Context
 
@@ -25,4 +25,4 @@ Accepted (PRD Work v2.0)
 
 - Desktop (`apps/desktop`) continues to use Runtime `:8765` until a separate migration.
 - `apps/work` Connection Ready defaults to Hermes Gateway without Runtime; Chat works with Runtime stopped in `direct` and `salt` modes.
-- Migration inventory (`scripts/salt-migration-inventory.py`) measures replacement rate before any Runtime deletion (v2.0 does not delete Runtime).
+- v2.1: Windows machine-scope Bootstrap installs Salt Minion 3008 LTS; enterprise `control-owner.json` is `salt`. Migration inventory v2 only counts **verified FULL** capabilities (`infra/salt/migration-capabilities.yaml`). v2.1 does not delete Runtime.

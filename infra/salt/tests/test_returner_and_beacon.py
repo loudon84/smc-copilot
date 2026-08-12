@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from _returners import smc_backend
 from _beacons import smc_hermes_health
+from _returners import smc_backend
 
 
 def test_returner_redacts_and_writes(tmp_path: Path, monkeypatch) -> None:

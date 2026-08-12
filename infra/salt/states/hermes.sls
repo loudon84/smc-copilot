@@ -1,4 +1,7 @@
-# Hermes Agent desired install (repo-only artifact path from pillar).
+# Hermes Agent signed install (artifact url/sha256/signature from pillar).
+
+{% set hermes = pillar.get('smc', {}).get('hermes', {}) %}
+{% set artifact = hermes.get('artifact', {}) %}
 
 sync_smc_modules:
   module.run:
@@ -15,9 +18,11 @@ hermes_control_owner:
 
 hermes_installed:
   smc_hermes.installed:
-    - version: {{ pillar.get('smc', {}).get('hermes', {}).get('version', 'latest') }}
-    - artifact_path: {{ pillar.get('smc', {}).get('hermes', {}).get('artifact_path', '') }}
-    - hermes_home: {{ pillar.get('smc', {}).get('hermes', {}).get('home', '') or None }}
+    - version: {{ hermes.get('version', '') }}
+    - artifact_url: {{ artifact.get('url', hermes.get('artifact_path', '')) }}
+    - artifact_sha256: {{ artifact.get('sha256', '') }}
+    - artifact_signature: {{ artifact.get('signature', '') }}
+    - hermes_home: {{ hermes.get('home', '') or None }}
     - require:
       - module: sync_smc_modules
       - file: hermes_control_owner

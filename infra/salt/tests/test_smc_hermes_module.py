@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from _modules import smc_hermes
@@ -14,21 +13,11 @@ def test_inspect_missing_home(tmp_path: Path, monkeypatch) -> None:
     assert info["repo_exists"] is False
 
 
-def test_install_from_fixture(tmp_path: Path, monkeypatch) -> None:
-    owner = tmp_path / "control-owner.json"
-    monkeypatch.setenv("SMC_CONTROL_OWNER_PATH", str(owner))
-    artifact = tmp_path / "artifact"
-    (artifact / "hermes_cli").mkdir(parents=True)
-    (artifact / "hermes_cli" / "main.py").write_text("# fixture\n", encoding="utf-8")
-    (artifact / "venv" / "Scripts").mkdir(parents=True)
-    (artifact / "venv" / "Scripts" / "python.exe").write_text("", encoding="utf-8")
-    home = tmp_path / "hermes-home"
-    result = smc_hermes.install(version="0.16.0", artifact_path=str(artifact), hermes_home=str(home))
-    assert result["ok"] is True
-    assert (home / "hermes-agent" / "hermes_cli" / "main.py").is_file()
-    active = json.loads((home / "active.json").read_text(encoding="utf-8"))
-    assert active["version"] == "0.16.0"
-    assert smc_hermes.version(hermes_home=str(home))["version"] == "0.16.0"
+def test_unsigned_install_rejected(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SMC_CONTROL_OWNER_PATH", str(tmp_path / "owner.json"))
+    result = smc_hermes.install(version="0.20.0", artifact_path=str(tmp_path / "a"), hermes_home=str(tmp_path / "h"))
+    assert result["ok"] is False
+    assert result["error"] == "signed_artifact_required"
 
 
 def test_doctor_and_health_without_gateway(tmp_path: Path, monkeypatch) -> None:

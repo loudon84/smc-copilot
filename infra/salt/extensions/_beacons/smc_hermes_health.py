@@ -1,22 +1,27 @@
-"""Beacon: emit Hermes Gateway health for Salt event bus."""
+"""Beacon: emit Hermes Gateway health for Salt event bus. Uses __salt__, not _modules import."""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from typing import Any
-
-_MOD_PARENT = Path(__file__).resolve().parents[1]
-if str(_MOD_PARENT) not in sys.path:
-    sys.path.insert(0, str(_MOD_PARENT))
-
-from _modules import smc_hermes
 
 __virtualname__ = "smc_hermes_health"
 
 
 def __virtual__():
     return __virtualname__
+
+
+def _salt() -> dict[str, Any]:
+    return globals().get("__salt__") or {}
+
+
+def _health(hermes_home: str | None) -> dict[str, Any]:
+    salt = _salt()
+    if "smc_hermes.health" in salt:
+        return salt["smc_hermes.health"](hermes_home=hermes_home)
+    from _modules import smc_hermes
+
+    return smc_hermes.health(hermes_home=hermes_home)
 
 
 def validate(config: Any) -> tuple[bool, str]:
@@ -34,5 +39,5 @@ def beacon(config: Any) -> list[dict[str, Any]]:
     elif isinstance(config, list) and config and isinstance(config[0], dict):
         interval_cfg = config[0]
     home = interval_cfg.get("hermes_home")
-    health = smc_hermes.health(hermes_home=home)
+    health = _health(home)
     return [{"tag": "smc/hermes/health", "hermes": health}]
