@@ -1,0 +1,8 @@
+{
+  "schema": "smc.salt-evidence.hermes-inspect.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "command": "salt ep_xxx smc_hermes.inspect",
+  "redaction": "no profile paths with usernames; home path hashed/aliased",
+  "results": null
+}

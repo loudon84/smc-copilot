@@ -1,28 +1,21 @@
-# Hermes Agent signed install (artifact url/sha256/signature from pillar).
+# Hermes Agent signed install — prepare only; owner claim is smc_handover.commit.
 
 {% set hermes = pillar.get('smc', {}).get('hermes', {}) %}
 {% set artifact = hermes.get('artifact', {}) %}
+{% set migrate_mode = hermes.get('migrate_mode', True) %}
 
 sync_smc_modules:
   module.run:
     - name: saltutil.sync_all
     - refresh: True
 
-hermes_control_owner:
-  file.serialize:
-    - name: {{ salt['environ.get']('SMC_CONTROL_OWNER_PATH', 'C:/ProgramData/SMC/control-owner.json') }}
-    - dataset:
-        hermes: salt
-    - formatter: json
-    - makedirs: True
-
-hermes_installed:
-  smc_hermes.installed:
+hermes_prepared:
+  smc_hermes.prepared:
     - version: {{ hermes.get('version', '') }}
     - artifact_url: {{ artifact.get('url', hermes.get('artifact_path', '')) }}
     - artifact_sha256: {{ artifact.get('sha256', '') }}
     - artifact_signature: {{ artifact.get('signature', '') }}
     - hermes_home: {{ hermes.get('home', '') or None }}
+    - migrate_mode: {{ migrate_mode }}
     - require:
       - module: sync_smc_modules
-      - file: hermes_control_owner

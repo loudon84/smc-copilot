@@ -11,12 +11,17 @@ from db.repositories.interfaces import (
     BindingRepository,
     DesiredStateRecord,
     DesiredStateRepository,
+    EndpointOperationRecord,
     EndpointRecord,
     EndpointRepository,
     EnrollmentRecord,
     EnrollmentRepository,
+    IdempotencyRecord,
+    IdempotencyRepository,
     JobReturnRecord,
     JobReturnRepository,
+    OperationRepository,
+    OperationStepRecord,
     PendingTokenRecord,
     PendingTokenRepository,
     RepositoryBundle,
@@ -190,6 +195,82 @@ class InMemoryAuditRepository(AuditRepository):
         return [e for e in self._events if e.target_type == target_type and e.target_id == target_id]
 
 
+class InMemoryIdempotencyRepository(IdempotencyRepository):
+    def __init__(self) -> None:
+        self._by_key: dict[str, IdempotencyRecord] = {}
+
+    async def get(self, key: str) -> IdempotencyRecord | None:
+        return self._by_key.get(key)
+
+    async def put(self, record: IdempotencyRecord) -> IdempotencyRecord:
+        existing = self._by_key.get(record.key)
+        if existing is not None:
+            return existing
+        if record.created_at is None:
+            record.created_at = datetime.now(UTC)
+        self._by_key[record.key] = record
+        return record
+
+
+class InMemoryOperationRepository(OperationRepository):
+    def __init__(self) -> None:
+        self._by_id: dict[str, EndpointOperationRecord] = {}
+        self._by_request: dict[str, str] = {}
+        self._steps: dict[str, dict[str, OperationStepRecord]] = {}
+        self._step_seq = 0
+
+    async def create(self, record: EndpointOperationRecord) -> EndpointOperationRecord:
+        now = datetime.now(UTC)
+        if record.created_at is None:
+            record.created_at = now
+        if record.updated_at is None:
+            record.updated_at = now
+        self._by_id[record.id] = record
+        if record.request_id:
+            self._by_request[record.request_id] = record.id
+        self._steps.setdefault(record.id, {})
+        return record
+
+    async def get(self, operation_id: str) -> EndpointOperationRecord | None:
+        return self._by_id.get(operation_id)
+
+    async def get_by_request_id(self, request_id: str) -> EndpointOperationRecord | None:
+        oid = self._by_request.get(request_id)
+        return self._by_id.get(oid) if oid else None
+
+    async def update(self, record: EndpointOperationRecord) -> EndpointOperationRecord:
+        record.updated_at = datetime.now(UTC)
+        self._by_id[record.id] = record
+        return record
+
+    async def list_resumable(self, *, kinds: list[str] | None = None) -> list[EndpointOperationRecord]:
+        out = []
+        for record in self._by_id.values():
+            if record.state not in {"pending", "running", "accepted", "synced"}:
+                continue
+            if kinds and record.kind not in kinds:
+                continue
+            out.append(record)
+        return out
+
+    async def upsert_step(self, step: OperationStepRecord) -> OperationStepRecord:
+        bucket = self._steps.setdefault(step.operation_id, {})
+        existing = bucket.get(step.step_name)
+        if existing is None:
+            self._step_seq += 1
+            step.id = self._step_seq
+        else:
+            step.id = existing.id
+        bucket[step.step_name] = step
+        return step
+
+    async def list_steps(self, operation_id: str) -> list[OperationStepRecord]:
+        return list(self._steps.get(operation_id, {}).values())
+
+    async def get_step(self, operation_id: str, step_name: str) -> OperationStepRecord | None:
+        return self._steps.get(operation_id, {}).get(step_name)
+
+
 def build_in_memory_repos() -> RepositoryBundle:
     return RepositoryBundle(
         endpoints=InMemoryEndpointRepository(),
@@ -201,6 +282,8 @@ def build_in_memory_repos() -> RepositoryBundle:
         artifacts=InMemoryArtifactRepository(),
         rollouts=InMemoryRolloutRepository(),
         audits=InMemoryAuditRepository(),
+        idempotency=InMemoryIdempotencyRepository(),
+        operations=InMemoryOperationRepository(),
     )
 
 
@@ -211,7 +294,9 @@ __all__ = [
     "InMemoryDesiredStateRepository",
     "InMemoryEndpointRepository",
     "InMemoryEnrollmentRepository",
+    "InMemoryIdempotencyRepository",
     "InMemoryJobReturnRepository",
+    "InMemoryOperationRepository",
     "InMemoryPendingTokenRepository",
     "InMemoryRolloutRepository",
     "build_in_memory_repos",

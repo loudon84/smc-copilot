@@ -1,0 +1,25 @@
+{
+  "schema": "smc.salt-evidence.master-connectivity.v1",
+  "capturedAt": "2026-08-12T09:00:24Z",
+  "status": "not_proven",
+  "manualGate": true,
+  "master": "192.168.102.104",
+  "fromEndpointAlias": "host_itbjb0676",
+  "tcp": {
+    "4505": "open",
+    "4506": "open"
+  },
+  "operatorRequired": {
+    "saltKeyList": "salt-key -L  # on Master; redact hostnames if needed",
+    "testPing": "salt ITBJB0676 test.ping",
+    "minionFinger": "salt-key -f ITBJB0676",
+    "masterFinger": "salt-key -f master  # or key.finger_master; store trusted fingerprint out-of-band"
+  },
+  "results": {
+    "saltKeyList": null,
+    "testPing": null,
+    "minionPubkeyFingerprint": null,
+    "masterPubkeyFingerprint": null
+  },
+  "note": "Do not auto-accept master fingerprints from untrusted network responses."
+}

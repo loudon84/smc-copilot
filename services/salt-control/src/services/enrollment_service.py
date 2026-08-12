@@ -11,6 +11,7 @@ from db.repositories.interfaces import (
     AuditEventRecord,
     EndpointRecord,
     EnrollmentRecord,
+    IdempotencyRecord,
     RepositoryBundle,
 )
 from integrations.salt_master import SaltMaster
@@ -21,6 +22,7 @@ from schemas.enrollment import (
     FingerprintReportRequest,
     FingerprintReportResponse,
 )
+from workers.enrollment_worker import EnrollmentOperationWorker
 
 
 def _new_id(prefix: str) -> str:
@@ -33,10 +35,12 @@ class EnrollmentService:
         repos: RepositoryBundle,
         settings: Settings,
         masters: list[SaltMaster],
+        worker: EnrollmentOperationWorker | None = None,
     ) -> None:
         self.repos = repos
         self.settings = settings
         self.masters = masters
+        self.worker = worker or EnrollmentOperationWorker(repos, masters)
 
     async def create(self, body: EnrollmentCreateRequest) -> EnrollmentCreateResponse:
         existing = await self.repos.enrollments.get_by_request_id(body.request_id)
@@ -44,15 +48,13 @@ class EnrollmentService:
             endpoint = await self.repos.endpoints.get(existing.endpoint_id)
             if endpoint is None:
                 raise SaltControlError(ErrorCode.INTERNAL_ERROR, "enrollment endpoint missing", status_code=500)
-            # Idempotent replay: device credential is only returned once; return opaque placeholder marker
-            # Tests assert same endpointId — credential may be empty on replay for security.
-            cached_cred = self.repos.extras.get(f"device_cred:{existing.id}", "")
+            # Device credential is only returned once; replay returns empty credential.
             return EnrollmentCreateResponse(
                 enrollment_id=existing.id,
                 endpoint_id=existing.endpoint_id,
                 masters=list(self.settings.master_list),
                 master_fingerprints=list(existing.master_fingerprints),
-                device_credential=cached_cred,
+                device_credential="",
                 expires_at=existing.expires_at.isoformat(),
             )
 
@@ -112,7 +114,6 @@ class EnrollmentService:
         )
         await self.repos.enrollments.create(enrollment)
         await self.repos.pending_tokens.mark_used(token_hash)
-        self.repos.extras[f"device_cred:{enrollment_id}"] = device_credential
 
         await self.repos.audits.append(
             AuditEventRecord(
@@ -145,13 +146,14 @@ class EnrollmentService:
             raise SaltControlError(ErrorCode.ENDPOINT_IDENTITY_CONFLICT, "endpoint mismatch", status_code=409)
 
         fp_cache_key = f"fp_req:{body.request_id}"
-        cached_state = self.repos.extras.get(fp_cache_key)
-        if cached_state is not None:
+        cached = await self.repos.idempotency.get(fp_cache_key)
+        if cached is not None:
+            payload = cached.response_json
             return FingerprintReportResponse(
                 enrollment_id=enrollment.id,
                 endpoint_id=enrollment.endpoint_id,
-                state=cached_state["state"],
-                error_code=cached_state.get("error_code"),
+                state=str(payload.get("state", enrollment.state)),
+                error_code=payload.get("error_code"),
             )
 
         matches = 0
@@ -183,7 +185,6 @@ class EnrollmentService:
             await self.repos.enrollments.update(enrollment)
             raise SaltControlError(ErrorCode.MINION_KEY_MISSING, "pending minion key missing", status_code=404)
 
-        # Accept on all masters — fail closed, no accept on mismatch (already handled)
         try:
             for master in self.masters:
                 await master.accept(body.endpoint_id, body.minion_fingerprint)
@@ -198,46 +199,31 @@ class EnrollmentService:
         enrollment.local_fingerprint = body.minion_fingerprint
         await self.repos.enrollments.update(enrollment)
 
-        # ping / sync / highstate — never switch control owner here (client-side)
-        primary = self.masters[0]
-        if not await primary.ping(body.endpoint_id):
-            enrollment.state = "failed"
-            enrollment.error_code = ErrorCode.MASTER_ACCEPT_FAILED
-            await self.repos.enrollments.update(enrollment)
-            return FingerprintReportResponse(
-                enrollment_id=enrollment.id,
-                endpoint_id=enrollment.endpoint_id,
-                state=enrollment.state,
-                error_code=enrollment.error_code,
-            )
+        # Durable async follow-up — do not block HTTP on highstate in production.
+        await self.worker.enqueue(
+            endpoint_id=body.endpoint_id,
+            enrollment_id=enrollment.id,
+            request_id=body.request_id,
+        )
 
-        if not await primary.sync_all(body.endpoint_id):
-            enrollment.state = "failed"
-            enrollment.error_code = ErrorCode.SYNC_ALL_FAILED
-            await self.repos.enrollments.update(enrollment)
-            return FingerprintReportResponse(
-                enrollment_id=enrollment.id,
-                endpoint_id=enrollment.endpoint_id,
-                state=enrollment.state,
-                error_code=enrollment.error_code,
-            )
-        enrollment.state = "synced"
-        await self.repos.enrollments.update(enrollment)
+        if self.settings.salt_env in {"lab", "test"}:
+            # Keep unit tests deterministic without a long-lived event loop worker.
+            await self.worker.tick()
+            enrollment = await self.repos.enrollments.get(enrollment_id) or enrollment
 
-        if not await primary.highstate(body.endpoint_id):
-            enrollment.state = "failed"
-            enrollment.error_code = ErrorCode.HIGHSTATE_FAILED
-            await self.repos.enrollments.update(enrollment)
-            return FingerprintReportResponse(
-                enrollment_id=enrollment.id,
-                endpoint_id=enrollment.endpoint_id,
-                state=enrollment.state,
-                error_code=enrollment.error_code,
+        response = FingerprintReportResponse(
+            enrollment_id=enrollment.id,
+            endpoint_id=enrollment.endpoint_id,
+            state=enrollment.state,
+            error_code=enrollment.error_code,
+        )
+        await self.repos.idempotency.put(
+            IdempotencyRecord(
+                key=fp_cache_key,
+                response_json={"state": response.state, "error_code": response.error_code},
+                created_at=datetime.now(UTC),
             )
-
-        enrollment.state = "highstate"
-        enrollment.completed_at = datetime.now(UTC)
-        await self.repos.enrollments.update(enrollment)
+        )
 
         await self.repos.audits.append(
             AuditEventRecord(
@@ -252,14 +238,6 @@ class EnrollmentService:
                 occurred_at=datetime.now(UTC),
             )
         )
-
-        response = FingerprintReportResponse(
-            enrollment_id=enrollment.id,
-            endpoint_id=enrollment.endpoint_id,
-            state=enrollment.state,
-            error_code=None,
-        )
-        self.repos.extras[fp_cache_key] = {"state": response.state, "error_code": None}
         return response
 
     async def get_status(self, enrollment_id: str) -> EnrollmentStatusResponse:

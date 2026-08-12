@@ -1,6 +1,10 @@
-# Salt v2.2 Go / No-Go
+# Salt v2.2 / v2.3 Go / No-Go
 
-Do **not** delete `services/runtime` in v2.2. Endpoint Control Plane is **flag-off** (`SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false`) after Ring 3 evidence, not source deletion.
+Status vocabulary: see [`docs/salt/evidence/v2.3/STATUS.md`](./evidence/v2.3/STATUS.md).
+Repo CI green ⇒ `implemented` only. Hardware / Master evidence ⇒ `proven` (human only).
+Manual Gates must not be auto-marked completed by Cursor.
+
+Do **not** delete `services/runtime` in v2.2/v2.3. Endpoint Control Plane is **flag-off** (`SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false`) after Ring 3 evidence, not source deletion.
 
 ## Inventory command
 

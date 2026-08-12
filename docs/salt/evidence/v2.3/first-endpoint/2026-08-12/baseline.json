@@ -1,0 +1,64 @@
+{
+  "schema": "smc.salt-evidence.baseline.v1",
+  "capturedAt": "2026-08-12T09:00:24Z",
+  "status": "implemented",
+  "repo": {
+    "pathAlias": "smc-copilot",
+    "branch": "codex/codex-worktree",
+    "commit": "45b1c1799c94204ae280a49572d910126cdfcc94",
+    "v22Inventory": {
+      "api": 0.921,
+      "service": 0.875,
+      "loc": 0.935,
+      "gate": "GO_repo_only"
+    }
+  },
+  "endpointAlias": "host_itbjb0676",
+  "minionIdCurrent": "ITBJB0676",
+  "minionIdDesiredPattern": "ep_*",
+  "salt": {
+    "serviceStatus": "Running",
+    "serviceStartType": "Automatic",
+    "master": "192.168.102.104",
+    "ports": {
+      "4505": "open",
+      "4506": "open"
+    },
+    "masterFingerConfigured": "unknown_or_partial",
+    "localSaltCallOnly": true,
+    "note": "salt-call test.ping is local-only and does NOT prove Master control path"
+  },
+  "smc": {
+    "endpointIdPresent": false,
+    "controlOwnerPresent": false,
+    "bootstrapJournalPresent": false
+  },
+  "hermes": {
+    "hermesLocalService": "Stopped",
+    "hermesLocalStartType": "Manual"
+  },
+  "masterSide": {
+    "saltKeyList": "NOT_PROVEN",
+    "testPingFromMaster": "NOT_PROVEN",
+    "minionPubkeyFingerprint": "NOT_PROVEN",
+    "masterPubkeyFingerprint": "NOT_PROVEN",
+    "manualGate": true
+  },
+  "secrets": {
+    "tokensPresent": false,
+    "privateKeysPresent": false,
+    "realUserNamesPresent": false
+  },
+  "backupBeforeClientChange": {
+    "status": "required_before_phase4",
+    "checklist": [
+      "minion conf + minion.d",
+      "minion PKI (no private key in git evidence)",
+      "public key fingerprint hash",
+      "service start type",
+      "Hermes home path presence",
+      "Gateway scheduled task presence",
+      "Runtime/Direct owner state"
+    ]
+  }
+}

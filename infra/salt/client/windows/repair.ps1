@@ -11,7 +11,7 @@ param(
     [string]$EnrollmentToken = "repair",
     [string]$SaltControlUrl = "",
     [string]$EnrollmentId = "",
-    [string]$MasterB = "salt-b.internal",
+    [string]$MasterB = "",
     [switch]$DryRun
 )
 
@@ -35,8 +35,13 @@ if ($DryRun) {
 }
 
 if (-not $endpointId) { throw "endpoint-id missing; run bootstrap first" }
+if ($MasterB -eq "salt-b.internal") { $MasterB = "" }
 
-& (Join-Path $here "configure-minion.ps1") -Master $Master -MasterB $MasterB -EndpointId $endpointId -MasterFingerprint $MasterFingerprint -StartService
+if ($MasterB) {
+    & (Join-Path $here "configure-minion.ps1") -Master $Master -MasterB $MasterB -EndpointId $endpointId -MasterFingerprint $MasterFingerprint -StartService
+} else {
+    & (Join-Path $here "configure-minion.ps1") -Master $Master -EndpointId $endpointId -MasterFingerprint $MasterFingerprint -StartService
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & (Join-Path $here "enroll-minion.ps1") `
     -EndpointId $endpointId `

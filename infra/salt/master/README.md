@@ -1,6 +1,14 @@
-# Production Salt Master (v2.2)
+# Production Salt Master (v2.2 / v2.3)
 
-Topology: two Linux Masters (`salt-a.internal`, `salt-b.internal`) in Active/Passive failover. Minions use `master_type: failover` with `master_alive_interval: 60` (failover within ~120s).
+Topology: production target is two Linux Masters in Active/Passive failover. **v2.3 first-endpoint lab** may use single Master `192.168.102.104` only — Ring 0 remains **NO-GO** until second Master + failover drill are proven.
+
+Minions: single Master uses scalar `master:`; multimaster uses `master_type: failover` with `master_alive_interval: 60`.
+
+## salt-api / eAuth (v2.3)
+
+- `master.d/salt-api.conf` — rest_cherrypy TLS only
+- `master.d/eauth.conf` — `salt_control` allowlist (`test.ping`, `saltutil.*`, `state.*`, `smc_hermes.*`, `smc_handover.*`); no shell/cmd
+- Release publish: `infra/salt/scripts/publish-salt-release.py` (current/previous atomic switch)
 
 ## PKI and secrets
 
@@ -31,5 +39,6 @@ saltutil.sync_all
 sys.list_modules
 sys.list_state_modules
 smc_hermes.inspect
+smc_handover.commit
 state.highstate
 ```

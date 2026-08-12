@@ -5,12 +5,15 @@
 
 ## Scope
 
-Salt Integration API for SMC Copilot Endpoint Control Plane (PRD v2.2):
+Salt Integration API for SMC Copilot Endpoint Control Plane (PRD v2.3):
 
 - Enrollment, Desired State, Job Return, Secret Broker, Artifact Metadata, Rollout
 - Independent package — **never** import `services/runtime`
 - API prefix: `/salt/v1`
 - Contract SOT: FastAPI/Pydantic → `contracts/salt-control-api/openapi.yaml`
+- Composition: `build_test_state` / `build_lab_state` / `build_production_state`
+- Production: PostgreSQL + OIDC/JWKS + live HTTPS adapters (fail closed; no Fake/InMemory)
+
 
 ## Commands
 

@@ -7,12 +7,20 @@ import json
 import time
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Any
 
+import httpx
 from fastapi import Depends, Header, Request
 
 from core.config import Settings, get_settings
 from core.errors import ErrorCode, SaltControlError
+
+try:
+    import jwt
+    from jwt import PyJWKClient
+except ImportError:  # pragma: no cover - optional until uv sync
+    jwt = None  # type: ignore[assignment]
+    PyJWKClient = None  # type: ignore[misc, assignment]
 
 
 class Scope(StrEnum):
@@ -29,6 +37,9 @@ class AuthPrincipal:
     principal_type: str  # device | service | operator
     scopes: frozenset[str]
     endpoint_id: str | None = None
+
+
+_jwks_clients: dict[str, Any] = {}
 
 
 def hash_secret(value: str) -> str:
@@ -54,6 +65,12 @@ def mint_lab_jwt(
 ) -> str:
     """HS256 JWT stub for lab/test Client Credentials and operator tokens."""
     cfg = settings or get_settings()
+    if cfg.salt_env == "production":
+        raise SaltControlError(
+            ErrorCode.FORBIDDEN,
+            "lab JWT minting forbidden in production",
+            status_code=403,
+        )
     header = {"alg": "HS256", "typ": "JWT"}
     now = int(time.time())
     payload = {
@@ -62,6 +79,7 @@ def mint_lab_jwt(
         "sub": subject,
         "scope": " ".join(scopes),
         "iat": now,
+        "nbf": now,
         "exp": now + ttl_seconds,
     }
     if extra:
@@ -73,6 +91,8 @@ def mint_lab_jwt(
 
 
 def verify_lab_jwt(token: str, settings: Settings) -> dict:
+    if settings.salt_env == "production":
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "lab JWT forbidden in production", status_code=401)
     try:
         header_b64, payload_b64, sig_b64 = token.split(".")
     except ValueError as exc:
@@ -83,13 +103,73 @@ def verify_lab_jwt(token: str, settings: Settings) -> dict:
         raise SaltControlError(ErrorCode.UNAUTHORIZED, "invalid token signature", status_code=401)
     try:
         payload = json.loads(_b64url_decode(payload_b64))
+        header = json.loads(_b64url_decode(header_b64))
     except (json.JSONDecodeError, ValueError) as exc:
         raise SaltControlError(ErrorCode.UNAUTHORIZED, "invalid token payload", status_code=401) from exc
+    if header.get("alg") != "HS256":
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "invalid token alg", status_code=401)
     if payload.get("iss") != settings.jwt_issuer or payload.get("aud") != settings.jwt_audience:
         raise SaltControlError(ErrorCode.UNAUTHORIZED, "invalid token audience", status_code=401)
-    if int(payload.get("exp", 0)) < int(time.time()):
+    now = int(time.time())
+    if int(payload.get("nbf", 0)) > now:
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "token not yet valid", status_code=401)
+    if int(payload.get("exp", 0)) < now:
         raise SaltControlError(ErrorCode.UNAUTHORIZED, "token expired", status_code=401)
     return payload
+
+
+def _jwks_client(jwks_url: str) -> Any:
+    if jwt is None or PyJWKClient is None:
+        raise SaltControlError(ErrorCode.INTERNAL_ERROR, "PyJWT required for OIDC", status_code=500)
+    client = _jwks_clients.get(jwks_url)
+    if client is None:
+        client = PyJWKClient(jwks_url, cache_keys=True, lifespan=300)
+        _jwks_clients[jwks_url] = client
+    return client
+
+
+def verify_oidc_jwt(token: str, settings: Settings) -> dict:
+    if jwt is None:
+        raise SaltControlError(ErrorCode.INTERNAL_ERROR, "PyJWT required for OIDC", status_code=500)
+    if not settings.oidc_issuer or not settings.oidc_jwks_url:
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "OIDC not configured", status_code=401)
+    try:
+        signing_key = _jwks_client(settings.oidc_jwks_url).get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256", "ES256"],
+            audience=settings.oidc_audience or settings.jwt_audience,
+            issuer=settings.oidc_issuer,
+            options={"require": ["exp", "iat", "nbf", "iss", "aud", "sub"]},
+        )
+    except Exception as exc:
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "invalid OIDC token", status_code=401) from exc
+    header = jwt.get_unverified_header(token)
+    if not header.get("kid"):
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "token kid required", status_code=401)
+    if "scope" not in payload and "scp" not in payload:
+        raise SaltControlError(ErrorCode.UNAUTHORIZED, "token scope required", status_code=401)
+    return payload
+
+
+def verify_bearer_token(token: str, settings: Settings) -> dict:
+    if settings.salt_env in {"lab", "test"}:
+        # Prefer lab HS256 in non-production for local tests; fall back to OIDC if configured.
+        try:
+            return verify_lab_jwt(token, settings)
+        except SaltControlError:
+            if settings.oidc_jwks_url:
+                return verify_oidc_jwt(token, settings)
+            raise
+    return verify_oidc_jwt(token, settings)
+
+
+def scopes_from_payload(payload: dict) -> frozenset[str]:
+    raw = payload.get("scope") or payload.get("scp") or ""
+    if isinstance(raw, list):
+        return frozenset(str(s) for s in raw)
+    return frozenset(str(raw).split())
 
 
 async def get_authorization_header(authorization: Annotated[str | None, Header()] = None) -> str | None:
@@ -131,8 +211,8 @@ async def require_device(request: Request, authorization: Annotated[str | None, 
 def scoped_auth(*required: str):
     async def _dep(request: Request, authorization: Annotated[str | None, Header()] = None) -> AuthPrincipal:
         token = parse_bearer_token(authorization)
-        payload = verify_lab_jwt(token, request.app.state.settings)
-        scopes = frozenset(str(payload.get("scope", "")).split())
+        payload = verify_bearer_token(token, request.app.state.settings)
+        scopes = scopes_from_payload(payload)
         if not any(s in scopes for s in required):
             raise SaltControlError(ErrorCode.FORBIDDEN, "insufficient scope", status_code=403)
         return AuthPrincipal(
@@ -143,6 +223,19 @@ def scoped_auth(*required: str):
         )
 
     return _dep
+
+
+async def probe_oidc_jwks(settings: Settings, *, timeout: float = 3.0) -> bool:
+    if settings.salt_env != "production":
+        return True
+    if not settings.oidc_jwks_url:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.get(settings.oidc_jwks_url)
+            return resp.status_code == 200 and "keys" in resp.json()
+    except Exception:
+        return False
 
 
 DeviceAuth = Annotated[AuthPrincipal, Depends(require_device)]

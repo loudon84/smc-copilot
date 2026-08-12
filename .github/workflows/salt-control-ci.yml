@@ -1,0 +1,70 @@
+name: Salt Control CI
+
+on:
+  push:
+    paths:
+      - "services/salt-control/**"
+      - "contracts/salt-control-api/**"
+      - "infra/salt/**"
+      - ".github/workflows/salt-control-ci.yml"
+  pull_request:
+    paths:
+      - "services/salt-control/**"
+      - "contracts/salt-control-api/**"
+      - "infra/salt/**"
+      - ".github/workflows/salt-control-ci.yml"
+
+jobs:
+  salt-control:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync salt-control
+        working-directory: services/salt-control
+        run: uv sync --extra dev
+      - name: Ruff
+        working-directory: services/salt-control
+        run: uv run ruff check .
+      - name: Ruff format
+        working-directory: services/salt-control
+        run: uv run ruff format --check .
+      - name: Pytest
+        working-directory: services/salt-control
+        run: uv run pytest -q
+      - name: Alembic upgrade head
+        working-directory: services/salt-control
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/salt_control_ci
+        run: |
+          echo "Alembic check uses in-memory repos in pytest; verify migration script syntax."
+          uv run python -c "import importlib.util; spec=importlib.util.spec_from_file_location('m', 'migrations/versions/20260812_v22_initial.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); print('migration ok')"
+      - name: OpenAPI export drift
+        working-directory: services/salt-control
+        run: uv run pytest tests/test_openapi_export.py -q
+
+  infra-salt-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync infra/salt
+        working-directory: infra/salt
+        run: uv sync --extra dev
+      - name: Ruff infra/salt
+        working-directory: infra/salt
+        run: uv run ruff check .
+      - name: Pytest infra/salt
+        working-directory: infra/salt
+        run: uv run pytest -q
+      - name: Production guards
+        run: python infra/salt/scripts/check-production-guards.py
+      - name: Migration inventory
+        working-directory: infra/salt
+        run: uv run python ../../scripts/salt-migration-inventory.py --check

@@ -135,6 +135,41 @@ class PendingTokenRecord:
     batch_id: str | None = None
 
 
+@dataclass
+class IdempotencyRecord:
+    key: str
+    response_json: dict[str, Any]
+    created_at: datetime | None = None
+    expires_at: datetime | None = None
+
+
+@dataclass
+class EndpointOperationRecord:
+    id: str
+    endpoint_id: str
+    kind: str
+    state: str
+    enrollment_id: str | None = None
+    request_id: str | None = None
+    error_code: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+@dataclass
+class OperationStepRecord:
+    operation_id: str
+    step_name: str
+    state: str
+    salt_jid: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    result_redacted: dict[str, Any] = field(default_factory=dict)
+    error_code: str | None = None
+    id: int | None = None
+
+
 class EndpointRepository(Protocol):
     async def create(self, record: EndpointRecord) -> EndpointRecord: ...
     async def get(self, endpoint_id: str) -> EndpointRecord | None: ...
@@ -192,6 +227,22 @@ class AuditRepository(Protocol):
     async def list_for_target(self, target_type: str, target_id: str) -> list[AuditEventRecord]: ...
 
 
+class IdempotencyRepository(Protocol):
+    async def get(self, key: str) -> IdempotencyRecord | None: ...
+    async def put(self, record: IdempotencyRecord) -> IdempotencyRecord: ...
+
+
+class OperationRepository(Protocol):
+    async def create(self, record: EndpointOperationRecord) -> EndpointOperationRecord: ...
+    async def get(self, operation_id: str) -> EndpointOperationRecord | None: ...
+    async def get_by_request_id(self, request_id: str) -> EndpointOperationRecord | None: ...
+    async def update(self, record: EndpointOperationRecord) -> EndpointOperationRecord: ...
+    async def list_resumable(self, *, kinds: list[str] | None = None) -> list[EndpointOperationRecord]: ...
+    async def upsert_step(self, step: OperationStepRecord) -> OperationStepRecord: ...
+    async def list_steps(self, operation_id: str) -> list[OperationStepRecord]: ...
+    async def get_step(self, operation_id: str, step_name: str) -> OperationStepRecord | None: ...
+
+
 @dataclass
 class RepositoryBundle:
     endpoints: EndpointRepository
@@ -203,4 +254,7 @@ class RepositoryBundle:
     artifacts: ArtifactRepository
     rollouts: RolloutRepository
     audits: AuditRepository
+    idempotency: IdempotencyRepository
+    operations: OperationRepository
+    # Lab/test only ephemeral cache — production must not rely on this.
     extras: dict[str, Any] = field(default_factory=dict)

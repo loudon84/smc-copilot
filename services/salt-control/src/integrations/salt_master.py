@@ -56,5 +56,9 @@ class FakeSaltMaster:
             return False
         return minion_id in self.accepted
 
+    async def delete_key(self, minion_id: str) -> None:
+        self.accepted.pop(minion_id, None)
+        self.pending.pop(minion_id, None)
+
     def add_pending(self, minion_id: str, fingerprint: str) -> None:
         self.pending[minion_id] = fingerprint

@@ -1,0 +1,15 @@
+{
+  "schema": "smc.salt-evidence.highstate.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "commands": [
+    "salt ep_xxx state.show_highstate",
+    "salt ep_xxx state.highstate test=True",
+    "salt ep_xxx state.highstate"
+  ],
+  "guards": {
+    "ownerWrittenDuringPrepare": false,
+    "destructiveChangesInTest": false
+  },
+  "results": { "show": null, "test": null, "apply": null }
+}

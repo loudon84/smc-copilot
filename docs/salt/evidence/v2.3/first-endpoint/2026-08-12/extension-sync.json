@@ -1,0 +1,11 @@
+{
+  "schema": "smc.salt-evidence.extension-sync.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "commands": [
+    "salt ep_xxx saltutil.sync_all",
+    "salt ep_xxx sys.list_modules"
+  ],
+  "expected": { "smc_hermes": true, "smc_handover": true },
+  "results": { "syncAll": null, "modules": null }
+}

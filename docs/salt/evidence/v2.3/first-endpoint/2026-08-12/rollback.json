@@ -1,0 +1,11 @@
+{
+  "schema": "smc.salt-evidence.rollback.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "drill": "Salt → prior owner (runtime|direct|absent) → re-migrate",
+  "results": {
+    "breakGlassRollback": null,
+    "reMigrate": null,
+    "ownerRestoredCorrectly": null
+  }
+}

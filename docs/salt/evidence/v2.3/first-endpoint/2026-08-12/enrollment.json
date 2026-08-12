@@ -1,0 +1,13 @@
+{
+  "schema": "smc.salt-evidence.enrollment.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "endpointAlias": "host_itbjb0676",
+  "desiredEndpointIdPattern": "ep_*",
+  "results": {
+    "enrollmentCreated": null,
+    "fingerprintAccepted": null,
+    "asyncOperations": null
+  },
+  "note": "Fill after Salt Control live enrollment against 192.168.102.104; no secrets."
+}

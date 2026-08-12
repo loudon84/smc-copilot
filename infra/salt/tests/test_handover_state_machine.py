@@ -8,18 +8,21 @@ from client.paths import control_owner_path, migration_marker_path
 
 
 def _hooks(**overrides) -> HandoverHooks:
+    def _ok() -> bool:
+        return True
+
     base = dict(
         inspect=lambda: {"ok": True, "home": "C:/Users/a/AppData/Local/hermes"},
         snapshot=lambda: {"owner": "runtime", "config": "ok"},
-        verify_salt=lambda: True,
-        stop_gateway=lambda: True,
-        disable_runtime=lambda: True,
-        start_salt_gateway=lambda: True,
-        health=lambda: True,
-        work_probe=lambda: True,
+        verify_salt=_ok,
+        stop_gateway=_ok,
+        disable_runtime=_ok,
+        start_salt_gateway=_ok,
+        health=_ok,
+        work_probe=_ok,
         restore_snapshot=lambda s: True,
-        restore_runtime=lambda: True,
-        runtime_reconcile=lambda: True,
+        restore_runtime=_ok,
+        runtime_reconcile=_ok,
     )
     base.update(overrides)
     return HandoverHooks(**base)
@@ -65,3 +68,27 @@ def test_rollback_is_idempotent(tmp_path: Path) -> None:
     assert first.ok is True
     assert second.ok is True
     assert json.loads(control_owner_path(tmp_path).read_text(encoding="utf-8"))["hermes"] == "runtime"
+
+
+def test_owner_303_rollback_restores_direct_not_forced_runtime(tmp_path: Path) -> None:
+    control_owner_path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
+    control_owner_path(tmp_path).write_text('{"hermes": "direct"}\n', encoding="utf-8")
+    migrate(
+        hooks=_hooks(snapshot=lambda: {"owner": "direct", "config": "ok"}),
+        program_data=tmp_path,
+        endpoint_id="ep_1",
+    )
+    result = rollback(hooks=_hooks(), program_data=tmp_path)
+    assert result.ok is True
+    assert json.loads(control_owner_path(tmp_path).read_text(encoding="utf-8"))["hermes"] == "direct"
+
+
+def test_owner_303_rollback_absent_owner_removes_file(tmp_path: Path) -> None:
+    migrate(
+        hooks=_hooks(snapshot=lambda: {"owner": None, "config": "ok"}),
+        program_data=tmp_path,
+        endpoint_id="ep_1",
+    )
+    result = rollback(hooks=_hooks(), program_data=tmp_path)
+    assert result.ok is True
+    assert not control_owner_path(tmp_path).is_file()

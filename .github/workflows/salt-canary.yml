@@ -1,0 +1,39 @@
+name: Salt Canary (Windows)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  canary:
+    runs-on: [self-hosted, Windows, X64, smc-salt-canary]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync infra/salt
+        working-directory: infra/salt
+        run: uv sync --extra dev
+      - name: Repo contract canary (Pester)
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser -ErrorAction SilentlyContinue
+          Invoke-Pester -Path infra/salt/tests/canary/Canary.v2.2.Tests.ps1 -Output Detailed `
+            -PassThru | Tee-Object -Variable pesterResult
+          if ($pesterResult.FailedCount -gt 0) { exit 1 }
+      - name: Evidence note
+        shell: pwsh
+        run: |
+          Write-Host "Hardware Cases A-F require this self-hosted runner; skipped tests are Manual Gate until real endpoints exist."
+          Write-Host "Store evidence under docs/salt/evidence/v2.2/<ring>/<date>/"
+
+  manual-gate-doc:
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Document manual gate when canary runner absent
+        run: |
+          echo "Salt Windows canary uses workflow_dispatch on label: self-hosted, Windows, X64, smc-salt-canary"
+          echo "If no runner is registered, execute Canary.v2.2.Tests.ps1 locally and file evidence templates."
+          echo "Do NOT mark hardware Cases A-F as PASS without real endpoint bundles."

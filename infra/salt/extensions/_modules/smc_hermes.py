@@ -127,10 +127,13 @@ def install(
     signing_key: str | None = None,
     key_id: str | None = None,
     public_key: str | None = None,
+    migrate_mode: bool = False,
 ) -> dict[str, Any]:
-    claim = _claim_owner()
-    if not claim.get("ok"):
-        return claim
+    # migrate_mode: prepare/adopt without claiming control-owner (smc_handover.commit does that).
+    if not migrate_mode:
+        claim = _claim_owner()
+        if not claim.get("ok"):
+            return claim
     layout = _layout(hermes_home)
     url = artifact_url or artifact_path
     if not url or not artifact_sha256 or not artifact_signature:
@@ -149,7 +152,7 @@ def install(
         return {"ok": False, "error": "signing_key_forbidden_in_production"}
     elif not (kid and pubkey):
         return {"ok": False, "error": "ed25519_key_required"}
-    return _call_util(
+    result = _call_util(
         "smc_artifact.install_signed",
         version=version,
         url=str(url),
@@ -159,6 +162,36 @@ def install(
         hermes_home=str(layout.home),
         key_id=kid,
         public_key=pubkey,
+    )
+    if isinstance(result, dict):
+        result["migrate_mode"] = bool(migrate_mode)
+        result["owner_claimed"] = not migrate_mode
+    return result
+
+
+def prepare(
+    version: str = "",
+    artifact_url: str | None = None,
+    artifact_sha256: str | None = None,
+    artifact_signature: str | None = None,
+    artifact_path: str | None = None,
+    hermes_home: str | None = None,
+    signing_key: str | None = None,
+    key_id: str | None = None,
+    public_key: str | None = None,
+) -> dict[str, Any]:
+    """Prepare/adopt Hermes without claiming control-owner."""
+    return install(
+        version=version,
+        artifact_url=artifact_url,
+        artifact_sha256=artifact_sha256,
+        artifact_signature=artifact_signature,
+        artifact_path=artifact_path,
+        hermes_home=hermes_home,
+        signing_key=signing_key,
+        key_id=key_id,
+        public_key=public_key,
+        migrate_mode=True,
     )
 
 

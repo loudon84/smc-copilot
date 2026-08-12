@@ -1,7 +1,7 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-  Machine-scope SMC Endpoint Bootstrap: enroll → install Salt Minion → configure → report fingerprint.
+  Machine-scope SMC Endpoint Bootstrap: enroll 鈫?install Salt Minion 鈫?configure 鈫?report fingerprint.
   Does not switch control-owner. Does not install apps/work.
   Live mode (-SaltControlUrl): POST /salt/v1/enrollments; Endpoint ID never from token hash.
   Without -SaltControlUrl: DryRun-only path (token-hash stand-in for local planning).
@@ -12,7 +12,7 @@ param(
     [Parameter(Mandatory = $true)][string]$EnrollmentToken,
     [Parameter(Mandatory = $true)][string]$BackendUrl,
     [string]$SaltControlUrl = "",
-    [string]$MasterB = "salt-b.internal",
+    [string]$MasterB = "",
     [string]$ArtifactBaseUrl = "",
     [ValidateSet("fresh", "migrate")][string]$WorkMode = "fresh",
     [string]$InstallerPath = "",
@@ -55,7 +55,7 @@ $masters = @($Master)
 $deviceCredential = $null
 
 if ($SaltControlUrl) {
-    # Live: Salt Control issues endpointId — forbid local token-hash derivation.
+    # Live: Salt Control issues endpointId 鈥?forbid local token-hash derivation.
     $py = @"
 import json, platform, hashlib, uuid, os, sys
 from pathlib import Path
@@ -136,7 +136,8 @@ New-Item -ItemType Directory -Force -Path $smcRoot | Out-Null
 Set-Content -LiteralPath $endpointFile -Value $endpointId -Encoding UTF8
 
 $masterA = $masters[0]
-$masterB = if ($masters.Count -gt 1) { $masters[1] } else { $MasterB }
+$masterB = if ($masters.Count -gt 1) { [string]$masters[1] } else { $MasterB }
+if ($masterB -eq "salt-b.internal") { $masterB = "" }
 
 if ($InstallerPath) {
     Write-JournalState -State "MSI_VERIFIED" -Extra @{ endpointId = $endpointId; enrollmentId = $enrollmentId }
@@ -147,8 +148,13 @@ if ($InstallerPath) {
     Write-JournalState -State "MINION_INSTALLED" -Extra @{ endpointId = $endpointId; enrollmentId = $enrollmentId }
 }
 
-& (Join-Path $here "configure-minion.ps1") `
-    -Master $masterA -MasterB $masterB -EndpointId $endpointId -MasterFingerprint $MasterFingerprint -StartService
+if ($masterB) {
+    & (Join-Path $here "configure-minion.ps1") `
+        -Master $masterA -MasterB $masterB -EndpointId $endpointId -MasterFingerprint $MasterFingerprint -StartService
+} else {
+    & (Join-Path $here "configure-minion.ps1") `
+        -Master $masterA -EndpointId $endpointId -MasterFingerprint $MasterFingerprint -StartService
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-JournalState -State "MINION_CONFIGURED" -Extra @{ endpointId = $endpointId; enrollmentId = $enrollmentId }
 

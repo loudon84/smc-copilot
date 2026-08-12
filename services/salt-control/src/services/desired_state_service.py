@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from core.config import Settings, get_settings
 from core.errors import ErrorCode, SaltControlError
 from db.repositories.interfaces import BindingRecord, DesiredStateRecord, RepositoryBundle
 from integrations.management_backend import ManagementBackend
@@ -18,22 +19,28 @@ from schemas.desired_state import (
 
 
 class DesiredStateService:
-    def __init__(self, repos: RepositoryBundle, backend: ManagementBackend) -> None:
+    def __init__(
+        self,
+        repos: RepositoryBundle,
+        backend: ManagementBackend,
+        settings: Settings | None = None,
+    ) -> None:
         self.repos = repos
         self.backend = backend
+        self.settings = settings or get_settings()
 
     async def get(self, endpoint_id: str, known_revision: str | None = None) -> DesiredStateResponse:
+        cached = await self.repos.desired_states.get_latest(endpoint_id)
+
         if not self.backend.available:
-            raise SaltControlError(
-                ErrorCode.DESIRED_STATE_UNAVAILABLE,
-                "desired state backend unavailable",
-                status_code=503,
-            )
+            return self._from_last_known_good(endpoint_id, cached, known_revision)
 
         try:
             binding = await self.backend.get_binding(endpoint_id)
             desired = await self.backend.get_desired_state(endpoint_id)
         except Exception as exc:
+            if cached is not None:
+                return self._from_last_known_good(endpoint_id, cached, known_revision)
             raise SaltControlError(
                 ErrorCode.DESIRED_STATE_UNAVAILABLE,
                 "desired state backend unavailable",
@@ -43,13 +50,14 @@ class DesiredStateService:
         if binding is None:
             raise SaltControlError(ErrorCode.BINDING_MISSING, "endpoint user binding missing", status_code=404)
         if desired is None:
+            if cached is not None:
+                return self._from_last_known_good(endpoint_id, cached, known_revision)
             raise SaltControlError(
                 ErrorCode.DESIRED_STATE_UNAVAILABLE,
                 "desired state unavailable",
                 status_code=503,
             )
 
-        # Persist binding locally (user from binding, never grain)
         await self.repos.bindings.upsert(
             BindingRecord(
                 endpoint_id=binding.endpoint_id,
@@ -74,11 +82,15 @@ class DesiredStateService:
         payload = {
             "userId": binding.user_id,
             "windowsAccount": binding.windows_account,
+            "windowsSid": binding.windows_sid,
+            "profileDir": binding.profile_dir,
             "hermes": {
                 "home": desired.hermes_home,
                 "version": desired.hermes_version,
                 "artifactRef": desired.artifact_ref,
             },
+            "profiles": desired.profiles,
+            "mcp": desired.mcp,
             "rollout": {"ring": desired.ring, "desiredOwner": desired.desired_owner},
             "secrets": desired.secrets,
         }
@@ -115,4 +127,64 @@ class DesiredStateService:
             mcp=dict(desired.mcp),
             secrets=[DesiredSecretRef(name=s["name"], ref=s["ref"]) for s in desired.secrets],
             rollout=DesiredRollout(ring=desired.ring, desired_owner=desired.desired_owner),
+        )
+
+    def _from_last_known_good(
+        self,
+        endpoint_id: str,
+        cached: DesiredStateRecord | None,
+        known_revision: str | None,
+    ) -> DesiredStateResponse:
+        if cached is None:
+            raise SaltControlError(
+                ErrorCode.DESIRED_STATE_UNAVAILABLE,
+                "desired state backend unavailable",
+                status_code=503,
+            )
+        if cached.created_at is not None:
+            age = datetime.now(UTC) - cached.created_at
+            if age > timedelta(seconds=self.settings.desired_state_lkg_ttl_seconds):
+                raise SaltControlError(
+                    ErrorCode.DESIRED_STATE_UNAVAILABLE,
+                    "last-known-good desired state expired",
+                    status_code=503,
+                )
+        # Never generate empty pillar — only return persisted LKG.
+        if known_revision and known_revision == cached.revision:
+            return DesiredStateResponse(
+                schema_="smc.desired-state.v2",
+                endpoint_id=endpoint_id,
+                revision=cached.revision,
+                not_modified=True,
+            )
+        payload = cached.payload_json
+        hermes = payload.get("hermes") or {}
+        rollout = payload.get("rollout") or {}
+        return DesiredStateResponse(
+            schema_="smc.desired-state.v2",
+            endpoint_id=endpoint_id,
+            revision=cached.revision,
+            not_modified=False,
+            user=DesiredUser(
+                user_id=str(payload.get("userId") or cached.user_id),
+                windows_account=str(payload.get("windowsAccount") or ""),
+                windows_sid=str(payload.get("windowsSid") or ""),
+                profile_dir=str(payload.get("profileDir") or ""),
+            ),
+            hermes=DesiredHermes(
+                home=str(hermes.get("home") or ""),
+                version=str(hermes.get("version") or ""),
+                artifact_ref=str(hermes.get("artifactRef") or ""),
+            ),
+            profiles=list(payload.get("profiles") or []),
+            mcp=dict(payload.get("mcp") or {}),
+            secrets=[
+                DesiredSecretRef(name=s["name"], ref=s["ref"])
+                for s in (payload.get("secrets") or [])
+                if isinstance(s, dict) and "name" in s and "ref" in s
+            ],
+            rollout=DesiredRollout(
+                ring=str(rollout.get("ring") or ""),
+                desired_owner=str(rollout.get("desiredOwner") or "salt"),
+            ),
         )

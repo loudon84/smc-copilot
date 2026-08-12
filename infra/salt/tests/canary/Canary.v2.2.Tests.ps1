@@ -45,7 +45,7 @@ Describe "BOOT-201 bootstrap.ps1 DryRun contract" {
         $manifest = Join-Path $SaltRoot "manifest\client-manifest.example.json"
         & (Join-Path $SaltRoot "client\windows\bootstrap.ps1") `
             -Master "salt-a.internal" `
-            -MasterFingerprint ("aa" * 32) `
+            -MasterFingerprint ("sha256:" + ("aa" * 32)) `
             -EnrollmentToken "canary-token" `
             -BackendUrl "https://backend.example" `
             -ManifestPath $manifest `

@@ -1,6 +1,7 @@
-"""Runtime → Salt ownership handover + rollback (PRD v2.1 §14).
+"""Runtime → Salt ownership handover + rollback (PRD v2.3).
 
-Owner switch happens only after Salt can manage Hermes. v2.1 does not uninstall Runtime files.
+Owner switch happens only via explicit commit after health + work probe.
+Production must not use stub hooks that always return True.
 """
 
 from __future__ import annotations
@@ -58,6 +59,32 @@ def read_owner(path: Path) -> str | None:
     return owner if owner in {"salt", "runtime", "direct"} else None
 
 
+def assert_no_stub_hooks(hooks: HandoverHooks, *, salt_env: str | None = None) -> None:
+    env = (salt_env or os.environ.get("SMC_SALT_ENV", "lab")).strip().lower()
+    if env in {"lab", "test"}:
+        return
+    for name in (
+        "inspect",
+        "snapshot",
+        "verify_salt",
+        "stop_gateway",
+        "disable_runtime",
+        "start_salt_gateway",
+        "health",
+        "work_probe",
+        "restore_snapshot",
+        "restore_runtime",
+        "runtime_reconcile",
+    ):
+        fn = getattr(hooks, name)
+        # Detect trivial lambdas used as production stubs: always-True / empty-ok.
+        code = getattr(fn, "__code__", None)
+        if code is not None and code.co_code and "lambda" in (fn.__name__ or ""):
+            # Production path must supply named callables from real adapters.
+            if fn.__name__ == "<lambda>":
+                raise RuntimeError(f"stub hook forbidden in production: {name}")
+
+
 @dataclass
 class HandoverHooks:
     inspect: Callable[[], dict[str, Any]]
@@ -84,6 +111,13 @@ class HandoverResult:
     steps: list[str] = field(default_factory=list)
 
 
+def _restore_owner(owner_path: Path, initial_owner: str | None) -> None:
+    if initial_owner in {"salt", "runtime", "direct"}:
+        atomic_write_json(owner_path, {"hermes": initial_owner})
+    elif owner_path.is_file():
+        owner_path.unlink()
+
+
 def migrate(
     *,
     hooks: HandoverHooks,
@@ -91,6 +125,7 @@ def migrate(
     endpoint_id: str = "ep_lab",
     hermes_home: str = "",
 ) -> HandoverResult:
+    assert_no_stub_hooks(hooks)
     owner_path = control_owner_path(program_data)
     marker_path = migration_marker_path(program_data)
     snapshot_dir = smc_root(program_data) / "handover-snapshots"
@@ -103,7 +138,7 @@ def migrate(
         return HandoverResult(
             state=state,
             ok=False,
-            owner=read_owner(owner_path) or initial_owner,
+            owner=read_owner(owner_path) if owner_path.is_file() else initial_owner,
             error=error,
             snapshot=snapshot,
             steps=steps,
@@ -138,16 +173,16 @@ def migrate(
 
     steps.append("SALT_GATEWAY_STARTED")
     if not hooks.start_salt_gateway():
-        atomic_write_json(owner_path, {"hermes": initial_owner or "runtime"})
+        _restore_owner(owner_path, initial_owner)
         return fail("SALT_GATEWAY_STARTED", "salt_gateway_start_failed")
 
     if not hooks.health():
-        atomic_write_json(owner_path, {"hermes": initial_owner or "runtime"})
+        _restore_owner(owner_path, initial_owner)
         return fail("SALT_GATEWAY_STARTED", "gateway_unhealthy")
 
     steps.append("WORK_VERIFIED")
     if not hooks.work_probe():
-        atomic_write_json(owner_path, {"hermes": initial_owner or "runtime"})
+        _restore_owner(owner_path, initial_owner)
         return fail("WORK_VERIFIED", "work_probe_failed")
 
     steps.append("COMPLETED")
@@ -174,16 +209,24 @@ def rollback(
     program_data: Path,
     snapshot: dict[str, Any] | None = None,
 ) -> HandoverResult:
+    assert_no_stub_hooks(hooks)
     owner_path = control_owner_path(program_data)
     snapshot_path = smc_root(program_data) / "handover-snapshots" / "latest.json"
     payload = snapshot or {}
     if not payload and snapshot_path.is_file():
         payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    steps = ["ROLLBACK", "stop_salt_gateway", "restore_snapshot", "owner_runtime", "restore_runtime", "reconcile"]
+    steps = ["ROLLBACK", "stop_salt_gateway", "restore_snapshot", "owner_restore", "restore_runtime", "reconcile"]
     hooks.stop_gateway()
     if payload:
         hooks.restore_snapshot(payload)
-    atomic_write_json(owner_path, {"hermes": "runtime"})
+    previous = payload.get("owner")
+    if previous in {"salt", "runtime", "direct"}:
+        atomic_write_json(owner_path, {"hermes": previous})
+        restored_owner: str | None = str(previous)
+    else:
+        if owner_path.is_file():
+            owner_path.unlink()
+        restored_owner = None
     hooks.restore_runtime()
     healthy = hooks.runtime_reconcile() and hooks.health()
     marker_path = migration_marker_path(program_data)
@@ -192,7 +235,7 @@ def rollback(
     return HandoverResult(
         state="ROLLBACK",
         ok=bool(healthy),
-        owner="runtime",
+        owner=restored_owner,
         error=None if healthy else "rollback_health_failed",
         snapshot=payload,
         steps=steps,

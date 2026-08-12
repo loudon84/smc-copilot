@@ -1,0 +1,8 @@
+{
+  "schema": "smc.salt-evidence.work-probe.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "probes": ["startup", "chat", "session", "file", "slash"],
+  "results": null,
+  "note": "apps/work must remain usable if Master/Backend temporarily offline after handover."
+}

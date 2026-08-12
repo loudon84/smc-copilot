@@ -1,0 +1,7 @@
+{
+  "schema": "smc.salt-evidence.gateway-health.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "command": "salt ep_xxx smc_hermes.health",
+  "results": null
+}

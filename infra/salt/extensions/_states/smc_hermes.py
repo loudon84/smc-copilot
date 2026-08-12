@@ -27,6 +27,7 @@ def installed(
     artifact_signature: str | None = None,
     artifact_path: str | None = None,
     hermes_home: str | None = None,
+    migrate_mode: bool = False,
 ) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
     if _opts().get("test"):
@@ -40,12 +41,35 @@ def installed(
         artifact_signature=artifact_signature,
         artifact_path=artifact_path,
         hermes_home=hermes_home,
+        migrate_mode=migrate_mode,
     )
     ret["result"] = bool(result.get("ok"))
     ret["changes"] = result if ret["result"] else {}
     ret["comment"] = result.get("message") or ("installed" if ret["result"] else result.get("error", "failed"))
     return ret
 
+
+def prepared(
+    name: str,
+    version: str = "",
+    artifact_url: str | None = None,
+    artifact_sha256: str | None = None,
+    artifact_signature: str | None = None,
+    artifact_path: str | None = None,
+    hermes_home: str | None = None,
+    migrate_mode: bool = True,
+) -> dict[str, Any]:
+    """Prepare Hermes without claiming control-owner."""
+    return installed(
+        name=name,
+        version=version,
+        artifact_url=artifact_url,
+        artifact_sha256=artifact_sha256,
+        artifact_signature=artifact_signature,
+        artifact_path=artifact_path,
+        hermes_home=hermes_home,
+        migrate_mode=True if migrate_mode is None else bool(migrate_mode),
+    )
 
 def gateway_running(name: str, hermes_home: str | None = None) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}

@@ -1,0 +1,19 @@
+{
+  "schema": "smc.salt-evidence.metrics-24h.v1",
+  "status": "not_proven",
+  "manualGate": true,
+  "observationWindowHours": 24,
+  "targets": {
+    "minionOnline": 1.0,
+    "highstateApplySuccess": 1.0,
+    "gatewayAvailability": 0.999,
+    "gatewayRecoveryP95Seconds": 120,
+    "ownerConflict": 0,
+    "secretPlaintextLeak": 0,
+    "unexpectedRuntimeFallback": 0,
+    "p0": 0,
+    "p1": 0
+  },
+  "observed": null,
+  "note": "Do not mark proven until continuous 24h metrics are filed by ops."
+}

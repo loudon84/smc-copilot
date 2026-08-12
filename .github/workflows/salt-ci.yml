@@ -53,7 +53,7 @@ jobs:
           & "infra/salt/client/windows/preflight.ps1" -DryRun
           & "infra/salt/client/windows/bootstrap.ps1" `
             -Master "salt.example.internal" `
-            -MasterFingerprint ("aa" * 32) `
+            -MasterFingerprint ("sha256:" + ("aa" * 32)) `
             -EnrollmentToken "ci-token" `
             -BackendUrl "https://backend.example" `
             -ManifestPath $manifest `
@@ -61,4 +61,4 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "infra/salt/client/windows/migrate-runtime-to-salt.ps1" -DryRun
           & "infra/salt/client/windows/rollback-to-runtime.ps1" -DryRun
-          & "infra/salt/client/windows/repair.ps1" -Master "salt.example.internal" -MasterFingerprint ("aa" * 32) -BackendUrl "https://backend.example" -DryRun
+          & "infra/salt/client/windows/repair.ps1" -Master "salt.example.internal" -MasterFingerprint ("sha256:" + ("aa" * 32)) -BackendUrl "https://backend.example" -DryRun
