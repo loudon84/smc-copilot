@@ -1,0 +1,1061 @@
+components:
+  schemas:
+    ArtifactMetadataResponse:
+      properties:
+        arch:
+          title: Arch
+          type: string
+        component:
+          title: Component
+          type: string
+        keyId:
+          title: Keyid
+          type: string
+        manifestSignature:
+          title: Manifestsignature
+          type: string
+        platform:
+          title: Platform
+          type: string
+        rollbackVersion:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rollbackversion
+        sha256:
+          title: Sha256
+          type: string
+        size:
+          title: Size
+          type: integer
+        url:
+          title: Url
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - component
+      - version
+      - platform
+      - arch
+      - size
+      - sha256
+      - url
+      - manifestSignature
+      - keyId
+      title: ArtifactMetadataResponse
+      type: object
+    DesiredHermes:
+      properties:
+        artifactRef:
+          title: Artifactref
+          type: string
+        home:
+          title: Home
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - home
+      - version
+      - artifactRef
+      title: DesiredHermes
+      type: object
+    DesiredRollout:
+      properties:
+        desiredOwner:
+          title: Desiredowner
+          type: string
+        ring:
+          title: Ring
+          type: string
+      required:
+      - ring
+      - desiredOwner
+      title: DesiredRollout
+      type: object
+    DesiredSecretRef:
+      properties:
+        name:
+          title: Name
+          type: string
+        ref:
+          title: Ref
+          type: string
+      required:
+      - name
+      - ref
+      title: DesiredSecretRef
+      type: object
+    DesiredStateResponse:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        hermes:
+          anyOf:
+          - $ref: '#/components/schemas/DesiredHermes'
+          - type: 'null'
+        mcp:
+          additionalProperties: true
+          default: {}
+          title: Mcp
+          type: object
+        notModified:
+          default: false
+          title: Notmodified
+          type: boolean
+        profiles:
+          default: []
+          items: {}
+          title: Profiles
+          type: array
+        revision:
+          title: Revision
+          type: string
+        rollout:
+          anyOf:
+          - $ref: '#/components/schemas/DesiredRollout'
+          - type: 'null'
+        schema:
+          default: smc.desired-state.v2
+          title: Schema
+          type: string
+        secrets:
+          default: []
+          items:
+            $ref: '#/components/schemas/DesiredSecretRef'
+          title: Secrets
+          type: array
+        user:
+          anyOf:
+          - $ref: '#/components/schemas/DesiredUser'
+          - type: 'null'
+      required:
+      - endpointId
+      - revision
+      title: DesiredStateResponse
+      type: object
+    DesiredUser:
+      properties:
+        profileDir:
+          title: Profiledir
+          type: string
+        userId:
+          title: Userid
+          type: string
+        windowsAccount:
+          title: Windowsaccount
+          type: string
+        windowsSid:
+          title: Windowssid
+          type: string
+      required:
+      - userId
+      - windowsAccount
+      - windowsSid
+      - profileDir
+      title: DesiredUser
+      type: object
+    DeviceInfo:
+      properties:
+        arch:
+          title: Arch
+          type: string
+        hostname:
+          title: Hostname
+          type: string
+        machineGuidHash:
+          title: Machineguidhash
+          type: string
+        windowsBuild:
+          title: Windowsbuild
+          type: integer
+      required:
+      - hostname
+      - machineGuidHash
+      - windowsBuild
+      - arch
+      title: DeviceInfo
+      type: object
+    EnrollmentCreateRequest:
+      properties:
+        device:
+          $ref: '#/components/schemas/DeviceInfo'
+        enrollmentToken:
+          title: Enrollmenttoken
+          type: string
+        requestId:
+          title: Requestid
+          type: string
+      required:
+      - enrollmentToken
+      - requestId
+      - device
+      title: EnrollmentCreateRequest
+      type: object
+    EnrollmentCreateResponse:
+      properties:
+        deviceCredential:
+          title: Devicecredential
+          type: string
+        endpointId:
+          title: Endpointid
+          type: string
+        enrollmentId:
+          title: Enrollmentid
+          type: string
+        expiresAt:
+          title: Expiresat
+          type: string
+        masterFingerprints:
+          items:
+            type: string
+          title: Masterfingerprints
+          type: array
+        masters:
+          items:
+            type: string
+          title: Masters
+          type: array
+      required:
+      - enrollmentId
+      - endpointId
+      - masters
+      - masterFingerprints
+      - deviceCredential
+      - expiresAt
+      title: EnrollmentCreateResponse
+      type: object
+    EnrollmentStatusResponse:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        enrollmentId:
+          title: Enrollmentid
+          type: string
+        errorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errorcode
+        masterFingerprints:
+          items:
+            type: string
+          title: Masterfingerprints
+          type: array
+        masters:
+          items:
+            type: string
+          title: Masters
+          type: array
+        state:
+          title: State
+          type: string
+      required:
+      - enrollmentId
+      - endpointId
+      - state
+      - masters
+      - masterFingerprints
+      title: EnrollmentStatusResponse
+      type: object
+    FingerprintReportRequest:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        minionFingerprint:
+          title: Minionfingerprint
+          type: string
+        requestId:
+          title: Requestid
+          type: string
+      required:
+      - endpointId
+      - minionFingerprint
+      - requestId
+      title: FingerprintReportRequest
+      type: object
+    FingerprintReportResponse:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        enrollmentId:
+          title: Enrollmentid
+          type: string
+        errorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errorcode
+        state:
+          title: State
+          type: string
+      required:
+      - enrollmentId
+      - endpointId
+      - state
+      title: FingerprintReportResponse
+      type: object
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          title: Detail
+          type: array
+      title: HTTPValidationError
+      type: object
+    JobReturnBatchRequest:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/JobReturnItem'
+          title: Items
+          type: array
+        requestId:
+          title: Requestid
+          type: string
+      required:
+      - requestId
+      - items
+      title: JobReturnBatchRequest
+      type: object
+    JobReturnBatchResponse:
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/JobReturnItemResult'
+          title: Results
+          type: array
+      required:
+      - results
+      title: JobReturnBatchResponse
+      type: object
+    JobReturnItem:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        function:
+          title: Function
+          type: string
+        jid:
+          title: Jid
+          type: string
+        payloadRedacted:
+          additionalProperties: true
+          title: Payloadredacted
+          type: object
+        success:
+          title: Success
+          type: boolean
+      required:
+      - jid
+      - endpointId
+      - function
+      - success
+      title: JobReturnItem
+      type: object
+    JobReturnItemResult:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        function:
+          title: Function
+          type: string
+        jid:
+          title: Jid
+          type: string
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        status:
+          title: Status
+          type: string
+      required:
+      - jid
+      - endpointId
+      - function
+      - status
+      title: JobReturnItemResult
+      type: object
+    RolloutActionRequest:
+      properties:
+        reason:
+          title: Reason
+          type: string
+        requestId:
+          title: Requestid
+          type: string
+      required:
+      - requestId
+      - reason
+      title: RolloutActionRequest
+      type: object
+    RolloutCreateRequest:
+      properties:
+        component:
+          title: Component
+          type: string
+        filters:
+          additionalProperties: true
+          default: {}
+          title: Filters
+          type: object
+        reason:
+          default: ''
+          title: Reason
+          type: string
+        requestId:
+          title: Requestid
+          type: string
+        ring:
+          title: Ring
+          type: string
+        thresholds:
+          additionalProperties: true
+          default: {}
+          title: Thresholds
+          type: object
+        version:
+          title: Version
+          type: string
+      required:
+      - component
+      - version
+      - ring
+      - requestId
+      title: RolloutCreateRequest
+      type: object
+    RolloutResponse:
+      properties:
+        completedCount:
+          default: 0
+          title: Completedcount
+          type: integer
+        component:
+          title: Component
+          type: string
+        failureRate:
+          default: 0.0
+          title: Failurerate
+          type: number
+        p0Count:
+          default: 0
+          title: P0Count
+          type: integer
+        p1Count:
+          default: 0
+          title: P1Count
+          type: integer
+        ring:
+          title: Ring
+          type: string
+        rollbackRate:
+          default: 0.0
+          title: Rollbackrate
+          type: number
+        rolloutId:
+          title: Rolloutid
+          type: string
+        state:
+          title: State
+          type: string
+        successRate:
+          default: 0.0
+          title: Successrate
+          type: number
+        targetCount:
+          default: 0
+          title: Targetcount
+          type: integer
+        thresholds:
+          additionalProperties: true
+          default: {}
+          title: Thresholds
+          type: object
+        version:
+          title: Version
+          type: string
+      required:
+      - rolloutId
+      - component
+      - version
+      - ring
+      - state
+      title: RolloutResponse
+      type: object
+    SecretResolveRequest:
+      properties:
+        endpointId:
+          title: Endpointid
+          type: string
+        refs:
+          items:
+            type: string
+          title: Refs
+          type: array
+        requestId:
+          title: Requestid
+          type: string
+        userId:
+          title: Userid
+          type: string
+      required:
+      - endpointId
+      - userId
+      - requestId
+      - refs
+      title: SecretResolveRequest
+      type: object
+    SecretResolveResponse:
+      properties:
+        secrets:
+          items:
+            $ref: '#/components/schemas/SecretValue'
+          title: Secrets
+          type: array
+      required:
+      - secrets
+      title: SecretResolveResponse
+      type: object
+    SecretValue:
+      properties:
+        ref:
+          title: Ref
+          type: string
+        status:
+          default: ok
+          title: Status
+          type: string
+        value:
+          title: Value
+          type: string
+      required:
+      - ref
+      - value
+      title: SecretValue
+      type: object
+    ValidationError:
+      properties:
+        ctx:
+          title: Context
+          type: object
+        input:
+          title: Input
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          title: Location
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+      type: object
+info:
+  title: SMC Salt Control
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /salt/v1/artifacts/{component}/{version}:
+    get:
+      operationId: get_artifact_salt_v1_artifacts__component___version__get
+      parameters:
+      - in: path
+        name: component
+        required: true
+        schema:
+          title: Component
+          type: string
+      - in: path
+        name: version
+        required: true
+        schema:
+          title: Version
+          type: string
+      - in: query
+        name: platform
+        required: false
+        schema:
+          default: windows
+          title: Platform
+          type: string
+      - in: query
+        name: arch
+        required: false
+        schema:
+          default: AMD64
+          title: Arch
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactMetadataResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Artifact
+      tags:
+      - artifacts
+  /salt/v1/endpoints/{endpoint_id}/desired-state:
+    get:
+      operationId: get_desired_state_salt_v1_endpoints__endpoint_id__desired_state_get
+      parameters:
+      - in: path
+        name: endpoint_id
+        required: true
+        schema:
+          title: Endpoint Id
+          type: string
+      - in: query
+        name: knownRevision
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Knownrevision
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DesiredStateResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Desired State
+      tags:
+      - desired-state
+  /salt/v1/enrollments:
+    post:
+      operationId: create_enrollment_salt_v1_enrollments_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentCreateResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Enrollment
+      tags:
+      - enrollments
+  /salt/v1/enrollments/{enrollment_id}:
+    get:
+      operationId: get_enrollment_salt_v1_enrollments__enrollment_id__get
+      parameters:
+      - in: path
+        name: enrollment_id
+        required: true
+        schema:
+          title: Enrollment Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentStatusResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Enrollment
+      tags:
+      - enrollments
+  /salt/v1/enrollments/{enrollment_id}/fingerprint:
+    post:
+      operationId: report_fingerprint_salt_v1_enrollments__enrollment_id__fingerprint_post
+      parameters:
+      - in: path
+        name: enrollment_id
+        required: true
+        schema:
+          title: Enrollment Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FingerprintReportRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FingerprintReportResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Report Fingerprint
+      tags:
+      - enrollments
+  /salt/v1/health:
+    get:
+      operationId: health_salt_v1_health_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                title: Response Health Salt V1 Health Get
+                type: object
+          description: Successful Response
+      summary: Health
+      tags:
+      - health
+  /salt/v1/job-returns:batch:
+    post:
+      operationId: batch_job_returns_salt_v1_job_returns_batch_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobReturnBatchRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobReturnBatchResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Batch Job Returns
+      tags:
+      - job-returns
+  /salt/v1/ready:
+    get:
+      operationId: ready_salt_v1_ready_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                title: Response Ready Salt V1 Ready Get
+                type: object
+          description: Successful Response
+      summary: Ready
+      tags:
+      - health
+  /salt/v1/rollouts:
+    post:
+      operationId: create_rollout_salt_v1_rollouts_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Rollout
+      tags:
+      - rollouts
+  /salt/v1/rollouts/{rollout_id}:
+    get:
+      operationId: get_rollout_salt_v1_rollouts__rollout_id__get
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Rollout
+      tags:
+      - rollouts
+  /salt/v1/rollouts/{rollout_id}:advance:
+    post:
+      operationId: advance_rollout_salt_v1_rollouts__rollout_id__advance_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutActionRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Advance Rollout
+      tags:
+      - rollouts
+  /salt/v1/rollouts/{rollout_id}:pause:
+    post:
+      operationId: pause_rollout_salt_v1_rollouts__rollout_id__pause_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutActionRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Pause Rollout
+      tags:
+      - rollouts
+  /salt/v1/rollouts/{rollout_id}:rollback:
+    post:
+      operationId: rollback_rollout_salt_v1_rollouts__rollout_id__rollback_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutActionRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolloutResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollback Rollout
+      tags:
+      - rollouts
+  /salt/v1/secrets:resolve:
+    post:
+      operationId: resolve_secrets_salt_v1_secrets_resolve_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecretResolveRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResolveResponse'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Resolve Secrets
+      tags:
+      - secrets

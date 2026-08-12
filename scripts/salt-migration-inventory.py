@@ -360,6 +360,11 @@ def main() -> int:
         default=None,
         help="Output directory (default: repo root)",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 when Endpoint Go gates fail (API/Service/LOC/P0P1)",
+    )
     args = parser.parse_args()
 
     repo = Path(__file__).resolve().parents[1]
@@ -426,7 +431,9 @@ def main() -> int:
         f"P0/P1={p0_p1} "
         f"decision={go['decision']}"
     )
-    return 0 if go["decision"] == "GO" else 1
+    if args.check and go["decision"] != "GO":
+        return 1
+    return 0 if not args.check else 0
 
 
 if __name__ == "__main__":

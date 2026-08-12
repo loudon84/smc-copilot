@@ -51,6 +51,7 @@ ERROR_HTTP_STATUS: dict[str, int] = {
     "gateway_start_failed": 503,
     "profile_path_invalid": 422,
     "secret_store_unavailable": 503,
+    "runtime_endpoint_control_decommissioned": 410,
 }
 
 

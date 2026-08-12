@@ -1,0 +1,44 @@
+{
+  "name": "salt-control",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "services/salt-control/src",
+  "projectType": "application",
+  "tags": ["type:service", "scope:salt-control"],
+  "targets": {
+    "install": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/salt-control",
+        "command": "uv sync --extra dev"
+      }
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/salt-control",
+        "command": "uv run alembic upgrade head"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/salt-control",
+        "command": "uv run ruff check ."
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/salt-control",
+        "command": "uv run ruff format --check ."
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "services/salt-control",
+        "command": "uv run pytest"
+      }
+    }
+  }
+}

@@ -26,6 +26,21 @@ WorkTask durable execution, Kernel, and 21 event types are documented in [work-t
 - Bundle version: `contracts/version.json` `bundleVersion`.
 - **v2.0 / ADR-026:** Endpoint Control Plane OpenAPI tags are frozen. See [ENDPOINT_CONTROL_PLANE_FREEZE.md](../../contracts/runtime-api/ENDPOINT_CONTROL_PLANE_FREEZE.md). New endpoint-management capability goes to `infra/salt`, not Runtime OpenAPI. Chat/Task data plane must not grow on Runtime if the target is Hermes direct or a Task Service.
 
+## Salt Control API (v2.2)
+
+```text
+Salt Control FastAPI + Pydantic (services/salt-control)
+        ↓  tools/contract-generate/export_salt_control_openapi.py
+contracts/salt-control-api/openapi.yaml
+        ↓  infra/salt/client (bootstrap, enrollment, secret resolve)
+Windows Salt Minion / Bootstrap scripts
+```
+
+- Source of truth: `services/salt-control` FastAPI routes under `/salt/v1`.
+- Version: `contracts/version.json` → `saltControlApi`.
+- `npm run contracts:check` includes `check_salt_control_drift.py`.
+- Salt Control must not import `services/runtime`. Runtime Endpoint Control retires via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` (ADR-030); Chat/Task contracts unchanged.
+
 ## v1.4 readiness / memory / expert-mcp
 
 - **Readiness v2** (`GET /api/v1/runtime/readiness`) splits `service` / `execution` / `maintenance` / `expertMcp` — Desktop Domain Gate must not collapse these into a single hard block (ADR-010).

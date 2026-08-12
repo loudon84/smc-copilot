@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Endpoint(Base):
+    __tablename__ = "endpoints"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    machine_guid_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    hostname: Mapped[str] = mapped_column(String(255), nullable=False)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False, default="windows")
+    arch: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="enrolling")
+    device_credential_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EndpointUserBinding(Base):
+    __tablename__ = "endpoint_user_bindings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    windows_account: Mapped[str] = mapped_column(String(255), nullable=False)
+    windows_sid: Mapped[str] = mapped_column(String(128), nullable=False)
+    profile_dir: Mapped[str] = mapped_column(String(512), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    bound_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    local_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    master_fingerprints: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DesiredStateRevision(Base):
+    __tablename__ = "desired_state_revisions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    revision: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    checksum: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_revision: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class JobReturn(Base):
+    __tablename__ = "job_returns"
+    __table_args__ = (UniqueConstraint("jid", "endpoint_id", "function", name="uq_job_return"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    jid: Mapped[str] = mapped_column(String(64), nullable=False)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    function: Mapped[str] = mapped_column(String(255), nullable=False)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    payload_redacted: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArtifactManifest(Base):
+    __tablename__ = "artifact_manifests"
+    __table_args__ = (UniqueConstraint("component", "version", "platform", "arch", name="uq_artifact_manifest"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    component: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[str] = mapped_column(String(64), nullable=False)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False)
+    arch: Mapped[str] = mapped_column(String(32), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(128), nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    manifest_signature: Mapped[str] = mapped_column(Text, nullable=False)
+    key_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    rollback_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Rollout(Base):
+    __tablename__ = "rollouts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    component: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[str] = mapped_column(String(64), nullable=False)
+    ring: Mapped[str] = mapped_column(String(32), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
+    thresholds_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    observation_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    target_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    failure_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    rollback_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    p0_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    p1_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RolloutTarget(Base):
+    __tablename__ = "rollout_targets"
+    __table_args__ = (UniqueConstraint("rollout_id", "endpoint_id", name="uq_rollout_target"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_redacted: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

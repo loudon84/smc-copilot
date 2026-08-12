@@ -1,12 +1,13 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Write minion.d\smc.conf (master / id / master_finger) and optionally start salt-minion.
+  Write minion.d\smc.conf with multimaster failover list and optionally start salt-minion.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Master,
     [Parameter(Mandatory = $true)][string]$EndpointId,
     [Parameter(Mandatory = $true)][string]$MasterFingerprint,
+    [string]$MasterB = "salt-b.internal",
     [string]$ConfDir = "$env:ProgramData\Salt Project\Salt\conf\minion.d",
     [switch]$StartService,
     [switch]$DryRun
@@ -15,7 +16,13 @@ param(
 $ErrorActionPreference = "Stop"
 
 $conf = @"
-master: $Master
+master:
+  - $Master
+  - $MasterB
+master_type: failover
+random_master: True
+master_alive_interval: 60
+verify_master_pubkey_sign: True
 id: $EndpointId
 master_finger: $MasterFingerprint
 log_level: info

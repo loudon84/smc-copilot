@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSIONS = ROOT / "extensions"
 MASTER = ROOT / "master"
-MANIFEST = ROOT / "manifest" / "client-manifest.json"
+MANIFEST = ROOT / "manifest" / "client-manifest.example.json"
 GATEWAY_SLS = ROOT / "states" / "gateway.sls"
 
 
@@ -34,6 +34,9 @@ def test_manifest_forbids_latest() -> None:
     assert payload["salt"]["version"].lower() != "latest"
     assert "latest" not in payload["salt"]["installer"].lower()
     assert payload["salt"]["channel"] == "3008-lts"
+    # Production client-manifest.json must not ship placeholders.
+    prod = ROOT / "manifest" / "client-manifest.json"
+    assert not prod.is_file(), "production client-manifest.json must come from signed release, not git"
 
 
 def test_gateway_sls_has_no_system_user_fallback() -> None:

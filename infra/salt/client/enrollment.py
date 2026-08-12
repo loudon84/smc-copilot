@@ -151,10 +151,23 @@ def enrollment_complete(ctx: EnrollmentContext) -> bool:
 
 
 def mock_backend_start_enrollment(token: str, hostname: str | None = None) -> dict[str, str]:
-    """Repo-only Backend enrollment/start stand-in. Endpoint id is not hostname."""
+    """Lab/DryRun stand-in only (SMC_SALT_ENV=lab|test).
+
+    Endpoint id is never hostname/username. Production/live must call Salt Control
+    ``POST /salt/v1/enrollments`` — never derive endpoint id from token hash locally.
+    """
     del hostname
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
     return {
         "endpoint_id": f"ep_{digest}",
         "status": "created",
+        "source": "lab_mock",
+        "warning": "not_for_production_token_hash_standin",
     }
+
+
+def assert_endpoint_id_not_token_hash(endpoint_id: str, enrollment_token: str) -> None:
+    """Live enrollment must reject the DryRun stand-in shape derived from the token."""
+    digest = hashlib.sha256(enrollment_token.encode("utf-8")).hexdigest()[:12]
+    if endpoint_id == f"ep_{digest}":
+        raise ValueError("endpointId must not be derived from enrollment token hash in live mode")

@@ -1,13 +1,17 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Report local minion pubkey fingerprint for Salt Integration accept (client never accepts keys).
+  Report local minion pubkey fingerprint for Salt Control accept (client never accepts keys).
+  Live: POST /salt/v1/enrollments/{id}/fingerprint and poll status. DryRun still OK.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$EndpointId,
     [Parameter(Mandatory = $true)][string]$BackendUrl,
     [Parameter(Mandatory = $true)][string]$EnrollmentToken,
+    [string]$SaltControlUrl = "",
+    [string]$EnrollmentId = "",
     [string]$MinionKeyDir = "$env:ProgramData\Salt Project\Salt\conf\pki\minion",
+    [int]$PollAttempts = 30,
     [switch]$DryRun
 )
 
@@ -31,9 +35,11 @@ if ($DryRun) {
         ok            = $true
         dryRun        = $true
         endpointId    = $EndpointId
+        enrollmentId  = $EnrollmentId
         fingerprint   = $fingerprint
         pubkeyPath    = $pub
         pubkeyExists  = [bool](Test-Path -LiteralPath $pub)
+        saltControlUrl = $SaltControlUrl
         note          = "Client reports fingerprint only; Master auto_accept must stay false."
     } | ConvertTo-Json -Compress
     exit 0
@@ -44,15 +50,56 @@ if (-not $fingerprint) {
     exit 2
 }
 
-# Repo-only: write a local report file. Production posts to Salt Integration / Backend.
 $reportDir = Join-Path $env:ProgramData "SMC\enrollment"
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+
+if ($SaltControlUrl -and $EnrollmentId) {
+    $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $saltRoot = Split-Path -Parent (Split-Path -Parent $here)
+    $py = @"
+import json, sys, time
+from pathlib import Path
+sys.path.insert(0, r'$saltRoot')
+from client.salt_control_client import SaltControlClient
+from client.device_credential import DeviceCredentialStore
+
+store = DeviceCredentialStore(
+    Path(r'$env:ProgramData') / 'SMC' / 'credentials' / 'device.dat',
+    force_file_backend=True,
+)
+client = SaltControlClient(r'$SaltControlUrl', credential_store=store)
+reported = client.report_fingerprint(
+    r'$EnrollmentId',
+    endpoint_id=r'$EndpointId',
+    fingerprint=r'$fingerprint',
+)
+status = client.poll_until(r'$EnrollmentId', max_attempts=$PollAttempts, sleep_fn=lambda s: time.sleep(min(s, 0.01)))
+print(json.dumps({'ok': True, 'reported': reported, 'status': status}))
+"@
+    $result = python -c $py
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $parsed = $result | ConvertFrom-Json
+    $reportPath = Join-Path $reportDir "$EndpointId.json"
+    @{
+        endpointId      = $EndpointId
+        enrollmentId    = $EnrollmentId
+        fingerprint     = $fingerprint
+        saltControlUrl  = $SaltControlUrl
+        status          = $parsed.status
+        reportedAt      = (Get-Date).ToString("o")
+    } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+    @{ ok = $true; endpointId = $EndpointId; enrollmentId = $EnrollmentId; fingerprint = $fingerprint; reportPath = $reportPath; polled = $true } | ConvertTo-Json -Compress
+    exit 0
+}
+
+# Without SaltControlUrl: local report only (lab / offline).
 $report = @{
     endpointId       = $EndpointId
     fingerprint      = $fingerprint
     backendUrl       = $BackendUrl
     enrollmentToken  = "***"
     reportedAt       = (Get-Date).ToString("o")
+    note             = "local report; set -SaltControlUrl for live POST+poll"
 }
 $reportPath = Join-Path $reportDir "$EndpointId.json"
 $report | ConvertTo-Json | Set-Content -LiteralPath $reportPath -Encoding UTF8

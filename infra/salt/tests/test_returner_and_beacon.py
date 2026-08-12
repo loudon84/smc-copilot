@@ -10,6 +10,7 @@ from _returners import smc_backend
 def test_returner_redacts_and_writes(tmp_path: Path, monkeypatch) -> None:
     sink = tmp_path / "jobs.jsonl"
     monkeypatch.setenv("SMC_SALT_RETURN_SINK", str(sink))
+    monkeypatch.setenv("SMC_SALT_ENV", "lab")
     ok = smc_backend.returner(
         {
             "jid": "1",

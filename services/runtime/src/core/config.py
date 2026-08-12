@@ -197,6 +197,11 @@ class Settings(BaseSettings):
     )
 
     copilot_desktop_token: str = Field(default="", alias="COPILOT_DESKTOP_TOKEN")
+    runtime_endpoint_control_enabled: bool = Field(
+        default=True,
+        alias="SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED",
+        description="When false, frozen Endpoint Control Plane routes return 410 (v2.2 Salt migration). Chat/Task unchanged.",
+    )
     copilot_require_token: bool = Field(default=False, alias="COPILOT_REQUIRE_TOKEN")
     cors_allow_origins: str = Field(
         default="http://127.0.0.1,http://localhost",

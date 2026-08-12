@@ -12,6 +12,17 @@ from client.enrollment import (
 from client.paths import read_endpoint_id, write_endpoint_id
 
 
+def test_rejects_token_hash_endpoint_id_in_live_mode() -> None:
+    import hashlib
+
+    from client.enrollment import assert_endpoint_id_not_token_hash
+
+    token = "enroll-token-1"
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()[:12]
+    with pytest.raises(ValueError, match="token hash"):
+        assert_endpoint_id_not_token_hash(f"ep_{digest}", token)
+
+
 def test_backend_endpoint_id_is_not_hostname() -> None:
     started = mock_backend_start_enrollment("enroll-token-1", hostname="DESKTOP-ABC")
     assert started["endpoint_id"].startswith("ep_")

@@ -117,6 +117,18 @@ def register_error_handlers(app: FastAPI) -> None:
                 content=detail,
                 headers={REQUEST_ID_HEADER: rid},
             )
+        if isinstance(detail, dict) and "code" in detail:
+            extra = {k: v for k, v in detail.items() if k not in {"code", "message"}}
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=_envelope(
+                    code=str(detail["code"]),
+                    message=str(detail.get("message", "Request failed")),
+                    details=extra or None,
+                    request_id=rid,
+                ),
+                headers={REQUEST_ID_HEADER: rid},
+            )
         message = detail if isinstance(detail, str) else str(detail)
         code = "http_error" if exc.status_code >= 500 else "request_error"
         return JSONResponse(

@@ -62,6 +62,9 @@ async def _endpoint_workers_enabled(settings, session_maker, center) -> bool:
 
 
 def _register_runtime_handlers(job_service: RuntimeJobService, settings, session_maker) -> None:
+    if not settings.runtime_endpoint_control_enabled:
+        logger.info("runtime_endpoint_handlers_skipped", reason="endpoint_control_decommissioned")
+        return
     try:
         from services.doctor_service import DoctorService
         from services.installation_service import InstallationService
@@ -311,7 +314,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.process_lock = process_lock
 
         bootstrap_token = (os.environ.get("RUNTIME_BOOTSTRAP_TOKEN") or "").strip()
-        if bootstrap_token:
+        if bootstrap_token and settings.runtime_endpoint_control_enabled:
             from services.bootstrap_service import BootstrapService
 
             async with session_maker() as session:
@@ -357,7 +360,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             except Exception:
                 logger.exception("task_worker_manager_configure_failed")
 
-        if not bool(getattr(app.state, "_disable_gateway_autostart", False)):
+        if settings.runtime_endpoint_control_enabled and not bool(
+            getattr(app.state, "_disable_gateway_autostart", False)
+        ):
             await supervisor.reconcile_instances_on_boot()
             await supervisor.reconcile_legacy_profiles_on_boot()
             # After install/env registration (dev_bootstrap), ensure Gateway via
@@ -375,7 +380,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await job_service.start_worker()
 
         if not disable_workers:
-            endpoint_enabled = await _endpoint_workers_enabled(settings, session_maker, center)
+            endpoint_enabled = settings.runtime_endpoint_control_enabled and await _endpoint_workers_enabled(
+                settings, session_maker, center
+            )
             if worker_supervisor is None:
                 worker_supervisor = _build_supervisor(
                     settings,

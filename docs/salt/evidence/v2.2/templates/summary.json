@@ -1,0 +1,26 @@
+{
+  "schema": "smc.salt-evidence.v2.2",
+  "ring": "ring0",
+  "date": "YYYY-MM-DD",
+  "component": "hermes",
+  "version": "0.0.0",
+  "devicesObserved": 0,
+  "cases": {
+    "A_fresh": "skipped|pass|fail",
+    "B_migrate": "skipped|pass|fail",
+    "C_user_switch": "skipped|pass|fail",
+    "D_offline": "skipped|pass|fail",
+    "E_upgrade_rollback": "skipped|pass|fail",
+    "F_break_glass": "skipped|pass|fail"
+  },
+  "slo": {
+    "bootstrapSuccessPct": null,
+    "enrollmentSuccessPct": null,
+    "highstateSuccessPct": null,
+    "gatewayAvailabilityPct": null,
+    "rollbackPct": null,
+    "p0": 0,
+    "p1": 0
+  },
+  "notes": "Redact device ids, usernames, tokens, secrets. Hardware Cases require self-hosted smc-salt-canary runner."
+}

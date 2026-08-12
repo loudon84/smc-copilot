@@ -4,14 +4,15 @@
   "sourceRoot": "contracts",
   "projectType": "library",
   "tags": ["type:contracts", "scope:shared"],
-  "implicitDependencies": ["runtime"],
+  "implicitDependencies": ["runtime", "salt-control"],
   "targets": {
     "generate": {
       "executor": "nx:run-commands",
       "options": {
         "commands": [
           "uv run --project services/runtime python tools/contract-generate/export_openapi.py",
-          "uv run --project services/runtime python tools/contract-generate/export_event_schemas.py"
+          "uv run --project services/runtime python tools/contract-generate/export_event_schemas.py",
+          "uv run --project services/salt-control python tools/contract-generate/export_salt_control_openapi.py"
         ],
         "parallel": false
       }
@@ -19,7 +20,11 @@
     "check": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --project services/runtime python tools/contract-generate/check_contract_drift.py"
+        "commands": [
+          "uv run --project services/runtime python tools/contract-generate/check_contract_drift.py",
+          "uv run --project services/salt-control python tools/contract-generate/check_salt_control_drift.py"
+        ],
+        "parallel": false
       }
     }
   }

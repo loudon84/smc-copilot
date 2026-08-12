@@ -9,7 +9,7 @@ from typing import Any
 
 SCHEMA = "smc.salt-client.v1"
 HEX64 = re.compile(r"^[0-9a-fA-F]{64}$")
-DEFAULT_MANIFEST = Path(__file__).resolve().parents[1] / "manifest" / "client-manifest.json"
+DEFAULT_MANIFEST = Path(__file__).resolve().parents[1] / "manifest" / "client-manifest.example.json"
 
 
 class ManifestError(ValueError):

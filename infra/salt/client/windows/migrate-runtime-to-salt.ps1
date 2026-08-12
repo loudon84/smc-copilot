@@ -2,6 +2,7 @@
 <#
 .SYNOPSIS
   Existing Runtime PC → Salt ownership. Does not uninstall Runtime files.
+  Uses durable bootstrap journal; owner switch only via handover COMPLETED.
 #>
 param(
     [string]$EndpointId = "",
@@ -11,6 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $smc = Join-Path $env:ProgramData "SMC"
+$journalPath = Join-Path $smc "bootstrap-journal.json"
 if (-not $EndpointId -and (Test-Path (Join-Path $smc "endpoint-id"))) {
     $EndpointId = (Get-Content (Join-Path $smc "endpoint-id") -Raw).Trim()
 }
@@ -34,8 +36,9 @@ if ($DryRun) {
         endpointId = $EndpointId
         hermesHome = $HermesHome
         steps      = $steps
+        journalPath = $journalPath
         uninstallRuntime = $false
-        note       = "Owner switch only after Salt can manage Hermes."
+        note       = "Owner switch only after health+work probe (handover COMPLETED / journal COMPLETED)."
     } | ConvertTo-Json -Compress
     exit 0
 }
@@ -45,6 +48,10 @@ $repoSalt = Split-Path -Parent (Split-Path -Parent $here)
 python -c @"
 from pathlib import Path
 from client.handover import HandoverHooks, migrate
+from client.journal import BootstrapJournal
+
+journal = BootstrapJournal.load(Path(r'$journalPath'))
+journal.advance('HERMES_VERIFIED', endpoint_id=r'$EndpointId')
 hooks = HandoverHooks(
     inspect=lambda: {'ok': True, 'home': r'$HermesHome'},
     snapshot=lambda: {'owner': 'runtime', 'hermes_home': r'$HermesHome'},
@@ -59,6 +66,10 @@ hooks = HandoverHooks(
     runtime_reconcile=lambda: True,
 )
 result = migrate(hooks=hooks, program_data=Path(r'$env:ProgramData'), endpoint_id='$EndpointId', hermes_home=r'$HermesHome')
-print({'ok': result.ok, 'state': result.state, 'owner': result.owner, 'error': result.error})
+if result.ok:
+    journal.advance('COMPLETED', endpoint_id=r'$EndpointId', owner='salt')
+else:
+    journal.mark_rollback(result.error or 'migrate_failed')
+print({'ok': result.ok, 'state': result.state, 'owner': result.owner, 'error': result.error, 'journal': journal.state})
 "@
 exit $LASTEXITCODE

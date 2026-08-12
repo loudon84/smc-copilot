@@ -40,3 +40,17 @@ TS client: `@smc/runtime-client` control-plane methods (`runtime.install/update/
 - `npm run contracts:check` still runs to prevent drift.
 - Control-plane functional PRs are rejected by default (ADR-026).
 - Bundle file is not deleted in v2.0.
+
+## v2.2 decommission flag
+
+After Ring 3 evidence (30-day SLO), set `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` on Runtime. Frozen routers return **410** with code `runtime_endpoint_control_decommissioned`. Chat/Task/data-plane routes (`/api/v1/health`, chat, tasks, work-tasks, etc.) remain available until a later archive phase. Source is retained for rollback during the 30-day observation window — flag-off is the v2.2 posture, not mass deletion.
+
+## v2.2 decommission flag
+
+After Ring 3 stable evidence (30 days), production sets:
+
+```text
+SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false
+```
+
+When false, frozen Endpoint Control Plane routes return **410** with code `runtime_endpoint_control_decommissioned`. Chat/Task/data-plane routes (e.g. `/api/v1/health`, chat, work-tasks) remain available until full Runtime archive. Source is retained for rollback during the evidence window — not deleted in v2.2.

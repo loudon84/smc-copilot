@@ -23,9 +23,9 @@
       "loc_total": 3116.0
     },
     "services": {
-      "count": 40.6,
-      "weighted": 0.4062,
-      "loc_weighted": 52.4,
+      "count": 39.4,
+      "weighted": 0.3937,
+      "loc_weighted": 51.9,
       "loc_total": 15691.0
     },
     "runtime_pkg": {
@@ -35,9 +35,9 @@
       "loc_total": 2710.0
     },
     "loc": {
-      "count": 49.7,
-      "weighted": 0.4967,
-      "loc_weighted": 55.5,
+      "count": 49.0,
+      "weighted": 0.49,
+      "loc_weighted": 55.1,
       "loc_total": 21517.0
     }
   },
@@ -49,15 +49,15 @@
       "loc_total": 1387.0
     },
     "services": {
-      "count": 90.3,
-      "weighted": 0.9028,
-      "loc_weighted": 93.7,
+      "count": 87.5,
+      "weighted": 0.875,
+      "loc_weighted": 92.8,
       "loc_total": 8770.0
     },
     "loc": {
-      "count": 90.9,
-      "weighted": 0.9085,
-      "loc_weighted": 94.1,
+      "count": 89.6,
+      "weighted": 0.8963,
+      "loc_weighted": 93.5,
       "loc_total": 12677.0
     }
   },
@@ -719,9 +719,9 @@
       "name": "compatibility_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/compatibility_service.py",
       "loc": 80,
-      "classification": "FULL",
-      "weight": 1.0,
-      "status": "verified",
+      "classification": "PARTIAL",
+      "weight": 0.5,
+      "status": "unverified_missing_evidence",
       "salt_source": "infra/salt/manifest/client-manifest.json",
       "capability_tests": [
         "infra/salt/tests/test_client_manifest.py"
@@ -1220,9 +1220,9 @@
       "name": "runtime_version_pin_service",
       "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_version_pin_service.py",
       "loc": 66,
-      "classification": "FULL",
-      "weight": 1.0,
-      "status": "verified",
+      "classification": "PARTIAL",
+      "weight": 0.5,
+      "status": "unverified_missing_evidence",
       "salt_source": "infra/salt/manifest/client-manifest.json",
       "capability_tests": [
         "infra/salt/tests/test_client_manifest.py"

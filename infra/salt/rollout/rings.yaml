@@ -1,0 +1,82 @@
+# Salt v2.2 rollout rings and SLO (repo SOT for Salt Control thresholds).
+# Manual Gate: advance only with signed docs/salt/evidence/v2.2/<ring>/<date>/approval.md
+
+version: "2.2"
+schema: smc.salt-rollout-rings.v1
+
+rings:
+  lab:
+    name: Lab
+    min_devices: 2
+    device_kind: vm
+    observation_hours: 24
+    advance_requires:
+      - cases_a_through_f_pass
+    notes: "Repo canary scripts + 2 lab VMs; hardware evidence still Manual Gate."
+
+  ring0:
+    name: Ring 0
+    min_devices: 5
+    device_kind: it_dev
+    observation_days: 7
+    advance_requires:
+      - p0_count_eq_0
+      - p1_count_eq_0
+      - slo_all_pass
+
+  ring1:
+    name: Ring 1
+    percent_of_fleet: 5
+    scope: single_department
+    observation_days: 7
+    advance_requires:
+      - control_owner_conflict_eq_0
+      - rollback_rate_within_slo
+
+  ring2:
+    name: Ring 2
+    percent_of_fleet: 25
+    scope: multi_department
+    observation_days: 14
+    advance_requires:
+      - multimaster_verified
+      - multi_user_verified
+      - multi_network_verified
+
+  ring3:
+    name: Ring 3
+    percent_of_fleet: 100
+    observation_days: 30
+    advance_requires:
+      - runtime_fallback_eq_0
+      - audit_pass
+      - disaster_recovery_pass
+    runtime_endpoint_decommission_after: true
+
+slo:
+  bootstrap_success_pct: 99.0
+  enrollment_success_pct: 99.0
+  highstate_success_pct: 99.5
+  gateway_availability_pct: 99.9
+  config_apply_success_pct: 99.5
+  gateway_recovery_p95_seconds: 120
+  automatic_plus_manual_rollback_pct_max: 1.0
+  secret_plaintext_leak: 0
+  control_owner_conflict: 0
+  p0: 0
+  p1: 0
+
+auto_pause_on:
+  - p0
+  - p1
+  - secret_leak
+  - signature_bypass
+  - owner_conflict
+  - gateway_availability_slo_fail
+  - any_slo_fail
+
+paused_allows:
+  - diagnose
+  - rollback
+paused_forbids:
+  - advance

@@ -125,6 +125,8 @@ def install(
     artifact_path: str | None = None,
     hermes_home: str | None = None,
     signing_key: str | None = None,
+    key_id: str | None = None,
+    public_key: str | None = None,
 ) -> dict[str, Any]:
     claim = _claim_owner()
     if not claim.get("ok"):
@@ -137,7 +139,16 @@ def install(
             "error": "signed_artifact_required",
             "message": "install requires artifact url/path + sha256 + signature",
         }
-    key = _signing_key(signing_key)
+    env = os.environ.get("SMC_SALT_ENV", "lab").strip().lower() or "lab"
+    kid = key_id or os.environ.get("SMC_ARTIFACT_KEY_ID", "").strip() or None
+    pubkey = public_key or os.environ.get("SMC_ARTIFACT_PUBLIC_KEY", "").strip() or None
+    key = ""
+    if env in {"lab", "test"}:
+        key = _signing_key(signing_key)
+    elif signing_key:
+        return {"ok": False, "error": "signing_key_forbidden_in_production"}
+    elif not (kid and pubkey):
+        return {"ok": False, "error": "ed25519_key_required"}
     return _call_util(
         "smc_artifact.install_signed",
         version=version,
@@ -146,6 +157,8 @@ def install(
         signature=artifact_signature,
         signing_key=key,
         hermes_home=str(layout.home),
+        key_id=kid,
+        public_key=pubkey,
     )
 
 
@@ -157,6 +170,8 @@ def upgrade(
     artifact_path: str | None = None,
     hermes_home: str | None = None,
     signing_key: str | None = None,
+    key_id: str | None = None,
+    public_key: str | None = None,
 ) -> dict[str, Any]:
     previous = version_info_from_home(hermes_home)
     before = inspect(hermes_home)
@@ -168,6 +183,8 @@ def upgrade(
         artifact_path=artifact_path,
         hermes_home=hermes_home,
         signing_key=signing_key,
+        key_id=key_id,
+        public_key=public_key,
     )
     result["previous_version"] = previous
     result["before"] = before
