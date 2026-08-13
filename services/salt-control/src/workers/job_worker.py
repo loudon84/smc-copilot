@@ -16,6 +16,7 @@ from services.invocation import build_invocation
 from services.job_payload_codec import decode_job_payload
 from services.job_result import parse_job_success
 from services.job_service import JobService, digest_result
+from services.ring0_service import Ring0Orchestrator
 
 
 class JobWorker:
@@ -203,7 +204,18 @@ class JobWorker:
                         await self._fail(job, ErrorCode.INTERNAL_ERROR)
                     return
             await asyncio.sleep(1.0)
-        await self._fail(job, ErrorCode.INTERNAL_ERROR)
+        await self._mark_result_pending(job)
+
+    async def _mark_result_pending(self, job: ControlJobRecord) -> None:
+        async def _once(repos: RepositoryBundle) -> None:
+            record = await repos.control_jobs.get(job.id)
+            if record is None or record.status in {"succeeded", "failed", "cancelled", "expired"}:
+                return
+            record.status = "result_pending"
+            record.error_code = "result_pending"
+            await repos.control_jobs.update(record)
+
+        await self._with_repos(_once)
 
     async def _heartbeat(self, job: ControlJobRecord) -> None:
         async def _once(repos: RepositoryBundle) -> None:
@@ -235,6 +247,7 @@ class JobWorker:
             )
             if job.operation == "rollback":
                 self.metrics["rollback_success_total"] += 1
+            await Ring0Orchestrator(repos, JobService(repos)).apply_job_result(job.id)
             await repos.audits.append(
                 AuditEventRecord(
                     id=f"aud_{secrets.token_urlsafe(8)}",
@@ -263,6 +276,7 @@ class JobWorker:
             )
             if job.operation in {"handover", "remigrate"}:
                 self.metrics["handover_failure_total"] += 1
+            await Ring0Orchestrator(repos, JobService(repos)).apply_job_result(job.id)
 
         await self._with_repos(_once)
 

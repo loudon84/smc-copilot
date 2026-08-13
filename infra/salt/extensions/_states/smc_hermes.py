@@ -71,6 +71,32 @@ def prepared(
         migrate_mode=True if migrate_mode is None else bool(migrate_mode),
     )
 
+def gateway_started(name: str, hermes_home: str | None = None) -> dict[str, Any]:
+    ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
+    if _opts().get("test"):
+        ret["result"] = None
+        ret["comment"] = "Gateway would be started"
+        return ret
+    result = _salt()["smc_hermes.gateway_start"](hermes_home=hermes_home)
+    ret["result"] = bool(result.get("ok"))
+    ret["changes"] = result if ret["result"] else {}
+    ret["comment"] = "started" if ret["result"] else result.get("error", "start failed")
+    return ret
+
+
+def gateway_stopped(name: str, hermes_home: str | None = None) -> dict[str, Any]:
+    ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
+    if _opts().get("test"):
+        ret["result"] = None
+        ret["comment"] = "Gateway would be stopped"
+        return ret
+    result = _salt()["smc_hermes.gateway_stop"](hermes_home=hermes_home)
+    ret["result"] = bool(result.get("ok"))
+    ret["changes"] = result if ret["result"] else {}
+    ret["comment"] = "stopped" if ret["result"] else result.get("error", "stop failed")
+    return ret
+
+
 def gateway_running(name: str, hermes_home: str | None = None) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
     if _opts().get("test"):

@@ -22,6 +22,7 @@ async def test_master_302_rejects_non_ep_target_and_cmd_run():
     with pytest.raises(PermissionError):
         await master.local_async("ep_x", "cmd.run")
     assert "cmd.run" not in ALLOWED_LOCAL_FUNCS
+    assert not any(fn.endswith(".*") for fn in ALLOWED_LOCAL_FUNCS)
 
 
 @pytest.mark.asyncio

@@ -37,6 +37,16 @@ class AuthPrincipal:
     principal_type: str  # device | service | operator
     scopes: frozenset[str]
     endpoint_id: str | None = None
+    roles: frozenset[str] = frozenset()
+
+
+def roles_from_payload(payload: dict) -> frozenset[str]:
+    raw = payload.get("salt_roles") or payload.get("roles") or []
+    if isinstance(raw, str):
+        return frozenset(s for s in raw.replace(",", " ").split() if s)
+    if isinstance(raw, list):
+        return frozenset(str(s) for s in raw)
+    return frozenset()
 
 
 _jwks_clients: dict[str, Any] = {}
@@ -196,8 +206,16 @@ def parse_bearer_token(authorization: str | None) -> str:
 
 async def require_device(request: Request, authorization: Annotated[str | None, Header()] = None) -> AuthPrincipal:
     cred = parse_device_credential(authorization)
-    repos = request.app.state.repos
-    endpoint = await repos.endpoints.get_by_credential_hash(hash_secret(cred))
+    digest = hash_secret(cred)
+    factory = getattr(request.app.state, "session_factory", None)
+    if factory is not None:
+        from db.unit_of_work import unit_of_work
+
+        async with unit_of_work(factory) as uow:
+            endpoint = await uow.repos.endpoints.get_by_credential_hash(digest)
+    else:
+        repos = getattr(request.state, "repos", None) or request.app.state.repos
+        endpoint = await repos.endpoints.get_by_credential_hash(digest)
     if endpoint is None:
         raise SaltControlError(ErrorCode.UNAUTHORIZED, "unknown device credential", status_code=401)
     return AuthPrincipal(
@@ -220,6 +238,7 @@ def scoped_auth(*required: str):
             principal_type="operator" if Scope.ROLLOUT_ADMIN in scopes else "service",
             scopes=scopes,
             endpoint_id=payload.get("endpoint_id"),
+            roles=roles_from_payload(payload),
         )
 
     return _dep

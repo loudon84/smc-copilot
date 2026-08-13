@@ -43,7 +43,13 @@ def _job(row: models.ControlJob) -> ControlJobRecord:
         heartbeat_at=_dt(row.heartbeat_at),
         attempt=row.attempt,
         salt_jid=row.salt_jid,
+        expected_function=getattr(row, "expected_function", None),
         result_digest=row.result_digest,
+        result_redacted=dict(row.result_redacted) if getattr(row, "result_redacted", None) else None,
+        result_schema_version=getattr(row, "result_schema_version", None),
+        result_source=getattr(row, "result_source", None),
+        result_captured_at=_dt(getattr(row, "result_captured_at", None)),
+        reconcile_ttl_seconds=int(getattr(row, "reconcile_ttl_seconds", 3600) or 3600),
         error_code=row.error_code,
         accepted_at=_dt(row.accepted_at),
         updated_at=_dt(row.updated_at),
@@ -72,6 +78,8 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
             requested_by=record.requested_by,
             correlation_id=record.correlation_id,
             payload_json=dict(record.payload_json or {}),
+            expected_function=record.expected_function,
+            reconcile_ttl_seconds=record.reconcile_ttl_seconds,
             accepted_at=record.accepted_at or now,
             updated_at=record.updated_at or now,
         )
@@ -104,7 +112,13 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
         row.heartbeat_at = record.heartbeat_at
         row.attempt = record.attempt
         row.salt_jid = record.salt_jid
+        row.expected_function = record.expected_function
         row.result_digest = record.result_digest
+        row.result_redacted = record.result_redacted
+        row.result_schema_version = record.result_schema_version
+        row.result_source = record.result_source
+        row.result_captured_at = record.result_captured_at
+        row.reconcile_ttl_seconds = record.reconcile_ttl_seconds
         row.error_code = record.error_code
         row.updated_at = datetime.now(UTC)
         row.completed_at = record.completed_at
@@ -154,7 +168,7 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
         result = await self._session.execute(
             select(models.ControlJob)
             .where(
-                models.ControlJob.status.in_(("dispatching", "running")),
+                models.ControlJob.status.in_(("dispatching", "running", "result_pending")),
                 models.ControlJob.lease_expires_at.is_not(None),
                 models.ControlJob.lease_expires_at < now,
             )
@@ -226,6 +240,9 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
         result_digest: str | None,
         error_code: str | None,
         now: datetime,
+        result_redacted: dict | None = None,
+        result_schema_version: str | None = None,
+        result_source: str | None = None,
     ) -> ControlJobRecord | None:
         row = await self._session.get(models.ControlJob, job_id)
         if row is None or row.claim_token != claim_token:
@@ -235,6 +252,13 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
         row.status = status
         row.result_digest = result_digest
         row.error_code = error_code
+        if result_redacted is not None:
+            row.result_redacted = result_redacted
+        if result_schema_version is not None:
+            row.result_schema_version = result_schema_version
+        if result_source is not None:
+            row.result_source = result_source
+            row.result_captured_at = now
         row.completed_at = now
         row.lease_owner = None
         row.lease_expires_at = None
@@ -255,13 +279,22 @@ class SqlAlchemyControlJobRepository(ControlJobRepository):
         result = await self._session.execute(
             update(models.ControlJob)
             .where(
-                models.ControlJob.status.in_(("dispatching", "running")),
+                models.ControlJob.status.in_(("dispatching", "running", "result_pending")),
                 models.ControlJob.lease_expires_at.is_not(None),
                 models.ControlJob.lease_expires_at < now,
             )
             .values(status="queued", claim_token=None, lease_owner=None, updated_at=now)
         )
         return int(result.rowcount or 0)  # type: ignore[attr-defined]
+
+    async def list_pending_reconcile(self) -> list[ControlJobRecord]:
+        result = await self._session.execute(
+            select(models.ControlJob).where(
+                models.ControlJob.status.in_(("running", "result_pending")),
+                models.ControlJob.salt_jid.is_not(None),
+            )
+        )
+        return [_job(r) for r in result.scalars().all()]
 
 
 class SqlAlchemySecretScopeRepository(SecretScopeRepository):

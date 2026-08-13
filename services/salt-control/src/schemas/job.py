@@ -22,6 +22,7 @@ JobStatus = Literal[
     "queued",
     "dispatching",
     "running",
+    "result_pending",
     "succeeded",
     "failed",
     "cancelled",
@@ -70,3 +71,5 @@ class EndpointStatusResponse(CamelModel):
     migration_phase: str | None = None
     target_state: str | None = None
     last_error: str | None = None
+    last_observed_at: str | None = None
+    fact_source: str | None = None

@@ -14,9 +14,11 @@ async def create_job(
     body: JobCreateRequest,
     request: Request,
     services: RequestServicesDep,
-    _auth: OperatorAuth,
+    auth: OperatorAuth,
 ) -> JobResponse:
-    response = await services.job_service.create(body)
+    # Actor is always the authenticated principal — ignore client-supplied requestedBy.
+    payload = body.model_copy(update={"requested_by": auth.subject})
+    response = await services.job_service.create(payload)
     worker = getattr(request.app.state, "job_worker", None)
     if worker is not None and not response.duplicate:
         worker.notify()
@@ -43,3 +45,15 @@ async def observer_stability(request: Request, _auth: OperatorAuth) -> dict:
     if observer is None:
         return {"status": "disabled"}
     return observer.stability_report()
+
+
+@router.get("/metrics")
+async def metrics(request: Request, _auth: OperatorAuth) -> dict:
+    observer = getattr(request.app.state, "observer", None)
+    job_worker = getattr(request.app.state, "job_worker", None)
+    reconciler = getattr(request.app.state, "result_reconciler", None)
+    return {
+        "observer": observer.metrics if observer is not None else {},
+        "jobWorker": getattr(job_worker, "metrics", {}) if job_worker is not None else {},
+        "resultReconciler": getattr(reconciler, "metrics", {}) if reconciler is not None else {},
+    }

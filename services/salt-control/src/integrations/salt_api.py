@@ -28,6 +28,8 @@ ALLOWED_LOCAL_FUNCS = frozenset(
         "smc_hermes.apply_config",
         "smc_hermes.restart",
         "smc_hermes.gateway_restart",
+        "smc_hermes.gateway_start",
+        "smc_hermes.gateway_stop",
         "smc_handover.commit",
         "smc_handover.rollback",
         "smc_handover.migrate",
@@ -190,7 +192,7 @@ class SaltApiMaster:
         kwarg: dict[str, Any] | None = None,
     ) -> str:
         _assert_ep_target(minion_id)
-        if function not in ALLOWED_LOCAL_FUNCS and not function.startswith("smc_hermes."):
+        if function not in ALLOWED_LOCAL_FUNCS:
             raise PermissionError(f"function not allowlisted: {function}")
         if function.startswith("cmd.") or function.startswith("ps.") or "powershell" in function.lower():
             raise PermissionError(f"forbidden function: {function}")

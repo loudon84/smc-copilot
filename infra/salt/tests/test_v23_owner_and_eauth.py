@@ -23,5 +23,9 @@ def test_eauth_has_no_cmd_run() -> None:
     # Ignore comments when scanning for forbidden functions.
     code_lines = "\n".join(line for line in text.splitlines() if not line.strip().startswith("#"))
     assert "cmd.run" not in code_lines
-    assert "smc_hermes.*" in text
-    assert "smc_handover.*" in text
+    assert "smc_hermes.*" not in code_lines
+    assert "smc_handover.*" not in code_lines
+    assert "smc_hermes.gateway_start" in text
+    assert "smc_handover.migrate" in text
+    assert "@wheel" in text
+    assert "key.accept" in text

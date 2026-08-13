@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -347,12 +348,20 @@ def gateway_restart(
     hermes_home: str | None = None,
     gateway_url: str | None = None,
     port: int = 8642,
+    action: str = "restart",
     stop=None,
     start=None,
     wait_closed=None,
     wait_health=None,
 ) -> dict[str, Any]:
-    """External restart: task.stop → wait port closed → task.run → wait /health."""
+    """Gateway lifecycle. action=start|stop|restart (v2.4.1 contract)."""
+    action = (action or "restart").strip().lower()
+    if action not in {"start", "stop", "restart"}:
+        return {"ok": False, "error": "invalid_action", "action": action}
+    if action == "start":
+        return gateway_start(hermes_home=hermes_home, gateway_url=gateway_url, port=port, start=start, wait_health=wait_health)
+    if action == "stop":
+        return gateway_stop(hermes_home=hermes_home, gateway_url=gateway_url, port=port, stop=stop, wait_closed=wait_closed)
     try:
         _assert_owner()
     except RuntimeError as exc:
@@ -374,26 +383,141 @@ def gateway_restart(
             time.sleep(0.05)
         return False
 
-    stop_fn = stop or (lambda: {"ok": True})
-    start_fn = start or (lambda: {"ok": True})
+    def _schtasks_end() -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                ["schtasks", "/End", "/TN", "SMC Hermes Gateway"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            return {"ok": completed.returncode == 0, "stdout": completed.stdout, "stderr": completed.stderr}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+    def _schtasks_run() -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                ["schtasks", "/Run", "/TN", "SMC Hermes Gateway"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            return {"ok": completed.returncode == 0, "stdout": completed.stdout, "stderr": completed.stderr}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+    stop_fn = stop or _schtasks_end
+    start_fn = start or _schtasks_run
     closed_fn = wait_closed or _port_closed
     health_fn = wait_health or (lambda: health(hermes_home=hermes_home, gateway_url=url).get("gateway_healthy"))
 
-    stop_fn()
+    stop_result = stop_fn()
     steps.append("task.stop")
+    if isinstance(stop_result, dict) and stop_result.get("ok") is False:
+        return {"ok": False, "error": "stop_failed", "steps": steps, "detail": stop_result}
     if not closed_fn():
         return {"ok": False, "error": "port_still_open", "steps": steps}
     steps.append("port_closed")
-    start_fn()
+    start_result = start_fn()
     steps.append("task.run")
+    if isinstance(start_result, dict) and start_result.get("ok") is False:
+        return {"ok": False, "error": "start_failed", "steps": steps, "detail": start_result}
     if not health_fn():
         return {"ok": False, "error": "health_timeout", "steps": steps, "gateway_url": url}
     steps.append("health_ok")
-    return {"ok": True, "steps": steps, "gateway_url": url}
+    return {"ok": True, "steps": steps, "gateway_url": url, "action": "restart"}
+
+
+def gateway_stop(
+    hermes_home: str | None = None,
+    gateway_url: str | None = None,
+    port: int = 8642,
+    stop=None,
+    wait_closed=None,
+) -> dict[str, Any]:
+    try:
+        _assert_owner()
+    except RuntimeError as exc:
+        return {"ok": False, "error": "control_owner_conflict", "message": str(exc)}
+
+    def _schtasks_end() -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                ["schtasks", "/End", "/TN", "SMC Hermes Gateway"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            return {"ok": completed.returncode == 0}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+    def _port_closed(timeout_s: float = 5.0) -> bool:
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            sock = socket.socket()
+            sock.settimeout(0.2)
+            try:
+                sock.connect(("127.0.0.1", port))
+            except OSError:
+                return True
+            finally:
+                sock.close()
+            time.sleep(0.05)
+        return False
+
+    stop_fn = stop or _schtasks_end
+    closed_fn = wait_closed or _port_closed
+    result = stop_fn()
+    if isinstance(result, dict) and result.get("ok") is False:
+        return {"ok": False, "error": "stop_failed", "detail": result}
+    if not closed_fn():
+        return {"ok": False, "error": "port_still_open"}
+    return {"ok": True, "action": "stop", "steps": ["task.stop", "port_closed"]}
+
+
+def gateway_start(
+    hermes_home: str | None = None,
+    gateway_url: str | None = None,
+    port: int = 8642,
+    start=None,
+    wait_health=None,
+) -> dict[str, Any]:
+    try:
+        _assert_owner()
+    except RuntimeError as exc:
+        return {"ok": False, "error": "control_owner_conflict", "message": str(exc)}
+    url = gateway_url or os.environ.get("SMC_HERMES_GATEWAY_URL", f"http://127.0.0.1:{port}")
+
+    def _schtasks_run() -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                ["schtasks", "/Run", "/TN", "SMC Hermes Gateway"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            return {"ok": completed.returncode == 0}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+    start_fn = start or _schtasks_run
+    health_fn = wait_health or (lambda: health(hermes_home=hermes_home, gateway_url=url).get("gateway_healthy"))
+    result = start_fn()
+    if isinstance(result, dict) and result.get("ok") is False:
+        return {"ok": False, "error": "start_failed", "detail": result}
+    if not health_fn():
+        return {"ok": False, "error": "health_timeout", "gateway_url": url}
+    return {"ok": True, "action": "start", "steps": ["task.run", "health_ok"], "gateway_url": url}
 
 
 def restart(hermes_home: str | None = None) -> dict[str, Any]:
-    return gateway_restart(hermes_home=hermes_home)
+    return gateway_restart(hermes_home=hermes_home, action="restart")
 
 
 def profile_apply(

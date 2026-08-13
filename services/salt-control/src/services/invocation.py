@@ -55,9 +55,9 @@ def build_invocation(operation: str, payload: JobPayload | None = None) -> SaltI
         return SaltInvocation("smc_hermes.apply_config", [], kw, 300.0, True)
 
     if operation == "start":
-        return SaltInvocation("smc_hermes.gateway_restart", [], {"action": "start"}, 180.0, True)
+        return SaltInvocation("smc_hermes.gateway_start", [], {}, 180.0, True)
     if operation == "stop":
-        return SaltInvocation("smc_hermes.gateway_restart", [], {"action": "stop"}, 180.0, True)
+        return SaltInvocation("smc_hermes.gateway_stop", [], {}, 180.0, True)
     if operation == "restart":
         return SaltInvocation("smc_hermes.restart", [], {}, 180.0, True)
     if operation == "health":

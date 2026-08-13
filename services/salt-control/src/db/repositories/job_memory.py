@@ -152,6 +152,9 @@ class InMemoryControlJobRepository(ControlJobRepository):
         result_digest: str | None,
         error_code: str | None,
         now: datetime,
+        result_redacted: dict | None = None,
+        result_schema_version: str | None = None,
+        result_source: str | None = None,
     ) -> ControlJobRecord | None:
         job = self._by_id.get(job_id)
         if job is None or job.claim_token != claim_token:
@@ -161,6 +164,13 @@ class InMemoryControlJobRepository(ControlJobRepository):
         job.status = status
         job.result_digest = result_digest
         job.error_code = error_code
+        if result_redacted is not None:
+            job.result_redacted = result_redacted
+        if result_schema_version is not None:
+            job.result_schema_version = result_schema_version
+        if result_source is not None:
+            job.result_source = result_source
+            job.result_captured_at = now
         job.completed_at = now
         job.lease_owner = None
         job.lease_expires_at = None
@@ -183,6 +193,9 @@ class InMemoryControlJobRepository(ControlJobRepository):
                 job.lease_owner = None
                 count += 1
         return count
+
+    async def list_pending_reconcile(self) -> list[ControlJobRecord]:
+        return [j for j in self._by_id.values() if j.status in {"running", "result_pending"} and j.salt_jid]
 
 
 class InMemorySecretScopeRepository(SecretScopeRepository):

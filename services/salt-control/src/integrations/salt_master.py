@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import secrets
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass
@@ -28,6 +29,8 @@ class FakeSaltMaster:
     fail_accept: bool = False
     fail_sync: bool = False
     fail_highstate: bool = False
+    jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    ready_ok: bool = True
 
     async def list_pending(self) -> list[PendingKey]:
         return [PendingKey(minion_id=k, fingerprint=v) for k, v in self.pending.items()]
@@ -62,3 +65,28 @@ class FakeSaltMaster:
 
     def add_pending(self, minion_id: str, fingerprint: str) -> None:
         self.pending[minion_id] = fingerprint
+
+    async def ready(self) -> bool:
+        return self.ready_ok
+
+    async def local_async(
+        self,
+        minion_id: str,
+        function: str,
+        arg: list[Any] | None = None,
+        kwarg: dict[str, Any] | None = None,
+    ) -> str:
+        jid = f"fake-{secrets.token_urlsafe(8)}"
+        self.jobs[jid] = {
+            "jid": jid,
+            "function": function,
+            "minion": minion_id,
+            "return": {minion_id: {"ok": True, "function": function}},
+        }
+        return jid
+
+    async def get_job(self, jid: str) -> dict[str, Any]:
+        return dict(self.jobs.get(jid) or {})
+
+    async def wait_job(self, jid: str, timeout_seconds: float = 30.0) -> dict[str, Any]:
+        return await self.get_job(jid)

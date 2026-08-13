@@ -34,6 +34,7 @@ from services.secret_service import SecretService
 from workers.enrollment_worker import EnrollmentOperationWorker
 from workers.job_worker import JobWorker
 from workers.observer import ControlPlaneObserver
+from workers.result_reconciler import ResultReconciler
 
 
 @dataclass
@@ -55,8 +56,10 @@ class AppState:
     worker: EnrollmentOperationWorker | None = None
     job_worker: JobWorker | None = None
     observer: ControlPlaneObserver | None = None
+    result_reconciler: ResultReconciler | None = None
     session_factory: Any | None = None
     _boot_session: Any | None = None
+    engine: Any | None = None
     # Deprecated: kept for lab/test backwards-compat only.
     idempotency: IdempotencyStore | None = None
 
@@ -123,6 +126,7 @@ def build_production_state(settings: Settings | None = None) -> AppState:
     worker = EnrollmentOperationWorker(masters=masters, session_factory=session_factory)
     job_worker = JobWorker(masters=masters, session_factory=session_factory)
     observer = ControlPlaneObserver(masters=masters, session_factory=session_factory)
+    result_reconciler = ResultReconciler(masters=masters, session_factory=session_factory)
     # Boot repos retained only for readiness probes / lab-compat service handles.
     job_service = JobService(repos)
     return AppState(
@@ -144,8 +148,10 @@ def build_production_state(settings: Settings | None = None) -> AppState:
         worker=worker,
         job_worker=job_worker,
         observer=observer,
+        result_reconciler=result_reconciler,
         session_factory=session_factory,
         _boot_session=boot_session,
+        engine=engine,
     )
 
 
@@ -160,6 +166,7 @@ def _build_fake_state(cfg: Settings) -> AppState:
     worker = EnrollmentOperationWorker(repos=repos, masters=masters)
     job_worker = JobWorker(masters=masters, repos=repos)
     observer = ControlPlaneObserver(masters=masters, repos=repos, interval_seconds=60.0)
+    result_reconciler = ResultReconciler(masters=masters, repos=repos, interval_seconds=30.0)
     job_service = JobService(repos)
     return AppState(
         settings=cfg,
@@ -180,6 +187,7 @@ def _build_fake_state(cfg: Settings) -> AppState:
         worker=worker,
         job_worker=job_worker,
         observer=observer,
+        result_reconciler=result_reconciler,
     )
 
 
@@ -209,7 +217,11 @@ def create_app(
                 app_state.job_worker.start()
             if app_state.observer is not None:
                 app_state.observer.start()
+            if app_state.result_reconciler is not None:
+                app_state.result_reconciler.start()
         yield
+        if app_state.result_reconciler is not None:
+            await app_state.result_reconciler.stop()
         if app_state.observer is not None:
             await app_state.observer.stop()
         if app_state.job_worker is not None:
@@ -222,6 +234,8 @@ def create_app(
                 await close()
         if app_state._boot_session is not None:
             await app_state._boot_session.close()
+        if app_state.engine is not None:
+            await app_state.engine.dispose()
 
     app = FastAPI(
         title="SMC Salt Control",
@@ -260,6 +274,8 @@ def _state_as_mapping(state: AppState) -> dict[str, Any]:
         "worker": state.worker,
         "job_worker": state.job_worker,
         "observer": state.observer,
+        "result_reconciler": state.result_reconciler,
         "_boot_session": state._boot_session,
         "session_factory": state.session_factory,
+        "engine": state.engine,
     }

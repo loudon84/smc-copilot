@@ -13,6 +13,6 @@ router = APIRouter(tags=["job-returns"])
 async def batch_job_returns(
     body: JobReturnBatchRequest,
     services: RequestServicesDep,
-    _auth: DeviceAuth,
+    auth: DeviceAuth,
 ) -> JobReturnBatchResponse:
-    return await services.return_service.batch_upsert(body)
+    return await services.return_service.batch_upsert(body, auth_endpoint_id=auth.endpoint_id)

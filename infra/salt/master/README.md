@@ -7,7 +7,7 @@ Minions: Ring 0 uses scalar `master: 192.168.102.104`. Multimaster `master_type:
 ## salt-api / eAuth
 
 - `master.d/salt-api.conf` — rest_cherrypy TLS only
-- `master.d/eauth.conf` — `salt_control` allowlist (`test.ping`, `saltutil.*`, `state.*`, `smc_hermes.*`, `smc_handover.*`); no shell/cmd
+- `master.d/eauth.conf` — `salt_control` explicit function allowlist (no `smc_hermes.*` / `smc_handover.*` wildcards, no shell/cmd); wheel limited to key ops
 - Release publish: `infra/salt/scripts/publish-salt-release.py` (current/previous atomic switch)
 
 ## PKI and secrets

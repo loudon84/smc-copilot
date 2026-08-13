@@ -19,7 +19,7 @@ Master: `192.168.102.104` (single master only)
 | Phase | Status |
 | --- | --- |
 | 0 Freeze / migration / regression tests / CI | implemented |
-| 1 Job / Returner / Lifecycle | pending |
+| 1 Job / Returner / Lifecycle | implemented |
 | 2 Handover / Runtime Fallback | pending |
 | 3 Ring 0 Aggregate / Batch Gates | pending |
 | 4 Observation / SLO / Auto Pause | pending |
