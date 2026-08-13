@@ -20,7 +20,7 @@ Master: `192.168.102.104` (single master only)
 | --- | --- |
 | 0 Freeze / migration / regression tests / CI | implemented |
 | 1 Job / Returner / Lifecycle | implemented |
-| 2 Handover / Runtime Fallback | pending |
+| 2 Handover / Runtime Fallback | implemented |
 | 3 Ring 0 Aggregate / Batch Gates | pending |
 | 4 Observation / SLO / Auto Pause | pending |
 | 5 Evidence Generator / Live Canary | pending |

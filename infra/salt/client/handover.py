@@ -171,18 +171,25 @@ def migrate(
     steps.append("OWNER_SWITCHED")
     atomic_write_json(owner_path, {"hermes": "salt"})
 
+    def restore_after_owner_switch() -> None:
+        if snapshot:
+            hooks.restore_snapshot(snapshot)
+        hooks.restore_runtime()
+        hooks.runtime_reconcile()
+        _restore_owner(owner_path, initial_owner)
+
     steps.append("SALT_GATEWAY_STARTED")
     if not hooks.start_salt_gateway():
-        _restore_owner(owner_path, initial_owner)
+        restore_after_owner_switch()
         return fail("SALT_GATEWAY_STARTED", "salt_gateway_start_failed")
 
     if not hooks.health():
-        _restore_owner(owner_path, initial_owner)
+        restore_after_owner_switch()
         return fail("SALT_GATEWAY_STARTED", "gateway_unhealthy")
 
     steps.append("WORK_VERIFIED")
     if not hooks.work_probe():
-        _restore_owner(owner_path, initial_owner)
+        restore_after_owner_switch()
         return fail("WORK_VERIFIED", "work_probe_failed")
 
     steps.append("COMPLETED")
@@ -228,7 +235,7 @@ def rollback(
             owner_path.unlink()
         restored_owner = None
     hooks.restore_runtime()
-    healthy = hooks.runtime_reconcile() and hooks.health()
+    healthy = bool(hooks.runtime_reconcile())
     marker_path = migration_marker_path(program_data)
     if marker_path.is_file():
         marker_path.unlink()
@@ -255,6 +262,20 @@ def remigrate(
     Idempotency is recorded in the migration marker for Salt Control Job correlation.
     """
     assert_no_stub_hooks(hooks)
+    marker_path = migration_marker_path(program_data)
+    if marker_path.is_file():
+        try:
+            existing = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+        if existing.get("status") == "COMPLETED":
+            return HandoverResult(
+                state="PRECHECK",
+                ok=False,
+                owner=existing.get("owner"),
+                error="remigrate_requires_rollback",
+                steps=["PRECHECK"],
+            )
     result = migrate(
         hooks=hooks,
         program_data=program_data,

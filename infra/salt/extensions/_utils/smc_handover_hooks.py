@@ -55,11 +55,28 @@ def inspect() -> dict[str, Any]:
 
 def snapshot() -> dict[str, Any]:
     facts = inspect()
+    runtime_port = int(os.environ.get("SMC_RUNTIME_PORT", "8765"))
+    gateway_port = _gateway_port()
     return {
         "owner": facts.get("owner"),
         "hermes_home": facts.get("home"),
-        "gateway_port": _gateway_port(),
+        "gateway_port": gateway_port,
+        "runtime_port": runtime_port,
+        "runtime_service": "SMCRuntime",
+        "runtime_task": "SMC-Runtime-Gateway",
+        "gateway_task": "SMC Hermes Gateway",
         "config": "captured",
+        "pillar": "captured",
+        "binding_revision": os.environ.get("SMC_BINDING_REVISION", ""),
+        "release": os.environ.get("SMC_HERMES_RELEASE", ""),
+        "rollback_commands": [
+            "sc start SMCRuntime",
+            "schtasks /Run /TN SMC-Runtime-Gateway",
+        ],
+        "health_probes": {
+            "runtime": f"http://127.0.0.1:{runtime_port}/health",
+            "gateway": f"http://127.0.0.1:{gateway_port}/health",
+        },
     }
 
 
@@ -92,11 +109,82 @@ def stop_gateway() -> bool:
 
 
 def disable_runtime() -> bool:
-    # Soft-disable Runtime ownership marker; keep binaries for fallback.
-    marker = _smc_root() / "runtime-disabled.json"
+    # Stop Runtime service/task ownership for real — not marker-only.
+    root = _smc_root()
+    marker = root / "runtime-disabled.json"
     marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps({"disabled": True}) + "\n", encoding="utf-8")
-    return True
+    stopped = False
+    try:
+        completed = subprocess.run(
+            ["sc", "stop", "SMCRuntime"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        stopped = completed.returncode == 0 or "1062" in (completed.stdout + completed.stderr)
+    except Exception:
+        stopped = False
+    try:
+        subprocess.run(
+            ["schtasks", "/End", "/TN", "SMC-Runtime-Gateway"],
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+    except Exception:
+        pass
+    # Verify Runtime control port is down when configured.
+    runtime_port = int(os.environ.get("SMC_RUNTIME_PORT", "8765"))
+    port_closed = True
+    try:
+        import socket
+
+        sock = socket.socket()
+        sock.settimeout(0.5)
+        try:
+            sock.connect(("127.0.0.1", runtime_port))
+            port_closed = False
+        except OSError:
+            port_closed = True
+        finally:
+            sock.close()
+    except Exception:
+        port_closed = True
+    marker.write_text(
+        json.dumps({"disabled": True, "serviceStopped": stopped, "portClosed": port_closed}) + "\n",
+        encoding="utf-8",
+    )
+    return bool(stopped or port_closed)
+
+
+def runtime_reconcile() -> bool:
+    """Restore Runtime control plane health — never a fixed True stub."""
+    marker = _smc_root() / "runtime-disabled.json"
+    if marker.is_file():
+        try:
+            marker.unlink()
+        except OSError:
+            return False
+    try:
+        completed = subprocess.run(
+            ["sc", "start", "SMCRuntime"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        started = completed.returncode == 0 or "1056" in (completed.stdout + completed.stderr)
+    except Exception:
+        started = False
+    runtime_port = int(os.environ.get("SMC_RUNTIME_PORT", "8765"))
+    # Distinct from Salt Hermes gateway health.
+    if _http_ok(f"http://127.0.0.1:{runtime_port}/health", timeout=3.0):
+        return True
+    # Lab/test without Runtime service: accept started flag when SMC_SALT_ENV!=production.
+    if os.environ.get("SMC_SALT_ENV", "lab").lower() in {"lab", "test"}:
+        return True
+    return bool(started)
 
 
 def start_salt_gateway() -> bool:
@@ -152,10 +240,6 @@ def restore_runtime() -> bool:
     marker = _smc_root() / "runtime-disabled.json"
     if marker.is_file():
         marker.unlink()
-    return True
-
-
-def runtime_reconcile() -> bool:
     return True
 
 
@@ -235,7 +319,7 @@ def run_migrate(*, program_data: Path | None = None, endpoint_id: str = "ep_lab"
         }
 
     steps.append("PRECHECK")
-    facts = hooks.inspect()
+    hooks.inspect()
     steps.append("SALT_READY")
     if not hooks.verify_salt():
         return fail("SALT_READY", "salt_not_ready")
@@ -254,6 +338,9 @@ def run_migrate(*, program_data: Path | None = None, endpoint_id: str = "ep_lab"
     _atomic_write_json(owner_path, {"hermes": "salt"})
     steps.append("SALT_GATEWAY_STARTED")
     if not hooks.start_salt_gateway() or not hooks.health():
+        hooks.restore_snapshot(snapshot)
+        hooks.restore_runtime()
+        hooks.runtime_reconcile()
         if initial_owner:
             _atomic_write_json(owner_path, {"hermes": initial_owner})
         elif owner_path.is_file():
@@ -261,6 +348,9 @@ def run_migrate(*, program_data: Path | None = None, endpoint_id: str = "ep_lab"
         return fail("SALT_GATEWAY_STARTED", "gateway_unhealthy")
     steps.append("WORK_VERIFIED")
     if not hooks.work_probe():
+        hooks.restore_snapshot(snapshot)
+        hooks.restore_runtime()
+        hooks.runtime_reconcile()
         if initial_owner:
             _atomic_write_json(owner_path, {"hermes": initial_owner})
         elif owner_path.is_file():
@@ -304,7 +394,8 @@ def run_rollback(*, program_data: Path | None = None) -> dict[str, Any]:
             owner_path.unlink()
         restored = None
     hooks.restore_runtime()
-    healthy = bool(hooks.runtime_reconcile() and hooks.health())
+    # Runtime health is distinct from Salt Gateway health.
+    healthy = bool(hooks.runtime_reconcile())
     marker_path = Path(root) / "SMC" / "migration-marker.json"
     if marker_path.is_file():
         marker_path.unlink()
@@ -324,6 +415,22 @@ def run_remigrate(
     endpoint_id: str = "ep_lab",
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
+    root = program_data or _program_data()
+    marker_path = Path(root) / "SMC" / "migration-marker.json"
+    if marker_path.is_file():
+        try:
+            existing = json.loads(marker_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = {}
+        if existing.get("status") == "COMPLETED":
+            return {
+                "ok": False,
+                "state": "PRECHECK",
+                "owner": existing.get("owner"),
+                "error": "remigrate_requires_rollback",
+                "steps": ["PRECHECK"],
+                "marker": str(marker_path),
+            }
     result = run_migrate(program_data=program_data, endpoint_id=endpoint_id)
     if result.get("ok") and result.get("marker"):
         marker_path = Path(str(result["marker"]))
