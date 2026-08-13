@@ -50,10 +50,33 @@ jobs:
         run: uv run ruff format --check .
       - name: Pytest
         working-directory: services/salt-control
-        run: uv run pytest -q
+        run: |
+          set -euo pipefail
+          OUT=$(uv run pytest -q --tb=line)
+          echo "$OUT"
+          # Alembic cycle must execute against the CI Postgres service — never skip.
+          if echo "$OUT" | grep -E 'tests/test_alembic_cycle.py.*(SKIPPED|skipped)'; then
+            echo "alembic integration test was skipped — failing CI"
+            exit 1
+          fi
+          if ! echo "$OUT" | grep -E 'passed'; then
+            echo "pytest produced no passed summary"
+            exit 1
+          fi
       - name: Alembic upgrade head
         working-directory: services/salt-control
         run: uv run alembic upgrade head
+      - name: Assert alembic integration ran
+        working-directory: services/salt-control
+        run: |
+          uv run pytest tests/test_alembic_cycle.py -q --tb=short
+          # Explicit non-skip assertion for CI logs.
+          python - <<'PY'
+          import os
+          url = os.environ.get("DATABASE_URL", "")
+          assert url.startswith("postgresql"), f"DATABASE_URL missing/invalid: {url!r}"
+          print("ok: DATABASE_URL present for alembic integration")
+          PY
       - name: Alembic upgrade → downgrade → upgrade
         working-directory: services/salt-control
         run: |
@@ -64,6 +87,60 @@ jobs:
       - name: OpenAPI export drift
         working-directory: services/salt-control
         run: uv run pytest tests/test_openapi_export.py -q
+      - name: v2.4.1 evidence remains not_proven
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          status = Path("docs/salt/evidence/v2.4.1/STATUS.md").read_text(encoding="utf-8")
+          assert "NO-GO" in status
+          assert "manual_gate / not_proven" in status
+          final = Path("docs/salt/evidence/v2.4.1/ring0/TEMPLATE/final-go-no-go.json").read_text(encoding="utf-8")
+          assert '"status": "not_proven"' in final or '"status":"not_proven"' in final
+          assert "proven" not in final.split("not_proven")[0]  # crude guard
+          v24 = Path("docs/salt/evidence/v2.4/STATUS.md").read_text(encoding="utf-8")
+          assert "manual_gate / not_proven" in v24
+          print("ok: live gates remain not_proven")
+          PY
+      - name: v2.3 superseded index present
+        run: |
+          test -f docs/salt/evidence/v2.3/SUPERSEDED.md
+          grep -q "superseded" docs/salt/evidence/v2.3/SUPERSEDED.md
+      - name: Phase 7 remains manual_gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          status = Path("docs/salt/evidence/v2.4.1/STATUS.md").read_text(encoding="utf-8")
+          assert "7 Live Ring 0 (human only)" in status
+          assert "manual_gate / not_proven" in status
+          assert "NO-GO" in status
+          # Cursor/CI must not auto-complete Phase 7.
+          for line in status.splitlines():
+              if "7 Live Ring 0" in line:
+                  assert "implemented" not in line.split("|")[-2]
+          print("ok: phase 7 remains manual")
+          PY
+
+  work-ring0:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/work
+    env:
+      NX_DAEMON: "false"
+      VITEST_CACHE_DIR: ${{ github.workspace }}/.vitest-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        working-directory: .
+        run: npm ci --ignore-scripts
+      - name: Ring 0 directed vitest
+        run: |
+          mkdir -p "$VITEST_CACHE_DIR"
+          npm exec vitest run -- tests/enterprise-salt-mode.test.ts tests/hermes-availability-backend.test.ts tests/runtime-adapter.test.ts tests/chat-messages.test.ts tests/chat-runs.test.ts tests/sessions-history-items.test.ts tests/session-attachment-store.test.ts src/main/files/attachment-adapter.test.ts src/main/files/file-security.test.ts
 
   infra-salt-guards:
     runs-on: ubuntu-latest

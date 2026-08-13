@@ -24,7 +24,7 @@ Master: `192.168.102.104` (single master only)
 | 3 Ring 0 Aggregate / Batch Gates | implemented |
 | 4 Observation / SLO / Auto Pause | implemented |
 | 5 Evidence Generator / Live Canary | implemented |
-| 6 Release Candidate CI | pending |
+| 6 Release Candidate CI | implemented |
 | 7 Live Ring 0 (human only) | manual_gate / not_proven |
 
 ## Rules
