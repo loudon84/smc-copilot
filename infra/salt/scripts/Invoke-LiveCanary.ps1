@@ -1,7 +1,8 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  v2.3.1 Live Canary hard gates against single Master 192.168.102.104.
+  v2.4.1 Live Canary hard gates against single Master 192.168.102.104.
+  WhatIf / DryRun may only emit status=implemented — never proven.
 #>
 param(
   [ValidateSet("lab", "production")]
@@ -12,9 +13,10 @@ param(
   [string]$Operation = "preflight",
   [string]$ReleaseId = "",
   [string]$ConfigRevision = "",
-  [string]$EvidenceDir = "docs/salt/evidence/v2.3.1/live-canary",
+  [string]$EvidenceDir = "docs/salt/evidence/v2.4.1/live-canary",
   [string]$MasterHost = "192.168.102.104",
-  [string]$ExpectedMasterFingerprint = $env:SMC_SALT_MASTER_FINGERPRINT
+  [string]$ExpectedMasterFingerprint = $env:SMC_SALT_MASTER_FINGERPRINT,
+  [switch]$WhatIf
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,13 +66,26 @@ try {
   Fail-Gate "tls" $_.Exception.Message
 }
 
-# 2) Master fingerprint
+# 2) Master fingerprint — compare connection fact vs expected (never format-only).
 if ([string]::IsNullOrWhiteSpace($ExpectedMasterFingerprint)) {
-  $gates.gates["master_fingerprint"] = @{ ok = $false; message = "SMC_SALT_MASTER_FINGERPRINT unset — manual_gate"; manualGate = $true }
+  $gates.gates["master_fingerprint"] = @{ ok = $false; message = "SMC_SALT_MASTER_FINGERPRINT unset — not_proven"; status = "not_proven" }
 } elseif (-not $ExpectedMasterFingerprint.StartsWith("sha256:")) {
   Fail-Gate "master_fingerprint" "fingerprint must start with sha256:"
 } else {
-  Pass-Gate "master_fingerprint" "configured"
+  $observed = $env:SMC_SALT_MASTER_FINGERPRINT_OBSERVED
+  if ([string]::IsNullOrWhiteSpace($observed)) {
+    $saltKey = Get-Command salt-key -ErrorAction SilentlyContinue
+    if ($null -ne $saltKey) {
+      $observed = ((& salt-key -f $MasterHost --out=txt 2>$null) | Select-Object -First 1)
+    }
+  }
+  if ([string]::IsNullOrWhiteSpace($observed)) {
+    $gates.gates["master_fingerprint"] = @{ ok = $false; message = "observed fingerprint missing — not_proven"; status = "not_proven" }
+  } elseif ($observed -notlike "*$($ExpectedMasterFingerprint.Replace('sha256:',''))*" -and $observed -ne $ExpectedMasterFingerprint) {
+    Fail-Gate "master_fingerprint" "observed fingerprint does not match expected"
+  } else {
+    Pass-Gate "master_fingerprint" "matched"
+  }
 }
 
 # 3) Minion accepted / online — require salt CLI when available
@@ -85,22 +100,28 @@ if ($null -eq $salt) {
   Pass-Gate "minion_online" "test.ping ok"
 }
 
-# 4-6) Extension / pillar gates
+# 4-6) Extension / pillar gates — missing facts stay not_proven, never auto-pass.
 Pass-Gate "secret_scan" "no secret values written to evidence"
-$gates.gates["extension_sync"] = @{ ok = $Operation -in @("preflight", "health", "diagnose"); message = "deferred_to_operator_for_mutating_ops"; manualGate = ($Operation -notin @("preflight", "health", "diagnose")) }
-$gates.gates["pillar_release"] = @{ ok = -not [string]::IsNullOrWhiteSpace($ReleaseId) -or $Operation -eq "preflight"; message = "release_id optional for preflight" }
+if ($env:SMC_SALT_EXTENSION_VERSION) {
+  Pass-Gate "extension_sync" $env:SMC_SALT_EXTENSION_VERSION
+} else {
+  $gates.gates["extension_sync"] = @{ ok = $false; message = "extension version not observed"; status = "not_proven" }
+}
+if ($env:SMC_SALT_PILLAR_REVISION -and $ReleaseId) {
+  Pass-Gate "pillar_release" $env:SMC_SALT_PILLAR_REVISION
+} else {
+  $gates.gates["pillar_release"] = @{ ok = $false; message = "pillar/release not observed"; status = "not_proven" }
+}
 
-# 7) Runtime fallback — execute dry reconcile probe, not mere script presence
+# 7) Runtime fallback — WhatIf is implemented only, never proven.
 $rollbackScript = Join-Path $repoRoot "infra\salt\client\windows\rollback-to-runtime.ps1"
 if (-not (Test-Path $rollbackScript)) {
   Fail-Gate "runtime_fallback" "rollback-to-runtime.ps1 missing"
 }
-try {
-  # Lab/test dry path — production HooksModule required for LIVE mutating ops.
-  & pwsh -File $rollbackScript -SaltEnv lab -WhatIf -ErrorAction SilentlyContinue
-  Pass-Gate "runtime_fallback" "rollback script executed (lab/whatif or hooks path)"
-} catch {
-  $gates.gates["runtime_fallback"] = @{ ok = $false; message = $_.Exception.Message; manualGate = $true }
+if ($WhatIf -or $Environment -eq "lab") {
+  $gates.gates["runtime_fallback"] = @{ ok = $false; message = "WhatIf/lab is implemented only — not proven"; status = "implemented"; whatIf = $true }
+} else {
+  $gates.gates["runtime_fallback"] = @{ ok = $false; message = "live rollback/remigrate must run via Job API"; status = "not_proven"; manualGate = $true }
 }
 
 if ($Operation -in @("handover", "rollback", "remigrate", "install", "configure", "health", "diagnose")) {
@@ -120,7 +141,6 @@ if ($Operation -in @("handover", "rollback", "remigrate", "install", "configure"
       minionId = $EndpointSelector
       operation = $Operation
       idempotencyKey = $idem
-      requestedBy = "live-canary"
       releaseId = $ReleaseId
       configRevision = $ConfigRevision
       correlationId = "live-canary"
@@ -134,7 +154,7 @@ if ($Operation -in @("handover", "rollback", "remigrate", "install", "configure"
       Start-Sleep -Seconds 5
       $final = Invoke-RestMethod -Method Get -Uri "$($controlUrl.TrimEnd('/'))/salt/v1/jobs/$jobId" `
         -Headers @{ Authorization = "Bearer $token" }
-    } while ($final.status -in @("queued", "dispatching", "running") -and (Get-Date) -lt $deadline)
+    } while ($final.status -in @("queued", "dispatching", "running", "result_pending") -and (Get-Date) -lt $deadline)
     $gates.gates["job_api"] = @{ ok = ($final.status -eq "succeeded"); jobId = $jobId; status = $final.status }
     if ($final.status -ne "succeeded") {
       $gates.status = "failed"
@@ -144,9 +164,11 @@ if ($Operation -in @("handover", "rollback", "remigrate", "install", "configure"
     $gates.status = "passed"
   }
 } else {
-  $gates.status = "passed"
+  $gates.status = "implemented"
 }
 
+$gates.status = "implemented"
+$gates.evidenceStatus = "not_proven"
 Write-Evidence "canary-result.json" $gates
 Write-Host "Live canary finished with status=$($gates.status)"
 if ($gates.status -eq "failed") { exit 1 }

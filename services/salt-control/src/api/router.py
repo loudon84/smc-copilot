@@ -6,6 +6,7 @@ from api.v1 import (
     artifacts,
     desired_state,
     enrollments,
+    evidence,
     health,
     job_returns,
     jobs,
@@ -26,3 +27,4 @@ api_router.include_router(ring0.router)
 api_router.include_router(secrets.router)
 api_router.include_router(artifacts.router)
 api_router.include_router(rollouts.router)
+api_router.include_router(evidence.router)
