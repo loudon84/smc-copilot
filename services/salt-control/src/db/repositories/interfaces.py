@@ -104,6 +104,12 @@ class RolloutRecord:
     snapshot_digest: str | None = None
     snapshot_json: list[dict[str, Any]] | None = None
     batch_index: int = 0
+    state_version: int = 0
+    batch_started_at: datetime | None = None
+    batch_observation_due_at: datetime | None = None
+    final_observation_started_at: datetime | None = None
+    final_observation_due_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime | None = None
 
 
@@ -114,6 +120,14 @@ class RolloutTargetRecord:
     state: str
     attempt_count: int = 0
     last_error: str | None = None
+    batch_index: int = 0
+    state_version: int = 0
+    source_job_id: str | None = None
+    reason_code: str | None = None
+    observed_at: datetime | None = None
+    state_changed_at: datetime | None = None
+    observing_started_at: datetime | None = None
+    observing_due_at: datetime | None = None
 
 
 @dataclass
@@ -175,6 +189,7 @@ class OperationStepRecord:
 
 
 TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed", "cancelled", "expired"})
+NON_TERMINAL_JOB_STATUSES = frozenset({"queued", "dispatching", "running", "result_pending"})
 
 
 @dataclass
@@ -190,6 +205,7 @@ class ControlJobRecord:
     release_id: str | None = None
     correlation_id: str | None = None
     payload_json: dict[str, Any] | None = None
+    expected_function: str | None = None
     claim_token: str | None = None
     lease_owner: str | None = None
     lease_expires_at: datetime | None = None
@@ -197,6 +213,11 @@ class ControlJobRecord:
     attempt: int = 0
     salt_jid: str | None = None
     result_digest: str | None = None
+    result_redacted: dict[str, Any] | None = None
+    result_schema_version: str | None = None
+    result_source: str | None = None
+    result_captured_at: datetime | None = None
+    reconcile_ttl_seconds: int = 3600
     error_code: str | None = None
     accepted_at: datetime | None = None
     updated_at: datetime | None = None
@@ -213,6 +234,10 @@ class RolloutApprovalRecord:
     reason: str | None = None
     id: int | None = None
     created_at: datetime | None = None
+    stage: str = "deploy"
+    role_source: str = "oidc"
+    expires_at: datetime | None = None
+    revoked_at: datetime | None = None
 
 
 @dataclass
@@ -255,6 +280,11 @@ class RolloutTargetJobRecord:
     state: str = "pending"
     id: int | None = None
     created_at: datetime | None = None
+    operation: str = "handover"
+    attempt: int = 1
+    idempotency_key: str | None = None
+    expected_function: str | None = None
+    result_source: str | None = None
 
 
 @dataclass
@@ -318,8 +348,9 @@ class ArtifactRepository(Protocol):
 class RolloutRepository(Protocol):
     async def create(self, record: RolloutRecord) -> RolloutRecord: ...
     async def get(self, rollout_id: str) -> RolloutRecord | None: ...
-    async def update(self, record: RolloutRecord) -> RolloutRecord: ...
+    async def update(self, record: RolloutRecord, *, expected_version: int | None = None) -> RolloutRecord: ...
     async def add_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord: ...
+    async def update_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord: ...
     async def list_targets(self, rollout_id: str) -> list[RolloutTargetRecord]: ...
     async def list_active(self) -> list[RolloutRecord]: ...
 
@@ -377,9 +408,13 @@ class ControlJobRepository(Protocol):
         result_digest: str | None,
         error_code: str | None,
         now: datetime,
+        result_redacted: dict | None = None,
+        result_schema_version: str | None = None,
+        result_source: str | None = None,
     ) -> ControlJobRecord | None: ...
     async def list_for_endpoint(self, endpoint_id: str, *, limit: int = 20) -> list[ControlJobRecord]: ...
     async def expire_stale_leases(self, *, now: datetime) -> int: ...
+    async def list_pending_reconcile(self) -> list[ControlJobRecord]: ...
 
 
 class SecretScopeRepository(Protocol):
@@ -420,6 +455,23 @@ class RolloutTargetJobRepository(Protocol):
 
 
 @dataclass
+class EndpointFactSampleRecord:
+    endpoint_id: str
+    payload_json: dict[str, Any]
+    source: str = "observer"
+    captured_at: datetime | None = None
+    id: int | None = None
+
+
+class EndpointFactSampleRepository(Protocol):
+    async def append(self, record: EndpointFactSampleRecord) -> EndpointFactSampleRecord: ...
+    async def list_since(self, endpoint_id: str, *, since: datetime) -> list[EndpointFactSampleRecord]: ...
+    async def list_window(
+        self, endpoint_id: str, *, since: datetime, until: datetime
+    ) -> list[EndpointFactSampleRecord]: ...
+
+
+@dataclass
 class RepositoryBundle:
     endpoints: EndpointRepository
     bindings: BindingRepository
@@ -439,5 +491,6 @@ class RepositoryBundle:
     endpoint_observations: EndpointObservationRepository
     control_plane_incidents: ControlPlaneIncidentRepository
     rollout_target_jobs: RolloutTargetJobRepository
+    endpoint_fact_samples: EndpointFactSampleRepository
     # Lab/test only ephemeral cache — production must not rely on this.
     extras: dict[str, Any] = field(default_factory=dict)

@@ -13,6 +13,8 @@ from schemas.rollout import (
     RolloutResponse,
 )
 from services.idempotency_helper import get_cached_response, request_digest, store_response
+from services.job_service import JobService
+from services.ring0_service import Ring0Orchestrator
 
 # v2.3.1 rollout states
 ROLLOUT_STATES = frozenset(
@@ -95,8 +97,20 @@ class RolloutService:
             raise SaltControlError(ErrorCode.NOT_FOUND, "rollout not found", status_code=404)
         return self._to_response(record)
 
+    def _ring0_aggregate(self, record: RolloutRecord) -> bool:
+        return bool(record.thresholds_json.get("ring0Aggregate") or record.snapshot_json)
+
+    def _ring0(self) -> Ring0Orchestrator:
+        return Ring0Orchestrator(self.repos, JobService(self.repos))
+
     async def approve(self, rollout_id: str, body: RolloutApprovalRequest, actor_id: str) -> RolloutResponse:
         record = await self._require(rollout_id)
+        if self._ring0_aggregate(record):
+            raise SaltControlError(
+                ErrorCode.CONFLICT,
+                "Ring 0 approvals must use /salt/v1/ring0/rollouts/{id}:approve",
+                status_code=409,
+            )
         if body.decision == "reject":
             record.state = "aborted"
             await self.repos.rollouts.update(record)
@@ -111,6 +125,9 @@ class RolloutService:
 
     async def advance(self, rollout_id: str, body: RolloutActionRequest, actor_id: str) -> RolloutResponse:
         record = await self._require(rollout_id)
+        if self._ring0_aggregate(record):
+            updated = await self._ring0().advance_batch(rollout_id, actor_id=actor_id)
+            return self._to_response(updated)
         if record.state not in {"approved", "created", "paused"}:
             raise SaltControlError(ErrorCode.CONFLICT, "rollout cannot advance", status_code=409)
         min_success = float(record.thresholds_json.get("minSuccessRate", 0.95))
@@ -133,6 +150,9 @@ class RolloutService:
 
     async def pause(self, rollout_id: str, body: RolloutActionRequest, actor_id: str) -> RolloutResponse:
         record = await self._require(rollout_id)
+        if self._ring0_aggregate(record):
+            updated = await self._ring0().pause(rollout_id, actor_id=actor_id, reason=body.reason)
+            return self._to_response(updated)
         record.state = "paused"
         await self.repos.rollouts.update(record)
         await self._audit(actor_id, "rollout.paused", record.id, body.request_id, {"reason": body.reason})
@@ -141,6 +161,11 @@ class RolloutService:
     async def resume(self, rollout_id: str, body: RolloutActionRequest, actor_id: str) -> RolloutResponse:
         """Manual resume after Master recovery — never auto-resume."""
         record = await self._require(rollout_id)
+        if self._ring0_aggregate(record):
+            updated = await self._ring0().resume(
+                rollout_id, actor_id=actor_id, reason=body.reason, gate_digest_submitted=None
+            )
+            return self._to_response(updated)
         if record.state != "paused":
             raise SaltControlError(ErrorCode.CONFLICT, "rollout is not paused", status_code=409)
         record.state = "running"
@@ -159,6 +184,10 @@ class RolloutService:
 
     async def rollback(self, rollout_id: str, body: RolloutActionRequest, actor_id: str) -> RolloutResponse:
         record = await self._require(rollout_id)
+        if self._ring0_aggregate(record):
+            await self._ring0().rollback_scope(rollout_id, scope="rollout", endpoint_id=None, actor_id=actor_id)
+            record = await self._require(rollout_id)
+            return self._to_response(record)
         record.state = "rolled_back"
         await self.repos.rollouts.update(record)
         await self._audit(actor_id, "rollout.rolled_back", record.id, body.request_id, {"reason": body.reason})

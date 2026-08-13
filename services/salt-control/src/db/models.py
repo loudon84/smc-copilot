@@ -186,6 +186,12 @@ class Rollout(Base):
     snapshot_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
     snapshot_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     batch_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    batch_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    batch_observation_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    final_observation_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    final_observation_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -197,6 +203,14 @@ class RolloutTarget(Base):
     rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False)
     state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    batch_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    state_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    observing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    observing_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
@@ -241,7 +255,13 @@ class ControlJob(Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     salt_jid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    expected_function: Mapped[str | None] = mapped_column(String(255), nullable=True)
     result_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    result_redacted: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    result_schema_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    result_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    result_captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reconcile_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -272,7 +292,7 @@ class SecretScope(Base):
 
 class RolloutApproval(Base):
     __tablename__ = "rollout_approvals"
-    __table_args__ = (UniqueConstraint("rollout_id", "role", "subject", name="uq_rollout_approval_actor"),)
+    __table_args__ = (UniqueConstraint("rollout_id", "stage", "role", name="uq_rollout_approval_stage_role"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -281,6 +301,10 @@ class RolloutApproval(Base):
     decision: Mapped[str] = mapped_column(String(32), nullable=False)
     snapshot_digest: Mapped[str] = mapped_column(String(128), nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, default="deploy")
+    role_source: Mapped[str] = mapped_column(String(64), nullable=False, default="oidc")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -320,7 +344,16 @@ class ControlPlaneIncident(Base):
 
 class RolloutTargetJob(Base):
     __tablename__ = "rollout_target_jobs"
-    __table_args__ = (UniqueConstraint("rollout_id", "endpoint_id", "batch_index", name="uq_rollout_target_batch"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "rollout_id",
+            "endpoint_id",
+            "batch_index",
+            "operation",
+            "attempt",
+            name="uq_rollout_target_batch_op_attempt",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -328,4 +361,32 @@ class RolloutTargetJob(Base):
     batch_index: Mapped[int] = mapped_column(Integer, nullable=False)
     job_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     state: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    operation: Mapped[str] = mapped_column(String(64), nullable=False, default="handover")
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    expected_function: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    result_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvidenceBundle(Base):
+    __tablename__ = "evidence_bundles"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    rollout_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    manifest_digest: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="not_proven")
+    signer: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    archive_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EndpointFactSample(Base):
+    __tablename__ = "endpoint_fact_samples"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    endpoint_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, default="observer")

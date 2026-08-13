@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from core.errors import ErrorCode, SaltControlError
 from db.repositories.interfaces import (
     ArtifactRecord,
     ArtifactRepository,
@@ -32,6 +33,7 @@ from db.repositories.interfaces import (
 from db.repositories.job_memory import InMemoryControlJobRepository, InMemorySecretScopeRepository
 from db.repositories.v24 import (
     InMemoryControlPlaneIncidentRepository,
+    InMemoryEndpointFactSampleRepository,
     InMemoryEndpointObservationRepository,
     InMemoryRolloutApprovalRepository,
     InMemoryRolloutObservationRepository,
@@ -179,12 +181,29 @@ class InMemoryRolloutRepository(RolloutRepository):
     async def get(self, rollout_id: str) -> RolloutRecord | None:
         return self._by_id.get(rollout_id)
 
-    async def update(self, record: RolloutRecord) -> RolloutRecord:
+    async def update(self, record: RolloutRecord, *, expected_version: int | None = None) -> RolloutRecord:
+        stored = self._by_id.get(record.id)
+        if stored is None:
+            raise KeyError(record.id)
+        current = stored.state_version
+        if expected_version is not None and current != expected_version:
+            raise SaltControlError(ErrorCode.CONFLICT, "state_version conflict", status_code=409)
+        record.state_version = current + 1
         self._by_id[record.id] = record
         return record
 
     async def add_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord:
         self._targets.setdefault(target.rollout_id, []).append(target)
+        return target
+
+    async def update_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord:
+        bucket = self._targets.setdefault(target.rollout_id, [])
+        for idx, existing in enumerate(bucket):
+            if existing.endpoint_id == target.endpoint_id:
+                target.state_version = existing.state_version + 1
+                bucket[idx] = target
+                return target
+        bucket.append(target)
         return target
 
     async def list_targets(self, rollout_id: str) -> list[RolloutTargetRecord]:
@@ -194,7 +213,18 @@ class InMemoryRolloutRepository(RolloutRepository):
         return [
             r
             for r in self._by_id.values()
-            if r.state in {"running", "advancing", "approved", "waiting_approval", "paused"}
+            if r.state
+            in {
+                "running",
+                "advancing",
+                "approved",
+                "waiting_approval",
+                "paused",
+                "batch_running",
+                "batch_observing",
+                "final_observing",
+                "awaiting_signoff",
+            }
         ]
 
 
@@ -306,6 +336,7 @@ def build_in_memory_repos() -> RepositoryBundle:
         endpoint_observations=InMemoryEndpointObservationRepository(),
         control_plane_incidents=InMemoryControlPlaneIncidentRepository(),
         rollout_target_jobs=InMemoryRolloutTargetJobRepository(),
+        endpoint_fact_samples=InMemoryEndpointFactSampleRepository(),
     )
 
 

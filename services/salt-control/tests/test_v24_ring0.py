@@ -9,10 +9,10 @@ from services.ring0_service import Ring0Orchestrator
 
 
 def test_invocation_mapping():
-    assert build_invocation("configure").function == "smc_hermes.apply_config"
-    assert build_invocation("start").function == "smc_hermes.gateway_restart"
-    assert build_invocation("stop").kwarg.get("action") == "stop"
+    assert build_invocation("start").function == "smc_hermes.gateway_start"
+    assert build_invocation("stop").function == "smc_hermes.gateway_stop"
     assert build_invocation("restart").function == "smc_hermes.restart"
+    assert build_invocation("configure").function == "smc_hermes.apply_config"
     assert build_invocation("handover").function == "smc_handover.migrate"
     assert build_invocation("remigrate").function == "smc_handover.remigrate"
     assert build_invocation("rollback").function == "smc_handover.rollback"
@@ -66,13 +66,18 @@ async def test_ring0_triple_approval_and_batches(client, settings, repos):
         ("security_owner", "carol"),
     ]
     for role, subject in subjects:
-        token = mint_lab_jwt(subject=subject, scopes=[Scope.ROLLOUT_ADMIN], settings=settings)
+        token = mint_lab_jwt(
+            subject=subject,
+            scopes=[Scope.ROLLOUT_ADMIN],
+            settings=settings,
+            extra={"salt_roles": [role]},
+        )
         resp = client.post(
             f"/salt/v1/ring0/rollouts/{rid}:approve",
             headers={"Authorization": f"Bearer {token}"},
-            json={"role": role, "decision": "approve"},
+            json={"decision": "approve"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 200, resp.text
     assert resp.json()["state"] == "approved"
 
     started = client.post(
@@ -82,11 +87,20 @@ async def test_ring0_triple_approval_and_batches(client, settings, repos):
     assert started.status_code == 200
     assert len(started.json()["jobIds"]) == 1
 
+    for job_id in started.json()["jobIds"]:
+        job = await repos.control_jobs.get(job_id)
+        assert job is not None
+        job.status = "succeeded"
+        await repos.control_jobs.update(job)
+    for target in await repos.rollouts.list_targets(rid):
+        if target.endpoint_id == "ep_1":
+            target.state = "observing_passed"
+
     advanced = client.post(
         f"/salt/v1/ring0/rollouts/{rid}:advance-batch",
         headers={"Authorization": f"Bearer {operator_token(settings)}"},
     )
-    assert advanced.status_code == 200
+    assert advanced.status_code == 200, advanced.text
 
 
 @pytest.mark.asyncio
@@ -108,6 +122,7 @@ async def test_returner_updates_control_job(repos):
             requested_by="ops",
             claim_token="tok",
             salt_jid="jid-ret-1",
+            expected_function="smc_hermes.health",
             accepted_at=datetime.now(UTC),
         )
     )

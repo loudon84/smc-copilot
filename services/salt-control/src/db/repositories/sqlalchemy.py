@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.errors import ErrorCode, SaltControlError
 from db import models
 from db.repositories.interfaces import (
     ArtifactRecord,
@@ -36,6 +37,7 @@ from db.repositories.interfaces import (
 from db.repositories.job_sqlalchemy import SqlAlchemyControlJobRepository, SqlAlchemySecretScopeRepository
 from db.repositories.v24 import (
     SqlAlchemyControlPlaneIncidentRepository,
+    SqlAlchemyEndpointFactSampleRepository,
     SqlAlchemyEndpointObservationRepository,
     SqlAlchemyRolloutApprovalRepository,
     SqlAlchemyRolloutObservationRepository,
@@ -409,6 +411,12 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
             snapshot_digest=record.snapshot_digest,
             snapshot_json=record.snapshot_json,
             batch_index=record.batch_index,
+            state_version=record.state_version,
+            batch_started_at=record.batch_started_at,
+            batch_observation_due_at=record.batch_observation_due_at,
+            final_observation_started_at=record.final_observation_started_at,
+            final_observation_due_at=record.final_observation_due_at,
+            completed_at=record.completed_at,
             created_at=record.created_at,
         )
         self._session.add(row)
@@ -419,24 +427,41 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
         row = await self._session.get(models.Rollout, rollout_id)
         return _rollout(row) if row else None
 
-    async def update(self, record: RolloutRecord) -> RolloutRecord:
+    async def update(self, record: RolloutRecord, *, expected_version: int | None = None) -> RolloutRecord:
         row = await self._session.get(models.Rollout, record.id)
         if row is None:
             raise KeyError(record.id)
-        row.state = record.state
-        row.thresholds_json = record.thresholds_json
-        row.observation_started_at = record.observation_started_at
-        row.target_count = record.target_count
-        row.completed_count = record.completed_count
-        row.success_rate = record.success_rate
-        row.failure_rate = record.failure_rate
-        row.rollback_rate = record.rollback_rate
-        row.p0_count = record.p0_count
-        row.p1_count = record.p1_count
-        row.snapshot_digest = record.snapshot_digest
-        row.snapshot_json = record.snapshot_json
-        row.batch_index = record.batch_index
-        await self._session.flush()
+        current = int(row.state_version or 0)
+        if expected_version is not None and current != expected_version:
+            raise SaltControlError(ErrorCode.CONFLICT, "state_version conflict", status_code=409)
+        result = await self._session.execute(
+            update(models.Rollout)
+            .where(models.Rollout.id == record.id, models.Rollout.state_version == current)
+            .values(
+                state=record.state,
+                thresholds_json=record.thresholds_json,
+                observation_started_at=record.observation_started_at,
+                target_count=record.target_count,
+                completed_count=record.completed_count,
+                success_rate=record.success_rate,
+                failure_rate=record.failure_rate,
+                rollback_rate=record.rollback_rate,
+                p0_count=record.p0_count,
+                p1_count=record.p1_count,
+                snapshot_digest=record.snapshot_digest,
+                snapshot_json=record.snapshot_json,
+                batch_index=record.batch_index,
+                batch_started_at=record.batch_started_at,
+                batch_observation_due_at=record.batch_observation_due_at,
+                final_observation_started_at=record.final_observation_started_at,
+                final_observation_due_at=record.final_observation_due_at,
+                completed_at=record.completed_at,
+                state_version=current + 1,
+            )
+        )
+        if int(result.rowcount or 0) == 0:  # type: ignore[attr-defined]
+            raise SaltControlError(ErrorCode.CONFLICT, "state_version conflict", status_code=409)
+        record.state_version = current + 1
         return record
 
     async def add_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord:
@@ -446,9 +471,42 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
             state=target.state,
             attempt_count=target.attempt_count,
             last_error=target.last_error,
+            batch_index=target.batch_index,
+            state_version=target.state_version,
+            source_job_id=target.source_job_id,
+            reason_code=target.reason_code,
+            observed_at=target.observed_at,
+            state_changed_at=target.state_changed_at,
+            observing_started_at=target.observing_started_at,
+            observing_due_at=target.observing_due_at,
         )
         self._session.add(row)
         await self._session.flush()
+        return target
+
+    async def update_target(self, target: RolloutTargetRecord) -> RolloutTargetRecord:
+        result = await self._session.execute(
+            select(models.RolloutTarget).where(
+                models.RolloutTarget.rollout_id == target.rollout_id,
+                models.RolloutTarget.endpoint_id == target.endpoint_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return await self.add_target(target)
+        row.state = target.state
+        row.attempt_count = target.attempt_count
+        row.last_error = target.last_error
+        row.batch_index = target.batch_index
+        row.state_version = int(row.state_version or 0) + 1
+        row.source_job_id = target.source_job_id
+        row.reason_code = target.reason_code
+        row.observed_at = target.observed_at
+        row.state_changed_at = target.state_changed_at
+        row.observing_started_at = target.observing_started_at
+        row.observing_due_at = target.observing_due_at
+        await self._session.flush()
+        target.state_version = row.state_version
         return target
 
     async def list_targets(self, rollout_id: str) -> list[RolloutTargetRecord]:
@@ -462,6 +520,14 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
                 state=r.state,
                 attempt_count=r.attempt_count,
                 last_error=r.last_error,
+                batch_index=r.batch_index,
+                state_version=r.state_version,
+                source_job_id=r.source_job_id,
+                reason_code=r.reason_code,
+                observed_at=_dt(r.observed_at),
+                state_changed_at=_dt(getattr(r, "state_changed_at", None)),
+                observing_started_at=_dt(getattr(r, "observing_started_at", None)),
+                observing_due_at=_dt(getattr(r, "observing_due_at", None)),
             )
             for r in result.scalars().all()
         ]
@@ -469,7 +535,19 @@ class SqlAlchemyRolloutRepository(RolloutRepository):
     async def list_active(self) -> list[RolloutRecord]:
         result = await self._session.execute(
             select(models.Rollout).where(
-                models.Rollout.state.in_(("running", "advancing", "approved", "waiting_approval", "paused"))
+                models.Rollout.state.in_(
+                    (
+                        "running",
+                        "advancing",
+                        "approved",
+                        "waiting_approval",
+                        "paused",
+                        "batch_running",
+                        "batch_observing",
+                        "final_observing",
+                        "awaiting_signoff",
+                    )
+                )
             )
         )
         return [_rollout(r) for r in result.scalars().all()]
@@ -684,6 +762,7 @@ def build_sqlalchemy_repos(session: AsyncSession) -> RepositoryBundle:
         endpoint_observations=SqlAlchemyEndpointObservationRepository(session),
         control_plane_incidents=SqlAlchemyControlPlaneIncidentRepository(session),
         rollout_target_jobs=SqlAlchemyRolloutTargetJobRepository(session),
+        endpoint_fact_samples=SqlAlchemyEndpointFactSampleRepository(session),
         extras={},
     )
 
@@ -739,6 +818,12 @@ def _rollout(row: models.Rollout) -> RolloutRecord:
         snapshot_digest=row.snapshot_digest,
         snapshot_json=list(row.snapshot_json or []) if row.snapshot_json else None,
         batch_index=row.batch_index,
+        state_version=int(getattr(row, "state_version", 0) or 0),
+        batch_started_at=_dt(getattr(row, "batch_started_at", None)),
+        batch_observation_due_at=_dt(getattr(row, "batch_observation_due_at", None)),
+        final_observation_started_at=_dt(getattr(row, "final_observation_started_at", None)),
+        final_observation_due_at=_dt(getattr(row, "final_observation_due_at", None)),
+        completed_at=_dt(getattr(row, "completed_at", None)),
         created_at=_dt(row.created_at),
     )
 

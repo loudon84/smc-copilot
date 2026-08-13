@@ -12,7 +12,7 @@ async def test_rollout_create(client, settings):
         json={
             "component": "hermes",
             "version": "0.21.0",
-            "ring": "ring0",
+            "ring": "lab",
             "requestId": "req-ro-1",
             "thresholds": {"minSuccessRate": 0.95},
             "reason": "canary",
@@ -39,7 +39,7 @@ async def test_rollout_approve_resume_abort(client, settings):
         json={
             "component": "hermes",
             "version": "0.22.0",
-            "ring": "ring0",
+            "ring": "lab",
             "requestId": "req-ro-approve",
             "thresholds": {"minSuccessRate": 0.95, "approvalRequired": True},
             "reason": "canary",
@@ -92,7 +92,7 @@ async def test_rollout_pause_on_gate_fail(client, settings, repos):
         json={
             "component": "hermes",
             "version": "0.21.1",
-            "ring": "ring0",
+            "ring": "lab",
             "requestId": "req-ro-gate",
             "thresholds": {"minSuccessRate": 0.99},
             "reason": "canary",
