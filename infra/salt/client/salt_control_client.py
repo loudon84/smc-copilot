@@ -126,7 +126,7 @@ class SaltControlClient:
             headers=headers,
             json={
                 "endpointId": endpoint_id,
-                "fingerprint": fingerprint,
+                "minionFingerprint": fingerprint,
                 "requestId": rid,
             },
         )

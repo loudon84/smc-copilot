@@ -48,6 +48,12 @@ def test_report_fingerprint_and_get_status() -> None:
         calls.append(f"{request.method} {request.url.path}")
         if request.url.path.endswith("/fingerprint"):
             assert request.headers.get("Authorization", "").startswith("Device ")
+            body = json.loads(request.content.decode())
+            assert body == {
+                "endpointId": "ep_1",
+                "minionFingerprint": "aa:bb",
+                "requestId": body["requestId"],
+            }
             return httpx.Response(200, json={"state": "pending"})
         if request.url.path.endswith("/enr_1"):
             return httpx.Response(200, json={"enrollmentId": "enr_1", "state": "accepted"})

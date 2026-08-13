@@ -83,7 +83,13 @@ catch {
 }
 
 if ($StartService) {
-    Start-Service -Name "salt-minion" -ErrorAction SilentlyContinue
+    $service = Get-Service -Name "salt-minion" -ErrorAction Stop
+    if ($service.Status -eq "Running") {
+        Restart-Service -Name "salt-minion" -Force -ErrorAction Stop
+    }
+    else {
+        Start-Service -Name "salt-minion" -ErrorAction Stop
+    }
 }
 
 @{

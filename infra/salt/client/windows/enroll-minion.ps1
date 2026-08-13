@@ -20,14 +20,12 @@ $ErrorActionPreference = "Stop"
 $pub = Join-Path $MinionKeyDir "minion.pub"
 $fingerprint = $null
 if (Test-Path -LiteralPath $pub) {
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = [System.IO.File]::ReadAllBytes($pub)
-        $hash = ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join ""
-        $fingerprint = ($hash -replace ".{2}", "$0:").TrimEnd(":")
-    } finally {
-        $sha.Dispose()
+    $serviceExe = (Get-CimInstance Win32_Service -Filter "Name='salt-minion'").PathName.Trim('"')
+    $python = Join-Path (Split-Path -Parent $serviceExe) "Scripts\python.exe"
+    if (-not (Test-Path -LiteralPath $python)) {
+        $python = Join-Path (Split-Path -Parent (Get-Command salt-call.exe -ErrorAction Stop).Source) "Scripts\python.exe"
     }
+    $fingerprint = (& $python -c "import salt.utils.crypt; print(salt.utils.crypt.pem_finger(r'$pub'))").Trim()
 }
 
 if ($DryRun) {
@@ -65,7 +63,6 @@ from client.device_credential import DeviceCredentialStore
 
 store = DeviceCredentialStore(
     Path(r'$env:ProgramData') / 'SMC' / 'credentials' / 'device.dat',
-    force_file_backend=True,
 )
 client = SaltControlClient(r'$SaltControlUrl', credential_store=store)
 reported = client.report_fingerprint(

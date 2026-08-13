@@ -57,18 +57,24 @@ $deviceCredential = $null
 if ($SaltControlUrl) {
     # Live: Salt Control issues endpointId 鈥?forbid local token-hash derivation.
     $py = @"
-import json, platform, hashlib, uuid, os, sys
+import json, platform, hashlib, uuid, os, sys, winreg
 from pathlib import Path
 sys.path.insert(0, r'$(Split-Path -Parent (Split-Path -Parent $here))')
 from client.salt_control_client import SaltControlClient, DeviceInfo
 from client.device_credential import DeviceCredentialStore
 from client.enrollment import assert_endpoint_id_not_token_hash
 
-guid = os.environ.get('COMPUTERNAME', 'unknown')
+with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Cryptography') as key:
+    guid = str(winreg.QueryValueEx(key, 'MachineGuid')[0])
 mgh = hashlib.sha256(guid.encode()).hexdigest()
-store = DeviceCredentialStore(Path(r'$smcRoot') / 'credentials' / 'device.dat', force_file_backend=True)
+store = DeviceCredentialStore(Path(r'$smcRoot') / 'credentials' / 'device.dat')
 client = SaltControlClient(r'$SaltControlUrl', credential_store=store)
-device = DeviceInfo(hostname=platform.node() or guid, machine_guid_hash=mgh, windows_build=0, arch=platform.machine() or 'AMD64')
+device = DeviceInfo(
+    hostname=platform.node() or os.environ.get('COMPUTERNAME', 'unknown'),
+    machine_guid_hash=mgh,
+    windows_build=sys.getwindowsversion().build,
+    arch=platform.machine() or 'AMD64',
+)
 result = client.create_enrollment(r'$EnrollmentToken', device)
 assert_endpoint_id_not_token_hash(result.endpoint_id, r'$EnrollmentToken')
 print(json.dumps({
