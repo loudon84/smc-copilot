@@ -1,0 +1,9 @@
+{
+  "schema": "smc.salt-evidence.v241.target-snapshot.v1",
+  "status": "not_proven",
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "snapshotDigest": null,
+  "targets": []
+}

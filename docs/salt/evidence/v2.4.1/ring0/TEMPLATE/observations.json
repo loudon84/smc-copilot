@@ -1,0 +1,9 @@
+{
+  "schema": "smc.salt-evidence.v241.observations.v1",
+  "status": "not_proven",
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "windows": ["15m", "1h", "6h", "24h", "7d"],
+  "samples": []
+}

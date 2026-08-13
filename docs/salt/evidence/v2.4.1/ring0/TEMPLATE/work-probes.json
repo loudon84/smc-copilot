@@ -1,0 +1,8 @@
+{
+  "schema": "smc.salt-evidence.v241.work-probes.v1",
+  "status": "not_proven",
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "probes": []
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "smc.salt-evidence.v241.final.v1",
+  "version": "v2.4.1",
+  "decision": "NO-GO",
+  "status": "not_proven",
+  "manualGate": true,
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "master": "192.168.102.104",
+  "secondMaster": false,
+  "signatures": {
+    "release_owner": null,
+    "platform_owner": null,
+    "security_owner": null
+  },
+  "blockedReason": "Live Ring 0 Manual Gates not attested. Cursor/CI must not set proven."
+}

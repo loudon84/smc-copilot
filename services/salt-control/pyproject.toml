@@ -41,6 +41,9 @@ dev-mode-dirs = ["src"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
+markers = [
+  "integration: requires live PostgreSQL (DATABASE_URL)",
+]
 
 [tool.ruff]
 line-length = 120

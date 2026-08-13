@@ -1,0 +1,9 @@
+{
+  "schema": "smc.salt-evidence.v241.batches.v1",
+  "status": "not_proven",
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "sizes": [1, 2, 2],
+  "batches": []
+}

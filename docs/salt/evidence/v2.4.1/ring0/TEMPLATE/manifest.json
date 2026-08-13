@@ -1,0 +1,12 @@
+{
+  "schema": "smc.salt-evidence.v241.manifest.v1",
+  "status": "not_proven",
+  "source": "template",
+  "generatorVersion": "v2.4.1",
+  "gitCommit": null,
+  "snapshotDigest": null,
+  "releaseId": null,
+  "configRevision": null,
+  "files": [],
+  "notes": "Generator fills SHA-256 per file. proven requires authorized signer."
+}

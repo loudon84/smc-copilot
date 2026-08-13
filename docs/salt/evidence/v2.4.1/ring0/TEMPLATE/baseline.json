@@ -1,0 +1,11 @@
+{
+  "schema": "smc.salt-evidence.v241.baseline.v1",
+  "status": "not_proven",
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "master": "192.168.102.104",
+  "secondMaster": false,
+  "gitCommit": null,
+  "notes": "Live baseline captured by operators. Template only."
+}

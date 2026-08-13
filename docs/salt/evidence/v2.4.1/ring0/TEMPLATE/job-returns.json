@@ -1,0 +1,8 @@
+{
+  "schema": "smc.salt-evidence.v241.job-returns.v1",
+  "status": "not_proven",
+  "source": "template",
+  "capturedAt": null,
+  "digest": null,
+  "returns": []
+}
