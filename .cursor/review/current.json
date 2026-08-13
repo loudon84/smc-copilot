@@ -1,0 +1,28 @@
+{
+  "work_item_id": "salt-v2.2-production-rollout",
+  "plan": ".cursor/plans/salt_v2.2_production_rollout.plan.md",
+  "review_model": "kimi-k3[reasoning=high]",
+  "reviewed_tree": "367030ee045214a1dc38e7598bcb38bcd69b289b",
+  "verdict": "BLOCK",
+  "findings": [
+    {
+      "severity": "BLOCKER",
+      "title": "staged changeset empty",
+      "detail": "git diff --cached is empty (0 staged files). review-staged only reviews staged changes; nothing is deliverable for v2.2 DoD acceptance."
+    },
+    {
+      "severity": "HIGH",
+      "title": "tests not run against staged tree",
+      "detail": "Lint/typecheck/unit tests were not executed against a staged delivery tree because the index has no staged v2.2 changes."
+    }
+  ],
+  "test_results": {
+    "lint": "skipped",
+    "typecheck": "skipped",
+    "unit": "skipped",
+    "integration": "skipped",
+    "note": "Skipped: empty staged set; working-tree verification is out of review-staged scope."
+  },
+  "reviewed_at": "2026-08-12T16:13:18+08:00",
+  "reviewer_agent": "2da4955f-91bf-47d2-938c-06c2e793e205"
+}
