@@ -9,6 +9,7 @@ from core.logging import safe_log_fields
 from db.repositories.interfaces import (
     AuditEventRecord,
     ControlPlaneIncidentRecord,
+    EndpointFactSampleRecord,
     EndpointObservationRecord,
     RepositoryBundle,
     RolloutObservationRecord,
@@ -127,6 +128,7 @@ class ControlPlaneObserver:
             await self._pause_rollouts(repos, now, reason="open_p0_p1")
 
         reclaimed = await repos.control_jobs.expire_stale_leases(now=now)
+        await self._collect_endpoint_facts(repos, now, master_ok)
         snapshot = {
             "at": now.isoformat(),
             "masterAvailable": master_ok,
@@ -139,9 +141,11 @@ class ControlPlaneObserver:
             last = self._window_last_write.get(window)
             period = WINDOW_SECONDS[window]
             if last is None or (now - last).total_seconds() >= min(period, self.interval_seconds):
-                self.windows[window] = snapshot
+                aggregated = await self._aggregate_window(repos, now, window)
+                payload = {**snapshot, **aggregated}
+                self.windows[window] = payload
                 self._window_last_write[window] = now
-                await self._persist_windows(repos, now, window, snapshot)
+                await self._persist_windows(repos, now, window, payload)
 
     async def _persist_windows(
         self, repos: RepositoryBundle, now: datetime, window: str, snapshot: dict[str, Any]
@@ -157,6 +161,29 @@ class ControlPlaneObserver:
                 )
             )
             for target in await repos.rollouts.list_targets(rollout.id):
+                facts = await repos.endpoint_fact_samples.list_since(
+                    target.endpoint_id, since=now - timedelta(seconds=WINDOW_SECONDS[window])
+                )
+                latest_fact = facts[-1].payload_json if facts else {}
+                gap = False
+                if facts:
+                    times = sorted(f.captured_at for f in facts if f.captured_at is not None)
+                    for prev, nxt in zip(times, times[1:], strict=False):
+                        if (nxt - prev).total_seconds() > 300:
+                            gap = True
+                            break
+                if gap:
+                    await repos.control_plane_incidents.create(
+                        ControlPlaneIncidentRecord(
+                            id=f"inc_{secrets.token_urlsafe(8)}",
+                            severity="P1",
+                            code="OBSERVATION_GAP",
+                            message="observation gap exceeds 5 minutes",
+                            rollout_id=rollout.id,
+                            endpoint_id=target.endpoint_id,
+                            metadata_redacted=safe_log_fields(window=window),
+                        )
+                    )
                 await repos.endpoint_observations.append(
                     EndpointObservationRecord(
                         endpoint_id=target.endpoint_id,
@@ -165,12 +192,92 @@ class ControlPlaneObserver:
                             **snapshot,
                             "rolloutId": rollout.id,
                             "targetState": target.state,
-                            "gatewayHealth": "unknown",
-                            "owner": "salt" if target.state in {"completed", "succeeded"} else "pending",
+                            "gatewayHealth": latest_fact.get("gatewayHealth", "unknown"),
+                            "owner": latest_fact.get("owner"),
+                            "workProbeOk": latest_fact.get("workProbeOk"),
+                            "factSource": latest_fact.get("source", "observer"),
+                            "lastObservedAt": (
+                                facts[-1].captured_at.isoformat() if facts and facts[-1].captured_at else None
+                            ),
+                            "sampleCount": len(facts),
+                            "gap": gap,
                         },
                         captured_at=now,
                     )
                 )
+
+    async def _collect_endpoint_facts(self, repos: RepositoryBundle, now: datetime, master_ok: bool) -> None:
+        seen: set[str] = set()
+        for rollout in await repos.rollouts.list_active():
+            for target in await repos.rollouts.list_targets(rollout.id):
+                if target.endpoint_id in seen:
+                    continue
+                seen.add(target.endpoint_id)
+                endpoint = await repos.endpoints.get(target.endpoint_id)
+                jobs = await repos.control_jobs.list_for_endpoint(target.endpoint_id, limit=1)
+                last_job = jobs[0] if jobs else None
+                gateway_health = "unknown"
+                owner = None
+                work_ok = None
+                # Never infer owner/gateway from target.state — only stored facts + live probes.
+                ping_ok = None
+                if self.masters:
+                    primary = self.masters[0]
+                    ping = getattr(primary, "ping", None)
+                    if ping is not None:
+                        try:
+                            ping_ok = bool(await ping(target.endpoint_id))
+                        except Exception:
+                            ping_ok = False
+                payload = {
+                    "source": "observer",
+                    "masterAvailable": master_ok,
+                    "minionHeartbeatAt": endpoint.last_seen_at.isoformat()
+                    if endpoint and endpoint.last_seen_at
+                    else None,
+                    "keyAccepted": ping_ok,
+                    "gatewayHealth": gateway_health,
+                    "owner": owner,
+                    "workProbeOk": work_ok,
+                    "jobStatus": last_job.status if last_job else None,
+                    "jobId": last_job.id if last_job else None,
+                    "capturedAt": now.isoformat(),
+                }
+                await repos.endpoint_fact_samples.append(
+                    EndpointFactSampleRecord(
+                        endpoint_id=target.endpoint_id,
+                        payload_json=payload,
+                        source="observer",
+                        captured_at=now,
+                    )
+                )
+                if gateway_health in {"failed", "unhealthy"} or work_ok is False:
+                    await self._pause_rollouts(repos, now, reason="endpoint_probe_failed")
+                    await repos.control_plane_incidents.create(
+                        ControlPlaneIncidentRecord(
+                            id=f"inc_{secrets.token_urlsafe(8)}",
+                            severity="P0",
+                            code="ENDPOINT_PROBE_FAILED",
+                            message="gateway or work critical probe failed",
+                            rollout_id=rollout.id,
+                            endpoint_id=target.endpoint_id,
+                            metadata_redacted=safe_log_fields(gatewayHealth=gateway_health),
+                        )
+                    )
+
+    async def _aggregate_window(self, repos: RepositoryBundle, now: datetime, window: str) -> dict[str, Any]:
+        since = now - timedelta(seconds=WINDOW_SECONDS[window])
+        sample_count = 0
+        gaps = 0
+        for rollout in await repos.rollouts.list_active():
+            for target in await repos.rollouts.list_targets(rollout.id):
+                facts = await repos.endpoint_fact_samples.list_window(target.endpoint_id, since=since, until=now)
+                sample_count += len(facts)
+                times = sorted(f.captured_at for f in facts if f.captured_at is not None)
+                for prev, nxt in zip(times, times[1:], strict=False):
+                    if (nxt - prev).total_seconds() > 300:
+                        gaps += 1
+        return {"window": window, "sampleCount": sample_count, "gapCount": gaps, "since": since.isoformat()}
 
     async def _check_masters(self) -> bool:
         if not self.masters:
@@ -189,7 +296,15 @@ class ControlPlaneObserver:
         paused = 0
         known = await repos.rollouts.list_active()
         for record in known:
-            if record.state in {"running", "advancing", "approved"}:
+            if record.state in {
+                "running",
+                "advancing",
+                "approved",
+                "batch_running",
+                "batch_observing",
+                "final_observing",
+            }:
+                record.thresholds_json["pausedFrom"] = record.state
                 record.state = "paused"
                 await repos.rollouts.update(record)
                 paused += 1

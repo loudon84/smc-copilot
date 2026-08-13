@@ -8,6 +8,7 @@ from core.errors import ErrorCode, SaltControlError
 from core.logging import safe_log_fields
 from db.repositories.interfaces import AuditEventRecord, ControlJobRecord, RepositoryBundle
 from schemas.job import EndpointStatusResponse, JobCreateRequest, JobResponse
+from services.invocation import build_invocation
 from services.job_payload_codec import payload_from_create
 
 ALLOWED_OPERATIONS = frozenset(
@@ -69,6 +70,7 @@ class JobService:
             requested_by=body.requested_by,
             correlation_id=body.correlation_id,
             payload_json=payload_from_create(body),
+            expected_function=build_invocation(body.operation, body.payload).function if body.operation else None,
             accepted_at=datetime.now(UTC),
         )
         created = await self.repos.control_jobs.create(record)
@@ -193,9 +195,20 @@ class JobService:
 
         obs = await self.repos.endpoint_observations.latest(endpoint_id, window="15m")
         gateway_health = None
+        last_observed_at = None
+        fact_source = None
         if obs is not None:
             gateway_health = str(obs.payload_json.get("gatewayHealth") or obs.payload_json.get("gateway_health") or "")
             owner = obs.payload_json.get("owner") or owner
+            last_observed_at = obs.payload_json.get("lastObservedAt")
+            fact_source = obs.payload_json.get("factSource")
+        facts = await self.repos.endpoint_fact_samples.list_since(endpoint_id, since=datetime(1970, 1, 1, tzinfo=UTC))
+        if facts:
+            latest_fact = max(facts, key=lambda f: f.captured_at or datetime.min.replace(tzinfo=UTC))
+            last_observed_at = latest_fact.captured_at.isoformat() if latest_fact.captured_at else last_observed_at
+            fact_source = latest_fact.source
+            owner = latest_fact.payload_json.get("owner") or owner
+            gateway_health = latest_fact.payload_json.get("gatewayHealth") or gateway_health
 
         if owner is None:
             binding = await self.repos.bindings.get_active(endpoint_id)
@@ -217,6 +230,8 @@ class JobService:
             migration_phase=migration_phase,
             target_state=target_state,
             last_error=last_error,
+            last_observed_at=last_observed_at,
+            fact_source=fact_source,
         )
 
 
