@@ -96,6 +96,23 @@ def test_gateway_lifecycle_invocation_contract():
 
 @pytest.mark.asyncio
 async def test_approval_role_cannot_be_self_reported(client, settings, repos):
+    from datetime import UTC, datetime
+
+    from db.repositories.interfaces import BindingRecord
+
+    for i in range(1, 6):
+        await repos.bindings.upsert(
+            BindingRecord(
+                endpoint_id=f"ep_{i}",
+                user_id=f"u{i}",
+                windows_account=rf"DOMAIN\user{i}",
+                windows_sid=f"S-1-5-21-{i}",
+                profile_dir=rf"C:\Users\user{i}",
+                active=True,
+                revision=f"b{i}",
+                bound_at=datetime.now(UTC),
+            )
+        )
     targets = [{"endpointId": f"ep_{i}", "minionId": f"ep_{i}"} for i in range(1, 6)]
     create = client.post(
         "/salt/v1/ring0/rollouts",

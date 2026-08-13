@@ -124,7 +124,12 @@ def build_production_state(settings: Settings | None = None) -> AppState:
     idempotency = IdempotencyStore()
     # Workers use session_factory — no long-lived business Session ownership.
     worker = EnrollmentOperationWorker(masters=masters, session_factory=session_factory)
-    job_worker = JobWorker(masters=masters, session_factory=session_factory)
+    job_worker = JobWorker(
+        masters=masters,
+        session_factory=session_factory,
+        artifact_store=artifact_store,
+        settings=cfg,
+    )
     observer = ControlPlaneObserver(masters=masters, session_factory=session_factory)
     result_reconciler = ResultReconciler(masters=masters, session_factory=session_factory)
     # Boot repos retained only for readiness probes / lab-compat service handles.
@@ -164,7 +169,12 @@ def _build_fake_state(cfg: Settings) -> AppState:
     secret_provider: SecretProvider = FakeSecretProvider()
     artifact_store: ArtifactStore = FakeArtifactStore()
     worker = EnrollmentOperationWorker(repos=repos, masters=masters)
-    job_worker = JobWorker(masters=masters, repos=repos)
+    job_worker = JobWorker(
+        masters=masters,
+        repos=repos,
+        artifact_store=artifact_store,
+        settings=cfg,
+    )
     observer = ControlPlaneObserver(masters=masters, repos=repos, interval_seconds=60.0)
     result_reconciler = ResultReconciler(masters=masters, repos=repos, interval_seconds=30.0)
     job_service = JobService(repos)

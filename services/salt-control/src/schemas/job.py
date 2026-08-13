@@ -7,6 +7,7 @@ from schemas.job_payload import JobPayload
 
 JobOperation = Literal[
     "install",
+    "upgrade",
     "configure",
     "start",
     "stop",

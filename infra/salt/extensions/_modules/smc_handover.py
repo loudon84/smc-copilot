@@ -20,11 +20,9 @@ def _utils() -> dict[str, Any]:
 
 def _call_util(key: str, *args: Any, **kwargs: Any) -> Any:
     utils = _utils()
-    if key in utils:
-        return utils[key](*args, **kwargs)
-    from _utils.dunder import call_util
-
-    return call_util(utils, key, *args, **kwargs)
+    if key not in utils:
+        raise RuntimeError("smc_utils_unavailable")
+    return utils[key](*args, **kwargs)
 
 
 def _owner_path() -> Path:
@@ -37,11 +35,9 @@ def _owner_path() -> Path:
 
 def _hooks():
     utils = _utils()
-    if "smc_handover_hooks.build_hooks" in utils:
-        return utils["smc_handover_hooks.build_hooks"]()
-    from _utils.smc_handover_hooks import build_hooks
-
-    return build_hooks()
+    if "smc_handover_hooks.build_hooks" not in utils:
+        raise RuntimeError("smc_utils_unavailable")
+    return utils["smc_handover_hooks.build_hooks"]()
 
 
 def read_owner() -> str | None:

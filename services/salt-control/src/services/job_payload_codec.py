@@ -26,7 +26,9 @@ def payload_from_create(body: JobCreateRequest) -> dict[str, Any]:
 def _default_payload_dict(body: JobCreateRequest) -> dict[str, Any]:
     op = body.operation
     if op == "install":
-        return InstallPayload(version=body.release_id).model_dump(mode="json", by_alias=True)
+        return InstallPayload(version=body.release_id, component="hermes").model_dump(mode="json", by_alias=True)
+    if op == "upgrade":
+        return UpgradePayload(version=body.release_id, component="hermes").model_dump(mode="json", by_alias=True)
     if op == "configure":
         return ConfigurePayload(config_revision=body.config_revision).model_dump(mode="json", by_alias=True)
     if op in {"start", "stop", "restart"}:

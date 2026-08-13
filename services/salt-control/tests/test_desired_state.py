@@ -130,3 +130,66 @@ async def test_desired_state_unavailable(client, seed_token, backend, settings):
     )
     assert resp.status_code == 503
     assert resp.json()["error"]["code"] == "desired_state_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_system_and_incomplete_binding_fail_closed(client, seed_token, backend, settings):
+    await seed_token("tok-sys")
+    enrolled = client.post(
+        "/salt/v1/enrollments",
+        json={
+            "enrollmentToken": "tok-sys",
+            "requestId": "req-sys",
+            "device": {
+                "hostname": "PC-SYS",
+                "machineGuidHash": "guid-sys",
+                "windowsBuild": 26100,
+                "arch": "AMD64",
+            },
+        },
+    ).json()
+    eid = enrolled["endpointId"]
+    backend.put_binding(
+        BackendUserBinding(
+            endpoint_id=eid,
+            user_id="u_sys",
+            windows_account="SYSTEM",
+            windows_sid="S-1-5-18",
+            profile_dir=r"C:\Windows\System32\config\systemprofile",
+            revision="bind_sys",
+        )
+    )
+    backend.put_desired(
+        BackendDesiredState(
+            endpoint_id=eid,
+            revision="rev_sys",
+            user_id="u_sys",
+            hermes_home=r"C:\h",
+            hermes_version="0.20.0",
+            artifact_ref="hermes/0.20.0",
+            ring="ring0",
+            desired_owner="salt",
+        )
+    )
+    resp = client.get(
+        f"/salt/v1/endpoints/{eid}/desired-state",
+        headers={"Authorization": f"Bearer {master_token(settings)}"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "validation_error"
+
+    backend.put_binding(
+        BackendUserBinding(
+            endpoint_id=eid,
+            user_id="u_empty",
+            windows_account=r"DOMAIN\alice",
+            windows_sid="",
+            profile_dir=r"C:\Users\alice",
+            revision="bind_empty",
+        )
+    )
+    resp = client.get(
+        f"/salt/v1/endpoints/{eid}/desired-state",
+        headers={"Authorization": f"Bearer {master_token(settings)}"},
+    )
+    assert resp.status_code == 400

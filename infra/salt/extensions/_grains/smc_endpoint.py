@@ -15,20 +15,16 @@ def _utils() -> dict[str, Any]:
 
 def _read_owner():
     utils = _utils()
-    if "smc_control_owner.read_control_owner" in utils:
-        return utils["smc_control_owner.read_control_owner"]()
-    from _utils.smc_control_owner import read_control_owner
-
-    return read_control_owner()
+    if "smc_control_owner.read_control_owner" not in utils:
+        return None
+    return utils["smc_control_owner.read_control_owner"]()
 
 
 def _layout(home: Path):
     utils = _utils()
-    if "smc_paths.layout" in utils:
-        return utils["smc_paths.layout"](str(home))
-    from _utils.smc_paths import layout
-
-    return layout(str(home))
+    if "smc_paths.layout" not in utils:
+        return None
+    return utils["smc_paths.layout"](str(home))
 
 
 def smc_endpoint() -> dict[str, Any]:

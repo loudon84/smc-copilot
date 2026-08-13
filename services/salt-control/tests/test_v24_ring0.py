@@ -4,18 +4,52 @@ import pytest
 from conftest import operator_token
 
 from core.auth import Scope, mint_lab_jwt
-from services.invocation import build_invocation
+from services.invocation import function_for_operation
 from services.ring0_service import Ring0Orchestrator
 
 
 def test_invocation_mapping():
-    assert build_invocation("start").function == "smc_hermes.gateway_start"
-    assert build_invocation("stop").function == "smc_hermes.gateway_stop"
-    assert build_invocation("restart").function == "smc_hermes.restart"
-    assert build_invocation("configure").function == "smc_hermes.apply_config"
-    assert build_invocation("handover").function == "smc_handover.migrate"
-    assert build_invocation("remigrate").function == "smc_handover.remigrate"
-    assert build_invocation("rollback").function == "smc_handover.rollback"
+    assert function_for_operation("start") == "smc_hermes.gateway_start"
+    assert function_for_operation("stop") == "smc_hermes.gateway_stop"
+    assert function_for_operation("restart") == "smc_hermes.restart"
+    assert function_for_operation("configure") == "smc_hermes.apply_config"
+    assert function_for_operation("upgrade") == "smc_hermes.upgrade"
+    assert function_for_operation("handover") == "smc_handover.migrate"
+    assert function_for_operation("remigrate") == "smc_handover.remigrate"
+    assert function_for_operation("rollback") == "smc_handover.rollback"
+
+
+@pytest.mark.asyncio
+async def test_ring0_rejects_system_and_mismatched_identity(repos):
+    from datetime import UTC, datetime
+
+    from db.repositories.interfaces import BindingRecord
+    from services.job_service import JobService
+    from services.ring0_service import Ring0Orchestrator
+
+    await repos.bindings.upsert(
+        BindingRecord(
+            endpoint_id="ep_1",
+            user_id="u1",
+            windows_account="SYSTEM",
+            windows_sid="S-1-5-18",
+            profile_dir=r"C:\Windows",
+            active=True,
+            revision="b1",
+            bound_at=datetime.now(UTC),
+        )
+    )
+    orch = Ring0Orchestrator(repos, JobService(repos))
+    with pytest.raises(Exception):
+        await orch.create_ring0(
+            component="hermes",
+            version="1",
+            targets=[{"endpoint_id": f"ep_{i}", "minion_id": f"ep_{i}"} for i in range(1, 6)],
+            actor_id="ops",
+            request_id="sys-bind",
+            release_id="rel",
+            config_revision="cfg",
+        )
 
 
 @pytest.mark.asyncio
@@ -35,8 +69,29 @@ async def test_ring0_requires_five_targets(repos):
         )
 
 
+async def _seed_ring0_bindings(repos) -> None:
+    from datetime import UTC, datetime
+
+    from db.repositories.interfaces import BindingRecord
+
+    for i in range(1, 6):
+        await repos.bindings.upsert(
+            BindingRecord(
+                endpoint_id=f"ep_{i}",
+                user_id=f"u{i}",
+                windows_account=rf"DOMAIN\user{i}",
+                windows_sid=f"S-1-5-21-{i}",
+                profile_dir=rf"C:\Users\user{i}",
+                active=True,
+                revision=f"b{i}",
+                bound_at=datetime.now(UTC),
+            )
+        )
+
+
 @pytest.mark.asyncio
 async def test_ring0_triple_approval_and_batches(client, settings, repos):
+    await _seed_ring0_bindings(repos)
     targets = [{"endpointId": f"ep_{i}", "minionId": f"ep_{i}", "bindingRevision": f"b{i}"} for i in range(1, 6)]
     create = client.post(
         "/salt/v1/ring0/rollouts",

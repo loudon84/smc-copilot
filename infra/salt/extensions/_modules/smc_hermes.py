@@ -19,6 +19,20 @@ __virtualname__ = "smc_hermes"
 
 SYSTEM_ACCOUNTS = frozenset({"system", "nt authority\\system", "nt authority/system", "localsystem"})
 
+REQUIRED_UTILS = (
+    "smc_paths.layout",
+    "smc_paths.detect_existing_home",
+    "smc_control_owner.read_control_owner",
+    "smc_control_owner.claim_salt_owner",
+    "smc_control_owner.assert_salt_may_manage",
+    "smc_artifact.install_signed",
+    "smc_artifact.activate_version",
+    "smc_redact.mapping",
+    "config_revision.apply_config",
+    "config_revision.rollback_config",
+    "config_revision.validate_config",
+)
+
 
 def __virtual__():
     return __virtualname__
@@ -32,13 +46,35 @@ def _salt() -> dict[str, Any]:
     return globals().get("__salt__") or {}
 
 
+def loader_status() -> dict[str, Any]:
+    """Read-only Salt 3008.2 loader probe. Never returns env/token/secret values."""
+    utils = _utils()
+    available = [key for key in REQUIRED_UTILS if key in utils]
+    missing = [key for key in REQUIRED_UTILS if key not in utils]
+    return {
+        "ok": not missing,
+        "required": list(REQUIRED_UTILS),
+        "available": available,
+        "missing": missing,
+        "error": None if not missing else "smc_utils_unavailable",
+    }
+
+
 def _call_util(key: str, *args: Any, **kwargs: Any) -> Any:
     utils = _utils()
-    if key in utils:
-        return utils[key](*args, **kwargs)
-    from _utils.dunder import call_util
+    if key not in utils:
+        raise RuntimeError("smc_utils_unavailable")
+    return utils[key](*args, **kwargs)
 
-    return call_util(utils, key, *args, **kwargs)
+
+def _unavailable(action: str) -> dict[str, Any]:
+    status = loader_status()
+    return {
+        "ok": False,
+        "error": "smc_utils_unavailable",
+        "action": action,
+        "missing": status["missing"],
+    }
 
 
 def _layout(hermes_home: str | None = None):
@@ -83,6 +119,9 @@ def version(hermes_home: str | None = None) -> dict[str, Any]:
 
 
 def inspect(hermes_home: str | None = None) -> dict[str, Any]:
+    status = loader_status()
+    if status["missing"]:
+        return _unavailable("inspect")
     layout = _layout(hermes_home)
     owner = _read_owner()
     return {
@@ -256,6 +295,9 @@ def version_info_from_home(hermes_home: str | None = None) -> str | None:
 
 
 def health(hermes_home: str | None = None, gateway_url: str | None = None) -> dict[str, Any]:
+    status = loader_status()
+    if status["missing"]:
+        return _unavailable("health")
     layout = _layout(hermes_home)
     url = gateway_url or os.environ.get("SMC_HERMES_GATEWAY_URL", "http://127.0.0.1:8642")
     healthy = False
@@ -279,6 +321,9 @@ def health(hermes_home: str | None = None, gateway_url: str | None = None) -> di
 
 
 def doctor(hermes_home: str | None = None) -> dict[str, Any]:
+    status = loader_status()
+    if status["missing"]:
+        return _unavailable("doctor")
     layout = _layout(hermes_home)
     checks = {
         "hermes_home_exists": layout.home.is_dir(),
@@ -328,7 +373,7 @@ def gateway_wrapper(
     exe = hermes_exe or str(layout.hermes_exe)
     dest = dest_dir / f"hermes-gateway-{endpoint_id}.cmd"
     dest.write_text(
-        f"@echo off\r\nset HERMES_HOME={hermes_home}\r\n\"{exe}\" gateway run\r\n",
+        f'@echo off\r\nset HERMES_HOME={hermes_home}\r\n"{exe}" gateway run\r\n',
         encoding="utf-8",
     )
     return {
@@ -359,9 +404,13 @@ def gateway_restart(
     if action not in {"start", "stop", "restart"}:
         return {"ok": False, "error": "invalid_action", "action": action}
     if action == "start":
-        return gateway_start(hermes_home=hermes_home, gateway_url=gateway_url, port=port, start=start, wait_health=wait_health)
+        return gateway_start(
+            hermes_home=hermes_home, gateway_url=gateway_url, port=port, start=start, wait_health=wait_health
+        )
     if action == "stop":
-        return gateway_stop(hermes_home=hermes_home, gateway_url=gateway_url, port=port, stop=stop, wait_closed=wait_closed)
+        return gateway_stop(
+            hermes_home=hermes_home, gateway_url=gateway_url, port=port, stop=stop, wait_closed=wait_closed
+        )
     try:
         _assert_owner()
     except RuntimeError as exc:

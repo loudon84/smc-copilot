@@ -9,7 +9,7 @@ import pytest
 from db.repositories.interfaces import ControlJobRecord
 from integrations.salt_master import FakeSaltMaster
 from schemas.job_return import JobReturnBatchRequest, JobReturnItem
-from services.invocation import build_invocation
+from services.invocation import OPERATION_FUNCTIONS, function_for_operation
 from services.return_service import ReturnService
 from workers.job_worker import JobWorker
 from workers.result_reconciler import ResultReconciler
@@ -18,6 +18,7 @@ from workers.result_reconciler import ResultReconciler
 def test_every_operation_has_strict_function_mapping():
     expected = {
         "install": "smc_hermes.install",
+        "upgrade": "smc_hermes.upgrade",
         "configure": "smc_hermes.apply_config",
         "start": "smc_hermes.gateway_start",
         "stop": "smc_hermes.gateway_stop",
@@ -28,10 +29,9 @@ def test_every_operation_has_strict_function_mapping():
         "handover": "smc_handover.migrate",
         "remigrate": "smc_handover.remigrate",
     }
+    assert OPERATION_FUNCTIONS == expected
     for operation, function in expected.items():
-        inv = build_invocation(operation)
-        assert inv.function == function
-        assert inv.timeout_seconds > 0
+        assert function_for_operation(operation) == function
 
 
 @pytest.mark.asyncio

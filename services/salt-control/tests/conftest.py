@@ -9,7 +9,7 @@ from app import AppState, create_app
 from core.auth import Scope, hash_secret, mint_lab_jwt
 from core.config import Settings
 from core.idempotency import IdempotencyStore
-from db.repositories.interfaces import PendingTokenRecord
+from db.repositories.interfaces import BindingRecord, PendingTokenRecord
 from db.repositories.memory import build_in_memory_repos
 from integrations.artifact_store import FakeArtifactStore
 from integrations.management_backend import FakeManagementBackend
@@ -37,6 +37,25 @@ def repos():
     return build_in_memory_repos()
 
 
+@pytest.fixture(autouse=True)
+async def seed_complete_bindings(repos):
+    """Ring 0 and job tests require complete non-System bindings (v2.4.2 fail-closed)."""
+    for i in range(1, 6):
+        await repos.bindings.upsert(
+            BindingRecord(
+                endpoint_id=f"ep_{i}",
+                user_id=f"u{i}",
+                windows_account=rf"DOMAIN\user{i}",
+                windows_sid=f"S-1-5-21-{i}",
+                profile_dir=rf"C:\Users\user{i}",
+                active=True,
+                revision=f"b{i}",
+                bound_at=datetime.now(UTC),
+            )
+        )
+    return repos
+
+
 @pytest.fixture
 def backend() -> FakeManagementBackend:
     return FakeManagementBackend()
@@ -61,7 +80,12 @@ def artifact_store() -> FakeArtifactStore:
 def app_state(settings, repos, backend, masters, secret_provider, artifact_store) -> AppState:
     idempotency = IdempotencyStore()
     job_service = JobService(repos)
-    job_worker = JobWorker(masters=masters, repos=repos)
+    job_worker = JobWorker(
+        masters=masters,
+        repos=repos,
+        artifact_store=artifact_store,
+        settings=settings,
+    )
     observer = ControlPlaneObserver(masters=masters, repos=repos)
     return AppState(
         settings=settings,

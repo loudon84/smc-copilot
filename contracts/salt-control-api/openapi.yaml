@@ -47,16 +47,22 @@ components:
       title: ArtifactMetadataResponse
       type: object
     ConfigurePayload:
+      additionalProperties: false
       properties:
+        config:
+          additionalProperties: true
+          title: Config
+          type: object
         configRevision:
           anyOf:
           - type: string
           - type: 'null'
           title: Configrevision
-        desired:
-          additionalProperties: true
-          title: Desired
-          type: object
+        hermesHome:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hermeshome
         kind:
           const: configure
           default: configure
@@ -229,6 +235,11 @@ components:
         endpointId:
           title: Endpointid
           type: string
+        factSource:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Factsource
         gatewayHealth:
           anyOf:
           - type: string
@@ -250,6 +261,11 @@ components:
             type: object
           - type: 'null'
           title: Lastjob
+        lastObservedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lastobservedat
         migrationPhase:
           anyOf:
           - type: string
@@ -358,6 +374,25 @@ components:
       - masterFingerprints
       title: EnrollmentStatusResponse
       type: object
+    EvidenceGenerateRequest:
+      properties:
+        gitCommit:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gitcommit
+        rolloutId:
+          title: Rolloutid
+          type: string
+        root:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Root
+      required:
+      - rolloutId
+      title: EvidenceGenerateRequest
+      type: object
     FingerprintReportRequest:
       properties:
         endpointId:
@@ -448,26 +483,22 @@ components:
       title: HandoverPayload
       type: object
     InstallPayload:
+      additionalProperties: false
       properties:
-        artifactUrl:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Artifacturl
         component:
           default: hermes
           title: Component
           type: string
+        hermesHome:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Hermeshome
         kind:
           const: install
           default: install
           title: Kind
           type: string
-        sha256:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Sha256
         version:
           anyOf:
           - type: string
@@ -499,6 +530,7 @@ components:
         operation:
           enum:
           - install
+          - upgrade
           - configure
           - start
           - stop
@@ -602,6 +634,7 @@ components:
           - queued
           - dispatching
           - running
+          - result_pending
           - succeeded
           - failed
           - cancelled
@@ -736,11 +769,6 @@ components:
           default: ''
           title: Reason
           type: string
-        role:
-          title: Role
-          type: string
-      required:
-      - role
       title: Ring0ApprovalRequest
       type: object
     Ring0CreateRequest:
@@ -773,6 +801,19 @@ components:
       - releaseId
       - configRevision
       title: Ring0CreateRequest
+      type: object
+    Ring0ResumeRequest:
+      properties:
+        gateDigest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Gatedigest
+        reason:
+          default: ''
+          title: Reason
+          type: string
+      title: Ring0ResumeRequest
       type: object
     Ring0RollbackRequest:
       properties:
@@ -988,22 +1029,22 @@ components:
       title: SecretValue
       type: object
     UpgradePayload:
+      additionalProperties: false
       properties:
-        artifactUrl:
+        component:
+          default: hermes
+          title: Component
+          type: string
+        hermesHome:
           anyOf:
           - type: string
           - type: 'null'
-          title: Artifacturl
+          title: Hermeshome
         kind:
           const: upgrade
           default: upgrade
           title: Kind
           type: string
-        sha256:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Sha256
         version:
           anyOf:
           - type: string
@@ -1271,6 +1312,42 @@ paths:
       summary: Report Fingerprint
       tags:
       - enrollments
+  /salt/v1/evidence/bundles:generate:
+    post:
+      operationId: generate_evidence_salt_v1_evidence_bundles_generate_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceGenerateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Generate Evidence Salt V1 Evidence Bundles Generate Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Generate Evidence
+      tags:
+      - evidence
   /salt/v1/health:
     get:
       description: Process liveness only — no dependency checks.
@@ -1388,6 +1465,36 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Get Job
+      tags:
+      - jobs
+  /salt/v1/metrics:
+    get:
+      operationId: metrics_salt_v1_metrics_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Metrics Salt V1 Metrics Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Metrics
       tags:
       - jobs
   /salt/v1/migrations/handover:
@@ -1570,6 +1677,114 @@ paths:
       summary: Create Ring0
       tags:
       - ring0
+  /salt/v1/ring0/rollouts/{rollout_id}/gates:
+    get:
+      operationId: ring0_gates_salt_v1_ring0_rollouts__rollout_id__gates_get
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Ring0 Gates Salt V1 Ring0 Rollouts  Rollout Id  Gates Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Ring0 Gates
+      tags:
+      - ring0
+  /salt/v1/ring0/rollouts/{rollout_id}/observations:
+    get:
+      operationId: ring0_observations_salt_v1_ring0_rollouts__rollout_id__observations_get
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Ring0 Observations Salt V1 Ring0 Rollouts  Rollout Id  Observations Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Ring0 Observations
+      tags:
+      - ring0
+  /salt/v1/ring0/rollouts/{rollout_id}/status:
+    get:
+      operationId: ring0_status_salt_v1_ring0_rollouts__rollout_id__status_get
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Ring0 Status Salt V1 Ring0 Rollouts  Rollout Id  Status Get
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Ring0 Status
+      tags:
+      - ring0
   /salt/v1/ring0/rollouts/{rollout_id}:advance-batch:
     post:
       operationId: advance_batch_salt_v1_ring0_rollouts__rollout_id__advance_batch_post
@@ -1646,6 +1861,126 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Approve Ring0
+      tags:
+      - ring0
+  /salt/v1/ring0/rollouts/{rollout_id}:complete-signoff:
+    post:
+      operationId: complete_signoff_salt_v1_ring0_rollouts__rollout_id__complete_signoff_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Complete Signoff Salt V1 Ring0 Rollouts  Rollout Id  Complete Signoff Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Complete Signoff
+      tags:
+      - ring0
+  /salt/v1/ring0/rollouts/{rollout_id}:pause:
+    post:
+      operationId: pause_ring0_salt_v1_ring0_rollouts__rollout_id__pause_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Ring0ResumeRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Pause Ring0 Salt V1 Ring0 Rollouts  Rollout Id  Pause Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Pause Ring0
+      tags:
+      - ring0
+  /salt/v1/ring0/rollouts/{rollout_id}:resume:
+    post:
+      operationId: resume_ring0_salt_v1_ring0_rollouts__rollout_id__resume_post
+      parameters:
+      - in: path
+        name: rollout_id
+        required: true
+        schema:
+          title: Rollout Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Ring0ResumeRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                title: Response Resume Ring0 Salt V1 Ring0 Rollouts  Rollout Id  Resume Post
+                type: object
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Resume Ring0
       tags:
       - ring0
   /salt/v1/ring0/rollouts/{rollout_id}:rollback:

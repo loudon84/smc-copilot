@@ -23,7 +23,35 @@ from pathlib import Path
 def _copy_tree(src: Path, dst: Path) -> None:
     if dst.exists():
         shutil.rmtree(dst)
-    shutil.copytree(src, dst)
+    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
+
+
+PUBLIC_UTILS = {
+    "smc_paths.py",
+    "smc_control_owner.py",
+    "smc_redact.py",
+    "smc_artifact.py",
+    "config_revision.py",
+    "smc_handover_hooks.py",
+}
+
+
+def _assert_loader_contract(repo_salt: Path) -> None:
+    utils = repo_salt / "extensions" / "_utils"
+    if not utils.is_dir():
+        raise SystemExit("missing extensions/_utils")
+    if (utils / "__init__.py").exists():
+        raise SystemExit("_utils must not be a Python package")
+    names = {path.name for path in utils.glob("*.py")}
+    if names != PUBLIC_UTILS:
+        raise SystemExit(f"public utils mismatch: {sorted(names)}")
+    offenders: list[str] = []
+    for path in (repo_salt / "extensions").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if "from _utils" in text or "\nfrom ." in f"\n{text}" or text.startswith("from ."):
+            offenders.append(str(path.relative_to(repo_salt)))
+    if offenders:
+        raise SystemExit(f"loader contract violation: {offenders}")
 
 
 def publish(repo_salt: Path, releases_root: Path, version: str) -> dict:
@@ -32,6 +60,7 @@ def publish(repo_salt: Path, releases_root: Path, version: str) -> dict:
     if target.exists():
         raise SystemExit(f"release already exists: {target}")
 
+    _assert_loader_contract(repo_salt)
     ext = repo_salt / "extensions"
     states = repo_salt / "states"
     target.mkdir(parents=True)

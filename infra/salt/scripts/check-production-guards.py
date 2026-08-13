@@ -15,12 +15,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SALT = ROOT / "infra" / "salt"
 CONTROL = ROOT / "services" / "salt-control" / "src"
 
 PLACEHOLDER_SHA = re.compile(r'"sha256"\s*:\s*"(a{64}|0{64})"', re.I)
 PLACEHOLDER_HOST = re.compile(r"artifacts\.internal\.smc")
+UTILS_PACKAGE = re.compile(r"^\s*(from\s+_utils\b|from\s+\.|import\s+_utils\b)", re.M)
 HMAC_PROD = re.compile(r"hmac_signature|HMAC shared|SMC_ARTIFACT_SIGNING_KEY")
 XOR_CACHE = re.compile(r"smc-lab-cache-key|XOR\+hmac")
 LAB_SINK = re.compile(r"lab[/\\]returns[/\\]jobs\.jsonl")
@@ -58,6 +59,23 @@ def main() -> int:
                 "use client-manifest.example.json for samples and ship real release manifests only"
             )
 
+    utils_init = SALT / "extensions" / "_utils" / "__init__.py"
+    if utils_init.is_file():
+        errors.append("extensions/_utils/__init__.py makes _utils a package; Salt loader requires independent plugins")
+    for path in (SALT / "extensions").rglob("*.py"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if UTILS_PACKAGE.search(text):
+            errors.append(f"_utils package or relative import: {path.relative_to(ROOT)}")
+        if "sys.path.insert" in text or "sys.path.append" in text:
+            errors.append(f"sys.path mutation: {path.relative_to(ROOT)}")
+    ext_pillar = (SALT / "master" / "master.d" / "ext-pillar.conf").read_text(encoding="utf-8", errors="replace")
+    if "salt_control_url" not in ext_pillar or "token_file" not in ext_pillar:
+        errors.append("ext-pillar.conf must configure salt_control_url and token_file")
+    if re.search(r"Bearer\s+[A-Za-z0-9_\-\.]+", ext_pillar):
+        errors.append("ext-pillar.conf must not contain token values")
+    gateway = (SALT / "states" / "gateway.sls").read_text(encoding="utf-8", errors="replace")
+    if "or 'System'" in gateway or 'or "System"' in gateway:
+        errors.append("gateway.sls must not fall back to System")
     scan_files = list((SALT / "extensions").rglob("*.py"))
     scan_files += list((SALT / "client").rglob("*.py"))
     scan_files += list((SALT / "client" / "windows").rglob("*.ps1"))
@@ -69,6 +87,8 @@ def main() -> int:
     for hit in _scan([example] if False else [], PLACEHOLDER_HOST):
         pass
     # Production extensions/returners/secrets must be env-gated
+    for hit in _scan(scan_files, HMAC_PROD, allow_lab_gate=True):
+        errors.append(f"HMAC artifact signing without production gate: {hit}")
     for hit in _scan(scan_files, XOR_CACHE, allow_lab_gate=True):
         errors.append(f"secret XOR/default key without production gate: {hit}")
     for hit in _scan(scan_files, LAB_SINK, allow_lab_gate=True):

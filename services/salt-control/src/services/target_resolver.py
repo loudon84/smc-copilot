@@ -41,6 +41,8 @@ async def resolve_ring0_snapshot(
             try:
                 backend_binding = await backend.get_binding(endpoint_id)
                 desired = await backend.get_desired_state(endpoint_id)
+            except SaltControlError:
+                raise
             except Exception:
                 backend_binding = None
                 desired = None
@@ -58,7 +60,9 @@ async def resolve_ring0_snapshot(
             windows_sid = backend_binding.windows_sid
             profile_dir = backend_binding.profile_dir
             binding_revision = backend_binding.revision
-        if windows_account.strip().lower() in SYSTEM_ACCOUNTS and binding is not None:
+        if not all(str(item).strip() for item in (windows_account, windows_sid, profile_dir, binding_revision)):
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "binding fields incomplete", status_code=400)
+        if windows_account.strip().lower() in SYSTEM_ACCOUNTS:
             raise SaltControlError(ErrorCode.VALIDATION_ERROR, "binding must not be System", status_code=400)
         group = "it"
         if desired is not None and str(getattr(desired, "ring", "")).lower() in {"it", "developer"}:

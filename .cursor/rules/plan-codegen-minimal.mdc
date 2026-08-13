@@ -1,0 +1,37 @@
+---
+description: Minimal code when implementing from .plan.md. Plan is outcomes, not a bill of materials.
+alwaysApply: true
+---
+
+# Plan → code: lazy senior
+
+`.plan.md` 是结果与约束，不是施工清单。先读被改函数及其全部调用方，再爬梯子，停在第一级能站住的解。
+
+1. 这件事需要存在吗？计划列了文件也不等于要新建。
+2. 仓库里已有 helper / schema / 调用路径？改它，不要再写一层。
+3. 标准库能做？用标准库。
+4. 平台或框架已有能力？用它（Pydantic alias、现有 error code、现有 test fixture）。
+5. 已安装依赖能做？用它，禁止为几行逻辑加新包。
+6. 能一行 / 改字段名 / 一张 mapping dict？就写那么多。
+7. 否则：满足**当前 Phase 退出条件**的最小 diff。
+
+## 计划章节怎么读
+
+- `修改文件`：允许改的上限，不是必须新建的下限。能少碰就少碰。
+- `关键决策` / 字段表：约束现有路径，不是新 codec / adapter / service 的许可证。
+- `测试` / 场景：要先红后绿的行为。优先在已有测试里加断言，不新建平行 harness。
+- `退出条件`：唯一完成定义。条件成立立即停。
+- 非本 Phase 退出条件要求的 runbook、evidence、文档生成物：不要用代码去“实现”。
+
+## 禁止（只要更短的补丁已能过退出条件）
+
+- 单实现的 Protocol / ABC / Factory / `*_codec.py` / `*_mapper.py` / `*_invocation.py`
+- 每个 Phase 一套 `test_v24*` 平行文件（把场景并进现有测试）
+- 调用方各打一遍补丁，却不修它们共用的那一个函数
+- 为以后预留的配置对象、重试包装、抽象层
+
+## 不准懒
+
+信任边界校验、失败关闭、密钥不进日志/测试/快照、计划退出条件写明必须有的行为。修根因，不修票据点名的那一条症状。
+
+交付形态：`做了 X。跳过 Y，何时再加 Z。` 解释比代码长就删解释。

@@ -5,8 +5,13 @@ import zipfile
 from pathlib import Path
 
 from _modules import smc_hermes
-from _utils.artifact import hmac_signature, sha256_file, verify_ed25519
 from conftest import SIGNING_KEY, make_signed_zip
+from plugin_loader import load_named_util
+
+_art = load_named_util("smc_artifact")
+hmac_signature = _art.hmac_signature
+sha256_file = _art.sha256_file
+verify_ed25519 = _art.verify_ed25519
 
 
 def test_install_signed_artifact(tmp_path: Path, monkeypatch, signed_artifact) -> None:
@@ -106,7 +111,7 @@ def test_zip_path_traversal_rejected(tmp_path: Path, monkeypatch, ed25519_artifa
     sig = signature  # signature won't match but traversal should fail first on unpack after verify
     monkeypatch.setenv("SMC_CONTROL_OWNER_PATH", str(tmp_path / "owner.json"))
     monkeypatch.setenv("SMC_SALT_ENV", "production")
-    from _utils import artifact as art
+    art = load_named_util("smc_artifact")
 
     # Re-sign evil bytes for ed25519
     from conftest import make_ed25519_keypair

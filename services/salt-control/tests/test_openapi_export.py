@@ -16,3 +16,5 @@ def test_openapi_export_stable():
     assert "/salt/v1/endpoints/{endpoint_id}/status" in paths
     assert "/salt/v1/rollouts/{rollout_id}:approve" in paths
     assert "/salt/v1/observer/stability" in paths
+    dumped = str(first)
+    assert "UpgradePayload" in dumped or "upgrade" in dumped.lower()

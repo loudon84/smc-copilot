@@ -17,11 +17,9 @@ def _salt() -> dict[str, Any]:
 
 def _health(hermes_home: str | None) -> dict[str, Any]:
     salt = _salt()
-    if "smc_hermes.health" in salt:
-        return salt["smc_hermes.health"](hermes_home=hermes_home)
-    from _modules import smc_hermes
-
-    return smc_hermes.health(hermes_home=hermes_home)
+    if "smc_hermes.health" not in salt:
+        return {"ok": False, "error": "smc_utils_unavailable", "missing": ["smc_hermes.health"]}
+    return salt["smc_hermes.health"](hermes_home=hermes_home)
 
 
 def validate(config: Any) -> tuple[bool, str]:

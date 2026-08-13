@@ -1,4 +1,6 @@
-# Production Salt Master (v2.4 Ring 0)
+# Production Salt Master (v2.4 Ring 0 / v2.4.2)
+
+v2.4.2 External Pillar reads `salt_control_url`, `token_file`, `trusted_key_id`, and `trusted_public_key_file` from `master.d/ext-pillar.conf`. Do not put token or private key values in git.
 
 Topology: **v2.4 Ring 0 uses a single Master** at `192.168.102.104`. Second Master, MultiMaster-PKI, and bidirectional failover are deferred to **v2.5 HA Readiness**. Do not deploy `master.d/failover.conf` for Ring 0 (see `deploy-list-v24-single-master.txt`).
 

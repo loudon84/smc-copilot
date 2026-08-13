@@ -10,6 +10,8 @@ from typing import Any
 
 ENDPOINT_ID_RE = re.compile(r"^ep_[A-Za-z0-9_-]+$")
 MASTER_FINGER_RE = re.compile(r"^sha256:[A-Fa-f0-9:]+$")
+SNAPSHOT_SCHEMA = "smc.minion-identity-adoption.v1"
+SNAPSHOT_VERSION = 1
 
 
 @dataclass
@@ -53,22 +55,50 @@ def plan_adoption(
     )
 
 
-def should_revoke_old_key(*, new_identity_online: bool, highstate_ok: bool) -> bool:
-    """Old key stays accepted until new identity fully passes."""
-    return bool(new_identity_online and highstate_ok)
+def should_revoke_old_key(
+    *,
+    fingerprint_compared: bool = False,
+    key_accepted: bool = False,
+    ping_ok: bool = False,
+    sync_ok: bool = False,
+    inspect_ok: bool = False,
+    doctor_ok: bool = False,
+    pillar_gate_ok: bool = False,
+    new_identity_online: bool = False,
+    highstate_ok: bool = False,
+) -> bool:
+    """Old key stays accepted until the new identity fully passes manual gates."""
+    del new_identity_online, highstate_ok
+    return all(
+        [
+            fingerprint_compared,
+            key_accepted,
+            ping_ok,
+            sync_ok,
+            inspect_ok,
+            doctor_ok,
+            pillar_gate_ok,
+        ]
+    )
 
 
-def write_snapshot(path: Path, snapshot: IdentitySnapshot) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload: dict[str, Any] = {
+def snapshot_payload(snapshot: IdentitySnapshot) -> dict[str, Any]:
+    return {
+        "schema": SNAPSHOT_SCHEMA,
+        "version": SNAPSHOT_VERSION,
         "oldMinionId": snapshot.old_minion_id,
         "newEndpointId": snapshot.new_endpoint_id,
         "confBackup": snapshot.conf_backup,
         "serviceStartType": snapshot.service_start_type,
         "masterFinger": snapshot.master_finger,
+        "revokeOldKeyAllowed": False,
     }
+
+
+def write_snapshot(path: Path, snapshot: IdentitySnapshot) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(snapshot_payload(snapshot), indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 

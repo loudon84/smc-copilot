@@ -28,6 +28,8 @@ def installed(
     artifact_path: str | None = None,
     hermes_home: str | None = None,
     migrate_mode: bool = False,
+    key_id: str | None = None,
+    public_key: str | None = None,
 ) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
     if _opts().get("test"):
@@ -42,6 +44,8 @@ def installed(
         artifact_path=artifact_path,
         hermes_home=hermes_home,
         migrate_mode=migrate_mode,
+        key_id=key_id,
+        public_key=public_key,
     )
     ret["result"] = bool(result.get("ok"))
     ret["changes"] = result if ret["result"] else {}
@@ -58,6 +62,8 @@ def prepared(
     artifact_path: str | None = None,
     hermes_home: str | None = None,
     migrate_mode: bool = True,
+    key_id: str | None = None,
+    public_key: str | None = None,
 ) -> dict[str, Any]:
     """Prepare Hermes without claiming control-owner."""
     return installed(
@@ -69,7 +75,10 @@ def prepared(
         artifact_path=artifact_path,
         hermes_home=hermes_home,
         migrate_mode=True if migrate_mode is None else bool(migrate_mode),
+        key_id=key_id,
+        public_key=public_key,
     )
+
 
 def gateway_started(name: str, hermes_home: str | None = None) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}

@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 
 from _modules import smc_hermes
-from _utils.paths import detect_existing_home
+from plugin_loader import load_named_util
+
+detect_existing_home = load_named_util("smc_paths").detect_existing_home
 
 
 def _mark_home(path: Path) -> None:

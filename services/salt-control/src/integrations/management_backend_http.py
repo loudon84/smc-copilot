@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import httpx
 
+from core.errors import ErrorCode, SaltControlError
 from integrations.management_backend import BackendDesiredState, BackendUserBinding, ManagementBackend
+
+_SYSTEM_ACCOUNTS = frozenset({"system", "nt authority\\system", "nt authority/system", "localsystem"})
 
 
 class HttpManagementBackend:
@@ -43,14 +46,22 @@ class HttpManagementBackend:
             self._available = False
             raise RuntimeError("management backend binding error")
         data = resp.json()
-        return BackendUserBinding(
-            endpoint_id=endpoint_id,
+        binding = BackendUserBinding(
+            endpoint_id=str(data.get("endpointId") or endpoint_id),
             user_id=str(data["userId"]),
             windows_account=str(data["windowsAccount"]),
             windows_sid=str(data["windowsSid"]),
             profile_dir=str(data["profileDir"]),
             revision=str(data["revision"]),
         )
+        if binding.endpoint_id != endpoint_id:
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "binding endpoint mismatch", status_code=400)
+        fields = (binding.user_id, binding.windows_account, binding.windows_sid, binding.profile_dir, binding.revision)
+        if any(not str(item).strip() for item in fields):
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "binding fields incomplete", status_code=400)
+        if binding.windows_account.strip().lower() in _SYSTEM_ACCOUNTS:
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "system binding forbidden", status_code=400)
+        return binding
 
     async def get_desired_state(self, endpoint_id: str) -> BackendDesiredState | None:
         if not self._available:

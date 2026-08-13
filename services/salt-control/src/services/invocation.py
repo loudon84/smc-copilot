@@ -1,4 +1,4 @@
-"""Typed Salt invocation builder — only allowlisted functions/args (v2.4)."""
+"""Typed Salt invocation builder — only allowlisted functions/args (v2.4.2)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,11 @@ from typing import Any, Literal
 
 from core.errors import ErrorCode, SaltControlError
 from schemas.job_payload import JobPayload
+from services.artifact_invocation import ArtifactInvocation
 
 JobOperation = Literal[
     "install",
+    "upgrade",
     "configure",
     "start",
     "stop",
@@ -31,27 +33,80 @@ class SaltInvocation:
     mutation: bool
 
 
-def build_invocation(operation: str, payload: JobPayload | None = None) -> SaltInvocation:
+OPERATION_FUNCTIONS: dict[str, str] = {
+    "install": "smc_hermes.install",
+    "upgrade": "smc_hermes.upgrade",
+    "configure": "smc_hermes.apply_config",
+    "start": "smc_hermes.gateway_start",
+    "stop": "smc_hermes.gateway_stop",
+    "restart": "smc_hermes.restart",
+    "health": "smc_hermes.health",
+    "diagnose": "smc_hermes.doctor",
+    "rollback": "smc_handover.rollback",
+    "handover": "smc_handover.migrate",
+    "remigrate": "smc_handover.remigrate",
+}
+
+
+def function_for_operation(operation: str) -> str:
+    if operation not in OPERATION_FUNCTIONS:
+        raise SaltControlError(ErrorCode.VALIDATION_ERROR, f"unsupported operation: {operation}", status_code=400)
+    return OPERATION_FUNCTIONS[operation]
+
+
+def build_invocation(
+    operation: str,
+    payload: JobPayload | None = None,
+    artifact: ArtifactInvocation | None = None,
+) -> SaltInvocation:
     """Map control-plane operation + typed payload to a Salt local_async call."""
     p = payload
     if operation == "install":
-        kw: dict[str, Any] = {}
-        if p is not None and getattr(p, "kind", None) == "install":
-            if p.artifact_url:
-                kw["url"] = p.artifact_url
-            if p.sha256:
-                kw["sha256"] = p.sha256
-            if p.version:
-                kw["version"] = p.version
+        if artifact is None:
+            raise SaltControlError(
+                ErrorCode.VALIDATION_ERROR, "install requires trusted artifact metadata", status_code=400
+            )
+        kw: dict[str, Any] = {
+            "version": artifact.version,
+            "artifact_url": artifact.artifact_url,
+            "artifact_sha256": artifact.artifact_sha256,
+            "artifact_signature": artifact.artifact_signature,
+            "key_id": artifact.key_id,
+            "public_key": artifact.public_key,
+        }
+        if artifact.hermes_home:
+            kw["hermes_home"] = artifact.hermes_home
         return SaltInvocation("smc_hermes.install", [], kw, 600.0, True)
+
+    if operation == "upgrade":
+        if artifact is None:
+            raise SaltControlError(
+                ErrorCode.VALIDATION_ERROR, "upgrade requires trusted artifact metadata", status_code=400
+            )
+        kw = {
+            "version": artifact.version,
+            "artifact_url": artifact.artifact_url,
+            "artifact_sha256": artifact.artifact_sha256,
+            "artifact_signature": artifact.artifact_signature,
+            "key_id": artifact.key_id,
+            "public_key": artifact.public_key,
+        }
+        if artifact.hermes_home:
+            kw["hermes_home"] = artifact.hermes_home
+        return SaltInvocation("smc_hermes.upgrade", [], kw, 600.0, True)
 
     if operation == "configure":
         kw = {}
         if p is not None and getattr(p, "kind", None) == "configure":
+            if not p.config:
+                raise SaltControlError(ErrorCode.VALIDATION_ERROR, "configure requires config", status_code=400)
+            kw["config"] = p.config
+            if p.hermes_home:
+                kw["hermes_home"] = p.hermes_home
             if p.config_revision:
-                kw["revision"] = p.config_revision
-            if p.desired:
-                kw["desired"] = p.desired
+                kw["note"] = p.config_revision
+        else:
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "configure requires config payload", status_code=400)
         return SaltInvocation("smc_hermes.apply_config", [], kw, 300.0, True)
 
     if operation == "start":

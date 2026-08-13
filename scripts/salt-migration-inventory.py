@@ -208,11 +208,8 @@ def classify_file(stem: str, mapping: dict[str, str]) -> str:
     return mapping.get(stem, "NO")
 
 
-def load_capabilities(repo: Path) -> dict[tuple[str, str], dict]:
-    path = repo / "infra" / "salt" / "migration-capabilities.yaml"
-    if yaml is None or not path.is_file():
-        return {}
-    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+def load_capabilities(repo: Path, manifest: dict | None = None) -> dict[tuple[str, str], dict]:
+    payload = manifest if manifest is not None else load_manifest(repo / "infra" / "salt" / "migration-capabilities.yaml")
     lookup: dict[tuple[str, str], dict] = {}
     for item in payload.get("items") or []:
         kind = str(item.get("kind") or "")
@@ -301,6 +298,65 @@ def endpoint_only(items: list[Item]) -> list[Item]:
     return [i for i in items if i.classification != "NO"]
 
 
+BLOCKER_FIELDS = (
+    "id",
+    "severity",
+    "implementationStatus",
+    "verificationStatus",
+    "affectedCapabilities",
+    "tests",
+)
+
+
+def load_manifest(path: Path) -> dict:
+    if yaml is None or not path.is_file():
+        return {}
+    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def load_blockers(manifest: dict) -> list[dict]:
+    blockers: list[dict] = []
+    for raw in manifest.get("blockers") or []:
+        if not isinstance(raw, dict):
+            continue
+        blockers.append({field: raw.get(field) for field in BLOCKER_FIELDS})
+    return blockers
+
+
+def evaluate_blockers(blockers: list[dict]) -> dict:
+    """Derive codeGate / liveGate from Capability Manifest blockers.
+
+    Automation may close codeGate when P0/P1 implementationStatus=fixed.
+    liveGate stays FAIL until verificationStatus=proven (manual signoff only).
+    """
+    code_open: list[str] = []
+    live_open: list[str] = []
+    p0_p1_items: list[dict] = []
+    for blocker in blockers:
+        severity = str(blocker.get("severity") or "").upper()
+        if severity not in {"P0", "P1"}:
+            continue
+        blocker_id = str(blocker.get("id") or "")
+        impl = str(blocker.get("implementationStatus") or "")
+        verification = str(blocker.get("verificationStatus") or "")
+        p0_p1_items.append(blocker)
+        if impl != "fixed":
+            code_open.append(blocker_id)
+        if verification != "proven":
+            live_open.append(blocker_id)
+    code_gate = "PASS" if not code_open else "FAIL"
+    live_gate = "PASS" if not live_open else "FAIL"
+    return {
+        "p0_p1": len(p0_p1_items),
+        "p0_p1_code_open": code_open,
+        "p0_p1_live_open": live_open,
+        "codeGate": code_gate,
+        "liveGate": live_gate,
+        "blockers": blockers,
+    }
+
+
 def render_md(report: dict) -> str:
     go = report.get("go", {})
     lines = [
@@ -312,6 +368,8 @@ def render_md(report: dict) -> str:
         f"- Runtime root: `{report['runtime_root']}`",
         f"- Capabilities: `{report.get('capabilities_path', '')}`",
         f"- P0/P1 blockers: **{report.get('p0_p1', 0)}**",
+        f"- codeGate: **{report.get('codeGate', 'FAIL')}**",
+        f"- liveGate: **{report.get('liveGate', 'FAIL')}**",
         "",
         "## Replacement rates",
         "",
@@ -320,24 +378,41 @@ def render_md(report: dict) -> str:
         f"| Entire Runtime | {report['entire']['routers']['count']}% | {report['entire']['services']['count']}% | {report['entire']['loc']['loc_weighted']}% |",
         f"| Endpoint Control Plane only | {report['endpoint']['routers']['count']}% | {report['endpoint']['services']['count']}% | {report['endpoint']['loc']['loc_weighted']}% |",
         "",
-        "Go threshold (PRD v2.1): Endpoint API ≥85%, Endpoint Service ≥85%, Endpoint LOC ≥75%, P0/P1 = 0.",
+        "Go threshold (PRD v2.1): Endpoint API ≥85%, Endpoint Service ≥85%, Endpoint LOC ≥75%, P0/P1 = 0, liveGate=PASS.",
         "",
         f"- Endpoint API (routers, excl. NO): **{report['endpoint']['routers']['count']}%** {'PASS' if go.get('api') else 'FAIL'}",
         f"- Endpoint Service (excl. NO): **{report['endpoint']['services']['count']}%** {'PASS' if go.get('service') else 'FAIL'}",
         f"- Endpoint LOC (routers+services+runtime pkg, excl. NO): **{report['endpoint']['loc']['loc_weighted']}%** {'PASS' if go.get('loc') else 'FAIL'}",
+        f"- codeGate: **{report.get('codeGate', 'FAIL')}**",
+        f"- liveGate: **{report.get('liveGate', 'FAIL')}**",
         f"- Decision: **{'GO' if go.get('decision') == 'GO' else 'NO-GO'}**",
         "",
-        "## Classification key",
+        "## Blockers",
         "",
-        "- FULL = 1.0 (verified Salt replacement only)",
-        "- PARTIAL = 0.5 (subset / unverified FULL)",
-        "- NO = 0 (Chat/Task data plane — not Salt)",
-        "",
-        "## Items",
-        "",
-        "| Kind | Name | Class | Status | LOC |",
-        "| --- | --- | --- | --- | ---: |",
+        "| ID | Severity | Implementation | Verification |",
+        "| --- | --- | --- | --- |",
     ]
+    for blocker in report.get("blockers") or []:
+        lines.append(
+            "| "
+            f"{blocker.get('id', '')} | {blocker.get('severity', '')} | "
+            f"{blocker.get('implementationStatus', '')} | {blocker.get('verificationStatus', '')} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Classification key",
+            "",
+            "- FULL = 1.0 (verified Salt replacement only)",
+            "- PARTIAL = 0.5 (subset / unverified FULL)",
+            "- NO = 0 (Chat/Task data plane — not Salt)",
+            "",
+            "## Items",
+            "",
+            "| Kind | Name | Class | Status | LOC |",
+            "| --- | --- | --- | --- | ---: |",
+        ]
+    )
     for item in report["items"]:
         lines.append(
             f"| {item['kind']} | `{item['name']}` | {item['classification']} | {item.get('status', '')} | {item['loc']} |"
@@ -372,7 +447,8 @@ def main() -> int:
     out_dir = (args.out_dir or repo).resolve()
     src = runtime_root / "src"
     capabilities_path = repo / "infra" / "salt" / "migration-capabilities.yaml"
-    capabilities = load_capabilities(repo)
+    manifest = load_manifest(capabilities_path)
+    capabilities = load_capabilities(repo, manifest)
 
     routers = scan_py_dir("router", src / "api" / "v1", ROUTER_CLASS, capabilities, repo)
     services = scan_py_dir("service", src / "services", SERVICE_CLASS, capabilities, repo)
@@ -386,21 +462,31 @@ def main() -> int:
     api_pct = coverage(endpoint_routers)["count"]
     service_pct = coverage(endpoint_services)["count"]
     loc_pct = coverage(endpoint_items)["loc_weighted"]
-    p0_p1 = 0
+    gates = evaluate_blockers(load_blockers(manifest))
+    p0_p1 = int(gates["p0_p1"])
+    code_gate = str(gates["codeGate"])
+    live_gate = str(gates["liveGate"])
     go = {
         "api": api_pct >= 85,
         "service": service_pct >= 85,
         "loc": loc_pct >= 75,
-        "p0_p1": p0_p1 == 0,
+        "p0_p1": not gates["p0_p1_code_open"] and not gates["p0_p1_live_open"],
+        "codeGate": code_gate == "PASS",
+        "liveGate": live_gate == "PASS",
     }
     go["decision"] = "GO" if all(go.values()) else "NO-GO"
 
     report = {
-        "generated_note": "salt-migration-inventory v2 (verified FULL only)",
+        "generated_note": "salt-migration-inventory v3 (codeGate/liveGate)",
         "runtime_root": str(runtime_root.as_posix()),
         "capabilities_path": str(capabilities_path.as_posix()),
         "weights": WEIGHT,
         "p0_p1": p0_p1,
+        "p0_p1_code_open": gates["p0_p1_code_open"],
+        "p0_p1_live_open": gates["p0_p1_live_open"],
+        "codeGate": code_gate,
+        "liveGate": live_gate,
+        "blockers": gates["blockers"],
         "go": go,
         "entire": {
             "routers": coverage(routers),
@@ -429,6 +515,8 @@ def main() -> int:
         f"Service={report['endpoint']['services']['count']}% "
         f"LOC={report['endpoint']['loc']['loc_weighted']}% "
         f"P0/P1={p0_p1} "
+        f"codeGate={code_gate} "
+        f"liveGate={live_gate} "
         f"decision={go['decision']}"
     )
     if args.check and go["decision"] != "GO":

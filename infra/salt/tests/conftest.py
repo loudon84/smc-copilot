@@ -8,6 +8,30 @@ from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from plugin_loader import build_utils_map
+
+
+@pytest.fixture(autouse=True)
+def inject_salt_utils():
+    """Inject Salt-shaped __utils__ so execution modules do not use package fallbacks."""
+    utils = build_utils_map()
+    from _beacons import smc_hermes_health
+    from _grains import smc_endpoint
+    from _modules import smc_handover, smc_hermes, smc_secret
+    from _returners import smc_backend
+
+    modules = (smc_hermes, smc_handover, smc_secret, smc_endpoint, smc_backend, smc_hermes_health)
+    previous = [getattr(mod, "__utils__", None) for mod in modules]
+    for mod in modules:
+        mod.__utils__ = utils
+    yield utils
+    for mod, old in zip(modules, previous, strict=True):
+        if old is None:
+            if hasattr(mod, "__utils__"):
+                delattr(mod, "__utils__")
+        else:
+            mod.__utils__ = old
+
 
 SIGNING_KEY = "test-signing-key"
 

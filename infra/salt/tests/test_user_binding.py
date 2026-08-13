@@ -22,11 +22,14 @@ def test_user_switch_does_not_reuse_secret_ref() -> None:
 
 
 def test_ext_pillar_uses_injected_resolver_not_mock_import() -> None:
-    smc_external.__opts__ = {
-        "smc_desired_state_resolver": lambda endpoint_id, user_id: resolve_desired_state(endpoint_id, user_id)
-    }
+    def _resolve(endpoint_id, user_id):
+        data = resolve_desired_state("lab-minion-01", user_id)
+        data["endpoint_id"] = endpoint_id
+        return data
+
+    smc_external.__opts__ = {"smc_desired_state_resolver": _resolve}
     try:
-        pillar = smc_external.ext_pillar("lab-minion-01", {})
+        pillar = smc_external.ext_pillar("ep_lab_minion_01", {})
         assert pillar["smc_pillar_source"] == "injected"
         assert pillar["smc"]["user"]["windows_account"]
     finally:
@@ -35,7 +38,7 @@ def test_ext_pillar_uses_injected_resolver_not_mock_import() -> None:
 
 def test_ext_pillar_backend_unavailable_does_not_clear_with_mock() -> None:
     smc_external.__opts__ = {}
-    pillar = smc_external.ext_pillar("lab-minion-01", {})
+    pillar = smc_external.ext_pillar("ep_lab_minion_01", {})
     assert pillar["smc"] == {}
     assert pillar["smc_pillar_source"] == "backend_unavailable"
     assert "mock" not in pillar["smc_pillar_source"]

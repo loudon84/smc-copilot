@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _utils.config_revision import apply_config, list_snapshots, rollback_config, validate_config
+from plugin_loader import load_named_util
+
+_config = load_named_util("config_revision")
+apply_config = _config.apply_config
+list_snapshots = _config.list_snapshots
+rollback_config = _config.rollback_config
+validate_config = _config.validate_config
 
 
 def test_validate_rejects_bad_platforms() -> None:

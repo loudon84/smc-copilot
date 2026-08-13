@@ -39,9 +39,20 @@ def test_manifest_forbids_latest() -> None:
     assert not prod.is_file(), "production client-manifest.json must come from signed release, not git"
 
 
+def test_no_utils_package_fallback() -> None:
+    assert not (EXTENSIONS / "_utils" / "__init__.py").exists()
+    offenders = []
+    import_re = re.compile(r"^\s*(from\s+_utils\b|from\s+\.|import\s+_utils\b)", re.M)
+    for path in EXTENSIONS.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if import_re.search(text) or "sys.path.insert" in text:
+            offenders.append(str(path.relative_to(ROOT)))
+    assert offenders == []
+
+
 def test_gateway_sls_has_no_system_user_fallback() -> None:
     text = GATEWAY_SLS.read_text(encoding="utf-8")
     assert "or 'System'" not in text
-    assert "or \"System\"" not in text
+    assert 'or "System"' not in text
     assert "user_name: System" not in text
     assert "waiting_user_binding" in text

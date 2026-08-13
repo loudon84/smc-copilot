@@ -17,6 +17,8 @@ from schemas.desired_state import (
     DesiredUser,
 )
 
+SYSTEM_ACCOUNTS = frozenset({"system", "nt authority\\system", "nt authority/system", "localsystem"})
+
 
 class DesiredStateService:
     def __init__(
@@ -38,6 +40,8 @@ class DesiredStateService:
         try:
             binding = await self.backend.get_binding(endpoint_id)
             desired = await self.backend.get_desired_state(endpoint_id)
+        except SaltControlError:
+            raise
         except Exception as exc:
             if cached is not None:
                 return self._from_last_known_good(endpoint_id, cached, known_revision)
@@ -49,6 +53,15 @@ class DesiredStateService:
 
         if binding is None:
             raise SaltControlError(ErrorCode.BINDING_MISSING, "endpoint user binding missing", status_code=404)
+        self._assert_binding(
+            endpoint_id=endpoint_id,
+            binding_endpoint_id=binding.endpoint_id,
+            user_id=binding.user_id,
+            windows_account=binding.windows_account,
+            windows_sid=binding.windows_sid,
+            profile_dir=binding.profile_dir,
+            revision=binding.revision,
+        )
         if desired is None:
             if cached is not None:
                 return self._from_last_known_good(endpoint_id, cached, known_revision)
@@ -160,6 +173,15 @@ class DesiredStateService:
         payload = cached.payload_json
         hermes = payload.get("hermes") or {}
         rollout = payload.get("rollout") or {}
+        self._assert_binding(
+            endpoint_id=endpoint_id,
+            binding_endpoint_id=endpoint_id,
+            user_id=str(payload.get("userId") or cached.user_id),
+            windows_account=str(payload.get("windowsAccount") or ""),
+            windows_sid=str(payload.get("windowsSid") or ""),
+            profile_dir=str(payload.get("profileDir") or ""),
+            revision=cached.revision,
+        )
         return DesiredStateResponse(
             schema_="smc.desired-state.v2",
             endpoint_id=endpoint_id,
@@ -188,3 +210,22 @@ class DesiredStateService:
                 desired_owner=str(rollout.get("desiredOwner") or "salt"),
             ),
         )
+
+    @staticmethod
+    def _assert_binding(
+        *,
+        endpoint_id: str,
+        binding_endpoint_id: str,
+        user_id: str,
+        windows_account: str,
+        windows_sid: str,
+        profile_dir: str,
+        revision: str,
+    ) -> None:
+        if binding_endpoint_id != endpoint_id:
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "binding endpoint mismatch", status_code=400)
+        fields = (user_id, windows_account, windows_sid, profile_dir, revision)
+        if any(not str(item).strip() for item in fields):
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "binding fields incomplete", status_code=400)
+        if windows_account.strip().lower() in SYSTEM_ACCOUNTS:
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "system binding forbidden", status_code=400)

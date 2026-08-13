@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from _utils.control_owner import claim_salt_owner, read_control_owner, write_control_owner
+from plugin_loader import load_named_util
+
+_owner = load_named_util("smc_control_owner")
+claim_salt_owner = _owner.claim_salt_owner
+read_control_owner = _owner.read_control_owner
+write_control_owner = _owner.write_control_owner
 
 
 def test_claim_salt_owner(tmp_path: Path) -> None:

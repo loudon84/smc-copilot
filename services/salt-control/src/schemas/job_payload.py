@@ -2,30 +2,39 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
-from schemas.common import CamelModel
+from schemas.common import CamelModel, to_camel
 
 
-class InstallPayload(CamelModel):
+class _StrictCamel(CamelModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=to_camel,
+        ser_json_by_alias=True,
+        extra="forbid",
+    )
+
+
+class InstallPayload(_StrictCamel):
     kind: Literal["install"] = "install"
-    artifact_url: str | None = None
-    sha256: str | None = None
     version: str | None = None
     component: str = "hermes"
+    hermes_home: str | None = None
 
 
-class UpgradePayload(CamelModel):
+class UpgradePayload(_StrictCamel):
     kind: Literal["upgrade"] = "upgrade"
-    artifact_url: str | None = None
-    sha256: str | None = None
     version: str | None = None
+    component: str = "hermes"
+    hermes_home: str | None = None
 
 
-class ConfigurePayload(CamelModel):
+class ConfigurePayload(_StrictCamel):
     kind: Literal["configure"] = "configure"
+    config: dict[str, Any] = Field(default_factory=dict)
+    hermes_home: str | None = None
     config_revision: str | None = None
-    desired: dict[str, Any] = Field(default_factory=dict)
 
 
 class GatewayLifecyclePayload(CamelModel):

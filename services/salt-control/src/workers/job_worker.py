@@ -7,11 +7,14 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
+from core.config import Settings
 from core.errors import ErrorCode
 from core.logging import safe_log_fields
 from db.repositories.interfaces import AuditEventRecord, ControlJobRecord, RepositoryBundle
 from db.unit_of_work import unit_of_work
+from integrations.artifact_store import ArtifactStore
 from integrations.salt_master import SaltMaster
+from services.artifact_invocation import resolve_artifact_invocation
 from services.invocation import build_invocation
 from services.job_payload_codec import decode_job_payload
 from services.job_result import parse_job_success
@@ -31,12 +34,16 @@ class JobWorker:
         heartbeat_interval: float = 20.0,
         poll_interval: float = 2.0,
         wake: asyncio.Event | None = None,
+        artifact_store: ArtifactStore | None = None,
+        settings: Settings | None = None,
     ) -> None:
         if session_factory is None and repos is None:
             raise ValueError("JobWorker requires session_factory or repos")
         self.masters = masters
         self.session_factory = session_factory
         self.repos = repos
+        self.artifact_store = artifact_store
+        self.settings = settings
         self.worker_id = worker_id or f"worker_{secrets.token_urlsafe(6)}"
         self.lease_seconds = lease_seconds
         self.heartbeat_interval = heartbeat_interval
@@ -117,7 +124,28 @@ class JobWorker:
 
         try:
             payload = decode_job_payload(job)
-            invocation = build_invocation(job.operation, payload)
+            artifact = None
+            if job.operation in {"install", "upgrade"}:
+                if self.artifact_store is None or self.settings is None:
+                    await self._fail(job, ErrorCode.VALIDATION_ERROR)
+                    return
+                version = getattr(payload, "version", None) if payload is not None else None
+                component = getattr(payload, "component", "hermes") if payload is not None else "hermes"
+                hermes_home = getattr(payload, "hermes_home", None) if payload is not None else None
+
+                async def _resolve(repos: RepositoryBundle):
+                    return await resolve_artifact_invocation(
+                        endpoint_id=job.endpoint_id,
+                        version=str(version or ""),
+                        component=str(component or "hermes"),
+                        hermes_home=hermes_home,
+                        repos=repos,
+                        store=self.artifact_store,
+                        settings=self.settings,
+                    )
+
+                artifact = await self._with_repos(_resolve)
+            invocation = build_invocation(job.operation, payload, artifact=artifact)
         except Exception:
             await self._fail(job, ErrorCode.VALIDATION_ERROR)
             return

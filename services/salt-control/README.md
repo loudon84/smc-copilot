@@ -1,6 +1,8 @@
 # SMC Salt Control Service
 
-Independent FastAPI service implementing the Salt Integration API for SMC Copilot Endpoint Control Plane (PRD v2.3 / v2.3.1).
+Independent FastAPI service implementing the Salt Integration API for SMC Copilot Endpoint Control Plane (PRD v2.3 / v2.4.2).
+
+v2.4.2 Job API: `install`/`upgrade` accept only `version` + optional `hermesHome`. Artifact URL/signature/public key are resolved server-side from the trusted Artifact Store. `configure` sends `config`/`hermesHome`/`note` to `smc_hermes.apply_config`. Ordinary jobs require `endpointId == minionId` and `ep_*`.
 
 ## Stack
 

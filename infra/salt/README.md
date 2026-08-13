@@ -1,4 +1,6 @@
-# SMC Salt Endpoint Control Plane (v2.2)
+# SMC Salt Endpoint Control Plane (v2.2 / v2.4.2)
+
+Patch `0.2.3` closes the Salt 3008.2 independent `_utils` loader contract, External Pillar/Salt Control field mapping, and Job invocation signatures. Live Master evidence remains `not_proven` until the v2.4.2 manual gate.
 
 Repo Salt Lab + production-ready client/security paths for PRD Work **v2.2**. Salt replaces `services/runtime` **Endpoint Control Plane** only. Chat/Session/Attachment/Task stay on `apps/work` → Hermes Gateway `:8642`.
 

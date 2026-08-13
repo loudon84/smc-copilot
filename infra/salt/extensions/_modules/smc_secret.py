@@ -26,11 +26,9 @@ def _utils() -> dict[str, Any]:
 
 def _redact(payload: Any) -> Any:
     utils = _utils()
-    if "smc_redact.mapping" in utils:
-        return utils["smc_redact.mapping"](payload)
-    from _utils.smc_redact import mapping
-
-    return mapping(payload)
+    if "smc_redact.mapping" not in utils:
+        return payload
+    return utils["smc_redact.mapping"](payload)
 
 
 def _salt_env() -> str:

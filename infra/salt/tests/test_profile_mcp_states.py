@@ -5,6 +5,8 @@ from pathlib import Path
 from _modules import smc_hermes
 from _states import smc_hermes as state_mod
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_profile_apply(tmp_path: Path) -> None:
     home = tmp_path / "hermes"
@@ -34,3 +36,14 @@ def test_state_mcp_configured(monkeypatch) -> None:
     )
     ret = state_mod.mcp_configured("mcp", config={"mcpServers": [{"command": "npx"}]})
     assert ret["result"] is True
+
+
+def test_sls_serializes_windows_paths_with_tojson() -> None:
+    hermes = (ROOT / "states" / "hermes.sls").read_text(encoding="utf-8")
+    gateway = (ROOT / "states" / "gateway.sls").read_text(encoding="utf-8")
+    profiles = (ROOT / "states" / "profiles.sls").read_text(encoding="utf-8")
+    assert "tojson" in hermes
+    assert "tojson" in gateway
+    assert "tojson" in profiles
+    assert "fail_without_changes" in hermes
+    assert "waiting_user_binding" in gateway

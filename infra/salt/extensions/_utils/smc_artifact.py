@@ -1,6 +1,7 @@
-"""Signed Hermes artifact lifecycle (Ed25519 production; HMAC lab/test only).
+"""Salt __utils__ name: smc_artifact.* — signed Hermes artifact lifecycle.
 
-Does not import services.runtime. Production refuses shared HMAC signing keys.
+Standalone Salt loader plugin. No relative imports, no _utils package.
+Ed25519 production; HMAC lab/test only.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import hmac
 import json
 import os
 import shutil
+import sys
 import tempfile
 import time
 import urllib.request
@@ -17,12 +19,38 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .paths import HermesLayout
-from .semver import semver_key
-
 MAX_ZIP_FILES = 10_000
 MAX_ZIP_TOTAL_BYTES = 1_000_000_000
 MAX_ZIP_MEMBER_BYTES = 500_000_000
+
+
+def semver_key(version: str) -> tuple[int, int, int]:
+    core = version.strip().lstrip("vV").split("+", 1)[0].split("-", 1)[0]
+    parts = core.split(".")
+    nums: list[int] = []
+    for part in parts[:3]:
+        digits = "".join(ch for ch in part if ch.isdigit())
+        nums.append(int(digits) if digits else 0)
+    while len(nums) < 3:
+        nums.append(0)
+    return nums[0], nums[1], nums[2]
+
+
+class _Layout:
+    def __init__(self, home: Path) -> None:
+        self.home = home
+        self.repo = home / "hermes-agent"
+        self.venv = self.repo / "venv"
+        if sys.platform == "win32":
+            self.python = self.venv / "Scripts" / "python.exe"
+            self.hermes_exe = self.venv / "Scripts" / "hermes.exe"
+        else:
+            self.python = self.venv / "bin" / "python"
+            self.hermes_exe = self.venv / "bin" / "hermes"
+
+    def is_installed(self) -> bool:
+        cli_ok = self.hermes_exe.exists() or (self.repo / "hermes_cli" / "main.py").exists()
+        return self.repo.is_dir() and self.python.exists() and cli_ok
 
 
 def salt_env() -> str:
@@ -163,8 +191,6 @@ def unpack_zip(archive: Path, staging: Path) -> Path:
 
 
 def _ensure_isolated_venv(agent_root: Path) -> None:
-    """Create a stub isolated venv layout when the bundle does not ship one."""
-    layout = HermesLayout.from_home(agent_root.parent if agent_root.name == "hermes-agent" else agent_root)
     scripts = agent_root / "venv" / ("Scripts" if os.name == "nt" else "bin")
     scripts.mkdir(parents=True, exist_ok=True)
     python = scripts / ("python.exe" if os.name == "nt" else "python")
@@ -173,7 +199,6 @@ def _ensure_isolated_venv(agent_root: Path) -> None:
         python.write_text("", encoding="utf-8")
     if not hermes.exists():
         hermes.write_text("", encoding="utf-8")
-    del layout
 
 
 def activate_version(home: Path, version: str, agent_root: Path) -> dict[str, Any]:
@@ -190,7 +215,7 @@ def activate_version(home: Path, version: str, agent_root: Path) -> dict[str, An
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(versions, target)
-    layout = HermesLayout.from_home(home)
+    layout = _Layout(home)
     if not layout.hermes_exe.exists() and not (layout.repo / "hermes_cli" / "main.py").exists():
         return {"ok": False, "error": "executable_missing", "home": str(home)}
     active = {

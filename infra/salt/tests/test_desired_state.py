@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from _pillar import smc_external
-from _utils.redact import redact_mapping
+from plugin_loader import load_named_util
 
 from mock_backend.desired_state import resolve_desired_state
+
+redact_mapping = load_named_util("smc_redact").redact_mapping
 
 
 def test_demo_user_binding() -> None:
@@ -23,12 +25,15 @@ def test_user_switch_does_not_reuse_previous_policy() -> None:
 
 
 def test_ext_pillar_injected_resolver() -> None:
-    smc_external.__opts__ = {
-        "smc_desired_state_resolver": lambda endpoint_id, user_id: resolve_desired_state(endpoint_id, user_id)
-    }
+    def _resolve(endpoint_id, user_id):
+        data = resolve_desired_state("lab-minion-01", user_id)
+        data["endpoint_id"] = endpoint_id
+        return data
+
+    smc_external.__opts__ = {"smc_desired_state_resolver": _resolve}
     try:
-        pillar = smc_external.ext_pillar("lab-minion-01", {})
-        assert pillar["smc"]["endpoint_id"] == "lab-minion-01"
+        pillar = smc_external.ext_pillar("ep_lab_minion_01", {})
+        assert pillar["smc"]["endpoint_id"] == "ep_lab_minion_01"
         assert pillar["smc_pillar_source"] == "injected"
     finally:
         smc_external.__opts__ = {}

@@ -23,6 +23,15 @@ def test_failover_conf_present() -> None:
     assert "verify_master_pubkey_sign" in failover
 
 
+def test_ext_pillar_uses_salt_control_config_names() -> None:
+    text = (MASTER_ROOT / "master.d" / "ext-pillar.conf").read_text(encoding="utf-8")
+    assert "salt_control_url" in text
+    assert "token_file" in text
+    assert "trusted_public_key_file" in text
+    assert "secret-token" not in text.lower()
+    assert "BEGIN PRIVATE" not in text
+
+
 def test_fileserver_conf_readonly_note() -> None:
     text = (MASTER_ROOT / "master.d" / "fileserver.conf").read_text(encoding="utf-8")
     assert "versioned" in text.lower() or "readonly" in text.lower()

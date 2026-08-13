@@ -8,12 +8,13 @@ from core.errors import ErrorCode, SaltControlError
 from core.logging import safe_log_fields
 from db.repositories.interfaces import AuditEventRecord, ControlJobRecord, RepositoryBundle
 from schemas.job import EndpointStatusResponse, JobCreateRequest, JobResponse
-from services.invocation import build_invocation
+from services.invocation import function_for_operation
 from services.job_payload_codec import payload_from_create
 
 ALLOWED_OPERATIONS = frozenset(
     {
         "install",
+        "upgrade",
         "configure",
         "start",
         "stop",
@@ -25,6 +26,28 @@ ALLOWED_OPERATIONS = frozenset(
         "remigrate",
     }
 )
+
+
+def _assert_identity(endpoint_id: str, minion_id: str) -> None:
+    if not endpoint_id.startswith("ep_") or endpoint_id != minion_id:
+        raise SaltControlError(
+            ErrorCode.VALIDATION_ERROR,
+            "endpoint_id must equal minion_id and match ep_*",
+            status_code=400,
+        )
+
+
+def _assert_mutation_payload(operation: str, payload) -> None:
+    if operation in {"install", "upgrade"}:
+        if payload is None or getattr(payload, "kind", None) not in {"install", "upgrade"}:
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "version required", status_code=400)
+        if not getattr(payload, "version", None):
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "version required", status_code=400)
+        if getattr(payload, "component", "hermes") != "hermes":
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "unsupported component", status_code=400)
+    if operation == "configure":
+        if payload is None or getattr(payload, "kind", None) != "configure" or not getattr(payload, "config", None):
+            raise SaltControlError(ErrorCode.VALIDATION_ERROR, "configure requires config", status_code=400)
 
 
 def _new_id(prefix: str) -> str:
@@ -53,6 +76,8 @@ class JobService:
     async def create(self, body: JobCreateRequest) -> JobResponse:
         if body.operation not in ALLOWED_OPERATIONS:
             raise SaltControlError(ErrorCode.VALIDATION_ERROR, "unsupported operation", status_code=400)
+        _assert_identity(body.endpoint_id, body.minion_id)
+        _assert_mutation_payload(body.operation, body.payload)
 
         existing = await self.repos.control_jobs.get_by_idempotency_key(body.idempotency_key)
         if existing is not None:
@@ -70,7 +95,7 @@ class JobService:
             requested_by=body.requested_by,
             correlation_id=body.correlation_id,
             payload_json=payload_from_create(body),
-            expected_function=build_invocation(body.operation, body.payload).function if body.operation else None,
+            expected_function=function_for_operation(body.operation) if body.operation else None,
             accepted_at=datetime.now(UTC),
         )
         created = await self.repos.control_jobs.create(record)

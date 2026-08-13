@@ -1,5 +1,5 @@
 {
-  "generated_note": "salt-migration-inventory v2 (verified FULL only)",
+  "generated_note": "salt-migration-inventory v3 (codeGate/liveGate)",
   "runtime_root": "E:/git/smc-copilot/services/runtime",
   "capabilities_path": "E:/git/smc-copilot/infra/salt/migration-capabilities.yaml",
   "weights": {
@@ -7,13 +7,82 @@
     "PARTIAL": 0.5,
     "NO": 0.0
   },
-  "p0_p1": 0,
+  "p0_p1": 4,
+  "p0_p1_code_open": [],
+  "p0_p1_live_open": [
+    "SALT-LOADER-001",
+    "PILLAR-CONTRACT-001",
+    "JOB-CONTRACT-001",
+    "IDENTITY-BINDING-001"
+  ],
+  "codeGate": "PASS",
+  "liveGate": "FAIL",
+  "blockers": [
+    {
+      "id": "SALT-LOADER-001",
+      "severity": "P0",
+      "implementationStatus": "fixed",
+      "verificationStatus": "not_proven",
+      "affectedCapabilities": [
+        "runtime",
+        "doctor_service",
+        "diagnostics"
+      ],
+      "tests": [
+        "infra/salt/tests/test_salt_loader_contract.py",
+        "infra/salt/tests/test_loader_dunder.py"
+      ]
+    },
+    {
+      "id": "PILLAR-CONTRACT-001",
+      "severity": "P0",
+      "implementationStatus": "fixed",
+      "verificationStatus": "not_proven",
+      "affectedCapabilities": [
+        "sync",
+        "resources",
+        "runtime_sync_service"
+      ],
+      "tests": [
+        "infra/salt/tests/test_external_pillar_contract.py"
+      ]
+    },
+    {
+      "id": "JOB-CONTRACT-001",
+      "severity": "P0",
+      "implementationStatus": "fixed",
+      "verificationStatus": "not_proven",
+      "affectedCapabilities": [
+        "runtime_job_service",
+        "update_service"
+      ],
+      "tests": [
+        "services/salt-control/tests/test_invocation_contract.py"
+      ]
+    },
+    {
+      "id": "IDENTITY-BINDING-001",
+      "severity": "P1",
+      "implementationStatus": "fixed",
+      "verificationStatus": "not_proven",
+      "affectedCapabilities": [
+        "endpoint",
+        "desired_state_service"
+      ],
+      "tests": [
+        "infra/salt/tests/test_minion_identity.py",
+        "services/salt-control/tests/test_desired_state.py"
+      ]
+    }
+  ],
   "go": {
     "api": true,
     "service": true,
     "loc": true,
-    "p0_p1": true,
-    "decision": "GO"
+    "p0_p1": false,
+    "codeGate": true,
+    "liveGate": false,
+    "decision": "NO-GO"
   },
   "entire": {
     "routers": {
@@ -883,7 +952,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/control_owner.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_control_owner.py",
       "capability_tests": [
         "infra/salt/tests/test_control_owner.py"
       ]
@@ -966,7 +1035,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1171,7 +1240,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1210,7 +1279,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1473,7 +1542,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1486,7 +1555,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1499,7 +1568,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1512,7 +1581,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1525,7 +1594,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1549,7 +1618,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1610,7 +1679,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1697,7 +1766,7 @@
       "classification": "PARTIAL",
       "weight": 0.5,
       "status": "documented",
-      "salt_source": "infra/salt/extensions/_utils/paths.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_paths.py",
       "capability_tests": [
         "infra/salt/tests/test_home_adoption.py"
       ]
@@ -1760,7 +1829,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/paths.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_paths.py",
       "capability_tests": [
         "infra/salt/tests/test_home_adoption.py"
       ]
@@ -1799,7 +1868,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]
@@ -1838,7 +1907,7 @@
       "classification": "FULL",
       "weight": 1.0,
       "status": "verified",
-      "salt_source": "infra/salt/extensions/_utils/artifact.py",
+      "salt_source": "infra/salt/extensions/_utils/smc_artifact.py",
       "capability_tests": [
         "infra/salt/tests/test_artifact_lifecycle.py"
       ]

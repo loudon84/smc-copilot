@@ -2,6 +2,40 @@ schema: smc.salt-migration-capabilities.v2
 notes: >
   Only status=verified FULL counts as weight 1.0. pairings and role_library stay PARTIAL.
   Tests listed must exist or inventory downgrades the item.
+  Blockers drive codeGate/liveGate. Cursor/CI may set implementationStatus=fixed;
+  verificationStatus=proven is manual signoff only.
+
+blockers:
+  - id: SALT-LOADER-001
+    severity: P0
+    implementationStatus: fixed
+    verificationStatus: not_proven
+    affectedCapabilities: [runtime, doctor_service, diagnostics]
+    tests:
+      - infra/salt/tests/test_salt_loader_contract.py
+      - infra/salt/tests/test_loader_dunder.py
+  - id: PILLAR-CONTRACT-001
+    severity: P0
+    implementationStatus: fixed
+    verificationStatus: not_proven
+    affectedCapabilities: [sync, resources, runtime_sync_service]
+    tests:
+      - infra/salt/tests/test_external_pillar_contract.py
+  - id: JOB-CONTRACT-001
+    severity: P0
+    implementationStatus: fixed
+    verificationStatus: not_proven
+    affectedCapabilities: [runtime_job_service, update_service]
+    tests:
+      - services/salt-control/tests/test_invocation_contract.py
+  - id: IDENTITY-BINDING-001
+    severity: P1
+    implementationStatus: fixed
+    verificationStatus: not_proven
+    affectedCapabilities: [endpoint, desired_state_service]
+    tests:
+      - infra/salt/tests/test_minion_identity.py
+      - services/salt-control/tests/test_desired_state.py
 
 items:
   # --- routers (Endpoint Control Plane) ---
@@ -145,7 +179,7 @@ items:
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/services/installation_service.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: update_service
     kind: service
@@ -180,7 +214,7 @@ items:
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/services/gateway_ownership_service.py
-    salt_source: infra/salt/extensions/_utils/control_owner.py
+    salt_source: infra/salt/extensions/_utils/smc_control_owner.py
     tests: [infra/salt/tests/test_control_owner.py]
   - name: gateway_credential_service
     kind: service
@@ -278,7 +312,7 @@ items:
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/services/runtime_update_plan_service.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: runtime_version_pin_service
     kind: service
@@ -292,7 +326,7 @@ items:
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/services/runtime_service_update.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: metrics_service
     kind: service
@@ -399,63 +433,63 @@ items:
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/artifact_downloader.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: checksum_verifier
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/checksum_verifier.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: artifact_signature
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/artifact_signature.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: bundle_security
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/bundle_security.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: version_layout
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/version_layout.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: activation_manager
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/activation_manager.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: archive_policy
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/archive_policy.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: executable_policy
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/executable_policy.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: platform_paths
     kind: runtime_pkg
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/platform_paths.py
-    salt_source: infra/salt/extensions/_utils/paths.py
+    salt_source: infra/salt/extensions/_utils/smc_paths.py
     tests: [infra/salt/tests/test_home_adoption.py]
   - name: windows_program_paths
     kind: runtime_pkg
@@ -532,7 +566,7 @@ items:
     classification: FULL
     status: verified
     runtime_source: services/runtime/src/runtime/resource_bundle.py
-    salt_source: infra/salt/extensions/_utils/artifact.py
+    salt_source: infra/salt/extensions/_utils/smc_artifact.py
     tests: [infra/salt/tests/test_artifact_lifecycle.py]
   - name: instance_operation_lock
     kind: runtime_pkg
@@ -553,7 +587,7 @@ items:
     classification: PARTIAL
     status: documented
     runtime_source: services/runtime/src/runtime/hermes_profile_paths.py
-    salt_source: infra/salt/extensions/_utils/paths.py
+    salt_source: infra/salt/extensions/_utils/smc_paths.py
     tests: [infra/salt/tests/test_home_adoption.py]
   - name: mcp_config_compiler
     kind: runtime_pkg
