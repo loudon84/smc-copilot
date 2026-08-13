@@ -32,6 +32,15 @@ def installed(
     public_key: str | None = None,
 ) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
+    inspected = _salt()["smc_hermes.inspect"](hermes_home=hermes_home)
+    if inspected.get("error"):
+        ret["comment"] = inspected["error"]
+        return ret
+    current = _salt()["smc_hermes.version"](hermes_home=hermes_home)
+    if inspected.get("installed") and (migrate_mode or (version and current.get("version") == version)):
+        ret["result"] = True
+        ret["comment"] = "existing Hermes home adopted" if migrate_mode else "Hermes version already current"
+        return ret
     if _opts().get("test"):
         ret["result"] = None
         ret["comment"] = f"Hermes {version} would be installed"
@@ -48,7 +57,7 @@ def installed(
         public_key=public_key,
     )
     ret["result"] = bool(result.get("ok"))
-    ret["changes"] = result if ret["result"] else {}
+    ret["changes"] = result if ret["result"] and result.get("changed", True) else {}
     ret["comment"] = result.get("message") or ("installed" if ret["result"] else result.get("error", "failed"))
     return ret
 
@@ -88,7 +97,7 @@ def gateway_started(name: str, hermes_home: str | None = None) -> dict[str, Any]
         return ret
     result = _salt()["smc_hermes.gateway_start"](hermes_home=hermes_home)
     ret["result"] = bool(result.get("ok"))
-    ret["changes"] = result if ret["result"] else {}
+    ret["changes"] = result if ret["result"] and result.get("changed", True) else {}
     ret["comment"] = "started" if ret["result"] else result.get("error", "start failed")
     return ret
 
@@ -101,7 +110,7 @@ def gateway_stopped(name: str, hermes_home: str | None = None) -> dict[str, Any]
         return ret
     result = _salt()["smc_hermes.gateway_stop"](hermes_home=hermes_home)
     ret["result"] = bool(result.get("ok"))
-    ret["changes"] = result if ret["result"] else {}
+    ret["changes"] = result if ret["result"] and result.get("changed", True) else {}
     ret["comment"] = "stopped" if ret["result"] else result.get("error", "stop failed")
     return ret
 
@@ -132,6 +141,10 @@ def gateway_wrapper_present(
     program_data: str | None = None,
 ) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
+    if _opts().get("test"):
+        ret["result"] = None
+        ret["comment"] = "Gateway wrapper would be checked / updated"
+        return ret
     result = _salt()["smc_hermes.gateway_wrapper"](
         endpoint_id=endpoint_id,
         hermes_home=hermes_home,
@@ -139,7 +152,7 @@ def gateway_wrapper_present(
         program_data=program_data,
     )
     ret["result"] = bool(result.get("ok"))
-    ret["changes"] = result if ret["result"] else {}
+    ret["changes"] = result if ret["result"] and result.get("changed", True) else {}
     ret["comment"] = "wrapper ready" if ret["result"] else result.get("error", "failed")
     return ret
 
@@ -151,6 +164,10 @@ def profile_present(
     windows_account: str | None = None,
 ) -> dict[str, Any]:
     ret: dict[str, Any] = {"name": name, "changes": {}, "result": False, "comment": ""}
+    if _opts().get("test"):
+        ret["result"] = None
+        ret["comment"] = "Hermes profile would be checked / updated"
+        return ret
     result = _salt()["smc_hermes.profile_apply"](
         name=name,
         hermes_home=hermes_home,
@@ -158,7 +175,7 @@ def profile_present(
         windows_account=windows_account,
     )
     ret["result"] = bool(result.get("ok"))
-    ret["changes"] = result if ret["result"] else {}
+    ret["changes"] = result if ret["result"] and result.get("changed", True) else {}
     ret["comment"] = "profile applied" if ret["result"] else result.get("error", "failed")
     return ret
 

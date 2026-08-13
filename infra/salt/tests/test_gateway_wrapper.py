@@ -23,6 +23,14 @@ def test_wrapper_writes_hermes_gateway_run(tmp_path: Path) -> None:
     assert result["task"]["trigger"] == "OnLogon"
     assert result["task"]["user_name"] == r"DOMAIN\zhangsan"
     assert result["task"]["force"] is True
+    again = smc_hermes.gateway_wrapper(
+        endpoint_id="ep_1",
+        hermes_home=str(home),
+        windows_account=r"DOMAIN\zhangsan",
+        program_data=str(tmp_path / "ProgramData"),
+        hermes_exe=str(home / "hermes.exe"),
+    )
+    assert again["changed"] is False
 
 
 def test_wrapper_refuses_system_fallback() -> None:

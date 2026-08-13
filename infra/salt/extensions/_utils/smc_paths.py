@@ -46,6 +46,8 @@ def detect_existing_home(
         candidates.append(Path(profile) / ".hermes")
     seen: set[str] = set()
     for candidate in candidates:
+        if _is_system_profile(candidate):
+            continue
         key = str(candidate.resolve()) if candidate.exists() else str(candidate)
         if key in seen:
             continue
@@ -58,16 +60,29 @@ def detect_existing_home(
 def default_hermes_home() -> Path:
     env = os.environ.get("HERMES_HOME", "").strip()
     if env:
-        return Path(env).expanduser()
+        candidate = Path(env).expanduser()
+        if _is_system_profile(candidate):
+            raise RuntimeError("hermes_home_unresolved")
+        return candidate
     adopted = detect_existing_home()
     if adopted:
         return adopted
     if sys.platform == "win32":
         local = os.environ.get("LOCALAPPDATA")
-        if local:
+        if local and not _is_system_profile(Path(local)) and not _is_system_account():
             return Path(local) / "hermes"
-        return Path.home() / ".hermes"
+        raise RuntimeError("hermes_home_unresolved")
     return Path.home() / ".hermes"
+
+
+def _is_system_account() -> bool:
+    account = str(os.environ.get("USERNAME") or os.environ.get("USER") or "").strip().lower()
+    return account in {"system", "localsystem", "local system"}
+
+
+def _is_system_profile(path: Path) -> bool:
+    normalized = str(path).replace("/", "\\").lower()
+    return "\\windows\\system32\\config\\systemprofile" in normalized
 
 
 class HermesLayout:
@@ -118,5 +133,7 @@ class HermesLayout:
 
 
 def layout(hermes_home: str | Path | None = None) -> HermesLayout:
-    home = Path(hermes_home).expanduser() if hermes_home else default_hermes_home()
+    home = Path(hermes_home).expanduser() if hermes_home and str(hermes_home).strip() else default_hermes_home()
+    if _is_system_profile(home):
+        raise RuntimeError("hermes_home_unresolved")
     return HermesLayout.from_home(home)

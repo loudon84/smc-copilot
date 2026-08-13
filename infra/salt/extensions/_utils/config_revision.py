@@ -110,12 +110,19 @@ def apply_config(hermes_home: Path, data: dict[str, Any], note: str = "") -> dic
         return {"ok": False, "error": "invalid_config", "message": message}
     layout_config = hermes_home / "config.yaml"
     previous = layout_config.read_text(encoding="utf-8") if layout_config.is_file() else ""
+    if previous and load_config(layout_config) == data:
+        return {
+            "ok": True,
+            "changed": False,
+            "path": str(layout_config),
+            "message": "config already current",
+        }
     if previous:
         save_snapshot(hermes_home, previous, note="pre-apply")
     content = dump_config(data)
     atomic_write_text(layout_config, content)
     snapshot = save_snapshot(hermes_home, content, note=note or "apply")
-    return {"ok": True, "revision": snapshot["revision"], "path": str(layout_config)}
+    return {"ok": True, "changed": True, "revision": snapshot["revision"], "path": str(layout_config)}
 
 
 def rollback_config(hermes_home: Path, revision: str) -> dict[str, Any]:

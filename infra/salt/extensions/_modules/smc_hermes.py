@@ -12,6 +12,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,22 @@ def _utils() -> dict[str, Any]:
 
 def _salt() -> dict[str, Any]:
     return globals().get("__salt__") or {}
+
+
+def _pillar() -> dict[str, Any]:
+    return globals().get("__pillar__") or {}
+
+
+def _binding_context() -> dict[str, str]:
+    smc = _pillar().get("smc") or {}
+    user = smc.get("user") or {}
+    hermes = smc.get("hermes") or {}
+    return {
+        "windows_account": str(user.get("windows_account") or "").strip(),
+        "windows_sid": str(user.get("windows_sid") or "").strip(),
+        "profile_dir": str(user.get("profile_dir") or "").strip(),
+        "hermes_home": str(hermes.get("home") or "").strip(),
+    }
 
 
 def loader_status() -> dict[str, Any]:
@@ -81,6 +98,16 @@ def _layout(hermes_home: str | None = None):
     return _call_util("smc_paths.layout", hermes_home)
 
 
+def _safe_layout(hermes_home: str | None, action: str):
+    selected_home = hermes_home or _binding_context()["hermes_home"] or None
+    try:
+        return _layout(selected_home), None
+    except RuntimeError as exc:
+        if str(exc) == "hermes_home_unresolved":
+            return None, {"ok": False, "error": "hermes_home_unresolved", "action": action, "home": None}
+        raise
+
+
 def _read_owner():
     return _call_util("smc_control_owner.read_control_owner")
 
@@ -100,7 +127,9 @@ def _signing_key(explicit: str | None = None) -> str:
 
 
 def version(hermes_home: str | None = None) -> dict[str, Any]:
-    layout = _layout(hermes_home)
+    layout, error = _safe_layout(hermes_home, "version")
+    if error:
+        return error
     marker = layout.home / "active.json"
     installed_version = None
     if marker.is_file():
@@ -122,7 +151,9 @@ def inspect(hermes_home: str | None = None) -> dict[str, Any]:
     status = loader_status()
     if status["missing"]:
         return _unavailable("inspect")
-    layout = _layout(hermes_home)
+    layout, error = _safe_layout(hermes_home, "inspect")
+    if error:
+        return error
     owner = _read_owner()
     return {
         "home": str(layout.home),
@@ -169,12 +200,28 @@ def install(
     public_key: str | None = None,
     migrate_mode: bool = False,
 ) -> dict[str, Any]:
+    layout, error = _safe_layout(hermes_home, "install")
+    if error:
+        return error
+    before = inspect(str(layout.home))
+    current_version = version_info_from_home(str(layout.home))
+    if before.get("installed") and (migrate_mode or (version and current_version == version)):
+        return {
+            "ok": True,
+            "changed": False,
+            "installed": True,
+            "version": current_version,
+            "home": str(layout.home),
+            "adopted": bool(migrate_mode),
+            "migrate_mode": bool(migrate_mode),
+            "owner_claimed": False,
+            "message": "existing Hermes home adopted" if migrate_mode else "Hermes version already current",
+        }
     # migrate_mode: prepare/adopt without claiming control-owner (smc_handover.commit does that).
     if not migrate_mode:
         claim = _claim_owner()
         if not claim.get("ok"):
             return claim
-    layout = _layout(hermes_home)
     url = artifact_url or artifact_path
     if not url or not artifact_sha256 or not artifact_signature:
         return {
@@ -298,7 +345,9 @@ def health(hermes_home: str | None = None, gateway_url: str | None = None) -> di
     status = loader_status()
     if status["missing"]:
         return _unavailable("health")
-    layout = _layout(hermes_home)
+    layout, error = _safe_layout(hermes_home, "health")
+    if error:
+        return error
     url = gateway_url or os.environ.get("SMC_HERMES_GATEWAY_URL", "http://127.0.0.1:8642")
     healthy = False
     status_code = None
@@ -320,22 +369,131 @@ def health(hermes_home: str | None = None, gateway_url: str | None = None) -> di
     }
 
 
-def doctor(hermes_home: str | None = None) -> dict[str, Any]:
+def _gateway_task_info(task_name: str = "SMC Hermes Gateway") -> dict[str, Any]:
+    if os.name != "nt":
+        return {"exists": False, "user": None, "command": None}
+    try:
+        completed = subprocess.run(
+            ["schtasks", "/Query", "/TN", task_name, "/XML"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {"exists": False, "user": None, "command": None, "error": type(exc).__name__}
+    if completed.returncode != 0:
+        return {"exists": False, "user": None, "command": None}
+    try:
+        root = ET.fromstring(completed.stdout.lstrip("\ufeff"))
+        user = root.findtext(".//{*}UserId")
+        command = root.findtext(".//{*}Exec/{*}Command")
+        arguments = root.findtext(".//{*}Exec/{*}Arguments")
+    except ET.ParseError:
+        return {"exists": True, "user": None, "command": None, "error": "task_xml_invalid"}
+    action = " ".join(part for part in (command, arguments) if part)
+    return {"exists": True, "user": user, "command": action or None}
+
+
+def _task_targets_home(task: dict[str, Any], hermes_home: Path) -> bool:
+    action = str(task.get("command") or "").strip()
+    if not action:
+        return False
+    if str(hermes_home).lower() in action.lower():
+        return True
+    if action.startswith('"') and '"' in action[1:]:
+        command_path = action[1:].split('"', 1)[0]
+    elif action.lower().endswith((".cmd", ".bat")):
+        command_path = action
+    else:
+        command_path = action.split(" ", 1)[0]
+    candidate = Path(os.path.expandvars(command_path))
+    if not candidate.is_file() or candidate.suffix.lower() not in {".cmd", ".bat"}:
+        return False
+    try:
+        return str(hermes_home).lower() in candidate.read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+
+
+def doctor(
+    hermes_home: str | None = None,
+    expected_windows_account: str | None = None,
+    expected_windows_sid: str | None = None,
+    expected_profile_dir: str | None = None,
+    expected_hermes_home: str | None = None,
+    gateway_url: str | None = None,
+) -> dict[str, Any]:
     status = loader_status()
     if status["missing"]:
         return _unavailable("doctor")
-    layout = _layout(hermes_home)
+    binding = _binding_context()
+    expected_windows_account = expected_windows_account or binding["windows_account"]
+    expected_windows_sid = expected_windows_sid or binding["windows_sid"]
+    expected_profile_dir = expected_profile_dir or binding["profile_dir"]
+    expected_hermes_home = expected_hermes_home or hermes_home or binding["hermes_home"]
+    selected_home = hermes_home or expected_hermes_home
+    layout, error = _safe_layout(selected_home, "doctor")
+    if error:
+        error.update(
+            {
+                "state": "waiting_user_binding" if not expected_hermes_home else "hermes_home_unresolved",
+                "agent_ready": False,
+                "gateway_ready": False,
+                "handover_ready": False,
+            }
+        )
+        return error
+    task = _gateway_task_info()
+    expected_account = (expected_windows_account or "").strip()
+    task_user = str(task.get("user") or "").strip()
+    expected_sid = (expected_windows_sid or "").strip()
+    task_user_bound = bool(
+        task.get("exists")
+        and task_user
+        and (task_user.lower() == expected_account.lower() or task_user.lower() == expected_sid.lower())
+    )
+    task_home_bound = bool(task.get("exists") and _task_targets_home(task, layout.home))
+    gateway = health(hermes_home=str(layout.home), gateway_url=gateway_url)
+    agent_ready = bool(layout.is_installed() and layout.config_file.is_file() and layout.env_file.is_file())
+    binding_complete = bool(expected_account and expected_windows_sid and expected_profile_dir and expected_hermes_home)
+    gateway_ready = bool(task_user_bound and task_home_bound and gateway.get("gateway_healthy"))
+    owner = _read_owner()
+    handover_ready = bool(agent_ready and binding_complete and gateway_ready)
     checks = {
         "hermes_home_exists": layout.home.is_dir(),
         "repo_exists": layout.repo.is_dir(),
         "venv_python": layout.python.exists(),
+        "hermes_exe": layout.hermes_exe.exists(),
         "config": layout.config_file.is_file(),
         "env": layout.env_file.is_file(),
-        "control_owner_salt": _read_owner() == "salt",
-        "gateway_task_user_bound": True,
+        "control_owner_salt": owner == "salt",
+        "binding_complete": binding_complete,
+        "gateway_task_exists": bool(task.get("exists")),
+        "gateway_task_user_bound": task_user_bound,
+        "gateway_task_home_bound": task_home_bound,
+        "gateway_healthy": bool(gateway.get("gateway_healthy")),
     }
-    ok = all(checks.values()) or (checks["hermes_home_exists"] and checks["repo_exists"])
-    payload = {"ok": ok, "checks": checks, "home": str(layout.home)}
+    if not binding_complete:
+        state = "waiting_user_binding"
+    elif not agent_ready:
+        state = "agent_not_ready"
+    elif not gateway_ready:
+        state = "gateway_not_ready"
+    elif owner != "salt":
+        state = "ready_for_handover"
+    else:
+        state = "ready"
+    payload = {
+        "ok": handover_ready,
+        "state": state,
+        "agent_ready": agent_ready,
+        "gateway_ready": gateway_ready,
+        "handover_ready": handover_ready,
+        "checks": checks,
+        "home": str(layout.home),
+        "gateway_task": task,
+    }
     return _call_util("smc_redact.mapping", payload)
 
 
@@ -372,12 +530,14 @@ def gateway_wrapper(
     layout = _layout(hermes_home)
     exe = hermes_exe or str(layout.hermes_exe)
     dest = dest_dir / f"hermes-gateway-{endpoint_id}.cmd"
-    dest.write_text(
-        f'@echo off\r\nset HERMES_HOME={hermes_home}\r\n"{exe}" gateway run\r\n',
-        encoding="utf-8",
-    )
+    content = f'@echo off\r\nset HERMES_HOME={hermes_home}\r\n"{exe}" gateway run\r\n'
+    encoded = content.encode("utf-8")
+    changed = not dest.is_file() or dest.read_bytes() != encoded
+    if changed:
+        dest.write_bytes(encoded)
     return {
         "ok": True,
+        "changed": changed,
         "wrapper": str(dest),
         "task": {
             "name": "SMC Hermes Gateway",
@@ -579,13 +739,22 @@ def profile_apply(
     profile_dir = home / "profiles" / name
     profile_dir.mkdir(parents=True, exist_ok=True)
     meta = {"name": name, "home": str(home), "port": port}
-    (profile_dir / "profile.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    profile_file = profile_dir / "profile.json"
+    content = json.dumps(meta, indent=2) + "\n"
+    profile_changed = not profile_file.is_file() or profile_file.read_text(encoding="utf-8") != content
+    if profile_changed:
+        profile_file.write_text(content, encoding="utf-8")
     wrapper = gateway_wrapper(
         endpoint_id=f"{name}",
         hermes_home=str(home),
         windows_account=windows_account,
     )
-    return {"ok": wrapper.get("ok", True) or windows_account is None, "profile": meta, "wrapper": wrapper}
+    return {
+        "ok": wrapper.get("ok", True) or windows_account is None,
+        "changed": profile_changed or bool(wrapper.get("changed")),
+        "profile": meta,
+        "wrapper": wrapper,
+    }
 
 
 def mcp_validate(config: dict[str, Any] | None) -> dict[str, Any]:

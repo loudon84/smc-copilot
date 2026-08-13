@@ -14,6 +14,8 @@ def test_profile_apply(tmp_path: Path) -> None:
     assert (home / "profiles" / "default" / "profile.json").is_file()
     assert result["profile"]["port"] == 8642
     assert result["wrapper"]["ok"] is True
+    repeated = smc_hermes.profile_apply("default", hermes_home=str(home), port=8642, windows_account=r"DOMAIN\zhangsan")
+    assert repeated["changed"] is False
 
 
 def test_mcp_validate_and_test() -> None:

@@ -32,3 +32,20 @@ def test_apply_and_rollback(tmp_path: Path) -> None:
     assert rolled["ok"] is True
     text = (home / "config.yaml").read_text(encoding="utf-8")
     assert "true" in text.lower() or "True" in text or "enabled: true" in text.lower()
+
+
+def test_apply_same_config_is_idempotent(tmp_path: Path) -> None:
+    home = tmp_path / "hermes"
+    home.mkdir()
+    desired = {"platforms": {"api_server": {"enabled": True}}}
+    first = apply_config(home, desired, note="first")
+    before = list_snapshots(home)
+    second = apply_config(home, desired, note="duplicate")
+    assert first["changed"] is True
+    assert second == {
+        "ok": True,
+        "changed": False,
+        "path": str(home / "config.yaml"),
+        "message": "config already current",
+    }
+    assert list_snapshots(home) == before
