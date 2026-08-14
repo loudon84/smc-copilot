@@ -1,6 +1,6 @@
 [project]
 name = "smc-opsi-control"
-version = "1.0.0"
+version = "1.1.0"
 description = "SMC Copilot OPSI Control Service — Client, Product, Action, Policy, Result, Diagnostics"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

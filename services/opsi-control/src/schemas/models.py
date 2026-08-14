@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def to_camel(name: str) -> str:
@@ -64,9 +64,17 @@ CUSTOM_OPERATIONS = {
     Operation.REPAIR,
 }
 
+SETUP_UPDATE = {Operation.SETUP, Operation.UPDATE}
+
+
+class UserBinding(CamelModel):
+    sid: str = Field(min_length=8, max_length=184, pattern=r"^S-1-[0-9-]+$")
+    account: str = Field(min_length=1, max_length=128)
+
 
 class TargetRef(CamelModel):
     client_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._-]+$")
+    user_binding: UserBinding | None = None
 
 
 class ActionCreateRequest(CamelModel):
@@ -79,12 +87,24 @@ class ActionCreateRequest(CamelModel):
     auto_repair_level: int | None = Field(default=None, ge=0, le=4)
     note: str | None = Field(default=None, max_length=256)
 
+    @model_validator(mode="after")
+    def _require_user_binding_for_setup_update(self) -> ActionCreateRequest:
+        if self.operation in SETUP_UPDATE:
+            missing = [t.client_id for t in self.targets if t.user_binding is None]
+            if missing:
+                raise ValueError("setup/update require userBinding {sid, account} on every target")
+            if not self.hermes_version or self.hermes_version.lower() == "latest":
+                raise ValueError("setup/update require exact hermesVersion")
+        return self
+
 
 class ActionTargetView(CamelModel):
     client_id: str
     status: ActionStatus
     error_code: str | None = None
     message: str | None = None
+    attempt: int | None = None
+    user_binding: UserBinding | None = None
 
 
 class ActionView(CamelModel):
@@ -94,6 +114,7 @@ class ActionView(CamelModel):
     payload_digest: str
     targets: list[ActionTargetView]
     created_at: datetime
+    updated_at: datetime | None = None
 
 
 class ActionResultView(CamelModel):
@@ -108,6 +129,9 @@ class ActionResultView(CamelModel):
     error_code: str | None = None
     message: str | None = None
     user_context: str | None = None
+    attempt: int | None = None
+    property_digest: str | None = None
+    opsi_modification_time: str | None = None
 
 
 class ClientView(CamelModel):
@@ -122,17 +146,30 @@ class ProductView(CamelModel):
     package_version: str
 
 
+class HermesStateView(CamelModel):
+    version: str | None = None
+    profile: str | None = None
+
+
+class GatewayStateView(CamelModel):
+    port: int | None = None
+    reachable: bool | None = None
+
+
+class ConfigStateView(CamelModel):
+    revision: int | None = None
+    status: ConfigStatus = ConfigStatus.UNKNOWN
+
+
 class EndpointStateView(CamelModel):
     schema_: Literal["smc.hermes.state.v1"] = Field(default="smc.hermes.state.v1", alias="schema")
     owner: Literal["opsi"] = "opsi"
     client_id: str
     timestamp: datetime
-    hermes_version: str | None = None
+    hermes: HermesStateView = Field(default_factory=HermesStateView)
+    gateway: GatewayStateView = Field(default_factory=GatewayStateView)
+    config: ConfigStateView = Field(default_factory=ConfigStateView)
     health: HealthStatus = HealthStatus.UNKNOWN
-    config_status: ConfigStatus = ConfigStatus.UNKNOWN
-    config_revision: int | None = None
-    gateway_port: int | None = None
-    gateway_reachable: bool | None = None
 
 
 class PolicyApplyRequest(CamelModel):
@@ -157,3 +194,4 @@ class DiagnosticView(CamelModel):
     recommended_action: str
     redacted: bool = True
     files: list[DiagnosticFileView] = Field(default_factory=list)
+    manifest_digest: str | None = None

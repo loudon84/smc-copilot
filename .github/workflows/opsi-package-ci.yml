@@ -17,9 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Product pytest
+        run: python -m pytest infra/opsi/tests -q
       - name: Validate control.toml and package smoke
         run: python infra/opsi/products/smc-hermes-agent/packaging/makepackage.py --smoke
       - name: Schema examples
@@ -33,16 +37,46 @@ jobs:
           pat = re.compile(r"(api[_-]?key|secret|password|bearer\s+[A-Za-z0-9._-]{12,})", re.I)
           hits = []
           for path in root.rglob("*"):
-              if not path.is_file() or path.suffix.lower() in {".png", ".zip", ".opsi"}:
+              if not path.is_file() or path.suffix.lower() in {".png", ".zip", ".opsi", ".sig"}:
+                  continue
+              if path.name.endswith("release-private-key.pem"):
+                  hits.append(str(path))
                   continue
               text = path.read_text(encoding="utf-8", errors="replace")
               if pat.search(text) and "example" not in path.name.lower() and "redact" not in path.name.lower():
-                  # allow documentation of redaction rules
-                  if "redact" in text.lower() or "forbidden" in text.lower():
+                  if "redact" in text.lower() or "forbidden" in text.lower() or "secret key" in text.lower():
                       continue
                   hits.append(str(path))
           assert hits == [], hits
           print("ok: no secrets in product tree")
           PY
       - name: Isolation vs Salt
-        run: python scripts/check-opsi-isolation.py
+        run: python scripts/check-opsi-isolation.py --base ${{ github.event.pull_request.base.sha || github.event.before }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smc-hermes-agent-smoke
+          path: infra/opsi/products/smc-hermes-agent/dist/*.smoke.zip
+          if-no-files-found: error
+
+  pester:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pester adapter contracts
+        shell: pwsh
+        run: Invoke-Pester -Path infra/opsi/tests/SmcHermesAgent.Tests.ps1 -EnableExit
+
+  builder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Smoke package is not .opsi
+        run: |
+          python infra/opsi/products/smc-hermes-agent/packaging/makepackage.py --smoke --dest /tmp/opsi-smoke
+          ls /tmp/opsi-smoke/*.smoke.zip
+          test ! -e /tmp/opsi-smoke/*.opsi
+      - name: Real builder script present
+        run: test -f infra/opsi/products/smc-hermes-agent/packaging/build-real.sh

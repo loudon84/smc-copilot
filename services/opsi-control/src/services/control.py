@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime, timedelta
+
 from core.auth import digest_payload
 from core.config import Settings
 from core.errors import ErrorCode, OpsiControlError
-from db.repositories.interfaces import ActionRecord, RepositoryBundle, TargetRecord
+from db.repositories.interfaces import ActionRecord, PolicyRecord, RepositoryBundle, TargetRecord
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import (
     ActionCreateRequest,
@@ -15,8 +18,8 @@ from schemas.models import (
     PolicyApplyRequest,
     TargetRef,
 )
-from workers.action_dispatcher import dispatch_target
-from workers.result_reconciler import parse_result_marker
+from workers.action_dispatcher import dispatch_queued
+from workers.result_reconciler import parse_result_marker, reconcile_open
 
 
 class InventoryService:
@@ -58,12 +61,16 @@ class InventoryService:
             health = "HEALTHY"
         elif installation.lower() in {"failed"}:
             health = "CRITICAL"
+        now = datetime.now(UTC).isoformat()
         return {
             "schema": "smc.hermes.state.v1",
             "owner": "opsi",
             "clientId": client_id,
+            "timestamp": now,
+            "hermes": {"version": "unknown", "profile": "default"},
+            "gateway": {"port": 8642, "reachable": health == "HEALTHY"},
+            "config": {"revision": 0, "status": "UNKNOWN"},
             "health": health,
-            "installationStatus": installation,
         }
 
 
@@ -80,55 +87,41 @@ class ActionService:
             if existing.payload_digest != digest:
                 raise OpsiControlError(ErrorCode.CONFLICT, "request_id payload mismatch", status_code=409)
             return await self.get(body.request_id)
+        now = datetime.now(UTC)
         record = ActionRecord(
             request_id=body.request_id,
             operation=body.operation,
             payload_digest=digest,
-            status=ActionStatus.CREATED,
+            status=ActionStatus.QUEUED,
             actor_id=actor_id,
+            created_at=now,
+            updated_at=now,
+            deadline=now + timedelta(hours=4),
+            payload_json=json.dumps(body.model_dump(by_alias=True, exclude_none=True), sort_keys=True),
+            hermes_version=body.hermes_version,
+            config_revision=body.config_revision,
+            auto_repair_level=body.auto_repair_level,
         )
         await self.repos.actions.put(record)
         for target in body.targets:
+            binding = target.user_binding
             await self.repos.targets.put(
-                TargetRecord(request_id=body.request_id, client_id=target.client_id, status=ActionStatus.QUEUED)
-            )
-        await self.repos.audit.add(body.request_id, actor_id, "action.created", body.operation.value)
-        any_failed = False
-        for target in body.targets:
-            try:
-                await dispatch_target(
-                    rpc=self.rpc,
-                    product_id=self.settings.product_id,
+                TargetRecord(
                     request_id=body.request_id,
                     client_id=target.client_id,
-                    operation=body.operation,
-                    hermes_version=body.hermes_version,
-                    config_revision=body.config_revision,
-                    auto_repair_level=body.auto_repair_level,
+                    status=ActionStatus.QUEUED,
+                    user_sid=binding.sid if binding else "",
+                    user_account=binding.account if binding else "",
                 )
-                await self.repos.targets.put(
-                    TargetRecord(
-                        request_id=body.request_id,
-                        client_id=target.client_id,
-                        status=ActionStatus.DISPATCHED,
-                        dispatched=True,
-                    )
-                )
-            except OpsiControlError as exc:
-                any_failed = True
-                await self.repos.targets.put(
-                    TargetRecord(
-                        request_id=body.request_id,
-                        client_id=target.client_id,
-                        status=ActionStatus.FAILED,
-                        error_code=exc.code,
-                        message=exc.message,
-                        dispatched=False,
-                    )
-                )
-        record.status = ActionStatus.FAILED if any_failed else ActionStatus.DISPATCHED
-        await self.repos.actions.put(record)
+            )
+        await self.repos.audit.add(body.request_id, actor_id, "action.created", body.operation.value)
         return await self.get(body.request_id)
+
+    async def dispatch_once(self) -> int:
+        return await dispatch_queued(self.repos, self.rpc, self.settings.product_id)
+
+    async def reconcile_once(self) -> int:
+        return await reconcile_open(self.repos, self.rpc, self.settings.product_id)
 
     async def get(self, request_id: str) -> ActionView:
         record = await self.repos.actions.get(request_id)
@@ -141,12 +134,15 @@ class ActionService:
             status=record.status,
             payload_digest=record.payload_digest,
             created_at=record.created_at,
+            updated_at=record.updated_at,
             targets=[
                 ActionTargetView(
                     client_id=item.client_id,
                     status=item.status,
                     error_code=item.error_code or None,
                     message=item.message or None,
+                    attempt=item.attempt,
+                    user_binding=item.user_binding,
                 )
                 for item in targets
             ],
@@ -164,16 +160,20 @@ class ActionService:
                     "status": item.status.value,
                     "timestamp": item.updated_at.isoformat(),
                     "sha256": item.sha256 or None,
+                    "bytes": item.bytes,
                     "redacted": item.redacted,
-                    "errorCode": item.error_code if hasattr(item, "error_code") else None,
+                    "errorCode": item.error_code or None,
                     "message": item.body[:512] if item.body else None,
+                    "attempt": None,
+                    "propertyDigest": None,
+                    "opsiModificationTime": None,
                 }
                 for item in stored
             ]
         targets = await self.repos.targets.list_for_request(request_id)
         out = []
         for target in targets:
-            log = await self.rpc.call("log_read", target.client_id)
+            log = await self.rpc.call("log_read", "instlog", target.client_id, 262144)
             marker = parse_result_marker(str(log or ""), request_id, target.client_id)
             out.append(
                 {
@@ -181,7 +181,7 @@ class ActionService:
                     "requestId": request_id,
                     "clientId": target.client_id,
                     "status": (marker or {}).get("status") or target.status.value,
-                    "timestamp": record_now(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "sha256": (marker or {}).get("sha256"),
                     "redacted": True,
                 }
@@ -190,17 +190,32 @@ class ActionService:
 
 
 class PolicyService:
-    def __init__(self, action_service: ActionService) -> None:
+    def __init__(self, action_service: ActionService, repos: RepositoryBundle) -> None:
         self.action_service = action_service
+        self.repos = repos
 
     async def apply(self, body: PolicyApplyRequest, actor_id: str) -> ActionView:
+        payload = body.model_dump(by_alias=True, exclude_none=True)
+        digest = digest_payload(payload)
+        await self.repos.policies.put(
+            PolicyRecord(
+                revision=body.revision,
+                payload_digest=digest,
+                payload_json=json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            )
+        )
         request = ActionCreateRequest(
-            request_id=f"req_policy_{body.revision}_{actor_id[:8]}",
+            request_id=f"req_pol_{body.revision:06d}_{actor_id[:8]}",
             operation=Operation.APPLY_CONFIG,
             targets=[TargetRef(client_id=client_id) for client_id in body.client_ids],
             config_revision=body.revision,
         )
-        return await self.action_service.create(request, actor_id)
+        view = await self.action_service.create(request, actor_id)
+        stored = await self.repos.policies.get(body.revision)
+        if stored:
+            stored.request_id = view.request_id
+            await self.repos.policies.put(stored)
+        return view
 
 
 class DiagnosticService:
@@ -211,8 +226,6 @@ class DiagnosticService:
         record = await self.repos.diagnostics.get(request_id)
         if record is None:
             raise OpsiControlError(ErrorCode.NOT_FOUND, "diagnostic not found", status_code=404)
-        import json
-
         files = json.loads(record.files_json or "[]")
         return DiagnosticView(
             request_id=record.request_id,
@@ -221,10 +234,5 @@ class DiagnosticService:
             severity=record.severity,
             recommended_action=record.recommended_action,
             files=files,
+            manifest_digest=record.manifest_digest or None,
         )
-
-
-def record_now() -> str:
-    from datetime import UTC, datetime
-
-    return datetime.now(UTC).isoformat()

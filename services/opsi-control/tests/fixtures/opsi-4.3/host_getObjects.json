@@ -1,0 +1,14 @@
+[
+  {
+    "type": "OpsiClient",
+    "id": "client-a.example.test",
+    "description": "lab-win10",
+    "hardwareAddress": "00:00:00:00:00:01"
+  },
+  {
+    "type": "OpsiClient",
+    "id": "client-b.example.test",
+    "description": "lab-win11",
+    "hardwareAddress": "00:00:00:00:00:02"
+  }
+]

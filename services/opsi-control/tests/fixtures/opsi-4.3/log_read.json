@@ -1,0 +1,6 @@
+{
+  "logType": "instlog",
+  "objectId": "client-a.example.test",
+  "maxSize": 262144,
+  "body": "SMC_ACTION_RESULT request_id=req_labfix01 client_id=client-a.example.test sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa status=SUCCEEDED bytes=128 redacted=true\n"
+}

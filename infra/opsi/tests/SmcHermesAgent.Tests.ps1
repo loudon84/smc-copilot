@@ -20,6 +20,24 @@ Describe "smc-hermes-agent adapter contracts" {
         $text | Should Match "bearer"
     }
 
+    It "transaction journal scripts exist" {
+        Test-Path (Join-Path $script:Product "scripts\transaction\Start-SmcTransaction.ps1") | Should Be $true
+        Test-Path (Join-Path $script:Product "scripts\transaction\Rollback-SmcTransaction.ps1") | Should Be $true
+    }
+
+    It "pending is not treated as SUCCEEDED in adapter" {
+        $text = Get-Content (Join-Path $script:Product "scripts\Invoke-SmcHermesAgent.ps1") -Raw
+        $text | Should Match "USER_CONTEXT_PENDING"
+        $text | Should Match "exit 10"
+        $text | Should Not Match "LastLoggedOnUserSID"
+    }
+
+    It "smoke packaging helper refuses .opsi suffix" {
+        $text = Get-Content (Join-Path $script:Product "packaging\makepackage.py") -Raw
+        $text | Should Match "smoke.zip"
+        $text | Should Match "must not emit .opsi"
+    }
+
     It "uninstall does not delete .hermes user data" {
         $text = Get-Content (Join-Path $script:Product "scripts\install\Uninstall-OpsiManaged.ps1") -Raw
         $text | Should Match "Never delete user Hermes data"

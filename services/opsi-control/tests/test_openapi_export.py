@@ -21,7 +21,8 @@ def test_production_rejects_http_rpc():
             oidc_jwks_url="https://idp.example/realms/smc/certs",
             opsi_rpc_url="http://opsi.example:4447/rpc",
             opsi_rpc_username="u",
-            opsi_rpc_password="p",
+            opsi_rpc_password_ref="OPSI_RPC_PASSWORD",
+            secret_provider_url="https://vault.example/v1/secret",
         )
 
 

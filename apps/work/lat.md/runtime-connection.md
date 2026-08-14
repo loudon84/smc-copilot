@@ -75,7 +75,9 @@ Covered by `apps/work/tests/enterprise-salt-mode.test.ts`.
 
 ## OPSI enterprise mode canary
 
-v1.0 regression: OPSI control-owner keeps Work on Availability-only Connection Ready, refuses local Start/Update/Doctor/Restart, never calls Runtime `:8765` or `opsi-control`, and continues Direct Hermes Chat when Gateway is healthy.
+v1.1: OPSI owner stays Availability-only. Work never calls `opsi-control` or Runtime `:8765`.
+
+Chat continues on Direct Hermes when Gateway is healthy even if OPSI control is offline. Work does not start or recover Gateway; that remains an OPSI operator action.
 
 Covered by `apps/work/tests/enterprise-opsi-mode.test.ts`.
 

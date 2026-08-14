@@ -43,6 +43,15 @@
     "redacted": { "type": "boolean" },
     "userContext": {
       "enum": ["SYSTEM", "USER", "USER_CONTEXT_PENDING", "UNKNOWN"]
+    },
+    "attempt": { "type": ["integer", "null"], "minimum": 0, "maximum": 32 },
+    "propertyDigest": {
+      "type": ["string", "null"],
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "opsiModificationTime": {
+      "type": ["string", "null"],
+      "maxLength": 40
     }
   }
 }

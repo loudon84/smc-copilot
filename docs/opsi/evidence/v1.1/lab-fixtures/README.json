@@ -1,0 +1,6 @@
+{
+  "schema": "smc.opsi.lab-fixture.v1",
+  "source": "mock_verified",
+  "liveProven": false,
+  "note": "Sanitized OPSI 4.3 JSON-RPC shapes for CI. Operator Lab exports replace these after redaction; do not mark proven."
+}

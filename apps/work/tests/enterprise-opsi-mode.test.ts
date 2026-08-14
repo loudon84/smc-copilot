@@ -81,4 +81,18 @@ describe("enterprise opsi mode canary", () => {
     expect(isDirectControlOwner()).toBe(false);
     expect(isRuntimeControlOwner()).toBe(false);
   });
+
+  it("continues Availability probe when OPSI control is offline and Gateway is healthy", async () => {
+    const { HermesAvailabilityBackend } = await import(
+      "../src/main/hermes/availability-backend"
+    );
+    const backend = new HermesAvailabilityBackend();
+    const probe = await backend.probe();
+    expect(probe.gatewayHealthy).toBe(true);
+    expect(probe.endpoint).toContain("8642");
+    expect(probe.errorCode).not.toBe("OPSI_UNAVAILABLE");
+    const restart = await backend.restart();
+    expect(restart.ok).toBe(false);
+    expect(restart.errorCode).toBe("EXTERNALLY_MANAGED");
+  });
 });

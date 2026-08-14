@@ -41,7 +41,7 @@ Windows Salt Minion / Bootstrap scripts
 - `npm run contracts:check` includes `check_salt_control_drift.py`.
 - Salt Control must not import `services/runtime`. Runtime Endpoint Control retires via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` (ADR-030); Chat/Task contracts unchanged.
 
-## OPSI Control API (v1.0 / ADR-031)
+## OPSI Control API (v1.1 / ADR-031)
 
 ```text
 OPSI Control FastAPI + Pydantic (services/opsi-control)

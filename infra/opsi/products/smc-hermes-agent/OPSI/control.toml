@@ -85,3 +85,33 @@ multivalue = false
 editable = true
 description = "SMC request id (req_*). Client-specific only. Never a product default in production."
 default = [""]
+
+[ProductProperty.unicode.client_id]
+multivalue = false
+editable = true
+description = "OPSI client FQDN. Never COMPUTERNAME."
+default = [""]
+
+[ProductProperty.unicode.managed_user_sid]
+multivalue = false
+editable = true
+description = "Bound user SID (S-1-...). Required for setup/update."
+default = [""]
+
+[ProductProperty.unicode.managed_user_account]
+multivalue = false
+editable = true
+description = "Bound user account DOMAIN\\user. Required for setup/update."
+default = [""]
+
+[ProductProperty.unicode.config_digest]
+multivalue = false
+editable = true
+description = "SHA256 of canonical managed config payload"
+default = [""]
+
+[ProductProperty.unicode.config_payload]
+multivalue = false
+editable = true
+description = "Canonical JSON managed-config keys. Client-specific only."
+default = [""]

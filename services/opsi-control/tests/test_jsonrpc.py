@@ -24,20 +24,30 @@ async def test_property_isolation_two_clients():
                 "productId": "smc-hermes-agent",
                 "propertyId": "custom_operation",
                 "objectId": "client-a.example",
-                "value": "status",
+                "values": ["status"],
             },
             {
                 "productId": "smc-hermes-agent",
                 "propertyId": "custom_operation",
                 "objectId": "client-b.example",
-                "value": "diagnose",
+                "values": ["diagnose"],
             },
         ],
     )
     props = await rpc.call("productPropertyState_getObjects", {}, [])
-    by_client = {item["objectId"]: item["value"] for item in props if item["propertyId"] == "custom_operation"}
+    by_client = {item["objectId"]: item["values"][0] for item in props if item["propertyId"] == "custom_operation"}
     assert by_client["client-a.example"] == "status"
     assert by_client["client-b.example"] == "diagnose"
+    assert all("value" not in item or "values" in item for item in props)
+
+
+@pytest.mark.asyncio
+async def test_log_read_instlog_shape():
+    rpc = FakeOpsiJsonRpc()
+    rpc.put_result_log("client-a.example", "req_labfix01", "SUCCEEDED", "ab" * 32)
+    body = await rpc.call("log_read", "instlog", "client-a.example", 1024)
+    assert "SMC_ACTION_RESULT" in body
+    assert "req_labfix01" in body
 
 
 @pytest.mark.asyncio

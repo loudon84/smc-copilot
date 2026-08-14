@@ -1,0 +1,12 @@
+[
+  {
+    "productId": "smc-hermes-agent",
+    "clientId": "client-a.example.test",
+    "installationStatus": "not_installed",
+    "actionRequest": "none",
+    "actionProgress": "",
+    "actionResult": "none",
+    "lastAction": "",
+    "modificationTime": "2026-08-14T08:00:00Z"
+  }
+]

@@ -60,11 +60,14 @@ jobs:
       - name: Pytest
         working-directory: services/opsi-control
         run: uv run pytest -q
-      - name: Alembic upgrade head
+      - name: Alembic upgrade/downgrade/upgrade
         working-directory: services/opsi-control
-        run: uv run alembic upgrade head
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
       - name: Isolation
-        run: python scripts/check-opsi-isolation.py --base ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
+        run: python scripts/check-opsi-isolation.py --base ${{ github.event.pull_request.base.sha || github.event.before }}
       - name: OpenAPI export
         run: uv run --project services/opsi-control python tools/contract-generate/export_opsi_control_openapi.py
       - name: Schema files present
@@ -78,8 +81,10 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          status = Path("docs/opsi/lab/POC-STATUS.md").read_text(encoding="utf-8")
+          status = Path("docs/opsi/evidence/v1.1/STATUS.md").read_text(encoding="utf-8")
           assert "not_proven" in status
           assert "NO-GO" in status
-          print("ok: live lab remains not_proven")
+          v10 = Path("docs/opsi/evidence/v1.0/STATUS.md").read_text(encoding="utf-8")
+          assert "NO-GO" in v10
+          print("ok: live evidence remains not_proven")
           PY

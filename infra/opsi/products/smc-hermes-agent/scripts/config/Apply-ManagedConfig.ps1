@@ -1,7 +1,8 @@
 #Requires -Version 5.1
 param(
     [Parameter(Mandatory = $true)][string]$Root,
-    [Parameter(Mandatory = $true)][int]$Revision
+    [Parameter(Mandatory = $true)][int]$Revision,
+    [string]$ConfigDigest = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -12,15 +13,22 @@ $backupPath = Join-Path $Root "managed\config\backup-$Revision.json"
 $incomingPath = Join-Path $Root "managed\config\incoming.json"
 
 $currentRev = 0
+$currentDigest = ""
 if (Test-Path -LiteralPath $currentPath) {
     $current = Get-Content -LiteralPath $currentPath -Raw | ConvertFrom-Json
     $currentRev = [int]$current.revision
+    if ($current.digest) { $currentDigest = [string]$current.digest }
     if ($Revision -lt $currentRev) { throw "stale revision $Revision < $currentRev" }
-    if ($Revision -eq $currentRev) { return } # idempotent
+    if ($Revision -eq $currentRev) {
+        if ($ConfigDigest -and $currentDigest -and $ConfigDigest -ne $currentDigest) {
+            throw "revision conflict: same revision different digest"
+        }
+        return
+    }
 }
 
 if (-not (Test-Path -LiteralPath $incomingPath)) {
-    throw "missing incoming managed config"
+    throw "missing incoming managed config (revision-only apply is forbidden)"
 }
 
 $incoming = Get-Content -LiteralPath $incomingPath -Raw | ConvertFrom-Json
@@ -35,6 +43,10 @@ foreach ($name in $allow) {
     }
 }
 
+$canonical = ConvertTo-SmcCanonicalJson -Object ([ordered]@{ revision = $Revision; keys = $keys })
+$digest = Get-SmcSha256Text -Text $canonical
+if ($ConfigDigest -and $ConfigDigest -ne $digest) { throw "config digest mismatch" }
+
 if (Test-Path -LiteralPath $currentPath) {
     Copy-Item -LiteralPath $currentPath -Destination $backupPath -Force
 }
@@ -43,9 +55,27 @@ $merged = @{
     schema   = "smc.opsi.managed-config.v1"
     revision = $Revision
     keys     = $keys
+    digest   = $digest
 }
 try {
     Write-SmcJsonAtomic -Path $currentPath -Object $merged
+    $hermesHome = $env:HERMES_HOME
+    if ($hermesHome) {
+        $hermesCfg = Join-Path $hermesHome "config.json"
+        $existing = @{}
+        if (Test-Path -LiteralPath $hermesCfg) {
+            try { $existing = Get-Content -LiteralPath $hermesCfg -Raw | ConvertFrom-Json } catch { $existing = @{} }
+        }
+        $allow | ForEach-Object {
+            if ($keys.ContainsKey($_)) { $existing | Add-Member -NotePropertyName $_ -NotePropertyValue $keys[$_] -Force }
+        }
+        Write-SmcJsonAtomic -Path $hermesCfg -Object $existing
+    }
+    $cli = Get-Command hermes -ErrorAction SilentlyContinue
+    if ($cli) {
+        & hermes config check
+        if ($LASTEXITCODE -ne 0) { throw "hermes config check failed" }
+    }
 }
 catch {
     if (Test-Path -LiteralPath $backupPath) {

@@ -40,6 +40,24 @@
             "minLength": 1,
             "maxLength": 128,
             "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "userBinding": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["sid", "account"],
+            "properties": {
+              "sid": {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 184,
+                "pattern": "^S-1-[0-9-]+$"
+              },
+              "account": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            }
           }
         }
       }

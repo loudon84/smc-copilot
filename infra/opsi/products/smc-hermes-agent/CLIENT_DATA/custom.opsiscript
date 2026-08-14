@@ -3,20 +3,37 @@ requiredWinstVersion >= 4.12.0
 
 DefVar $requestId$
 DefVar $operation$
+DefVar $clientId$
+DefVar $configRevision$
+DefVar $repairLevel$
+DefVar $gatewayPort$
+DefVar $logLines$
 DefVar $exitCode$
 
 set $requestId$ = GetProductProperty("request_id", "")
 set $operation$ = GetProductProperty("custom_operation", "")
+set $clientId$ = GetProductProperty("client_id", "")
+set $configRevision$ = GetProductProperty("config_revision", "0")
+set $repairLevel$ = GetProductProperty("auto_repair_level", "1")
+set $gatewayPort$ = GetProductProperty("gateway_port", "8642")
+set $logLines$ = GetProductProperty("diagnostic_log_lines", "200")
 
 if ($requestId$ = "")
 	isFatalError "missing request_id"
 endif
+if ($clientId$ = "")
+	isFatalError "missing client_id"
+endif
 
 if ($operation$ = "status") or ($operation$ = "collect-log") or ($operation$ = "apply-config") or ($operation$ = "restart-gateway") or ($operation$ = "diagnose") or ($operation$ = "repair")
-	DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action custom -CustomOperation ""$operation$"" -RequestId ""$requestId$"""
+	DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action custom -CustomOperation ""$operation$"" -RequestId ""$requestId$"" -ClientId ""$clientId$"" -ConfigRevision ""$configRevision$"" -AutoRepairLevel ""$repairLevel$"" -GatewayPort ""$gatewayPort$"" -DiagnosticLogLines ""$logLines$"""
 	set $exitCode$ = getLastExitCode
-	if not ($exitCode$ = "0")
-		isFatalError "custom operation failed"
+	if ($exitCode$ = "10")
+		comment "USER_CONTEXT_PENDING"
+	else
+		if not ($exitCode$ = "0")
+			isFatalError "custom operation failed"
+		endif
 	endif
 else
 	LogError "unknown custom_operation"

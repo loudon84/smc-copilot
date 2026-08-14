@@ -2,6 +2,11 @@
 
 Independent provider parallel to Salt. Default SOT remains Salt (ADR-026); customers may choose OPSI (ADR-031).
 
+Roadmap:
+
+- [`PRD-OPSI-v1.1.md`](PRD-OPSI-v1.1.md) — Real Endpoint Closure + Pilot Readiness.
+- v1.0 code is implemented, while live OPSI/Windows verification remains `NO-GO / not_proven` until operator evidence is signed.
+
 | Path | Role |
 | --- | --- |
 | `infra/opsi` | `smc-hermes-agent` localboot Product + packaging |

@@ -3,17 +3,30 @@ requiredWinstVersion >= 4.12.0
 
 DefVar $requestId$
 DefVar $hermesVersion$
+DefVar $clientId$
+DefVar $managedSid$
+DefVar $managedAccount$
 DefVar $exitCode$
 
 set $requestId$ = GetProductProperty("request_id", "")
 set $hermesVersion$ = GetProductProperty("hermes_version", "")
+set $clientId$ = GetProductProperty("client_id", "")
+set $managedSid$ = GetProductProperty("managed_user_sid", "")
+set $managedAccount$ = GetProductProperty("managed_user_account", "")
 
-if not ($requestId$ = "")
-	DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action update -RequestId ""$requestId$"" -HermesVersion ""$hermesVersion$"""
-	set $exitCode$ = getLastExitCode
+if ($requestId$ = "")
+	isFatalError "missing request_id"
+endif
+if ($clientId$ = "")
+	isFatalError "missing client_id"
+endif
+
+DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action update -RequestId ""$requestId$"" -HermesVersion ""$hermesVersion$"" -ClientId ""$clientId$"" -ManagedUserSid ""$managedSid$"" -ManagedUserAccount ""$managedAccount$"""
+set $exitCode$ = getLastExitCode
+if ($exitCode$ = "10")
+	comment "USER_CONTEXT_PENDING"
+else
 	if not ($exitCode$ = "0")
 		isFatalError "update failed"
 	endif
-else
-	isFatalError "missing request_id"
 endif

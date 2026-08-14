@@ -1,0 +1,14 @@
+[
+  {
+    "productId": "smc-hermes-agent",
+    "propertyId": "request_id",
+    "objectId": "client-a.example.test",
+    "values": ["req_labfix01"]
+  },
+  {
+    "productId": "smc-hermes-agent",
+    "propertyId": "custom_operation",
+    "objectId": "client-a.example.test",
+    "values": ["status"]
+  }
+]

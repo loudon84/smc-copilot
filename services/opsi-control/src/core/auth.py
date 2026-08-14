@@ -18,6 +18,10 @@ except ImportError:  # pragma: no cover
     jwt = None  # type: ignore[assignment]
     PyJWKClient = None  # type: ignore[misc, assignment]
 
+_JWKS_CLIENTS: dict[str, Any] = {}
+_JWKS_LOADED_AT: dict[str, float] = {}
+_JWKS_TTL_SECONDS = 300
+
 
 class Scope(StrEnum):
     INVENTORY_READ = "opsi.inventory.read"
@@ -78,15 +82,27 @@ async def get_principal(
         if settings.opsi_env == "production":
             if not settings.oidc_jwks_url or PyJWKClient is None:
                 raise OpsiControlError(ErrorCode.UNAUTHORIZED, "oidc jwks unavailable", status_code=401)
-            client = PyJWKClient(settings.oidc_jwks_url)
-            signing_key = client.get_signing_key_from_jwt(token)
+            now = time.time()
+            cached = _JWKS_CLIENTS.get(settings.oidc_jwks_url)
+            loaded = _JWKS_LOADED_AT.get(settings.oidc_jwks_url, 0)
+            if cached is None or now - loaded > _JWKS_TTL_SECONDS:
+                cached = PyJWKClient(settings.oidc_jwks_url, cache_keys=True)
+                _JWKS_CLIENTS[settings.oidc_jwks_url] = cached
+                _JWKS_LOADED_AT[settings.oidc_jwks_url] = now
+            signing_key = cached.get_signing_key_from_jwt(token)
             payload = jwt.decode(
                 token,
                 signing_key.key,
                 algorithms=["RS256"],
                 audience=settings.oidc_audience,
                 issuer=settings.oidc_issuer,
+                options={"require": ["exp", "iat", "iss", "aud"]},
             )
+            if payload.get("nbf") and int(payload["nbf"]) > now:
+                raise OpsiControlError(ErrorCode.UNAUTHORIZED, "token not yet valid", status_code=401)
+            kid = jwt.get_unverified_header(token).get("kid")
+            if not kid:
+                raise OpsiControlError(ErrorCode.UNAUTHORIZED, "token kid missing", status_code=401)
         else:
             payload = jwt.decode(
                 token,

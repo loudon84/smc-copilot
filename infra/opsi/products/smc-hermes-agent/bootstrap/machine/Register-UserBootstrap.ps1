@@ -1,21 +1,34 @@
 #Requires -Version 5.1
-param([Parameter(Mandatory = $true)][string]$Root)
+param(
+    [Parameter(Mandatory = $true)][string]$Root,
+    [Parameter(Mandatory = $true)][string]$ManagedUserSid,
+    [Parameter(Mandatory = $true)][string]$ManagedUserAccount,
+    [Parameter(Mandatory = $true)][string]$HermesVersion,
+    [Parameter(Mandatory = $true)][string]$RequestId
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "..\..\common\SmcOpsi.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "..\..\scripts\common\SmcOpsi.psm1") -Force
 
-# SYSTEM registers a logon trigger. Does not initialize Hermes Home.
-$taskName = "SMC-Hermes-User-Bootstrap"
+if (-not (Test-SmcUserBinding -Sid $ManagedUserSid -Account $ManagedUserAccount)) {
+    Write-Output "USER_CONTEXT_PENDING: profile not ready"
+}
+
+$taskName = "SMC-Hermes-User-Bootstrap-$ManagedUserSid"
 $userScript = Join-Path $Root "bootstrap\user\Initialize-HermesHome.ps1"
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$userScript`" -Root `"$Root`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+$arg = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$userScript`" -Root `"$Root`" -ManagedUserSid `"$ManagedUserSid`" -HermesVersion `"$HermesVersion`" -RequestId `"$RequestId`""
 try {
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Force | Out-Null
-} catch {
-    # Lab/CI without ScheduledTask cmdlets: write definition only.
+    $principal = New-ScheduledTaskPrincipal -UserId $ManagedUserAccount -LogonType Interactive -RunLevel Limited
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arg
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $ManagedUserAccount
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+}
+catch {
     Write-SmcJsonAtomic -Path (Join-Path $Root "bootstrap\machine\task-definition.json") -Object @{
-        name    = $taskName
-        script  = $userScript
-        trigger = "AtLogOn"
+        name      = $taskName
+        script    = $userScript
+        trigger   = "AtLogOn"
+        principal = $ManagedUserAccount
+        sid       = $ManagedUserSid
     }
 }
