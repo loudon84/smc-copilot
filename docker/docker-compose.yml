@@ -1,0 +1,161 @@
+name: salt-master
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg17}
+    container_name: salt-control-postgres
+    hostname: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-salt_control}
+      POSTGRES_USER: ${POSTGRES_USER:-salt_control}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-salt_control} -d ${POSTGRES_DB:-salt_control}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - salt-control
+
+  salt-master:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SALT_VERSION: ${SALT_VERSION:-3008.2}
+    image: salt-master-salt-master:${SALT_MASTER_IMAGE_TAG:-latest}
+    container_name: salt-master
+    hostname: salt-master
+    restart: unless-stopped
+    init: true
+    environment:
+      SMC_SALT_ENV: production
+      SMC_SALT_CONTROL_URL: ${SALT_CONTROL_PUBLIC_URL}
+      SMC_SALT_CONTROL_TOKEN_FILE: /run/secrets/salt_control_master_token
+      SMC_ARTIFACT_KEY_ID: ${ARTIFACT_KEY_ID}
+      SMC_ARTIFACT_PUBLIC_KEY_FILE: /run/secrets/artifact_public_key
+      SALT_API_USERNAME: ${SALT_API_USERNAME:-salt_control}
+      SALT_API_PASSWORD_FILE: /run/secrets/salt_api_password
+    secrets:
+      - salt_api_password
+      - salt_control_master_token
+      - artifact_public_key
+    ports:
+      - "${SALT_BIND_IP}:4505:4505/tcp"
+      - "${SALT_BIND_IP}:4506:4506/tcp"
+      - "${SALT_BIND_IP}:8000:8000/tcp"
+    volumes:
+      - ./config/master.d:/opt/smc/master.d-host:ro
+      - ./source/smc-copilot/infra/salt/master/master.d:/opt/smc/master.d-repo:ro
+      - ./data/generated/master.d:/etc/salt/master.d
+      - ./data/pki:/etc/salt/pki/master
+      - ./srv/salt:/srv/salt
+      - ./srv/pillar:/srv/pillar
+      - ./data/cache:/var/cache/salt/master
+      - ./data/logs:/var/log/salt
+      - ./certs/fullchain.pem:/etc/salt/pki/api/salt-api.crt:ro
+      - ./certs/privkey.pem:/etc/salt/pki/api/salt-api.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x salt-master >/dev/null && pgrep -x salt-api >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    stop_grace_period: 30s
+    networks:
+      - salt-control
+
+  salt-control:
+    build:
+      context: ./source/smc-copilot
+      dockerfile: docker/SaltControl.Dockerfile
+    image: smc-salt-control:${SMC_SALT_CONTROL_VERSION:-latest}
+    container_name: salt-control
+    hostname: salt-control
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      salt-master:
+        condition: service_healthy
+    environment:
+      SMC_SALT_ENV: production
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${POSTGRES_DB:-salt_control}
+      DATABASE_USER: ${POSTGRES_USER:-salt_control}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+      JWT_LAB_SECRET_FILE: /run/secrets/jwt_internal_secret
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-salt-control}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL}
+      SALT_MASTERS: ${SALT_PUBLIC_HOST:-salt.superic.com}
+      SALT_MASTER_FINGERPRINTS: ${SALT_MASTER_FINGERPRINT}
+      SALT_API_URLS: ${SALT_API_PUBLIC_URL}
+      SALT_API_USERNAME: ${SALT_API_USERNAME:-salt_control}
+      SALT_API_PASSWORD_FILE: /run/secrets/salt_api_password
+      MANAGEMENT_BACKEND_URL: ${MANAGEMENT_BACKEND_URL}
+      MANAGEMENT_BACKEND_TOKEN_FILE: /run/secrets/management_backend_token
+      ARTIFACT_STORE_URL: ${ARTIFACT_STORE_URL}
+      ARTIFACT_STORE_TOKEN_FILE: /run/secrets/artifact_store_token
+      SECRET_PROVIDER_URL: ${SECRET_PROVIDER_URL}
+      SECRET_PROVIDER_TOKEN_FILE: /run/secrets/secret_provider_token
+      ARTIFACT_KEY_ID: ${ARTIFACT_KEY_ID}
+      ARTIFACT_PUBLIC_KEY_FILE: /run/secrets/artifact_public_key
+      TLS_CERT_FILE: /run/tls/fullchain.pem
+      TLS_KEY_FILE: /run/tls/privkey.pem
+    secrets:
+      - postgres_password
+      - salt_api_password
+      - jwt_internal_secret
+      - artifact_public_key
+      - management_backend_token
+      - artifact_store_token
+      - secret_provider_token
+    ports:
+      - "${SALT_BIND_IP}:8770:8770/tcp"
+    volumes:
+      - ./certs/fullchain.pem:/run/tls/fullchain.pem:ro
+      - ./certs/privkey.pem:/run/tls/privkey.pem:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import ssl,urllib.request; urllib.request.urlopen('https://127.0.0.1:8770/salt/v1/health', context=ssl._create_unverified_context(), timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    stop_grace_period: 30s
+    networks:
+      - salt-control
+
+networks:
+  salt-control:
+    name: smc-salt-control
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres-password
+  salt_api_password:
+    file: ./secrets/salt-api-password
+  salt_control_master_token:
+    file: ./secrets/salt-control-master-token
+  jwt_internal_secret:
+    file: ./secrets/jwt-internal-secret
+  artifact_public_key:
+    file: ./secrets/artifact-ed25519-public-key.pem
+  management_backend_token:
+    file: ./secrets/management-backend-token
+  artifact_store_token:
+    file: ./secrets/artifact-store-token
+  secret_provider_token:
+    file: ./secrets/secret-provider-token

@@ -38,8 +38,11 @@ class Settings(BaseSettings):
     salt_api_username: str = ""
     salt_api_password: str = ""  # from secret store / env only — never log
     management_backend_url: str = ""
+    management_backend_token: str = ""
     artifact_store_url: str = ""
+    artifact_store_token: str = ""
     secret_provider_url: str = ""
+    secret_provider_token: str = ""
     artifact_public_key: str = ""
     artifact_key_id: str = ""
     enrollment_token_ttl_seconds: int = 3600
@@ -91,6 +94,13 @@ class Settings(BaseSettings):
                 errors.append(f"{url_name} required in production")
             elif not url.startswith("https://"):
                 errors.append(f"{url_name} must be https")
+        for token_name, token in (
+            ("management_backend_token", self.management_backend_token),
+            ("artifact_store_token", self.artifact_store_token),
+            ("secret_provider_token", self.secret_provider_token),
+        ):
+            if not token:
+                errors.append(f"{token_name} required in production")
         if any(m in _PLACEHOLDER_MASTERS for m in self.master_list):
             errors.append("placeholder salt masters forbidden in production")
         if any(f in _PLACEHOLDER_FINGERPRINTS for f in self.master_fingerprint_list):

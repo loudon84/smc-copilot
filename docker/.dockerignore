@@ -1,0 +1,11 @@
+*
+!Dockerfile
+!salt-master-entrypoint.sh
+!source/
+!source/smc-copilot/
+!source/smc-copilot/services/
+!source/smc-copilot/services/salt-control/
+!source/smc-copilot/services/salt-control/**
+!source/smc-copilot/docker/
+!source/smc-copilot/docker/SaltControl.Dockerfile
+!source/smc-copilot/docker/salt-control-entrypoint.sh

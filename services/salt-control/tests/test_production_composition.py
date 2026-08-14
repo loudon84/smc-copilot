@@ -31,6 +31,29 @@ def test_prod_301_rejects_http_salt_api():
             salt_api_username="salt",
             salt_api_password="secret",
             management_backend_url="https://backend.example",
+            management_backend_token="backend-token",
+            artifact_store_url="https://artifacts.example",
+            artifact_store_token="artifact-token",
+            secret_provider_url="https://secrets.example",
+            secret_provider_token="secret-token",
+            artifact_key_id="k1",
+            artifact_public_key="pubkey",
+        )
+
+
+def test_prod_requires_integration_service_tokens():
+    with pytest.raises((ValueError, ValidationError), match="management_backend_token"):
+        Settings(
+            salt_env="production",
+            jwt_lab_secret="prod-secret-not-lab",
+            oidc_issuer="https://idp.example/realms/smc",
+            oidc_jwks_url="https://idp.example/realms/smc/protocol/openid-connect/certs",
+            salt_masters="salt.superic.com",
+            salt_master_fingerprints="sha256:" + ("ab" * 32),
+            salt_api_urls="https://salt.superic.com:8000",
+            salt_api_username="salt_control",
+            salt_api_password="secret",
+            management_backend_url="https://backend.example",
             artifact_store_url="https://artifacts.example",
             secret_provider_url="https://secrets.example",
             artifact_key_id="k1",

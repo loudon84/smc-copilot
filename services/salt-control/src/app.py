@@ -111,9 +111,18 @@ def build_production_state(settings: Settings | None = None) -> AppState:
     if any(isinstance(m, FakeSaltMaster) for m in masters):
         raise RuntimeError("production must not use FakeSaltMaster")
 
-    backend: ManagementBackend = HttpManagementBackend(cfg.management_backend_url)
-    secret_provider: SecretProvider = HttpSecretProvider(cfg.secret_provider_url)
-    artifact_store: ArtifactStore = HttpArtifactStore(cfg.artifact_store_url)
+    backend: ManagementBackend = HttpManagementBackend(
+        cfg.management_backend_url,
+        token=cfg.management_backend_token,
+    )
+    secret_provider: SecretProvider = HttpSecretProvider(
+        cfg.secret_provider_url,
+        token=cfg.secret_provider_token,
+    )
+    artifact_store: ArtifactStore = HttpArtifactStore(
+        cfg.artifact_store_url,
+        token=cfg.artifact_store_token,
+    )
     if isinstance(backend, FakeManagementBackend):
         raise RuntimeError("production must not use FakeManagementBackend")
     if isinstance(secret_provider, FakeSecretProvider):
