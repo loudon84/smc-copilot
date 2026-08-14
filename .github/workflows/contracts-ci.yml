@@ -5,6 +5,7 @@ on:
     paths:
       - "services/runtime/src/api/**"
       - "services/runtime/src/**/schemas/**"
+      - "services/opsi-control/**"
       - "contracts/**"
       - "packages/runtime-client-ts/**"
       - "tools/contract-generate/**"
@@ -13,6 +14,7 @@ on:
     paths:
       - "services/runtime/src/api/**"
       - "services/runtime/src/**/schemas/**"
+      - "services/opsi-control/**"
       - "contracts/**"
       - "packages/runtime-client-ts/**"
       - "tools/contract-generate/**"

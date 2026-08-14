@@ -5,10 +5,13 @@
 export {
   getHermesControlOwner,
   isSaltControlOwner,
+  isOpsiControlOwner,
+  isExternallyManagedControlOwner,
   isRuntimeControlOwner,
   isDirectControlOwner,
   readControlOwnerSnapshot,
   saltManagedMessage,
+  externallyManagedMessage,
 } from "./control-owner";
 export { HermesAvailabilityBackend } from "./availability-backend";
 export {

@@ -72,21 +72,24 @@ function RuntimePane(): React.JSX.Element {
     }
   }
 
-  const saltMode = owner?.owner === "salt";
+  const externallyManaged =
+    owner?.owner === "salt" || owner?.owner === "opsi";
+  const providerLabel =
+    owner?.owner === "opsi" ? "OPSI" : owner?.owner === "salt" ? "Salt" : null;
 
   return (
     <div className="settings-pane">
-      <h2>{saltMode ? "Hermes Availability" : "Hermes Runtime"}</h2>
+      <h2>{externallyManaged ? "Hermes Availability" : "Hermes Runtime"}</h2>
       <p className="settings-pane-desc">
-        {saltMode
-          ? "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
+        {externallyManaged
+          ? `Managed by organization${providerLabel ? ` / Provider: ${providerLabel}` : ""}. This app only checks whether Gateway is reachable.`
           : "Copilot Desktop connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
       </p>
 
       <dl className="settings-kv">
         <div>
           <dt>Control owner</dt>
-          <dd>{saltMode ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
+          <dd>{externallyManaged ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
         </div>
         <div>
           <dt>Hermes status</dt>
@@ -110,7 +113,7 @@ function RuntimePane(): React.JSX.Element {
           <dt>Version</dt>
           <dd>{status?.version || "—"}</dd>
         </div>
-        {!saltMode && (
+        {!externallyManaged && (
           <>
             <div>
               <dt>Owner source</dt>
@@ -139,9 +142,9 @@ function RuntimePane(): React.JSX.Element {
           disabled={busy}
           onClick={() => void handleReconnect()}
         >
-          {saltMode ? "Retry" : "Reconnect"}
+          {externallyManaged ? "Retry" : "Reconnect"}
         </button>
-        {!saltMode && (
+        {!externallyManaged && (
           <button
             type="button"
             disabled={busy}

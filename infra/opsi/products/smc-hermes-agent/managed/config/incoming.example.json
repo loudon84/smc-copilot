@@ -1,0 +1,13 @@
+{
+  "schema": "smc.opsi.managed-config.v1",
+  "revision": 13,
+  "keys": {
+    "gateway_port": 8642,
+    "gateway_bind": "127.0.0.1",
+    "gateway_autostart": true,
+    "managed_profile": "default",
+    "diagnostics_enabled": true,
+    "diagnostic_log_lines": 500,
+    "auto_repair_level": 1
+  }
+}

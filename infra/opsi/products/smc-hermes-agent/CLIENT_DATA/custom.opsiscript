@@ -1,0 +1,24 @@
+[Actions]
+requiredWinstVersion >= 4.12.0
+
+DefVar $requestId$
+DefVar $operation$
+DefVar $exitCode$
+
+set $requestId$ = GetProductProperty("request_id", "")
+set $operation$ = GetProductProperty("custom_operation", "")
+
+if ($requestId$ = "")
+	isFatalError "missing request_id"
+endif
+
+if ($operation$ = "status") or ($operation$ = "collect-log") or ($operation$ = "apply-config") or ($operation$ = "restart-gateway") or ($operation$ = "diagnose") or ($operation$ = "repair")
+	DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action custom -CustomOperation ""$operation$"" -RequestId ""$requestId$"""
+	set $exitCode$ = getLastExitCode
+	if not ($exitCode$ = "0")
+		isFatalError "custom operation failed"
+	endif
+else
+	LogError "unknown custom_operation"
+	isFatalError "unknown custom_operation"
+endif

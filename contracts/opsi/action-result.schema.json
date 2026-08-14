@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/action-result.schema.json",
+  "title": "smc.opsi.action-result.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "requestId",
+    "clientId",
+    "status",
+    "timestamp",
+    "sha256",
+    "redacted"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.action-result.v1" },
+    "requestId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 80,
+      "pattern": "^req_[A-Za-z0-9_-]{8,64}$"
+    },
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "status": {
+      "enum": ["CREATED", "QUEUED", "DISPATCHED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN"]
+    },
+    "timestamp": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 40,
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "errorCode": { "type": ["string", "null"], "maxLength": 64 },
+    "message": { "type": ["string", "null"], "maxLength": 512 },
+    "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "bytes": { "type": "integer", "minimum": 0, "maximum": 65536 },
+    "redacted": { "type": "boolean" },
+    "userContext": {
+      "enum": ["SYSTEM", "USER", "USER_CONTEXT_PENDING", "UNKNOWN"]
+    }
+  }
+}

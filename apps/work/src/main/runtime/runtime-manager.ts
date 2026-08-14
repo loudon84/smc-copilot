@@ -20,6 +20,7 @@ function defaultAdapter(): HermesRuntimeAdapter {
   const owner = getHermesControlOwner();
   switch (owner) {
     case "salt":
+    case "opsi":
       // Probe-only Availability (Gateway :8642 /health). No Runtime :8765.
       return new HermesAvailabilityBackend();
     case "direct":

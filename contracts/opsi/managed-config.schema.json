@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/managed-config.schema.json",
+  "title": "smc.opsi.managed-config.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "revision", "keys"],
+  "properties": {
+    "schema": { "const": "smc.opsi.managed-config.v1" },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+    "keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 32,
+      "properties": {
+        "gateway_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "gateway_bind": { "enum": ["127.0.0.1"] },
+        "gateway_autostart": { "type": "boolean" },
+        "managed_profile": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "diagnostics_enabled": { "type": "boolean" },
+        "diagnostic_log_lines": { "type": "integer", "minimum": 1, "maximum": 500 },
+        "auto_repair_level": { "type": "integer", "minimum": 0, "maximum": 2 }
+      }
+    }
+  }
+}

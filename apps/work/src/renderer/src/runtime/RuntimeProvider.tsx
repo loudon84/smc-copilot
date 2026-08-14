@@ -25,8 +25,9 @@ export function RuntimeProvider({
     try {
       const owner = await window.hermesAPI.getControlOwner();
       switch (owner.owner) {
-        case "salt": {
-          // Probe-only — Salt owns install/start; never call Runtime :8765.
+        case "salt":
+        case "opsi": {
+          // Probe-only — Salt/OPSI owns install/start; never call Runtime :8765.
           const status = await window.hermesAPI.runtimeGetStatus(profile);
           if (status.state === "ready") {
             dispatch({ type: "CONNECT_SUCCESS", status });
@@ -37,7 +38,7 @@ export function RuntimeProvider({
             status,
             error:
               status.errorMessage ||
-              "Waiting for Salt to install or recover Hermes Agent.",
+              "Waiting for the organization to install or recover Hermes Agent.",
           });
           return false;
         }
@@ -93,13 +94,16 @@ export function RuntimeProvider({
     try {
       const owner = await window.hermesAPI.getControlOwner();
       switch (owner.owner) {
-        case "salt": {
+        case "salt":
+        case "opsi": {
           const status = await window.hermesAPI.runtimeGetStatus(profile);
           dispatch({
             type: "CONNECT_FAILURE",
             status,
             error:
-              "Hermes Gateway is Salt-managed. Restart is not available in enterprise mode.",
+              owner.owner === "opsi"
+                ? "Hermes Gateway is managed by the organization (Provider: OPSI). Restart is not available."
+                : "Hermes Gateway is Salt-managed. Restart is not available in enterprise mode.",
           });
           return false;
         }

@@ -1,6 +1,6 @@
 /**
- * HermesAvailabilityBackend — probe-only Connection Ready for Salt mode.
- * Does not install, spawn Gateway, or call Runtime HTTP.
+ * HermesAvailabilityBackend — probe-only Connection Ready for Salt/OPSI mode.
+ * Does not install, spawn Gateway, or call Runtime HTTP / opsi-control.
  */
 // @lat: [[runtime-connection#Hermes Availability Backend]]
 import { readFileSync, existsSync } from "fs";
@@ -14,7 +14,10 @@ import type {
 import { locateHermesRuntime } from "../runtime/hermes-runtime-locator";
 import { getApiUrl, isGatewayHealthy } from "./transport/gateway-http";
 import { getApiServerKey } from "../config";
-import { saltManagedMessage } from "./control-owner";
+import {
+  externallyManagedErrorCode,
+  externallyManagedMessage,
+} from "./control-owner";
 
 function readInstalledVersion(homePath: string): string | undefined {
   const marker = join(homePath, "active.json");
@@ -61,9 +64,9 @@ export class HermesAvailabilityBackend implements HermesRuntimeAdapter {
       state === "ready"
         ? undefined
         : state === "runtime_missing"
-          ? saltManagedMessage("Hermes install")
+          ? externallyManagedMessage("Hermes install")
           : state === "gateway_unreachable"
-            ? saltManagedMessage("Gateway start")
+            ? externallyManagedMessage("Gateway start")
             : "Hermes Agent is not ready";
     return {
       mode: "local",
@@ -113,8 +116,8 @@ export class HermesAvailabilityBackend implements HermesRuntimeAdapter {
       profile: probe.profile,
       endpoint: probe.endpoint,
       version: probe.version,
-      errorCode: "SALT_MANAGED",
-      errorMessage: saltManagedMessage("Restart Gateway"),
+      errorCode: externallyManagedErrorCode(),
+      errorMessage: externallyManagedMessage("Restart Gateway"),
     };
   }
 }

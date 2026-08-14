@@ -1,6 +1,6 @@
 # Runtime Connection
 
-Work connects to Hermes Gateway for Connection Ready by default (`direct`). Copilot Runtime (`services/runtime` :8765) is opt-in (`control owner = runtime`). Salt mode uses Availability probe only.
+Work connects to Hermes Gateway for Connection Ready by default (`direct`). Copilot Runtime (`services/runtime` :8765) is opt-in (`control owner = runtime`). Salt and OPSI modes use Availability probe only.
 
 ## Boundary
 
@@ -8,6 +8,7 @@ Desktop owns login, Chat, Sessions, and settings. Control owner selects who mana
 
 - `direct` (default): Work probes and may start Gateway against Hermes home / `:8642`.
 - `salt`: Salt owns install/lifecycle; Work only probes Availability.
+- `opsi`: OPSI owns install/lifecycle; Work only probes Availability. No `opsi-control` client, credentials, or Job UI.
 - `runtime`: Copilot Runtime HTTP (`:8765`) owns install/lifecycle.
 
 Hermes Agent owns agent loop, session data, skills/tools. See [[src/shared/runtime/runtime-contract.ts]] for shared probe types.
@@ -23,7 +24,7 @@ Runtime paths live outside the install module so Gateway and Chat stay decoupled
 [[src/main/runtime/runtime-manager.ts]] picks the adapter from control owner:
 
 - `direct` → [[src/main/runtime/legacy-local-runtime-adapter.ts]] (Gateway `:8642`, no Runtime HTTP)
-- `salt` → [[src/main/hermes/availability-backend.ts]]
+- `salt` / `opsi` → [[src/main/hermes/availability-backend.ts]]
 - `runtime` → [[src/main/runtime/runtime-service-adapter.ts]] via [[src/main/runtime/runtime-management-backend.ts]]
 
 ## Runtime Service Adapter
@@ -56,13 +57,13 @@ App splash checks Portal Auth, then connects Hermes before main UI, or shows Con
 
 ## Direct Hermes Mode
 
-Default Work mode (`direct`) and Salt-managed Work (`SMC_HERMES_CONTROL_OWNER=salt` or `%ProgramData%\SMC\control-owner.json`) do not depend on Runtime `:8765` for Connection Ready.
+Default Work mode (`direct`) and externally managed Work (`SMC_HERMES_CONTROL_OWNER=salt|opsi` or `%ProgramData%\SMC\control-owner.json`) do not depend on Runtime `:8765` for Connection Ready.
 
-[[src/main/hermes/control-owner.ts]] is the owner mutex (default `direct`). `direct` uses Legacy local adapter to probe/start Gateway. Salt mode uses [[src/main/hermes/availability-backend.ts]] and splash [[src/renderer/src/runtime/RuntimeProvider.tsx]] calls `runtimeGetStatus` instead of `runtimeEnsureLocalReady`. Chat transport stays in [[src/main/hermes.ts]].
+[[src/main/hermes/control-owner.ts]] is the owner mutex (default `direct`). `direct` uses Legacy local adapter to probe/start Gateway. Salt and OPSI modes use [[src/main/hermes/availability-backend.ts]] and splash [[src/renderer/src/runtime/RuntimeProvider.tsx]] calls `runtimeGetStatus` instead of `runtimeEnsureLocalReady`. Chat transport stays in [[src/main/hermes.ts]].
 
 ## Hermes Availability Backend
 
-Probe-only Connection Ready for enterprise/Salt mode. Never install, update, or spawn Gateway.
+Probe-only Connection Ready for enterprise Salt/OPSI mode. Never install, update, or spawn Gateway.
 
 Uses [[src/main/hermes/transport/gateway-http.ts]] for Gateway URL and `/health` (same path as Chat transport). `authenticated` is derived from local API key presence and is not equal to `gatewayHealthy`.
 
@@ -71,6 +72,12 @@ Uses [[src/main/hermes/transport/gateway-http.ts]] for Gateway URL and `/health`
 v2.3.1 regression: Salt control-owner keeps Work on Availability-only Connection Ready and refuses local Gateway restart while Chat stays off Runtime `:8765`.
 
 Covered by `apps/work/tests/enterprise-salt-mode.test.ts`.
+
+## OPSI enterprise mode canary
+
+v1.0 regression: OPSI control-owner keeps Work on Availability-only Connection Ready, refuses local Start/Update/Doctor/Restart, never calls Runtime `:8765` or `opsi-control`, and continues Direct Hermes Chat when Gateway is healthy.
+
+Covered by `apps/work/tests/enterprise-opsi-mode.test.ts`.
 
 ## Portal Auth Login
 

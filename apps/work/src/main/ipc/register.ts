@@ -74,9 +74,9 @@ import { getRuntimeManager } from "../runtime/runtime-manager";
 import { getRuntimeManagementBackend } from "../runtime/runtime-management-backend";
 import {
   isRuntimeControlOwner,
-  isSaltControlOwner,
+  isExternallyManagedControlOwner,
   readControlOwnerSnapshot,
-  saltManagedMessage,
+  externallyManagedMessage,
 } from "../hermes/control-owner";
 import { resolveProfileToInstance } from "../runtime/runtime-management-mapper";
 import type {
@@ -746,7 +746,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         () => sshGetHermesVersion(conn.ssh),
         activeSshProfile(),
       );
-    if (isSaltControlOwner()) {
+    if (isExternallyManagedControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.version ?? null;
     }
@@ -766,7 +766,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         activeSshProfile(),
       );
     clearVersionCache();
-    if (isSaltControlOwner()) {
+    if (isExternallyManagedControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.version ?? null;
     }
@@ -776,7 +776,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     return getHermesVersion();
   });
   ipcMain.handle("run-hermes-doctor", async () => {
-    if (isSaltControlOwner()) return saltManagedMessage("Doctor");
+    if (isExternallyManagedControlOwner()) return externallyManagedMessage("Doctor");
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshRunDoctor(conn.ssh);
     if (isRuntimeControlOwner()) {
@@ -786,8 +786,8 @@ export function registerIpcHandlers(context: IpcContext): void {
   });
   ipcMain.handle("run-hermes-update", async (event) => {
     try {
-      if (isSaltControlOwner()) {
-        return { success: false, error: saltManagedMessage("Update") };
+      if (isExternallyManagedControlOwner()) {
+        return { success: false, error: externallyManagedMessage("Update") };
       }
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) {
@@ -1767,11 +1767,11 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   // Gateway
   ipcMain.handle("start-gateway", async () => {
-    if (isSaltControlOwner()) {
+    if (isExternallyManagedControlOwner()) {
       return {
         success: false,
         running: false,
-        error: saltManagedMessage("Start Gateway"),
+        error: externallyManagedMessage("Start Gateway"),
       };
     }
     const conn = getConnectionConfig();
@@ -1796,7 +1796,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     return startGatewayDetailed();
   });
   ipcMain.handle("stop-gateway", async () => {
-    if (isSaltControlOwner()) return false;
+    if (isExternallyManagedControlOwner()) return false;
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -1812,7 +1812,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     return stopGateway(undefined, true);
   });
   ipcMain.handle("restart-gateway", async (_event, profile?: string) => {
-    if (isSaltControlOwner()) return false;
+    if (isExternallyManagedControlOwner()) return false;
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -1833,7 +1833,7 @@ export function registerIpcHandlers(context: IpcContext): void {
   ipcMain.handle("gateway-status", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshGatewayStatus(conn.ssh);
-    if (isSaltControlOwner() || !isRuntimeControlOwner()) {
+    if (isExternallyManagedControlOwner() || !isRuntimeControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.gatewayRunning;
     }

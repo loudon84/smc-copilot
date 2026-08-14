@@ -1,0 +1,85 @@
+name: OPSI Control CI
+
+on:
+  push:
+    paths:
+      - "services/opsi-control/**"
+      - "contracts/opsi/**"
+      - "infra/opsi/**"
+      - "tools/contract-generate/export_opsi_control_openapi.py"
+      - "tools/contract-generate/check_opsi_control_drift.py"
+      - "scripts/check-opsi-isolation.py"
+      - ".github/workflows/opsi-control-ci.yml"
+  pull_request:
+    paths:
+      - "services/opsi-control/**"
+      - "contracts/opsi/**"
+      - "infra/opsi/**"
+      - "tools/contract-generate/export_opsi_control_openapi.py"
+      - "tools/contract-generate/check_opsi_control_drift.py"
+      - "scripts/check-opsi-isolation.py"
+      - ".github/workflows/opsi-control-ci.yml"
+
+jobs:
+  opsi-control:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsi_control_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/opsi_control_ci
+      SMC_OPSI_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: Sync opsi-control
+        working-directory: services/opsi-control
+        run: uv sync --extra dev
+      - name: Ruff
+        working-directory: services/opsi-control
+        run: uv run ruff check .
+      - name: Ruff format
+        working-directory: services/opsi-control
+        run: uv run ruff format --check .
+      - name: Pytest
+        working-directory: services/opsi-control
+        run: uv run pytest -q
+      - name: Alembic upgrade head
+        working-directory: services/opsi-control
+        run: uv run alembic upgrade head
+      - name: Isolation
+        run: python scripts/check-opsi-isolation.py --base ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD' }}
+      - name: OpenAPI export
+        run: uv run --project services/opsi-control python tools/contract-generate/export_opsi_control_openapi.py
+      - name: Schema files present
+        run: |
+          test -f contracts/opsi/endpoint-state.schema.json
+          test -f contracts/opsi/action-request.schema.json
+          test -f contracts/opsi/action-result.schema.json
+          test -f contracts/opsi/diagnostic.schema.json
+          test -f contracts/opsi/managed-config.schema.json
+      - name: Lab status remains not_proven
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          status = Path("docs/opsi/lab/POC-STATUS.md").read_text(encoding="utf-8")
+          assert "not_proven" in status
+          assert "NO-GO" in status
+          print("ok: live lab remains not_proven")
+          PY

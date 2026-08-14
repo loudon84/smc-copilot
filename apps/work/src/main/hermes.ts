@@ -26,8 +26,8 @@ import {
   getEnhancedPath,
 } from "./runtime/hermes-runtime-paths";
 import {
-  isSaltControlOwner,
-  saltManagedMessage,
+  isExternallyManagedControlOwner,
+  externallyManagedMessage,
 } from "./hermes/control-owner";
 import { buildLocalDashboardCliArgs } from "./dashboard-launch";
 import {
@@ -3152,9 +3152,9 @@ function gatewayCliCommandArgs(
 }
 
 export function startGatewayDetailed(profile?: string): GatewayStartResult {
-  if (isSaltControlOwner()) {
-    const error = saltManagedMessage("Start Gateway");
-    console.warn("[gateway] startGateway() refused — control_owner=salt");
+  if (isExternallyManagedControlOwner()) {
+    const error = externallyManagedMessage("Start Gateway");
+    console.warn("[gateway] startGateway() refused — externally managed control owner");
     return { success: false, running: false, error };
   }
   // Defensive: the local gateway is never the right thing to spawn in
@@ -3576,7 +3576,7 @@ export function restartGateway(
   healthPollMs = 250,
   stopTimeoutMs = 5000,
 ): Promise<boolean> {
-  if (isSaltControlOwner()) return Promise.resolve(false);
+  if (isExternallyManagedControlOwner()) return Promise.resolve(false);
   // Same defensive gate as startGateway — the local gateway has no role
   // in remote/SSH mode. Cheap to check; catches IPC paths that don't
   // wrap their restart calls in an isRemoteMode() check.
@@ -3628,7 +3628,7 @@ export async function startGatewayWithRecovery(
   // restart implementation.
   void restartCommandTimeoutMs;
 
-  if (isSaltControlOwner()) return false;
+  if (isExternallyManagedControlOwner()) return false;
   if (isRemoteMode()) return false;
 
   if (isGatewayRunning(profile)) {

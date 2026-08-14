@@ -36,7 +36,7 @@ describe("hermes control owner", () => {
     expect(isSaltControlOwner()).toBe(true);
   });
 
-  it("reads file when env unset", async () => {
+  it("reads salt from file when env unset", async () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path, JSON.stringify({ hermes: "salt" }), "utf-8");
     process.env.SMC_CONTROL_OWNER_PATH = path;
@@ -45,5 +45,39 @@ describe("hermes control owner", () => {
       "../src/main/hermes/control-owner"
     );
     expect(getHermesControlOwner()).toBe("salt");
+  });
+
+  it("reads opsi from file", async () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, JSON.stringify({ hermes: "opsi" }), "utf-8");
+    process.env.SMC_CONTROL_OWNER_PATH = path;
+    delete process.env.SMC_HERMES_CONTROL_OWNER;
+    const { getHermesControlOwner, isOpsiControlOwner, isExternallyManagedControlOwner } =
+      await import("../src/main/hermes/control-owner");
+    expect(getHermesControlOwner()).toBe("opsi");
+    expect(isOpsiControlOwner()).toBe(true);
+    expect(isExternallyManagedControlOwner()).toBe(true);
+  });
+
+  it("reads runtime from env", async () => {
+    process.env.SMC_CONTROL_OWNER_PATH = join(dir, "missing.json");
+    process.env.SMC_HERMES_CONTROL_OWNER = "runtime";
+    const { getHermesControlOwner, isRuntimeControlOwner } = await import(
+      "../src/main/hermes/control-owner"
+    );
+    expect(getHermesControlOwner()).toBe("runtime");
+    expect(isRuntimeControlOwner()).toBe(true);
+  });
+
+  it("rejects illegal owner values by falling back to default", async () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, JSON.stringify({ hermes: "narnia" }), "utf-8");
+    process.env.SMC_CONTROL_OWNER_PATH = path;
+    delete process.env.SMC_HERMES_CONTROL_OWNER;
+    const { getHermesControlOwner, isDirectControlOwner } = await import(
+      "../src/main/hermes/control-owner"
+    );
+    expect(getHermesControlOwner()).toBe("direct");
+    expect(isDirectControlOwner()).toBe(true);
   });
 });

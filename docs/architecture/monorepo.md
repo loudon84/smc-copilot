@@ -7,8 +7,10 @@
 | `apps/desktop` | Electron Desktop (npm) |
 | `apps/work` | Work desktop; Salt-mode Direct Hermes Client (v2.0) |
 | `services/runtime` | FastAPI Runtime (uv); Endpoint Control Plane **frozen** (ADR-026) |
-| `infra/salt` | Salt Lab + SMC Hermes Extension (Endpoint Control Plane) |
-| `contracts` | Generated OpenAPI + event schemas |
+| `infra/salt` | Salt Lab + SMC Hermes Extension (default Endpoint Control Plane) |
+| `infra/opsi` | OPSI 4.3 `smc-hermes-agent` Product (parallel Endpoint Control Plane) |
+| `services/opsi-control` | FastAPI OPSI Control (opsiconfd JSON-RPC adapter) |
+| `contracts` | Generated OpenAPI + event schemas + OPSI JSON Schema |
 | `packages/runtime-client-ts` | Generated + facade TS client |
 
 ## Build isolation

@@ -1,0 +1,87 @@
+[Package]
+version = "1"
+depends = []
+
+[Product]
+id = "smc-hermes-agent"
+name = "SMC Hermes Agent"
+description = "OPSI localboot adapter for Hermes install, update, config, health, diagnostics"
+advice = "Do not install Hermes into systemprofile. Machine layer stages; user context starts Gateway."
+priority = 0
+type = "localboot"
+productVersion = "0.22.0"
+packageVersion = "1"
+licenseRequired = false
+setupScript = "setup.opsiscript"
+uninstallScript = "uninstall.opsiscript"
+updateScript = "update.opsiscript"
+customScript = "custom.opsiscript"
+
+[[Product.windowsSoftwareIds]]
+
+[ProductProperty.bool.gateway_autostart]
+default = [true]
+description = "Start Hermes Gateway at user logon"
+
+[ProductProperty.bool.diagnostics_enabled]
+default = [true]
+description = "Allow diagnostic bundle collection"
+
+[ProductProperty.unicode.hermes_version]
+multivalue = false
+editable = true
+description = "Exact Hermes version. latest is forbidden."
+values = []
+default = ["0.22.0"]
+
+[ProductProperty.unicode.release_channel]
+multivalue = false
+editable = false
+description = "testing or stable; server must resolve to exact hermes_version before publish"
+values = ["testing", "stable"]
+default = ["stable"]
+
+[ProductProperty.unicode.gateway_port]
+multivalue = false
+editable = true
+description = "Gateway listen port"
+values = ["8642"]
+default = ["8642"]
+
+[ProductProperty.unicode.managed_profile]
+multivalue = false
+editable = true
+description = "Hermes profile name"
+default = ["default"]
+
+[ProductProperty.unicode.config_revision]
+multivalue = false
+editable = true
+description = "Managed config revision (integer as string)"
+default = ["0"]
+
+[ProductProperty.unicode.diagnostic_log_lines]
+multivalue = false
+editable = true
+description = "Max log lines per category (cap 500)"
+default = ["500"]
+
+[ProductProperty.unicode.auto_repair_level]
+multivalue = false
+editable = true
+description = "0 observe, 1 restart, 2 config/doctor. 3+ requires explicit policy."
+values = ["0", "1", "2"]
+default = ["1"]
+
+[ProductProperty.unicode.custom_operation]
+multivalue = false
+editable = true
+description = "Allowlisted custom action. Client-specific only."
+values = ["status", "collect-log", "apply-config", "restart-gateway", "diagnose", "repair"]
+default = ["status"]
+
+[ProductProperty.unicode.request_id]
+multivalue = false
+editable = true
+description = "SMC request id (req_*). Client-specific only. Never a product default in production."
+default = [""]

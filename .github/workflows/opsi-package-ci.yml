@@ -1,0 +1,48 @@
+name: OPSI Package CI
+
+on:
+  push:
+    paths:
+      - "infra/opsi/**"
+      - "contracts/opsi/*.schema.json"
+      - ".github/workflows/opsi-package-ci.yml"
+  pull_request:
+    paths:
+      - "infra/opsi/**"
+      - "contracts/opsi/*.schema.json"
+      - ".github/workflows/opsi-package-ci.yml"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate control.toml and package smoke
+        run: python infra/opsi/products/smc-hermes-agent/packaging/makepackage.py --smoke
+      - name: Schema examples
+        run: python infra/opsi/tests/validate_schemas.py
+      - name: Secret scan product tree
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path("infra/opsi")
+          pat = re.compile(r"(api[_-]?key|secret|password|bearer\s+[A-Za-z0-9._-]{12,})", re.I)
+          hits = []
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() in {".png", ".zip", ".opsi"}:
+                  continue
+              text = path.read_text(encoding="utf-8", errors="replace")
+              if pat.search(text) and "example" not in path.name.lower() and "redact" not in path.name.lower():
+                  # allow documentation of redaction rules
+                  if "redact" in text.lower() or "forbidden" in text.lower():
+                      continue
+                  hits.append(str(path))
+          assert hits == [], hits
+          print("ok: no secrets in product tree")
+          PY
+      - name: Isolation vs Salt
+        run: python scripts/check-opsi-isolation.py

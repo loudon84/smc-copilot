@@ -8,10 +8,12 @@ import type {
   HermesControlOwner,
   ControlOwnerSnapshot,
 } from "../../shared/runtime/control-owner";
+import { isExternallyManagedOwner } from "../../shared/runtime/control-owner";
 
 const VALID_OWNERS = new Set<HermesControlOwner>([
   "direct",
   "salt",
+  "opsi",
   "runtime",
 ]);
 
@@ -27,7 +29,12 @@ export function defaultControlOwnerPath(): string {
 
 function parseOwner(raw: string | undefined): HermesControlOwner | null {
   const value = raw?.trim().toLowerCase();
-  if (value === "direct" || value === "salt" || value === "runtime") {
+  if (
+    value === "direct" ||
+    value === "salt" ||
+    value === "opsi" ||
+    value === "runtime"
+  ) {
     return value;
   }
   return null;
@@ -66,6 +73,14 @@ export function isSaltControlOwner(): boolean {
   return getHermesControlOwner() === "salt";
 }
 
+export function isOpsiControlOwner(): boolean {
+  return getHermesControlOwner() === "opsi";
+}
+
+export function isExternallyManagedControlOwner(): boolean {
+  return isExternallyManagedOwner(getHermesControlOwner());
+}
+
 export function isRuntimeControlOwner(): boolean {
   return getHermesControlOwner() === "runtime";
 }
@@ -76,6 +91,27 @@ export function isDirectControlOwner(): boolean {
 
 export function saltManagedMessage(action: string): string {
   return `Hermes is managed by Salt (${action} is not available in enterprise mode). Wait for Salt install or recovery.`;
+}
+
+export function externallyManagedMessage(action: string): string {
+  const owner = getHermesControlOwner();
+  switch (owner) {
+    case "salt":
+      return saltManagedMessage(action);
+    case "opsi":
+      return `Managed by organization / Provider: OPSI. ${action} is not available in this app. Wait for enterprise recovery.`;
+    case "direct":
+    case "runtime":
+      return `Hermes is managed by the organization. ${action} is not available.`;
+    default: {
+      const _exhaustive: never = owner;
+      return `Hermes is managed by the organization (${_exhaustive}). ${action} is not available.`;
+    }
+  }
+}
+
+export function externallyManagedErrorCode(): "SALT_MANAGED" | "EXTERNALLY_MANAGED" {
+  return isSaltControlOwner() ? "SALT_MANAGED" : "EXTERNALLY_MANAGED";
 }
 
 export function assertOwner(

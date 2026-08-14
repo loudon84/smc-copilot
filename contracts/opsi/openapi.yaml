@@ -1,0 +1,470 @@
+components:
+  schemas:
+    ActionCreateRequest:
+      additionalProperties: false
+      properties:
+        autoRepairLevel:
+          anyOf:
+          - maximum: 4.0
+            minimum: 0.0
+            type: integer
+          - type: 'null'
+          title: Autorepairlevel
+        configRevision:
+          anyOf:
+          - maximum: 1000000.0
+            minimum: 0.0
+            type: integer
+          - type: 'null'
+          title: Configrevision
+        hermesVersion:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Hermesversion
+        note:
+          anyOf:
+          - maxLength: 256
+            type: string
+          - type: 'null'
+          title: Note
+        operation:
+          $ref: '#/components/schemas/Operation'
+        requestId:
+          maxLength: 80
+          minLength: 12
+          pattern: ^req_[A-Za-z0-9_-]{8,64}$
+          title: Requestid
+          type: string
+        schema:
+          const: smc.opsi.action-request.v1
+          default: smc.opsi.action-request.v1
+          title: Schema
+          type: string
+        targets:
+          items:
+            $ref: '#/components/schemas/TargetRef'
+          maxItems: 200
+          minItems: 1
+          title: Targets
+          type: array
+      required:
+      - requestId
+      - operation
+      - targets
+      title: ActionCreateRequest
+      type: object
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          title: Detail
+          type: array
+      title: HTTPValidationError
+      type: object
+    Operation:
+      enum:
+      - setup
+      - update
+      - uninstall
+      - status
+      - collect-log
+      - apply-config
+      - restart-gateway
+      - diagnose
+      - repair
+      title: Operation
+      type: string
+    PolicyApplyRequest:
+      additionalProperties: false
+      properties:
+        clientIds:
+          items:
+            type: string
+          maxItems: 200
+          minItems: 1
+          title: Clientids
+          type: array
+        keys:
+          additionalProperties:
+            anyOf:
+            - type: integer
+            - type: string
+            - type: boolean
+          title: Keys
+          type: object
+        revision:
+          maximum: 1000000.0
+          minimum: 1.0
+          title: Revision
+          type: integer
+        schema:
+          const: smc.opsi.managed-config.v1
+          default: smc.opsi.managed-config.v1
+          title: Schema
+          type: string
+      required:
+      - revision
+      - clientIds
+      - keys
+      title: PolicyApplyRequest
+      type: object
+    TargetRef:
+      additionalProperties: false
+      properties:
+        clientId:
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9._-]+$
+          title: Clientid
+          type: string
+      required:
+      - clientId
+      title: TargetRef
+      type: object
+    ValidationError:
+      properties:
+        ctx:
+          title: Context
+          type: object
+        input:
+          title: Input
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          title: Location
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+      type: object
+info:
+  title: SMC OPSI Control
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /api/v1/opsi/actions:
+    post:
+      operationId: create_action_api_v1_opsi_actions_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Action
+      tags:
+      - actions
+  /api/v1/opsi/actions/{request_id}:
+    get:
+      operationId: get_action_api_v1_opsi_actions__request_id__get
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Action
+      tags:
+      - actions
+  /api/v1/opsi/actions/{request_id}/results:
+    get:
+      operationId: action_results_api_v1_opsi_actions__request_id__results_get
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Action Results
+      tags:
+      - actions
+  /api/v1/opsi/clients:
+    get:
+      operationId: list_clients_api_v1_opsi_clients_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Clients
+      tags:
+      - clients
+  /api/v1/opsi/clients/{client_id}:
+    get:
+      operationId: get_client_api_v1_opsi_clients__client_id__get
+      parameters:
+      - in: path
+        name: client_id
+        required: true
+        schema:
+          title: Client Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Client
+      tags:
+      - clients
+  /api/v1/opsi/clients/{client_id}/state:
+    get:
+      operationId: client_state_api_v1_opsi_clients__client_id__state_get
+      parameters:
+      - in: path
+        name: client_id
+        required: true
+        schema:
+          title: Client Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Client State
+      tags:
+      - clients
+  /api/v1/opsi/diagnostics/{request_id}:
+    get:
+      operationId: get_diagnostic_api_v1_opsi_diagnostics__request_id__get
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Diagnostic
+      tags:
+      - diagnostics
+  /api/v1/opsi/policies/apply:
+    post:
+      operationId: apply_policy_api_v1_opsi_policies_apply_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyApplyRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Apply Policy
+      tags:
+      - policies
+  /api/v1/opsi/products:
+    get:
+      operationId: list_products_api_v1_opsi_products_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Products
+      tags:
+      - products
+  /health:
+    get:
+      operationId: health_health_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                title: Response Health Health Get
+                type: object
+          description: Successful Response
+      summary: Health
+      tags:
+      - health
+  /ready:
+    get:
+      operationId: ready_ready_get
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Ready
+      tags:
+      - health
