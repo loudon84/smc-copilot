@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/rollout-gate.schema.json",
+  "title": "smc.opsi.rollout-gate.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["gateType", "decision", "reason", "inputDigest", "evaluator"],
+  "properties": {
+    "gateType": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "decision": { "enum": ["PASS", "PAUSE"] },
+    "reason": { "type": "string", "maxLength": 256 },
+    "inputDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "evaluator": { "type": "string", "const": "gate-v1.2.0" }
+  }
+}

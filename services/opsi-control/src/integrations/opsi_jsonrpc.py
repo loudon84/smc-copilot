@@ -51,7 +51,13 @@ class FakeOpsiJsonRpc:
                 "productVersion": "0.22.0",
                 "packageVersion": "1",
                 "depotId": "depot.example",
-            }
+            },
+            {
+                "productId": "smc-hermes-agent",
+                "productVersion": "0.21.0",
+                "packageVersion": "1",
+                "depotId": "depot.example",
+            },
         ]
         self.product_on_client: dict[str, dict[str, Any]] = {}
         self.properties: dict[tuple[str, str, str], list[str]] = {}

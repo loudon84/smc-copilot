@@ -118,3 +118,158 @@ class WorkerHeartbeatRow(Base):
     worker_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutCampaignRow(Base):
+    __tablename__ = "opsi_rollout_campaigns"
+
+    campaign_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    snapshot_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    client_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
+    product_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    package_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    artifact_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    signer_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    config_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    gate_policy_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    evidence_policy_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    creator_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    change_ticket: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    window_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pause_cause: Mapped[str] = mapped_column(String(64), default="")
+    fencing_token: Mapped[int] = mapped_column(Integer, default=0)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutBatchRow(Base):
+    __tablename__ = "opsi_rollout_batches"
+    __table_args__ = (UniqueConstraint("campaign_id", "batch_index", name="uq_opsi_rollout_batch"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(80), ForeignKey("opsi_rollout_campaigns.campaign_id", ondelete="CASCADE"), nullable=False
+    )
+    batch_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    client_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
+    observe_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    dispatched: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class RolloutTargetRow(Base):
+    __tablename__ = "opsi_rollout_targets"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "client_id", name="uq_opsi_rollout_target"),
+        UniqueConstraint("client_id", "active_slot", name="uq_opsi_rollout_active_client"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(80), ForeignKey("opsi_rollout_campaigns.campaign_id", ondelete="CASCADE"), nullable=False
+    )
+    client_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    batch_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    preflight_json: Mapped[str] = mapped_column(Text, default="[]")
+    preflight_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    action_id: Mapped[str] = mapped_column(String(80), default="")
+    baseline_version: Mapped[str] = mapped_column(String(64), default="")
+    baseline_digest: Mapped[str] = mapped_column(String(64), default="")
+    baseline_owner: Mapped[str] = mapped_column(String(32), default="opsi")
+    ineligible_reason: Mapped[str] = mapped_column(String(256), default="")
+    mutated: Mapped[bool] = mapped_column(Boolean, default=False)
+    active_slot: Mapped[str] = mapped_column(String(96), default="active")
+
+
+class RolloutApprovalRow(Base):
+    __tablename__ = "opsi_rollout_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    campaign_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutGateRow(Base):
+    __tablename__ = "opsi_rollout_gates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    gate_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    input_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutEventRow(Base):
+    __tablename__ = "opsi_rollout_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    event: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    detail: Mapped[str] = mapped_column(String(512), default="")
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class ArtifactPromotionRow(Base):
+    __tablename__ = "opsi_artifact_promotions"
+
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    product_version: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    signer_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutIdempotencyRow(Base):
+    __tablename__ = "opsi_rollout_idempotency"
+    __table_args__ = (UniqueConstraint("actor_id", "key", name="uq_opsi_rollout_idempotency"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(128), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    command: Mapped[str] = mapped_column(String(32), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    body_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    response_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class RolloutOutboxRow(Base):
+    __tablename__ = "opsi_rollout_outbox"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    published: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class LiveGateRow(Base):
+    __tablename__ = "opsi_live_gates"
+
+    gate_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    signed_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    immutable: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

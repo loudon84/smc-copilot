@@ -25,8 +25,8 @@ def client(state):
 
 @pytest.fixture
 def token(settings):
-    def _mint(*scopes: str) -> str:
+    def _mint(*scopes: str, subject: str = "ops", roles: list[str] | None = None) -> str:
         wanted = list(scopes) or [scope.value for scope in Scope]
-        return mint_lab_jwt(subject="ops", scopes=wanted, settings=settings)
+        return mint_lab_jwt(subject=subject, scopes=wanted, settings=settings, roles=roles)
 
     return _mint

@@ -3,7 +3,7 @@
   "runtimeApi": "3.1.0",
   "runtimeEvents": "2.2.0",
   "saltControlApi": "1.0.0",
-  "opsiControlApi": "1.1.0",
+  "opsiControlApi": "1.2.0",
   "compatibility": {
     "minimumDesktopVersion": "0.1.9",
     "minimumRuntimeVersion": "1.6.0"

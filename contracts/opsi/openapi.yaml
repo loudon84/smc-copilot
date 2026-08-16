@@ -1,5 +1,37 @@
 components:
   schemas:
+    AbortRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        rollbackMutated:
+          default: false
+          title: Rollbackmutated
+          type: boolean
+      required:
+      - reason
+      - changeTicket
+      title: AbortRequest
+      type: object
     ActionCreateRequest:
       additionalProperties: false
       properties:
@@ -55,6 +87,112 @@ components:
       - targets
       title: ActionCreateRequest
       type: object
+    ApprovalKind:
+      enum:
+      - start
+      - next_batch
+      - resume
+      - rollback_expand
+      - promote
+      title: ApprovalKind
+      type: string
+    ApproveRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        kind:
+          $ref: '#/components/schemas/ApprovalKind'
+          default: start
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+      required:
+      - reason
+      - changeTicket
+      title: ApproveRequest
+      type: object
+    ArtifactChannel:
+      enum:
+      - testing
+      - pilot
+      - stable
+      - quarantined
+      title: ArtifactChannel
+      type: string
+    ArtifactPromoteRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        digest:
+          pattern: ^[a-fA-F0-9]{64}$
+          title: Digest
+          type: string
+        evidenceRef:
+          maxLength: 256
+          minLength: 3
+          title: Evidenceref
+          type: string
+        fromChannel:
+          $ref: '#/components/schemas/ArtifactChannel'
+          default: testing
+        productVersion:
+          title: Productversion
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        schema:
+          const: smc.opsi.artifact-promotion.v1
+          default: smc.opsi.artifact-promotion.v1
+          title: Schema
+          type: string
+        signerKeyId:
+          title: Signerkeyid
+          type: string
+        toChannel:
+          $ref: '#/components/schemas/ArtifactChannel'
+          default: pilot
+      required:
+      - reason
+      - changeTicket
+      - productVersion
+      - digest
+      - signerKeyId
+      - evidenceRef
+      title: ArtifactPromoteRequest
+      type: object
     HTTPValidationError:
       properties:
         detail:
@@ -77,6 +215,40 @@ components:
       - repair
       title: Operation
       type: string
+    PauseRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        cause:
+          maxLength: 64
+          minLength: 3
+          title: Cause
+          type: string
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+      required:
+      - reason
+      - changeTicket
+      - cause
+      title: PauseRequest
+      type: object
     PolicyApplyRequest:
       additionalProperties: false
       properties:
@@ -110,6 +282,249 @@ components:
       - clientIds
       - keys
       title: PolicyApplyRequest
+      type: object
+    PreflightRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+      required:
+      - reason
+      - changeTicket
+      title: PreflightRequest
+      type: object
+    ResumeRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+      required:
+      - reason
+      - changeTicket
+      title: ResumeRequest
+      type: object
+    RollbackRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        batchIndex:
+          anyOf:
+          - maximum: 20.0
+            minimum: 0.0
+            type: integer
+          - type: 'null'
+          title: Batchindex
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        clientId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Clientid
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        scope:
+          $ref: '#/components/schemas/RollbackScope'
+      required:
+      - reason
+      - changeTicket
+      - scope
+      title: RollbackRequest
+      type: object
+    RollbackScope:
+      enum:
+      - target
+      - batch
+      - campaign
+      title: RollbackScope
+      type: string
+    RolloutCreateRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        artifactDigest:
+          pattern: ^[a-fA-F0-9]{64}$
+          title: Artifactdigest
+          type: string
+        campaignId:
+          maxLength: 80
+          minLength: 12
+          pattern: ^cmp_[A-Za-z0-9_-]{8,64}$
+          title: Campaignid
+          type: string
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        clientIds:
+          items:
+            type: string
+          maxItems: 20
+          minItems: 2
+          title: Clientids
+          type: array
+        configRevision:
+          maximum: 1000000.0
+          minimum: 1.0
+          title: Configrevision
+          type: integer
+        evidencePolicyRevision:
+          default: 1
+          minimum: 1.0
+          title: Evidencepolicyrevision
+          type: integer
+        gatePolicyRevision:
+          default: 1
+          minimum: 1.0
+          title: Gatepolicyrevision
+          type: integer
+        name:
+          maxLength: 128
+          minLength: 3
+          title: Name
+          type: string
+        packageVersion:
+          maxLength: 32
+          minLength: 1
+          title: Packageversion
+          type: string
+        productId:
+          default: smc-hermes-agent
+          title: Productid
+          type: string
+        productVersion:
+          maxLength: 64
+          minLength: 1
+          title: Productversion
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        schema:
+          const: smc.opsi.rollout-campaign.v1
+          default: smc.opsi.rollout-campaign.v1
+          title: Schema
+          type: string
+        signerKeyId:
+          maxLength: 64
+          minLength: 1
+          title: Signerkeyid
+          type: string
+        windowEnd:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Windowend
+        windowStart:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Windowstart
+      required:
+      - reason
+      - changeTicket
+      - campaignId
+      - name
+      - clientIds
+      - productVersion
+      - packageVersion
+      - artifactDigest
+      - signerKeyId
+      - configRevision
+      title: RolloutCreateRequest
+      type: object
+    StartRequest:
+      additionalProperties: false
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actor
+        changeTicket:
+          maxLength: 64
+          minLength: 3
+          title: Changeticket
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+      required:
+      - reason
+      - changeTicket
+      title: StartRequest
       type: object
     TargetRef:
       additionalProperties: false
@@ -175,7 +590,7 @@ components:
       type: object
 info:
   title: SMC OPSI Control
-  version: 1.1.0
+  version: 1.2.0
 openapi: 3.1.0
 paths:
   /api/v1/opsi/actions:
@@ -277,6 +692,39 @@ paths:
       summary: Action Results
       tags:
       - actions
+  /api/v1/opsi/artifacts/promote:
+    post:
+      operationId: promote_artifact_api_v1_opsi_artifacts_promote_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactPromoteRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Promote Artifact
+      tags:
+      - rollouts
   /api/v1/opsi/clients:
     get:
       operationId: list_clients_api_v1_opsi_clients_get
@@ -463,6 +911,528 @@ paths:
       summary: List Products
       tags:
       - products
+  /api/v1/opsi/rollouts:
+    get:
+      operationId: list_rollouts_api_v1_opsi_rollouts_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: List Rollouts
+      tags:
+      - rollouts
+    post:
+      operationId: create_rollout_api_v1_opsi_rollouts_post
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Idempotency-Key
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RolloutCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/metrics:
+    get:
+      operationId: rollout_metrics_api_v1_opsi_rollouts_metrics_get
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollout Metrics
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}:
+    get:
+      operationId: get_rollout_api_v1_opsi_rollouts__campaign_id__get
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/abort:
+    post:
+      operationId: abort_rollout_api_v1_opsi_rollouts__campaign_id__abort_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AbortRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Abort Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/approve:
+    post:
+      operationId: approve_rollout_api_v1_opsi_rollouts__campaign_id__approve_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Approve Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/evidence:
+    get:
+      operationId: rollout_evidence_api_v1_opsi_rollouts__campaign_id__evidence_get
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollout Evidence
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/pause:
+    post:
+      operationId: pause_rollout_api_v1_opsi_rollouts__campaign_id__pause_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Pause Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/preflight:
+    post:
+      operationId: preflight_rollout_api_v1_opsi_rollouts__campaign_id__preflight_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreflightRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Preflight Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/resume:
+    post:
+      operationId: resume_rollout_api_v1_opsi_rollouts__campaign_id__resume_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResumeRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Resume Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/rollback:
+    post:
+      operationId: rollback_rollout_api_v1_opsi_rollouts__campaign_id__rollback_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollback Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/start:
+    post:
+      operationId: start_rollout_api_v1_opsi_rollouts__campaign_id__start_post
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: If-Match
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: If-Match
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Start Rollout
+      tags:
+      - rollouts
+  /api/v1/opsi/rollouts/{campaign_id}/targets:
+    get:
+      operationId: rollout_targets_api_v1_opsi_rollouts__campaign_id__targets_get
+      parameters:
+      - in: path
+        name: campaign_id
+        required: true
+        schema:
+          title: Campaign Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Rollout Targets
+      tags:
+      - rollouts
   /health:
     get:
       operationId: health_health_get

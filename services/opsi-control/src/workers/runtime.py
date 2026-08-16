@@ -34,6 +34,23 @@ class WorkerRuntime:
             except TimeoutError:
                 continue
 
+    async def run_rollout(self, service: object | None) -> None:
+        if service is None:
+            return
+        worker_id = self.worker_id or f"rollout-{os.getpid()}"
+        while not self.stop.is_set():
+            try:
+                await self.repos.heartbeats.touch(worker_id, "rollout")
+                dispatch = getattr(service, "dispatch_once", None)
+                if dispatch:
+                    await dispatch(worker_id)
+            except Exception:
+                log.exception("rollout tick failed")
+            try:
+                await asyncio.wait_for(self.stop.wait(), timeout=2.0)
+            except TimeoutError:
+                continue
+
     async def run_reconciler(self) -> None:
         worker_id = self.worker_id or f"reconciler-{os.getpid()}"
         while not self.stop.is_set():

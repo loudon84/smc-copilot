@@ -14,12 +14,15 @@ from core.errors import OpsiControlError, error_body
 from core.logging import configure_logging
 from db.repositories.interfaces import RepositoryBundle
 from db.repositories.memory import build_in_memory_repos
+from db.repositories.rollout_memory import MemoryRolloutStore
+from db.repositories.rollout_sql import SqlRolloutStore
 from db.repositories.sqlalchemy import build_sqlalchemy_repos
 from db.session import create_engine, create_session_factory
 from integrations.opsi_http import HttpOpsiJsonRpc
 from integrations.opsi_jsonrpc import FakeOpsiJsonRpc, OpsiJsonRpc
 from integrations.secret_provider import EnvSecretProvider, HttpSecretProvider, SecretProvider
 from services.control import ActionService, DiagnosticService, InventoryService, PolicyService
+from services.rollout import RolloutService
 from workers.runtime import WorkerRuntime
 
 
@@ -32,6 +35,7 @@ class AppState:
     actions: ActionService
     policies: PolicyService
     diagnostics: DiagnosticService
+    rollouts: RolloutService
     session_factory: Any | None = None
     engine: Any | None = None
     secrets: SecretProvider | None = None
@@ -47,6 +51,22 @@ def build_test_state(settings: Settings | None = None) -> AppState:
     rpc = FakeOpsiJsonRpc()
     inventory = InventoryService(rpc, cfg.product_id)
     actions = ActionService(repos, rpc, cfg)
+    store = MemoryRolloutStore()
+    facts = {
+        host["id"]: {
+            "os": "windows11",
+            "lastSeenMinutes": 5,
+            "owner": "opsi",
+            "diskFreeMb": 4096,
+            "userSid": "S-1-5-21-1-2-3-1001",
+            "userAccount": "lab\\user-a",
+            "gatewayHealthy": True,
+            "previousVersion": "0.21.0",
+            "previousDigest": "ab" * 32,
+        }
+        for host in rpc.hosts
+    }
+    rollouts = RolloutService(store, rpc, cfg, actions, facts=facts)
     return AppState(
         settings=cfg,
         repos=repos,
@@ -56,6 +76,7 @@ def build_test_state(settings: Settings | None = None) -> AppState:
         policies=PolicyService(actions, repos),
         diagnostics=DiagnosticService(repos),
         secrets=EnvSecretProvider(),
+        rollouts=rollouts,
     )
 
 
@@ -70,6 +91,8 @@ def build_production_state(settings: Settings) -> AppState:
         raise ValueError("Fake RPC forbidden in production")
     inventory = InventoryService(rpc, settings.product_id)
     actions = ActionService(repos, rpc, settings)
+    store = SqlRolloutStore(factory)
+    rollouts = RolloutService(store, rpc, settings, actions)
     return AppState(
         settings=settings,
         repos=repos,
@@ -81,6 +104,7 @@ def build_production_state(settings: Settings) -> AppState:
         session_factory=factory,
         engine=engine,
         secrets=secrets,
+        rollouts=rollouts,
     )
 
 
@@ -101,6 +125,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
             tasks = [
                 asyncio.create_task(runtime.run_dispatcher(), name="opsi-dispatcher"),
                 asyncio.create_task(runtime.run_reconciler(), name="opsi-reconciler"),
+                asyncio.create_task(runtime.run_rollout(app_state.rollouts), name="opsi-rollout"),
             ]
             app_state.worker_tasks = tasks
         yield
@@ -116,7 +141,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if secret_close:
             await secret_close()
 
-    app = FastAPI(title="SMC OPSI Control", version="1.1.0", lifespan=lifespan)
+    app = FastAPI(title="SMC OPSI Control", version="1.2.0", lifespan=lifespan)
     if state is None:
         if cfg.opsi_env in {"test", "lab"}:
             state = build_test_state(cfg)
@@ -130,6 +155,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.state.actions = state.actions
     app.state.policies = state.policies
     app.state.diagnostics = state.diagnostics
+    app.state.rollouts = state.rollouts
     app.state.engine = state.engine
     app.state.secrets = state.secrets
     app.include_router(api_router)

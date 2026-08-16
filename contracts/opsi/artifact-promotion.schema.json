@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/artifact-promotion.schema.json",
+  "title": "smc.opsi.artifact-promotion.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "productVersion",
+    "digest",
+    "signerKeyId",
+    "fromChannel",
+    "toChannel",
+    "evidenceRef",
+    "reason",
+    "changeTicket"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.artifact-promotion.v1" },
+    "productVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "digest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "signerKeyId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "fromChannel": { "enum": ["testing", "pilot", "stable", "quarantined"] },
+    "toChannel": { "enum": ["testing", "pilot", "stable", "quarantined"] },
+    "evidenceRef": { "type": "string", "minLength": 3, "maxLength": 256 },
+    "reason": { "type": "string", "minLength": 3, "maxLength": 256 },
+    "changeTicket": { "type": "string", "minLength": 3, "maxLength": 64 }
+  }
+}

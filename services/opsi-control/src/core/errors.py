@@ -12,6 +12,7 @@ class ErrorCode(StrEnum):
     OPSI_UNAVAILABLE = "opsi_unavailable"
     OPSI_RPC_DENIED = "opsi_rpc_denied"
     ACTION_NOT_CANCELLABLE = "action_not_cancellable"
+    PRECONDITION_FAILED = "precondition_failed"
     INTERNAL_ERROR = "internal_error"
 
 

@@ -77,14 +77,24 @@ jobs:
           test -f contracts/opsi/action-result.schema.json
           test -f contracts/opsi/diagnostic.schema.json
           test -f contracts/opsi/managed-config.schema.json
+          test -f contracts/opsi/rollout-campaign.schema.json
+          test -f contracts/opsi/artifact-promotion.schema.json
+          test -f contracts/opsi/evidence-manifest.schema.json
+          test -f contracts/opsi/rollout-gate.schema.json
       - name: Lab status remains not_proven
         run: |
           python - <<'PY'
           from pathlib import Path
-          status = Path("docs/opsi/evidence/v1.1/STATUS.md").read_text(encoding="utf-8")
-          assert "not_proven" in status
-          assert "NO-GO" in status
-          v10 = Path("docs/opsi/evidence/v1.0/STATUS.md").read_text(encoding="utf-8")
-          assert "NO-GO" in v10
+          for rel in (
+              "docs/opsi/evidence/v1.0/STATUS.md",
+              "docs/opsi/evidence/v1.1/STATUS.md",
+              "docs/opsi/evidence/v1.2/STATUS.md",
+          ):
+              status = Path(rel).read_text(encoding="utf-8")
+              assert "NO-GO" in status
+          v11 = Path("docs/opsi/evidence/v1.1/STATUS.md").read_text(encoding="utf-8")
+          v12 = Path("docs/opsi/evidence/v1.2/STATUS.md").read_text(encoding="utf-8")
+          assert "not_proven" in v11
+          assert "not_proven" in v12
           print("ok: live evidence remains not_proven")
           PY

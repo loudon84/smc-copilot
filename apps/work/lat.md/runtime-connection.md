@@ -77,6 +77,8 @@ Covered by `apps/work/tests/enterprise-salt-mode.test.ts`.
 
 v1.1: OPSI owner stays Availability-only. Work never calls `opsi-control` or Runtime `:8765`.
 
+v1.2 Pilot Campaign / Batch / Rollback lives only in `services/opsi-control`. Work must not add Rollout UI, OPSI RPC, credentials, or `window.opsiApi`.
+
 Chat continues on Direct Hermes when Gateway is healthy even if OPSI control is offline. Work does not start or recover Gateway; that remains an OPSI operator action.
 
 Covered by `apps/work/tests/enterprise-opsi-mode.test.ts`.

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     product_id: str = "smc-hermes-agent"
     start_workers: bool = True
     worker_mode: str = "lifespan"
+    pilot_start_enabled: bool = False
+    pilot_live_gate: str = "NO-GO"
 
     @field_validator("opsi_env")
     @classmethod
@@ -65,6 +67,8 @@ class Settings(BaseSettings):
             errors.append("secret_provider_url must be https in production")
         if self.database_url.startswith("sqlite"):
             errors.append("sqlite is not allowed in production")
+        if self.pilot_start_enabled and self.pilot_live_gate != "GO":
+            errors.append("pilot_start_enabled requires immutable live gate GO")
         if errors:
             raise ValueError("; ".join(errors))
 

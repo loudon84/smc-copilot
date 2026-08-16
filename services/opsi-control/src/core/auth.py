@@ -28,6 +28,14 @@ class Scope(StrEnum):
     ACTION_DISPATCH = "opsi.action.dispatch"
     POLICY_APPLY = "opsi.policy.apply"
     DIAGNOSTICS_READ = "opsi.diagnostics.read"
+    ROLLOUT_CREATE = "opsi.rollout.create"
+    ROLLOUT_APPROVE = "opsi.rollout.approve"
+    ROLLOUT_START = "opsi.rollout.start"
+    ROLLOUT_PAUSE = "opsi.rollout.pause"
+    ROLLOUT_RESUME = "opsi.rollout.resume"
+    ROLLOUT_ABORT = "opsi.rollout.abort"
+    ROLLOUT_ROLLBACK = "opsi.rollout.rollback"
+    ROLLOUT_EVIDENCE = "opsi.rollout.evidence.read"
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,7 @@ class AuthPrincipal:
     subject: str
     principal_type: str
     scopes: frozenset[str]
+    roles: frozenset[str] = frozenset()
 
 
 def mint_lab_jwt(
@@ -43,6 +52,7 @@ def mint_lab_jwt(
     scopes: list[str],
     settings: Settings | None = None,
     ttl_seconds: int = 300,
+    roles: list[str] | None = None,
 ) -> str:
     cfg = settings or get_settings()
     if cfg.opsi_env == "production":
@@ -57,6 +67,7 @@ def mint_lab_jwt(
         "iat": now,
         "exp": now + ttl_seconds,
         "scope": " ".join(scopes),
+        "roles": " ".join(roles or []),
     }
     return jwt.encode(payload, cfg.jwt_lab_secret, algorithm="HS256")
 
@@ -116,7 +127,10 @@ async def get_principal(
     except Exception as exc:
         raise OpsiControlError(ErrorCode.UNAUTHORIZED, "invalid token", status_code=401) from exc
     return AuthPrincipal(
-        subject=str(payload.get("sub") or "unknown"), principal_type="operator", scopes=_scopes_from_payload(payload)
+        subject=str(payload.get("sub") or "unknown"),
+        principal_type="operator",
+        scopes=_scopes_from_payload(payload),
+        roles=_scopes_from_payload({"scope": payload.get("roles") or ""}),
     )
 
 

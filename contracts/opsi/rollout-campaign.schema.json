@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/rollout-campaign.schema.json",
+  "title": "smc.opsi.rollout-campaign.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "campaignId",
+    "name",
+    "clientIds",
+    "productVersion",
+    "packageVersion",
+    "artifactDigest",
+    "signerKeyId",
+    "configRevision",
+    "reason",
+    "changeTicket"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.rollout-campaign.v1" },
+    "campaignId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 80,
+      "pattern": "^cmp_[A-Za-z0-9_-]{8,64}$"
+    },
+    "name": { "type": "string", "minLength": 3, "maxLength": 128 },
+    "clientIds": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 20,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "productId": { "type": "string", "default": "smc-hermes-agent" },
+    "productVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "artifactDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "signerKeyId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "configRevision": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+    "gatePolicyRevision": { "type": "integer", "minimum": 1, "default": 1 },
+    "evidencePolicyRevision": { "type": "integer", "minimum": 1, "default": 1 },
+    "windowStart": { "type": ["string", "null"], "format": "date-time" },
+    "windowEnd": { "type": ["string", "null"], "format": "date-time" },
+    "reason": { "type": "string", "minLength": 3, "maxLength": 256 },
+    "changeTicket": { "type": "string", "minLength": 3, "maxLength": 64 }
+  }
+}

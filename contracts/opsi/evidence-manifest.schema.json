@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/evidence-manifest.schema.json",
+  "title": "smc.opsi.evidence-manifest.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "campaignId",
+    "snapshotDigest",
+    "artifactDigest",
+    "gatePolicyRevision",
+    "verification",
+    "decision",
+    "sha256",
+    "producer",
+    "timestamp"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.evidence-manifest.v1" },
+    "campaignId": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 80,
+      "pattern": "^cmp_[A-Za-z0-9_-]{8,64}$"
+    },
+    "snapshotDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "artifactDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "gatePolicyRevision": { "type": "integer", "minimum": 1 },
+    "verification": { "enum": ["implemented", "verified", "proven"] },
+    "decision": { "enum": ["GO", "NO-GO"] },
+    "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "producer": { "type": "string", "const": "opsi-control" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "events": { "type": "integer", "minimum": 0 },
+    "redacted": { "type": "boolean", "default": true }
+  }
+}

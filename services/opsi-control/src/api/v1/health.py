@@ -80,7 +80,7 @@ async def ready(request: Request):
             ok = ok and secret_ok
         heartbeats = await request.app.state.repos.heartbeats.list_fresh(90)
         roles = {item.role for item in heartbeats}
-        workers_ok = "dispatcher" in roles and "reconciler" in roles
+        workers_ok = "dispatcher" in roles and "reconciler" in roles and "rollout" in roles
         checks["workers"] = "ok" if workers_ok else "fail"
         ok = ok and workers_ok
         if type(request.app.state.repos.actions).__name__.startswith("Memory"):
