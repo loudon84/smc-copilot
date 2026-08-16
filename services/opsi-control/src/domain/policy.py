@@ -31,6 +31,34 @@ class PilotPolicy:
         return hashlib.sha256(encoded).hexdigest()
 
 
+@dataclass(frozen=True)
+class ProductionPolicy:
+    revision: str
+    min_targets: int
+    max_targets: int
+    max_depots: int
+    ring0_per_depot: int
+    ring0_global_max: int
+    observe_hours: tuple[int, ...]
+    cumulative: tuple[float, ...]
+    live: bool
+
+    def digest(self) -> str:
+        payload = {
+            "revision": self.revision,
+            "minTargets": self.min_targets,
+            "maxTargets": self.max_targets,
+            "maxDepots": self.max_depots,
+            "ring0PerDepot": self.ring0_per_depot,
+            "ring0GlobalMax": self.ring0_global_max,
+            "observeHours": list(self.observe_hours),
+            "cumulative": list(self.cumulative),
+            "live": self.live,
+        }
+        encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+
 ACCELERATED_V14 = PilotPolicy(
     revision="accelerated-v1.4",
     min_targets=3,
@@ -53,9 +81,36 @@ LEGACY_V12 = PilotPolicy(
     final_hours=24 * 7,
 )
 
+CONTROLLED_REENTRY_V15 = ProductionPolicy(
+    revision="controlled-reentry-v1.5",
+    min_targets=21,
+    max_targets=50,
+    max_depots=2,
+    ring0_per_depot=1,
+    ring0_global_max=4,
+    observe_hours=(24, 12, 12, 24, 24 * 7),
+    cumulative=(0.10, 0.25, 0.50, 1.0),
+    live=True,
+)
+
+ENGINEERING_V13 = ProductionPolicy(
+    revision="engineering-v1.3",
+    min_targets=21,
+    max_targets=500,
+    max_depots=8,
+    ring0_per_depot=2,
+    ring0_global_max=25,
+    observe_hours=(24, 12, 12, 24, 24 * 14),
+    cumulative=(0.10, 0.25, 0.50, 1.0),
+    live=False,
+)
+
 POLICIES = {policy.revision: policy for policy in (ACCELERATED_V14, LEGACY_V12)}
+PRODUCTION_POLICIES = {policy.revision: policy for policy in (CONTROLLED_REENTRY_V15, ENGINEERING_V13)}
 V14_GATE_POLICY = ACCELERATED_V14
+V15_LIVE_POLICY = CONTROLLED_REENTRY_V15
 PRODUCTION_REENTRY_GATE = "v1.5-production-reentry"
+V14_LIVE_GATE = "v1.4-win10-clean-endpoint"
 
 
 def resolve_pilot_policy(revision: str | None) -> PilotPolicy:
@@ -66,5 +121,17 @@ def resolve_pilot_policy(revision: str | None) -> PilotPolicy:
     return policy
 
 
+def resolve_production_policy(revision: str | None) -> ProductionPolicy:
+    key = (revision or CONTROLLED_REENTRY_V15.revision).strip()
+    policy = PRODUCTION_POLICIES.get(key)
+    if policy is None:
+        raise ValueError(f"unknown production policy: {key}")
+    return policy
+
+
 def satisfies_v14_gate(policy: PilotPolicy) -> bool:
     return policy.revision == V14_GATE_POLICY.revision and policy.digest() == V14_GATE_POLICY.digest()
+
+
+def satisfies_v15_live_gate(policy: ProductionPolicy) -> bool:
+    return policy.revision == V15_LIVE_POLICY.revision and policy.digest() == V15_LIVE_POLICY.digest()

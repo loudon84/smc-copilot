@@ -41,7 +41,7 @@ Windows Salt Minion / Bootstrap scripts
 - `npm run contracts:check` includes `check_salt_control_drift.py`.
 - Salt Control must not import `services/runtime`. Runtime Endpoint Control retires via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` (ADR-030); Chat/Task contracts unchanged.
 
-## OPSI Control API (v1.4 / ADR-031 / ADR-032 / ADR-033)
+## OPSI Control API (v1.5 / ADR-031 / ADR-032 / ADR-033 / ADR-034)
 
 ```text
 OPSI Control FastAPI + Pydantic (services/opsi-control)
@@ -55,8 +55,8 @@ Windows opsiclientd / smc-hermes-agent
 - Version: `contracts/version.json` → `opsiControlApi`.
 - `npm run contracts:check` includes `check_opsi_control_drift.py`.
 - OPSI Control must not import `services/runtime` or `services/salt-control`.
-- JSON Schemas live in `contracts/opsi/*.schema.json` (`action-*`, `rollout-campaign`, `artifact-promotion`, `evidence-manifest`, `rollout-gate`, `endpoint-inventory`, `runtime-artifact-manifest`).
-- v1.4 adds real Lab HTTP RPC + isolated PostgreSQL, inventory/binding evidence, artifact envelope v2, and `accelerated-v1.4` Pilot policy. Production start/stable/rings stay frozen until `v1.5-production-reentry` GO. Work and Salt/Runtime contracts are unchanged.
+- JSON Schemas live in `contracts/opsi/*.schema.json` (`action-*`, `rollout-campaign`, `artifact-promotion`, `evidence-manifest`, `rollout-gate`, `endpoint-inventory`, `runtime-artifact-manifest`, `depot-artifact-attestation`, `live-gate`, `target-verification`).
+- v1.5 adds TargetVerification, Depot Attestation v2 Ed25519, signed `v1.5-production-reentry` import/revoke, Evidence Manifest v3, and `controlled-reentry-v1.5`. Production start/stable/rings stay frozen until operator-signed GO. Work and Salt/Runtime contracts are unchanged.
 
 ## v1.4 readiness / memory / expert-mcp
 

@@ -36,6 +36,8 @@ class CampaignRecord:
     freeze_revision: int = 0
     pilot_policy_revision: str = "accelerated-v1.4"
     pilot_policy_digest: str = ""
+    production_policy_revision: str = ""
+    production_policy_digest: str = ""
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
     payload_json: str = "{}"
@@ -51,6 +53,7 @@ class BatchRecord:
     approved: bool = False
     dispatched: bool = False
     observe_until: datetime | None = None
+    observe_started_at: datetime | None = None
 
 
 @dataclass
@@ -70,6 +73,8 @@ class RolloutTargetRecord:
     active_slot: str = "active"
     depot_id: str = ""
     ring_index: int = 0
+    healthy_at: datetime | None = None
+    parent_action_id: str = ""
 
 
 @dataclass
@@ -146,6 +151,12 @@ class LiveGateRecord:
     signed_by: str
     created_at: datetime = field(default_factory=utcnow)
     immutable: bool = True
+    payload_json: str = "{}"
+    signature: str = ""
+    expires_at: datetime | None = None
+    revoked: bool = False
+    input_digest: str = ""
+    key_id: str = ""
 
 
 @dataclass
@@ -169,6 +180,7 @@ class RingRecord:
     observe_hours: int
     approved: bool = False
     observe_until: datetime | None = None
+    observe_started_at: datetime | None = None
 
 
 @dataclass
@@ -184,6 +196,12 @@ class AttestationRecord:
     signature: str
     evidence_ref: str
     revoked: bool = False
+    algorithm: str = "Ed25519"
+    key_id: str = ""
+    envelope_digest: str = ""
+    signer_key_id: str = ""
+    readback_digest: str = ""
+    readback_observed_at: datetime | None = None
 
 
 @dataclass
@@ -204,3 +222,34 @@ class ComplianceSnapshotRecord:
     payload_json: str
     digest: str
     created_at: datetime = field(default_factory=utcnow)
+
+
+@dataclass
+class TargetVerificationStoreRecord:
+    campaign_id: str
+    client_id: str
+    action_id: str
+    kind: str
+    action_result_digest: str
+    parent_result_digest: str
+    product_readback_digest: str
+    inventory_digest: str
+    gateway_evidence_ref: str
+    work_evidence_ref: str
+    desired_version: str
+    desired_package: str
+    desired_artifact: str
+    desired_config: str
+    desired_owner: str
+    observed_version: str
+    observed_package: str
+    observed_artifact: str
+    observed_config: str
+    observed_owner: str
+    observed_tasks: str
+    observed_health: str
+    decision: str
+    reason: str
+    observed_at: datetime
+    expires_at: datetime
+    canonical_digest: str

@@ -3,33 +3,48 @@ from __future__ import annotations
 import hashlib
 import json
 
-from domain.policy import ACCELERATED_V14, PilotPolicy, resolve_pilot_policy
+from domain.policy import (
+    ACCELERATED_V14,
+    CONTROLLED_REENTRY_V15,
+    ENGINEERING_V13,
+    PilotPolicy,
+    ProductionPolicy,
+    resolve_pilot_policy,
+    resolve_production_policy,
+)
 
 CANARY_SIZE = ACCELERATED_V14.canary_size
 FOLLOW_ON_SIZE = ACCELERATED_V14.follow_on_size
 PILOT_MIN = ACCELERATED_V14.min_targets
 PILOT_MAX = ACCELERATED_V14.max_targets
-PRODUCTION_MIN = 21
-PRODUCTION_MAX = 500
-PRODUCTION_DEPOT_MAX = 8
+PRODUCTION_MIN = CONTROLLED_REENTRY_V15.min_targets
+PRODUCTION_MAX = ENGINEERING_V13.max_targets
+PRODUCTION_DEPOT_MAX = ENGINEERING_V13.max_depots
 MAX_DISPATCH_PER_TICK = 5
 CANARY_OBSERVE_HOURS = ACCELERATED_V14.canary_hours
 BATCH_OBSERVE_HOURS = ACCELERATED_V14.follow_on_hours
 FINAL_OBSERVE_HOURS = ACCELERATED_V14.final_hours
-GATE_POLICY_VERSION = "gate-v1.4.0"
+GATE_POLICY_VERSION = "gate-v1.5.0"
 GATE_POLICY_VERSION_V12 = "gate-v1.2.0"
 PREFLIGHT_TTL_SECONDS = 3600
 
 
 def canonicalize_client_ids(
-    client_ids: list[str], *, mode: str = "pilot", policy: PilotPolicy | None = None
+    client_ids: list[str],
+    *,
+    mode: str = "pilot",
+    policy: PilotPolicy | None = None,
+    production_policy: ProductionPolicy | None = None,
 ) -> list[str]:
     unique = sorted({item.strip() for item in client_ids if item.strip()})
     if not unique:
         raise ValueError("client_ids required")
     if mode == "production":
-        if len(unique) < PRODUCTION_MIN or len(unique) > PRODUCTION_MAX:
-            raise ValueError("production requires 21-500 endpoints")
+        bound = production_policy or resolve_production_policy(None)
+        if len(unique) < bound.min_targets or len(unique) > bound.max_targets:
+            raise ValueError(
+                f"production policy {bound.revision} requires {bound.min_targets}-{bound.max_targets} endpoints"
+            )
         return unique
     bound = policy or ACCELERATED_V14
     if len(unique) > bound.max_targets:
@@ -37,8 +52,14 @@ def canonicalize_client_ids(
     return unique
 
 
-def snapshot_digest(client_ids: list[str], *, mode: str = "pilot", policy: PilotPolicy | None = None) -> str:
-    canonical = canonicalize_client_ids(client_ids, mode=mode, policy=policy)
+def snapshot_digest(
+    client_ids: list[str],
+    *,
+    mode: str = "pilot",
+    policy: PilotPolicy | None = None,
+    production_policy: ProductionPolicy | None = None,
+) -> str:
+    canonical = canonicalize_client_ids(client_ids, mode=mode, policy=policy, production_policy=production_policy)
     encoded = json.dumps(canonical, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 

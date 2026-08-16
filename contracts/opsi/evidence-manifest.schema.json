@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://smc.local/contracts/opsi/evidence-manifest.schema.json",
-  "title": "smc.opsi.evidence-manifest.v2",
+  "title": "smc.opsi.evidence-manifest.v3",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -17,7 +17,7 @@
     "timestamp"
   ],
   "properties": {
-    "schema": { "enum": ["smc.opsi.evidence-manifest.v1", "smc.opsi.evidence-manifest.v2"] },
+    "schema": { "enum": ["smc.opsi.evidence-manifest.v1", "smc.opsi.evidence-manifest.v2", "smc.opsi.evidence-manifest.v3"] },
     "campaignId": {
       "type": "string",
       "minLength": 12,
@@ -35,6 +35,9 @@
     "events": { "type": "integer", "minimum": 0 },
     "redacted": { "type": "boolean", "default": true },
     "mappingDigest": { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
-    "freezeRevision": { "type": "integer", "minimum": 0 }
+    "freezeRevision": { "type": "integer", "minimum": 0 },
+    "verificationCount": { "type": "integer", "minimum": 0 },
+    "productionPolicyRevision": { "type": ["string", "null"] },
+    "liveGateId": { "type": ["string", "null"] }
   }
 }

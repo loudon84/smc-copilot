@@ -25,6 +25,7 @@ from db.models import (
     RolloutOutboxRow,
     RolloutRingRow,
     RolloutTargetRow,
+    TargetVerificationRow,
 )
 from db.repositories.rollout_records import (
     ApprovalRecord,
@@ -42,6 +43,7 @@ from db.repositories.rollout_records import (
     PromotionRecord,
     RingRecord,
     RolloutTargetRecord,
+    TargetVerificationStoreRecord,
 )
 from schemas.rollout import ACTIVE_CAMPAIGN, TERMINAL_CAMPAIGN
 
@@ -129,6 +131,8 @@ class SqlRolloutStore:
                     row.observe_hours = record.observe_hours
                     row.approved = record.approved
                     row.dispatched = record.dispatched
+                    row.observe_until = record.observe_until
+                    row.observe_started_at = record.observe_started_at
 
     async def replace_targets(self, campaign_id: str, targets: list[RolloutTargetRecord]) -> None:
         try:
@@ -384,7 +388,7 @@ class SqlRolloutStore:
         async with self.factory() as session:
             async with session.begin():
                 existing = await session.get(LiveGateRow, record.gate_id)
-                if existing and existing.immutable:
+                if existing and existing.immutable and not getattr(existing, "revoked", False):
                     raise OpsiControlError(ErrorCode.CONFLICT, "live gate is immutable", status_code=409)
                 if existing is None:
                     session.add(
@@ -395,8 +399,48 @@ class SqlRolloutStore:
                             signed_by=record.signed_by,
                             immutable=record.immutable,
                             created_at=record.created_at,
+                            payload_json=record.payload_json,
+                            signature=record.signature,
+                            expires_at=record.expires_at,
+                            revoked=record.revoked,
+                            input_digest=record.input_digest,
+                            key_id=record.key_id,
                         )
                     )
+                else:
+                    existing.decision = record.decision
+                    existing.evidence_ref = record.evidence_ref
+                    existing.signed_by = record.signed_by
+                    existing.immutable = record.immutable
+                    existing.payload_json = record.payload_json
+                    existing.signature = record.signature
+                    existing.expires_at = record.expires_at
+                    existing.revoked = record.revoked
+                    existing.input_digest = record.input_digest
+                    existing.key_id = record.key_id
+
+    async def revoke_live_gate(self, gate_id: str) -> LiveGateRecord | None:
+        async with self.factory() as session:
+            async with session.begin():
+                row = await session.get(LiveGateRow, gate_id)
+                if row is None:
+                    return None
+                row.revoked = True
+                row.decision = "NO-GO"
+                return LiveGateRecord(
+                    gate_id=row.gate_id,
+                    decision=row.decision,
+                    evidence_ref=row.evidence_ref,
+                    signed_by=row.signed_by,
+                    immutable=row.immutable,
+                    created_at=row.created_at,
+                    payload_json=getattr(row, "payload_json", "{}"),
+                    signature=getattr(row, "signature", ""),
+                    expires_at=getattr(row, "expires_at", None),
+                    revoked=True,
+                    input_digest=getattr(row, "input_digest", ""),
+                    key_id=getattr(row, "key_id", ""),
+                )
 
     async def get_live_gate(self, gate_id: str = "v1.1-live") -> LiveGateRecord | None:
         async with self.factory() as session:
@@ -410,6 +454,12 @@ class SqlRolloutStore:
                 signed_by=row.signed_by,
                 immutable=row.immutable,
                 created_at=row.created_at,
+                payload_json=getattr(row, "payload_json", "{}"),
+                signature=getattr(row, "signature", ""),
+                expires_at=getattr(row, "expires_at", None),
+                revoked=getattr(row, "revoked", False),
+                input_digest=getattr(row, "input_digest", ""),
+                key_id=getattr(row, "key_id", ""),
             )
 
     async def claim_orchestrator(
@@ -492,6 +542,7 @@ class SqlRolloutStore:
                             observe_hours=item.observe_hours,
                             approved=item.approved,
                             observe_until=item.observe_until,
+                            observe_started_at=item.observe_started_at,
                         )
                     )
 
@@ -513,6 +564,7 @@ class SqlRolloutStore:
                     observe_hours=row.observe_hours,
                     approved=row.approved,
                     observe_until=row.observe_until,
+                    observe_started_at=getattr(row, "observe_started_at", None),
                 )
                 for row in rows
             ]
@@ -538,6 +590,12 @@ class SqlRolloutStore:
                         signature=record.signature,
                         evidence_ref=record.evidence_ref,
                         revoked=record.revoked,
+                        algorithm=record.algorithm,
+                        key_id=record.key_id,
+                        envelope_digest=record.envelope_digest,
+                        signer_key_id=record.signer_key_id,
+                        readback_digest=record.readback_digest,
+                        readback_observed_at=record.readback_observed_at,
                     )
                 )
 
@@ -553,39 +611,12 @@ class SqlRolloutStore:
             ).scalar_one_or_none()
             if row is None:
                 return None
-            return AttestationRecord(
-                depot_id=row.depot_id,
-                product_id=row.product_id,
-                product_version=row.product_version,
-                package_version=row.package_version,
-                artifact_digest=row.artifact_digest,
-                issuer=row.issuer,
-                generated_at=row.generated_at,
-                expires_at=row.expires_at,
-                signature=row.signature,
-                evidence_ref=row.evidence_ref,
-                revoked=row.revoked,
-            )
+            return _attestation_from_row(row)
 
     async def list_attestations(self) -> list[AttestationRecord]:
         async with self.factory() as session:
             rows = (await session.execute(select(DepotAttestationRow))).scalars()
-            return [
-                AttestationRecord(
-                    depot_id=row.depot_id,
-                    product_id=row.product_id,
-                    product_version=row.product_version,
-                    package_version=row.package_version,
-                    artifact_digest=row.artifact_digest,
-                    issuer=row.issuer,
-                    generated_at=row.generated_at,
-                    expires_at=row.expires_at,
-                    signature=row.signature,
-                    evidence_ref=row.evidence_ref,
-                    revoked=row.revoked,
-                )
-                for row in rows
-            ]
+            return [_attestation_from_row(row) for row in rows]
 
     async def put_freeze(self, record: FreezeRecord) -> None:
         async with self.factory() as session:
@@ -698,6 +729,64 @@ class SqlRolloutStore:
                 if row:
                     row.published = True
 
+    async def add_outbox(self, record: OutboxRecord) -> OutboxRecord:
+        async with self.factory() as session:
+            async with session.begin():
+                row = RolloutOutboxRow(
+                    campaign_id=record.campaign_id,
+                    kind=record.kind,
+                    payload_json=record.payload_json,
+                    published=record.published,
+                )
+                session.add(row)
+                await session.flush()
+                record.id = row.id
+                return record
+
+    async def put_verification(self, record: TargetVerificationStoreRecord) -> TargetVerificationStoreRecord:
+        async with self.factory() as session:
+            async with session.begin():
+                existing = (
+                    await session.execute(
+                        select(TargetVerificationRow).where(
+                            TargetVerificationRow.campaign_id == record.campaign_id,
+                            TargetVerificationRow.client_id == record.client_id,
+                            TargetVerificationRow.action_id == record.action_id,
+                            TargetVerificationRow.kind == record.kind,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing and existing.canonical_digest != record.canonical_digest:
+                    raise OpsiControlError(ErrorCode.CONFLICT, "verification digest conflict", status_code=409)
+                if existing is None:
+                    session.add(_verification_to_row(record))
+                return record
+
+    async def get_verification(
+        self, campaign_id: str, client_id: str, action_id: str, kind: str
+    ) -> TargetVerificationStoreRecord | None:
+        async with self.factory() as session:
+            row = (
+                await session.execute(
+                    select(TargetVerificationRow).where(
+                        TargetVerificationRow.campaign_id == campaign_id,
+                        TargetVerificationRow.client_id == client_id,
+                        TargetVerificationRow.action_id == action_id,
+                        TargetVerificationRow.kind == kind,
+                    )
+                )
+            ).scalar_one_or_none()
+            return _verification_from_row(row) if row else None
+
+    async def list_verifications(self, campaign_id: str) -> list[TargetVerificationStoreRecord]:
+        async with self.factory() as session:
+            rows = (
+                await session.execute(
+                    select(TargetVerificationRow).where(TargetVerificationRow.campaign_id == campaign_id)
+                )
+            ).scalars()
+            return [_verification_from_row(row) for row in rows]
+
 
 def _campaign_to_row(record: CampaignRecord) -> RolloutCampaignRow:
     return RolloutCampaignRow(
@@ -728,6 +817,8 @@ def _campaign_to_row(record: CampaignRecord) -> RolloutCampaignRow:
         freeze_revision=record.freeze_revision,
         pilot_policy_revision=record.pilot_policy_revision,
         pilot_policy_digest=record.pilot_policy_digest,
+        production_policy_revision=record.production_policy_revision,
+        production_policy_digest=record.production_policy_digest,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -762,6 +853,8 @@ def _campaign_from_row(row: RolloutCampaignRow) -> CampaignRecord:
         freeze_revision=getattr(row, "freeze_revision", 0),
         pilot_policy_revision=getattr(row, "pilot_policy_revision", "accelerated-v1.4"),
         pilot_policy_digest=getattr(row, "pilot_policy_digest", ""),
+        production_policy_revision=getattr(row, "production_policy_revision", ""),
+        production_policy_digest=getattr(row, "production_policy_digest", ""),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -780,6 +873,8 @@ def _apply_campaign(row: RolloutCampaignRow, record: CampaignRecord) -> None:
     row.freeze_revision = record.freeze_revision
     row.pilot_policy_revision = record.pilot_policy_revision
     row.pilot_policy_digest = record.pilot_policy_digest
+    row.production_policy_revision = record.production_policy_revision
+    row.production_policy_digest = record.production_policy_digest
 
 
 def _batch_to_row(record: BatchRecord) -> RolloutBatchRow:
@@ -792,6 +887,7 @@ def _batch_to_row(record: BatchRecord) -> RolloutBatchRow:
         approved=record.approved,
         dispatched=record.dispatched,
         observe_until=record.observe_until,
+        observe_started_at=record.observe_started_at,
     )
 
 
@@ -805,6 +901,7 @@ def _batch_from_row(row: RolloutBatchRow) -> BatchRecord:
         approved=row.approved,
         dispatched=row.dispatched,
         observe_until=getattr(row, "observe_until", None),
+        observe_started_at=getattr(row, "observe_started_at", None),
     )
 
 
@@ -825,6 +922,8 @@ def _target_to_row(record: RolloutTargetRecord) -> RolloutTargetRow:
         active_slot=record.active_slot,
         depot_id=record.depot_id,
         ring_index=record.ring_index,
+        healthy_at=record.healthy_at,
+        parent_action_id=record.parent_action_id,
     )
 
 
@@ -845,6 +944,8 @@ def _target_from_row(row: RolloutTargetRow) -> RolloutTargetRecord:
         active_slot=row.active_slot,
         depot_id=getattr(row, "depot_id", ""),
         ring_index=getattr(row, "ring_index", 0),
+        healthy_at=getattr(row, "healthy_at", None),
+        parent_action_id=getattr(row, "parent_action_id", ""),
     )
 
 
@@ -861,6 +962,8 @@ def _apply_target(row: RolloutTargetRow, record: RolloutTargetRecord) -> None:
     row.active_slot = record.active_slot
     row.depot_id = record.depot_id
     row.ring_index = record.ring_index
+    row.healthy_at = record.healthy_at
+    row.parent_action_id = record.parent_action_id
 
 
 def _promotion_from_row(row: ArtifactPromotionRow) -> PromotionRecord:
@@ -872,4 +975,90 @@ def _promotion_from_row(row: ArtifactPromotionRow) -> PromotionRecord:
         evidence_ref=row.evidence_ref,
         actor_id=row.actor_id,
         created_at=row.created_at,
+    )
+
+
+def _attestation_from_row(row: DepotAttestationRow) -> AttestationRecord:
+    return AttestationRecord(
+        depot_id=row.depot_id,
+        product_id=row.product_id,
+        product_version=row.product_version,
+        package_version=row.package_version,
+        artifact_digest=row.artifact_digest,
+        issuer=row.issuer,
+        generated_at=row.generated_at,
+        expires_at=row.expires_at,
+        signature=row.signature,
+        evidence_ref=row.evidence_ref,
+        revoked=row.revoked,
+        algorithm=getattr(row, "algorithm", "Ed25519"),
+        key_id=getattr(row, "key_id", ""),
+        envelope_digest=getattr(row, "envelope_digest", ""),
+        signer_key_id=getattr(row, "signer_key_id", ""),
+        readback_digest=getattr(row, "readback_digest", ""),
+        readback_observed_at=getattr(row, "readback_observed_at", None),
+    )
+
+
+def _verification_to_row(record: TargetVerificationStoreRecord) -> TargetVerificationRow:
+    return TargetVerificationRow(
+        campaign_id=record.campaign_id,
+        client_id=record.client_id,
+        action_id=record.action_id,
+        kind=record.kind,
+        action_result_digest=record.action_result_digest,
+        parent_result_digest=record.parent_result_digest,
+        product_readback_digest=record.product_readback_digest,
+        inventory_digest=record.inventory_digest,
+        gateway_evidence_ref=record.gateway_evidence_ref,
+        work_evidence_ref=record.work_evidence_ref,
+        desired_version=record.desired_version,
+        desired_package=record.desired_package,
+        desired_artifact=record.desired_artifact,
+        desired_config=record.desired_config,
+        desired_owner=record.desired_owner,
+        observed_version=record.observed_version,
+        observed_package=record.observed_package,
+        observed_artifact=record.observed_artifact,
+        observed_config=record.observed_config,
+        observed_owner=record.observed_owner,
+        observed_tasks=record.observed_tasks,
+        observed_health=record.observed_health,
+        decision=record.decision,
+        reason=record.reason,
+        observed_at=record.observed_at,
+        expires_at=record.expires_at,
+        canonical_digest=record.canonical_digest,
+    )
+
+
+def _verification_from_row(row: TargetVerificationRow) -> TargetVerificationStoreRecord:
+    return TargetVerificationStoreRecord(
+        campaign_id=row.campaign_id,
+        client_id=row.client_id,
+        action_id=row.action_id,
+        kind=row.kind,
+        action_result_digest=row.action_result_digest,
+        parent_result_digest=row.parent_result_digest,
+        product_readback_digest=row.product_readback_digest,
+        inventory_digest=row.inventory_digest,
+        gateway_evidence_ref=row.gateway_evidence_ref,
+        work_evidence_ref=row.work_evidence_ref,
+        desired_version=row.desired_version,
+        desired_package=row.desired_package,
+        desired_artifact=row.desired_artifact,
+        desired_config=row.desired_config,
+        desired_owner=row.desired_owner,
+        observed_version=row.observed_version,
+        observed_package=row.observed_package,
+        observed_artifact=row.observed_artifact,
+        observed_config=row.observed_config,
+        observed_owner=row.observed_owner,
+        observed_tasks=row.observed_tasks,
+        observed_health=row.observed_health,
+        decision=row.decision,
+        reason=row.reason,
+        observed_at=row.observed_at,
+        expires_at=row.expires_at,
+        canonical_digest=row.canonical_digest,
     )

@@ -13,6 +13,8 @@ from schemas.rollout import (
     DepotAttestationRequest,
     DepotPauseRequest,
     FreezeClearRequest,
+    LiveGateImportRequest,
+    LiveGateRevokeRequest,
     PauseRequest,
     PreflightRequest,
     ReleaseFreezeRequest,
@@ -295,3 +297,31 @@ async def fleet_compliance(
     limit: int = 50,
 ):
     return await request.app.state.rollouts.list_fleet_compliance(cursor=cursor, limit=limit)
+
+
+@router.post("/live-gates/import")
+async def import_live_gate(
+    body: LiveGateImportRequest,
+    request: Request,
+    principal: Annotated[AuthPrincipal, Depends(require_scope(Scope.ROLLOUT_APPROVE))],
+):
+    return await request.app.state.rollouts.import_live_gate(body, principal)
+
+
+@router.get("/live-gates/{gate_id}")
+async def get_live_gate(
+    gate_id: str,
+    request: Request,
+    _auth: Annotated[object, Depends(require_scope(Scope.ROLLOUT_EVIDENCE))],
+):
+    return await request.app.state.rollouts.get_live_gate(gate_id)
+
+
+@router.post("/live-gates/{gate_id}/revoke")
+async def revoke_live_gate(
+    gate_id: str,
+    body: LiveGateRevokeRequest,
+    request: Request,
+    principal: Annotated[AuthPrincipal, Depends(require_scope(Scope.ROLLOUT_ABORT))],
+):
+    return await request.app.state.rollouts.revoke_live_gate(gate_id, principal, body.reason)

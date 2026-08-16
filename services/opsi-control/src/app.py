@@ -84,6 +84,11 @@ def _seed_installed_inventory(store: MemoryInventoryStore, rpc: FakeOpsiJsonRpc)
             "previousVersion": "0.21.0",
             "previousDigest": "ab" * 32,
             "bindingSource": "operator-evidence",
+            "workSmokeRef": "test://work-smoke",
+            "cliPath": r"C:\ProgramData\SMC\hermes\versions\current\hermes.exe",
+            "cliVersion": "0.21.0",
+            "bootstrapTask": "SMC-Hermes-User-Bootstrap-S-1-5-21-1-2-3-1001",
+            "gatewayTask": "SMC-Hermes-Gateway-S-1-5-21-1-2-3-1001",
         }
 
 
@@ -224,7 +229,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if secret_close:
             await secret_close()
 
-    app = FastAPI(title="SMC OPSI Control", version="1.4.0", lifespan=lifespan)
+    app = FastAPI(title="SMC OPSI Control", version="1.5.0", lifespan=lifespan)
     if state is None:
         if cfg.opsi_env == "test":
             state = build_test_state(cfg)

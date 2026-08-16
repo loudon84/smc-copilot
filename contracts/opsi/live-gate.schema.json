@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/live-gate.schema.json",
+  "title": "smc.opsi.live-gate.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "gateId", "decision", "evidenceRef", "expiresAt", "inputDigest", "payload", "approvals"],
+  "properties": {
+    "schema": { "const": "smc.opsi.live-gate.v1" },
+    "gateId": { "type": "string", "minLength": 8, "maxLength": 80 },
+    "decision": { "enum": ["GO", "NO-GO"] },
+    "evidenceRef": { "type": "string", "minLength": 3, "maxLength": 256 },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "inputDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "payload": { "type": "object" },
+    "approvals": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "keyId", "signature"],
+        "properties": {
+          "role": { "enum": ["release_owner", "endpoint_ops", "security_owner"] },
+          "keyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "signature": { "type": "string", "minLength": 32 }
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,6 @@
     "decision": { "enum": ["PASS", "PAUSE", "FREEZE"] },
     "reason": { "type": "string", "maxLength": 256 },
     "inputDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
-    "evaluator": { "type": "string", "enum": ["gate-v1.2.0", "gate-v1.3.0", "gate-v1.4.0"] }
+    "evaluator": { "type": "string", "enum": ["gate-v1.2.0", "gate-v1.3.0", "gate-v1.4.0", "gate-v1.5.0"] }
   }
 }

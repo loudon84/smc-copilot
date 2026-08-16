@@ -85,10 +85,12 @@ export function mapReadinessToProbe(options: {
   const executionReady = readiness.execution?.ready === true;
   // When /health was fetched with a wrong id (404), fall back to readiness
   // projection: gatewayApiState=healthy still means the port is serving.
-  const defaultInstance = readiness.execution?.defaultInstance as
-    | { gatewayApiState?: string }
-    | null
+  const executionReadiness = readiness.execution as
+    | {
+        defaultInstance?: { gatewayApiState?: string } | null;
+      }
     | undefined;
+  const defaultInstance = executionReadiness?.defaultInstance;
   const readinessGatewayApi = defaultInstance?.gatewayApiState === "healthy";
   const gatewayHealthy =
     health?.gateway?.healthy === true ||

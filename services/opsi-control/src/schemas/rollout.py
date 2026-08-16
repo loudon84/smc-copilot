@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from domain.policy import resolve_pilot_policy
+from domain.policy import resolve_pilot_policy, resolve_production_policy
 from schemas.models import CamelModel
 
 
@@ -144,6 +144,7 @@ class RolloutCreateRequest(CommandBase):
     gate_policy_revision: int = Field(default=1, ge=1)
     evidence_policy_revision: int = Field(default=1, ge=1)
     pilot_policy_revision: str = "accelerated-v1.4"
+    production_policy_revision: str = "controlled-reentry-v1.5"
     window_start: datetime | None = None
     window_end: datetime | None = None
 
@@ -158,8 +159,12 @@ class RolloutCreateRequest(CommandBase):
     @model_validator(mode="after")
     def _mode_bounds(self) -> RolloutCreateRequest:
         count = len(self.client_ids)
-        if self.mode == CampaignMode.PRODUCTION and (count < 21 or count > 500):
-            raise ValueError("production requires 21-500 endpoints")
+        if self.mode == CampaignMode.PRODUCTION:
+            policy = resolve_production_policy(self.production_policy_revision)
+            if count < policy.min_targets or count > policy.max_targets:
+                raise ValueError(
+                    f"production policy {policy.revision} requires {policy.min_targets}-{policy.max_targets} endpoints"
+                )
         if self.mode == CampaignMode.PILOT:
             policy = resolve_pilot_policy(self.pilot_policy_revision)
             if count < policy.min_targets or count > policy.max_targets:
@@ -222,6 +227,12 @@ class DepotAttestationRequest(CommandBase):
     expires_at: datetime
     signature: str = Field(min_length=32, max_length=4096)
     evidence_ref: str = Field(min_length=3, max_length=256)
+    algorithm: str = "Ed25519"
+    key_id: str = ""
+    envelope_digest: str = Field(default="", pattern=r"^$|^[a-fA-F0-9]{64}$")
+    signer_key_id: str = ""
+    readback_digest: str = Field(default="", pattern=r"^$|^[a-fA-F0-9]{64}$")
+    readback_observed_at: datetime | None = None
 
 
 class ReleaseFreezeRequest(CommandBase):
@@ -263,6 +274,7 @@ class RolloutBatchView(CamelModel):
     observe_hours: int
     approved: bool = False
     observe_until: datetime | None = None
+    observe_started_at: datetime | None = None
 
 
 class DepotLaneView(CamelModel):
@@ -279,6 +291,8 @@ class RingView(CamelModel):
     client_ids: list[str]
     observe_hours: int
     approved: bool = False
+    observe_until: datetime | None = None
+    observe_started_at: datetime | None = None
 
 
 class RolloutApprovalView(CamelModel):
@@ -308,9 +322,9 @@ class RolloutCampaignView(CamelModel):
 
 
 class EvidenceManifestView(CamelModel):
-    schema_: Literal["smc.opsi.evidence-manifest.v1", "smc.opsi.evidence-manifest.v2"] = Field(
-        default="smc.opsi.evidence-manifest.v2", alias="schema"
-    )
+    schema_: Literal[
+        "smc.opsi.evidence-manifest.v1", "smc.opsi.evidence-manifest.v2", "smc.opsi.evidence-manifest.v3"
+    ] = Field(default="smc.opsi.evidence-manifest.v3", alias="schema")
     campaign_id: str
     snapshot_digest: str
     artifact_digest: str
@@ -324,6 +338,9 @@ class EvidenceManifestView(CamelModel):
     redacted: bool = True
     mapping_digest: str | None = None
     freeze_revision: int = 0
+    verification_count: int = 0
+    production_policy_revision: str | None = None
+    live_gate_id: str | None = None
 
 
 class MetricsView(CamelModel):
@@ -359,3 +376,37 @@ class ComplianceView(CamelModel):
     observed_at: datetime
     digest: str
     critical: bool = False
+    source_digest: str | None = None
+
+
+class LiveGateApproval(CamelModel):
+    role: str
+    key_id: str
+    signature: str
+
+
+class LiveGateImportRequest(CamelModel):
+    schema_: Literal["smc.opsi.live-gate.v1"] = Field(default="smc.opsi.live-gate.v1", alias="schema")
+    gate_id: str = Field(min_length=8, max_length=80)
+    decision: Literal["GO", "NO-GO"] = "NO-GO"
+    evidence_ref: str = Field(min_length=3, max_length=256)
+    expires_at: datetime
+    input_digest: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+    payload: dict
+    approvals: list[LiveGateApproval]
+
+
+class LiveGateRevokeRequest(CamelModel):
+    reason: str = Field(min_length=3, max_length=256)
+    change_ticket: str = Field(min_length=3, max_length=64)
+
+
+class LiveGateView(CamelModel):
+    gate_id: str
+    decision: str
+    evidence_ref: str
+    signed_by: str
+    expires_at: datetime | None = None
+    revoked: bool = False
+    input_digest: str = ""
+    immutable: bool = True

@@ -60,7 +60,7 @@ isProject: false
 - 不向 `services/runtime/**`、`contracts/runtime-api/**` 增加 OPSI 能力。
 - Work 不新增 OPSI UI/API/credentials，始终 Direct Hermes。
 - Control 不直连 Endpoint/Gateway/Work，不新增 SSH/WinRM/SMB。
-- Production Rings、stable production rollout 默认冻结，直至 Phase 7 Operator GO。
+- Production Rings、stable production rollout 在 Phase 7 后仍保持冻结，直至后续版本写入受信 `v1.5-production-reentry` Operator GO。
 - 本版本只管理受信 Artifact 中的 CLI + Gateway，不成为通用 Windows Service Manager。
 
 ## 2. 已验证基线
@@ -95,7 +95,7 @@ Lab/Win/Pilot         NO-GO / not_proven
 ### 3.1 状态真值
 
 - 保留 v1.1/v1.2/v1.3 Evidence 的 `not_proven/NO-GO`，不回写历史完成状态。
-- v1.4 Evidence 新增 `engineering/win10-clean-endpoint` 两层门禁。Win11 Clean Pair 与 3～5 台 accelerated Pilot 不作为本版本 Live 门禁。
+- v1.4 Evidence 新增 `engineering/win10-clean-endpoint` 两层门禁。Windows 11 独立验证与 3～5 台 accelerated Pilot 不作为本版本 Live 门禁。
 - 所有 production Campaign start、stable promotion 和 Ring advancement 默认返回 precondition failure。
 - Cursor/fixture 不能在 lab/production 写 `proven/GO`。
 
@@ -193,7 +193,7 @@ build_production_state production only / Http RPC + Existing Internal PostgreSQL
 
 ### 6.3 Endpoint Verify
 
-- 在 PowerShell 5.1/Win10/Win11 可用的 pinned verifier 中实现 Ed25519 verify。
+- 在 PowerShell 5.1/Windows 10 可用的 pinned verifier 中实现 Ed25519 verify；Windows 11 不纳入本版本人工认证矩阵。
 - verifier 自身由 Product file manifest/digest 固定；不可从网络下载。
 - verify 在 Expand-Archive 前执行；失败清理 staging 并写 FAILED，不写 version/owner。
 - public key/key id 固定，支持明确的双 key rotation window，禁止信任任意随包 public key。

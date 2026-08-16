@@ -20,6 +20,7 @@ from db.repositories.rollout_records import (
     PromotionRecord,
     RingRecord,
     RolloutTargetRecord,
+    TargetVerificationStoreRecord,
 )
 from schemas.rollout import ACTIVE_CAMPAIGN, TERMINAL_CAMPAIGN
 
@@ -43,6 +44,7 @@ class MemoryRolloutStore:
         self.freezes: dict[str, FreezeRecord] = {}
         self.compliance: list[ComplianceSnapshotRecord] = []
         self.leases: dict[str, tuple[str, datetime, int]] = {}
+        self.verifications: dict[tuple[str, str, str, str], TargetVerificationStoreRecord] = {}
         self._seq = 0
         self.lease_owner = ""
         self.lease_until: datetime | None = None
@@ -200,10 +202,21 @@ class MemoryRolloutStore:
 
     async def put_live_gate(self, record: LiveGateRecord) -> None:
         existing = self.live_gates.get(record.gate_id)
-        if existing and existing.immutable:
+        if existing and existing.immutable and not existing.revoked:
             raise OpsiControlError(ErrorCode.CONFLICT, "live gate is immutable", status_code=409)
         self.live_gates[record.gate_id] = record
         self.live_gate = record
+
+    async def revoke_live_gate(self, gate_id: str) -> LiveGateRecord | None:
+        record = self.live_gates.get(gate_id) or (
+            self.live_gate if self.live_gate and self.live_gate.gate_id == gate_id else None
+        )
+        if record is None:
+            return None
+        record.revoked = True
+        record.decision = "NO-GO"
+        self.live_gates[gate_id] = record
+        return record
 
     async def get_live_gate(self, gate_id: str = "v1.1-live") -> LiveGateRecord | None:
         if gate_id in self.live_gates:
@@ -300,3 +313,24 @@ class MemoryRolloutStore:
         for item in self.outbox:
             if item.id == outbox_id:
                 item.published = True
+
+    async def add_outbox(self, record: OutboxRecord) -> OutboxRecord:
+        record.id = self._next()
+        self.outbox.append(record)
+        return record
+
+    async def put_verification(self, record: TargetVerificationStoreRecord) -> TargetVerificationStoreRecord:
+        key = (record.campaign_id, record.client_id, record.action_id, record.kind)
+        existing = self.verifications.get(key)
+        if existing and existing.canonical_digest != record.canonical_digest:
+            raise OpsiControlError(ErrorCode.CONFLICT, "verification digest conflict", status_code=409)
+        self.verifications[key] = record
+        return record
+
+    async def get_verification(
+        self, campaign_id: str, client_id: str, action_id: str, kind: str
+    ) -> TargetVerificationStoreRecord | None:
+        return self.verifications.get((campaign_id, client_id, action_id, kind))
+
+    async def list_verifications(self, campaign_id: str) -> list[TargetVerificationStoreRecord]:
+        return [item for item in self.verifications.values() if item.campaign_id == campaign_id]

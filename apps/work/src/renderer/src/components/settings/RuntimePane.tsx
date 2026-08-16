@@ -13,7 +13,7 @@ function RuntimePane(): React.JSX.Element {
   );
   const [owner, setOwner] = useState<ControlOwnerSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | None>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);

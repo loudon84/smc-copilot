@@ -1,8 +1,8 @@
 # OPSI v1.4 Real Lab + Windows Runtime Closure — STATUS
 
 Engineering: **implemented** (automated gates)
-Lab Clean Pair: **not_proven**
-Accelerated Pilot: **not_proven**
+Windows 10 Clean Endpoint: **not_proven**
+Accelerated Pilot: **deferred_to_v1.5**
 Decision: **NO-GO**
 
 v1.1 / v1.2 / v1.3 Live Evidence remain `not_proven / NO-GO`. This file does not authorize Production Ring mutation.
@@ -21,7 +21,7 @@ Real Lab `HttpOpsiJsonRpc` + PostgreSQL, persisted inventory/binding, Artifact e
 
 ## Not proven
 
-- Win10 + Win11 Clean Pair on live OPSI 4.3
-- 3–5 endpoint accelerated Pilot / 24h Observation
+- 1 Windows 10 Clean Endpoint on live OPSI 4.3
+- 3–5 Windows 10 endpoint accelerated Pilot / 24h Observation（v1.5 scope）
 - target / batch / campaign rollback drill on live OPSI 4.3
 - v1.5 Production Re-entry Go/No-Go

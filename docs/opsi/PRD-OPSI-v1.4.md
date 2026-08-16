@@ -6,7 +6,7 @@
 - 规划基线：`a82bf81`（OPSI v1.3 engineering implementation）
 - 目标 API：`opsiControlApi 1.4.0`
 - 目标 Product：`smc-hermes-agent` package revision 2
-- 状态：Planning；所有 Production Ring mutation 保持冻结
+- 状态：Engineering implemented；Live Windows 10 验证仍为 `not_proven`，所有 Production Ring mutation 保持冻结
 
 ## 1. 文档定位
 
@@ -23,7 +23,7 @@ Live Lab / Windows      not_proven / NO-GO
 
 这些测试主要证明契约、状态机和静态脚本约束，尚不能证明“干净 Windows 通过真实 OPSI 安装 Hermes、在绑定用户上下文启动 Gateway，并由真实 opsi-control 观测和管理”。
 
-v1.4 是修复型版本，不继续增加 Fleet/HA 功能。它要关闭真实 Lab 装配、权威 Inventory、Artifact 验签、CLI/Gateway Task、用户 continuation result relay、Owner commit 和卸载清理，然后用 2 台 Clean Windows 与 3～5 台快速 Pilot 完成人工证明。
+v1.4 是修复型版本，不继续增加 Fleet/HA 功能。它要关闭真实 Lab 装配、权威 Inventory、Artifact 验签、CLI/Gateway Task、用户 continuation result relay、Owner commit 和卸载清理，然后用 1 台 Windows 10 Clean Endpoint 完成人工证明。3～5 台快速 Pilot 与 Production Re-entry 统一移入 v1.5。
 
 ```text
 Freeze v1.3 Production
@@ -38,9 +38,7 @@ Exact CLI + SID Gateway Task + User Continuation Relay
         ↓
 Owner Commit only after Gateway Health
         ↓
-Win10/Win11 Clean Install Proof
-        ↓
-3～5 Endpoint Accelerated Pilot / 1-Day Observation
+Windows 10 Clean Endpoint Proof
         ↓
 v1.5 Production Re-entry Go / No-Go
 ```
@@ -94,7 +92,7 @@ v1.4 必须完成：
 - CLI/version/config/Gateway health 全部通过后才原子写 `owner=opsi` 和最终 `SUCCEEDED`。
 - 用户 continuation 的最终 Result 能经后续 OPSI action relay 到 instlog，并由原 request id 收敛。
 - Pilot 使用 versioned `accelerated-v1.4` policy：3～5 台、Canary 2 台/4h、后续最多 3 台/1h、最终 24h。
-- 在 1 台 Windows 10 + 1 台 Windows 11 Clean Endpoint 完整证明后，再执行 3～5 台 Pilot。
+- 在 1 台 Windows 10 Clean Endpoint 完整证明真实 `.opsi`、全 Action、continuation、update/rollback/uninstall；Windows 11 与 3～5 台 Pilot 不作为 v1.4 Live 门禁。
 
 ## 4. 非目标
 
@@ -348,13 +346,13 @@ Bootstrap/Gateway SID tasks 注册/read-back 成功；update 不重复；uninsta
 
 setup/update/uninstall/status/collect-log/diagnose/apply-config/restart-gateway/repair L0-L2 全部在 exact managed CLI 上执行；无 PATH 依赖或假成功。
 
-### AC-08 Clean Windows Pair
+### AC-08 Windows 10 Clean Endpoint
 
-1 台 Windows 10 + 1 台 Windows 11 从无 Hermes/无 OPSI owner 开始，真实 `.opsi` 安装、用户登录、Gateway/Work smoke、update/rollback/uninstall 全矩阵 proven。
+1 台 Windows 10 从无 Hermes/无 OPSI owner 开始，真实 `.opsi` 安装、用户登录、Gateway/Work smoke、update/rollback/uninstall 全矩阵 proven。
 
-### AC-09 Accelerated Pilot
+### AC-09 Accelerated Pilot Policy（工程验收）
 
-3～5 台执行 Canary 2/4h、后续≤3/1h、最终 24h；owner conflict/false success/unknown/secret leak 为 0，rollback drill 100%。
+自动化证明 `accelerated-v1.4` 的 3～5、Canary 2/4h、后续≤3/1h、最终 24h 策略和 Production freeze。真实 3～5 台 Pilot、24h Observation 与多目标 rollback drill 由 v1.5 执行。
 
 ## 12. 发布阶段
 
@@ -366,12 +364,11 @@ Phase 3  Artifact Contract + Real Ed25519 Verification + Release Builder
 Phase 4  Exact CLI + SID Tasks + Owner Transaction
 Phase 5  User Continuation Result Relay + Reconciliation
 Phase 6  Accelerated Pilot Policy + Contracts/CI/Runbooks
-Phase 7  Win10/Win11 Clean Pair（人工门禁）
-Phase 8  3～5 Endpoint / 1-Day Pilot（人工门禁）
-Phase 9  v1.5 Production Re-entry Go / No-Go
+Phase 7  Windows 10 Clean Endpoint（人工门禁）
+Phase 8  v1.5 Production Re-entry 保持冻结 / NO-GO
 ```
 
-Cursor/CI 只能写 `implemented/verified`。Phase 7～9 只能由 Operator Evidence 推进。
+Cursor/CI 只能写 `implemented/verified`。Phase 7 只能由 Operator Evidence 推进；v1.5 Production Re-entry 由下一版本单独签核。
 
 ## 13. Definition of Done
 
@@ -389,6 +386,6 @@ Cursor/CI 只能写 `implemented/verified`。Phase 7～9 只能由 Operator Evid
 - [ ] Pilot policy 为 3～5 / 4h / 1h / 24h，legacy policy 不满足 v1.4 Gate。
 - [ ] API 1.4.0、Schema/OpenAPI、migration、Product/Pester/Control/Contract tests 通过。
 - [ ] Work Direct Hermes/OPSI Offline Continuity 通过，Salt/Runtime diff 为空。
-- [ ] Win10/Win11 Clean Pair Evidence 由 Operator 签为 `proven`。
-- [ ] 3～5 Endpoint 1-Day Pilot Evidence 由 Operator 签为 `proven`。
-- [ ] v1.5 Production Re-entry Go/No-Go 已归档；未 GO 时 Production Rings 继续冻结。
+- [ ] 1 台 Windows 10 Clean Endpoint Evidence 由 Operator 签为 `proven`。
+- [ ] Windows 11 与 3～5 Endpoint Pilot 不作为 v1.4 Live 门禁。
+- [ ] v1.5 Production Re-entry 继续为 `NO-GO`；下一版本未签署 GO 时 Production Rings 继续冻结。

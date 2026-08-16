@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (OPSI v1.4 engineering). Live Clean Pair and Accelerated Pilot remain `not_proven` until operator signoff.
+Accepted (OPSI v1.4 engineering). The Windows 10 Clean Endpoint remains `not_proven` until operator signoff; Windows 11 is outside the v1.4 certification matrix, and the Accelerated Pilot is deferred to v1.5.
 
 ## Context
 

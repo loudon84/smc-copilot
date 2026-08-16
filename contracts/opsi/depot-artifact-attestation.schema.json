@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/depot-artifact-attestation.schema.json",
+  "title": "smc.opsi.depot-artifact-attestation.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "depotId",
+    "productId",
+    "productVersion",
+    "packageVersion",
+    "artifactDigest",
+    "issuer",
+    "generatedAt",
+    "expiresAt",
+    "signature",
+    "evidenceRef",
+    "algorithm",
+    "keyId"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.depot-artifact-attestation.v2" },
+    "depotId": { "type": "string", "minLength": 3, "maxLength": 128 },
+    "productId": { "type": "string", "const": "smc-hermes-agent" },
+    "productVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "artifactDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "issuer": { "type": "string", "minLength": 3, "maxLength": 64 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "signature": { "type": "string", "minLength": 32, "maxLength": 4096 },
+    "evidenceRef": { "type": "string", "minLength": 3, "maxLength": 256 },
+    "algorithm": { "const": "Ed25519" },
+    "keyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "envelopeDigest": { "type": "string", "pattern": "^$|^[a-fA-F0-9]{64}$" },
+    "signerKeyId": { "type": "string" },
+    "readbackDigest": { "type": "string", "pattern": "^$|^[a-fA-F0-9]{64}$" },
+    "readbackObservedAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

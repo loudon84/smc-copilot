@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     worker_mode: str = "lifespan"
     pilot_start_enabled: bool = False
     pilot_live_gate: str = "NO-GO"
+    production_reentry_go: str = Field(default="NO-GO", validation_alias=AliasChoices("SMC_OPSI_PRODUCTION_GO"))
 
     @field_validator("opsi_env")
     @classmethod

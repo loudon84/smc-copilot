@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta, timezone
 
+from crypto_fixtures import sign_attestation_fields
 from fastapi.testclient import TestClient
 
 from app import build_test_state, create_app
@@ -108,7 +109,7 @@ def test_production_mode_rejects_small_fleet():
             }
         )
     except Exception as exc:
-        assert "21-500" in str(exc)
+        assert "21-50" in str(exc) or "21-500" in str(exc)
     else:
         raise AssertionError("expected validation error")
 
@@ -248,6 +249,14 @@ def test_freeze_and_attestation_and_compliance(token):
     )
     assert frozen.status_code == 200, frozen.text
     now = datetime.now(UTC)
+    signature = sign_attestation_fields(
+        depot_id="depot.example",
+        product_version="0.22.0",
+        package_version="1",
+        artifact_digest=DIGEST,
+        generated_at=now,
+        expires_at=now + timedelta(days=7),
+    )
     attested = client.post(
         "/api/v1/opsi/depot-attestations",
         headers=_auth(token, "release_owner", idem="att"),
@@ -257,9 +266,10 @@ def test_freeze_and_attestation_and_compliance(token):
             "packageVersion": "1",
             "artifactDigest": DIGEST,
             "issuer": "opsi-lab-signer",
+            "keyId": "opsi-lab-signer",
             "generatedAt": now.isoformat(),
             "expiresAt": (now + timedelta(days=7)).isoformat(),
-            "signature": "sig" + "ab" * 16,
+            "signature": signature,
             "evidenceRef": "test://attestation",
             **REASON,
         },
@@ -294,7 +304,7 @@ def test_freeze_and_attestation_and_compliance(token):
         "/api/v1/opsi/rollouts/cmp_v13comp01/evidence",
         headers=_auth(token, "release_owner"),
     ).json()
-    assert evidence["schema"] == "smc.opsi.evidence-manifest.v2"
+    assert evidence["schema"] == "smc.opsi.evidence-manifest.v3"
     assert evidence["verification"] == "implemented"
     assert evidence["decision"] == "NO-GO"
 
@@ -330,3 +340,5 @@ def test_openapi_includes_v13_paths():
     assert "/api/v1/opsi/depot-attestations" in paths
     assert "/api/v1/opsi/release-freezes" in paths
     assert "/api/v1/opsi/fleet/compliance" in paths
+    assert "/api/v1/opsi/live-gates/import" in paths
+    assert "/api/v1/opsi/live-gates/{gate_id}" in paths

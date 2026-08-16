@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/target-verification.schema.json",
+  "title": "smc.opsi.target-verification.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "campaignId",
+    "clientId",
+    "actionId",
+    "kind",
+    "decision",
+    "canonicalDigest"
+  ],
+  "properties": {
+    "campaignId": { "type": "string", "pattern": "^cmp_[A-Za-z0-9_-]{8,64}$" },
+    "clientId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "actionId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "kind": { "enum": ["apply", "rollback"] },
+    "decision": { "enum": ["HEALTHY", "ROLLED_BACK", "FAILED", "UNKNOWN_BLOCKED", "CONFLICT"] },
+    "canonicalDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "actionResultDigest": { "type": "string" },
+    "inventoryDigest": { "type": "string" },
+    "productReadbackDigest": { "type": "string" },
+    "workEvidenceRef": { "type": "string" },
+    "reason": { "type": "string", "maxLength": 256 }
+  }
+}

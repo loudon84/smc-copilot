@@ -20,20 +20,30 @@ from db.repositories.rollout_records import (
     GateRecord,
     IdempotencyRecord,
     LiveGateRecord,
+    OutboxRecord,
     PromotionRecord,
     RingRecord,
     RolloutTargetRecord,
+    TargetVerificationStoreRecord,
 )
 from domain.attestation import DepotArtifactAttestation, attestation_valid
 from domain.collector import InventoryStore, MemoryInventoryStore
 from domain.compliance import classify
 from domain.gates import CRITICAL_CAUSES, GATE_POLICY_VERSION, evaluate_campaign_gates, gate_input_digest
 from domain.inventory import BaselineKind, load_inventory
-from domain.policy import PRODUCTION_REENTRY_GATE, resolve_pilot_policy, satisfies_v14_gate
+from domain.live_gate import LiveGateEnvelope, verify_live_gate_envelope
+from domain.policy import (
+    PRODUCTION_REENTRY_GATE,
+    resolve_pilot_policy,
+    resolve_production_policy,
+    satisfies_v14_gate,
+    satisfies_v15_live_gate,
+)
 from domain.preflight import evaluate_target, preflight_expired
 from domain.rate import CAMPAIGN_BUDGET, DEPOT_BUDGET, GLOBAL_BUDGET, fair_depot_order, strictest
 from domain.rings import mapping_digest, split_rings
 from domain.snapshot import MAX_DISPATCH_PER_TICK, canonicalize_client_ids, snapshot_digest, split_batches
+from domain.verification import VerificationDecision, VerificationKind, decide_verification, verification_digest
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import ActionCreateRequest, ActionStatus, Operation, TargetRef, UserBinding
 from schemas.rollout import (
@@ -55,6 +65,8 @@ from schemas.rollout import (
     EvidenceManifestView,
     FreezeClearRequest,
     FreezeView,
+    LiveGateImportRequest,
+    LiveGateView,
     MetricsView,
     PauseRequest,
     PreflightCheckView,
@@ -72,6 +84,16 @@ from schemas.rollout import (
     TargetStatus,
 )
 from services.control import ActionService
+
+_TEST_ATTESTATION_KEYS = {
+    "opsi-lab-signer": "74d053ad636f9884be52c8a3c4e5e02973837f27a76e20273f0dcdd2bf179de6",
+    "opsi-release-signer": "74d053ad636f9884be52c8a3c4e5e02973837f27a76e20273f0dcdd2bf179de6",
+}
+_TEST_OPERATOR_KEYS = {
+    "operator-release": "f722fb08da50a8a0fcf0cb1ccb8c55ea8d1ace073c5d26bca0c04fcc4bc25605",
+    "operator-endpoint-ops": "3bc2270a79ae55c9f460dfe5a9d6ca48a2ad852fd64e906cef3b2f2d439dd2e9",
+    "operator-security": "b421c23b300796652642ed7e0677688fd5bef38dd2cf58189debf0c32a224fc0",
+}
 
 
 class RolloutService:
@@ -92,6 +114,15 @@ class RolloutService:
         self.facts = facts if facts is not None else {}
         self.issuer_allowlist = {"opsi-lab-signer", "opsi-release-signer"}
         self.revoked_issuers: set[str] = set()
+        self.attestation_keys: dict[str, str] = dict(_TEST_ATTESTATION_KEYS) if settings.opsi_env == "test" else {}
+        self.operator_keys: dict[str, str] = dict(_TEST_OPERATOR_KEYS) if settings.opsi_env == "test" else {}
+        self.revoked_key_ids: set[str] = set()
+        self._now = lambda: datetime.now(UTC)
+
+    def _test_flags(self, client_id: str) -> dict[str, Any]:
+        if self.settings.opsi_env != "test":
+            return {}
+        return self.facts.get(client_id, {})
 
     async def create(
         self, body: RolloutCreateRequest, principal: AuthPrincipal, idempotency_key: str
@@ -105,13 +136,18 @@ class RolloutService:
         if await self.store.get_campaign(body.campaign_id):
             raise OpsiControlError(ErrorCode.CONFLICT, "campaign exists", status_code=409)
         policy = resolve_pilot_policy(body.pilot_policy_revision) if body.mode.value == "pilot" else None
-        client_ids = canonicalize_client_ids(body.client_ids, mode=body.mode.value, policy=policy)
+        production_policy = (
+            resolve_production_policy(body.production_policy_revision) if body.mode == CampaignMode.PRODUCTION else None
+        )
+        client_ids = canonicalize_client_ids(
+            body.client_ids, mode=body.mode.value, policy=policy, production_policy=production_policy
+        )
         active = await self.store.active_client_ids()
         overlap = [item for item in client_ids if item in active]
         if overlap:
             raise OpsiControlError(ErrorCode.CONFLICT, "client already in active campaign", status_code=409)
         mapping = await self._client_depot_mapping(client_ids)
-        digest = snapshot_digest(client_ids, mode=body.mode.value, policy=policy)
+        digest = snapshot_digest(client_ids, mode=body.mode.value, policy=policy, production_policy=production_policy)
         mapped = mapping_digest(mapping) if mapping else ""
         now = datetime.now(UTC)
         record = CampaignRecord(
@@ -139,6 +175,8 @@ class RolloutService:
             freeze_revision=0,
             pilot_policy_revision=policy.revision if policy else "",
             pilot_policy_digest=policy.digest() if policy else "",
+            production_policy_revision=production_policy.revision if production_policy else "",
+            production_policy_digest=production_policy.digest() if production_policy else "",
             created_at=now,
             updated_at=now,
         )
@@ -146,7 +184,7 @@ class RolloutService:
         batches = []
         targets = []
         if body.mode == CampaignMode.PRODUCTION:
-            rings = split_rings(mapping)
+            rings = split_rings(mapping, production_policy)
             ring_records = []
             depot_members: dict[str, list[str]] = {}
             for index, ids, hours in rings:
@@ -254,7 +292,7 @@ class RolloutService:
                 promotion_ok=promo_ok,
                 promotion_channel=channel or "missing",
                 required_channel=required_channel,
-                evidence_flags=self.facts.get(target.client_id, {}),
+                evidence_flags=self._test_flags(target.client_id),
             )
             target.preflight_json = json.dumps(checks)
             target.preflight_at = datetime.now(UTC)
@@ -323,6 +361,13 @@ class RolloutService:
             await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
             await self._assert_not_frozen()
             await self._require_triple_approval(campaign_id, ApprovalKind.START, campaign.revision)
+            production_policy = resolve_production_policy(campaign.production_policy_revision or None)
+            if not satisfies_v15_live_gate(production_policy):
+                raise OpsiControlError(
+                    ErrorCode.PRECONDITION_FAILED,
+                    "v1.5 live gate requires controlled-reentry-v1.5",
+                    status_code=412,
+                )
             if not await self._depots_attested(campaign):
                 raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "depot attestation required", status_code=412)
         else:
@@ -546,7 +591,7 @@ class RolloutService:
                         continue
                     if await self._client_has_open_mutation(target.client_id):
                         continue
-                    fact = self.facts.get(target.client_id, {})
+                    fact = self._test_flags(target.client_id)
                     if fact.get("secretCanary"):
                         target.status = TargetStatus.FAILED.value
                         target.ineligible_reason = "secret_canary"
@@ -583,6 +628,7 @@ class RolloutService:
                     )
                     target.status = TargetStatus.DISPATCHED.value
                     target.action_id = request_id
+                    target.parent_action_id = request_id
                     target.mutated = True
                     await self.store.put_target(target)
                     handled += 1
@@ -590,6 +636,10 @@ class RolloutService:
             ready.dispatched = True
             ready.status = BatchStatus.VERIFYING.value
             await self.store.put_batch(ready)
+            for ring in await self.store.list_rings(campaign.campaign_id):
+                if ring.ring_index == ready.batch_index:
+                    ring.status = BatchStatus.VERIFYING.value
+                    await self.store.put_ring(ring)
             decision, cause, reason = evaluate_campaign_gates(
                 targets=await self.store.list_targets(campaign.campaign_id),
                 batch_index=ready.batch_index,
@@ -610,10 +660,6 @@ class RolloutService:
                 await self._auto_pause(campaign.campaign_id, cause)
                 if decision == "FREEZE" or cause in CRITICAL_CAUSES:
                     await self._force_freeze(campaign.campaign_id, cause)
-            else:
-                ready.status = BatchStatus.OBSERVING.value
-                ready.observe_until = datetime.now(UTC) + timedelta(hours=ready.observe_hours)
-                await self.store.put_batch(ready)
         return handled
 
     async def promote(self, body: ArtifactPromoteRequest, principal: AuthPrincipal) -> dict[str, str]:
@@ -688,6 +734,8 @@ class RolloutService:
                 client_ids=item.client_ids,
                 observe_hours=item.observe_hours,
                 approved=item.approved,
+                observe_until=item.observe_until,
+                observe_started_at=item.observe_started_at,
             )
             for item in await self.store.list_batches(campaign_id)
         ]
@@ -737,30 +785,40 @@ class RolloutService:
     async def evidence(self, campaign_id: str) -> EvidenceManifestView:
         campaign = await self._get(campaign_id)
         events = await self.store.list_events(campaign_id)
+        verifications = await self.store.list_verifications(campaign_id)
+        rings = await self.store.list_rings(campaign_id)
+        freeze = await self.store.get_active_freeze()
         payload = {
-            "schema": "smc.opsi.evidence-manifest.v2",
+            "schema": "smc.opsi.evidence-manifest.v3",
             "campaignId": campaign.campaign_id,
             "snapshotDigest": campaign.snapshot_digest,
             "mappingDigest": campaign.mapping_digest,
             "artifactDigest": campaign.artifact_digest,
             "gatePolicyRevision": campaign.gate_policy_revision,
             "freezeRevision": campaign.freeze_revision,
+            "productionPolicyRevision": campaign.production_policy_revision,
             "events": [item.event for item in events],
+            "verificationDigests": [item.canonical_digest for item in verifications],
+            "ringStatuses": [item.status for item in rings],
+            "freezeActive": bool(freeze and freeze.active),
         }
         digest = digest_payload(payload)
         return EvidenceManifestView(
-            schema_="smc.opsi.evidence-manifest.v2",
+            schema_="smc.opsi.evidence-manifest.v3",
             campaign_id=campaign.campaign_id,
             snapshot_digest=campaign.snapshot_digest,
             artifact_digest=campaign.artifact_digest,
             gate_policy_revision=campaign.gate_policy_revision,
-            verification="implemented",
+            verification="verified" if verifications else "implemented",
             decision="NO-GO",
             sha256=digest,
-            timestamp=datetime.now(UTC),
+            timestamp=self._now(),
             events=len(events),
             mapping_digest=campaign.mapping_digest or None,
             freeze_revision=campaign.freeze_revision,
+            verification_count=len(verifications),
+            production_policy_revision=campaign.production_policy_revision or None,
+            live_gate_id=PRODUCTION_REENTRY_GATE if campaign.mode == CampaignMode.PRODUCTION.value else None,
         )
 
     async def metrics(self) -> MetricsView:
@@ -821,10 +879,16 @@ class RolloutService:
 
     async def _assert_live_gate(self, gate_id: str = "v1.1-live") -> None:
         gate = await self.store.get_live_gate(gate_id)
-        if gate is None or gate.decision != "GO":
+        if gate is None or gate.decision != "GO" or gate.revoked:
             raise OpsiControlError(
                 ErrorCode.PRECONDITION_FAILED,
                 f"{gate_id} live gate is not GO; mutation forbidden",
+                status_code=412,
+            )
+        if gate.expires_at is not None and self._now() >= gate.expires_at:
+            raise OpsiControlError(
+                ErrorCode.PRECONDITION_FAILED,
+                f"{gate_id} live gate expired",
                 status_code=412,
             )
 
@@ -849,11 +913,14 @@ class RolloutService:
             raise OpsiControlError(ErrorCode.FORBIDDEN, "triple approval required", status_code=403)
 
     async def _depots_attested(self, campaign: CampaignRecord) -> bool:
-        now = datetime.now(UTC)
+        now = self._now()
         for depot in await self.store.list_depots(campaign.campaign_id):
             record = await self.store.get_attestation(depot.depot_id, campaign.artifact_digest)
             if record is None or record.revoked:
                 return False
+            readback = await self._product_on_depot_digest(
+                depot.depot_id, campaign.product_version, campaign.package_version
+            )
             item = DepotArtifactAttestation(
                 depot_id=record.depot_id,
                 product_id=record.product_id,
@@ -865,18 +932,45 @@ class RolloutService:
                 expires_at=record.expires_at,
                 signature=record.signature,
                 evidence_ref=record.evidence_ref,
+                algorithm=record.algorithm,
+                key_id=record.key_id,
+                envelope_digest=record.envelope_digest,
+                signer_key_id=record.signer_key_id or campaign.signer_key_id,
+                readback_digest=record.readback_digest,
+                readback_observed_at=record.readback_observed_at,
             )
             if not attestation_valid(
                 item,
                 now=now,
                 allowlist=self.issuer_allowlist,
-                revoked=self.revoked_issuers,
+                revoked=self.revoked_issuers | self.revoked_key_ids,
                 expected_digest=campaign.artifact_digest,
                 expected_version=campaign.product_version,
                 expected_package=campaign.package_version,
+                public_keys=self.attestation_keys,
+                expected_readback=readback or record.readback_digest,
+                expected_signer_key_id=campaign.signer_key_id if record.signer_key_id else "",
             ):
                 return False
+            if readback and record.readback_digest and readback != record.readback_digest:
+                return False
         return True
+
+    async def _product_on_depot_digest(self, depot_id: str, product_version: str, package_version: str) -> str:
+        try:
+            products = await self.rpc.call("productOnDepot_getObjects", {}, [])
+        except Exception:
+            return ""
+        matches = [
+            item
+            for item in products
+            if item.get("productVersion") == product_version
+            and str(item.get("packageVersion")) == str(package_version)
+            and (not item.get("depotId") or item.get("depotId") == depot_id)
+        ]
+        if not matches:
+            return ""
+        return digest_payload({"depotId": depot_id, "items": matches})
 
     async def _client_depot_mapping(self, client_ids: list[str]) -> dict[str, str]:
         mapping: dict[str, str] = {}
@@ -886,6 +980,203 @@ class RolloutService:
             if depot_id:
                 mapping[client_id] = depot_id
         return mapping
+
+    async def _verify_target(
+        self, campaign: CampaignRecord, target: RolloutTargetRecord, kind: str, now: datetime
+    ) -> TargetVerificationStoreRecord:
+        action_id = target.parent_action_id or target.action_id
+        result = await self.actions.repos.results.get(action_id, target.client_id) if action_id else None
+        snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, store=self.inventory)
+        evidence = (
+            await self.inventory.get_evidence(target.client_id) if hasattr(self.inventory, "get_evidence") else {}
+        )
+        work_ref = str((evidence or {}).get("workSmokeRef") or (evidence or {}).get("workEvidenceRef") or "")
+        product_rows = []
+        try:
+            product_rows = await self.rpc.call(
+                "productOnClient_getObjects",
+                {"clientId": target.client_id, "productId": campaign.product_id},
+                [],
+            )
+        except Exception:
+            product_rows = []
+        product = product_rows[0] if product_rows else {}
+        installed = str(product.get("installationStatus") or "") == "installed"
+        absent = str(product.get("installationStatus") or "") in {"not_installed", "uninstalled", ""}
+        observed_version = str(product.get("productVersion") or (snapshot.previous_version if snapshot else ""))
+        observed_package = str(product.get("packageVersion") or campaign.package_version)
+        observed_artifact = snapshot.previous_digest if snapshot else ""
+        observed_owner = snapshot.owner if snapshot else ""
+        observed_tasks = ""
+        if snapshot:
+            observed_tasks = ",".join(item for item in (snapshot.bootstrap_task, snapshot.gateway_task) if item)
+        inventory_digest = snapshot.content_digest if snapshot else ""
+        result_digest = (result.body_digest or result.sha256) if result else ""
+        product_digest = digest_payload(product) if product else ""
+        decision, reason = decide_verification(
+            kind=kind,
+            result_status=result.status if result else None,
+            result_digest=result_digest,
+            inventory_expired=snapshot is None or snapshot.expired(now),
+            inventory_digest=inventory_digest,
+            desired_version=campaign.product_version,
+            desired_package=campaign.package_version,
+            desired_artifact=campaign.artifact_digest,
+            desired_owner="opsi",
+            observed_version=observed_version,
+            observed_package=observed_package,
+            observed_artifact=observed_artifact,
+            observed_owner=observed_owner,
+            observed_tasks=observed_tasks,
+            gateway_healthy=bool(snapshot and snapshot.gateway_healthy),
+            work_evidence_ref=work_ref,
+            product_installed=installed,
+            product_absent=absent and not installed,
+        )
+        payload = {
+            "campaignId": campaign.campaign_id,
+            "clientId": target.client_id,
+            "actionId": action_id,
+            "kind": kind,
+            "actionResultDigest": result_digest,
+            "productReadbackDigest": product_digest,
+            "inventoryDigest": inventory_digest,
+            "decision": decision,
+            "reason": reason,
+        }
+        record = TargetVerificationStoreRecord(
+            campaign_id=campaign.campaign_id,
+            client_id=target.client_id,
+            action_id=action_id or "",
+            kind=kind,
+            action_result_digest=result_digest,
+            parent_result_digest=result_digest,
+            product_readback_digest=product_digest,
+            inventory_digest=inventory_digest,
+            gateway_evidence_ref="opsi-rpc" if snapshot and snapshot.gateway_healthy else "",
+            work_evidence_ref=work_ref,
+            desired_version=campaign.product_version,
+            desired_package=campaign.package_version,
+            desired_artifact=campaign.artifact_digest,
+            desired_config=str(campaign.config_revision),
+            desired_owner="opsi",
+            observed_version=observed_version,
+            observed_package=observed_package,
+            observed_artifact=observed_artifact,
+            observed_config=str(campaign.config_revision),
+            observed_owner=observed_owner,
+            observed_tasks=observed_tasks,
+            observed_health="healthy" if snapshot and snapshot.gateway_healthy else "unknown",
+            decision=decision,
+            reason=reason,
+            observed_at=now,
+            expires_at=now + timedelta(hours=1),
+            canonical_digest=verification_digest(payload),
+        )
+        return await self.store.put_verification(record)
+
+    async def _advance_ring_observation(self, campaign: CampaignRecord, now: datetime) -> int:
+        progressed = 0
+        rings = await self.store.list_rings(campaign.campaign_id)
+        batches = await self.store.list_batches(campaign.campaign_id)
+        targets = await self.store.list_targets(campaign.campaign_id)
+        for ring in rings:
+            members = [item for item in targets if item.ring_index == ring.ring_index]
+            if not members:
+                continue
+            batch = next((item for item in batches if item.batch_index == ring.ring_index), None)
+            if ring.status in {BatchStatus.DISPATCHING.value, BatchStatus.VERIFYING.value}:
+                if members and all(item.status == TargetStatus.HEALTHY.value for item in members):
+                    started = max((item.healthy_at or now) for item in members)
+                    ring.status = BatchStatus.OBSERVING.value
+                    ring.observe_started_at = started
+                    ring.observe_until = started + timedelta(hours=ring.observe_hours)
+                    await self.store.put_ring(ring)
+                    if batch is not None:
+                        batch.status = BatchStatus.OBSERVING.value
+                        batch.observe_started_at = started
+                        batch.observe_until = ring.observe_until
+                        await self.store.put_batch(batch)
+                    progressed += 1
+            if ring.status == BatchStatus.OBSERVING.value:
+                if any(
+                    item.status in {TargetStatus.FAILED.value, TargetStatus.UNKNOWN_BLOCKED.value} for item in members
+                ):
+                    await self._auto_pause(campaign.campaign_id, "observation_drift")
+                    continue
+                if ring.observe_until and now >= ring.observe_until:
+                    ring.status = BatchStatus.PASSED.value
+                    await self.store.put_ring(ring)
+                    if batch is not None:
+                        batch.status = BatchStatus.PASSED.value
+                        await self.store.put_batch(batch)
+                    progressed += 1
+        return progressed
+
+    async def import_live_gate(self, body: LiveGateImportRequest, principal: AuthPrincipal) -> LiveGateView:
+        self._require_role(principal, RolloutRole.SECURITY_OWNER)
+        envelope = LiveGateEnvelope(
+            gate_id=body.gate_id,
+            decision=body.decision,
+            evidence_ref=body.evidence_ref,
+            expires_at=body.expires_at,
+            input_digest=body.input_digest,
+            payload=body.payload,
+            approvals=[item.model_dump(by_alias=True) for item in body.approvals],
+        )
+        ok, reason = verify_live_gate_envelope(
+            envelope,
+            now=self._now(),
+            public_keys=self.operator_keys,
+            revoked_keys=self.revoked_key_ids,
+            expected_gate_id=body.gate_id,
+        )
+        if not ok:
+            raise OpsiControlError(ErrorCode.VALIDATION_ERROR, f"live gate invalid: {reason}", status_code=400)
+        if body.gate_id == PRODUCTION_REENTRY_GATE and body.decision == "GO":
+            if self.settings.opsi_env == "production" and not envelope.approvals:
+                raise OpsiControlError(ErrorCode.FORBIDDEN, "unsigned GO forbidden", status_code=403)
+        record = LiveGateRecord(
+            gate_id=body.gate_id,
+            decision=body.decision,
+            evidence_ref=body.evidence_ref,
+            signed_by=principal.subject,
+            payload_json=json.dumps(body.payload, sort_keys=True),
+            signature=body.approvals[0].signature if body.approvals else "",
+            expires_at=body.expires_at,
+            revoked=False,
+            input_digest=body.input_digest,
+            key_id=",".join(item.key_id for item in body.approvals),
+        )
+        await self.store.put_live_gate(record)
+        await self._event("global", principal.subject, "live-gate.imported", body.gate_id)
+        return await self.get_live_gate(body.gate_id)
+
+    async def get_live_gate(self, gate_id: str) -> LiveGateView:
+        record = await self.store.get_live_gate(gate_id)
+        if record is None:
+            raise OpsiControlError(ErrorCode.NOT_FOUND, "live gate not found", status_code=404)
+        return LiveGateView(
+            gate_id=record.gate_id,
+            decision=record.decision,
+            evidence_ref=record.evidence_ref,
+            signed_by=record.signed_by,
+            expires_at=record.expires_at,
+            revoked=record.revoked,
+            input_digest=record.input_digest,
+            immutable=record.immutable,
+        )
+
+    async def revoke_live_gate(self, gate_id: str, principal: AuthPrincipal, reason: str) -> LiveGateView:
+        self._require_role(principal, RolloutRole.SECURITY_OWNER)
+        record = await self.store.revoke_live_gate(gate_id)
+        if record is None:
+            raise OpsiControlError(ErrorCode.NOT_FOUND, "live gate not found", status_code=404)
+        await self._event("global", principal.subject, "live-gate.revoked", reason)
+        for campaign in await self.store.list_campaigns(limit=100):
+            if campaign.mode == CampaignMode.PRODUCTION.value and campaign.status in {s.value for s in ACTIVE_CAMPAIGN}:
+                await self._auto_pause(campaign.campaign_id, "live_gate_revoked")
+        return await self.get_live_gate(gate_id)
 
     async def _force_freeze(self, source: str, cause: str) -> None:
         existing = await self.store.get_active_freeze()
@@ -903,6 +1194,7 @@ class RolloutService:
 
     async def reconcile_once(self, worker_id: str = "rollout-reconciler") -> int:
         progressed = 0
+        now = self._now()
         for campaign in await self.store.list_campaigns(limit=100):
             if campaign.status not in {
                 CampaignStatus.RUNNING.value,
@@ -915,26 +1207,45 @@ class RolloutService:
             ):
                 continue
             for target in await self.store.list_targets(campaign.campaign_id):
-                fact = self.facts.get(target.client_id, {})
                 if target.status == TargetStatus.DISPATCHED.value:
-                    target.status = TargetStatus.APPLYING.value
-                    await self.store.put_target(target)
+                    action = await self.actions.repos.actions.get(target.action_id) if target.action_id else None
+                    if action is None:
+                        target.status = TargetStatus.UNKNOWN_BLOCKED.value
+                        await self.store.put_target(target)
+                    else:
+                        target.status = TargetStatus.APPLYING.value
+                        await self.store.put_target(target)
                     progressed += 1
                     continue
                 if target.status == TargetStatus.APPLYING.value:
-                    target.status = TargetStatus.VERIFYING.value
-                    await self.store.put_target(target)
-                    progressed += 1
+                    action = await self.actions.repos.actions.get(target.action_id) if target.action_id else None
+                    if action is not None and action.status == ActionStatus.SUCCEEDED:
+                        target.status = TargetStatus.VERIFYING.value
+                        await self.store.put_target(target)
+                        await self.store.add_outbox(
+                            OutboxRecord(
+                                id=0,
+                                campaign_id=campaign.campaign_id,
+                                kind="action.result.finalized",
+                                payload_json=json.dumps(
+                                    {"actionId": target.action_id, "clientId": target.client_id, "kind": "apply"}
+                                ),
+                            )
+                        )
+                        progressed += 1
+                    elif action is not None and action.status == ActionStatus.FAILED:
+                        target.status = TargetStatus.FAILED.value
+                        await self.store.put_target(target)
+                        progressed += 1
                     continue
                 if target.status == TargetStatus.VERIFYING.value:
-                    if (
-                        fact.get("resultChecksum")
-                        and fact.get("productReadback")
-                        and fact.get("gatewayProbe")
-                        and fact.get("workSmoke")
-                    ):
+                    record = await self._verify_target(campaign, target, VerificationKind.APPLY.value, now)
+                    if record.decision == VerificationDecision.HEALTHY.value:
                         target.status = TargetStatus.HEALTHY.value
-                    elif fact.get("unknownResult"):
+                        target.healthy_at = now
+                    elif record.decision == VerificationDecision.FAILED.value:
+                        target.status = TargetStatus.FAILED.value
+                    else:
                         target.status = TargetStatus.UNKNOWN_BLOCKED.value
                     await self.store.put_target(target)
                     progressed += 1
@@ -950,12 +1261,16 @@ class RolloutService:
                     progressed += 1
                     continue
                 if target.status == TargetStatus.ROLLBACK_VERIFYING.value:
-                    if fact.get("rollbackReadback") and fact.get("gatewayProbe") and fact.get("workSmoke"):
+                    record = await self._verify_target(campaign, target, VerificationKind.ROLLBACK.value, now)
+                    if record.decision == VerificationDecision.ROLLED_BACK.value:
                         target.status = TargetStatus.ROLLED_BACK.value
-                    elif fact.get("unknownResult"):
+                    elif record.decision == VerificationDecision.FAILED.value:
+                        target.status = TargetStatus.ROLLBACK_FAILED.value
+                    else:
                         target.status = TargetStatus.UNKNOWN_BLOCKED.value
                     await self.store.put_target(target)
                     progressed += 1
+            progressed += await self._advance_ring_observation(campaign, now)
         return progressed
 
     async def freeze(self, body: ReleaseFreezeRequest, principal: AuthPrincipal) -> FreezeView:
@@ -1015,15 +1330,22 @@ class RolloutService:
             expires_at=body.expires_at,
             signature=body.signature,
             evidence_ref=body.evidence_ref,
+            algorithm=body.algorithm,
+            key_id=body.key_id or body.issuer,
+            envelope_digest=body.envelope_digest,
+            signer_key_id=body.signer_key_id,
+            readback_digest=body.readback_digest,
+            readback_observed_at=body.readback_observed_at,
         )
         if not attestation_valid(
             item,
-            now=datetime.now(UTC),
+            now=self._now(),
             allowlist=self.issuer_allowlist,
-            revoked=self.revoked_issuers,
+            revoked=self.revoked_issuers | self.revoked_key_ids,
             expected_digest=body.artifact_digest,
             expected_version=body.product_version,
             expected_package=body.package_version,
+            public_keys=self.attestation_keys,
         ):
             raise OpsiControlError(ErrorCode.VALIDATION_ERROR, "attestation invalid", status_code=400)
         await self.store.put_attestation(
@@ -1038,6 +1360,12 @@ class RolloutService:
                 expires_at=body.expires_at,
                 signature=body.signature,
                 evidence_ref=body.evidence_ref,
+                algorithm=body.algorithm,
+                key_id=body.key_id or body.issuer,
+                envelope_digest=body.envelope_digest,
+                signer_key_id=body.signer_key_id,
+                readback_digest=body.readback_digest,
+                readback_observed_at=body.readback_observed_at,
             )
         )
         return {"depotId": body.depot_id, "digest": item.digest()}
@@ -1064,6 +1392,8 @@ class RolloutService:
                 client_ids=item.client_ids,
                 observe_hours=item.observe_hours,
                 approved=item.approved,
+                observe_until=item.observe_until,
+                observe_started_at=item.observe_started_at,
             )
             for item in await self.store.list_rings(campaign_id)
         ]
@@ -1099,6 +1429,31 @@ class RolloutService:
         self, campaign_id: str, ring_index: int, body: ApproveRequest, principal: AuthPrincipal, expected_revision: int
     ) -> RolloutCampaignView:
         await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
+        await self._assert_not_frozen()
+        campaign = await self._get(campaign_id)
+        self._match(campaign, expected_revision)
+        rings = await self.store.list_rings(campaign_id)
+        current = next((item for item in rings if item.ring_index == ring_index), None)
+        if current is None:
+            raise OpsiControlError(ErrorCode.NOT_FOUND, "ring not found", status_code=404)
+        if ring_index > 0:
+            predecessor = next((item for item in rings if item.ring_index == ring_index - 1), None)
+            if predecessor is None or predecessor.status != BatchStatus.PASSED.value:
+                raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "predecessor ring is not PASSED", status_code=412)
+            if predecessor.observe_until is None or self._now() < predecessor.observe_until:
+                raise OpsiControlError(
+                    ErrorCode.PRECONDITION_FAILED, "predecessor observe deadline not reached", status_code=412
+                )
+        mapping = await self._client_depot_mapping(campaign.client_ids)
+        if mapping_digest(mapping) != campaign.mapping_digest:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "mapping digest drifted", status_code=412)
+        if not await self._depots_attested(campaign):
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "depot attestation required", status_code=412)
+        for target in await self.store.list_targets(campaign_id):
+            if target.ring_index != ring_index:
+                continue
+            if preflight_expired(target.preflight_at, self._now()):
+                raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "preflight expired", status_code=412)
         body.kind = ApprovalKind.NEXT_RING
         await self.approve(campaign_id, body, principal, expected_revision)
         campaign = await self._get(campaign_id)
@@ -1114,24 +1469,30 @@ class RolloutService:
                 batch.approved = True
                 batch.status = BatchStatus.READY.value
                 await self.store.put_batch(batch)
+        campaign.fencing_token += 1
+        await self.store.cas_campaign(campaign, campaign.revision)
         return await self.get(campaign_id)
 
     async def fleet_compliance(self, campaign_id: str) -> list[ComplianceView]:
         campaign = await self._get(campaign_id)
         rows: list[ComplianceView] = []
+        now = self._now()
         for target in await self.store.list_targets(campaign_id):
-            fact = self.facts.get(target.client_id, {})
-            observed_version = str(fact.get("observedVersion") or target.baseline_version)
-            observed_digest = str(fact.get("observedDigest") or target.baseline_digest)
+            snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, store=self.inventory)
+            stale = snapshot is None or snapshot.expired(now)
+            observed_version = snapshot.previous_version if snapshot else ""
+            observed_digest = snapshot.previous_digest if snapshot else ""
+            owner = snapshot.owner if snapshot else ""
+            health = "healthy" if target.status == TargetStatus.HEALTHY.value else "unknown"
             status, critical = classify(
                 desired_version=campaign.product_version,
                 observed_version=observed_version,
                 desired_digest=campaign.artifact_digest,
                 observed_digest=observed_digest,
-                owner=str(fact.get("owner") or ""),
-                health="healthy" if target.status == TargetStatus.HEALTHY.value else "unknown",
-                stale=bool(fact.get("stale")),
-                exempt=bool(fact.get("exempt")),
+                owner=owner,
+                health=health,
+                stale=stale,
+                exempt=False,
             )
             payload = {
                 "clientId": target.client_id,
@@ -1139,6 +1500,8 @@ class RolloutService:
                 "status": status.value,
                 "desired": campaign.product_version,
                 "observed": observed_version,
+                "inventoryDigest": snapshot.content_digest if snapshot else "",
+                "observedAt": (snapshot.observed_at if snapshot else now).isoformat(),
             }
             digest = digest_payload(payload)
             rows.append(
@@ -1146,9 +1509,10 @@ class RolloutService:
                     client_id=target.client_id.split(".")[0],
                     depot_id=target.depot_id,
                     status=status.value,
-                    observed_at=datetime.now(UTC),
+                    observed_at=snapshot.observed_at if snapshot else now,
                     digest=digest,
                     critical=critical,
+                    source_digest=snapshot.content_digest if snapshot else None,
                 )
             )
         await self.store.put_compliance(

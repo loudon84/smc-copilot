@@ -46,6 +46,11 @@
       "enum": ["accelerated-v1.4", "legacy-v1.2"],
       "default": "accelerated-v1.4"
     },
+    "productionPolicyRevision": {
+      "type": "string",
+      "enum": ["controlled-reentry-v1.5", "engineering-v1.3"],
+      "default": "controlled-reentry-v1.5"
+    },
     "windowStart": { "type": ["string", "null"], "format": "date-time" },
     "windowEnd": { "type": ["string", "null"], "format": "date-time" },
     "reason": { "type": "string", "minLength": 3, "maxLength": 256 },

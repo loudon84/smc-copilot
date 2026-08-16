@@ -53,7 +53,16 @@ Describe "smc-hermes-agent adapter contracts" {
         Set-Content -LiteralPath (Join-Path $root "versions\current\hermes.exe") -Value "fixture" -Encoding ascii
         $cli = Resolve-SmcHermesCli -Root $root -Entrypoint "hermes.exe"
         $cli | Should Match "hermes.exe"
-        { Resolve-SmcHermesCli -Root $root -Entrypoint "..\..\Windows\System32\cmd.exe" } | Should Throw
+        $threw = $false
+        $message = ""
+        try {
+            Resolve-SmcHermesCli -Root $root -Entrypoint "..\..\Windows\System32\cmd.exe" -ErrorAction Stop
+        } catch {
+            $threw = $true
+            $message = "$_"
+        }
+        $threw | Should Be $true
+        $message | Should Match "escapes managed root"
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }
 

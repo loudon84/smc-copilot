@@ -150,6 +150,8 @@ class RolloutCampaignRow(Base):
     freeze_revision: Mapped[int] = mapped_column(Integer, default=0)
     pilot_policy_revision: Mapped[str] = mapped_column(String(64), default="accelerated-v1.4")
     pilot_policy_digest: Mapped[str] = mapped_column(String(64), default="")
+    production_policy_revision: Mapped[str] = mapped_column(String(64), default="")
+    production_policy_digest: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
@@ -169,6 +171,7 @@ class RolloutBatchRow(Base):
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     dispatched: Mapped[bool] = mapped_column(Boolean, default=False)
     observe_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    observe_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RolloutTargetRow(Base):
@@ -196,6 +199,8 @@ class RolloutTargetRow(Base):
     active_slot: Mapped[str] = mapped_column(String(96), default="active")
     depot_id: Mapped[str] = mapped_column(String(128), default="")
     ring_index: Mapped[int] = mapped_column(Integer, default=0)
+    healthy_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    parent_action_id: Mapped[str] = mapped_column(String(80), default="")
 
 
 class RolloutApprovalRow(Base):
@@ -280,6 +285,12 @@ class LiveGateRow(Base):
     evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False)
     signed_by: Mapped[str] = mapped_column(String(128), nullable=False)
     immutable: Mapped[bool] = mapped_column(Boolean, default=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    signature: Mapped[str] = mapped_column(Text, default="")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    input_digest: Mapped[str] = mapped_column(String(64), default="")
+    key_id: Mapped[str] = mapped_column(String(128), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
 
@@ -310,6 +321,7 @@ class RolloutRingRow(Base):
     observe_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     observe_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    observe_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class DepotAttestationRow(Base):
@@ -327,6 +339,12 @@ class DepotAttestationRow(Base):
     signature: Mapped[str] = mapped_column(Text, nullable=False)
     evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    algorithm: Mapped[str] = mapped_column(String(32), default="Ed25519")
+    key_id: Mapped[str] = mapped_column(String(128), default="")
+    envelope_digest: Mapped[str] = mapped_column(String(64), default="")
+    signer_key_id: Mapped[str] = mapped_column(String(64), default="")
+    readback_digest: Mapped[str] = mapped_column(String(64), default="")
+    readback_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ReleaseFreezeRow(Base):
@@ -401,3 +419,39 @@ class EndpointInventoryRow(Base):
     gateway_task: Mapped[str] = mapped_column(String(160), nullable=False, default="")
     trust_level: Mapped[str] = mapped_column(String(64), nullable=False, default="OPSI_AUTHENTICATED_CHECKSUM")
     evidence_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
+
+class TargetVerificationRow(Base):
+    __tablename__ = "opsi_target_verifications"
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "client_id", "action_id", "kind", name="uq_opsi_target_verification"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    client_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    action_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    action_result_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    parent_result_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    product_readback_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    inventory_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    gateway_evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    work_evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    desired_version: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    desired_package: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    desired_artifact: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    desired_config: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    desired_owner: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    observed_version: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    observed_package: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    observed_artifact: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    observed_config: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    observed_owner: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    observed_tasks: Mapped[str] = mapped_column(String(320), nullable=False, default="")
+    observed_health: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    canonical_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
