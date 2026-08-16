@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][int]$Revision,
-    [string]$ConfigDigest = ""
+    [string]$ConfigDigest = "",
+    [string]$ConfigPayload = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,14 @@ Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
 $currentPath = Join-Path $Root "managed\config\current.json"
 $backupPath = Join-Path $Root "managed\config\backup-$Revision.json"
 $incomingPath = Join-Path $Root "managed\config\incoming.json"
+if ($ConfigPayload) {
+    $pad = 4 - ($ConfigPayload.Length % 4)
+    if ($pad -eq 4) { $pad = 0 }
+    $b64 = $ConfigPayload + ("=" * $pad)
+    $bytes = [Convert]::FromBase64String(($b64.Replace("-", "+").Replace("_", "/")))
+    New-Item -ItemType Directory -Force -Path (Split-Path $incomingPath) | Out-Null
+    [IO.File]::WriteAllBytes($incomingPath, $bytes)
+}
 
 $currentRev = 0
 $currentDigest = ""

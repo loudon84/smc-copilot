@@ -23,7 +23,8 @@
         "apply-config",
         "restart-gateway",
         "diagnose",
-        "repair"
+        "repair",
+        "reconcile-controller"
       ]
     },
     "targets": {

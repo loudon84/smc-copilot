@@ -34,12 +34,26 @@ class InventoryStore:
     async def put_evidence(self, client_id: str, evidence: dict[str, Any]) -> None:
         raise NotImplementedError
 
+    async def get_controller_evidence(self, client_id: str) -> dict[str, Any] | None:
+        return None
+
+    async def put_controller_evidence(self, client_id: str, evidence: dict[str, Any]) -> None:
+        return None
+
+    async def get_result_ack(self, request_id: str, client_id: str) -> str | None:
+        return None
+
+    async def put_result_ack(self, request_id: str, client_id: str, token: str) -> None:
+        return None
+
 
 class MemoryInventoryStore(InventoryStore):
     def __init__(self) -> None:
         self.snapshots: dict[str, EndpointInventorySnapshot] = {}
         self.bindings: dict[str, EndpointBindingRecord] = {}
         self.evidence: dict[str, dict[str, Any]] = {}
+        self.controller_evidence: dict[str, dict[str, Any]] = {}
+        self.result_acks: dict[tuple[str, str], str] = {}
 
     async def get_snapshot(self, client_id: str) -> EndpointInventorySnapshot | None:
         item = self.snapshots.get(client_id)
@@ -65,6 +79,18 @@ class MemoryInventoryStore(InventoryStore):
 
     async def put_evidence(self, client_id: str, evidence: dict[str, Any]) -> None:
         self.evidence[client_id] = dict(evidence)
+
+    async def get_controller_evidence(self, client_id: str) -> dict[str, Any] | None:
+        return self.controller_evidence.get(client_id)
+
+    async def put_controller_evidence(self, client_id: str, evidence: dict[str, Any]) -> None:
+        self.controller_evidence[client_id] = dict(evidence)
+
+    async def get_result_ack(self, request_id: str, client_id: str) -> str | None:
+        return self.result_acks.get((request_id, client_id))
+
+    async def put_result_ack(self, request_id: str, client_id: str, token: str) -> None:
+        self.result_acks[(request_id, client_id)] = token
 
 
 class InventoryCollector:

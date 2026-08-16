@@ -68,6 +68,10 @@
     "trustLevel": {
       "type": ["string", "null"],
       "maxLength": 64
-    }
+    },
+    "ackToken": { "type": ["string", "null"], "maxLength": 80 },
+    "transactionDigest": { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
+    "desiredDigest": { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
+    "observedDigest": { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" }
   }
 }

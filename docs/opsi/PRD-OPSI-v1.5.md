@@ -6,7 +6,7 @@
 - 规划基线：`9c10235`（OPSI v1.4 engineering implementation）
 - 目标 API：`opsiControlApi 1.5.0`
 - 目标 Product：`smc-hermes-agent` package revision 2（除非 Endpoint contract 必须修订）
-- 状态：Planning；v1.4 Windows 10 Live Evidence 未 `proven/GO` 前，Production mutation 保持冻结
+- 状态：Engineering implemented；Live Pilot/Controlled Production Evidence 仍为 `not_proven/NO-GO`
 
 ## 1. 文档定位
 
@@ -29,7 +29,7 @@ Ring 0 → 10% → 25% → 50% → 100%
                     ↓
 Rollback + Freeze/Recovery Drill + 7-Day Observation
                     ↓
-v1.6 Fleet Scale Expansion Go / No-Go
+v1.6 Endpoint Controller Closure（Fleet Scale deferred）
 ```
 
 ## 2. v1.4 后代码审计结论
@@ -375,4 +375,4 @@ Phase 9  21～50 / 1～2 Depot Production Re-entry + 7-Day（人工）
 - [ ] 3～5 Windows 10 Accelerated Pilot / 24h 由 Operator 签为 `proven/GO`。
 - [ ] 21～50 Windows 10 / 1～2 Depot Rings + rollback/freeze + 7-Day Evidence 由 Operator签核。
 - [ ] 未完成 Operator GO 时 stable promotion、Production start 和 Ring advancement 继续 fail closed。
-- [ ] v1.6 只在 v1.5 GO 后评估 51～500 / 3～8 Depot Scale Expansion；不自动包含 HA/DR。
+- [ ] 下一版本先完成 v1.6 Endpoint Controller install-to-control闭环；51～500 / 3～8 Depot Scale Expansion顺延至后续版本，且不自动包含HA/DR。

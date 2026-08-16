@@ -455,3 +455,23 @@ class TargetVerificationRow(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     canonical_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+
+
+class ControllerEvidenceRow(Base):
+    __tablename__ = "opsi_controller_evidence"
+
+    client_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+
+
+class ResultAckRow(Base):
+    __tablename__ = "opsi_result_acks"
+    __table_args__ = (UniqueConstraint("request_id", "client_id", name="uq_opsi_result_ack"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    request_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    client_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    token: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

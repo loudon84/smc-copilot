@@ -4,7 +4,9 @@ param(
     [Parameter(Mandatory = $true)][string]$ManagedUserSid,
     [Parameter(Mandatory = $true)][string]$HermesVersion,
     [Parameter(Mandatory = $true)][string]$RequestId,
-    [Parameter(Mandatory = $true)][string]$ClientId
+    [Parameter(Mandatory = $true)][string]$ClientId,
+    [int]$GatewayPort = 8642,
+    [string]$ManagedProfile = "default"
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -32,10 +34,10 @@ $cli = Resolve-SmcHermesCli -Root $Root
 & $cli --version | Out-Null
 try { & $cli config check | Out-Null } catch { throw "hermes config check failed" }
 $gwTask = "SMC-Hermes-Gateway-$ManagedUserSid"
-try { Start-SmcManagedTask -TaskName $gwTask } catch { & $cli gateway start | Out-Null }
+try { Start-SmcManagedTask -TaskName $gwTask } catch { throw "refusing SYSTEM CLI gateway start fallback" }
 $ok = $false
 try {
-    $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8642/health" -UseBasicParsing -TimeoutSec 3
+    $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$GatewayPort/health" -UseBasicParsing -TimeoutSec 3
     $ok = ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300)
 } catch {}
 if (-not $ok) { throw "gateway health failed; restoring previous owner" }

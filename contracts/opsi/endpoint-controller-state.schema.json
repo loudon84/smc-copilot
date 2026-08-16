@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/endpoint-controller-state.schema.json",
+  "title": "smc.opsi.endpoint-controller-state.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "owner", "clientId", "timestamp", "health"],
+  "properties": {
+    "schema": { "const": "smc.opsi.endpoint-controller-state.v2" },
+    "owner": { "type": "string", "maxLength": 32 },
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "timestamp": { "type": "string", "minLength": 20, "maxLength": 40 },
+    "hermes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string" },
+        "profile": { "type": "string" }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "reachable": { "type": "boolean" }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "revision": { "type": "integer", "minimum": 0 },
+        "status": { "enum": ["CURRENT", "OUTDATED", "APPLYING", "FAILED", "UNKNOWN"] }
+      }
+    },
+    "health": { "enum": ["HEALTHY", "WARNING", "CRITICAL", "OFFLINE", "UNKNOWN"] },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "revision": { "type": "string" },
+        "digest": { "type": "string" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string" },
+        "digest": { "type": "string" }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phase": { "type": "string" },
+        "open": { "type": "boolean" }
+      }
+    },
+    "stale": { "type": "boolean" },
+    "commandSucceeded": { "type": ["boolean", "null"] }
+  }
+}

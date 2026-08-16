@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import UTC, datetime
 from typing import Any
 
@@ -57,6 +58,7 @@ async def dispatch_target(
     user_account: str = "",
     config_payload: str = "",
     config_digest: str = "",
+    ack_token: str = "",
 ) -> str:
     await _require_client(rpc, client_id)
     await _require_product(rpc, product_id, hermes_version if operation in SETUP_UPDATE else None)
@@ -78,7 +80,8 @@ async def dispatch_target(
     if config_revision is not None:
         properties.append(_prop(product_id, "config_revision", client_id, str(config_revision)))
     if config_payload:
-        properties.append(_prop(product_id, "config_payload", client_id, config_payload))
+        encoded = base64.urlsafe_b64encode(config_payload.encode("utf-8")).decode("ascii").rstrip("=")
+        properties.append(_prop(product_id, "config_payload", client_id, encoded))
     if config_digest:
         properties.append(_prop(product_id, "config_digest", client_id, config_digest))
     if auto_repair_level is not None:
@@ -87,6 +90,8 @@ async def dispatch_target(
         properties.append(_prop(product_id, "managed_user_sid", client_id, user_sid))
     if user_account:
         properties.append(_prop(product_id, "managed_user_account", client_id, user_account))
+    if ack_token:
+        properties.append(_prop(product_id, "ack_token", client_id, ack_token))
 
     await rpc.call("productPropertyState_updateObjects", properties)
     verified = await rpc.call("productPropertyState_getObjects", {"objectId": client_id, "productId": product_id}, [])
@@ -133,11 +138,16 @@ async def dispatch_queued(
             continue
         config_payload = ""
         config_digest = ""
+        ack_token = ""
         if action.config_revision is not None:
             policy = await repos.policies.get(action.config_revision)
             if policy:
                 config_payload = policy.payload_json
                 config_digest = policy.payload_digest
+        inventory = getattr(repos, "inventory_store", None)
+        getter = getattr(inventory, "get_result_ack", None) if inventory is not None else None
+        if getter and action.operation == Operation.STATUS:
+            ack_token = (await getter(target.request_id, target.client_id)) or ""
         try:
             digest = await dispatch_target(
                 rpc=rpc,
@@ -152,6 +162,7 @@ async def dispatch_queued(
                 user_account=target.user_account,
                 config_payload=config_payload,
                 config_digest=config_digest,
+                ack_token=ack_token,
             )
             target.status = ActionStatus.DISPATCHED
             target.dispatched = True

@@ -16,7 +16,7 @@ def test_control_toml_localboot_and_allowlist():
     assert version is not None
     assert version.group(1).lower() != "latest"
     assert "latest is forbidden" in text.lower() or "exact" in text.lower()
-    for op in ("status", "collect-log", "apply-config", "restart-gateway", "diagnose", "repair"):
+    for op in ("status", "collect-log", "apply-config", "restart-gateway", "diagnose", "repair", "reconcile-controller"):
         assert op in text
 
 

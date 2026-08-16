@@ -2,20 +2,19 @@
 param(
     [int]$GatewayPort = 8642,
     [string]$Root = "",
-    [string]$ManagedUserSid = ""
+    [Parameter(Mandatory = $true)][string]$ManagedUserSid
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
 
 if (-not $Root) { $Root = Get-SmcOpsiRoot }
-if ($ManagedUserSid) {
-    $task = "SMC-Hermes-Gateway-$ManagedUserSid"
-    if (Get-SmcManagedTask -TaskName $task) {
-        Start-SmcManagedTask -TaskName $task
-        exit 0
-    }
+if (-not $ManagedUserSid) {
+    throw "SYSTEM CLI fallback is forbidden; ManagedUserSid required"
 }
-$cli = Resolve-SmcHermesCli -Root $Root
-& $cli gateway restart
-exit $LASTEXITCODE
+$task = "SMC-Hermes-Gateway-$ManagedUserSid"
+if (-not (Get-SmcManagedTask -TaskName $task)) {
+    throw "exact Gateway task missing for SID; refusing SYSTEM CLI fallback"
+}
+Start-SmcManagedTask -TaskName $task
+exit 0

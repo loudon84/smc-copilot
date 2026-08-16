@@ -8,6 +8,11 @@ DefVar $configRevision$
 DefVar $repairLevel$
 DefVar $gatewayPort$
 DefVar $logLines$
+DefVar $managedSid$
+DefVar $managedAccount$
+DefVar $managedProfile$
+DefVar $configDigest$
+DefVar $configPayload$
 DefVar $exitCode$
 
 set $requestId$ = GetProductProperty("request_id", "")
@@ -17,6 +22,11 @@ set $configRevision$ = GetProductProperty("config_revision", "0")
 set $repairLevel$ = GetProductProperty("auto_repair_level", "1")
 set $gatewayPort$ = GetProductProperty("gateway_port", "8642")
 set $logLines$ = GetProductProperty("diagnostic_log_lines", "200")
+set $managedSid$ = GetProductProperty("managed_user_sid", "")
+set $managedAccount$ = GetProductProperty("managed_user_account", "")
+set $managedProfile$ = GetProductProperty("managed_profile", "default")
+set $configDigest$ = GetProductProperty("config_digest", "")
+set $configPayload$ = GetProductProperty("config_payload", "")
 
 if ($requestId$ = "")
 	isFatalError "missing request_id"
@@ -25,8 +35,8 @@ if ($clientId$ = "")
 	isFatalError "missing client_id"
 endif
 
-if ($operation$ = "status") or ($operation$ = "collect-log") or ($operation$ = "apply-config") or ($operation$ = "restart-gateway") or ($operation$ = "diagnose") or ($operation$ = "repair")
-	DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action custom -CustomOperation ""$operation$"" -RequestId ""$requestId$"" -ClientId ""$clientId$"" -ConfigRevision ""$configRevision$"" -AutoRepairLevel ""$repairLevel$"" -GatewayPort ""$gatewayPort$"" -DiagnosticLogLines ""$logLines$"""
+if ($operation$ = "status") or ($operation$ = "collect-log") or ($operation$ = "apply-config") or ($operation$ = "restart-gateway") or ($operation$ = "diagnose") or ($operation$ = "repair") or ($operation$ = "reconcile-controller")
+	DosInTheBackground "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""%ScriptPath%\scripts\Invoke-SmcHermesAgent.ps1"" -Action custom -CustomOperation ""$operation$"" -RequestId ""$requestId$"" -ClientId ""$clientId$"" -ConfigRevision ""$configRevision$"" -AutoRepairLevel ""$repairLevel$"" -GatewayPort ""$gatewayPort$"" -DiagnosticLogLines ""$logLines$"" -ManagedUserSid ""$managedSid$"" -ManagedUserAccount ""$managedAccount$"" -ManagedProfile ""$managedProfile$"" -ConfigDigest ""$configDigest$"" -ConfigPayload ""$configPayload$"""
 	set $exitCode$ = getLastExitCode
 	if ($exitCode$ = "10")
 		comment "USER_CONTEXT_PENDING"

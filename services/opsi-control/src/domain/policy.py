@@ -110,6 +110,7 @@ PRODUCTION_POLICIES = {policy.revision: policy for policy in (CONTROLLED_REENTRY
 V14_GATE_POLICY = ACCELERATED_V14
 V15_LIVE_POLICY = CONTROLLED_REENTRY_V15
 PRODUCTION_REENTRY_GATE = "v1.5-production-reentry"
+CONTROLLER_GATE = "v1.6-endpoint-controller"
 V14_LIVE_GATE = "v1.4-win10-clean-endpoint"
 
 

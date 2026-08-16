@@ -21,13 +21,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from artifact_v2 import (  # noqa: E402
-    MANIFEST_SCHEMA,
     RELEASE_KEY_ID,
     SMOKE_KEY_ID,
-    canonical_manifest_bytes,
     sha256_file,
-    sign_envelope,
     validate_entrypoint,
+)
+from artifact_v3 import (  # noqa: E402
+    MANIFEST_SCHEMA,
+    canonical_manifest_bytes,
+    file_list_from_zip,
+    sign_envelope,
 )
 
 PRODUCT = Path(__file__).resolve().parents[1]
@@ -77,6 +80,7 @@ def _ensure_smoke_artifact(dest: Path, product_version: str, package_version: st
     _write_cli_zip(zip_path, product_version)
     digest = sha256_file(zip_path)
     inner = hashlib_cli(zip_path)
+    files = file_list_from_zip(zip_path)
     manifest = {
         "schema": MANIFEST_SCHEMA,
         "version": product_version,
@@ -86,9 +90,12 @@ def _ensure_smoke_artifact(dest: Path, product_version: str, package_version: st
         "sha256": digest,
         "cliSha256": inner,
         "cliVersion": product_version,
+        "cliVersionCommand": ["--version"],
+        "controllerCompat": "1",
         "packageRevision": package_version,
         "keyId": SMOKE_KEY_ID,
         "bytes": zip_path.stat().st_size,
+        "files": files,
         "createdAt": datetime.now(UTC).isoformat(),
     }
     validate_entrypoint(manifest["entrypoint"])
@@ -105,7 +112,7 @@ def hashlib_cli(zip_path: Path) -> str:
 
 def _collect_files(*, skip_artifacts: bool = False) -> list[Path]:
     files: list[Path] = []
-    for rel in ("OPSI", "CLIENT_DATA", "scripts", "bootstrap", "managed"):
+    for rel in ("OPSI", "CLIENT_DATA", "scripts", "bootstrap", "managed", "controller"):
         root = PRODUCT / rel
         if root.is_dir():
             files.extend([path for path in root.rglob("*") if path.is_file()])
@@ -131,7 +138,7 @@ def _write_archive(archive: Path, product_version: str, package_version: str, ex
         for path in files:
             rel = path.relative_to(PRODUCT)
             parts = rel.parts
-            if parts[0] in {"scripts", "bootstrap", "managed"}:
+            if parts[0] in {"scripts", "bootstrap", "managed", "controller"}:
                 arc = "CLIENT_DATA/" + str(rel).replace("\\", "/")
             else:
                 arc = str(rel).replace("\\", "/")

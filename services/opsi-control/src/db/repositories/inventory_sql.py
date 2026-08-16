@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from db.models import EndpointBindingRow, EndpointInventoryRow
+from db.models import ControllerEvidenceRow, EndpointBindingRow, EndpointInventoryRow, ResultAckRow
 from domain.collector import InventoryStore
 from domain.inventory import EndpointBindingRecord, EndpointInventorySnapshot
 
@@ -201,3 +202,57 @@ class SqlInventoryStore(InventoryStore):
                     )
                     return
                 row.evidence_json = encoded
+
+    async def get_controller_evidence(self, client_id: str) -> dict[str, Any] | None:
+        async with self.factory() as session:
+            row = await session.get(ControllerEvidenceRow, client_id)
+            if row is None:
+                return None
+            return json.loads(row.payload_json)
+
+    async def put_controller_evidence(self, client_id: str, evidence: dict[str, Any]) -> None:
+        async with self.factory() as session:
+            async with session.begin():
+                encoded = json.dumps(evidence)
+                digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+                now = datetime.now(UTC)
+                row = await session.get(ControllerEvidenceRow, client_id)
+                if row is None:
+                    session.add(
+                        ControllerEvidenceRow(
+                            client_id=client_id,
+                            payload_json=encoded,
+                            observed_at=now,
+                            content_digest=digest,
+                        )
+                    )
+                    return
+                row.payload_json = encoded
+                row.observed_at = now
+                row.content_digest = digest
+
+    async def get_result_ack(self, request_id: str, client_id: str) -> str | None:
+        from sqlalchemy import select
+
+        async with self.factory() as session:
+            result = await session.execute(
+                select(ResultAckRow).where(ResultAckRow.request_id == request_id, ResultAckRow.client_id == client_id)
+            )
+            row = result.scalar_one_or_none()
+            return row.token if row else None
+
+    async def put_result_ack(self, request_id: str, client_id: str, token: str) -> None:
+        from sqlalchemy import select
+
+        async with self.factory() as session:
+            async with session.begin():
+                result = await session.execute(
+                    select(ResultAckRow).where(
+                        ResultAckRow.request_id == request_id, ResultAckRow.client_id == client_id
+                    )
+                )
+                row = result.scalar_one_or_none()
+                if row is None:
+                    session.add(ResultAckRow(request_id=request_id, client_id=client_id, token=token))
+                    return
+                row.token = token

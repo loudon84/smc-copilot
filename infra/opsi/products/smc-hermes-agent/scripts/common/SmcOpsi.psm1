@@ -6,6 +6,9 @@ $script:SmcSecretKeyPattern = [regex]'(?i)^(api[_-]?key|secret|token|password|au
 $script:SmcSecretValuePattern = [regex]'(?i)(bearer\s+[A-Za-z0-9._\-]+|https?://[^/\s]+:[^@/\s]+@)'
 
 function Get-SmcOpsiRoot {
+    if ($env:SMC_OPSI_ROOT) {
+        return $env:SMC_OPSI_ROOT
+    }
     if ($env:ProgramData) {
         return (Join-Path $env:ProgramData "SMC\opsi")
     }
@@ -240,18 +243,30 @@ function Test-SmcRelativeEntrypoint {
 function Resolve-SmcHermesCli {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
-        [string]$Entrypoint = "hermes.exe",
+        [string]$Entrypoint = "",
         [string]$ExpectedDigest = ""
     )
+    $slot = ""
+    $activePath = Join-Path $Root "runtime\active.json"
+    if (Test-Path -LiteralPath $activePath) {
+        try {
+            $active = Get-Content -LiteralPath $activePath -Raw | ConvertFrom-Json
+            if ($active.active) { $slot = [string]$active.active }
+            if (-not $Entrypoint -and $active.entrypoint) { $Entrypoint = [string]$active.entrypoint }
+        } catch { $slot = "" }
+    }
+    if (-not $Entrypoint) { $Entrypoint = "hermes.exe" }
     if (-not (Test-SmcRelativeEntrypoint -Entrypoint $Entrypoint)) {
         throw "entrypoint escapes managed root"
     }
-    $current = Join-Path $Root "versions\current"
-    $resolved = Join-Path $current $Entrypoint
+    if (-not $slot) {
+        $slot = Join-Path $Root "versions\current"
+    }
+    $resolved = Join-Path $slot $Entrypoint
     $full = [System.IO.Path]::GetFullPath($resolved)
-    $rootFull = [System.IO.Path]::GetFullPath($current)
+    $rootFull = [System.IO.Path]::GetFullPath($slot)
     if (-not $full.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "entrypoint escapes versions/current"
+        throw "entrypoint escapes managed root"
     }
     if (-not (Test-Path -LiteralPath $full) -or (Get-Item -LiteralPath $full).PSIsContainer) {
         throw "managed CLI missing: $Entrypoint"

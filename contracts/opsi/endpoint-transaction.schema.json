@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/endpoint-transaction.schema.json",
+  "title": "smc.opsi.transaction.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "requestId", "desiredDigest", "operation", "phase"],
+  "properties": {
+    "schema": { "const": "smc.opsi.transaction.v2" },
+    "requestId": { "type": "string", "pattern": "^req_[A-Za-z0-9_-]{8,64}$" },
+    "desiredDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "operation": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "phase": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "previousOwner": { "type": "string" },
+    "previousVersion": { "type": "string" },
+    "checkpoints": { "type": "array", "items": { "type": "string" } },
+    "outputDigest": { "type": "string" },
+    "startedAt": { "type": "string" },
+    "updatedAt": { "type": "string" },
+    "deadline": { "type": "string" },
+    "recovery": { "type": "string" }
+  }
+}

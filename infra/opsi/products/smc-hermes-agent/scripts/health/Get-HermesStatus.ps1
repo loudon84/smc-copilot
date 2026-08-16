@@ -3,21 +3,41 @@ param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$ClientId,
     [int]$GatewayPort = 8642,
-    [string]$RequestId = ""
+    [string]$RequestId = "",
+    [string]$AckToken = "",
+    [string]$ManagedUserSid = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
+$controllerMod = Join-Path $PSScriptRoot "..\..\controller\SmcController.psm1"
+if (Test-Path -LiteralPath $controllerMod) { Import-Module $controllerMod -Force }
+
+if ($AckToken -and $ManagedUserSid -and $RequestId -and (Get-Command Register-SmcResultAck -ErrorAction SilentlyContinue)) {
+    Register-SmcResultAck -Sid $ManagedUserSid -RequestId $RequestId -Token $AckToken
+}
 
 $contDir = Join-Path $Root "continuations"
+$outboxDir = Join-Path $Root "commands"
 if (Test-Path -LiteralPath $contDir) {
     Get-ChildItem -LiteralPath $contDir -Filter "*.json" | ForEach-Object {
         $item = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
         if ([string]$item.clientId -eq "local") { throw "clientId=local forbidden" }
+        if ($item.ackToken) { return }
         if ($item.clientId -and $item.parentRequestId) {
             $digest = ""
             if ($item.contentDigest) { $digest = [string]$item.contentDigest }
             Write-SmcActionResult -RequestId $RequestId -ClientId ([string]$item.clientId) -Status ([string]$item.status) -ParentRequestId ([string]$item.parentRequestId) -ResultKind "continuation" -ContentSha256 $digest | Out-Null
+        }
+    }
+}
+if ($ManagedUserSid) {
+    $sidOutbox = Join-Path $outboxDir "$ManagedUserSid\outbox"
+    if (Test-Path -LiteralPath $sidOutbox) {
+        Get-ChildItem -LiteralPath $sidOutbox -Filter "*.json" | ForEach-Object {
+            $item = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+            if ($item.ackToken) { return }
+            Write-SmcActionResult -RequestId $RequestId -ClientId $ClientId -Status "SUCCEEDED" -ParentRequestId ([string]$item.requestId) -ResultKind "continuation" | Out-Null
         }
     }
 }
@@ -65,21 +85,32 @@ try {
     if ($drive) { $diskFree = [int64]$drive.Free }
 } catch {}
 
+$owner = Get-SmcControlOwner
+$ownershipPath = Join-Path $Root "state\ownership.json"
+if (Test-Path -LiteralPath $ownershipPath) {
+    try {
+        $own = Get-Content -LiteralPath $ownershipPath -Raw | ConvertFrom-Json
+        if ($own.current) { $owner = [string]$own.current }
+    } catch {}
+}
+
 $health = "UNKNOWN"
-if ($reachable -and $cliOk -and $configStatus -ne "FAILED") { $health = "HEALTHY" }
+if ($reachable -and $cliOk -and $configStatus -ne "FAILED" -and $owner -eq "opsi") { $health = "HEALTHY" }
 elseif ($version -and $version -ne "unknown") { $health = "WARNING" }
 else { $health = "OFFLINE" }
 
 $state = [ordered]@{
-    schema    = "smc.hermes.state.v1"
-    owner     = "opsi"
+    schema    = "smc.opsi.endpoint-controller-state.v2"
+    owner     = $owner
     clientId  = $ClientId
     timestamp = [DateTime]::UtcNow.ToString("o")
     hermes    = @{ version = $version; profile = "default" }
     gateway   = @{ port = $GatewayPort; reachable = $reachable }
     config    = @{ revision = $revision; status = $configStatus }
     health    = $health
+    commandSucceeded = $true
 }
+Write-SmcJsonAtomic -Path (Join-Path $Root "observed\endpoint.json") -Object $state
 Write-SmcJsonAtomic -Path (Join-Path $Root "state\hermes.json") -Object $state
 Write-SmcJsonAtomic -Path (Join-Path $Root "state\probes.json") -Object @{
     cli       = $cliOk

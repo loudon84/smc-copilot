@@ -55,25 +55,64 @@ class InventoryService:
 
     async def client_state(self, client_id: str) -> dict:
         await self.get_client(client_id)
-        poc = await self.rpc.call(
-            "productOnClient_getObjects", {"clientId": client_id, "productId": self.product_id}, []
-        )
-        installation = (poc[0].get("installationStatus") if poc else "") or "unknown"
-        health = "UNKNOWN"
-        if installation.lower() == "installed":
-            health = "HEALTHY"
-        elif installation.lower() in {"failed"}:
-            health = "CRITICAL"
-        now = datetime.now(UTC).isoformat()
+        evidence = None
+        if self.store is not None:
+            getter = getattr(self.store, "get_controller_evidence", None)
+            if getter:
+                evidence = await getter(client_id)
+        now = datetime.now(UTC)
+        if not evidence:
+            return {
+                "schema": "smc.opsi.endpoint-controller-state.v2",
+                "owner": "",
+                "clientId": client_id,
+                "timestamp": now.isoformat(),
+                "hermes": {"version": "unknown", "profile": "default"},
+                "gateway": {"port": 8642, "reachable": False},
+                "config": {"revision": 0, "status": "UNKNOWN"},
+                "health": "UNKNOWN",
+                "stale": True,
+                "commandSucceeded": None,
+            }
+        observed = evidence.get("observedAt") or evidence.get("timestamp")
+        stale = False
+        if observed:
+            try:
+                stamp = datetime.fromisoformat(str(observed).replace("Z", "+00:00"))
+                stale = now - stamp > timedelta(hours=24)
+            except ValueError:
+                stale = True
+        health = str(evidence.get("health") or "UNKNOWN")
+        if stale:
+            health = "UNKNOWN"
         return {
-            "schema": "smc.hermes.state.v1",
-            "owner": "opsi",
+            "schema": "smc.opsi.endpoint-controller-state.v2",
+            "owner": str(evidence.get("owner") or ""),
             "clientId": client_id,
-            "timestamp": now,
-            "hermes": {"version": "unknown", "profile": "default"},
-            "gateway": {"port": 8642, "reachable": health == "HEALTHY"},
-            "config": {"revision": 0, "status": "UNKNOWN"},
+            "timestamp": now.isoformat(),
+            "hermes": {
+                "version": evidence.get("runtimeVersion") or evidence.get("runtime_version") or "unknown",
+                "profile": evidence.get("profile") or "default",
+            },
+            "gateway": {
+                "port": int(evidence.get("port") or 8642),
+                "reachable": bool(evidence.get("gatewayReachable") or evidence.get("gateway_reachable")),
+            },
+            "config": {"revision": int(evidence.get("configRevision") or 0), "status": "UNKNOWN"},
             "health": health,
+            "controller": {
+                "revision": evidence.get("controllerRevision") or evidence.get("controller_revision") or "",
+                "digest": evidence.get("controllerDigest") or evidence.get("controller_digest") or "",
+            },
+            "runtime": {
+                "version": evidence.get("runtimeVersion") or evidence.get("runtime_version") or "",
+                "digest": evidence.get("runtimeDigest") or evidence.get("runtime_digest") or "",
+            },
+            "transaction": {
+                "phase": evidence.get("transactionPhase") or evidence.get("transaction_phase") or "",
+                "open": bool(evidence.get("openTransaction")),
+            },
+            "stale": stale,
         }
 
     async def put_binding(self, client_id: str, body, principal) -> dict:
@@ -152,6 +191,29 @@ class InventoryService:
             "contentDigest": snapshot.content_digest,
             "redacted": True,
             "userBindingSource": snapshot.binding_source,
+        }
+
+    async def put_controller_evidence(self, client_id: str, body) -> dict:
+        if self.store is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "inventory store required", status_code=412)
+        await self.get_client(client_id)
+        payload = body.model_dump(by_alias=True, exclude_none=True)
+        payload["observedAt"] = (body.observed_at or datetime.now(UTC)).isoformat()
+        await self.store.put_controller_evidence(client_id, payload)
+        return await self.client_state(client_id)
+
+    async def get_controller(self, client_id: str) -> dict:
+        state = await self.client_state(client_id)
+        controller = state.get("controller") or {}
+        return {
+            "clientId": client_id,
+            "revision": controller.get("revision") or "",
+            "digest": controller.get("digest") or "",
+            "runtimeVersion": (state.get("runtime") or {}).get("version") or "",
+            "health": state.get("health"),
+            "owner": state.get("owner") or "",
+            "stale": bool(state.get("stale")),
+            "redacted": True,
         }
 
 

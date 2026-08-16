@@ -87,8 +87,45 @@ Describe "smc-hermes-agent adapter contracts" {
         $text | Should Match "SMC-Hermes-User-Bootstrap-"
         $text | Should Match "SMC-Hermes-Gateway-"
         $text | Should Match "Register-SmcManagedTask"
+        $text | Should Match "HERMES_HOME"
         $mod = Get-Content (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Raw
         $mod | Should Match "function Register-SmcManagedTask"
         $mod | Should Match "Get-ScheduledTask"
+    }
+
+    It "honors SMC_OPSI_ROOT and installs controller after cache delete" {
+        Import-Module (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Force
+        Import-Module (Join-Path $script:Product "controller\SmcController.psm1") -Force
+        $root = Join-Path $env:TEMP ("smc-ctrl-" + [guid]::NewGuid().ToString("N"))
+        $env:SMC_OPSI_ROOT = $root
+        $src = Join-Path $root "cache"
+        New-Item -ItemType Directory -Force -Path $src | Out-Null
+        Set-Content -LiteralPath (Join-Path $src "Invoke-SmcEndpointController.ps1") -Value "# fixture" -Encoding ascii
+        $installed = Install-SmcControllerBundle -Source $src -Revision "1" -Digest ("ab" * 32)
+        Remove-Item -LiteralPath $src -Recurse -Force
+        Test-Path -LiteralPath (Join-Path $installed "Invoke-SmcEndpointController.ps1") | Should Be $true
+        $journal = Start-SmcJournalV2 -RequestId "req_pester01" -DesiredDigest ("aa" * 32) -Operation "setup" -PreviousOwner "salt" -PreviousVersion "0.21.0"
+        $journal.previousOwner | Should Be "salt"
+        Set-SmcJournalCheckpoint -RequestId "req_pester01" -Phase "runtime_activated"
+        $resumed = Resume-SmcJournalV2 -RequestId "req_pester01"
+        $resumed.phase | Should Be "recovering"
+        Restore-SmcPreviousOwner
+        $blocked = Invoke-SmcTwoPhaseUninstall -Residual
+        $blocked | Should Be "UNINSTALL_BLOCKED"
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item Env:SMC_OPSI_ROOT -ErrorAction SilentlyContinue
+    }
+
+    It "resolves CLI from runtime active pointer" {
+        Import-Module (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Force
+        $root = Join-Path $env:TEMP ("smc-slot-" + [guid]::NewGuid().ToString("N"))
+        $slot = Join-Path $root "runtime\versions\0.22.0-aabbccdd"
+        New-Item -ItemType Directory -Force -Path $slot | Out-Null
+        Set-Content -LiteralPath (Join-Path $slot "hermes.exe") -Value "fixture" -Encoding ascii
+        $active = Join-Path $root "runtime\active.json"
+        @{ active = $slot; entrypoint = "hermes.exe" } | ConvertTo-Json | Set-Content -LiteralPath $active -Encoding ascii
+        $cli = Resolve-SmcHermesCli -Root $root -Entrypoint "hermes.exe"
+        $cli | Should Match "hermes.exe"
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }
 }

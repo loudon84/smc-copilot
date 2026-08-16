@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$RequestId,
     [Parameter(Mandatory = $true)][string]$PayloadDigest,
-    [string]$Phase = "prepare",
+    [string]$Phase = "controller_verified",
     [string]$PreviousVersion = "",
     [string]$TargetVersion = "",
     [string]$PreviousOwner = "",
@@ -12,10 +12,18 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
+$controllerMod = Join-Path $PSScriptRoot "..\..\controller\SmcController.psm1"
+if (Test-Path -LiteralPath $controllerMod) {
+    Import-Module $controllerMod -Force
+    Start-SmcJournalV2 -RequestId $RequestId -DesiredDigest $PayloadDigest -Operation $Phase -PreviousOwner $PreviousOwner -PreviousVersion $PreviousVersion | Out-Null
+    return
+}
 $path = Get-SmcJournalPath
 Write-SmcJsonAtomic -Path $path -Object ([ordered]@{
+        schema          = "smc.opsi.transaction.v2"
         requestId       = $RequestId
         payloadDigest   = $PayloadDigest
+        desiredDigest   = $PayloadDigest
         attempt         = $Attempt
         phase           = $Phase
         previousVersion = $PreviousVersion

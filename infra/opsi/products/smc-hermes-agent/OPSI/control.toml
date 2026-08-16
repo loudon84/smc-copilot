@@ -10,7 +10,7 @@ advice = "Do not install Hermes into systemprofile. Machine layer stages; user c
 priority = 0
 type = "localboot"
 productVersion = "0.22.0"
-packageVersion = "2"
+packageVersion = "3"
 licenseRequired = false
 setupScript = "setup.opsiscript"
 uninstallScript = "uninstall.opsiscript"
@@ -77,7 +77,7 @@ default = ["1"]
 multivalue = false
 editable = true
 description = "Allowlisted custom action. Client-specific only."
-values = ["status", "collect-log", "apply-config", "restart-gateway", "diagnose", "repair"]
+values = ["status", "collect-log", "apply-config", "restart-gateway", "diagnose", "repair", "reconcile-controller"]
 default = ["status"]
 
 [ProductProperty.unicode.request_id]
@@ -113,5 +113,11 @@ default = [""]
 [ProductProperty.unicode.config_payload]
 multivalue = false
 editable = true
-description = "Canonical JSON managed-config keys. Client-specific only."
+description = "Bounded base64url canonical managed-config payload. Client-specific only."
 default = [""]
+
+[ProductProperty.unicode.controller_revision]
+multivalue = false
+editable = true
+description = "Installed Endpoint Controller revision. Independent of hermes_version."
+default = ["1"]

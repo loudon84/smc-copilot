@@ -53,6 +53,7 @@ class Operation(StrEnum):
     RESTART_GATEWAY = "restart-gateway"
     DIAGNOSE = "diagnose"
     REPAIR = "repair"
+    RECONCILE_CONTROLLER = "reconcile-controller"
 
 
 CUSTOM_OPERATIONS = {
@@ -62,6 +63,7 @@ CUSTOM_OPERATIONS = {
     Operation.RESTART_GATEWAY,
     Operation.DIAGNOSE,
     Operation.REPAIR,
+    Operation.RECONCILE_CONTROLLER,
 }
 
 SETUP_UPDATE = {Operation.SETUP, Operation.UPDATE}
@@ -138,6 +140,10 @@ class ActionResultView(CamelModel):
     result_kind: str | None = None
     content_sha256: str | None = None
     trust_level: str | None = None
+    ack_token: str | None = None
+    transaction_digest: str | None = None
+    desired_digest: str | None = None
+    observed_digest: str | None = None
 
 
 class BindingUpsertRequest(CamelModel):
@@ -179,6 +185,39 @@ class InventoryEvidenceUpsertRequest(CamelModel):
         return self
 
 
+class ControllerEvidenceUpsertRequest(CamelModel):
+    schema_: Literal["smc.opsi.endpoint-controller-state.v2"] = Field(
+        default="smc.opsi.endpoint-controller-state.v2", alias="schema"
+    )
+    owner: str = Field(default="", max_length=32)
+    health: HealthStatus = HealthStatus.UNKNOWN
+    controller_revision: str = Field(default="", max_length=64)
+    controller_digest: str = Field(default="", max_length=64)
+    runtime_version: str = Field(default="", max_length=64)
+    runtime_digest: str = Field(default="", max_length=64)
+    transaction_phase: str = Field(default="", max_length=64)
+    gateway_reachable: bool = False
+    observed_at: datetime | None = None
+    actor: str | None = None
+
+    @model_validator(mode="after")
+    def _reject_forged_actor(self) -> ControllerEvidenceUpsertRequest:
+        if self.actor is not None:
+            raise ValueError("actor must not be supplied in the body")
+        return self
+
+
+class ControllerView(CamelModel):
+    client_id: str
+    revision: str = ""
+    digest: str = ""
+    runtime_version: str = ""
+    health: HealthStatus = HealthStatus.UNKNOWN
+    owner: str = ""
+    stale: bool = True
+    redacted: bool = True
+
+
 class ClientView(CamelModel):
     client_id: str
     description: str = ""
@@ -207,14 +246,21 @@ class ConfigStateView(CamelModel):
 
 
 class EndpointStateView(CamelModel):
-    schema_: Literal["smc.hermes.state.v1"] = Field(default="smc.hermes.state.v1", alias="schema")
-    owner: Literal["opsi"] = "opsi"
+    schema_: Literal["smc.opsi.endpoint-controller-state.v2"] = Field(
+        default="smc.opsi.endpoint-controller-state.v2", alias="schema"
+    )
+    owner: str = ""
     client_id: str
     timestamp: datetime
     hermes: HermesStateView = Field(default_factory=HermesStateView)
     gateway: GatewayStateView = Field(default_factory=GatewayStateView)
     config: ConfigStateView = Field(default_factory=ConfigStateView)
     health: HealthStatus = HealthStatus.UNKNOWN
+    controller: dict | None = None
+    runtime: dict | None = None
+    transaction: dict | None = None
+    command_succeeded: bool | None = None
+    stale: bool = False
 
 
 class PolicyApplyRequest(CamelModel):

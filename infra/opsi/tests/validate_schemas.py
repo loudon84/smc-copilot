@@ -19,6 +19,10 @@ def main() -> int:
         "managed-config.schema.json",
         "endpoint-inventory.schema.json",
         "runtime-artifact-manifest.schema.json",
+        "endpoint-controller-manifest.schema.json",
+        "endpoint-controller-state.schema.json",
+        "endpoint-command.schema.json",
+        "endpoint-transaction.schema.json",
     ]
     for name in required:
         path = SCHEMAS / name

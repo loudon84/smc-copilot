@@ -33,6 +33,7 @@ from domain.gates import CRITICAL_CAUSES, GATE_POLICY_VERSION, evaluate_campaign
 from domain.inventory import BaselineKind, load_inventory
 from domain.live_gate import LiveGateEnvelope, verify_live_gate_envelope
 from domain.policy import (
+    CONTROLLER_GATE,
     PRODUCTION_REENTRY_GATE,
     resolve_pilot_policy,
     resolve_production_policy,
@@ -358,7 +359,7 @@ class RolloutService:
         self._match(campaign, expected_revision)
         self._require_role(principal, RolloutRole.RELEASE_OWNER)
         if campaign.mode == CampaignMode.PRODUCTION.value:
-            await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
+            await self._assert_production_mutation_gates()
             await self._assert_not_frozen()
             await self._require_triple_approval(campaign_id, ApprovalKind.START, campaign.revision)
             production_policy = resolve_production_policy(campaign.production_policy_revision or None)
@@ -664,7 +665,7 @@ class RolloutService:
 
     async def promote(self, body: ArtifactPromoteRequest, principal: AuthPrincipal) -> dict[str, str]:
         if body.to_channel == ArtifactChannel.STABLE:
-            await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
+            await self._assert_production_mutation_gates()
             existing = await self.store.get_promotion(body.digest)
             if existing is None or existing.channel != ArtifactChannel.PILOT.value or existing.digest != body.digest:
                 raise OpsiControlError(
@@ -876,6 +877,10 @@ class RolloutService:
         campaign.fencing_token += 1
         await self.store.cas_campaign(campaign, expected)
         await self._event(campaign_id, "gate-engine", "campaign.paused", cause)
+
+    async def _assert_production_mutation_gates(self) -> None:
+        await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
+        await self._assert_live_gate(CONTROLLER_GATE)
 
     async def _assert_live_gate(self, gate_id: str = "v1.1-live") -> None:
         gate = await self.store.get_live_gate(gate_id)
@@ -1428,7 +1433,7 @@ class RolloutService:
     async def approve_ring(
         self, campaign_id: str, ring_index: int, body: ApproveRequest, principal: AuthPrincipal, expected_revision: int
     ) -> RolloutCampaignView:
-        await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
+        await self._assert_production_mutation_gates()
         await self._assert_not_frozen()
         campaign = await self._get(campaign_id)
         self._match(campaign, expected_revision)

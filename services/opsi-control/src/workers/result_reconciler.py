@@ -21,6 +21,7 @@ _MARKER = re.compile(
     r"(?: parent_request_id=(?P<parent_request_id>req_[A-Za-z0-9_-]+))?"
     r"(?: result_kind=(?P<result_kind>[A-Za-z0-9_-]+))?"
     r"(?: content_sha256=(?P<content_sha256>[a-fA-F0-9]{64}))?"
+    r"(?: ack_token=(?P<ack_token>ack_[A-Za-z0-9_-]+))?"
 )
 
 _COMPACT = re.compile(
@@ -207,6 +208,7 @@ async def _close_parent(repos: RepositoryBundle, parent_id: str, client_id: str,
         item.error_code = ""
         item.message = "continuation relayed"
         await repos.targets.put(item)
+        token = f"ack_{marker.get('sha256', '')[:16]}"
         await repos.results.put(
             ResultRecord(
                 request_id=parent_id,
@@ -219,4 +221,10 @@ async def _close_parent(repos: RepositoryBundle, parent_id: str, client_id: str,
                 body_digest=marker.get("content_sha256") or marker["sha256"],
             )
         )
+        inventory = getattr(repos, "inventory", None)
+        if inventory is None:
+            inventory = getattr(repos, "inventory_store", None)
+        put_ack = getattr(inventory, "put_result_ack", None) if inventory is not None else None
+        if put_ack:
+            await put_ack(parent_id, client_id, token)
     await recompute_aggregate(repos, parent_id)

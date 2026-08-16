@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/endpoint-command.schema.json",
+  "title": "smc.opsi.user-command.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "requestId", "clientId", "sid", "desiredDigest", "operation"],
+  "properties": {
+    "schema": { "const": "smc.opsi.user-command.v1" },
+    "requestId": { "type": "string", "pattern": "^req_[A-Za-z0-9_-]{8,64}$" },
+    "clientId": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+    "sid": { "type": "string", "pattern": "^S-1-[0-9-]+$" },
+    "desiredDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "operation": {
+      "enum": [
+        "initialize-user",
+        "apply-config",
+        "start-gateway",
+        "restart-gateway",
+        "repair-l1",
+        "repair-l2",
+        "quiesce-gateway",
+        "verify-health"
+      ]
+    },
+    "deadline": { "type": "string" },
+    "status": { "type": "string" },
+    "observedDigest": { "type": "string" }
+  }
+}

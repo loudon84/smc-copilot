@@ -18,7 +18,7 @@
     "bytes"
   ],
   "properties": {
-    "schema": { "const": "smc.opsi.runtime-artifact.v2" },
+    "schema": { "enum": ["smc.opsi.runtime-artifact.v2", "smc.opsi.runtime-artifact.v3"] },
     "version": { "type": "string", "minLength": 1, "maxLength": 64 },
     "platform": { "enum": ["windows"] },
     "architecture": { "enum": ["amd64"] },
@@ -34,6 +34,24 @@
     "packageRevision": { "type": "string", "minLength": 1, "maxLength": 32 },
     "keyId": { "type": "string", "minLength": 1, "maxLength": 64 },
     "bytes": { "type": "integer", "minimum": 1 },
-    "createdAt": { "type": "string" }
+    "createdAt": { "type": "string" },
+    "cliVersionCommand": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "controllerCompat": { "type": "string", "maxLength": 32 },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "size", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+        }
+      }
+    }
   }
 }

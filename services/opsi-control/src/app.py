@@ -229,7 +229,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if secret_close:
             await secret_close()
 
-    app = FastAPI(title="SMC OPSI Control", version="1.5.0", lifespan=lifespan)
+    app = FastAPI(title="SMC OPSI Control", version="1.6.0", lifespan=lifespan)
     if state is None:
         if cfg.opsi_env == "test":
             state = build_test_state(cfg)

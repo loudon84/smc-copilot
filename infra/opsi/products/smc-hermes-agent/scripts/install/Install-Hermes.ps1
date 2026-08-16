@@ -48,30 +48,24 @@ elseif (-not (Test-Path -LiteralPath $pub)) {
 if ($allowedKeyIds -notcontains $keyId) { throw "untrusted artifact keyId" }
 Assert-SmcArtifactSignature -Artifact $artifact -ManifestPath $manifestPath -SignaturePath $sigPath -PublicKeyPath $pub -ExpectedKeyId $keyId
 
-$stagingDir = Join-Path $env:ProgramData "SMC\opsi\staging\$HermesVersion"
-if (Test-Path -LiteralPath $stagingDir) { Remove-Item -LiteralPath $stagingDir -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
-Copy-Item -LiteralPath $artifact, $manifestPath, $sigPath -Destination $stagingDir -Force
+$controllerMod = Join-Path $layout.ProductRoot "controller\SmcController.psm1"
+if (Test-Path -LiteralPath $controllerMod) { Import-Module $controllerMod -Force }
 
-$current = Join-Path $Root "versions\current"
-$previous = Join-Path $Root "versions\previous"
 $versionJson = Join-Path $Root "state\version.json"
 $previousVersion = ""
 if (Test-Path -LiteralPath $versionJson) {
     try { $previousVersion = [string]((Get-Content -LiteralPath $versionJson -Raw | ConvertFrom-Json).version) } catch {}
 }
-if ($Update -and (Test-Path -LiteralPath $current)) {
-    if (Test-Path -LiteralPath $previous) { Remove-Item -LiteralPath $previous -Recurse -Force }
-    Copy-Item -LiteralPath $current -Destination $previous -Recurse -Force
-}
+
+$stagingDir = Join-Path $Root "staging\$HermesVersion"
+if (Test-Path -LiteralPath $stagingDir) { Remove-Item -LiteralPath $stagingDir -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+Copy-Item -LiteralPath $artifact, $manifestPath, $sigPath -Destination $stagingDir -Force
 
 $extract = Join-Path $stagingDir "payload"
 New-Item -ItemType Directory -Force -Path $extract | Out-Null
 Expand-Archive -LiteralPath (Join-Path $stagingDir (Split-Path $artifact -Leaf)) -DestinationPath $extract -Force
-New-Item -ItemType Directory -Force -Path $current | Out-Null
-Copy-Item -Path (Join-Path $extract "*") -Destination $current -Recurse -Force
-
-if (Test-SmcSystemProfilePath -Path $current) {
+if (Test-SmcSystemProfilePath -Path $extract) {
     throw "refusing systemprofile install path"
 }
 
@@ -79,6 +73,50 @@ $entrypoint = "hermes.exe"
 if ($manifest.entrypoint) { $entrypoint = [string]$manifest.entrypoint }
 $cliDigest = ""
 if ($manifest.cliSha256) { $cliDigest = [string]$manifest.cliSha256 }
+$files = @()
+if ($manifest.files) {
+    foreach ($item in @($manifest.files)) {
+        $files += @{ path = [string]$item.path; size = [string]$item.size; sha256 = [string]$item.sha256 }
+    }
+}
+else {
+    Get-ChildItem -LiteralPath $extract -Recurse -File | ForEach-Object {
+        $rel = $_.FullName.Substring($extract.Length).TrimStart("\")
+        $files += @{
+            path   = $rel.Replace("\", "/")
+            size   = [string]$_.Length
+            sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+    }
+}
+
+$digest = [string]$manifest.sha256
+$slot = $null
+if (Get-Command Install-SmcRuntimeSlot -ErrorAction SilentlyContinue) {
+    $slot = Install-SmcRuntimeSlot -Extract $extract -Version $HermesVersion -Digest $digest -Files $files
+}
+else {
+    $short = $digest.Substring(0, [Math]::Min(12, $digest.Length))
+    $slot = Join-Path $Root "runtime\versions\$HermesVersion-$short"
+    if (Test-Path -LiteralPath $slot) { Remove-Item -LiteralPath $slot -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $slot | Out-Null
+    Copy-Item -Path (Join-Path $extract "*") -Destination $slot -Recurse -Force
+    $activePath = Join-Path $Root "runtime\active.json"
+    $previous = ""
+    if (Test-Path -LiteralPath $activePath) {
+        try { $previous = [string]((Get-Content -LiteralPath $activePath -Raw | ConvertFrom-Json).active) } catch {}
+    }
+    Write-SmcJsonAtomic -Path $activePath -Object @{
+        schema         = "smc.opsi.runtime-active.v1"
+        active         = $slot
+        previous       = $previous
+        version        = $HermesVersion
+        digest         = $digest
+        entrypoint     = $entrypoint
+        updatedAt      = [DateTime]::UtcNow.ToString("o")
+    }
+}
+
 $cli = Resolve-SmcHermesCli -Root $Root -Entrypoint $entrypoint -ExpectedDigest $cliDigest
 $verOut = & $cli --version 2>$null | Select-Object -First 1
 if ("$verOut" -notmatch [regex]::Escape($HermesVersion)) {
@@ -91,6 +129,7 @@ Write-SmcJsonAtomic -Path $versionJson -Object @{
     packageRevision  = [string]$manifest.packageRevision
     artifactDigest   = [string]$manifest.sha256
     entrypoint       = $entrypoint
+    slot             = [string]$slot
     owner            = "pending"
     updatedAt        = [DateTime]::UtcNow.ToString("o")
 }
