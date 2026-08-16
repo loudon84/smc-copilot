@@ -61,4 +61,5 @@ async def test_unavailable():
 
 def test_allowlist_fixed():
     assert "log_read" in ALLOWED_METHODS
-    assert len(ALLOWED_METHODS) == 8
+    assert "configState_getObjects" in ALLOWED_METHODS
+    assert len(ALLOWED_METHODS) == 9

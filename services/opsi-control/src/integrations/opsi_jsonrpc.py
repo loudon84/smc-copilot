@@ -17,6 +17,7 @@ ALLOWED_METHODS = frozenset(
         "productPropertyState_getObjects",
         "productPropertyState_updateObjects",
         "log_read",
+        "configState_getObjects",
     }
 )
 
@@ -65,6 +66,7 @@ class FakeOpsiJsonRpc:
         self._available = True
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
         self.write_timeouts: set[str] = set()
+        self.depot_mapping: dict[str, str] = {host["id"]: "depot.example" for host in self.hosts}
 
     @property
     def available(self) -> bool:
@@ -99,6 +101,18 @@ class FakeOpsiJsonRpc:
                 if filters.get("type"):
                     out = [item for item in out if item.get("type") == filters["type"]]
             return out
+        if method == "configState_getObjects":
+            filters = params[0] if params else {}
+            items = [
+                {"objectId": client_id, "configId": "clientconfig.depot.id", "values": [depot]}
+                for client_id, depot in self.depot_mapping.items()
+            ]
+            if isinstance(filters, dict):
+                if filters.get("objectId"):
+                    items = [item for item in items if item["objectId"] == filters["objectId"]]
+                if filters.get("configId"):
+                    items = [item for item in items if item["configId"] == filters["configId"]]
+            return items
         if method == "productOnDepot_getObjects":
             return list(self.products)
         if method == "productOnClient_getObjects":

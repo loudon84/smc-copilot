@@ -1,6 +1,6 @@
 ---
 name: OPSI v1.2 Pilot Rollout Orchestration
-overview: 在 v1.1 真实 OPSI/Windows 门禁获得 Pilot GO 后，为 10～20 台 OPSI-managed Endpoint 建设不可变目标快照、预检、双人审批、2 台 Canary 与每批最多 5 台的发布编排、自动暂停、三层回滚、可复算 Evidence 和 7 天 Pilot 观察；保持 Work Direct Hermes、Salt/Runtime 隔离，且不扩展到生产全量或多 Depot。
+overview: 在 v1.1 真实 OPSI/Windows 门禁获得 Pilot GO 后，为 3～5 台 OPSI-managed Endpoint 建设不可变目标快照、预检、双人审批、2 台 Canary 与每批最多 3 台的发布编排、自动暂停、三层回滚、可复算 Evidence 和 1 天 Pilot 观察；保持 Work Direct Hermes、Salt/Runtime 隔离，且不扩展到生产全量或多 Depot。
 todos:
   - id: opsi-v12-phase0-live-prerequisite
     content: "Phase 0（人工前置）: 完成 v1.1 Windows 10/11、24h Development Observation、Security/Release Signoff 与 Pilot Go/No-Go；Evidence 未 proven/GO 时禁止后续 Pilot mutation，Cursor 不得自动标记完成"
@@ -9,10 +9,10 @@ todos:
     content: "Phase 1: 将 opsiControlApi 提升至 1.2.0，新增 Campaign/Batch/Target/Approval/Gate/Event/Artifact Promotion 契约、PostgreSQL migration、UoW/outbox、乐观锁和 active-target 唯一约束"
     status: completed
   - id: opsi-v12-phase2-snapshot-preflight
-    content: "Phase 2: 实现 10～20 台 immutable target snapshot、stable batching、owner/inventory/artifact/rollback/user-binding/disk/health/concurrency preflight 与 testing→pilot promotion"
+    content: "Phase 2: 实现 3～5 台 immutable target snapshot、stable batching、owner/inventory/artifact/rollback/user-binding/disk/health/concurrency preflight 与 testing→pilot promotion"
     status: completed
   - id: opsi-v12-phase3-approval-orchestration
-    content: "Phase 3: 实现双人审批、维护窗口、2 台 Canary + 每批最多 5 台、异步 Worker dispatch、per-endpoint serialization、restart recovery 和 OPSI authoritative reconciliation"
+    content: "Phase 3: 实现双人审批、维护窗口、2 台 Canary + 每批最多 3 台、异步 Worker dispatch、per-endpoint serialization、restart recovery 和 OPSI authoritative reconciliation"
     status: completed
   - id: opsi-v12-phase4-gates-rollback
     content: "Phase 4: 实现 policy-versioned gate evaluation、auto pause、重新 preflight 后 resume、abort，以及 target/batch/campaign 逆批次 rollback 与 rollback health/Work verify"
@@ -24,7 +24,7 @@ todos:
     content: "Phase 6: 通过 contracts、OPSI Control、Product、migration、Windows Pester、Work Direct Hermes、OPSI Offline Continuity 与 Salt/Runtime isolation gates，生成 Pilot Runbook/Evidence 模板"
     status: completed
   - id: opsi-v12-phase7-live-pilot
-    content: "Phase 7（人工门禁）: 在真实 OPSI 4.3 对 10～20 台执行 Canary/批次发布、target/batch/campaign rollback drill 和 7-Day Observation，完成 v1.3 Production Rollout Go/No-Go；Cursor 不得自动标记完成"
+    content: "Phase 7（人工门禁）: 在真实 OPSI 4.3 对 3～5 台执行 Canary 4h / 批次 1h 发布、target/batch/campaign rollback drill 和 1-Day Observation，完成 v1.3 Production Rollout Go/No-Go；Cursor 不得自动标记完成"
     status: pending
 isProject: false
 ---
@@ -56,7 +56,7 @@ isProject: false
 - 不向 `services/runtime/**`、`contracts/runtime-api/**` 增加 OPSI 能力。
 - Work 始终 Direct Hermes；不得增加 OPSI Rollout UI、RPC client、credentials 或 `window.opsiApi`。
 - `opsi-control` 只连接 DB、Secret/JWKS provider 和 OPSI Server，不直连 Windows Endpoint/Gateway/Work。
-- 不做超过 20 台、Multi-depot、HA、跨 Provider migration 或 Production auto-rollout。
+- 不做超过 5 台、Multi-depot、HA、跨 Provider migration 或 Production auto-rollout。
 
 ## 2. 当前真值与启动条件
 
@@ -140,9 +140,9 @@ Pydantic source model
 
 ### 5.1 Immutable Target Snapshot
 
-- 输入只允许显式 client ids 或受控 inventory query；最终必须 materialize 为 10～20 个 canonical client ids。
+- 输入只允许显式 client ids 或受控 inventory query；最终必须 materialize 为 3～5 个 canonical client ids。
 - canonicalize、排序并计算 snapshot SHA-256；保存 query provenance 但不在运行期重新展开。
-- Batch 固定切分为 Canary 2 台，其余每批最多 5 台；同一 digest 得到相同分批。
+- Batch 固定切分为 Canary 2 台，其余每批最多 3 台；同一 digest 得到相同分批。
 - group membership 后续变化不影响 Campaign；任何 target/顺序变化创建新 revision/Campaign。
 
 ### 5.2 Preflight Matrix
@@ -184,10 +184,10 @@ Pydantic source model
 
 ### 6.3 Batch Progression
 
-- Canary 固定 2 台并至少观察 24h。
-- 后续每批最多 5 台并至少观察 6h。
+- Canary 固定 2 台并至少观察 4h。
+- 后续每批最多 3 台并至少观察 1h。
 - Batch 全部 Target `HEALTHY`、gate passed 且获得下一批人工批准后才推进。
-- 全部 Batch passed 后进入 7-Day Observation，不自动标记 Campaign `SUCCEEDED`。
+- 全部 Batch passed 后进入 1-Day Observation，不自动标记 Campaign `SUCCEEDED`。
 
 ## 7. Phase 4 — Gates、Pause/Resume 与 Rollback
 
@@ -300,21 +300,21 @@ Work 只做 Direct Hermes、external owner availability、reconnect 和 OPSI Off
 - Pilot target nomination/preflight checklist。
 - Approval/maintenance window/run/pause/resume/abort runbook。
 - target/batch/campaign rollback drill runbook。
-- Canary 24h、batch 6h、final 7-Day Observation 模板。
+- Canary 4h、batch 1h、final 1-Day Observation 模板。
 - P0/P1、Secret leak、Owner conflict、false success、rollback failure 的 NO-GO 规则。
 
 ## 10. Phase 7 — Live Pilot（人工门禁）
 
-在真实 OPSI 4.3 单 Server/Depot、10～20 台 Windows 10/11 Endpoint 执行：
+在真实 OPSI 4.3 单 Server/Depot、3～5 台 Windows 10/11 Endpoint 执行：
 
 1. 固化 Target snapshot、Artifact/config/baseline digest。
 2. 完成 Preflight 与双人/安全审批。
-3. Canary 2 台发布并观察至少 24h。
-4. 后续每批最多 5 台，每批观察至少 6h并审批推进。
+3. Canary 2 台发布并观察至少 4h。
+4. 后续每批最多 3 台，每批观察至少 1h 并审批推进。
 5. 注入失败验证 auto pause/no-new-dispatch。
 6. 分别执行 target、batch、campaign rollback drill。
 7. 验证 OPSI/Control offline 时 Gateway/Work continuity。
-8. 全部 Target 收敛后观察 7 天。
+8. 全部 Target 收敛后观察 1 天。
 9. Release/Endpoint Ops/Security 复核 Evidence，签署 v1.3 Production Rollout Go/No-Go。
 
 硬性 NO-GO：
@@ -335,7 +335,7 @@ Work 只做 Direct Hermes、external owner availability、reconnect 和 OPSI Off
 5. `feat(opsi-control): add rollout observability audit and evidence`
 6. `test(opsi): add pilot failure injection and isolation regressions`
 7. `docs(opsi): add v1.2 pilot runbook and evidence templates`
-8. `test(opsi): archive 10-20 endpoint seven-day pilot evidence`（Operator Evidence PR）
+8. `test(opsi): archive 3-5 endpoint one-day pilot evidence`（Operator Evidence PR）
 
 Contract/Migration PR 先于 producer/consumer；功能 PR 不包含 Live `proven` Evidence。每个工程 PR 应可独立回退，且 Salt/Runtime 隔离 diff 必须为空。
 
@@ -343,7 +343,7 @@ Contract/Migration PR 先于 producer/consumer；功能 PR 不包含 Live `prove
 
 - [ ] Phase 0 v1.1 Live Gate 已由 Operator 签为 `proven/GO`。
 - [ ] `opsiControlApi 1.2.0`、OpenAPI/Schema、migration/compatibility gates 通过。
-- [ ] 10～20 台 immutable snapshot、deterministic batches 与 digest 通过测试。
+- [ ] 3～5 台 immutable snapshot、deterministic batches 与 digest 通过测试。
 - [ ] Preflight 对 unsafe/unknown/unrollbackable Target fail closed。
 - [ ] 双人审批、revision invalidation、maintenance window、RBAC 生效。
 - [ ] Canary/Batch durable orchestration 在 restart/offline/duplicate 场景收敛。
@@ -351,5 +351,5 @@ Contract/Migration PR 先于 producer/consumer；功能 PR 不包含 Live `prove
 - [ ] target/batch/campaign rollback 与 health/Work verify 通过。
 - [ ] Evidence 可复算、默认脱敏、secret canary 与 checksum 通过。
 - [ ] Contracts、Product、Control、Pester、Work 与 isolation 全部通过。
-- [ ] 10～20 台 7-Day Pilot 由 Operator 签为 `proven`。
+- [ ] 3～5 台 1-Day Pilot 由 Operator 签为 `proven`。
 - [ ] v1.3 Production Rollout Go/No-Go 已归档；未获 GO 时不得扩大范围。

@@ -93,7 +93,7 @@ def test_openapi_includes_rollout_paths():
     assert "/api/v1/opsi/rollouts" in paths
     assert "/api/v1/opsi/rollouts/{campaign_id}/start" in paths
     assert "/api/v1/opsi/artifacts/promote" in paths
-    assert app.openapi()["info"]["version"] == "1.2.0"
+    assert app.openapi()["info"]["version"] == "1.3.0"
 
 
 def test_production_rejects_pilot_flag_without_go():
@@ -379,7 +379,7 @@ def test_stable_promotion_rejected(rollout_client, token):
             **REASON,
         },
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 412
 
 
 def test_feature_flag_blocks_start_even_with_go(client, token, state):

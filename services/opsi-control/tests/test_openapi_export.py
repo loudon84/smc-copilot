@@ -56,4 +56,4 @@ def test_openapi_export_stable():
     assert "/api/v1/opsi/policies/apply" in paths
     assert "/api/v1/opsi/diagnostics/{request_id}" in paths
     assert "/api/v1/opsi/rollouts" in paths
-    assert first["info"]["version"] == "1.2.0"
+    assert first["info"]["version"] == "1.3.0"

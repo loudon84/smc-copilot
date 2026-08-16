@@ -7,9 +7,9 @@
   "required": ["gateType", "decision", "reason", "inputDigest", "evaluator"],
   "properties": {
     "gateType": { "type": "string", "minLength": 1, "maxLength": 64 },
-    "decision": { "enum": ["PASS", "PAUSE"] },
+    "decision": { "enum": ["PASS", "PAUSE", "FREEZE"] },
     "reason": { "type": "string", "maxLength": 256 },
     "inputDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
-    "evaluator": { "type": "string", "const": "gate-v1.2.0" }
+    "evaluator": { "type": "string", "enum": ["gate-v1.2.0", "gate-v1.3.0"] }
   }
 }

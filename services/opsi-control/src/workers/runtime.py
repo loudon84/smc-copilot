@@ -44,6 +44,9 @@ class WorkerRuntime:
                 dispatch = getattr(service, "dispatch_once", None)
                 if dispatch:
                     await dispatch(worker_id)
+                reconcile = getattr(service, "reconcile_once", None)
+                if reconcile:
+                    await reconcile(worker_id)
             except Exception:
                 log.exception("rollout tick failed")
             try:

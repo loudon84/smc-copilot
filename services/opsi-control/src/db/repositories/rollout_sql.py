@@ -10,27 +10,37 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.errors import ErrorCode, OpsiControlError
 from db.models import (
     ArtifactPromotionRow,
+    DepotAttestationRow,
+    FleetComplianceRow,
     LiveGateRow,
-    PollCursorRow,
+    ReleaseFreezeRow,
     RolloutApprovalRow,
     RolloutBatchRow,
     RolloutCampaignRow,
+    RolloutDepotRow,
     RolloutEventRow,
     RolloutGateRow,
     RolloutIdempotencyRow,
+    RolloutLeaseRow,
     RolloutOutboxRow,
+    RolloutRingRow,
     RolloutTargetRow,
 )
 from db.repositories.rollout_records import (
     ApprovalRecord,
+    AttestationRecord,
     BatchRecord,
     CampaignRecord,
+    ComplianceSnapshotRecord,
+    DepotLaneRecord,
     EventRecord,
+    FreezeRecord,
     GateRecord,
     IdempotencyRecord,
     LiveGateRecord,
     OutboxRecord,
     PromotionRecord,
+    RingRecord,
     RolloutTargetRecord,
 )
 from schemas.rollout import ACTIVE_CAMPAIGN, TERMINAL_CAMPAIGN
@@ -54,9 +64,13 @@ class SqlRolloutStore:
             row = await session.get(RolloutCampaignRow, campaign_id)
             return _campaign_from_row(row) if row else None
 
-    async def list_campaigns(self) -> list[CampaignRecord]:
+    async def list_campaigns(self, *, cursor: str | None = None, limit: int = 50) -> list[CampaignRecord]:
         async with self.factory() as session:
-            rows = (await session.execute(select(RolloutCampaignRow))).scalars()
+            stmt = select(RolloutCampaignRow).order_by(RolloutCampaignRow.campaign_id)
+            if cursor:
+                stmt = stmt.where(RolloutCampaignRow.campaign_id > cursor)
+            stmt = stmt.limit(max(1, min(limit, 100)))
+            rows = (await session.execute(stmt)).scalars()
             return [_campaign_from_row(row) for row in rows]
 
     async def cas_campaign(self, record: CampaignRecord, expected_revision: int) -> CampaignRecord:
@@ -126,11 +140,20 @@ class SqlRolloutStore:
         except IntegrityError as exc:
             raise OpsiControlError(ErrorCode.CONFLICT, "client already in active campaign", status_code=409) from exc
 
-    async def list_targets(self, campaign_id: str) -> list[RolloutTargetRecord]:
+    async def list_targets(
+        self, campaign_id: str, *, cursor: str | None = None, limit: int | None = None
+    ) -> list[RolloutTargetRecord]:
         async with self.factory() as session:
-            rows = (
-                await session.execute(select(RolloutTargetRow).where(RolloutTargetRow.campaign_id == campaign_id))
-            ).scalars()
+            stmt = (
+                select(RolloutTargetRow)
+                .where(RolloutTargetRow.campaign_id == campaign_id)
+                .order_by(RolloutTargetRow.client_id)
+            )
+            if cursor:
+                stmt = stmt.where(RolloutTargetRow.client_id > cursor)
+            if limit is not None:
+                stmt = stmt.limit(max(1, min(limit, 100)))
+            rows = (await session.execute(stmt)).scalars()
             return [_target_from_row(row) for row in rows]
 
     async def put_target(self, record: RolloutTargetRecord) -> None:
@@ -360,23 +383,24 @@ class SqlRolloutStore:
     async def put_live_gate(self, record: LiveGateRecord) -> None:
         async with self.factory() as session:
             async with session.begin():
-                existing = (await session.execute(select(LiveGateRow))).scalars().first()
+                existing = await session.get(LiveGateRow, record.gate_id)
                 if existing and existing.immutable:
                     raise OpsiControlError(ErrorCode.CONFLICT, "live gate is immutable", status_code=409)
-                session.add(
-                    LiveGateRow(
-                        gate_id=record.gate_id,
-                        decision=record.decision,
-                        evidence_ref=record.evidence_ref,
-                        signed_by=record.signed_by,
-                        immutable=record.immutable,
-                        created_at=record.created_at,
+                if existing is None:
+                    session.add(
+                        LiveGateRow(
+                            gate_id=record.gate_id,
+                            decision=record.decision,
+                            evidence_ref=record.evidence_ref,
+                            signed_by=record.signed_by,
+                            immutable=record.immutable,
+                            created_at=record.created_at,
+                        )
                     )
-                )
 
-    async def get_live_gate(self) -> LiveGateRecord | None:
+    async def get_live_gate(self, gate_id: str = "v1.1-live") -> LiveGateRecord | None:
         async with self.factory() as session:
-            row = (await session.execute(select(LiveGateRow))).scalars().first()
+            row = await session.get(LiveGateRow, gate_id)
             if row is None:
                 return None
             return LiveGateRecord(
@@ -388,28 +412,267 @@ class SqlRolloutStore:
                 created_at=row.created_at,
             )
 
-    async def claim_orchestrator(self, worker_id: str, fencing_token: int) -> bool:
+    async def claim_orchestrator(
+        self, worker_id: str, fencing_token: int, lease_key: str = "rollout-orchestrator"
+    ) -> bool:
         async with self.factory() as session:
             async with session.begin():
-                row = await session.get(PollCursorRow, "rollout-orchestrator", with_for_update=True)
+                row = await session.get(RolloutLeaseRow, lease_key, with_for_update=True)
                 now = datetime.now(UTC)
-                if row and row.lease_until and row.lease_until > now:
-                    owner = (row.cursor or "").split("|", 1)[0]
-                    if owner and owner != worker_id:
-                        return False
-                cursor = f"{worker_id}|{fencing_token}"
+                if row and row.lease_until > now and row.owner and row.owner != worker_id:
+                    return False
                 if row is None:
                     session.add(
-                        PollCursorRow(
-                            name="rollout-orchestrator",
+                        RolloutLeaseRow(
+                            lease_key=lease_key,
+                            owner=worker_id,
                             lease_until=now + timedelta(seconds=30),
-                            cursor=cursor,
+                            fencing_token=fencing_token,
                         )
                     )
                 else:
+                    row.owner = worker_id
                     row.lease_until = now + timedelta(seconds=30)
-                    row.cursor = cursor
+                    row.fencing_token = fencing_token
                 return True
+
+    async def replace_depots(self, campaign_id: str, depots: list[DepotLaneRecord]) -> None:
+        async with self.factory() as session:
+            async with session.begin():
+                await session.execute(delete(RolloutDepotRow).where(RolloutDepotRow.campaign_id == campaign_id))
+                for item in depots:
+                    session.add(
+                        RolloutDepotRow(
+                            campaign_id=item.campaign_id,
+                            depot_id=item.depot_id,
+                            status=item.status,
+                            client_ids_json=json.dumps(item.client_ids),
+                            mapping_digest=item.mapping_digest,
+                            timezone=item.timezone,
+                            attestation_digest=item.attestation_digest,
+                            failure_count=item.failure_count,
+                        )
+                    )
+
+    async def list_depots(self, campaign_id: str) -> list[DepotLaneRecord]:
+        async with self.factory() as session:
+            rows = (
+                await session.execute(select(RolloutDepotRow).where(RolloutDepotRow.campaign_id == campaign_id))
+            ).scalars()
+            return [
+                DepotLaneRecord(
+                    campaign_id=row.campaign_id,
+                    depot_id=row.depot_id,
+                    status=row.status,
+                    client_ids=_ids(row.client_ids_json),
+                    mapping_digest=row.mapping_digest,
+                    timezone=row.timezone,
+                    attestation_digest=row.attestation_digest,
+                    failure_count=row.failure_count,
+                )
+                for row in rows
+            ]
+
+    async def put_depot(self, record: DepotLaneRecord) -> None:
+        existing = [item for item in await self.list_depots(record.campaign_id) if item.depot_id != record.depot_id]
+        existing.append(record)
+        await self.replace_depots(record.campaign_id, existing)
+
+    async def replace_rings(self, campaign_id: str, rings: list[RingRecord]) -> None:
+        async with self.factory() as session:
+            async with session.begin():
+                await session.execute(delete(RolloutRingRow).where(RolloutRingRow.campaign_id == campaign_id))
+                for item in rings:
+                    session.add(
+                        RolloutRingRow(
+                            campaign_id=item.campaign_id,
+                            ring_index=item.ring_index,
+                            status=item.status,
+                            client_ids_json=json.dumps(item.client_ids),
+                            observe_hours=item.observe_hours,
+                            approved=item.approved,
+                            observe_until=item.observe_until,
+                        )
+                    )
+
+    async def list_rings(self, campaign_id: str) -> list[RingRecord]:
+        async with self.factory() as session:
+            rows = (
+                await session.execute(
+                    select(RolloutRingRow)
+                    .where(RolloutRingRow.campaign_id == campaign_id)
+                    .order_by(RolloutRingRow.ring_index)
+                )
+            ).scalars()
+            return [
+                RingRecord(
+                    campaign_id=row.campaign_id,
+                    ring_index=row.ring_index,
+                    status=row.status,
+                    client_ids=_ids(row.client_ids_json),
+                    observe_hours=row.observe_hours,
+                    approved=row.approved,
+                    observe_until=row.observe_until,
+                )
+                for row in rows
+            ]
+
+    async def put_ring(self, record: RingRecord) -> None:
+        existing = [item for item in await self.list_rings(record.campaign_id) if item.ring_index != record.ring_index]
+        existing.append(record)
+        await self.replace_rings(record.campaign_id, existing)
+
+    async def put_attestation(self, record: AttestationRecord) -> None:
+        async with self.factory() as session:
+            async with session.begin():
+                session.add(
+                    DepotAttestationRow(
+                        depot_id=record.depot_id,
+                        product_id=record.product_id,
+                        product_version=record.product_version,
+                        package_version=record.package_version,
+                        artifact_digest=record.artifact_digest,
+                        issuer=record.issuer,
+                        generated_at=record.generated_at,
+                        expires_at=record.expires_at,
+                        signature=record.signature,
+                        evidence_ref=record.evidence_ref,
+                        revoked=record.revoked,
+                    )
+                )
+
+    async def get_attestation(self, depot_id: str, artifact_digest: str) -> AttestationRecord | None:
+        async with self.factory() as session:
+            row = (
+                await session.execute(
+                    select(DepotAttestationRow).where(
+                        DepotAttestationRow.depot_id == depot_id,
+                        DepotAttestationRow.artifact_digest == artifact_digest,
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return None
+            return AttestationRecord(
+                depot_id=row.depot_id,
+                product_id=row.product_id,
+                product_version=row.product_version,
+                package_version=row.package_version,
+                artifact_digest=row.artifact_digest,
+                issuer=row.issuer,
+                generated_at=row.generated_at,
+                expires_at=row.expires_at,
+                signature=row.signature,
+                evidence_ref=row.evidence_ref,
+                revoked=row.revoked,
+            )
+
+    async def list_attestations(self) -> list[AttestationRecord]:
+        async with self.factory() as session:
+            rows = (await session.execute(select(DepotAttestationRow))).scalars()
+            return [
+                AttestationRecord(
+                    depot_id=row.depot_id,
+                    product_id=row.product_id,
+                    product_version=row.product_version,
+                    package_version=row.package_version,
+                    artifact_digest=row.artifact_digest,
+                    issuer=row.issuer,
+                    generated_at=row.generated_at,
+                    expires_at=row.expires_at,
+                    signature=row.signature,
+                    evidence_ref=row.evidence_ref,
+                    revoked=row.revoked,
+                )
+                for row in rows
+            ]
+
+    async def put_freeze(self, record: FreezeRecord) -> None:
+        async with self.factory() as session:
+            async with session.begin():
+                row = await session.get(ReleaseFreezeRow, record.freeze_id)
+                if row is None:
+                    session.add(
+                        ReleaseFreezeRow(
+                            freeze_id=record.freeze_id,
+                            revision=record.revision,
+                            active=record.active,
+                            cause=record.cause,
+                            actor_id=record.actor_id,
+                            cleared_by=record.cleared_by,
+                            created_at=record.created_at,
+                        )
+                    )
+                else:
+                    row.revision = record.revision
+                    row.active = record.active
+                    row.cause = record.cause
+                    row.cleared_by = record.cleared_by
+
+    async def get_active_freeze(self) -> FreezeRecord | None:
+        async with self.factory() as session:
+            row = (
+                (await session.execute(select(ReleaseFreezeRow).where(ReleaseFreezeRow.active.is_(True))))
+                .scalars()
+                .first()
+            )
+            if row is None:
+                return None
+            return FreezeRecord(
+                freeze_id=row.freeze_id,
+                revision=row.revision,
+                active=row.active,
+                cause=row.cause,
+                actor_id=row.actor_id,
+                created_at=row.created_at,
+                cleared_by=row.cleared_by,
+            )
+
+    async def get_freeze(self, freeze_id: str) -> FreezeRecord | None:
+        async with self.factory() as session:
+            row = await session.get(ReleaseFreezeRow, freeze_id)
+            if row is None:
+                return None
+            return FreezeRecord(
+                freeze_id=row.freeze_id,
+                revision=row.revision,
+                active=row.active,
+                cause=row.cause,
+                actor_id=row.actor_id,
+                created_at=row.created_at,
+                cleared_by=row.cleared_by,
+            )
+
+    async def put_compliance(self, record: ComplianceSnapshotRecord) -> None:
+        async with self.factory() as session:
+            async with session.begin():
+                session.add(
+                    FleetComplianceRow(
+                        snapshot_id=record.snapshot_id,
+                        campaign_id=record.campaign_id,
+                        payload_json=record.payload_json,
+                        digest=record.digest,
+                        created_at=record.created_at,
+                    )
+                )
+
+    async def list_compliance(self, *, cursor: str | None = None, limit: int = 50) -> list[ComplianceSnapshotRecord]:
+        async with self.factory() as session:
+            stmt = select(FleetComplianceRow).order_by(FleetComplianceRow.snapshot_id)
+            if cursor:
+                stmt = stmt.where(FleetComplianceRow.snapshot_id > cursor)
+            stmt = stmt.limit(max(1, min(limit, 100)))
+            rows = (await session.execute(stmt)).scalars()
+            return [
+                ComplianceSnapshotRecord(
+                    snapshot_id=row.snapshot_id,
+                    campaign_id=row.campaign_id,
+                    payload_json=row.payload_json,
+                    digest=row.digest,
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
 
     async def unpublished_outbox(self) -> list[OutboxRecord]:
         async with self.factory() as session:
@@ -460,6 +723,9 @@ def _campaign_to_row(record: CampaignRecord) -> RolloutCampaignRow:
         pause_cause=record.pause_cause,
         fencing_token=record.fencing_token,
         payload_json=record.payload_json,
+        mode=record.mode,
+        mapping_digest=record.mapping_digest,
+        freeze_revision=record.freeze_revision,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -489,6 +755,9 @@ def _campaign_from_row(row: RolloutCampaignRow) -> CampaignRecord:
         pause_cause=row.pause_cause,
         fencing_token=row.fencing_token,
         payload_json=row.payload_json,
+        mode=getattr(row, "mode", "pilot"),
+        mapping_digest=getattr(row, "mapping_digest", ""),
+        freeze_revision=getattr(row, "freeze_revision", 0),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -502,6 +771,9 @@ def _apply_campaign(row: RolloutCampaignRow, record: CampaignRecord) -> None:
     row.fencing_token = record.fencing_token
     row.updated_at = record.updated_at
     row.payload_json = record.payload_json
+    row.mode = record.mode
+    row.mapping_digest = record.mapping_digest
+    row.freeze_revision = record.freeze_revision
 
 
 def _batch_to_row(record: BatchRecord) -> RolloutBatchRow:
@@ -513,6 +785,7 @@ def _batch_to_row(record: BatchRecord) -> RolloutBatchRow:
         observe_hours=record.observe_hours,
         approved=record.approved,
         dispatched=record.dispatched,
+        observe_until=record.observe_until,
     )
 
 
@@ -525,6 +798,7 @@ def _batch_from_row(row: RolloutBatchRow) -> BatchRecord:
         observe_hours=row.observe_hours,
         approved=row.approved,
         dispatched=row.dispatched,
+        observe_until=getattr(row, "observe_until", None),
     )
 
 
@@ -543,6 +817,8 @@ def _target_to_row(record: RolloutTargetRecord) -> RolloutTargetRow:
         ineligible_reason=record.ineligible_reason,
         mutated=record.mutated,
         active_slot=record.active_slot,
+        depot_id=record.depot_id,
+        ring_index=record.ring_index,
     )
 
 
@@ -561,6 +837,8 @@ def _target_from_row(row: RolloutTargetRow) -> RolloutTargetRecord:
         ineligible_reason=row.ineligible_reason,
         mutated=row.mutated,
         active_slot=row.active_slot,
+        depot_id=getattr(row, "depot_id", ""),
+        ring_index=getattr(row, "ring_index", 0),
     )
 
 
@@ -575,6 +853,8 @@ def _apply_target(row: RolloutTargetRow, record: RolloutTargetRecord) -> None:
     row.ineligible_reason = record.ineligible_reason
     row.mutated = record.mutated
     row.active_slot = record.active_slot
+    row.depot_id = record.depot_id
+    row.ring_index = record.ring_index
 
 
 def _promotion_from_row(row: ArtifactPromotionRow) -> PromotionRecord:

@@ -41,7 +41,7 @@ Windows Salt Minion / Bootstrap scripts
 - `npm run contracts:check` includes `check_salt_control_drift.py`.
 - Salt Control must not import `services/runtime`. Runtime Endpoint Control retires via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` (ADR-030); Chat/Task contracts unchanged.
 
-## OPSI Control API (v1.2 / ADR-031)
+## OPSI Control API (v1.3 / ADR-031 / ADR-032)
 
 ```text
 OPSI Control FastAPI + Pydantic (services/opsi-control)
@@ -56,7 +56,7 @@ Windows opsiclientd / smc-hermes-agent
 - `npm run contracts:check` includes `check_opsi_control_drift.py`.
 - OPSI Control must not import `services/runtime` or `services/salt-control`.
 - JSON Schemas live in `contracts/opsi/*.schema.json` (`action-*`, `rollout-campaign`, `artifact-promotion`, `evidence-manifest`, `rollout-gate`).
-- v1.2 adds Campaign/Batch/Target/Approval/Gate/Promotion under `/api/v1/opsi/rollouts*` without changing Work or Salt/Runtime contracts.
+- v1.3 adds production mode, Depot/Ring/Attestation/Freeze/Compliance under `/api/v1/opsi` without changing Work or Salt/Runtime contracts. v1.2 payloads without `mode` remain `pilot`.
 
 ## v1.4 readiness / memory / expert-mcp
 

@@ -63,6 +63,8 @@ def build_test_state(settings: Settings | None = None) -> AppState:
             "gatewayHealthy": True,
             "previousVersion": "0.21.0",
             "previousDigest": "ab" * 32,
+            "depotId": "depot.example",
+            "bindingSource": "operator-evidence",
         }
         for host in rpc.hosts
     }
@@ -141,7 +143,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if secret_close:
             await secret_close()
 
-    app = FastAPI(title="SMC OPSI Control", version="1.2.0", lifespan=lifespan)
+    app = FastAPI(title="SMC OPSI Control", version="1.3.0", lifespan=lifespan)
     if state is None:
         if cfg.opsi_env in {"test", "lab"}:
             state = build_test_state(cfg)

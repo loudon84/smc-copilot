@@ -89,12 +89,15 @@ jobs:
               "docs/opsi/evidence/v1.0/STATUS.md",
               "docs/opsi/evidence/v1.1/STATUS.md",
               "docs/opsi/evidence/v1.2/STATUS.md",
+              "docs/opsi/evidence/v1.3/STATUS.md",
           ):
               status = Path(rel).read_text(encoding="utf-8")
               assert "NO-GO" in status
           v11 = Path("docs/opsi/evidence/v1.1/STATUS.md").read_text(encoding="utf-8")
           v12 = Path("docs/opsi/evidence/v1.2/STATUS.md").read_text(encoding="utf-8")
+          v13 = Path("docs/opsi/evidence/v1.3/STATUS.md").read_text(encoding="utf-8")
           assert "not_proven" in v11
           assert "not_proven" in v12
+          assert "not_proven" in v13
           print("ok: live evidence remains not_proven")
           PY

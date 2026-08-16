@@ -6,14 +6,19 @@ from datetime import UTC, datetime, timedelta
 from core.errors import ErrorCode, OpsiControlError
 from db.repositories.rollout_records import (
     ApprovalRecord,
+    AttestationRecord,
     BatchRecord,
     CampaignRecord,
+    ComplianceSnapshotRecord,
+    DepotLaneRecord,
     EventRecord,
+    FreezeRecord,
     GateRecord,
     IdempotencyRecord,
     LiveGateRecord,
     OutboxRecord,
     PromotionRecord,
+    RingRecord,
     RolloutTargetRecord,
 )
 from schemas.rollout import ACTIVE_CAMPAIGN, TERMINAL_CAMPAIGN
@@ -30,7 +35,14 @@ class MemoryRolloutStore:
         self.promotions: dict[str, PromotionRecord] = {}
         self.idempotency: dict[tuple[str, str], IdempotencyRecord] = {}
         self.outbox: list[OutboxRecord] = []
+        self.live_gates: dict[str, LiveGateRecord] = {}
         self.live_gate: LiveGateRecord | None = None
+        self.depots: list[DepotLaneRecord] = []
+        self.rings: list[RingRecord] = []
+        self.attestations: dict[str, AttestationRecord] = {}
+        self.freezes: dict[str, FreezeRecord] = {}
+        self.compliance: list[ComplianceSnapshotRecord] = []
+        self.leases: dict[str, tuple[str, datetime, int]] = {}
         self._seq = 0
         self.lease_owner = ""
         self.lease_until: datetime | None = None
@@ -46,8 +58,11 @@ class MemoryRolloutStore:
     async def get_campaign(self, campaign_id: str) -> CampaignRecord | None:
         return self.campaigns.get(campaign_id)
 
-    async def list_campaigns(self) -> list[CampaignRecord]:
-        return list(self.campaigns.values())
+    async def list_campaigns(self, *, cursor: str | None = None, limit: int = 50) -> list[CampaignRecord]:
+        items = sorted(self.campaigns.values(), key=lambda item: item.campaign_id)
+        if cursor:
+            items = [item for item in items if item.campaign_id > cursor]
+        return items[: max(1, min(limit, 100))]
 
     async def cas_campaign(self, record: CampaignRecord, expected_revision: int) -> CampaignRecord:
         current = self.campaigns.get(record.campaign_id)
@@ -84,8 +99,18 @@ class MemoryRolloutStore:
         self.targets = [item for item in self.targets if item.campaign_id != campaign_id]
         self.targets.extend(targets)
 
-    async def list_targets(self, campaign_id: str) -> list[RolloutTargetRecord]:
-        return [item for item in self.targets if item.campaign_id == campaign_id]
+    async def list_targets(
+        self, campaign_id: str, *, cursor: str | None = None, limit: int | None = None
+    ) -> list[RolloutTargetRecord]:
+        items = sorted(
+            [item for item in self.targets if item.campaign_id == campaign_id],
+            key=lambda item: item.client_id,
+        )
+        if cursor:
+            items = [item for item in items if item.client_id > cursor]
+        if limit is not None:
+            return items[: max(1, min(limit, 100))]
+        return items
 
     async def put_target(self, record: RolloutTargetRecord) -> None:
         self.targets = [
@@ -174,21 +199,99 @@ class MemoryRolloutStore:
         return None
 
     async def put_live_gate(self, record: LiveGateRecord) -> None:
-        if self.live_gate and self.live_gate.immutable:
+        existing = self.live_gates.get(record.gate_id)
+        if existing and existing.immutable:
             raise OpsiControlError(ErrorCode.CONFLICT, "live gate is immutable", status_code=409)
+        self.live_gates[record.gate_id] = record
         self.live_gate = record
 
-    async def get_live_gate(self) -> LiveGateRecord | None:
-        return self.live_gate
+    async def get_live_gate(self, gate_id: str = "v1.1-live") -> LiveGateRecord | None:
+        if gate_id in self.live_gates:
+            return self.live_gates[gate_id]
+        if self.live_gate and self.live_gate.gate_id == gate_id:
+            return self.live_gate
+        return None
 
-    async def claim_orchestrator(self, worker_id: str, fencing_token: int) -> bool:
+    async def claim_orchestrator(
+        self, worker_id: str, fencing_token: int, lease_key: str = "rollout-orchestrator"
+    ) -> bool:
         now = datetime.now(UTC)
-        if self.lease_until and self.lease_until > now and self.lease_owner and self.lease_owner != worker_id:
-            return False
-        self.lease_owner = worker_id
-        self.lease_until = now + timedelta(seconds=30)
-        self.lease_token = fencing_token
+        if lease_key == "rollout-orchestrator":
+            if self.lease_until and self.lease_until > now and self.lease_owner and self.lease_owner != worker_id:
+                return False
+        else:
+            current = self.leases.get(lease_key)
+            if current is not None:
+                owner, until, _token = current
+                if until > now and owner and owner != worker_id:
+                    return False
+        self.leases[lease_key] = (worker_id, now + timedelta(seconds=30), fencing_token)
+        if lease_key == "rollout-orchestrator":
+            self.lease_owner = worker_id
+            self.lease_until = now + timedelta(seconds=30)
+            self.lease_token = fencing_token
         return True
+
+    async def replace_depots(self, campaign_id: str, depots: list[DepotLaneRecord]) -> None:
+        self.depots = [item for item in self.depots if item.campaign_id != campaign_id]
+        self.depots.extend(depots)
+
+    async def list_depots(self, campaign_id: str) -> list[DepotLaneRecord]:
+        return [item for item in self.depots if item.campaign_id == campaign_id]
+
+    async def put_depot(self, record: DepotLaneRecord) -> None:
+        self.depots = [
+            item
+            for item in self.depots
+            if not (item.campaign_id == record.campaign_id and item.depot_id == record.depot_id)
+        ]
+        self.depots.append(record)
+
+    async def replace_rings(self, campaign_id: str, rings: list[RingRecord]) -> None:
+        self.rings = [item for item in self.rings if item.campaign_id != campaign_id]
+        self.rings.extend(rings)
+
+    async def list_rings(self, campaign_id: str) -> list[RingRecord]:
+        return sorted(
+            [item for item in self.rings if item.campaign_id == campaign_id],
+            key=lambda item: item.ring_index,
+        )
+
+    async def put_ring(self, record: RingRecord) -> None:
+        self.rings = [
+            item
+            for item in self.rings
+            if not (item.campaign_id == record.campaign_id and item.ring_index == record.ring_index)
+        ]
+        self.rings.append(record)
+
+    async def put_attestation(self, record: AttestationRecord) -> None:
+        self.attestations[f"{record.depot_id}:{record.artifact_digest}"] = record
+
+    async def get_attestation(self, depot_id: str, artifact_digest: str) -> AttestationRecord | None:
+        return self.attestations.get(f"{depot_id}:{artifact_digest}")
+
+    async def list_attestations(self) -> list[AttestationRecord]:
+        return list(self.attestations.values())
+
+    async def put_freeze(self, record: FreezeRecord) -> None:
+        self.freezes[record.freeze_id] = record
+
+    async def get_active_freeze(self) -> FreezeRecord | None:
+        actives = [item for item in self.freezes.values() if item.active]
+        return actives[-1] if actives else None
+
+    async def get_freeze(self, freeze_id: str) -> FreezeRecord | None:
+        return self.freezes.get(freeze_id)
+
+    async def put_compliance(self, record: ComplianceSnapshotRecord) -> None:
+        self.compliance.append(record)
+
+    async def list_compliance(self, *, cursor: str | None = None, limit: int = 50) -> list[ComplianceSnapshotRecord]:
+        items = sorted(self.compliance, key=lambda item: item.snapshot_id)
+        if cursor:
+            items = [item for item in items if item.snapshot_id > cursor]
+        return items[: max(1, min(limit, 100))]
 
     async def unpublished_outbox(self) -> list[OutboxRecord]:
         return [item for item in self.outbox if not item.published]

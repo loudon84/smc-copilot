@@ -9,6 +9,11 @@ from pydantic import Field, field_validator, model_validator
 from schemas.models import CamelModel
 
 
+class CampaignMode(StrEnum):
+    PILOT = "pilot"
+    PRODUCTION = "production"
+
+
 class CampaignStatus(StrEnum):
     DRAFT = "DRAFT"
     PREFLIGHTING = "PREFLIGHTING"
@@ -46,6 +51,18 @@ class BatchStatus(StrEnum):
     ROLLED_BACK = "ROLLED_BACK"
 
 
+class DepotLaneStatus(StrEnum):
+    UNATTESTED = "UNATTESTED"
+    READY = "READY"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    OBSERVING = "OBSERVING"
+    PASSED = "PASSED"
+    BLOCKED = "BLOCKED"
+    ROLLING_BACK = "ROLLING_BACK"
+    FAILED = "FAILED"
+
+
 class TargetStatus(StrEnum):
     PENDING = "PENDING"
     PREFLIGHT_READY = "PREFLIGHT_READY"
@@ -55,8 +72,12 @@ class TargetStatus(StrEnum):
     VERIFYING = "VERIFYING"
     HEALTHY = "HEALTHY"
     FAILED = "FAILED"
+    ROLLBACK_QUEUED = "ROLLBACK_QUEUED"
+    ROLLBACK_APPLYING = "ROLLBACK_APPLYING"
+    ROLLBACK_VERIFYING = "ROLLBACK_VERIFYING"
     ROLLED_BACK = "ROLLED_BACK"
     ROLLBACK_FAILED = "ROLLBACK_FAILED"
+    UNKNOWN_BLOCKED = "UNKNOWN_BLOCKED"
     SKIPPED = "SKIPPED"
 
 
@@ -71,20 +92,27 @@ class RolloutRole(StrEnum):
     RELEASE_OWNER = "release_owner"
     ENDPOINT_OPS = "endpoint_ops"
     SECURITY_OWNER = "security_owner"
+    SITE_OWNER = "site_owner"
+    INCIDENT_COMMANDER = "incident_commander"
 
 
 class RollbackScope(StrEnum):
     TARGET = "target"
     BATCH = "batch"
+    DEPOT = "depot"
+    RING = "ring"
     CAMPAIGN = "campaign"
 
 
 class ApprovalKind(StrEnum):
     START = "start"
     NEXT_BATCH = "next_batch"
+    NEXT_RING = "next_ring"
     RESUME = "resume"
     ROLLBACK_EXPAND = "rollback_expand"
     PROMOTE = "promote"
+    FREEZE_CLEAR = "freeze_clear"
+    DEPOT_RESUME = "depot_resume"
 
 
 class CommandBase(CamelModel):
@@ -104,7 +132,8 @@ class RolloutCreateRequest(CommandBase):
     schema_: Literal["smc.opsi.rollout-campaign.v1"] = Field(default="smc.opsi.rollout-campaign.v1", alias="schema")
     campaign_id: str = Field(min_length=12, max_length=80, pattern=r"^cmp_[A-Za-z0-9_-]{8,64}$")
     name: str = Field(min_length=3, max_length=128)
-    client_ids: list[str] = Field(min_length=2, max_length=20)
+    mode: CampaignMode = CampaignMode.PILOT
+    client_ids: list[str] = Field(min_length=2, max_length=500)
     product_id: str = "smc-hermes-agent"
     product_version: str = Field(min_length=1, max_length=64)
     package_version: str = Field(min_length=1, max_length=32)
@@ -123,6 +152,15 @@ class RolloutCreateRequest(CommandBase):
         if len(cleaned) != len(set(cleaned)):
             raise ValueError("client_ids must be unique")
         return cleaned
+
+    @model_validator(mode="after")
+    def _mode_bounds(self) -> RolloutCreateRequest:
+        count = len(self.client_ids)
+        if self.mode == CampaignMode.PILOT and count > 20:
+            raise ValueError("pilot supports at most 20 endpoints")
+        if self.mode == CampaignMode.PRODUCTION and (count < 21 or count > 500):
+            raise ValueError("production requires 21-500 endpoints")
+        return self
 
 
 class PreflightRequest(CommandBase):
@@ -152,7 +190,9 @@ class AbortRequest(CommandBase):
 class RollbackRequest(CommandBase):
     scope: RollbackScope
     client_id: str | None = None
-    batch_index: int | None = Field(default=None, ge=0, le=20)
+    batch_index: int | None = Field(default=None, ge=0, le=500)
+    depot_id: str | None = None
+    ring_index: int | None = Field(default=None, ge=0, le=4)
 
 
 class ArtifactPromoteRequest(CommandBase):
@@ -165,6 +205,32 @@ class ArtifactPromoteRequest(CommandBase):
     evidence_ref: str = Field(min_length=3, max_length=256)
 
 
+class DepotAttestationRequest(CommandBase):
+    depot_id: str = Field(min_length=3, max_length=128)
+    product_id: str = "smc-hermes-agent"
+    product_version: str
+    package_version: str
+    artifact_digest: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+    issuer: str = Field(min_length=3, max_length=64)
+    generated_at: datetime
+    expires_at: datetime
+    signature: str = Field(min_length=32, max_length=4096)
+    evidence_ref: str = Field(min_length=3, max_length=256)
+
+
+class ReleaseFreezeRequest(CommandBase):
+    freeze_id: str = Field(min_length=8, max_length=80, pattern=r"^frz_[A-Za-z0-9_-]{4,64}$")
+    cause: str = Field(min_length=3, max_length=64)
+
+
+class FreezeClearRequest(CommandBase):
+    root_cause_closed: bool = True
+
+
+class DepotPauseRequest(CommandBase):
+    cause: str = Field(min_length=3, max_length=64)
+
+
 class PreflightCheckView(CamelModel):
     code: str
     passed: bool
@@ -175,6 +241,8 @@ class RolloutTargetView(CamelModel):
     client_id: str
     status: TargetStatus
     batch_index: int
+    depot_id: str | None = None
+    ring_index: int | None = None
     preflight: list[PreflightCheckView] = Field(default_factory=list)
     action_id: str | None = None
     baseline_version: str | None = None
@@ -184,6 +252,23 @@ class RolloutTargetView(CamelModel):
 
 class RolloutBatchView(CamelModel):
     batch_index: int
+    status: BatchStatus
+    client_ids: list[str]
+    observe_hours: int
+    approved: bool = False
+    observe_until: datetime | None = None
+
+
+class DepotLaneView(CamelModel):
+    depot_id: str
+    status: DepotLaneStatus
+    client_count: int
+    mapping_digest: str
+    timezone: str = "UTC"
+
+
+class RingView(CamelModel):
+    ring_index: int
     status: BatchStatus
     client_ids: list[str]
     observe_hours: int
@@ -203,8 +288,10 @@ class RolloutCampaignView(CamelModel):
     campaign_id: str
     name: str
     status: CampaignStatus
+    mode: CampaignMode = CampaignMode.PILOT
     revision: int
     snapshot_digest: str
+    mapping_digest: str | None = None
     client_count: int
     product_version: str
     artifact_digest: str
@@ -215,7 +302,9 @@ class RolloutCampaignView(CamelModel):
 
 
 class EvidenceManifestView(CamelModel):
-    schema_: Literal["smc.opsi.evidence-manifest.v1"] = Field(default="smc.opsi.evidence-manifest.v1", alias="schema")
+    schema_: Literal["smc.opsi.evidence-manifest.v1", "smc.opsi.evidence-manifest.v2"] = Field(
+        default="smc.opsi.evidence-manifest.v2", alias="schema"
+    )
     campaign_id: str
     snapshot_digest: str
     artifact_digest: str
@@ -227,6 +316,8 @@ class EvidenceManifestView(CamelModel):
     timestamp: datetime
     events: int
     redacted: bool = True
+    mapping_digest: str | None = None
+    freeze_revision: int = 0
 
 
 class MetricsView(CamelModel):
@@ -239,3 +330,26 @@ class MetricsView(CamelModel):
     rollback_success: int
     rollback_failure: int
     unpublished_outbox: int = 0
+    freeze_active: bool = False
+
+
+class CursorPage(CamelModel):
+    items: list[dict]
+    next_cursor: str | None = None
+
+
+class FreezeView(CamelModel):
+    freeze_id: str
+    revision: int
+    active: bool
+    cause: str
+    actor_id: str
+
+
+class ComplianceView(CamelModel):
+    client_id: str
+    depot_id: str
+    status: str
+    observed_at: datetime
+    digest: str
+    critical: bool = False

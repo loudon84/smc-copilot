@@ -145,6 +145,9 @@ class RolloutCampaignRow(Base):
     pause_cause: Mapped[str] = mapped_column(String(64), default="")
     fencing_token: Mapped[int] = mapped_column(Integer, default=0)
     payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    mode: Mapped[str] = mapped_column(String(16), default="pilot")
+    mapping_digest: Mapped[str] = mapped_column(String(64), default="")
+    freeze_revision: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
@@ -163,6 +166,7 @@ class RolloutBatchRow(Base):
     observe_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     dispatched: Mapped[bool] = mapped_column(Boolean, default=False)
+    observe_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RolloutTargetRow(Base):
@@ -188,6 +192,8 @@ class RolloutTargetRow(Base):
     ineligible_reason: Mapped[str] = mapped_column(String(256), default="")
     mutated: Mapped[bool] = mapped_column(Boolean, default=False)
     active_slot: Mapped[str] = mapped_column(String(96), default="active")
+    depot_id: Mapped[str] = mapped_column(String(128), default="")
+    ring_index: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class RolloutApprovalRow(Base):
@@ -273,3 +279,80 @@ class LiveGateRow(Base):
     signed_by: Mapped[str] = mapped_column(String(128), nullable=False)
     immutable: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutDepotRow(Base):
+    __tablename__ = "opsi_rollout_depots"
+    __table_args__ = (UniqueConstraint("campaign_id", "depot_id", name="uq_opsi_rollout_depot"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    depot_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    client_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
+    mapping_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    attestation_digest: Mapped[str] = mapped_column(String(64), default="")
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class RolloutRingRow(Base):
+    __tablename__ = "opsi_rollout_rings"
+    __table_args__ = (UniqueConstraint("campaign_id", "ring_index", name="uq_opsi_rollout_ring"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    ring_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    client_ids_json: Mapped[str] = mapped_column(Text, nullable=False)
+    observe_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    observe_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DepotAttestationRow(Base):
+    __tablename__ = "opsi_depot_attestations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    depot_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    product_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    product_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    package_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    artifact_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    issuer: Mapped[str] = mapped_column(String(64), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    signature: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ReleaseFreezeRow(Base):
+    __tablename__ = "opsi_release_freezes"
+
+    freeze_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    cause: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    cleared_by: Mapped[str] = mapped_column(String(128), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class FleetComplianceRow(Base):
+    __tablename__ = "opsi_fleet_compliance"
+
+    snapshot_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class RolloutLeaseRow(Base):
+    __tablename__ = "opsi_rollout_leases"
+
+    lease_key: Mapped[str] = mapped_column(String(160), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(128), nullable=False)
+    lease_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    fencing_token: Mapped[int] = mapped_column(Integer, default=0)

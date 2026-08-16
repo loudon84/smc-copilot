@@ -7,31 +7,39 @@ CANARY_SIZE = 2
 FOLLOW_ON_SIZE = 5
 PILOT_MIN = 10
 PILOT_MAX = 20
+PRODUCTION_MIN = 21
+PRODUCTION_MAX = 500
+PRODUCTION_DEPOT_MAX = 8
 MAX_DISPATCH_PER_TICK = 5
 CANARY_OBSERVE_HOURS = 24
 BATCH_OBSERVE_HOURS = 6
 FINAL_OBSERVE_HOURS = 24 * 7
-GATE_POLICY_VERSION = "gate-v1.2.0"
+GATE_POLICY_VERSION = "gate-v1.3.0"
+GATE_POLICY_VERSION_V12 = "gate-v1.2.0"
 PREFLIGHT_TTL_SECONDS = 3600
 
 
-def canonicalize_client_ids(client_ids: list[str]) -> list[str]:
+def canonicalize_client_ids(client_ids: list[str], *, mode: str = "pilot") -> list[str]:
     unique = sorted({item.strip() for item in client_ids if item.strip()})
     if not unique:
         raise ValueError("client_ids required")
+    if mode == "production":
+        if len(unique) < PRODUCTION_MIN or len(unique) > PRODUCTION_MAX:
+            raise ValueError("production requires 21-500 endpoints")
+        return unique
     if len(unique) > PILOT_MAX:
         raise ValueError("pilot supports at most 20 endpoints")
     return unique
 
 
-def snapshot_digest(client_ids: list[str]) -> str:
-    canonical = canonicalize_client_ids(client_ids)
+def snapshot_digest(client_ids: list[str], *, mode: str = "pilot") -> str:
+    canonical = canonicalize_client_ids(client_ids, mode=mode)
     encoded = json.dumps(canonical, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
-def split_batches(client_ids: list[str]) -> list[tuple[int, list[str], int]]:
-    canonical = canonicalize_client_ids(client_ids)
+def split_batches(client_ids: list[str], *, mode: str = "pilot") -> list[tuple[int, list[str], int]]:
+    canonical = canonicalize_client_ids(client_ids, mode=mode)
     if len(canonical) < CANARY_SIZE:
         raise ValueError("canary requires at least 2 endpoints")
     batches: list[tuple[int, list[str], int]] = [(0, canonical[:CANARY_SIZE], CANARY_OBSERVE_HOURS)]

@@ -29,9 +29,10 @@
     "clientIds": {
       "type": "array",
       "minItems": 2,
-      "maxItems": 20,
+      "maxItems": 500,
       "items": { "type": "string", "minLength": 1, "maxLength": 128 }
     },
+    "mode": { "enum": ["pilot", "production"], "default": "pilot" },
     "productId": { "type": "string", "default": "smc-hermes-agent" },
     "productVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
     "packageVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
