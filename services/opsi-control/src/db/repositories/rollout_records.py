@@ -34,6 +34,8 @@ class CampaignRecord:
     mode: str = "pilot"
     mapping_digest: str = ""
     freeze_revision: int = 0
+    pilot_policy_revision: str = "accelerated-v1.4"
+    pilot_policy_digest: str = ""
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
     payload_json: str = "{}"

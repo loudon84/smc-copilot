@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 PRODUCT = Path(__file__).resolve().parents[1] / "products" / "smc-hermes-agent"
@@ -51,8 +52,6 @@ def test_property_isolation_model():
 
 
 def test_smoke_package_is_not_opsi_suffix(tmp_path):
-    from importlib.util import module_from_spec, spec_from_file_location
-
     spec = spec_from_file_location("makepackage", PRODUCT / "packaging" / "makepackage.py")
     assert spec and spec.loader
     module = module_from_spec(spec)
@@ -61,3 +60,7 @@ def test_smoke_package_is_not_opsi_suffix(tmp_path):
     assert archive.suffixes[-2:] == [".smoke", ".zip"] or archive.name.endswith(".smoke.zip")
     assert not archive.name.endswith(".opsi")
     hashlib.sha256(archive.read_bytes()).hexdigest()
+    source_pub = PRODUCT / "CLIENT_DATA" / "keys" / "release-public-key.pem"
+    if source_pub.exists():
+        after = source_pub.read_bytes()
+        assert after

@@ -25,13 +25,15 @@ from db.repositories.rollout_records import (
     RolloutTargetRecord,
 )
 from domain.attestation import DepotArtifactAttestation, attestation_valid
+from domain.collector import InventoryStore, MemoryInventoryStore
 from domain.compliance import classify
 from domain.gates import CRITICAL_CAUSES, GATE_POLICY_VERSION, evaluate_campaign_gates, gate_input_digest
-from domain.inventory import load_inventory
+from domain.inventory import BaselineKind, load_inventory
+from domain.policy import PRODUCTION_REENTRY_GATE, resolve_pilot_policy, satisfies_v14_gate
 from domain.preflight import evaluate_target, preflight_expired
 from domain.rate import CAMPAIGN_BUDGET, DEPOT_BUDGET, GLOBAL_BUDGET, fair_depot_order, strictest
 from domain.rings import mapping_digest, split_rings
-from domain.snapshot import MAX_DISPATCH_PER_TICK, PILOT_MIN, canonicalize_client_ids, snapshot_digest, split_batches
+from domain.snapshot import MAX_DISPATCH_PER_TICK, canonicalize_client_ids, snapshot_digest, split_batches
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import ActionCreateRequest, ActionStatus, Operation, TargetRef, UserBinding
 from schemas.rollout import (
@@ -80,11 +82,13 @@ class RolloutService:
         settings: Settings,
         actions: ActionService,
         facts: dict[str, dict[str, Any]] | None = None,
+        inventory: InventoryStore | None = None,
     ) -> None:
         self.store = store
         self.rpc = rpc
         self.settings = settings
         self.actions = actions
+        self.inventory = inventory or MemoryInventoryStore()
         self.facts = facts if facts is not None else {}
         self.issuer_allowlist = {"opsi-lab-signer", "opsi-release-signer"}
         self.revoked_issuers: set[str] = set()
@@ -100,13 +104,14 @@ class RolloutService:
             return replay
         if await self.store.get_campaign(body.campaign_id):
             raise OpsiControlError(ErrorCode.CONFLICT, "campaign exists", status_code=409)
-        client_ids = canonicalize_client_ids(body.client_ids, mode=body.mode.value)
+        policy = resolve_pilot_policy(body.pilot_policy_revision) if body.mode.value == "pilot" else None
+        client_ids = canonicalize_client_ids(body.client_ids, mode=body.mode.value, policy=policy)
         active = await self.store.active_client_ids()
         overlap = [item for item in client_ids if item in active]
         if overlap:
             raise OpsiControlError(ErrorCode.CONFLICT, "client already in active campaign", status_code=409)
         mapping = await self._client_depot_mapping(client_ids)
-        digest = snapshot_digest(client_ids, mode=body.mode.value)
+        digest = snapshot_digest(client_ids, mode=body.mode.value, policy=policy)
         mapped = mapping_digest(mapping) if mapping else ""
         now = datetime.now(UTC)
         record = CampaignRecord(
@@ -131,6 +136,9 @@ class RolloutService:
             window_end=body.window_end,
             mode=body.mode.value,
             mapping_digest=mapped,
+            freeze_revision=0,
+            pilot_policy_revision=policy.revision if policy else "",
+            pilot_policy_digest=policy.digest() if policy else "",
             created_at=now,
             updated_at=now,
         )
@@ -189,7 +197,7 @@ class RolloutService:
                 ],
             )
         else:
-            for index, ids, hours in split_batches(client_ids, mode=body.mode.value):
+            for index, ids, hours in split_batches(client_ids, mode=body.mode.value, policy=policy):
                 batches.append(
                     BatchRecord(
                         campaign_id=body.campaign_id,
@@ -241,19 +249,23 @@ class RolloutService:
                 product_id=campaign.product_id,
                 product_version=campaign.product_version,
                 artifact_digest=campaign.artifact_digest,
-                facts=self.facts,
+                inventory=self.inventory,
                 active_clients=active,
                 promotion_ok=promo_ok,
                 promotion_channel=channel or "missing",
                 required_channel=required_channel,
+                evidence_flags=self.facts.get(target.client_id, {}),
             )
             target.preflight_json = json.dumps(checks)
             target.preflight_at = datetime.now(UTC)
             target.baseline_version = baseline_version
             target.baseline_digest = baseline_digest
-            snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, facts=self.facts)
+            snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, store=self.inventory)
             target.baseline_owner = snapshot.owner if snapshot else ""
-            if reason or target.baseline_owner != "opsi":
+            conflict = bool(snapshot and snapshot.baseline_kind == BaselineKind.CONFLICT.value)
+            absent_ok = bool(snapshot and snapshot.baseline_kind == BaselineKind.ABSENT.value)
+            installed_owner_ok = target.baseline_owner == "opsi" or absent_ok
+            if reason or conflict or not installed_owner_ok:
                 target.status = TargetStatus.INELIGIBLE.value
                 target.ineligible_reason = reason or "owner_conflict"
                 ineligible = True
@@ -308,7 +320,7 @@ class RolloutService:
         self._match(campaign, expected_revision)
         self._require_role(principal, RolloutRole.RELEASE_OWNER)
         if campaign.mode == CampaignMode.PRODUCTION.value:
-            await self._assert_live_gate("v1.2-production")
+            await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
             await self._assert_not_frozen()
             await self._require_triple_approval(campaign_id, ApprovalKind.START, campaign.revision)
             if not await self._depots_attested(campaign):
@@ -319,9 +331,10 @@ class RolloutService:
                 raise OpsiControlError(
                     ErrorCode.PRECONDITION_FAILED, "pilot start feature flag disabled", status_code=412
                 )
-            if self.settings.opsi_env == "production" and len(campaign.client_ids) < PILOT_MIN:
+            policy = resolve_pilot_policy(campaign.pilot_policy_revision or "accelerated-v1.4")
+            if not satisfies_v14_gate(policy) and self.settings.opsi_env != "test":
                 raise OpsiControlError(
-                    ErrorCode.VALIDATION_ERROR, "production pilot requires 10-20 endpoints", status_code=400
+                    ErrorCode.PRECONDITION_FAILED, "v1.4 gate requires accelerated-v1.4 policy", status_code=412
                 )
             await self._require_dual_approval(campaign_id, ApprovalKind.START, campaign.revision, campaign.creator_id)
         if campaign.status != CampaignStatus.AWAITING_APPROVAL.value:
@@ -434,7 +447,7 @@ class RolloutService:
         campaign.status = CampaignStatus.ROLLING_BACK.value
         await self.store.cas_campaign(campaign, expected_revision)
         for target in selected:
-            snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, facts=self.facts)
+            snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, store=self.inventory)
             if snapshot is None or not target.baseline_version or len(target.baseline_digest) != 64:
                 target.status = TargetStatus.ROLLBACK_FAILED.value
                 await self.store.put_target(target)
@@ -547,7 +560,7 @@ class RolloutService:
                             campaign.campaign_id, "canary_failure" if ready.batch_index == 0 else "injected_failure"
                         )
                         return handled + 1
-                    snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, facts=self.facts)
+                    snapshot = await load_inventory(rpc=self.rpc, client_id=target.client_id, store=self.inventory)
                     if snapshot is None:
                         target.status = TargetStatus.INELIGIBLE.value
                         target.ineligible_reason = "authoritative_inventory"
@@ -605,11 +618,7 @@ class RolloutService:
 
     async def promote(self, body: ArtifactPromoteRequest, principal: AuthPrincipal) -> dict[str, str]:
         if body.to_channel == ArtifactChannel.STABLE:
-            gate = await self.store.get_live_gate("v1.2-production")
-            if gate is None or gate.decision != "GO":
-                raise OpsiControlError(
-                    ErrorCode.PRECONDITION_FAILED, "stable promotion requires v1.2 proven GO", status_code=412
-                )
+            await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
             existing = await self.store.get_promotion(body.digest)
             if existing is None or existing.channel != ArtifactChannel.PILOT.value or existing.digest != body.digest:
                 raise OpsiControlError(
@@ -872,8 +881,8 @@ class RolloutService:
     async def _client_depot_mapping(self, client_ids: list[str]) -> dict[str, str]:
         mapping: dict[str, str] = {}
         for client_id in client_ids:
-            snapshot = await load_inventory(rpc=self.rpc, client_id=client_id, facts=self.facts)
-            depot_id = snapshot.depot_id if snapshot else str(self.facts.get(client_id, {}).get("depotId") or "")
+            snapshot = await load_inventory(rpc=self.rpc, client_id=client_id, store=self.inventory)
+            depot_id = snapshot.depot_id if snapshot else ""
             if depot_id:
                 mapping[client_id] = depot_id
         return mapping
@@ -1089,6 +1098,7 @@ class RolloutService:
     async def approve_ring(
         self, campaign_id: str, ring_index: int, body: ApproveRequest, principal: AuthPrincipal, expected_revision: int
     ) -> RolloutCampaignView:
+        await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
         body.kind = ApprovalKind.NEXT_RING
         await self.approve(campaign_id, body, principal, expected_revision)
         campaign = await self._get(campaign_id)

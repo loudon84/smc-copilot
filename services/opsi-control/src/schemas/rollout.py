@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from domain.policy import resolve_pilot_policy
 from schemas.models import CamelModel
 
 
@@ -142,6 +143,7 @@ class RolloutCreateRequest(CommandBase):
     config_revision: int = Field(ge=1, le=1_000_000)
     gate_policy_revision: int = Field(default=1, ge=1)
     evidence_policy_revision: int = Field(default=1, ge=1)
+    pilot_policy_revision: str = "accelerated-v1.4"
     window_start: datetime | None = None
     window_end: datetime | None = None
 
@@ -156,10 +158,14 @@ class RolloutCreateRequest(CommandBase):
     @model_validator(mode="after")
     def _mode_bounds(self) -> RolloutCreateRequest:
         count = len(self.client_ids)
-        if self.mode == CampaignMode.PILOT and count > 20:
-            raise ValueError("pilot supports at most 20 endpoints")
         if self.mode == CampaignMode.PRODUCTION and (count < 21 or count > 500):
             raise ValueError("production requires 21-500 endpoints")
+        if self.mode == CampaignMode.PILOT:
+            policy = resolve_pilot_policy(self.pilot_policy_revision)
+            if count < policy.min_targets or count > policy.max_targets:
+                raise ValueError(
+                    f"pilot policy {policy.revision} requires {policy.min_targets}-{policy.max_targets} endpoints"
+                )
         return self
 
 

@@ -12,7 +12,10 @@ def test_health(client):
 def test_ready_lab(client):
     resp = client.get("/ready")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ready"
+    body = resp.json()
+    assert body["status"] == "ready"
+    assert body["rpcBackend"] == "fake"
+    assert body["persistence"] == "memory"
 
 
 def test_clients_require_auth(client):

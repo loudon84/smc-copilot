@@ -22,26 +22,10 @@ def _auth(token, *roles: str, subject: str = "ops", idem: str = "idem-v13") -> d
     }
 
 
-def _facts_for(client_id: str, depot_id: str = "depot.example") -> dict:
-    return {
-        "os": "windows11",
-        "lastSeenMinutes": 5,
-        "owner": "opsi",
-        "diskFreeMb": 4096,
-        "userSid": "S-1-5-21-1-2-3-1001",
-        "userAccount": "lab\\user-a",
-        "gatewayHealthy": True,
-        "previousVersion": "0.21.0",
-        "previousDigest": "ab" * 32,
-        "depotId": depot_id,
-        "bindingSource": "operator-evidence",
-    }
-
-
 def test_missing_inventory_is_ineligible(token):
     settings = Settings(opsi_env="test", jwt_lab_secret="test-secret-test-secret-test-sec32", pilot_start_enabled=True)
     state = build_test_state(settings)
-    state.rollouts.facts["client-a.example"] = {"os": "windows11"}
+    asyncio.run(state.inventory_store.delete_snapshot("client-a.example"))
     client = TestClient(create_app(state))
     created = client.post(
         "/api/v1/opsi/rollouts",
@@ -50,7 +34,7 @@ def test_missing_inventory_is_ineligible(token):
             "schema": "smc.opsi.rollout-campaign.v1",
             "campaignId": "cmp_v13miss01",
             "name": "missing-facts",
-            "clientIds": ["client-b.example", "client-a.example"],
+            "clientIds": ["client-b.example", "client-a.example", "client-c.example"],
             "productVersion": "0.22.0",
             "packageVersion": "1",
             "artifactDigest": DIGEST,
@@ -95,7 +79,7 @@ def test_create_defaults_to_pilot_mode(token):
             "changeTicket": "CHG-1",
             "campaignId": "cmp_default01",
             "name": "default-pilot",
-            "clientIds": ["a.example", "b.example"],
+            "clientIds": ["a.example", "b.example", "c.example"],
             "productVersion": "0.22.0",
             "packageVersion": "1",
             "artifactDigest": DIGEST,
@@ -181,7 +165,7 @@ def test_rollback_enqueues_without_success(token):
             "schema": "smc.opsi.rollout-campaign.v1",
             "campaignId": "cmp_v13roll01",
             "name": "rollback-queue",
-            "clientIds": ["client-b.example", "client-a.example"],
+            "clientIds": ["client-b.example", "client-a.example", "client-c.example"],
             "productVersion": "0.22.0",
             "packageVersion": "1",
             "artifactDigest": DIGEST,
@@ -238,7 +222,7 @@ def test_metrics_survive_without_process_counters(token):
             "schema": "smc.opsi.rollout-campaign.v1",
             "campaignId": "cmp_v13met01",
             "name": "metrics",
-            "clientIds": ["client-b.example", "client-a.example"],
+            "clientIds": ["client-b.example", "client-a.example", "client-c.example"],
             "productVersion": "0.22.0",
             "packageVersion": "1",
             "artifactDigest": DIGEST,
@@ -288,7 +272,7 @@ def test_freeze_and_attestation_and_compliance(token):
             "schema": "smc.opsi.rollout-campaign.v1",
             "campaignId": "cmp_v13comp01",
             "name": "compliance",
-            "clientIds": ["client-b.example", "client-a.example"],
+            "clientIds": ["client-b.example", "client-a.example", "client-c.example"],
             "productVersion": "0.22.0",
             "packageVersion": "1",
             "artifactDigest": DIGEST,
@@ -340,7 +324,7 @@ def test_production_gate_seed_forbidden_in_production():
 
 
 def test_openapi_includes_v13_paths():
-    paths = create_app().openapi()["paths"]
+    paths = create_app(build_test_state()).openapi()["paths"]
     assert "/api/v1/opsi/rollouts/{campaign_id}/depots" in paths
     assert "/api/v1/opsi/rollouts/{campaign_id}/rings" in paths
     assert "/api/v1/opsi/depot-attestations" in paths

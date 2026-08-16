@@ -43,8 +43,11 @@ class FakeOpsiJsonRpc:
 
     def __init__(self) -> None:
         self.hosts: list[dict[str, Any]] = [
-            {"id": "client-a.example", "type": "OpsiClient", "description": "lab-a"},
-            {"id": "client-b.example", "type": "OpsiClient", "description": "lab-b"},
+            {"id": "client-a.example", "type": "OpsiClient", "description": "lab-a", "lastSeenMinutes": 5},
+            {"id": "client-b.example", "type": "OpsiClient", "description": "lab-b", "lastSeenMinutes": 5},
+            {"id": "client-c.example", "type": "OpsiClient", "description": "lab-c", "lastSeenMinutes": 5},
+            {"id": "client-d.example", "type": "OpsiClient", "description": "lab-d", "lastSeenMinutes": 5},
+            {"id": "client-e.example", "type": "OpsiClient", "description": "lab-e", "lastSeenMinutes": 5},
         ]
         self.products: list[dict[str, Any]] = [
             {

@@ -23,9 +23,9 @@ def _sort_dict(value: object) -> object:
 
 def main() -> int:
     sys.path.insert(0, str(OPSI_SRC))
-    from app import create_app
+    from app import build_test_state, create_app
 
-    schema = create_app().openapi()
+    schema = create_app(build_test_state()).openapi()
     schema = _sort_dict(schema)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     text = yaml.safe_dump(

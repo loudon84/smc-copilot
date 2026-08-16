@@ -84,10 +84,10 @@ try {
         }
         "custom" {
             switch ($CustomOperation) {
-                "status" { & (Join-Path $here "health\Get-HermesStatus.ps1") -Root $root -ClientId $ClientId -GatewayPort $GatewayPort }
+                "status" { & (Join-Path $here "health\Get-HermesStatus.ps1") -Root $root -ClientId $ClientId -GatewayPort $GatewayPort -RequestId $RequestId }
                 "collect-log" { & (Join-Path $here "diagnostics\Collect-Diagnostics.ps1") -Root $root -RequestId $RequestId -ClientId $ClientId -LogLines $DiagnosticLogLines }
                 "apply-config" { & (Join-Path $here "config\Apply-ManagedConfig.ps1") -Root $root -Revision $ConfigRevision -ConfigDigest $ConfigDigest }
-                "restart-gateway" { & (Join-Path $here "gateway\Restart-Gateway.ps1") -GatewayPort $GatewayPort }
+                "restart-gateway" { & (Join-Path $here "gateway\Restart-Gateway.ps1") -GatewayPort $GatewayPort -Root $root -ManagedUserSid $ManagedUserSid }
                 "diagnose" { & (Join-Path $here "diagnostics\Collect-Diagnostics.ps1") -Root $root -RequestId $RequestId -ClientId $ClientId -LogLines $DiagnosticLogLines }
                 "repair" { & (Join-Path $here "repair\Repair-Hermes.ps1") -Level $AutoRepairLevel -GatewayPort $GatewayPort -Root $root -ClientId $ClientId }
                 default { throw "unreachable custom operation" }
@@ -100,7 +100,7 @@ try {
 
     if ($userContext -eq "USER_CONTEXT_PENDING" -and $Action -in @("setup", "update")) {
         Write-SmcActionResult -RequestId $RequestId -ClientId $ClientId -Status "RUNNING" -ErrorCode "USER_CONTEXT_PENDING" -Message "machine staged; waiting for user logon" -UserContext $userContext
-        & (Join-Path $here "bootstrap\machine\Register-UserBootstrap.ps1") -Root $root -ManagedUserSid $ManagedUserSid -ManagedUserAccount $ManagedUserAccount -HermesVersion $HermesVersion -RequestId $RequestId | Out-Null
+        & (Join-Path $here "bootstrap\machine\Register-UserBootstrap.ps1") -Root $root -ManagedUserSid $ManagedUserSid -ManagedUserAccount $ManagedUserAccount -HermesVersion $HermesVersion -RequestId $RequestId -ClientId $ClientId | Out-Null
         Register-SmcRequestSeen -RequestId $RequestId -PayloadDigest $payloadDigest -Status "RUNNING"
         exit 10
     }

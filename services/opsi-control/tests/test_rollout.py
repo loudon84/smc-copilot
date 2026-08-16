@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from app import build_test_state, create_app
 from core.config import Settings
+from domain.inventory import snapshot_from_parts
+from domain.policy import ACCELERATED_V14, LEGACY_V12
 from domain.snapshot import snapshot_digest, split_batches
 
 DIGEST = "aa" * 32
@@ -47,7 +49,7 @@ def _campaign_body(client_ids: list[str] | None = None) -> dict:
         "schema": "smc.opsi.rollout-campaign.v1",
         "campaignId": CMP,
         "name": "lab-pilot",
-        "clientIds": client_ids or ["client-b.example", "client-a.example"],
+        "clientIds": client_ids or ["client-a.example", "client-b.example", "client-c.example"],
         "productVersion": "0.22.0",
         "packageVersion": "1",
         "artifactDigest": DIGEST,
@@ -79,21 +81,23 @@ def test_snapshot_is_canonical_and_stable():
     left = ["client-b.example", "client-a.example"]
     right = ["client-a.example", "client-b.example", "client-a.example"]
     assert snapshot_digest(left) == snapshot_digest(right)
-    batches = split_batches([f"h{i:02d}.example" for i in range(12)])
+    batches = split_batches([f"h{i:02d}.example" for i in range(4)])
     assert batches[0][1] == ["h00.example", "h01.example"]
-    assert batches[0][2] == 24
-    assert len(batches[1][1]) == 5
-    assert batches[1][2] == 6
-    assert len(batches) == 3
+    assert batches[0][2] == ACCELERATED_V14.canary_hours
+    assert len(batches[1][1]) == 2
+    assert batches[1][2] == ACCELERATED_V14.follow_on_hours
+    legacy = split_batches([f"h{i:02d}.example" for i in range(12)], policy=LEGACY_V12)
+    assert legacy[0][2] == 24
+    assert len(legacy[1][1]) == 5
 
 
 def test_openapi_includes_rollout_paths():
-    app = create_app()
+    app = create_app(build_test_state())
     paths = app.openapi()["paths"]
     assert "/api/v1/opsi/rollouts" in paths
     assert "/api/v1/opsi/rollouts/{campaign_id}/start" in paths
     assert "/api/v1/opsi/artifacts/promote" in paths
-    assert app.openapi()["info"]["version"] == "1.3.0"
+    assert app.openapi()["info"]["version"] == "1.4.0"
 
 
 def test_production_rejects_pilot_flag_without_go():
@@ -166,9 +170,9 @@ def test_happy_path_dual_approval_canary_pause_rollback_evidence(rollout_client,
     assert created.status_code == 200, created.text
     body = created.json()
     assert body["status"] == "DRAFT"
-    assert body["clientCount"] == 2
+    assert body["clientCount"] == 3
     assert body["batches"][0]["clientIds"] == ["client-a.example", "client-b.example"]
-    assert body["batches"][0]["observeHours"] == 24
+    assert body["batches"][0]["observeHours"] == 4
     replay = rollout_client.post(
         "/api/v1/opsi/rollouts",
         headers=_auth(token, "release_owner", subject="alice"),
@@ -292,7 +296,18 @@ def test_creator_cannot_satisfy_both_roles(rollout_client, token, rollout_state)
 def test_owner_conflict_blocks_approval(rollout_client, token, rollout_state):
     asyncio.run(rollout_state.rollouts.seed_live_gate_for_test())
     _promote(rollout_client, token)
-    rollout_state.rollouts.facts["client-a.example"]["owner"] = "salt"
+    evidence = rollout_state.inventory_store.evidence["client-a.example"]
+    evidence["owner"] = "salt"
+    host = next(item for item in rollout_state.rpc.hosts if item["id"] == "client-a.example")
+    snap = snapshot_from_parts(
+        client_id="client-a.example",
+        rpc_host=host,
+        depot_id="depot.example",
+        binding=rollout_state.inventory_store.bindings["client-a.example"],
+        evidence=evidence,
+    )
+    assert snap is not None
+    rollout_state.inventory_store.snapshots["client-a.example"] = snap
     created = rollout_client.post(
         "/api/v1/opsi/rollouts",
         headers=_auth(token, "release_owner"),

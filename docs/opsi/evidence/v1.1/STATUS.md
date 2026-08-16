@@ -16,6 +16,8 @@ Do not treat v1.0 engineering `completed` as Live PASS. Status meanings:
 
 Close false-success install, fake `.opsi` smoke suffix, SYSTEM/User handoff, durable Action workers, OPSI 4.3 RPC shape, and production readiness. Live Windows 10/11 + 24h observation remain operator gates.
 
+v1.4 does not rewrite this file to `proven`. Historical Live gaps stay open until Operator signoff.
+
 ## Not proven
 
 - Lab Depot install/read-back

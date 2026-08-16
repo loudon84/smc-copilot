@@ -1,14 +1,17 @@
 #Requires -Version 5.1
 param([Parameter(Mandatory = $true)][string]$Root)
-Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
+# Never delete user Hermes data (.hermes / Profiles / Memory / Sessions / Credentials / Workspace).
+# Uninstall only removes managed tasks, staging, versions, and task manifest.
 
-# Uninstall OPSI-managed files and logon triggers only. Never delete user Hermes data.
-$taskName = "SMC-Hermes-User-Bootstrap"
-try { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue } catch {}
+$manifestPath = Get-SmcTaskManifestPath
+if (Test-Path -LiteralPath $manifestPath) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    foreach ($name in @($manifest.bootstrapTask, $manifest.gatewayTask)) {
+        if ($name) { Remove-SmcManagedTask -TaskName ([string]$name) }
+    }
+}
 
-foreach ($rel in @("staging", "versions", "scripts", "managed\policy", "state\journal.json")) {
+foreach ($rel in @("staging", "versions", "scripts", "managed\policy", "state\journal.json", "state\task-manifest.json")) {
     $path = Join-Path $Root $rel
     if (Test-Path -LiteralPath $path) {
         Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
@@ -18,7 +21,6 @@ foreach ($rel in @("staging", "versions", "scripts", "managed\policy", "state\jo
 $keep = @(
     Join-Path $env:USERPROFILE ".hermes"
 )
-# Explicitly do not touch Profiles/Config/Skills/Plugins/Memory/Sessions/Credentials/Workspace.
 foreach ($path in $keep) {
     if ($path) { Write-Output "retained:$path" }
 }

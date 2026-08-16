@@ -1,21 +1,21 @@
 #Requires -Version 5.1
 param(
-    [int]$GatewayPort = 8642
+    [int]$GatewayPort = 8642,
+    [string]$Root = "",
+    [string]$ManagedUserSid = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
 
-# Prefer official Hermes CLI; never kill python.exe by name.
-$cli = Get-Command hermes -ErrorAction SilentlyContinue
-if ($cli) {
-    & hermes gateway restart
-    exit $LASTEXITCODE
+if (-not $Root) { $Root = Get-SmcOpsiRoot }
+if ($ManagedUserSid) {
+    $task = "SMC-Hermes-Gateway-$ManagedUserSid"
+    if (Get-SmcManagedTask -TaskName $task) {
+        Start-SmcManagedTask -TaskName $task
+        exit 0
+    }
 }
-
-$task = Get-ScheduledTask -TaskName "SMC-Hermes-Gateway" -ErrorAction SilentlyContinue
-if ($task) {
-    Start-ScheduledTask -TaskName "SMC-Hermes-Gateway"
-    exit 0
-}
-
-throw "MANUAL_ACTION_REQUIRED: no hermes CLI or versioned gateway task"
+$cli = Resolve-SmcHermesCli -Root $Root
+& $cli gateway restart
+exit $LASTEXITCODE

@@ -86,6 +86,8 @@ class ActionCreateRequest(CamelModel):
     config_revision: int | None = Field(default=None, ge=0, le=1_000_000)
     auto_repair_level: int | None = Field(default=None, ge=0, le=4)
     note: str | None = Field(default=None, max_length=256)
+    parent_request_id: str | None = Field(default=None, pattern=r"^req_[A-Za-z0-9_-]{8,64}$")
+    result_kind: str | None = Field(default=None, max_length=32)
 
     @model_validator(mode="after")
     def _require_user_binding_for_setup_update(self) -> ActionCreateRequest:
@@ -132,6 +134,49 @@ class ActionResultView(CamelModel):
     attempt: int | None = None
     property_digest: str | None = None
     opsi_modification_time: str | None = None
+    parent_request_id: str | None = None
+    result_kind: str | None = None
+    content_sha256: str | None = None
+    trust_level: str | None = None
+
+
+class BindingUpsertRequest(CamelModel):
+    user_sid: str = Field(min_length=8, max_length=184, pattern=r"^S-1-[0-9-]+$")
+    user_account: str = Field(min_length=1, max_length=128)
+    evidence_ref: str = Field(min_length=3, max_length=256)
+    reason: str = Field(min_length=3, max_length=256)
+    change_ticket: str = Field(min_length=3, max_length=64)
+    actor: str | None = None
+    role: str | None = None
+
+    @model_validator(mode="after")
+    def _reject_forged_actor(self) -> BindingUpsertRequest:
+        if self.actor is not None or self.role is not None:
+            raise ValueError("actor/role must not be supplied in the body")
+        return self
+
+
+class InventoryEvidenceUpsertRequest(CamelModel):
+    os: str = Field(min_length=1, max_length=64)
+    last_seen_minutes: int = Field(ge=0, le=10_080)
+    owner: str = Field(default="", max_length=32)
+    disk_free_mb: int = Field(ge=0, le=10_000_000)
+    gateway_healthy: bool = False
+    previous_version: str = Field(default="", max_length=64)
+    previous_digest: str = Field(default="", max_length=64)
+    cli_path: str = Field(default="", max_length=256)
+    cli_version: str = Field(default="", max_length=64)
+    bootstrap_task: str = Field(default="", max_length=160)
+    gateway_task: str = Field(default="", max_length=160)
+    actor: str | None = None
+
+    @model_validator(mode="after")
+    def _reject_forged_actor(self) -> InventoryEvidenceUpsertRequest:
+        if self.actor is not None:
+            raise ValueError("actor must not be supplied in the body")
+        if self.previous_digest and len(self.previous_digest) != 64:
+            raise ValueError("previousDigest must be 64 hex chars")
+        return self
 
 
 class ClientView(CamelModel):

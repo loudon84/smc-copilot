@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from schemas.models import ActionCreateRequest
+
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMAS = ROOT / "contracts" / "opsi"
 
@@ -23,6 +25,9 @@ def test_action_result_optional_observability():
     assert "attempt" in schema["properties"]
     assert "propertyDigest" in schema["properties"]
     assert "opsiModificationTime" in schema["properties"]
+    assert "parentRequestId" in schema["properties"]
+    assert "resultKind" in schema["properties"]
+    assert "contentSha256" in schema["properties"]
 
 
 def test_three_way_action_request_example():
@@ -40,8 +45,6 @@ def test_three_way_action_request_example():
     }
     schema = _load("action-request.schema.json")
     assert example["schema"] == schema["properties"]["schema"]["const"]
-    from schemas.models import ActionCreateRequest
-
     parsed = ActionCreateRequest.model_validate(example)
     dumped = parsed.model_dump(by_alias=True, exclude_none=True)
     assert dumped["targets"][0]["userBinding"]["sid"].startswith("S-1-")

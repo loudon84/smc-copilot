@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/endpoint-inventory.schema.json",
+  "title": "smc.opsi.endpoint-inventory.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "clientId",
+    "timestamp",
+    "sourceTrustLevel",
+    "os",
+    "diskFreeMb",
+    "baselineKind",
+    "contentDigest",
+    "redacted"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.endpoint-inventory.v1" },
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 40
+    },
+    "sourceTrustLevel": {
+      "type": "string",
+      "enum": ["OPSI_AUTHENTICATED_CHECKSUM"]
+    },
+    "os": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "diskFreeMb": { "type": "integer", "minimum": 0 },
+    "owner": { "type": ["string", "null"], "maxLength": 32 },
+    "baselineKind": { "enum": ["ABSENT", "INSTALLED", "CONFLICT"] },
+    "artifactDigest": {
+      "type": ["string", "null"],
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "cliVersion": { "type": ["string", "null"], "maxLength": 64 },
+    "gatewayReachable": { "type": ["boolean", "null"] },
+    "contentDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "redacted": { "const": true },
+    "userBindingSource": { "type": ["string", "null"], "maxLength": 64 }
+  }
+}

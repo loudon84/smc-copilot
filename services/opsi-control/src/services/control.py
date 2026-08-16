@@ -7,6 +7,7 @@ from core.auth import digest_payload
 from core.config import Settings
 from core.errors import ErrorCode, OpsiControlError
 from db.repositories.interfaces import ActionRecord, PolicyRecord, RepositoryBundle, TargetRecord
+from domain.inventory import EndpointBindingRecord
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import (
     ActionCreateRequest,
@@ -23,9 +24,11 @@ from workers.result_reconciler import parse_result_marker, reconcile_open
 
 
 class InventoryService:
-    def __init__(self, rpc: OpsiJsonRpc, product_id: str) -> None:
+    def __init__(self, rpc: OpsiJsonRpc, product_id: str, store=None, collector=None) -> None:
         self.rpc = rpc
         self.product_id = product_id
+        self.store = store
+        self.collector = collector
 
     async def list_clients(self) -> list[dict]:
         hosts = await self.rpc.call("host_getObjects", {"type": "OpsiClient"}, [])
@@ -71,6 +74,84 @@ class InventoryService:
             "gateway": {"port": 8642, "reachable": health == "HEALTHY"},
             "config": {"revision": 0, "status": "UNKNOWN"},
             "health": health,
+        }
+
+    async def put_binding(self, client_id: str, body, principal) -> dict:
+        if self.store is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "inventory store required", status_code=412)
+        current = await self.store.get_binding(client_id)
+        revision = (current.revision + 1) if current else 1
+        record = EndpointBindingRecord(
+            client_id=client_id,
+            user_sid=body.user_sid,
+            user_account=body.user_account,
+            evidence_ref=body.evidence_ref,
+            revision=revision,
+            approved_by=principal.subject,
+            observed_at=datetime.now(UTC),
+            reason=body.reason,
+            change_ticket=body.change_ticket,
+        )
+        await self.store.put_binding(record)
+        return {
+            "clientId": client_id,
+            "revision": revision,
+            "bindingSource": "operator-binding",
+            "redactedAccount": True,
+        }
+
+    async def put_evidence(self, client_id: str, body) -> dict:
+        if self.store is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "inventory store required", status_code=412)
+        await self.get_client(client_id)
+        evidence = {
+            "os": body.os,
+            "lastSeenMinutes": body.last_seen_minutes,
+            "owner": body.owner,
+            "diskFreeMb": body.disk_free_mb,
+            "gatewayHealthy": body.gateway_healthy,
+            "previousVersion": body.previous_version,
+            "previousDigest": body.previous_digest,
+            "cliPath": body.cli_path,
+            "cliVersion": body.cli_version,
+            "bootstrapTask": body.bootstrap_task,
+            "gatewayTask": body.gateway_task,
+        }
+        await self.store.put_evidence(client_id, evidence)
+        snapshot = await self.collector.refresh(client_id) if self.collector else None
+        if snapshot is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "inventory incomplete", status_code=412)
+        return await self.inventory_evidence(client_id)
+
+    async def refresh_inventory(self, client_id: str) -> dict:
+        if self.collector is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "collector required", status_code=412)
+        snapshot = await self.collector.refresh(client_id)
+        if snapshot is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "inventory incomplete", status_code=412)
+        return await self.inventory_evidence(client_id)
+
+    async def inventory_evidence(self, client_id: str) -> dict:
+        if self.store is None:
+            raise OpsiControlError(ErrorCode.PRECONDITION_FAILED, "inventory store required", status_code=412)
+        snapshot = await self.store.get_snapshot(client_id)
+        if snapshot is None:
+            raise OpsiControlError(ErrorCode.NOT_FOUND, "inventory evidence not found", status_code=404)
+        return {
+            "schema": "smc.opsi.endpoint-inventory.v1",
+            "clientId": snapshot.client_id,
+            "timestamp": snapshot.observed_at.isoformat(),
+            "sourceTrustLevel": snapshot.trust_level,
+            "os": snapshot.os,
+            "diskFreeMb": snapshot.disk_free_mb,
+            "owner": snapshot.owner,
+            "baselineKind": snapshot.baseline_kind,
+            "artifactDigest": snapshot.previous_digest or None,
+            "cliVersion": snapshot.cli_version or None,
+            "gatewayReachable": snapshot.gateway_healthy,
+            "contentDigest": snapshot.content_digest,
+            "redacted": True,
+            "userBindingSource": snapshot.binding_source,
         }
 
 

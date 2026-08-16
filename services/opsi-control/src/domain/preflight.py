@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from domain.inventory import EndpointInventorySnapshot, load_inventory
+from domain.collector import InventoryStore
+from domain.inventory import BaselineKind, EndpointInventorySnapshot, load_inventory
 from domain.snapshot import PREFLIGHT_TTL_SECONDS
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 
@@ -16,6 +17,9 @@ def _os_supported(os_name: str) -> bool:
     return any(token in lowered for token in SUPPORTED_OS) or lowered in {
         "lab-a",
         "lab-b",
+        "lab-c",
+        "lab-d",
+        "lab-e",
         "lab-win10",
         "lab-win11",
     }
@@ -46,14 +50,16 @@ async def evaluate_target(
     product_id: str,
     product_version: str,
     artifact_digest: str,
-    facts: dict[str, dict[str, Any]],
+    inventory: InventoryStore,
     active_clients: set[str],
     promotion_ok: bool,
     promotion_channel: str,
     required_channel: str = "pilot",
+    evidence_flags: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str, str, str]:
     checks: list[dict[str, Any]] = []
-    snapshot = await load_inventory(rpc=rpc, client_id=client_id, facts=facts)
+    flags = evidence_flags or {}
+    snapshot = await load_inventory(rpc=rpc, client_id=client_id, store=inventory)
     exists = snapshot is not None
     checks.append({"code": "client_exists", "passed": exists, "detail": "" if exists else "missing"})
     if snapshot is None:
@@ -66,22 +72,36 @@ async def evaluate_target(
     checks.append({"code": "recently_seen", "passed": seen_ok, "detail": str(snapshot.last_seen_minutes)})
     depot_ok = await _depot_has_product(rpc, snapshot, product_id, product_version)
     checks.append({"code": "depot_product", "passed": depot_ok, "detail": snapshot.depot_id})
-    owner_ok = snapshot.owner == "opsi"
-    checks.append({"code": "owner_opsi", "passed": owner_ok, "detail": snapshot.owner})
+    conflict = snapshot.baseline_kind == BaselineKind.CONFLICT.value
+    checks.append({"code": "owner_conflict", "passed": not conflict, "detail": snapshot.owner})
+    if snapshot.baseline_kind == BaselineKind.ABSENT.value:
+        owner_ok = snapshot.owner.lower() in {"", "direct", "empty", "pending"}
+        baseline_ok = True
+        gateway_ok = True
+    else:
+        owner_ok = snapshot.owner == "opsi"
+        baseline_ok = bool(snapshot.previous_version and len(snapshot.previous_digest) == 64)
+        gateway_ok = snapshot.gateway_healthy
+    checks.append(
+        {
+            "code": "owner_opsi",
+            "passed": owner_ok or snapshot.baseline_kind == BaselineKind.ABSENT.value,
+            "detail": snapshot.owner,
+        }
+    )
     artifact_ok = promotion_ok and promotion_channel == required_channel and len(artifact_digest) == 64
     checks.append({"code": "artifact_channel", "passed": artifact_ok, "detail": promotion_channel})
-    baseline_ok = bool(snapshot.previous_version and len(snapshot.previous_digest) == 64)
     checks.append({"code": "rollback_baseline", "passed": baseline_ok, "detail": snapshot.previous_version})
     binding_ok = bool(snapshot.user_sid.startswith("S-1-") and snapshot.user_account)
-    if facts.get(client_id, {}).get("userBindingUnknown"):
+    if flags.get("userBindingUnknown"):
         binding_ok = False
     checks.append({"code": "user_binding", "passed": binding_ok, "detail": snapshot.binding_source})
     disk_ok = snapshot.disk_free_mb >= 512
     checks.append({"code": "disk", "passed": disk_ok, "detail": str(snapshot.disk_free_mb)})
-    checks.append({"code": "gateway_health", "passed": snapshot.gateway_healthy, "detail": ""})
+    checks.append({"code": "gateway_health", "passed": gateway_ok, "detail": ""})
     concurrent_ok = client_id not in active_clients
     checks.append({"code": "no_active_mutation", "passed": concurrent_ok, "detail": campaign_id})
-    secret_ok = not bool(facts.get(client_id, {}).get("secretCanary"))
+    secret_ok = not bool(flags.get("secretCanary"))
     checks.append({"code": "secret_canary", "passed": secret_ok, "detail": ""})
     failed = [item["code"] for item in checks if not item["passed"]]
     reason = ",".join(failed)

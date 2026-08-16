@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app import create_app
+from app import build_test_state, create_app
 from core.config import Settings
 
 
@@ -44,7 +44,7 @@ def test_test_state_refuses_production_env():
 
 
 def test_openapi_export_stable():
-    app = create_app()
+    app = create_app(build_test_state())
     first = app.openapi()
     second = app.openapi()
     assert first == second
@@ -56,4 +56,4 @@ def test_openapi_export_stable():
     assert "/api/v1/opsi/policies/apply" in paths
     assert "/api/v1/opsi/diagnostics/{request_id}" in paths
     assert "/api/v1/opsi/rollouts" in paths
-    assert first["info"]["version"] == "1.3.0"
+    assert first["info"]["version"] == "1.4.0"

@@ -42,5 +42,44 @@ Describe "smc-hermes-agent adapter contracts" {
         $text = Get-Content (Join-Path $script:Product "scripts\install\Uninstall-OpsiManaged.ps1") -Raw
         $text | Should Match "Never delete user Hermes data"
         $text | Should Match "retained"
+        $text | Should Match "Remove-SmcManagedTask"
+        $text | Should Match "bootstrapTask"
+    }
+
+    It "resolves managed CLI from temp root and rejects traversal" {
+        Import-Module (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Force
+        $root = Join-Path $env:TEMP ("smc-opsi-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force -Path (Join-Path $root "versions\current") | Out-Null
+        Set-Content -LiteralPath (Join-Path $root "versions\current\hermes.exe") -Value "fixture" -Encoding ascii
+        $cli = Resolve-SmcHermesCli -Root $root -Entrypoint "hermes.exe"
+        $cli | Should Match "hermes.exe"
+        { Resolve-SmcHermesCli -Root $root -Entrypoint "..\..\Windows\System32\cmd.exe" } | Should Throw
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "forbids clientId=local in user continuation" {
+        $init = Get-Content (Join-Path $script:Product "bootstrap\user\Initialize-HermesHome.ps1") -Raw
+        $init | Should Match "clientId=local is forbidden"
+        $status = Get-Content (Join-Path $script:Product "scripts\health\Get-HermesStatus.ps1") -Raw
+        $status | Should Match "clientId=local forbidden"
+    }
+
+    It "verifies artifact before Expand-Archive and pins key ids" {
+        $text = Get-Content (Join-Path $script:Product "scripts\install\Install-Hermes.ps1") -Raw
+        $verify = $text.IndexOf("Assert-SmcArtifactSignature")
+        $expand = $text.IndexOf("Expand-Archive")
+        ($verify -ge 0 -and $expand -gt $verify) | Should Be $true
+        $text | Should Match "untrusted artifact keyId"
+        $text | Should Not Match "Get-Command hermes"
+    }
+
+    It "registers SID-scoped bootstrap and gateway tasks" {
+        $text = Get-Content (Join-Path $script:Product "bootstrap\machine\Register-UserBootstrap.ps1") -Raw
+        $text | Should Match "SMC-Hermes-User-Bootstrap-"
+        $text | Should Match "SMC-Hermes-Gateway-"
+        $text | Should Match "Register-SmcManagedTask"
+        $mod = Get-Content (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Raw
+        $mod | Should Match "function Register-SmcManagedTask"
+        $mod | Should Match "Get-ScheduledTask"
     }
 }

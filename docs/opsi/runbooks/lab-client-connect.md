@@ -40,7 +40,9 @@ $env:SMC_OPSI_ENV = "lab"
 uv run uvicorn main:app --app-dir src --host 127.0.0.1 --port 8787
 ```
 
-`GET http://127.0.0.1:8787/ready` should show OPSI RPC healthy once credentials are valid.
+`GET http://127.0.0.1:8787/ready` must show `rpcBackend=http` and `persistence=postgresql` once credentials and `database_url` are valid. Filling real opsiconfd credentials no longer lands in Fake RPC.
+
+See [`v1.4-real-lab.md`](v1.4-real-lab.md).
 
 ## Notes
 

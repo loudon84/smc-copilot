@@ -52,6 +52,22 @@
     "opsiModificationTime": {
       "type": ["string", "null"],
       "maxLength": 40
+    },
+    "parentRequestId": {
+      "type": ["string", "null"],
+      "pattern": "^req_[A-Za-z0-9_-]{8,64}$"
+    },
+    "resultKind": {
+      "type": ["string", "null"],
+      "maxLength": 32
+    },
+    "contentSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "trustLevel": {
+      "type": ["string", "null"],
+      "maxLength": 64
     }
   }
 }

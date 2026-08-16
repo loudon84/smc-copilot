@@ -3,11 +3,16 @@ param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$ManagedUserSid,
     [Parameter(Mandatory = $true)][string]$HermesVersion,
-    [Parameter(Mandatory = $true)][string]$RequestId
+    [Parameter(Mandatory = $true)][string]$RequestId,
+    [Parameter(Mandatory = $true)][string]$ClientId
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\..\scripts\common\SmcOpsi.psm1") -Force
+
+if ($ClientId -eq "local" -or [string]::IsNullOrWhiteSpace($ClientId)) {
+    throw "clientId=local is forbidden"
+}
 
 $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 if ($currentSid -ne $ManagedUserSid) {
@@ -16,12 +21,6 @@ if ($currentSid -ne $ManagedUserSid) {
 
 $home = $env:HERMES_HOME
 if (-not $home) {
-    $cli = Get-Command hermes -ErrorAction SilentlyContinue
-    if ($cli) {
-        try { $home = (& hermes config path 2>$null | Select-Object -First 1) } catch {}
-    }
-}
-if (-not $home) {
     $profile = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$ManagedUserSid" -ErrorAction SilentlyContinue).ProfileImagePath
     if ($profile) { $home = Join-Path $profile ".hermes" }
 }
@@ -29,18 +28,30 @@ if (-not $home) { throw "USER_CONTEXT_PENDING: cannot resolve HERMES_HOME" }
 if (Test-SmcSystemProfilePath -Path $home) { throw "refusing systemprofile Hermes Home" }
 
 New-Item -ItemType Directory -Force -Path $home | Out-Null
-$cli = Get-Command hermes -ErrorAction SilentlyContinue
-if ($cli) {
-    & hermes --version | Out-Null
-    try { & hermes config check | Out-Null } catch { throw "hermes config check failed" }
-    try { & hermes gateway start | Out-Null } catch { throw "gateway start failed" }
-    $ok = $false
-    try {
-        $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8642/health" -UseBasicParsing -TimeoutSec 3
-        $ok = ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300)
-    } catch {}
-    if (-not $ok) { throw "gateway health failed; restoring previous owner" }
+$cli = Resolve-SmcHermesCli -Root $Root
+& $cli --version | Out-Null
+try { & $cli config check | Out-Null } catch { throw "hermes config check failed" }
+$gwTask = "SMC-Hermes-Gateway-$ManagedUserSid"
+try { Start-SmcManagedTask -TaskName $gwTask } catch { & $cli gateway start | Out-Null }
+$ok = $false
+try {
+    $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8642/health" -UseBasicParsing -TimeoutSec 3
+    $ok = ($resp.StatusCode -ge 200 -and $resp.StatusCode -lt 300)
+} catch {}
+if (-not $ok) { throw "gateway health failed; restoring previous owner" }
+
+$outboxDir = Join-Path $Root "continuations"
+New-Item -ItemType Directory -Force -Path $outboxDir | Out-Null
+$continuation = [ordered]@{
+    parentRequestId = $RequestId
+    clientId        = $ClientId
+    status          = "SUCCEEDED"
+    cliVersion      = $HermesVersion
 }
+$canonical = ConvertTo-SmcCanonicalJson -Object $continuation
+$digest = Get-SmcSha256Text -Text $canonical
+$continuation.contentDigest = $digest
+Write-SmcJsonAtomic -Path (Join-Path $outboxDir "$RequestId.json") -Object $continuation
 
 $ownerPath = Join-Path (Split-Path $Root) "control-owner.json"
 Write-SmcJsonAtomic -Path $ownerPath -Object @{ hermes = "opsi" }
@@ -55,4 +66,4 @@ Write-SmcJsonAtomic -Path $versionJson -Object @{
     requestId = $RequestId
     updatedAt = [DateTime]::UtcNow.ToString("o")
 }
-Write-SmcActionResult -RequestId $RequestId -ClientId "local" -Status "SUCCEEDED" -UserContext "USER"
+Write-SmcActionResult -RequestId $RequestId -ClientId $ClientId -Status "SUCCEEDED" -UserContext "USER"

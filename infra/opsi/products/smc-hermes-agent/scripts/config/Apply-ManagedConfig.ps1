@@ -71,11 +71,9 @@ try {
         }
         Write-SmcJsonAtomic -Path $hermesCfg -Object $existing
     }
-    $cli = Get-Command hermes -ErrorAction SilentlyContinue
-    if ($cli) {
-        & hermes config check
-        if ($LASTEXITCODE -ne 0) { throw "hermes config check failed" }
-    }
+    $cli = Resolve-SmcHermesCli -Root $Root
+    & $cli config check
+    if ($LASTEXITCODE -ne 0) { throw "hermes config check failed" }
 }
 catch {
     if (Test-Path -LiteralPath $backupPath) {

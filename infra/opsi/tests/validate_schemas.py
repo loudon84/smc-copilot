@@ -17,6 +17,8 @@ def main() -> int:
         "action-result.schema.json",
         "diagnostic.schema.json",
         "managed-config.schema.json",
+        "endpoint-inventory.schema.json",
+        "runtime-artifact-manifest.schema.json",
     ]
     for name in required:
         path = SCHEMAS / name

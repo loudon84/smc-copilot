@@ -21,9 +21,12 @@ class HttpOpsiJsonRpc:
         self.secrets = secrets
         self._id = 0
         self._owns_client = client is None
+        verify: bool | str = True
+        if settings.opsi_rpc_ca_bundle:
+            verify = settings.opsi_rpc_ca_bundle
         self._client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(settings.opsi_rpc_timeout_seconds),
-            verify=True,
+            verify=verify,
             limits=httpx.Limits(max_connections=16, max_keepalive_connections=8),
         )
 

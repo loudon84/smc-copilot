@@ -726,6 +726,8 @@ def _campaign_to_row(record: CampaignRecord) -> RolloutCampaignRow:
         mode=record.mode,
         mapping_digest=record.mapping_digest,
         freeze_revision=record.freeze_revision,
+        pilot_policy_revision=record.pilot_policy_revision,
+        pilot_policy_digest=record.pilot_policy_digest,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
@@ -758,6 +760,8 @@ def _campaign_from_row(row: RolloutCampaignRow) -> CampaignRecord:
         mode=getattr(row, "mode", "pilot"),
         mapping_digest=getattr(row, "mapping_digest", ""),
         freeze_revision=getattr(row, "freeze_revision", 0),
+        pilot_policy_revision=getattr(row, "pilot_policy_revision", "accelerated-v1.4"),
+        pilot_policy_digest=getattr(row, "pilot_policy_digest", ""),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -774,6 +778,8 @@ def _apply_campaign(row: RolloutCampaignRow, record: CampaignRecord) -> None:
     row.mode = record.mode
     row.mapping_digest = record.mapping_digest
     row.freeze_revision = record.freeze_revision
+    row.pilot_policy_revision = record.pilot_policy_revision
+    row.pilot_policy_digest = record.pilot_policy_digest
 
 
 def _batch_to_row(record: BatchRecord) -> RolloutBatchRow:

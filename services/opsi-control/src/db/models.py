@@ -148,6 +148,8 @@ class RolloutCampaignRow(Base):
     mode: Mapped[str] = mapped_column(String(16), default="pilot")
     mapping_digest: Mapped[str] = mapped_column(String(64), default="")
     freeze_revision: Mapped[int] = mapped_column(Integer, default=0)
+    pilot_policy_revision: Mapped[str] = mapped_column(String(64), default="accelerated-v1.4")
+    pilot_policy_digest: Mapped[str] = mapped_column(String(64), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
@@ -356,3 +358,46 @@ class RolloutLeaseRow(Base):
     owner: Mapped[str] = mapped_column(String(128), nullable=False)
     lease_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     fencing_token: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class EndpointBindingRow(Base):
+    __tablename__ = "opsi_endpoint_bindings"
+
+    client_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    user_sid: Mapped[str] = mapped_column(String(184), nullable=False)
+    user_account: Mapped[str] = mapped_column(String(128), nullable=False)
+    evidence_ref: Mapped[str] = mapped_column(String(256), nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    approved_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason: Mapped[str] = mapped_column(String(256), nullable=False)
+    change_ticket: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class EndpointInventoryRow(Base):
+    __tablename__ = "opsi_endpoint_inventory"
+
+    client_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    os: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    last_seen_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    owner: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    disk_free_mb: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    user_sid: Mapped[str] = mapped_column(String(184), nullable=False, default="")
+    user_account: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    binding_source: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    binding_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    gateway_healthy: Mapped[bool] = mapped_column(Boolean, default=False)
+    previous_version: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    previous_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    depot_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    baseline_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="ABSENT")
+    content_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    expiry: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cli_path: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    cli_version: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    bootstrap_task: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    gateway_task: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    trust_level: Mapped[str] = mapped_column(String(64), nullable=False, default="OPSI_AUTHENTICATED_CHECKSUM")
+    evidence_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")

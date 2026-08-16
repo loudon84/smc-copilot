@@ -153,7 +153,10 @@ function Write-SmcActionResult {
         [string]$Message = "",
         [string]$UserContext = "UNKNOWN",
         [int]$Attempt = 1,
-        [string]$PropertyDigest = ""
+        [string]$PropertyDigest = "",
+        [string]$ParentRequestId = "",
+        [string]$ResultKind = "",
+        [string]$ContentSha256 = ""
     )
     $root = Get-SmcOpsiRoot
     $canonical = [ordered]@{
@@ -169,6 +172,8 @@ function Write-SmcActionResult {
         attempt     = $Attempt
     }
     if ($PropertyDigest) { $canonical.propertyDigest = $PropertyDigest }
+    if ($ParentRequestId) { $canonical.parentRequestId = $ParentRequestId }
+    if ($ResultKind) { $canonical.resultKind = $ResultKind }
     $json = ConvertTo-SmcCanonicalJson -Object $canonical
     $sha = Get-SmcSha256Text -Text $json
     $bytes = [System.Text.Encoding]::UTF8.GetByteCount($json)
@@ -179,6 +184,12 @@ function Write-SmcActionResult {
     $path = Join-Path $root "results\$RequestId.json"
     Write-SmcJsonAtomic -Path $path -Object $final
     $marker = "SMC_ACTION_RESULT request_id=$RequestId client_id=$ClientId sha256=$sha status=$Status bytes=$bytes redacted=true"
+    if ($ParentRequestId) { $marker = "$marker parent_request_id=$ParentRequestId" }
+    if ($ResultKind) {
+        $digest = $ContentSha256
+        if (-not $digest) { $digest = $sha }
+        $marker = "$marker result_kind=$ResultKind content_sha256=$digest"
+    }
     Write-Output $marker
     $logDir = Join-Path $root "logs"
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -213,6 +224,112 @@ function Get-SmcControlOwner {
 
 function Get-SmcJournalPath {
     return (Join-Path (Get-SmcOpsiRoot) "state\journal.json")
+}
+
+function Get-SmcTaskManifestPath {
+    return (Join-Path (Get-SmcOpsiRoot) "state\task-manifest.json")
+}
+
+function Test-SmcRelativeEntrypoint {
+    param([string]$Entrypoint)
+    if ([string]::IsNullOrWhiteSpace($Entrypoint)) { return $false }
+    if ($Entrypoint -match '\.\.|[A-Za-z]:|^\\\\|^/') { return $false }
+    return $true
+}
+
+function Resolve-SmcHermesCli {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [string]$Entrypoint = "hermes.exe",
+        [string]$ExpectedDigest = ""
+    )
+    if (-not (Test-SmcRelativeEntrypoint -Entrypoint $Entrypoint)) {
+        throw "entrypoint escapes managed root"
+    }
+    $current = Join-Path $Root "versions\current"
+    $resolved = Join-Path $current $Entrypoint
+    $full = [System.IO.Path]::GetFullPath($resolved)
+    $rootFull = [System.IO.Path]::GetFullPath($current)
+    if (-not $full.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "entrypoint escapes versions/current"
+    }
+    if (-not (Test-Path -LiteralPath $full) -or (Get-Item -LiteralPath $full).PSIsContainer) {
+        throw "managed CLI missing: $Entrypoint"
+    }
+    if ($ExpectedDigest) {
+        $actual = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $ExpectedDigest.ToLowerInvariant()) { throw "CLI digest mismatch" }
+    }
+    return $full
+}
+
+function Assert-SmcArtifactSignature {
+    param(
+        [Parameter(Mandatory = $true)][string]$Artifact,
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$SignaturePath,
+        [Parameter(Mandatory = $true)][string]$PublicKeyPath,
+        [string]$ExpectedKeyId = "smc-opsi-release-ed25519-v1"
+    )
+    if (-not (Test-Path -LiteralPath $Artifact)) { throw "artifact missing" }
+    if (-not (Test-Path -LiteralPath $ManifestPath)) { throw "artifact manifest missing" }
+    if (-not (Test-Path -LiteralPath $SignaturePath)) { throw "artifact signature missing" }
+    if (-not (Test-Path -LiteralPath $PublicKeyPath)) { throw "release public key missing" }
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+    $verifier = Join-Path $PSScriptRoot "..\verify\verify_ed25519.py"
+    if (-not $python -or -not (Test-Path -LiteralPath $verifier)) {
+        throw "Ed25519 verifier unavailable"
+    }
+    $py = $python.Source
+    $args = @(
+        $verifier,
+        "--artifact", $Artifact,
+        "--manifest", $ManifestPath,
+        "--signature", $SignaturePath,
+        "--public-key", $PublicKeyPath,
+        "--expected-key-id", $ExpectedKeyId
+    )
+    & $py @args
+    if ($LASTEXITCODE -ne 0) { throw "Ed25519 verify failed" }
+}
+
+function Register-SmcManagedTask {
+    param(
+        [Parameter(Mandatory = $true)][string]$TaskName,
+        [Parameter(Mandatory = $true)][string]$Execute,
+        [Parameter(Mandatory = $true)][string]$Argument,
+        [Parameter(Mandatory = $true)][string]$UserId
+    )
+    $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited
+    $action = New-ScheduledTaskAction -Execute $Execute -Argument $Argument
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $UserId
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+    $read = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    if (-not $read) { throw "task read-back failed: $TaskName" }
+    return $read.TaskName
+}
+
+function Get-SmcManagedTask {
+    param([Parameter(Mandatory = $true)][string]$TaskName)
+    return Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
+
+function Start-SmcManagedTask {
+    param([Parameter(Mandatory = $true)][string]$TaskName)
+    Start-ScheduledTask -TaskName $TaskName
+}
+
+function Stop-SmcManagedTask {
+    param([Parameter(Mandatory = $true)][string]$TaskName)
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+}
+
+function Remove-SmcManagedTask {
+    param([Parameter(Mandatory = $true)][string]$TaskName)
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    $still = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($still) { throw "task still present after uninstall: $TaskName" }
 }
 
 Export-ModuleMember -Function *

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     opsi_rpc_username: str = ""
     opsi_rpc_password: str = ""
     opsi_rpc_password_ref: str = ""
+    opsi_rpc_ca_bundle: str = ""
     opsi_rpc_timeout_seconds: float = 15.0
     opsi_rpc_max_bytes: int = 1_048_576
     secret_provider_url: str = ""
@@ -49,6 +50,17 @@ class Settings(BaseSettings):
             raise ValueError("worker_mode must be lifespan|standalone")
         return mode
 
+    def assert_lab_safe(self) -> None:
+        if self.opsi_env != "lab":
+            return
+        errors: list[str] = []
+        if not self.opsi_rpc_url.startswith("https://"):
+            errors.append("lab opsi_rpc_url must be https")
+        if self.database_url.startswith("sqlite") or not self.database_url.startswith("postgresql"):
+            errors.append("lab persistence must be postgresql")
+        if errors:
+            raise ValueError("; ".join(errors))
+
     def assert_production_safe(self) -> None:
         if self.opsi_env != "production":
             return
@@ -65,15 +77,16 @@ class Settings(BaseSettings):
             errors.append("opsi RPC username and password secret reference required in production")
         if not self.secret_provider_url.startswith("https://"):
             errors.append("secret_provider_url must be https in production")
-        if self.database_url.startswith("sqlite"):
-            errors.append("sqlite is not allowed in production")
+        if self.database_url.startswith("sqlite") or not self.database_url.startswith("postgresql"):
+            errors.append("production persistence must be postgresql")
         if self.pilot_start_enabled and self.pilot_live_gate != "GO":
             errors.append("pilot_start_enabled requires immutable live gate GO")
         if errors:
             raise ValueError("; ".join(errors))
 
     @model_validator(mode="after")
-    def _production_guard(self) -> Settings:
+    def _env_guard(self) -> Settings:
+        # Lab HTTPS/PostgreSQL is enforced in build_lab_state so Alembic can load database_url alone.
         self.assert_production_safe()
         return self
 

@@ -2,11 +2,25 @@
 param(
     [Parameter(Mandatory = $true)][string]$Root,
     [Parameter(Mandatory = $true)][string]$ClientId,
-    [int]$GatewayPort = 8642
+    [int]$GatewayPort = 8642,
+    [string]$RequestId = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\common\SmcOpsi.psm1") -Force
+
+$contDir = Join-Path $Root "continuations"
+if (Test-Path -LiteralPath $contDir) {
+    Get-ChildItem -LiteralPath $contDir -Filter "*.json" | ForEach-Object {
+        $item = Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+        if ([string]$item.clientId -eq "local") { throw "clientId=local forbidden" }
+        if ($item.clientId -and $item.parentRequestId) {
+            $digest = ""
+            if ($item.contentDigest) { $digest = [string]$item.contentDigest }
+            Write-SmcActionResult -RequestId $RequestId -ClientId ([string]$item.clientId) -Status ([string]$item.status) -ParentRequestId ([string]$item.parentRequestId) -ResultKind "continuation" -ContentSha256 $digest | Out-Null
+        }
+    }
+}
 
 $versionPath = Join-Path $Root "state\version.json"
 $version = "unknown"
@@ -29,12 +43,14 @@ if (Test-Path -LiteralPath $configPath) {
 
 $cliOk = $false
 $doctor = "unknown"
-$cli = Get-Command hermes -ErrorAction SilentlyContinue
-if ($cli) {
+try {
+    $cli = Resolve-SmcHermesCli -Root $Root
     $cliOk = $true
-    try { & hermes --version | Out-Null } catch { $cliOk = $false }
-    try { & hermes config check | Out-Null } catch { $configStatus = "FAILED" }
-    try { $doctor = ((& hermes doctor 2>$null | Out-String).Trim()) } catch { $doctor = "failed" }
+    try { & $cli --version | Out-Null } catch { $cliOk = $false }
+    try { & $cli config check | Out-Null } catch { $configStatus = "FAILED" }
+    try { $doctor = ((& $cli doctor 2>$null | Out-String).Trim()) } catch { $doctor = "failed" }
+} catch {
+    $cliOk = $false
 }
 
 $reachable = $false
@@ -72,5 +88,4 @@ Write-SmcJsonAtomic -Path (Join-Path $Root "state\probes.json") -Object @{
     userSid   = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     ownerFile = Get-SmcControlOwner
 }
-Write-SmcJsonAtomic -Path (Join-Path $Root "state\hermes.json") -Object $state
 $state | ConvertTo-Json -Compress -Depth 8

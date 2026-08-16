@@ -25,6 +25,7 @@ _JWKS_TTL_SECONDS = 300
 
 class Scope(StrEnum):
     INVENTORY_READ = "opsi.inventory.read"
+    INVENTORY_WRITE = "opsi.inventory.write"
     ACTION_DISPATCH = "opsi.action.dispatch"
     POLICY_APPLY = "opsi.policy.apply"
     DIAGNOSTICS_READ = "opsi.diagnostics.read"

@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ManagedUserSid,
     [Parameter(Mandatory = $true)][string]$ManagedUserAccount,
     [Parameter(Mandatory = $true)][string]$HermesVersion,
-    [Parameter(Mandatory = $true)][string]$RequestId
+    [Parameter(Mandatory = $true)][string]$RequestId,
+    [Parameter(Mandatory = $true)][string]$ClientId
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -14,21 +15,22 @@ if (-not (Test-SmcUserBinding -Sid $ManagedUserSid -Account $ManagedUserAccount)
     Write-Output "USER_CONTEXT_PENDING: profile not ready"
 }
 
-$taskName = "SMC-Hermes-User-Bootstrap-$ManagedUserSid"
+$bootstrapName = "SMC-Hermes-User-Bootstrap-$ManagedUserSid"
+$gatewayName = "SMC-Hermes-Gateway-$ManagedUserSid"
 $userScript = Join-Path $Root "bootstrap\user\Initialize-HermesHome.ps1"
-$arg = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$userScript`" -Root `"$Root`" -ManagedUserSid `"$ManagedUserSid`" -HermesVersion `"$HermesVersion`" -RequestId `"$RequestId`""
-try {
-    $principal = New-ScheduledTaskPrincipal -UserId $ManagedUserAccount -LogonType Interactive -RunLevel Limited
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arg
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $ManagedUserAccount
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
-}
-catch {
-    Write-SmcJsonAtomic -Path (Join-Path $Root "bootstrap\machine\task-definition.json") -Object @{
-        name      = $taskName
-        script    = $userScript
-        trigger   = "AtLogOn"
-        principal = $ManagedUserAccount
-        sid       = $ManagedUserSid
-    }
-}
+$arg = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$userScript`" -Root `"$Root`" -ManagedUserSid `"$ManagedUserSid`" -HermesVersion `"$HermesVersion`" -RequestId `"$RequestId`" -ClientId `"$ClientId`""
+Register-SmcManagedTask -TaskName $bootstrapName -Execute "powershell.exe" -Argument $arg -UserId $ManagedUserAccount | Out-Null
+
+$cli = Resolve-SmcHermesCli -Root $Root
+$gwArg = "gateway start"
+Register-SmcManagedTask -TaskName $gatewayName -Execute $cli -Argument $gwArg -UserId $ManagedUserAccount | Out-Null
+
+Write-SmcJsonAtomic -Path (Get-SmcTaskManifestPath) -Object ([ordered]@{
+        bootstrapTask = $bootstrapName
+        gatewayTask   = $gatewayName
+        sid           = $ManagedUserSid
+        account       = $ManagedUserAccount
+        cli           = $cli
+        version       = $HermesVersion
+        registered    = $true
+    })

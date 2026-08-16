@@ -41,7 +41,7 @@ Windows Salt Minion / Bootstrap scripts
 - `npm run contracts:check` includes `check_salt_control_drift.py`.
 - Salt Control must not import `services/runtime`. Runtime Endpoint Control retires via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` (ADR-030); Chat/Task contracts unchanged.
 
-## OPSI Control API (v1.3 / ADR-031 / ADR-032)
+## OPSI Control API (v1.4 / ADR-031 / ADR-032 / ADR-033)
 
 ```text
 OPSI Control FastAPI + Pydantic (services/opsi-control)
@@ -55,8 +55,8 @@ Windows opsiclientd / smc-hermes-agent
 - Version: `contracts/version.json` → `opsiControlApi`.
 - `npm run contracts:check` includes `check_opsi_control_drift.py`.
 - OPSI Control must not import `services/runtime` or `services/salt-control`.
-- JSON Schemas live in `contracts/opsi/*.schema.json` (`action-*`, `rollout-campaign`, `artifact-promotion`, `evidence-manifest`, `rollout-gate`).
-- v1.3 adds production mode, Depot/Ring/Attestation/Freeze/Compliance under `/api/v1/opsi` without changing Work or Salt/Runtime contracts. v1.2 payloads without `mode` remain `pilot`.
+- JSON Schemas live in `contracts/opsi/*.schema.json` (`action-*`, `rollout-campaign`, `artifact-promotion`, `evidence-manifest`, `rollout-gate`, `endpoint-inventory`, `runtime-artifact-manifest`).
+- v1.4 adds real Lab HTTP RPC + isolated PostgreSQL, inventory/binding evidence, artifact envelope v2, and `accelerated-v1.4` Pilot policy. Production start/stable/rings stay frozen until `v1.5-production-reentry` GO. Work and Salt/Runtime contracts are unchanged.
 
 ## v1.4 readiness / memory / expert-mcp
 
