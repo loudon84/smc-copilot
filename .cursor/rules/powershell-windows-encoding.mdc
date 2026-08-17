@@ -1,0 +1,46 @@
+---
+description: PowerShell 脚本与 Windows 子进程必须 UTF-8，禁止 GBK 默认解码
+globs:
+  - "**/*.ps1"
+  - "**/*.psm1"
+  - "tools/release/**/*.py"
+  - "infra/opsi/**/*.ps1"
+  - "infra/opsi/**/*.psm1"
+  - "infra/opsi/**/*.py"
+  - "scripts/**/*.ps1"
+  - "scripts/**/*.py"
+alwaysApply: false
+---
+
+# PowerShell / Windows encoding
+
+中文 Windows 默认控制台代码页常为 GBK。Agent 生成或修改 `.ps1` / 调用子进程时必须显式 UTF-8，禁止依赖系统默认编码。
+
+## Python 调用子进程（含调 ps1 / CLI）
+
+- 禁止：`subprocess.run(..., capture_output=True, text=True)` 且不设 `encoding`
+- 必须：`encoding="utf-8", errors="replace"`（或等价）
+- Release 链优先复用 `tools/release/subprocess_text.py` 的 `run_command` / `command_output`
+- 读 `stderr`/`stdout` 前按 `or ""` 处理；禁止对可能为 `None` 的流直接 `.strip()`
+
+```python
+# BAD — 中文 Windows 上 GBK 解码会炸，stderr 可能为 None
+subprocess.run(cmd, capture_output=True, text=True)
+
+# GOOD
+subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+# 或
+from tools.release.subprocess_text import run_command, command_output
+```
+
+## 生成 / 修改 `.ps1` / `.psm1`
+
+- 文件保存为 UTF-8（优先 BOM-less；若需被 Windows PowerShell 5.1 可靠解析非 ASCII，可用 UTF-8 BOM）
+- 脚本头固定：`Set-StrictMode -Version Latest` + `$ErrorActionPreference = "Stop"`
+- 子进程输出：优先设置 UTF-8 输出编码，或按 UTF-8 解码字节；禁止假定系统 ANSI/GBK
+- 对外打印给 Python/CI 消费的 JSON/日志：只用 ASCII 可打印字符或明确 UTF-8；勿依赖本机代码页
+- 入口脚本用 `powershell -NoProfile -ExecutionPolicy Bypass -File ...`；勿假设默认 Profile/编码
+
+## 自检
+
+新增或改动会捕获 CLI 输出的代码时，确认不会在 GBK locale 下触发 `UnicodeDecodeError`，且失败信息可从 `stderr|stdout` 安全取出。
