@@ -202,17 +202,22 @@ def test_restart_and_repair_forbid_system_cli_fallback():
     assert "ManagedUserSid" in restart
     repair = (PRODUCT / "scripts" / "repair" / "Repair-Hermes.ps1").read_text(encoding="utf-8")
     assert "ManagedUserSid" in repair
+    installed = (PRODUCT / "controller" / "Invoke-SmcEndpointController.ps1").read_text(encoding="utf-8")
+    assert "USER_CONTEXT_PENDING" in installed
     adapter = (PRODUCT / "scripts" / "Invoke-SmcHermesAgent.ps1").read_text(encoding="utf-8")
-    assert "USER_CONTEXT_PENDING" in adapter
     assert "apply-config" in adapter
+    assert "current.json" in adapter
 
 
 def test_gateway_task_binds_home_profile_bind_port():
     register = (PRODUCT / "bootstrap" / "machine" / "Register-UserBootstrap.ps1").read_text(encoding="utf-8")
-    assert "HERMES_HOME" in register
+    assert "Start-SmcHermesGateway.ps1" in register
+    assert "HermesHome" in register
     assert "ManagedProfile" in register
     assert "127.0.0.1" in register
     assert "GatewayPort" in register
+    wrapper = (PRODUCT / "controller" / "Start-SmcHermesGateway.ps1").read_text(encoding="utf-8")
+    assert "$env:HERMES_HOME = $HermesHome" in wrapper
     init = (PRODUCT / "bootstrap" / "user" / "Initialize-HermesHome.ps1").read_text(encoding="utf-8")
     assert "GatewayPort" in init
 

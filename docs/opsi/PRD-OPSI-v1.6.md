@@ -7,7 +7,7 @@
 - 目标 API：`opsiControlApi 1.6.0`
 - 目标 Product：`smc-hermes-agent` package revision 3
 - 目标 Controller Contract：`smc.opsi.endpoint-controller.v1`
-- 状态：Planning；v1.5 Live Evidence 仍为 `not_proven/NO-GO`，Production mutation 保持冻结
+- 状态：Engineering implemented（`a448eb4`）；v1.6 Windows 10 Live Evidence 仍为 `not_proven/NO-GO`，Production mutation 保持冻结
 
 ## 1. 文档定位
 

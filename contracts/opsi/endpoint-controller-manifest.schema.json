@@ -15,7 +15,8 @@
     "userEntrypoint",
     "signerKeyId",
     "minProductRevision",
-    "canonicalDigest"
+    "canonicalDigest",
+    "signature"
   ],
   "properties": {
     "schema": { "const": "smc.opsi.endpoint-controller.v1" },

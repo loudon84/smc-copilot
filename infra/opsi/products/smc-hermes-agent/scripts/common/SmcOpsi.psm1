@@ -290,22 +290,41 @@ function Assert-SmcArtifactSignature {
     if (-not (Test-Path -LiteralPath $ManifestPath)) { throw "artifact manifest missing" }
     if (-not (Test-Path -LiteralPath $SignaturePath)) { throw "artifact signature missing" }
     if (-not (Test-Path -LiteralPath $PublicKeyPath)) { throw "release public key missing" }
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
-    $verifier = Join-Path $PSScriptRoot "..\verify\verify_ed25519.py"
-    if (-not $python -or -not (Test-Path -LiteralPath $verifier)) {
-        throw "Ed25519 verifier unavailable"
-    }
-    $py = $python.Source
-    $args = @(
-        $verifier,
-        "--artifact", $Artifact,
-        "--manifest", $ManifestPath,
-        "--signature", $SignaturePath,
-        "--public-key", $PublicKeyPath,
-        "--expected-key-id", $ExpectedKeyId
+    $candidates = @(
+        (Join-Path $PSScriptRoot "..\..\controller\smc-artifact-verify.ps1"),
+        (Join-Path $PSScriptRoot "..\smc-artifact-verify.ps1"),
+        (Join-Path (Get-SmcOpsiRoot) "controller\current.json")
     )
-    & $py @args
+    $verifier = $null
+    $pinned = ""
+    $currentPtr = Join-Path (Get-SmcOpsiRoot) "controller\current.json"
+    if (Test-Path -LiteralPath $currentPtr) {
+        try {
+            $ptr = Get-Content -LiteralPath $currentPtr -Raw | ConvertFrom-Json
+            $installed = Join-Path ([string]$ptr.path) "smc-artifact-verify.ps1"
+            if (Test-Path -LiteralPath $installed) {
+                $verifier = $installed
+                $pinned = [string]$ptr.verifierDigest
+            }
+        } catch {}
+    }
+    if (-not $verifier) {
+        foreach ($item in $candidates) {
+            if ($item.EndsWith("current.json")) { continue }
+            if (Test-Path -LiteralPath $item) { $verifier = $item; break }
+        }
+    }
+    if (-not $verifier) { throw "bundled verifier missing; system Python is forbidden" }
+    $verifyArgs = @{
+        Kind          = "runtime"
+        Artifact      = $Artifact
+        Manifest      = $ManifestPath
+        Signature     = $SignaturePath
+        PublicKey     = $PublicKeyPath
+        ExpectedKeyId = $ExpectedKeyId
+    }
+    if ($pinned) { $verifyArgs.PinnedDigest = $pinned }
+    & $verifier @verifyArgs
     if ($LASTEXITCODE -ne 0) { throw "Ed25519 verify failed" }
 }
 

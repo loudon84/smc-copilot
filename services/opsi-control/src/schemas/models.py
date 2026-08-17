@@ -144,6 +144,9 @@ class ActionResultView(CamelModel):
     transaction_digest: str | None = None
     desired_digest: str | None = None
     observed_digest: str | None = None
+    release_index_digest: str | None = None
+    controller_digest: str | None = None
+    runtime_manifest_digest: str | None = None
 
 
 class BindingUpsertRequest(CamelModel):
@@ -195,6 +198,7 @@ class ControllerEvidenceUpsertRequest(CamelModel):
     controller_digest: str = Field(default="", max_length=64)
     runtime_version: str = Field(default="", max_length=64)
     runtime_digest: str = Field(default="", max_length=64)
+    release_index_digest: str = Field(default="", max_length=64)
     transaction_phase: str = Field(default="", max_length=64)
     gateway_reachable: bool = False
     observed_at: datetime | None = None
@@ -228,6 +232,38 @@ class ProductView(CamelModel):
     product_id: str
     product_version: str
     package_version: str
+    controller_revision: str | None = None
+    controller_digest: str | None = None
+    runtime_versions: list[str] = Field(default_factory=list)
+    release_index_digest: str | None = None
+    verified: bool = False
+    live_eligible: bool = False
+
+
+class ProductReleaseUpsertRequest(CamelModel):
+    schema_: Literal["smc.opsi.product-release.v1"] = Field(default="smc.opsi.product-release.v1", alias="schema")
+    product_id: str = "smc-hermes-agent"
+    product_version: str = Field(min_length=1, max_length=32)
+    package_version: str = Field(min_length=1, max_length=16)
+    controller: dict = Field(default_factory=dict)
+    runtimes: list[dict] = Field(default_factory=list)
+    verifier: dict = Field(default_factory=dict)
+    source_revision: str = Field(default="unknownrev", min_length=7, max_length=64)
+    build_id: str = Field(default="build-local", min_length=1, max_length=80)
+    created_at: str = ""
+    canonical_digest: str = Field(default="", max_length=64)
+    signer_key_id: str = Field(default="", max_length=64)
+    signature: str = Field(default="", min_length=0)
+    live_eligible: bool = False
+    verified: bool = False
+    depot_readback: dict = Field(default_factory=dict)
+    attestation_digest: str = Field(default="", max_length=64)
+
+    @model_validator(mode="after")
+    def _reject_smoke_live(self) -> ProductReleaseUpsertRequest:
+        if self.live_eligible and self.signer_key_id.startswith("TEST-ONLY"):
+            raise ValueError("smoke release cannot be live eligible")
+        return self
 
 
 class HermesStateView(CamelModel):

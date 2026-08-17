@@ -33,6 +33,7 @@ from domain.gates import CRITICAL_CAUSES, GATE_POLICY_VERSION, evaluate_campaign
 from domain.inventory import BaselineKind, load_inventory
 from domain.live_gate import LiveGateEnvelope, verify_live_gate_envelope
 from domain.policy import (
+    CLIENT_DEPLOYMENT_GATE,
     CONTROLLER_GATE,
     PRODUCTION_REENTRY_GATE,
     resolve_pilot_policy,
@@ -881,6 +882,7 @@ class RolloutService:
     async def _assert_production_mutation_gates(self) -> None:
         await self._assert_live_gate(PRODUCTION_REENTRY_GATE)
         await self._assert_live_gate(CONTROLLER_GATE)
+        await self._assert_live_gate(CLIENT_DEPLOYMENT_GATE)
 
     async def _assert_live_gate(self, gate_id: str = "v1.1-live") -> None:
         gate = await self.store.get_live_gate(gate_id)
@@ -1138,6 +1140,14 @@ class RolloutService:
         )
         if not ok:
             raise OpsiControlError(ErrorCode.VALIDATION_ERROR, f"live gate invalid: {reason}", status_code=400)
+        if body.decision == "GO" and body.gate_id == CLIENT_DEPLOYMENT_GATE:
+            ref = body.evidence_ref.lower()
+            if ref.startswith(("test://", "smoke://", "fixture://", "fake://")):
+                raise OpsiControlError(
+                    ErrorCode.VALIDATION_ERROR,
+                    "smoke/fixture evidence cannot satisfy v1.7 live gate",
+                    status_code=400,
+                )
         if body.gate_id == PRODUCTION_REENTRY_GATE and body.decision == "GO":
             if self.settings.opsi_env == "production" and not envelope.approvals:
                 raise OpsiControlError(ErrorCode.FORBIDDEN, "unsigned GO forbidden", status_code=403)

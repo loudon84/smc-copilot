@@ -43,15 +43,34 @@ class InventoryService:
 
     async def list_products(self) -> list[dict]:
         products = await self.rpc.call("productOnDepot_getObjects", {}, [])
-        return [
-            {
+        release = None
+        if self.store is not None:
+            getter = getattr(self.store, "get_product_release", None)
+            if getter:
+                release = await getter(self.product_id)
+        items = []
+        for item in products:
+            if item.get("productId") != self.product_id:
+                continue
+            row = {
                 "productId": item.get("productId"),
                 "productVersion": item.get("productVersion"),
                 "packageVersion": item.get("packageVersion"),
             }
-            for item in products
-            if item.get("productId") == self.product_id
-        ]
+            if release:
+                controller = release.get("controller") or {}
+                row.update(
+                    {
+                        "controllerRevision": controller.get("revision"),
+                        "controllerDigest": controller.get("bundleDigest"),
+                        "runtimeVersions": [rt.get("version") for rt in release.get("runtimes") or []],
+                        "releaseIndexDigest": release.get("canonicalDigest"),
+                        "verified": bool(release.get("verified")),
+                        "liveEligible": bool(release.get("liveEligible")),
+                    }
+                )
+            items.append(row)
+        return items
 
     async def client_state(self, client_id: str) -> dict:
         await self.get_client(client_id)

@@ -33,35 +33,90 @@ function Get-SmcJournalV2Path {
     return (Join-Path $layout.Transactions "$RequestId.json")
 }
 
+function Get-SmcControllerFileDigest {
+    param([Parameter(Mandatory = $true)][string]$Root)
+    $parts = @()
+    Get-ChildItem -LiteralPath $Root -Recurse -File | Sort-Object FullName | ForEach-Object {
+        $rel = $_.FullName.Substring($Root.Length).TrimStart("\").Replace("\", "/")
+        if ($rel -eq "controller.manifest.json") { return }
+        if ($rel -match '\.\.|[A-Za-z]:|^\\\\') { throw "controller path escapes managed root: $rel" }
+        $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $parts += "$rel|$($_.Length)|$hash"
+    }
+    return (Get-SmcSha256Text -Text ($parts -join "`n"))
+}
+
 function Install-SmcControllerBundle {
     param(
         [Parameter(Mandatory = $true)][string]$Source,
         [Parameter(Mandatory = $true)][string]$Revision,
-        [Parameter(Mandatory = $true)][string]$Digest
+        [string]$Digest = ""
     )
     $layout = Get-SmcControllerLayout
+    $staging = Join-Path $layout.Controller ("staging\" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $staging | Out-Null
+    Copy-Item -Path (Join-Path $Source "*") -Destination $staging -Recurse -Force
+    if (-not (Test-Path -LiteralPath (Join-Path $staging "scripts"))) {
+        $parent = Split-Path -Parent $Source
+        foreach ($rel in @("scripts", "bootstrap")) {
+            $origin = Join-Path $parent $rel
+            if (Test-Path -LiteralPath $origin) {
+                Copy-Item -Path $origin -Destination (Join-Path $staging $rel) -Recurse -Force
+            }
+        }
+    }
+    $manifestPath = Join-Path $staging "controller.manifest.json"
+    if (Test-Path -LiteralPath $manifestPath) {
+        $verifier = Join-Path $staging "smc-artifact-verify.ps1"
+        if (-not (Test-Path -LiteralPath $verifier)) { throw "bundled verifier missing" }
+        $pub = Join-Path $staging "scripts\..\..\keys\release-public-key.pem"
+        $keyGuess = @(
+            (Join-Path $Source "..\CLIENT_DATA\keys\release-public-key.pem"),
+            (Join-Path $Source "..\keys\release-public-key.pem"),
+            (Join-Path (Get-SmcOpsiRoot) "keys\release-public-key.pem")
+        )
+        $public = $null
+        foreach ($candidate in $keyGuess) {
+            $full = [System.IO.Path]::GetFullPath($candidate)
+            if (Test-Path -LiteralPath $full) { $public = $full; break }
+        }
+        if ($public) {
+            & $verifier -Kind controller -Manifest $manifestPath -PublicKey $public -Bundle $staging
+            if ($LASTEXITCODE -ne 0) {
+                Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+                throw "controller manifest verify failed"
+            }
+        }
+        $man = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+        $Digest = [string]$man.canonicalDigest
+        if (-not $Digest) { throw "controller canonicalDigest missing" }
+    }
+    else {
+        $Digest = Get-SmcControllerFileDigest -Root $staging
+    }
     $short = $Digest.Substring(0, [Math]::Min(12, $Digest.Length))
     $dest = Join-Path $layout.Controller "releases\$Revision-$short"
     if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Copy-Item -Path (Join-Path $Source "*") -Destination $dest -Recurse -Force
-    Get-ChildItem -LiteralPath $dest -Recurse -File | ForEach-Object {
-        $rel = $_.FullName.Substring($dest.Length).TrimStart("\")
-        if ($rel -match '\.\.|[A-Za-z]:|^\\\\') { throw "controller path escapes managed root: $rel" }
-        Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 | Out-Null
-    }
+    New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+    Move-Item -LiteralPath $staging -Destination $dest
     $previous = ""
+    $previousDigest = ""
     if (Test-Path -LiteralPath $layout.Current) {
-        try { $previous = [string]((Get-Content -LiteralPath $layout.Current -Raw | ConvertFrom-Json).path) } catch {}
+        try {
+            $prev = Get-Content -LiteralPath $layout.Current -Raw | ConvertFrom-Json
+            $previous = [string]$prev.path
+            $previousDigest = [string]$prev.digest
+        } catch {}
     }
     Write-SmcJsonAtomic -Path $layout.Current -Object ([ordered]@{
-            schema     = "smc.opsi.endpoint-controller.v1"
-            revision   = $Revision
-            digest     = $Digest
-            path       = $dest
-            previous   = $previous
-            entrypoint = "Invoke-SmcEndpointController.ps1"
-            updatedAt  = [DateTime]::UtcNow.ToString("o")
+            schema          = "smc.opsi.endpoint-controller.v1"
+            revision        = $Revision
+            digest          = $Digest
+            path            = $dest
+            previous        = $previous
+            previousDigest  = $previousDigest
+            entrypoint      = "Invoke-SmcEndpointController.ps1"
+            updatedAt       = [DateTime]::UtcNow.ToString("o")
         })
     if ($env:SMC_OPSI_SKIP_TASKS -ne "1") {
         $recover = Join-Path $dest "Invoke-SmcEndpointController.ps1"
@@ -183,6 +238,10 @@ function Install-SmcRuntimeSlot {
     if (Test-Path -LiteralPath $layout.Active) {
         try { $previous = [string]((Get-Content -LiteralPath $layout.Active -Raw | ConvertFrom-Json).active) } catch {}
     }
+    $entrypoint = "hermes.exe"
+    foreach ($item in @($Files)) {
+        if ([string]$item.path -match 'hermes\.exe$') { $entrypoint = [string]$item.path; break }
+    }
     Write-SmcJsonAtomic -Path $layout.Active -Object ([ordered]@{
             schema         = "smc.opsi.runtime-active.v1"
             active         = $slot
@@ -190,6 +249,7 @@ function Install-SmcRuntimeSlot {
             version        = $Version
             digest         = $Digest
             manifestDigest = $Digest
+            entrypoint     = $entrypoint
             updatedAt      = [DateTime]::UtcNow.ToString("o")
         })
     return $slot

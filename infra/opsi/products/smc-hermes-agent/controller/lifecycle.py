@@ -144,16 +144,52 @@ def read_json(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def install_controller_bundle(layout: ControllerLayout, source: Path, revision: str, digest: str) -> Path:
-    dest = layout.controller / "releases" / f"{revision}-{digest[:12]}"
+def install_controller_bundle(layout: ControllerLayout, source: Path, revision: str, digest: str = "") -> Path:
+    dest_parent = layout.controller / "releases"
+    dest_parent.mkdir(parents=True, exist_ok=True)
+    staging = layout.controller / "staging" / os.urandom(8).hex()
+    if staging.exists():
+        shutil.rmtree(staging)
+    shutil.copytree(source, staging)
+    scripts_src = source.parent / "scripts"
+    if not (staging / "scripts").exists() and scripts_src.is_dir():
+        shutil.copytree(scripts_src, staging / "scripts")
+    bootstrap_src = source.parent / "bootstrap"
+    if not (staging / "bootstrap").exists() and bootstrap_src.is_dir():
+        shutil.copytree(bootstrap_src, staging / "bootstrap")
+    manifest_path = staging / "controller.manifest.json"
+    if manifest_path.is_file():
+        body = json.loads(manifest_path.read_text(encoding="utf-8"))
+        digest = str(body.get("canonicalDigest") or "")
+        if not digest:
+            raise ValueError("controller canonicalDigest missing")
+        expected = {str(item["path"]).replace("\\", "/") for item in body.get("files") or []}
+        present = {p.relative_to(staging).as_posix() for p in staging.rglob("*") if p.is_file() and p.name != "controller.manifest.json"}
+        if expected and expected - present:
+            shutil.rmtree(staging)
+            raise ValueError("controller manifest tamper")
+        for item in body.get("files") or []:
+            path = staging / item["path"]
+            if not path.is_file() or sha256_file(path) != str(item["sha256"]).lower():
+                shutil.rmtree(staging)
+                raise ValueError("controller file digest mismatch")
+    elif not digest:
+        parts = []
+        for path in sorted(p for p in staging.rglob("*") if p.is_file()):
+            rel = path.relative_to(staging).as_posix()
+            if rel == "controller.manifest.json":
+                continue
+            assert_contained(staging, rel)
+            parts.append(f"{rel}|{path.stat().st_size}|{sha256_file(path)}")
+        digest = sha256_bytes("\n".join(parts).encode("utf-8"))
+    dest = dest_parent / f"{revision}-{digest[:12]}"
     if dest.exists():
         shutil.rmtree(dest)
-    shutil.copytree(source, dest)
+    shutil.move(str(staging), str(dest))
     for path in dest.rglob("*"):
         if path.is_file():
             rel = path.relative_to(dest).as_posix()
             assert_contained(dest, rel)
-            sha256_file(path)
     previous = read_json(layout.current_controller)
     pointer = {
         "schema": CONTROLLER_SCHEMA,
@@ -161,6 +197,7 @@ def install_controller_bundle(layout: ControllerLayout, source: Path, revision: 
         "digest": digest,
         "path": str(dest),
         "previous": (previous or {}).get("path", ""),
+        "previousDigest": (previous or {}).get("digest", ""),
         "entrypoint": "Invoke-SmcEndpointController.ps1",
         "updatedAt": iso_now(),
     }
@@ -196,6 +233,7 @@ def install_runtime_slot(
         "version": version,
         "digest": digest,
         "manifestDigest": digest,
+        "entrypoint": next((item["path"] for item in files if str(item["path"]).endswith("hermes.exe")), "hermes.exe"),
         "updatedAt": iso_now(),
     }
     write_json(layout.active_runtime, pointer)

@@ -17,9 +17,10 @@ if (-not (Test-SmcExactVersion -Version $HermesVersion)) {
 $layout = Get-SmcProductLayout -AnchorPath $PSScriptRoot
 $scriptPathArtifacts = Join-Path $layout.Artifacts "hermes-$HermesVersion-windows.zip"
 $programDataArtifacts = Join-Path $Root "managed\artifacts\hermes-$HermesVersion-windows.zip"
+$rootKeys = Join-Path $Root "keys\release-public-key.pem"
 $artifact = $null
-if (Test-Path -LiteralPath $scriptPathArtifacts) { $artifact = $scriptPathArtifacts }
-elseif (Test-Path -LiteralPath $programDataArtifacts) { $artifact = $programDataArtifacts }
+if (Test-Path -LiteralPath $programDataArtifacts) { $artifact = $programDataArtifacts }
+elseif (Test-Path -LiteralPath $scriptPathArtifacts) { $artifact = $scriptPathArtifacts }
 if (-not $artifact) {
     throw "artifact missing: hermes-$HermesVersion-windows.zip (fail closed)"
 }
@@ -33,11 +34,14 @@ if (-not (Test-Path -LiteralPath $sigPath)) { throw "artifact signature missing"
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.version -ne $HermesVersion) { throw "manifest version mismatch" }
 $pub = Join-Path $layout.Keys "release-public-key.pem"
+if (Test-Path -LiteralPath $rootKeys) { $pub = $rootKeys }
 $allowedKeyIds = @("smc-opsi-release-ed25519-v1", "smc-opsi-release-ed25519-v2")
 $keyId = "smc-opsi-release-ed25519-v1"
 if ($manifest.keyId) { $keyId = [string]$manifest.keyId }
 if ($keyId -eq "TEST-ONLY-ed25519") {
     $smokePub = Join-Path $layout.Keys "smoke-public-key.pem"
+    $rootSmoke = Join-Path $Root "keys\smoke-public-key.pem"
+    if (Test-Path -LiteralPath $rootSmoke) { $smokePub = $rootSmoke }
     if (-not (Test-Path -LiteralPath $smokePub)) { throw "smoke public key missing" }
     $pub = $smokePub
     $allowedKeyIds += "TEST-ONLY-ed25519"
@@ -48,7 +52,10 @@ elseif (-not (Test-Path -LiteralPath $pub)) {
 if ($allowedKeyIds -notcontains $keyId) { throw "untrusted artifact keyId" }
 Assert-SmcArtifactSignature -Artifact $artifact -ManifestPath $manifestPath -SignaturePath $sigPath -PublicKeyPath $pub -ExpectedKeyId $keyId
 
-$controllerMod = Join-Path $layout.ProductRoot "controller\SmcController.psm1"
+$controllerMod = Join-Path $layout.ProductRoot "SmcController.psm1"
+if (-not (Test-Path -LiteralPath $controllerMod)) {
+    $controllerMod = Join-Path $layout.ProductRoot "controller\SmcController.psm1"
+}
 if (Test-Path -LiteralPath $controllerMod) { Import-Module $controllerMod -Force }
 
 $versionJson = Join-Path $Root "state\version.json"

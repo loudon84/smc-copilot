@@ -46,6 +46,12 @@ class InventoryStore:
     async def put_result_ack(self, request_id: str, client_id: str, token: str) -> None:
         return None
 
+    async def get_product_release(self, product_id: str) -> dict[str, Any] | None:
+        return None
+
+    async def put_product_release(self, product_id: str, release: dict[str, Any]) -> None:
+        return None
+
 
 class MemoryInventoryStore(InventoryStore):
     def __init__(self) -> None:
@@ -54,6 +60,7 @@ class MemoryInventoryStore(InventoryStore):
         self.evidence: dict[str, dict[str, Any]] = {}
         self.controller_evidence: dict[str, dict[str, Any]] = {}
         self.result_acks: dict[tuple[str, str], str] = {}
+        self.product_releases: dict[str, dict[str, Any]] = {}
 
     async def get_snapshot(self, client_id: str) -> EndpointInventorySnapshot | None:
         item = self.snapshots.get(client_id)
@@ -91,6 +98,16 @@ class MemoryInventoryStore(InventoryStore):
 
     async def put_result_ack(self, request_id: str, client_id: str, token: str) -> None:
         self.result_acks[(request_id, client_id)] = token
+
+    async def get_product_release(self, product_id: str) -> dict[str, Any] | None:
+        return self.product_releases.get(product_id)
+
+    async def put_product_release(self, product_id: str, release: dict[str, Any]) -> None:
+        if release.get("liveEligible") and str(release.get("keyId") or release.get("signerKeyId") or "").startswith(
+            "TEST-ONLY"
+        ):
+            raise ValueError("smoke release cannot be live eligible")
+        self.product_releases[product_id] = dict(release)
 
 
 class InventoryCollector:
