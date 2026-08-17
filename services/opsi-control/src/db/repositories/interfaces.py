@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from schemas.models import ActionStatus, Operation, UserBinding
 
@@ -136,3 +136,4 @@ class RepositoryBundle:
     audit: AuditRepository
     policies: PolicyRepository
     heartbeats: HeartbeatRepository
+    inventory_store: Any = None

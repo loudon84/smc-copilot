@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/product-release.schema.json",
+  "title": "smc.opsi.product-release.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "productId",
+    "productVersion",
+    "packageVersion",
+    "controller",
+    "runtimes",
+    "verifier",
+    "sourceRevision",
+    "buildId",
+    "createdAt",
+    "canonicalDigest",
+    "signerKeyId",
+    "signature"
+  ],
+  "properties": {
+    "schema": { "const": "smc.opsi.product-release.v1" },
+    "productId": { "const": "smc-hermes-agent" },
+    "productVersion": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "packageVersion": { "type": "string", "minLength": 1, "maxLength": 16 },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "manifestSha256", "bundleDigest"],
+      "properties": {
+        "revision": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "manifestSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "bundleDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "runtimes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "manifestSha256", "artifactSha256", "controllerCompat"],
+        "properties": {
+          "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "manifestSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+          "artifactSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+          "controllerCompat": { "type": "string", "minLength": 1, "maxLength": 32 }
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "sha256"],
+      "properties": {
+        "platform": { "enum": ["windows-amd64"] },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "entrypoint": { "type": "string", "maxLength": 128 }
+      }
+    },
+    "sourceRevision": { "type": "string", "minLength": 7, "maxLength": 64 },
+    "buildId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "createdAt": { "type": "string" },
+    "canonicalDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "signerKeyId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "signature": { "type": "string", "minLength": 1 },
+    "liveEligible": { "type": "boolean" }
+  }
+}

@@ -7,6 +7,7 @@ from typing import Any
 from core.auth import digest_payload
 from core.errors import ErrorCode, OpsiControlError
 from db.repositories.interfaces import RepositoryBundle
+from domain.product_release import compat_holds
 from integrations.dto import ProductPropertyState, property_from_wire, property_to_wire
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import CUSTOM_OPERATIONS, SETUP_UPDATE, ActionStatus, Operation
@@ -34,14 +35,42 @@ async def _require_client(rpc: OpsiJsonRpc, client_id: str) -> None:
         raise OpsiControlError(ErrorCode.NOT_FOUND, "client not found", status_code=404)
 
 
-async def _require_product(rpc: OpsiJsonRpc, product_id: str, hermes_version: str | None) -> None:
+async def _require_product(
+    rpc: OpsiJsonRpc,
+    product_id: str,
+    hermes_version: str | None,
+    release: dict[str, Any] | None = None,
+) -> None:
     products = await rpc.call("productOnDepot_getObjects", {}, [])
     matches = [item for item in products if item.get("productId") == product_id]
     if not matches:
         raise OpsiControlError(ErrorCode.NOT_FOUND, "product not on depot", status_code=404)
-    if hermes_version:
-        if not any(item.get("productVersion") == hermes_version for item in matches):
-            raise OpsiControlError(ErrorCode.VALIDATION_ERROR, "depot productVersion mismatch", status_code=400)
+    if not hermes_version:
+        return
+    if release:
+        product_version = str(release.get("productVersion") or "")
+        package_version = str(release.get("packageVersion") or "")
+        if product_version and not any(
+            item.get("productVersion") == product_version and str(item.get("packageVersion")) == package_version
+            for item in matches
+        ):
+            raise OpsiControlError(ErrorCode.VALIDATION_ERROR, "depot product release mismatch", status_code=400)
+        runtimes = release.get("runtimes") or []
+        runtime = next((item for item in runtimes if str(item.get("version")) == hermes_version), None)
+        if runtime is None:
+            raise OpsiControlError(ErrorCode.VALIDATION_ERROR, "hermes version not in release catalog", status_code=400)
+        compat = str(runtime.get("controllerCompat") or "1")
+        revision = str(release.get("controllerRevision") or release.get("controller", {}).get("revision") or "1")
+        try:
+            if not compat_holds(compat, revision):
+                raise OpsiControlError(
+                    ErrorCode.VALIDATION_ERROR, "controller/runtime compatibility failed", status_code=400
+                )
+        except ValueError as exc:
+            raise OpsiControlError(ErrorCode.VALIDATION_ERROR, str(exc), status_code=400) from exc
+        return
+    # Product and Hermes versions are independent; presence on depot is sufficient without a catalog.
+    _ = hermes_version
 
 
 async def dispatch_target(
@@ -59,9 +88,15 @@ async def dispatch_target(
     config_payload: str = "",
     config_digest: str = "",
     ack_token: str = "",
+    release: dict[str, Any] | None = None,
 ) -> str:
     await _require_client(rpc, client_id)
-    await _require_product(rpc, product_id, hermes_version if operation in SETUP_UPDATE else None)
+    await _require_product(
+        rpc,
+        product_id,
+        hermes_version if operation in SETUP_UPDATE else None,
+        release=release,
+    )
     if operation in SETUP_UPDATE and (not user_sid or not user_account):
         raise OpsiControlError(
             ErrorCode.VALIDATION_ERROR, "setup/update require verified user binding", status_code=400
@@ -148,6 +183,10 @@ async def dispatch_queued(
         getter = getattr(inventory, "get_result_ack", None) if inventory is not None else None
         if getter and action.operation == Operation.STATUS:
             ack_token = (await getter(target.request_id, target.client_id)) or ""
+        release = None
+        release_getter = getattr(inventory, "get_product_release", None) if inventory is not None else None
+        if release_getter:
+            release = await release_getter("smc-hermes-agent")
         try:
             digest = await dispatch_target(
                 rpc=rpc,
@@ -163,6 +202,7 @@ async def dispatch_queued(
                 config_payload=config_payload,
                 config_digest=config_digest,
                 ack_token=ack_token,
+                release=release,
             )
             target.status = ActionStatus.DISPATCHED
             target.dispatched = True

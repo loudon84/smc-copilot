@@ -148,3 +148,51 @@ def signed_controller_gate(
         "payload": payload,
         "approvals": approvals,
     }
+
+
+def signed_client_deployment_gate(
+    *,
+    decision: str = "GO",
+    evidence_ref: str = "operator://v1.7",
+    expires_at: datetime | None = None,
+) -> dict[str, Any]:
+    from domain.policy import CLIENT_DEPLOYMENT_GATE
+
+    expiry = expires_at or (datetime.now(UTC) + timedelta(days=7))
+    payload = {
+        "schema": "smc.opsi.live-gate.v1",
+        "gateId": CLIENT_DEPLOYMENT_GATE,
+        "decision": decision,
+        "evidenceRef": evidence_ref,
+        "expiresAt": expiry.isoformat(),
+        "windowsProof": "w10-01-to-w10-05",
+    }
+    canonical = canonical_json(gate_canonical_payload(payload))
+    digest = hashlib.sha256(canonical).hexdigest()
+    approvals = [
+        {
+            "role": "release_owner",
+            "keyId": "operator-release",
+            "signature": sign_ed25519(OPERATOR_RELEASE_SK, canonical),
+        },
+        {
+            "role": "endpoint_ops",
+            "keyId": "operator-endpoint-ops",
+            "signature": sign_ed25519(OPERATOR_OPS_SK, canonical),
+        },
+        {
+            "role": "security_owner",
+            "keyId": "operator-security",
+            "signature": sign_ed25519(OPERATOR_SECURITY_SK, canonical),
+        },
+    ]
+    return {
+        "schema": "smc.opsi.live-gate.v1",
+        "gateId": CLIENT_DEPLOYMENT_GATE,
+        "decision": decision,
+        "evidenceRef": evidence_ref,
+        "expiresAt": expiry.isoformat(),
+        "inputDigest": digest,
+        "payload": payload,
+        "approvals": approvals,
+    }

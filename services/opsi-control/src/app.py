@@ -100,6 +100,7 @@ def build_test_state(settings: Settings | None = None) -> AppState:
     rpc = FakeOpsiJsonRpc()
     _assert_rpc_kind(rpc, allow_fake=True)
     inventory_store = MemoryInventoryStore()
+    repos.inventory_store = inventory_store
     _seed_installed_inventory(inventory_store, rpc)
     collector = InventoryCollector(rpc, inventory_store)
     now = datetime.now(UTC)
@@ -155,6 +156,7 @@ def build_real_state(settings: Settings, *, auth_mode: str, secret_mode: str) ->
     rpc = HttpOpsiJsonRpc(settings, secrets=secrets)
     _assert_rpc_kind(rpc, allow_fake=False)
     inventory_store = SqlInventoryStore(factory)
+    repos.inventory_store = inventory_store
     collector = InventoryCollector(rpc, inventory_store)
     inventory = InventoryService(rpc, settings.product_id, store=inventory_store, collector=collector)
     actions = ActionService(repos, rpc, settings)
@@ -229,7 +231,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if secret_close:
             await secret_close()
 
-    app = FastAPI(title="SMC OPSI Control", version="1.6.0", lifespan=lifespan)
+    app = FastAPI(title="SMC OPSI Control", version="1.7.0", lifespan=lifespan)
     if state is None:
         if cfg.opsi_env == "test":
             state = build_test_state(cfg)

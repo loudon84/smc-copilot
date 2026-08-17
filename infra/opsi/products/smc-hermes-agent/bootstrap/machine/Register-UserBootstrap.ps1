@@ -12,7 +12,11 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-Import-Module (Join-Path $PSScriptRoot "..\..\scripts\common\SmcOpsi.psm1") -Force
+$common = Join-Path $PSScriptRoot "..\..\scripts\common\SmcOpsi.psm1"
+if (-not (Test-Path -LiteralPath $common)) {
+    $common = Join-Path $PSScriptRoot "..\..\SmcOpsi.psm1"
+}
+Import-Module $common -Force
 
 if (-not (Test-SmcUserBinding -Sid $ManagedUserSid -Account $ManagedUserAccount)) {
     Write-Output "USER_CONTEXT_PENDING: profile not ready"
@@ -21,13 +25,22 @@ if (-not (Test-SmcUserBinding -Sid $ManagedUserSid -Account $ManagedUserAccount)
 $controllerDir = Join-Path $Root "controller"
 $currentPtr = Join-Path $controllerDir "current.json"
 $userScript = Join-Path $Root "bootstrap\user\Initialize-HermesHome.ps1"
+$wrapper = Join-Path $PSScriptRoot "..\..\controller\Start-SmcHermesGateway.ps1"
+$installedPath = ""
 if (Test-Path -LiteralPath $currentPtr) {
     try {
         $ptr = Get-Content -LiteralPath $currentPtr -Raw | ConvertFrom-Json
-        $installedUser = Join-Path ([string]$ptr.path) "Invoke-SmcUserController.ps1"
+        $installedPath = [string]$ptr.path
+        $installedUser = Join-Path $installedPath "Invoke-SmcUserController.ps1"
         if (Test-Path -LiteralPath $installedUser) { $userScript = $installedUser }
+        $installedWrap = Join-Path $installedPath "Start-SmcHermesGateway.ps1"
+        if (Test-Path -LiteralPath $installedWrap) { $wrapper = $installedWrap }
     } catch {}
 }
+if (-not (Test-Path -LiteralPath $wrapper)) {
+    $wrapper = Join-Path $installedPath "Start-SmcHermesGateway.ps1"
+}
+if (-not (Test-Path -LiteralPath $wrapper)) { throw "Start-SmcHermesGateway wrapper missing" }
 
 $bootstrapName = "SMC-Hermes-User-Bootstrap-$ManagedUserSid"
 $gatewayName = "SMC-Hermes-Gateway-$ManagedUserSid"
@@ -42,19 +55,19 @@ try {
     $profile = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$ManagedUserSid" -ErrorAction SilentlyContinue).ProfileImagePath
     if ($profile) { $profilePath = Join-Path $profile ".hermes" }
 } catch {}
-$gwArg = "gateway start --bind 127.0.0.1 --port $GatewayPort --profile $ManagedProfile"
-if ($GatewayAutostart -eq "false") { $gwArg = "gateway status --port $GatewayPort" }
-$envPrefix = ""
-if ($profilePath) { $envPrefix = "set HERMES_HOME=$profilePath&& " }
-Register-SmcManagedTask -TaskName $gatewayName -Execute $cli -Argument $gwArg -UserId $ManagedUserAccount | Out-Null
+$gwAction = "start"
+if ($GatewayAutostart -eq "false") { $gwAction = "status" }
+$gwArg = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$wrapper`" -HermesExe `"$cli`" -HermesHome `"$profilePath`" -Profile `"$ManagedProfile`" -Port $GatewayPort -Bind 127.0.0.1 -GatewayAction $gwAction"
+Register-SmcManagedTask -TaskName $gatewayName -Execute "powershell.exe" -Argument $gwArg -UserId $ManagedUserAccount | Out-Null
 
-$taskDigest = Get-SmcSha256Text -Text "$cli|$gwArg|$profilePath|$ManagedProfile|$GatewayPort"
+$taskDigest = Get-SmcSha256Text -Text "$wrapper|$cli|$profilePath|$ManagedProfile|$GatewayPort|$gwAction"
 Write-SmcJsonAtomic -Path (Get-SmcTaskManifestPath) -Object ([ordered]@{
         bootstrapTask      = $bootstrapName
         gatewayTask        = $gatewayName
         userControllerTask = $userControllerName
         sid                = $ManagedUserSid
         account            = $ManagedUserAccount
+        wrapper            = $wrapper
         cli                = $cli
         hermesHome         = $profilePath
         profile            = $ManagedProfile
@@ -63,6 +76,8 @@ Write-SmcJsonAtomic -Path (Get-SmcTaskManifestPath) -Object ([ordered]@{
         autostart          = $GatewayAutostart
         version            = $HermesVersion
         taskDigest         = $taskDigest
+        desired            = @{ exe = $cli; home = $profilePath; wrapper = $wrapper }
+        observed           = @{ exe = $cli; home = $profilePath; wrapper = $wrapper }
         registered         = $true
     })
 Write-SmcJsonAtomic -Path (Join-Path $Root "state\tasks.json") -Object ([ordered]@{
@@ -70,4 +85,7 @@ Write-SmcJsonAtomic -Path (Join-Path $Root "state\tasks.json") -Object ([ordered
         bootstrap = $bootstrapName
         user      = $userControllerName
         digest    = $taskDigest
+        wrapper   = $wrapper
+        exe       = $cli
+        home      = $profilePath
     })

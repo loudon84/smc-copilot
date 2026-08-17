@@ -23,6 +23,7 @@ def main() -> int:
         "endpoint-controller-state.schema.json",
         "endpoint-command.schema.json",
         "endpoint-transaction.schema.json",
+        "product-release.schema.json",
     ]
     for name in required:
         path = SCHEMAS / name

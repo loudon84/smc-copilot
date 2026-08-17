@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 
-from crypto_fixtures import signed_controller_gate, signed_reentry_gate
+from crypto_fixtures import signed_client_deployment_gate, signed_controller_gate, signed_reentry_gate
 from fastapi.testclient import TestClient
 
 from app import build_test_state, create_app
@@ -82,6 +82,13 @@ def test_production_mutation_requires_controller_gate(token):
         json=signed_controller_gate(),
     )
     assert ctrl.status_code == 200, ctrl.text
+    pytest_raises_gate(state, "v1.7-client-deployment-release")
+    deploy = client.post(
+        "/api/v1/opsi/live-gates/import",
+        headers=_auth(token, "security_owner", idem="deploy"),
+        json=signed_client_deployment_gate(),
+    )
+    assert deploy.status_code == 200, deploy.text
     asyncio.run(state.rollouts._assert_production_mutation_gates())
 
 

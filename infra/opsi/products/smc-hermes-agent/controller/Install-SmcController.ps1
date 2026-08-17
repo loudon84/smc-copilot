@@ -1,15 +1,21 @@
 #Requires -Version 5.1
 param(
     [Parameter(Mandatory = $true)][string]$Source,
-    [string]$Revision = "1",
+    [string]$Revision = "2",
     [string]$Digest = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module (Join-Path $here "..\scripts\common\SmcOpsi.psm1") -Force
-Import-Module (Join-Path $here "SmcController.psm1") -Force
-if (-not $Digest) {
-    $Digest = Get-SmcSha256Text -Text $Revision
+$common = Join-Path $here "scripts\common\SmcOpsi.psm1"
+if (-not (Test-Path -LiteralPath $common)) {
+    $common = Join-Path $here "..\scripts\common\SmcOpsi.psm1"
 }
-Install-SmcControllerBundle -Source $Source -Revision $Revision -Digest $Digest | Out-Null
+Import-Module $common -Force
+Import-Module (Join-Path $here "SmcController.psm1") -Force
+if ($Digest) {
+    Install-SmcControllerBundle -Source $Source -Revision $Revision -Digest $Digest | Out-Null
+}
+else {
+    Install-SmcControllerBundle -Source $Source -Revision $Revision | Out-Null
+}

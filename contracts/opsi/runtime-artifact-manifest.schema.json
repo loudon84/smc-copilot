@@ -53,5 +53,12 @@
         }
       }
     }
+  },
+  "if": {
+    "properties": { "schema": { "const": "smc.opsi.runtime-artifact.v3" } },
+    "required": ["schema"]
+  },
+  "then": {
+    "required": ["files"]
   }
 }

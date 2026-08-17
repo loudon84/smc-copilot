@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from db.models import ControllerEvidenceRow, EndpointBindingRow, EndpointInventoryRow, ResultAckRow
+from db.models import ControllerEvidenceRow, EndpointBindingRow, EndpointInventoryRow, ProductReleaseRow, ResultAckRow
 from domain.collector import InventoryStore
 from domain.inventory import EndpointBindingRecord, EndpointInventorySnapshot
 
@@ -256,3 +256,63 @@ class SqlInventoryStore(InventoryStore):
                     session.add(ResultAckRow(request_id=request_id, client_id=client_id, token=token))
                     return
                 row.token = token
+
+    async def get_product_release(self, product_id: str) -> dict[str, Any] | None:
+        from sqlalchemy import select
+
+        async with self.factory() as session:
+            result = await session.execute(
+                select(ProductReleaseRow)
+                .where(ProductReleaseRow.product_id == product_id)
+                .order_by(ProductReleaseRow.id.desc())
+            )
+            row = result.scalars().first()
+            if row is None:
+                return None
+            return json.loads(row.payload_json)
+
+    async def put_product_release(self, product_id: str, release: dict[str, Any]) -> None:
+        if release.get("liveEligible") and str(release.get("signerKeyId") or release.get("keyId") or "").startswith(
+            "TEST-ONLY"
+        ):
+            raise ValueError("smoke release cannot be live eligible")
+        async with self.factory() as session:
+            async with session.begin():
+                from sqlalchemy import select
+
+                product_version = str(release.get("productVersion") or "")
+                package_version = str(release.get("packageVersion") or "")
+                result = await session.execute(
+                    select(ProductReleaseRow).where(
+                        ProductReleaseRow.product_id == product_id,
+                        ProductReleaseRow.product_version == product_version,
+                        ProductReleaseRow.package_version == package_version,
+                    )
+                )
+                row = result.scalar_one_or_none()
+                controller = release.get("controller") or {}
+                encoded = json.dumps(release)
+                values = dict(
+                    controller_revision=str(controller.get("revision") or ""),
+                    controller_digest=str(controller.get("bundleDigest") or ""),
+                    runtime_catalog_json=json.dumps(release.get("runtimes") or []),
+                    release_index_digest=str(release.get("canonicalDigest") or ""),
+                    attestation_digest=str(release.get("attestationDigest") or ""),
+                    depot_readback_json=json.dumps(release.get("depotReadback") or {}),
+                    signer_key_id=str(release.get("signerKeyId") or ""),
+                    live_eligible=bool(release.get("liveEligible")),
+                    verified=bool(release.get("verified")),
+                    payload_json=encoded,
+                )
+                if row is None:
+                    session.add(
+                        ProductReleaseRow(
+                            product_id=product_id,
+                            product_version=product_version,
+                            package_version=package_version,
+                            **values,
+                        )
+                    )
+                    return
+                for key, value in values.items():
+                    setattr(row, key, value)

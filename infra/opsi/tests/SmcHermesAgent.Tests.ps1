@@ -26,10 +26,12 @@ Describe "smc-hermes-agent adapter contracts" {
     }
 
     It "pending is not treated as SUCCEEDED in adapter" {
-        $text = Get-Content (Join-Path $script:Product "scripts\Invoke-SmcHermesAgent.ps1") -Raw
-        $text | Should Match "USER_CONTEXT_PENDING"
-        $text | Should Match "exit 10"
-        $text | Should Not Match "LastLoggedOnUserSID"
+        $boot = Get-Content (Join-Path $script:Product "scripts\Invoke-SmcHermesAgent.ps1") -Raw
+        $boot | Should Match "current.json"
+        $boot | Should Not Match "LastLoggedOnUserSID"
+        $installed = Get-Content (Join-Path $script:Product "controller\Invoke-SmcEndpointController.ps1") -Raw
+        $installed | Should Match "USER_CONTEXT_PENDING"
+        $installed | Should Match "exit 10"
     }
 
     It "smoke packaging helper refuses .opsi suffix" {
@@ -87,7 +89,10 @@ Describe "smc-hermes-agent adapter contracts" {
         $text | Should Match "SMC-Hermes-User-Bootstrap-"
         $text | Should Match "SMC-Hermes-Gateway-"
         $text | Should Match "Register-SmcManagedTask"
-        $text | Should Match "HERMES_HOME"
+        $text | Should Match "Start-SmcHermesGateway.ps1"
+        $text | Should Match "HermesHome"
+        $wrap = Get-Content (Join-Path $script:Product "controller\Start-SmcHermesGateway.ps1") -Raw
+        $wrap | Should Match '\$env:HERMES_HOME = \$HermesHome'
         $mod = Get-Content (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Raw
         $mod | Should Match "function Register-SmcManagedTask"
         $mod | Should Match "Get-ScheduledTask"
@@ -127,5 +132,38 @@ Describe "smc-hermes-agent adapter contracts" {
         $cli = Resolve-SmcHermesCli -Root $root -Entrypoint "hermes.exe"
         $cli | Should Match "hermes.exe"
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "does not call system python for artifact verify" {
+        $mod = Get-Content (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Raw
+        $mod | Should Not Match "Get-Command python"
+        $mod | Should Match "smc-artifact-verify"
+        Test-Path (Join-Path $script:Product "controller\smc-artifact-verify.ps1") | Should Be $true
+        Test-Path (Join-Path $script:Product "controller\Start-SmcHermesGateway.ps1") | Should Be $true
+    }
+
+    It "gateway wrapper injects HERMES_HOME and task uses wrapper" {
+        $wrap = Get-Content (Join-Path $script:Product "controller\Start-SmcHermesGateway.ps1") -Raw
+        $wrap | Should Match '\$env:HERMES_HOME = \$HermesHome'
+        $reg = Get-Content (Join-Path $script:Product "bootstrap\machine\Register-UserBootstrap.ps1") -Raw
+        $reg | Should Match "Start-SmcHermesGateway.ps1"
+        $reg | Should Not Match "set HERMES_HOME="
+    }
+
+    It "thin bootstrap dispatches installed controller after cache delete" {
+        Import-Module (Join-Path $script:Product "scripts\common\SmcOpsi.psm1") -Force
+        Import-Module (Join-Path $script:Product "controller\SmcController.psm1") -Force
+        $root = Join-Path $env:TEMP ("smc-disp-" + [guid]::NewGuid().ToString("N"))
+        $env:SMC_OPSI_ROOT = $root
+        $src = Join-Path $script:Product "controller"
+        $installed = Install-SmcControllerBundle -Source $src -Revision "2"
+        $entry = Join-Path $installed "Invoke-SmcEndpointController.ps1"
+        Test-Path -LiteralPath $entry | Should Be $true
+        Test-Path -LiteralPath (Join-Path $installed "scripts") | Should Be $true
+        $boot = Get-Content (Join-Path $script:Product "scripts\Invoke-SmcHermesAgent.ps1") -Raw
+        $boot | Should Match "current.json"
+        $boot | Should Not Match "install\\Install-Hermes.ps1"
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item Env:SMC_OPSI_ROOT -ErrorAction SilentlyContinue
     }
 }

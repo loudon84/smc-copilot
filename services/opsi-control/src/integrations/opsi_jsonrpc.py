@@ -52,6 +52,12 @@ class FakeOpsiJsonRpc:
         self.products: list[dict[str, Any]] = [
             {
                 "productId": "smc-hermes-agent",
+                "productVersion": "1.7.0",
+                "packageVersion": "1",
+                "depotId": "depot.example",
+            },
+            {
+                "productId": "smc-hermes-agent",
                 "productVersion": "0.22.0",
                 "packageVersion": "1",
                 "depotId": "depot.example",

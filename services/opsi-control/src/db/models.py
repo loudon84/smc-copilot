@@ -475,3 +475,26 @@ class ResultAckRow(Base):
     client_id: Mapped[str] = mapped_column(String(128), nullable=False)
     token: Mapped[str] = mapped_column(String(80), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class ProductReleaseRow(Base):
+    __tablename__ = "opsi_product_releases"
+    __table_args__ = (
+        UniqueConstraint("product_id", "product_version", "package_version", name="uq_opsi_product_release"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    product_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    package_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    controller_revision: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    controller_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    runtime_catalog_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    release_index_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    attestation_digest: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    depot_readback_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    signer_key_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    live_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
