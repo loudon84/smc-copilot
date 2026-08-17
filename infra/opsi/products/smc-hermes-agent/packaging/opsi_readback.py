@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import zipfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from control_schema import (  # noqa: E402
+    ControlSchemaError,
+    package_version as control_package_version,
+    product_version as control_product_version,
+    property_default,
+    validate_control_schema,
+)
 
 COMPARE_PATHS = (
     "OPSI/control.toml",
@@ -34,45 +44,46 @@ def sha256_file(path: Path) -> str:
     return sha256_bytes(path.read_bytes())
 
 
-def _control_field(text: str, name: str) -> str:
-    match = re.search(rf'^{name}\s*=\s*"([^"]+)"', text, re.M)
-    if not match:
-        raise ValueError(f"Release FAILED: missing {name} in control.toml")
-    return match.group(1)
-
-
-def _control_property_default(text: str, name: str) -> str:
-    block = re.search(rf"\[ProductProperty\.unicode\.{re.escape(name)}\](.*?)(\n\[|\Z)", text, re.S)
-    if not block:
-        raise ValueError(f"Release FAILED: missing ProductProperty {name}")
-    match = re.search(r'default\s*=\s*\["([^"]*)"\]', block.group(1))
-    if not match:
-        raise ValueError(f"Release FAILED: missing default for {name}")
-    return match.group(1)
+def _package_root(dest: Path) -> Path:
+    direct = dest / "OPSI" / "control.toml"
+    if direct.is_file():
+        return dest
+    matches = sorted(dest.rglob("OPSI/control.toml"))
+    if not matches:
+        raise ValueError("Release FAILED: OPSI/control.toml missing after extract")
+    return matches[0].parent.parent
 
 
 def extract_opsi(archive: Path, dest: Path) -> Path:
     if dest.exists():
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
+    if archive.suffix.lower() == ".opsi":
+        tool = shutil.which("opsi-cli")
+        if not tool:
+            raise ValueError("Release FAILED: opsi-cli missing; native extract required")
+        result = subprocess.run(
+            [tool, "package", "extract", "-o", str(archive), str(dest)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if result.returncode != 0:
+            raise ValueError(
+                "Release FAILED: opsi-cli package extract failed: "
+                + (result.stderr or result.stdout or "").strip()
+            )
+        return _package_root(dest)
     if zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as zf:
             zf.extractall(dest)
-        return dest
+        return _package_root(dest)
     if tarfile.is_tarfile(archive):
         with tarfile.open(archive) as tf:
             tf.extractall(dest)
-        return dest
-    tool = shutil.which("opsi-package-manager")
-    if tool:
-        result = subprocess.run(
-            [tool, "-x", str(archive), "-d", str(dest)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0 and any(dest.rglob("control.toml")):
-            return dest
+        return _package_root(dest)
     raise ValueError("Release FAILED: OPSI-aware extract failed")
 
 
@@ -106,17 +117,30 @@ def readback_opsi(archive: Path, stage: Path, *, extract_root: Path | None = Non
             continue
         if sha256_file(staged_file) != sha256_file(packed_file):
             mismatches.append(pattern)
-    control_text = (extracted / "OPSI" / "control.toml").read_text(encoding="utf-8") if (extracted / "OPSI" / "control.toml").is_file() else ""
+    control_path = extracted / "OPSI" / "control.toml"
     index_path = extracted / "OPSI" / "product-release.json"
     if not index_path.is_file():
         mismatches.append("product-release.json")
         if mismatches:
             raise ValueError("Release FAILED: " + ", ".join(mismatches))
     index = json.loads(index_path.read_text(encoding="utf-8"))
-    product_version = _control_field(control_text, "productVersion") if control_text else ""
-    package_version = _control_field(control_text, "packageVersion") if control_text else ""
-    hermes_version = _control_property_default(control_text, "hermes_version") if control_text else ""
-    controller_revision = _control_property_default(control_text, "controller_revision") if control_text else ""
+    product_version = ""
+    package_version = ""
+    hermes_version = ""
+    controller_revision = ""
+    if control_path.is_file():
+        try:
+            control = validate_control_schema(
+                control_path,
+                expected_product_version=str(index.get("productVersion") or "") or None,
+                expected_package_version=str(index.get("packageVersion") or "") or None,
+            )
+        except ControlSchemaError as exc:
+            raise ValueError(str(exc)) from exc
+        product_version = control_product_version(control)
+        package_version = control_package_version(control)
+        hermes_version = property_default(control, "hermes_version")
+        controller_revision = property_default(control, "controller_revision")
     runtime = (index.get("runtimes") or [None])[0]
     if not runtime:
         mismatches.append("runtime catalog missing")

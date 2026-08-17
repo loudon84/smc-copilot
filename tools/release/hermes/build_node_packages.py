@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from tools.release.hermes.runtime_profile import FORBIDDEN_NODE_VERSIONS
+from tools.release.subprocess_text import command_output, run_command
 
 
 def sha256_file(path: Path) -> str:
@@ -76,14 +76,11 @@ def pack_packages(packages: list[dict[str, str]], dest: Path) -> list[Path]:
         name = item["name"]
         version = assert_pinned(item["version"])
         spec = f"{name}@{version}"
-        result = subprocess.run(
+        result = run_command(
             [npm, "pack", spec, "--pack-destination", str(packages_dir)],
-            capture_output=True,
-            text=True,
-            check=False,
         )
         if result.returncode != 0:
-            raise ValueError(result.stderr.strip() or f"npm pack failed: {spec}")
+            raise ValueError(command_output(result, f"npm pack failed: {spec}"))
         written.extend(sorted(packages_dir.glob("*.tgz")))
     if packages and not list(packages_dir.glob("*.tgz")):
         raise ValueError("missing node dependency")

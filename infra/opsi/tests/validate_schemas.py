@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import json
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMAS = ROOT / "contracts" / "opsi"
+CONTROL = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "OPSI" / "control.toml"
+CONTROL_SCHEMA = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "packaging" / "control_schema.py"
 
 
 def main() -> int:
@@ -34,10 +37,14 @@ def main() -> int:
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data.get("additionalProperties") is False
         assert "title" in data
-    control = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "OPSI" / "control.toml"
-    text = control.read_text(encoding="utf-8")
+    text = CONTROL.read_text(encoding="utf-8")
     assert 'id = "smc-hermes-agent"' in text
     assert "latest" not in text.lower() or "forbidden" in text.lower()
+    spec = spec_from_file_location("control_schema", CONTROL_SCHEMA)
+    assert spec and spec.loader
+    schema = module_from_spec(spec)
+    spec.loader.exec_module(schema)
+    schema.validate_control_schema(CONTROL, expected_product_version="1.7.2", expected_package_version="1")
     print("ok: opsi schemas and control.toml")
     return 0
 

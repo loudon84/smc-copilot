@@ -49,8 +49,8 @@ def test_runtime_profile_yaml_pins_smc_managed():
 def test_client_release_yaml_uses_native_and_independent_versions():
     text = (RELEASE / "client-release.yaml").read_text(encoding="utf-8")
     assert "smc.client-release.config.v1" in text
-    assert 'version: "1.7.1"' in text
-    assert 'productVersion: "1.7.1"' in text
+    assert 'version: "1.7.2"' in text
+    assert 'productVersion: "1.7.2"' in text
     assert "buildMode: native" in text
     assert "docker" not in text
     assert "hermes_version" not in text

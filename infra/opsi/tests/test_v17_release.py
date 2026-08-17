@@ -26,8 +26,11 @@ def _load(name: str, path: Path):
 
 def test_control_toml_splits_product_and_hermes_versions():
     text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
-    assert 'productVersion = "1.7.1"' in text
-    assert 'packageVersion = "1"' in text
+    assert 'version = "1.7.2"' in text
+    assert 'version = "1"' in text
+    assert "productVersion" not in text
+    assert "packageVersion" not in text
+    assert "[[ProductProperty]]" in text
     assert 'default = ["0.22.0"]' in text
     assert 'default = ["2"]' in text
     assert "0.22.0" in text
@@ -66,7 +69,7 @@ def test_build_release_emits_signed_envelopes_not_zip_copy(tmp_path):
     assert "OPSI/product-release.json" in names
     assert not any("private" in name.lower() and "public" not in name.lower() for name in names)
     index = json.loads(zipfile.ZipFile(archive).read("OPSI/product-release.json"))
-    assert index["productVersion"] == "1.7.1"
+    assert index["productVersion"] == "1.7.2"
     assert index["runtimes"][0]["version"] == "0.22.0"
     assert index["liveEligible"] is False
     rel = _load("product_release", PRODUCT / "packaging" / "product_release.py")

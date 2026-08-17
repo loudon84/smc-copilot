@@ -55,7 +55,7 @@ def test_o01_valid_stage_and_o05_readback(tmp_path: Path):
     assert (stage / "OPSI" / "product-release.json").is_file()
     readback = _load("opsi_readback", PRODUCT / "packaging" / "opsi_readback.py")
     result = readback.readback_opsi(archive, stage)
-    assert result["productVersion"] == "1.7.1"
+    assert result["productVersion"] == "1.7.2"
 
 
 def test_o02_private_key_in_stage_fails(tmp_path: Path):
@@ -95,7 +95,7 @@ def test_o04_native_does_not_fallback_to_zipfile(tmp_path: Path):
     if shutil.which("opsi-makepackage"):
         pytest.skip("opsi-makepackage present")
     with pytest.raises(SystemExit, match="opsi-makepackage missing"):
-        make.build_opsi_native(tmp_path, tmp_path, "1.7.1", "1")
+        make.build_opsi_native(tmp_path, tmp_path, "1.7.2", "1")
 
 
 def test_o06_readback_mismatch_fails(tmp_path: Path):
@@ -141,7 +141,9 @@ def test_rb11_product_release_signature(tmp_path: Path):
     public = load_pem_public_key((stage / "CLIENT_DATA" / "keys" / "release-public-key.pem").read_bytes())
     rel.verify_index(index, public)
     control = (stage / "OPSI" / "control.toml").read_text(encoding="utf-8")
-    assert 'productVersion = "1.7.1"' in control
+    assert 'version = "1.7.2"' in control
+    assert "productVersion" not in control
+    assert "packageVersion" not in control
     assert 'default = ["0.22.0"]' in control
     assert 'default = ["2"]' in control
 
@@ -175,7 +177,7 @@ def test_rb13_opsi_readback_consistent_and_mismatch(tmp_path: Path):
     make, archive, stage = _signed_release(tmp_path)
     readback = _load("opsi_readback", PRODUCT / "packaging" / "opsi_readback.py")
     result = readback.readback_opsi(archive, stage, extract_root=tmp_path / "readback-ok")
-    assert result["productVersion"] == "1.7.1"
+    assert result["productVersion"] == "1.7.2"
     assert result["hermesVersion"] == "0.22.0"
     assert (tmp_path / "readback-ok" / "OPSI" / "control.toml").is_file()
     control = stage / "OPSI" / "control.toml"
@@ -189,7 +191,7 @@ def test_zipfile_path_must_not_emit_opsi(tmp_path: Path):
     stage = tmp_path / "stage"
     (stage / "OPSI").mkdir(parents=True)
     (stage / "OPSI" / "control.toml").write_text("id = 'x'\n", encoding="utf-8")
-    archive = make.write_opsi_archive(stage, tmp_path / "out", "1.7.1", "1")
+    archive = make.write_opsi_archive(stage, tmp_path / "out", "1.7.2", "1")
     assert archive.name.endswith(".fixture.zip")
     assert not archive.name.endswith(".opsi")
 
@@ -223,13 +225,15 @@ def test_staged_control_toml_tracks_runtime_version(tmp_path: Path):
     dest = tmp_path / "control.toml"
     make.stage_control_toml(
         dest,
-        product_version="1.7.1",
+        product_version="1.7.2",
         package_version="9",
         hermes_version="0.23.1",
         controller_revision="4",
     )
     text = dest.read_text(encoding="utf-8")
-    assert 'productVersion = "1.7.1"' in text
-    assert 'packageVersion = "9"' in text
+    assert 'version = "1.7.2"' in text
+    assert 'version = "9"' in text
+    assert "productVersion" not in text
+    assert "packageVersion" not in text
     assert 'default = ["0.23.1"]' in text
     assert 'default = ["4"]' in text

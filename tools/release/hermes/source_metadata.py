@@ -9,6 +9,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from tools.release.subprocess_text import command_output, run_command
+
 FORBIDDEN_VERSIONS = {"latest", "current", "main", "unknown"}
 
 
@@ -36,7 +38,7 @@ def read_pyproject_version(repo: Path) -> str:
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=False)
+    return run_command(["git", *args], cwd=repo)
 
 
 def freeze_source(
@@ -60,7 +62,7 @@ def freeze_source(
         raise ValueError(f"hermes version mismatch: cli={requested} pyproject={source_version}")
     rev = _git(repo, "rev-parse", "HEAD")
     if rev.returncode != 0:
-        raise ValueError(rev.stderr.strip() or "git rev-parse failed")
+        raise ValueError(command_output(rev, "git rev-parse failed"))
     branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
     porcelain = _git(repo, "status", "--porcelain")
     dirty = bool(porcelain.stdout.strip())

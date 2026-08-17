@@ -35,6 +35,13 @@ from artifact_v3 import (  # noqa: E402
     sign_envelope,
     verify_envelope,
 )
+from control_schema import (  # noqa: E402
+    ControlSchemaError,
+    package_version as control_package_version,
+    product_version as control_product_version,
+    property_default,
+    validate_control_schema,
+)
 from controller_manifest import (  # noqa: E402
     build_unsigned as build_controller_unsigned,
     sign_manifest,
@@ -47,40 +54,119 @@ from product_release import (  # noqa: E402
 )
 from opsi_readback import readback_opsi  # noqa: E402
 
+try:
+    import cryptography
+except ImportError:  # pragma: no cover
+    cryptography = None
+
+NATIVE_OPSI_TOOLS = ("opsi-makepackage", "opsi-package-manager", "opsi-cli")
+
 PRODUCT = Path(__file__).resolve().parents[1]
 SECRET_NAME_RE = re.compile(r"(private|credential|password|secret|\.env$)", re.I)
 FORBIDDEN_SUFFIXES = {".pfx", ".p12", ".key"}
 CONTROLLER_COPY = ("scripts", "bootstrap")
 
 
-def _control_field(name: str) -> str:
-    text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
-    match = re.search(rf'^{name}\s*=\s*"([^"]+)"', text, re.M)
-    if not match:
-        raise SystemExit(f"missing {name} in control.toml")
-    return match.group(1)
+def _schema_fail(exc: ControlSchemaError) -> SystemExit:
+    return SystemExit(str(exc))
+
+
+def _source_control() -> dict:
+    path = PRODUCT / "OPSI" / "control.toml"
+    try:
+        return validate_control_schema(path)
+    except ControlSchemaError as exc:
+        raise _schema_fail(exc) from exc
+
+
+def _source_product_version() -> str:
+    return control_product_version(_source_control())
+
+
+def _source_package_version() -> str:
+    return control_package_version(_source_control())
 
 
 def _control_property_default(name: str) -> str:
-    text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
-    block = re.search(rf"\[ProductProperty\.unicode\.{name}\](.*?)(\n\[|\Z)", text, re.S)
-    if not block:
-        raise SystemExit(f"missing ProductProperty {name}")
-    match = re.search(r'default\s*=\s*\["([^"]+)"\]', block.group(1))
-    if not match:
-        raise SystemExit(f"missing default for {name}")
-    return match.group(1)
+    try:
+        return property_default(_source_control(), name)
+    except ControlSchemaError as exc:
+        raise _schema_fail(exc) from exc
+
+
+def _replace_table_field(text: str, table: str, field: str, value: str) -> str:
+    header = f"[{table}]"
+    chunks = re.split(r"(?=^\[)", text, flags=re.M)
+    found = 0
+    out: list[str] = []
+    for chunk in chunks:
+        first = chunk.split("\n", 1)[0].strip()
+        if first != header:
+            out.append(chunk)
+            continue
+        updated, count = re.subn(
+            rf'(?m)^({re.escape(field)}\s*=\s*)"[^"]+"',
+            rf'\1"{value}"',
+            chunk,
+            count=1,
+        )
+        if count != 1:
+            raise SystemExit(f"failed to stage [{table}].{field}")
+        found += 1
+        out.append(updated)
+    if found != 1:
+        raise SystemExit(f"failed to stage [{table}].{field}")
+    return "".join(out)
 
 
 def _replace_property_default(text: str, name: str, value: str) -> str:
-    pattern = re.compile(
-        rf"(\[ProductProperty\.unicode\.{re.escape(name)}\].*?default\s*=\s*\[)\"[^\"]*\"(\])",
-        re.S,
-    )
-    updated, count = pattern.subn(rf'\1"{value}"\2', text, count=1)
-    if count != 1:
+    chunks = re.split(r"(?=^\[\[ProductProperty\]\])", text, flags=re.M)
+    replaced = 0
+    out: list[str] = []
+    for chunk in chunks:
+        if chunk.startswith("[[ProductProperty]]") and re.search(
+            rf'(?m)^name\s*=\s*"{re.escape(name)}"', chunk
+        ):
+            updated, count = re.subn(
+                r'(?m)^(default\s*=\s*\[)"[^"]*"(\])',
+                rf'\1"{value}"\2',
+                chunk,
+                count=1,
+            )
+            if count != 1:
+                raise SystemExit(f"failed to stage ProductProperty {name}")
+            replaced += 1
+            out.append(updated)
+        else:
+            out.append(chunk)
+    if replaced != 1:
         raise SystemExit(f"failed to stage ProductProperty {name}")
-    return updated
+    return "".join(out)
+
+
+def ensure_builder_runtime() -> None:
+    if cryptography is None:
+        raise SystemExit("SMC Builder requires cryptography")
+    _ = cryptography.__version__
+
+
+def ensure_native_opsi_tooling() -> None:
+    if shutil.which("opsi-makepackage") is None:
+        raise SystemExit("opsi-makepackage missing; native tooling required (no zipfile fallback)")
+    missing = [name for name in NATIVE_OPSI_TOOLS if shutil.which(name) is None]
+    if missing:
+        raise SystemExit("OPSI native tooling missing: " + ", ".join(missing))
+    tool = shutil.which("opsi-makepackage")
+    result = subprocess.run(
+        [str(tool), "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit((result.stderr or result.stdout or "opsi-makepackage --version failed").strip())
 
 
 def stage_control_toml(
@@ -92,12 +178,20 @@ def stage_control_toml(
     controller_revision: str,
 ) -> Path:
     text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
-    text = re.sub(r'(?m)^(productVersion\s*=\s*)"[^"]+"', rf'\1"{product_version}"', text, count=1)
-    text = re.sub(r'(?m)^(packageVersion\s*=\s*)"[^"]+"', rf'\1"{package_version}"', text, count=1)
+    text = _replace_table_field(text, "Package", "version", package_version)
+    text = _replace_table_field(text, "Product", "version", product_version)
     text = _replace_property_default(text, "hermes_version", hermes_version)
     text = _replace_property_default(text, "controller_revision", controller_revision)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
+    try:
+        validate_control_schema(
+            dest,
+            expected_product_version=product_version,
+            expected_package_version=package_version,
+        )
+    except ControlSchemaError as exc:
+        raise _schema_fail(exc) from exc
     return dest
 
 
@@ -430,13 +524,28 @@ def write_opsi_archive(stage: Path, dest: Path, product_version: str, package_ve
 
 
 def build_opsi_native(stage: Path, dest: Path, product_version: str, package_version: str) -> Path:
+    ensure_native_opsi_tooling()
+    try:
+        validate_control_schema(
+            stage / "OPSI" / "control.toml",
+            expected_product_version=product_version,
+            expected_package_version=package_version,
+        )
+    except ControlSchemaError as exc:
+        raise _schema_fail(exc) from exc
     tool = shutil.which("opsi-makepackage")
-    if not tool:
-        raise SystemExit("opsi-makepackage missing; native tooling required (no zipfile fallback)")
     dest.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run([tool], cwd=stage, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        [str(tool)],
+        cwd=stage,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     if result.returncode != 0:
-        raise SystemExit(result.stderr.strip() or result.stdout.strip() or "opsi-makepackage failed")
+        raise SystemExit((result.stderr or result.stdout or "opsi-makepackage failed").strip())
     produced = list(stage.glob("*.opsi"))
     if not produced:
         produced = list(stage.glob("**/*.opsi"))
@@ -541,8 +650,8 @@ def _write_archive(archive: Path, product_version: str, package_version: str, ex
 
 
 def build_smoke(dest: Path) -> Path:
-    product_version = _control_field("productVersion")
-    package_version = _control_field("packageVersion")
+    product_version = _source_product_version()
+    package_version = _source_package_version()
     hermes_version = _control_property_default("hermes_version")
     if "latest" in product_version.lower() or hermes_version.lower() == "latest":
         raise SystemExit("productVersion/hermes_version must be exact")
@@ -576,10 +685,11 @@ def prepare_release_stage(
         raise SystemExit("real Hermes Windows zip required")
     if not key_ref.is_file():
         raise SystemExit("release signing key ref missing; refusing to autogenerate")
+    ensure_builder_runtime()
     source_art = PRODUCT / "CLIENT_DATA" / "artifacts"
     before_arts = {p: p.read_bytes() for p in source_art.glob("*")} if source_art.is_dir() else {}
-    product_version = product_version or _control_field("productVersion")
-    package_version = package_version or _control_field("packageVersion")
+    product_version = product_version or _source_product_version()
+    package_version = package_version or _source_package_version()
     runtime_build = _runtime_build_from_zip(hermes_zip)
     runtime_version = hermes_version or (str(runtime_build.get("version") or "") if runtime_build else "") or _control_property_default("hermes_version")
     if runtime_build and str(runtime_build.get("version") or "") != runtime_version:
@@ -601,7 +711,13 @@ def prepare_release_stage(
     controller = build_controller_envelope(work / "controller", controller_revision, private, key_id)
     source_revision = "local-dev"
     git = subprocess.run(
-        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=PRODUCT, check=False
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=PRODUCT,
+        check=False,
     )
     if git.returncode == 0:
         source_revision = git.stdout.strip()[:40]
@@ -712,8 +828,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.production_depot or args.publish:
         raise SystemExit("refusing to publish to production depot from this script")
-    if shutil.which("opsi-package-manager"):
-        pass
+    ensure_builder_runtime()
     if args.hermes_zip:
         if not args.signing_key_ref:
             raise SystemExit("release path requires --signing-key-ref")

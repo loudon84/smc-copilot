@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import re
-import shutil
-import subprocess
 from pathlib import Path
 from typing import Any
+
+from tools.release.subprocess_text import command_output, run_command
 
 WHEEL_RE = re.compile(
     r"^(?P<name>.+)-(?P<version>[^-]+)-(?P<python>[^-]+)-(?P<abi>[^-]+)-(?P<plat>.+)\.whl$",
@@ -109,45 +109,30 @@ def resolve_wheelhouse(
 
 def download_wheelhouse(repo: Path, dest: Path, extras: list[str]) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
-    uv = shutil.which("uv")
-    extra_args: list[str] = []
-    for extra in extras:
-        extra_args.extend(["--extra", extra])
-    if uv:
-        cmd = [
-            uv,
-            "pip",
-            "download",
-            "--python-platform",
-            "x86_64-pc-windows-msvc",
-            "--python-version",
-            "3.12",
-            "--only-binary",
-            ":all:",
-            "-d",
-            str(dest),
-            ".",
-            *extra_args,
-        ]
-    else:
-        cmd = [
-            "python",
-            "-m",
-            "pip",
-            "download",
-            "--only-binary",
-            ":all:",
-            "--platform",
-            "win_amd64",
-            "--python-version",
-            "3.12",
-            "-d",
-            str(dest),
-            ".",
-        ]
-    result = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, check=False)
+    target = "."
+    if extras:
+        target = f".[{','.join(extras)}]"
+    # uv 0.11+ removed `uv pip download`; use pip cross-platform fetch.
+    cmd = [
+        "python",
+        "-m",
+        "pip",
+        "download",
+        "--only-binary",
+        ":all:",
+        "--platform",
+        "win_amd64",
+        "--python-version",
+        "3.12",
+        "--implementation",
+        "cp",
+        "-d",
+        str(dest),
+        target,
+    ]
+    result = run_command(cmd, cwd=repo)
     if result.returncode != 0:
-        raise ValueError(result.stderr.strip() or result.stdout.strip() or "wheelhouse download failed")
+        raise ValueError(command_output(result, "wheelhouse download failed"))
     assert_wheelhouse_binary_only(dest)
     inventory_wheels(dest)
     return dest

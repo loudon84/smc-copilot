@@ -12,9 +12,13 @@ def test_control_toml_localboot_and_allowlist():
     text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
     assert 'id = "smc-hermes-agent"' in text
     assert 'type = "localboot"' in text
-    version = re.search(r'^productVersion\s*=\s*"([^"]+)"', text, re.M)
-    assert version is not None
-    assert version.group(1).lower() != "latest"
+    spec = spec_from_file_location("control_schema", PRODUCT / "packaging" / "control_schema.py")
+    assert spec and spec.loader
+    schema = module_from_spec(spec)
+    spec.loader.exec_module(schema)
+    data = schema.validate_control_schema(PRODUCT / "OPSI" / "control.toml")
+    version = schema.product_version(data)
+    assert version.lower() != "latest"
     assert "latest is forbidden" in text.lower() or "exact" in text.lower()
     for op in ("status", "collect-log", "apply-config", "restart-gateway", "diagnose", "repair", "reconcile-controller"):
         assert op in text

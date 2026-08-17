@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.release.client.release_config import load_release_config  # noqa: E402
+from tools.release.subprocess_text import command_output, run_command
 from tools.release.client.release_inventory import (  # noqa: E402
     capture_opsi_client_installer,
     capture_work_installers,
@@ -45,9 +46,9 @@ MAKEPACKAGE = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "packa
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> None:
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    result = run_command(cmd, cwd=cwd)
     if result.returncode != 0:
-        raise SystemExit(result.stderr.strip() or result.stdout.strip() or "command failed")
+        raise SystemExit(command_output(result, "command failed"))
 
 
 def load_makepackage():
@@ -60,8 +61,8 @@ def load_makepackage():
 
 
 def freeze_smc(allow_dirty: bool) -> dict[str, Any]:
-    result = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False)
-    porcelain = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=False)
+    result = run_command(["git", "rev-parse", "HEAD"], cwd=ROOT)
+    porcelain = run_command(["git", "status", "--porcelain"], cwd=ROOT)
     dirty = bool(porcelain.stdout.strip())
     if dirty and not allow_dirty:
         raise ValueError("dirty smc-copilot source is forbidden for production builds")

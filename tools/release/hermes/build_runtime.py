@@ -26,7 +26,6 @@ from tools.release.hermes.build_wheel import build_wheel  # noqa: E402
 from tools.release.hermes.build_wheelhouse import (  # noqa: E402
     inventory_wheels,
     resolve_wheelhouse,
-    verify_required_wheels,
     wheelhouse_digest,
     write_requirements_lock,
 )
@@ -112,7 +111,8 @@ def assemble_bundle(
     if copied == 0:
         raise ValueError("missing python dependency")
     python_items = inventory_wheels(python_wheels)
-    verify_required_wheels(python_items, [wheel.stem.split("-")[0]])
+    if not (app / wheel.name).is_file():
+        raise ValueError("hermes wheel missing")
     write_requirements_lock(dest / "python" / "requirements.lock", python_items)
     if (node_root / "package.json").is_file():
         shutil.copy2(node_root / "package.json", node / "package.json")
