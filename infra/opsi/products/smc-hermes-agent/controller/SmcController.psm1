@@ -213,16 +213,80 @@ function Resume-SmcJournalV2 {
     return (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json)
 }
 
+function Test-SmcVersionRange {
+    param([Parameter(Mandatory = $true)][string]$Actual, [Parameter(Mandatory = $true)][string]$Range)
+    $verMatch = [regex]::Match($Actual, "(\d+)\.(\d+)(?:\.(\d+))?")
+    if (-not $verMatch.Success) { return $false }
+    $actualVer = [version]::Parse(("{0}.{1}.{2}" -f $verMatch.Groups[1].Value, $verMatch.Groups[2].Value, $(if ($verMatch.Groups[3].Value) { $verMatch.Groups[3].Value } else { "0" })))
+    foreach ($clause in $Range.Split(",")) {
+        $item = $clause.Trim()
+        if ($item.StartsWith(">=")) {
+            if ($actualVer -lt [version]($item.Substring(2).Trim() + $(if ($item.Substring(2).Trim() -match '^\d+\.\d+$') { ".0" } else { "" }))) { return $false }
+        }
+        elseif ($item.StartsWith("<=")) {
+            $bound = $item.Substring(2).Trim()
+            if ($bound -match '^\d+\.\d+$') { $bound = "$bound.0" }
+            if ($actualVer -gt [version]$bound) { return $false }
+        }
+        elseif ($item.StartsWith("<")) {
+            $bound = $item.Substring(1).Trim()
+            if ($bound -match '^\d+\.\d+$') { $bound = "$bound.0" }
+            if ($actualVer -ge [version]$bound) { return $false }
+        }
+        elseif ($item.StartsWith(">")) {
+            $bound = $item.Substring(1).Trim()
+            if ($bound -match '^\d+\.\d+$') { $bound = "$bound.0" }
+            if ($actualVer -le [version]$bound) { return $false }
+        }
+    }
+    return $true
+}
+
+function Assert-SmcClientPrerequisites {
+    param(
+        [string]$PythonRange = ">=3.12,<3.13",
+        [string]$NodeRange = ">=22,<23"
+    )
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) { throw "PREREQUISITE_FAILED: Python missing" }
+    $pyVer = & python -c "import platform,sys; print(sys.version.split()[0]); print(platform.machine())" 2>$null
+    $lines = @($pyVer)
+    $actualPy = [string]$lines[0]
+    $arch = [string]$lines[1]
+    if ($arch -notmatch 'AMD64|x86_64|x64') { throw "PREREQUISITE_FAILED: Python architecture must be AMD64 actual=$arch" }
+    if (-not (Test-SmcVersionRange -Actual $actualPy -Range $PythonRange)) {
+        throw "PREREQUISITE_FAILED: Python $PythonRange actual=$actualPy"
+    }
+    $venvCheck = & python -c "import venv" 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "PREREQUISITE_FAILED: Python venv module missing" }
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $node) { throw "PREREQUISITE_FAILED: Node missing" }
+    $nodeVer = & node -v 2>$null
+    if (-not (Test-SmcVersionRange -Actual ([string]$nodeVer) -Range $NodeRange)) {
+        throw "PREREQUISITE_FAILED: Node $NodeRange actual=$nodeVer"
+    }
+    $npm = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npm) { throw "PREREQUISITE_FAILED: npm missing" }
+}
+
 function Install-SmcRuntimeSlot {
     param(
         [Parameter(Mandatory = $true)][string]$Extract,
         [Parameter(Mandatory = $true)][string]$Version,
         [Parameter(Mandatory = $true)][string]$Digest,
-        [Parameter(Mandatory = $true)]$Files
+        [Parameter(Mandatory = $true)]$Files,
+        [string]$InstallType = "binary-zip",
+        [string]$RuntimeEntrypoint = "",
+        [string]$RequiresPython = ">=3.12,<3.13",
+        [string]$RequiresNode = ">=22,<23"
     )
     $layout = Get-SmcControllerLayout
     $short = $Digest.Substring(0, [Math]::Min(12, $Digest.Length))
     $slot = Join-Path $layout.Runtime "versions\$Version-$short"
+    $previous = ""
+    if (Test-Path -LiteralPath $layout.Active) {
+        try { $previous = [string]((Get-Content -LiteralPath $layout.Active -Raw | ConvertFrom-Json).active) } catch {}
+    }
     if (Test-Path -LiteralPath $slot) { Remove-Item -LiteralPath $slot -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $slot | Out-Null
     Copy-Item -Path (Join-Path $Extract "*") -Destination $slot -Recurse -Force
@@ -234,13 +298,40 @@ function Install-SmcRuntimeSlot {
         $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($actual -ne ([string]$item.sha256).ToLowerInvariant()) { throw "runtime file digest mismatch: $rel" }
     }
-    $previous = ""
-    if (Test-Path -LiteralPath $layout.Active) {
-        try { $previous = [string]((Get-Content -LiteralPath $layout.Active -Raw | ConvertFrom-Json).active) } catch {}
-    }
     $entrypoint = "hermes.exe"
     foreach ($item in @($Files)) {
         if ([string]$item.path -match 'hermes\.exe$') { $entrypoint = [string]$item.path; break }
+    }
+    if ($RuntimeEntrypoint) { $entrypoint = $RuntimeEntrypoint }
+    if ($InstallType -eq "python-wheelhouse") {
+        Assert-SmcClientPrerequisites -PythonRange $RequiresPython -NodeRange $RequiresNode
+        $venv = Join-Path $slot "venv"
+        & python -m venv $venv
+        if ($LASTEXITCODE -ne 0) { throw "venv creation failed" }
+        $pip = Join-Path $venv "Scripts\pip.exe"
+        $wheels = Join-Path $slot "python\wheels"
+        $hermesWheel = Get-ChildItem -LiteralPath (Join-Path $slot "app") -Filter "*.whl" | Select-Object -First 1
+        if (-not $hermesWheel) { throw "missing python dependency" }
+        & $pip install --no-index --find-links $wheels $hermesWheel.FullName
+        if ($LASTEXITCODE -ne 0) { throw "offline wheel install failed" }
+        $nodePkgs = Join-Path $slot "node\packages"
+        if (Test-Path -LiteralPath $nodePkgs) {
+            Get-ChildItem -LiteralPath $nodePkgs -Filter "*.tgz" | ForEach-Object {
+                & npm install --offline --omit=dev $_.FullName
+                if ($LASTEXITCODE -ne 0) { throw "offline node install failed" }
+            }
+        }
+        if (-not $RuntimeEntrypoint) { $entrypoint = "venv\Scripts\hermes.exe" }
+        Write-SmcJsonAtomic -Path (Join-Path $slot "runtime.json") -Object ([ordered]@{
+                version     = $Version
+                digest      = $Digest
+                installType = $InstallType
+                entrypoint  = $entrypoint
+            })
+        $cli = Join-Path $slot $entrypoint
+        $verOut = & $cli --version 2>$null | Select-Object -First 1
+        if ("$verOut" -notmatch [regex]::Escape($Version)) { throw "CLI version mismatch: expected $Version" }
+        & $cli gateway status 2>$null | Out-Null
     }
     Write-SmcJsonAtomic -Path $layout.Active -Object ([ordered]@{
             schema         = "smc.opsi.runtime-active.v1"

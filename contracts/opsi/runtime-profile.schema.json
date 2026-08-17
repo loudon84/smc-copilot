@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/runtime-profile.schema.json",
+  "title": "smc.hermes.runtime-profile.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "profiles"],
+  "properties": {
+    "schema": { "const": "smc.hermes.runtime-profile.v1" },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "python", "node", "gateway"],
+        "properties": {
+          "version": { "type": "integer", "minimum": 1 },
+          "python": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["extras", "lazyInstall"],
+            "properties": {
+              "extras": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
+              "lazyInstall": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["allowed"],
+                "properties": {
+                  "allowed": { "type": "boolean" }
+                }
+              }
+            }
+          },
+          "node": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["packages"],
+            "properties": {
+              "packages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "version"],
+                  "properties": {
+                    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "pattern": "^(?!latest$|current$|\\*|unversioned$).+"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "gateway": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["enabled", "bind", "port"],
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "bind": { "enum": ["127.0.0.1"] },
+              "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

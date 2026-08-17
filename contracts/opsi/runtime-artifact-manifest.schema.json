@@ -40,6 +40,32 @@
       "items": { "type": "string" }
     },
     "controllerCompat": { "type": "string", "maxLength": 32 },
+    "installType": { "enum": ["binary-zip", "python-wheelhouse"] },
+    "runtimeEntrypoint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "node"],
+      "properties": {
+        "python": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "node": { "type": "string", "minLength": 1, "maxLength": 32 }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "runtimeBuildSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
     "files": {
       "type": "array",
       "items": {
@@ -54,11 +80,24 @@
       }
     }
   },
-  "if": {
-    "properties": { "schema": { "const": "smc.opsi.runtime-artifact.v3" } },
-    "required": ["schema"]
-  },
-  "then": {
-    "required": ["files"]
-  }
+  "allOf": [
+    {
+      "if": {
+        "properties": { "schema": { "const": "smc.opsi.runtime-artifact.v3" } },
+        "required": ["schema"]
+      },
+      "then": {
+        "required": ["files"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "installType": { "const": "python-wheelhouse" } },
+        "required": ["installType"]
+      },
+      "then": {
+        "required": ["runtimeEntrypoint", "requires", "profile"]
+      }
+    }
+  ]
 }

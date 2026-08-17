@@ -1,0 +1,25 @@
+schema: smc.hermes.runtime-profile.v1
+
+profiles:
+
+  smc-managed:
+    version: 1
+
+    python:
+      extras:
+        - mcp
+        - web
+        - google
+
+      lazyInstall:
+        allowed: false
+
+    node:
+      packages:
+        - name: "@modelcontextprotocol/server-filesystem"
+          version: "2025.8.21"
+
+    gateway:
+      enabled: true
+      bind: "127.0.0.1"
+      port: 8642

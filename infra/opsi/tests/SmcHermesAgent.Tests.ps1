@@ -166,4 +166,14 @@ Describe "smc-hermes-agent adapter contracts" {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item Env:SMC_OPSI_ROOT -ErrorAction SilentlyContinue
     }
+
+    It "wheelhouse install checks prerequisites and stays offline" {
+        $ctrl = Get-Content (Join-Path $script:Product "controller\SmcController.psm1") -Raw
+        $ctrl | Should Match "PREREQUISITE_FAILED"
+        $ctrl | Should Match "--no-index"
+        $ctrl | Should Match "python-wheelhouse"
+        $install = Get-Content (Join-Path $script:Product "scripts\install\Install-Hermes.ps1") -Raw
+        $install | Should Match "runtimeEntrypoint"
+        $install | Should Match "InstallType"
+    }
 }

@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
+import subprocess
 from base64 import urlsafe_b64decode
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,6 +19,7 @@ STATE_SCHEMA = "smc.opsi.endpoint-controller-state.v2"
 JOURNAL_SCHEMA = "smc.opsi.transaction.v2"
 COMMAND_SCHEMA = "smc.opsi.user-command.v1"
 RUNTIME_ACTIVE = "smc.opsi.runtime-active.v1"
+PREREQUISITE_FAILED = "PREREQUISITE_FAILED"
 USER_OPS = {
     "initialize-user",
     "apply-config",
@@ -39,6 +42,113 @@ PHASES = (
     "owner_committed",
     "finalized",
 )
+
+
+class PrerequisiteFailed(ValueError):
+    def __init__(self, message: str, *, actual: str = "") -> None:
+        detail = f"{PREREQUISITE_FAILED}: {message}"
+        if actual:
+            detail = f"{detail} actual={actual}"
+        super().__init__(detail)
+        self.actual = actual
+
+
+def parse_version(text: str) -> tuple[int, int, int]:
+    parts = [int(part) for part in re.findall(r"\d+", str(text or ""))]
+    while len(parts) < 3:
+        parts.append(0)
+    return (parts[0], parts[1], parts[2])
+
+
+def version_in_range(actual: str, spec: str) -> bool:
+    ver = parse_version(actual)
+    for raw in str(spec or "").split(","):
+        clause = raw.strip()
+        if clause.startswith(">="):
+            if ver < parse_version(clause[2:]):
+                return False
+        elif clause.startswith("<="):
+            if ver > parse_version(clause[2:]):
+                return False
+        elif clause.startswith(">"):
+            if ver <= parse_version(clause[1:]):
+                return False
+        elif clause.startswith("<"):
+            if ver >= parse_version(clause[1:]):
+                return False
+        elif clause.startswith("="):
+            if ver != parse_version(clause.lstrip("=")):
+                return False
+        elif clause:
+            return False
+    return True
+
+
+def check_python_prerequisite(*, executable: str | None, version: str, architecture: str, required: str) -> None:
+    if not executable:
+        raise PrerequisiteFailed("Python missing", actual="")
+    arch = str(architecture or "").lower().replace("-", "_")
+    if arch not in {"amd64", "x86_64", "x64"}:
+        raise PrerequisiteFailed("Python architecture must be AMD64", actual=architecture)
+    if not version_in_range(version, required):
+        raise PrerequisiteFailed(f"Python {required}", actual=version)
+
+
+def check_node_prerequisite(*, executable: str | None, version: str, required: str) -> None:
+    if not executable:
+        raise PrerequisiteFailed("Node missing", actual="")
+    if not version_in_range(version, required):
+        raise PrerequisiteFailed(f"Node {required}", actual=version)
+
+
+def offline_pip_args(python: str, wheelhouse: Path, hermes_wheel: Path) -> list[str]:
+    return [
+        python,
+        "-m",
+        "pip",
+        "install",
+        "--no-index",
+        "--find-links",
+        str(wheelhouse),
+        str(hermes_wheel),
+    ]
+
+
+def create_runtime_venv(python: str, slot: Path, runner=subprocess.run) -> Path:
+    venv = slot / "venv"
+    result = runner([python, "-m", "venv", str(venv)], capture_output=True, text=True, check=False)
+    if getattr(result, "returncode", 1) != 0:
+        raise ValueError(getattr(result, "stderr", "") or "venv creation failed")
+    return venv
+
+
+def venv_python(venv: Path) -> Path:
+    windows = venv / "Scripts" / "python.exe"
+    if windows.is_file():
+        return windows
+    return venv / "bin" / "python"
+
+
+def install_wheelhouse_into_slot(slot: Path, *, python: str, runner=subprocess.run) -> Path:
+    wheelhouse = slot / "python" / "wheels"
+    wheels = sorted((slot / "app").glob("*.whl"))
+    if not wheelhouse.is_dir() or not wheels:
+        raise ValueError("missing python dependency")
+    venv = create_runtime_venv(python, slot, runner=runner)
+    py = str(venv_python(venv))
+    cmd = offline_pip_args(py, wheelhouse, wheels[0])
+    if any("pypi.org" in part.lower() for part in cmd):
+        raise ValueError("PyPI URL forbidden")
+    result = runner(cmd, capture_output=True, text=True, check=False)
+    if getattr(result, "returncode", 1) != 0:
+        raise ValueError(getattr(result, "stderr", "") or "offline wheel install failed")
+    return venv
+
+
+def gateway_smoke(cli: Path, runner=subprocess.run) -> None:
+    result = runner([str(cli), "gateway", "status"], capture_output=True, text=True, check=False)
+    if result.returncode not in {0, 1}:
+        raise ValueError(result.stderr.strip() or "gateway smoke failed")
 
 
 def canonical_json(payload: dict[str, Any]) -> bytes:
@@ -206,8 +316,23 @@ def install_controller_bundle(layout: ControllerLayout, source: Path, revision: 
 
 
 def install_runtime_slot(
-    layout: ControllerLayout, extract: Path, version: str, digest: str, files: list[dict[str, str]]
+    layout: ControllerLayout,
+    extract: Path,
+    version: str,
+    digest: str,
+    files: list[dict[str, str]],
+    *,
+    install_type: str = "binary-zip",
+    runtime_entrypoint: str = "",
+    requires: dict[str, str] | None = None,
+    python_exe: str | None = None,
+    python_version: str = "",
+    python_arch: str = "amd64",
+    node_exe: str | None = None,
+    node_version: str = "",
+    runner=subprocess.run,
 ) -> Path:
+    previous = read_json(layout.active_runtime)
     slot = layout.runtime / "versions" / f"{version}-{digest[:12]}"
     if slot.exists():
         shutil.rmtree(slot)
@@ -225,7 +350,41 @@ def install_runtime_slot(
             raise ValueError(f"runtime file digest mismatch: {item['path']}")
         if path.stat().st_size != int(item["size"]):
             raise ValueError(f"runtime file size mismatch: {item['path']}")
-    previous = read_json(layout.active_runtime)
+    entry = runtime_entrypoint or next(
+        (item["path"] for item in files if str(item["path"]).endswith("hermes.exe")),
+        "hermes.exe",
+    )
+    if install_type == "python-wheelhouse":
+        req = requires or {}
+        check_python_prerequisite(
+            executable=python_exe,
+            version=python_version,
+            architecture=python_arch,
+            required=str(req.get("python") or ">=3.12,<3.13"),
+        )
+        check_node_prerequisite(
+            executable=node_exe,
+            version=node_version,
+            required=str(req.get("node") or ">=22,<23"),
+        )
+        if python_exe:
+            install_wheelhouse_into_slot(slot, python=python_exe, runner=runner)
+        entry = runtime_entrypoint or "venv/Scripts/hermes.exe"
+        write_json(
+            slot / "runtime.json",
+            {
+                "version": version,
+                "digest": digest,
+                "installType": install_type,
+                "entrypoint": entry,
+            },
+        )
+        cli = assert_contained(slot, entry)
+        if cli.is_file():
+            result = runner([str(cli), "--version"], capture_output=True, text=True, check=False)
+            if result.returncode != 0 or version not in (result.stdout or ""):
+                raise ValueError(f"CLI version mismatch: expected {version}")
+            gateway_smoke(cli, runner=runner)
     pointer = {
         "schema": RUNTIME_ACTIVE,
         "active": str(slot),
@@ -233,7 +392,7 @@ def install_runtime_slot(
         "version": version,
         "digest": digest,
         "manifestDigest": digest,
-        "entrypoint": next((item["path"] for item in files if str(item["path"]).endswith("hermes.exe")), "hermes.exe"),
+        "entrypoint": entry,
         "updatedAt": iso_now(),
     }
     write_json(layout.active_runtime, pointer)

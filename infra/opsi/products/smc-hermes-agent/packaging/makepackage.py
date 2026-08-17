@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
 import zipfile
 from datetime import UTC, datetime
@@ -44,6 +45,7 @@ from product_release import (  # noqa: E402
     sign_index,
     verify_index,
 )
+from opsi_readback import readback_opsi  # noqa: E402
 
 PRODUCT = Path(__file__).resolve().parents[1]
 SECRET_NAME_RE = re.compile(r"(private|credential|password|secret|\.env$)", re.I)
@@ -115,8 +117,32 @@ def _sign_smoke(manifest: dict, artifact: Path, dest_keys: Path) -> None:
 
 def hashlib_cli(zip_path: Path) -> str:
     with zipfile.ZipFile(zip_path) as zf:
-        data = zf.read("hermes.exe")
-    return hashlib.sha256(data).hexdigest()
+        names = [name.replace("\\", "/") for name in zf.namelist()]
+        if "hermes.exe" in names:
+            return hashlib.sha256(zf.read("hermes.exe")).hexdigest()
+        wheels = sorted(name for name in names if name.startswith("app/") and name.endswith(".whl"))
+        if wheels:
+            return hashlib.sha256(zf.read(wheels[0])).hexdigest()
+    raise SystemExit("runtime CLI or Hermes wheel missing")
+
+
+def _zip_member(archive: Path, name: str) -> bytes | None:
+    target = name.replace("\\", "/")
+    with zipfile.ZipFile(archive) as zf:
+        for member in zf.namelist():
+            if member.replace("\\", "/") == target:
+                return zf.read(member)
+    return None
+
+
+def _runtime_build_from_zip(archive: Path) -> dict | None:
+    raw = _zip_member(archive, "runtime-build.json")
+    if raw is None:
+        return None
+    body = json.loads(raw.decode("utf-8"))
+    if body.get("schema") != "smc.hermes.runtime-build.v1":
+        raise SystemExit("invalid runtime-build.json schema")
+    return body
 
 
 def build_runtime_envelope(
@@ -138,6 +164,24 @@ def build_runtime_envelope(
     digest = sha256_file(artifact)
     files = file_list_from_zip(artifact)
     inner = hashlib_cli(artifact)
+    runtime_build = _runtime_build_from_zip(artifact)
+    if runtime_build:
+        build_version = str(runtime_build.get("version") or "")
+        if build_version != hermes_version:
+            raise SystemExit(f"runtime-build version mismatch: {build_version} != {hermes_version}")
+        if runtime_build.get("platform") != "windows" or runtime_build.get("architecture") != "amd64":
+            raise SystemExit("runtime-build platform must be windows/amd64")
+        install_type = "python-wheelhouse"
+        runtime_entrypoint = "venv/Scripts/hermes.exe"
+        requires = runtime_build.get("requires") or {"python": ">=3.12,<3.13", "node": ">=22,<23"}
+        profile = runtime_build.get("profile") or {"name": "smc-managed", "version": 1}
+        runtime_build_sha256 = hashlib.sha256(_zip_member(artifact, "runtime-build.json") or b"").hexdigest()
+    else:
+        install_type = "binary-zip"
+        runtime_entrypoint = "hermes.exe"
+        requires = None
+        profile = None
+        runtime_build_sha256 = None
     manifest = {
         "schema": MANIFEST_SCHEMA,
         "version": hermes_version,
@@ -154,7 +198,15 @@ def build_runtime_envelope(
         "bytes": artifact.stat().st_size,
         "files": files,
         "createdAt": datetime.now(UTC).isoformat(),
+        "installType": install_type,
+        "runtimeEntrypoint": runtime_entrypoint,
     }
+    if requires:
+        manifest["requires"] = requires
+    if profile:
+        manifest["profile"] = profile
+    if runtime_build_sha256:
+        manifest["runtimeBuildSha256"] = runtime_build_sha256
     validate_entrypoint(manifest["entrypoint"])
     canonical_manifest_bytes(manifest)
     signature = sign_envelope(manifest, digest, private_key)
@@ -340,6 +392,30 @@ def write_opsi_archive(stage: Path, dest: Path, product_version: str, package_ve
     return archive
 
 
+def build_opsi_native(stage: Path, dest: Path, product_version: str, package_version: str) -> Path:
+    tool = shutil.which("opsi-makepackage")
+    if not tool:
+        raise SystemExit("opsi-makepackage missing; native tooling required (no zipfile fallback)")
+    dest.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run([tool], cwd=stage, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise SystemExit(result.stderr.strip() or result.stdout.strip() or "opsi-makepackage failed")
+    produced = list(stage.glob("*.opsi"))
+    if not produced:
+        produced = list(stage.glob("**/*.opsi"))
+    expected_name = f"smc-hermes-agent_{product_version}-{package_version}.opsi"
+    archive = dest / expected_name
+    match = next((path for path in produced if path.name == expected_name), produced[0] if produced else None)
+    if match is None:
+        raise SystemExit("opsi-makepackage did not emit .opsi")
+    if match.resolve() != archive.resolve():
+        if archive.exists():
+            archive.unlink()
+        shutil.move(str(match), str(archive))
+    (dest / f"{archive.name}.sha256").write_text(sha256_file(archive) + "\n", encoding="utf-8")
+    return archive
+
+
 def _ensure_smoke_artifact(dest: Path, hermes_version: str, package_version: str) -> Path:
     artifacts = dest / "artifacts"
     artifacts.mkdir(parents=True, exist_ok=True)
@@ -449,7 +525,14 @@ def build_smoke(dest: Path) -> Path:
     return archive
 
 
-def build_release(dest: Path, hermes_zip: Path, key_ref: Path, *, hermes_version: str = "") -> Path:
+def build_release(
+    dest: Path,
+    hermes_zip: Path,
+    key_ref: Path,
+    *,
+    hermes_version: str = "",
+    opsi_tooling: str = "zipfile",
+) -> Path:
     if not hermes_zip.is_file():
         raise SystemExit("real Hermes Windows zip required")
     if not key_ref.is_file():
@@ -475,16 +558,11 @@ def build_release(dest: Path, hermes_zip: Path, key_ref: Path, *, hermes_version
     )
     controller = build_controller_envelope(work / "controller", controller_revision, private, key_id)
     source_revision = "local-dev"
-    try:
-        import subprocess
-
-        git = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=PRODUCT, check=False
-        )
-        if git.returncode == 0:
-            source_revision = git.stdout.strip()[:40]
-    except OSError:
-        pass
+    git = subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=PRODUCT, check=False
+    )
+    if git.returncode == 0:
+        source_revision = git.stdout.strip()[:40]
     unsigned = build_release_unsigned(
         product_version=product_version,
         package_version=package_version,
@@ -516,7 +594,13 @@ def build_release(dest: Path, hermes_zip: Path, key_ref: Path, *, hermes_version
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     stage = stage_release(work, runtime=runtime, controller=controller, release_index=signed, public_pem=public_pem)
-    archive = write_opsi_archive(stage, dest, product_version, package_version)
+    if opsi_tooling == "native":
+        archive = build_opsi_native(stage, dest, product_version, package_version)
+    elif opsi_tooling == "zipfile":
+        archive = write_opsi_archive(stage, dest, product_version, package_version)
+    else:
+        raise SystemExit(f"unsupported opsi tooling: {opsi_tooling}")
+    readback_opsi(archive, stage)
     after_arts = {p: p.read_bytes() for p in source_art.glob("*")} if source_art.is_dir() else {}
     if before_arts != after_arts:
         raise SystemExit("release must not rewrite source artifacts")
@@ -537,6 +621,7 @@ def main() -> int:
     parser.add_argument("--signing-key-ref", type=Path)
     parser.add_argument("--production-depot", action="store_true", help="forbidden unless operator override")
     parser.add_argument("--publish", action="store_true")
+    parser.add_argument("--opsi-tooling", choices=("zipfile", "native"), default="zipfile")
     args = parser.parse_args()
     if args.production_depot or args.publish:
         raise SystemExit("refusing to publish to production depot from this script")
@@ -545,7 +630,13 @@ def main() -> int:
     if args.hermes_zip:
         if not args.signing_key_ref:
             raise SystemExit("release path requires --signing-key-ref")
-        build_release(args.dest, args.hermes_zip, args.signing_key_ref, hermes_version=args.hermes_version)
+        build_release(
+            args.dest,
+            args.hermes_zip,
+            args.signing_key_ref,
+            hermes_version=args.hermes_version,
+            opsi_tooling=args.opsi_tooling,
+        )
         return 0
     archive = build_smoke(args.dest)
     if archive.stat().st_size < 100:

@@ -26,7 +26,7 @@ def _load(name: str, path: Path):
 
 def test_control_toml_splits_product_and_hermes_versions():
     text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
-    assert 'productVersion = "1.7.0"' in text
+    assert 'productVersion = "1.7.1"' in text
     assert 'packageVersion = "1"' in text
     assert 'default = ["0.22.0"]' in text
     assert 'default = ["2"]' in text
@@ -65,11 +65,61 @@ def test_build_release_emits_signed_envelopes_not_zip_copy(tmp_path):
     assert "OPSI/product-release.json" in names
     assert not any("private" in name.lower() and "public" not in name.lower() for name in names)
     index = json.loads(zipfile.ZipFile(archive).read("OPSI/product-release.json"))
-    assert index["productVersion"] == "1.7.0"
+    assert index["productVersion"] == "1.7.1"
     assert index["runtimes"][0]["version"] == "0.22.0"
     assert index["liveEligible"] is False
     rel = _load("product_release", PRODUCT / "packaging" / "product_release.py")
     rel.verify_index(index, private.public_key())
+
+
+def test_build_release_wheelhouse_binds_runtime_build(tmp_path):
+    if Ed25519PrivateKey is None:
+        pytest.skip("cryptography required")
+    make = _load("makepackage", PRODUCT / "packaging" / "makepackage.py")
+    runtime_build = {
+        "schema": "smc.hermes.runtime-build.v1",
+        "version": "0.22.0",
+        "platform": "windows",
+        "architecture": "amd64",
+        "requires": {"python": ">=3.12,<3.13", "node": ">=22,<23"},
+        "source": {
+            "revision": "abc1234deadbeef",
+            "dirty": False,
+            "pyprojectSha256": "aa" * 32,
+            "lockSha256": "bb" * 32,
+        },
+        "profile": {"name": "smc-managed", "version": 1},
+        "python": {"wheelCount": 1, "wheelhouseDigest": "cc" * 32},
+        "node": {"packageCount": 0, "packageLockDigest": "dd" * 32},
+        "buildId": "build-test",
+        "liveEligible": False,
+    }
+    hermes = tmp_path / "hermes-0.22.0-windows-amd64.zip"
+    with zipfile.ZipFile(hermes, "w") as zf:
+        zf.writestr("app/hermes_agent-0.22.0-py3-none-any.whl", b"wheel-bytes")
+        zf.writestr("python/wheels/pydantic-2.11.0-py3-none-any.whl", b"dep")
+        zf.writestr("runtime-build.json", json.dumps(runtime_build, indent=2).encode("utf-8"))
+        zf.writestr("runtime-profile.json", b'{"schema":"smc.hermes.runtime-profile.v1"}')
+    from cryptography.hazmat.primitives import serialization
+
+    private = Ed25519PrivateKey.generate()
+    key_ref = tmp_path / "release.pem"
+    key_ref.write_bytes(
+        private.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    archive = make.build_release(tmp_path / "out", hermes, key_ref, hermes_version="0.22.0")
+    with zipfile.ZipFile(archive) as zf:
+        names = zf.namelist()
+        manifest = json.loads(zf.read([n for n in names if n.endswith(".manifest.json") and "hermes-" in n][0]))
+    assert manifest["installType"] == "python-wheelhouse"
+    assert manifest["runtimeEntrypoint"] == "venv/Scripts/hermes.exe"
+    assert manifest["requires"]["python"] == ">=3.12,<3.13"
+    assert manifest["profile"]["name"] == "smc-managed"
+    assert len(manifest["runtimeBuildSha256"]) == 64
 
 
 def test_controller_digest_is_not_sha256_of_revision():

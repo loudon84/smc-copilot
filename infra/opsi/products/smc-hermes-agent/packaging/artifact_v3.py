@@ -23,6 +23,18 @@ COMPAT_RE = re.compile(r"^(>=|<=|>|<|=)?\d+$")
 __all__ = ["RELEASE_KEY_ID", "SMOKE_KEY_ID", "sha256_file"]
 
 
+INSTALL_TYPES = ("binary-zip", "python-wheelhouse")
+RUNTIME_ENTRY_RE = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
+
+
+def validate_runtime_entrypoint(value: str) -> str:
+    text = str(value or "").replace("\\", "/")
+    if not RUNTIME_ENTRY_RE.match(text):
+        raise ValueError(f"invalid runtimeEntrypoint: {value}")
+    validate_entrypoint(text.split("/")[-1])
+    return text
+
+
 def canonical_manifest_bytes(manifest: dict[str, Any]) -> bytes:
     payload = {
         "architecture": manifest["architecture"],
@@ -40,6 +52,16 @@ def canonical_manifest_bytes(manifest: dict[str, Any]) -> bytes:
         "sha256": manifest["sha256"],
         "version": manifest["version"],
     }
+    if manifest.get("installType"):
+        payload["installType"] = manifest["installType"]
+    if manifest.get("runtimeEntrypoint"):
+        payload["runtimeEntrypoint"] = manifest["runtimeEntrypoint"]
+    if manifest.get("requires"):
+        payload["requires"] = manifest["requires"]
+    if manifest.get("profile"):
+        payload["profile"] = manifest["profile"]
+    if manifest.get("runtimeBuildSha256"):
+        payload["runtimeBuildSha256"] = manifest["runtimeBuildSha256"]
     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
@@ -143,6 +165,23 @@ def verify_envelope(manifest: dict[str, Any], artifact_digest: str, signature: b
         raise ValueError("latest is forbidden")
     validate_entrypoint(str(manifest.get("entrypoint") or ""))
     parse_compat(str(manifest.get("controllerCompat") or "1"))
+    install_type = str(manifest.get("installType") or "binary-zip")
+    if install_type not in INSTALL_TYPES:
+        raise ValueError(f"unsupported installType: {install_type}")
+    if install_type == "python-wheelhouse":
+        if not manifest.get("runtimeEntrypoint"):
+            raise ValueError("python-wheelhouse requires runtimeEntrypoint")
+        validate_runtime_entrypoint(str(manifest["runtimeEntrypoint"]))
+        requires = manifest.get("requires") or {}
+        if not requires.get("python") or not requires.get("node"):
+            raise ValueError("python-wheelhouse requires python/node ranges")
+        profile = manifest.get("profile") or {}
+        if not profile.get("name") or int(profile.get("version") or 0) < 1:
+            raise ValueError("python-wheelhouse requires profile")
+        if not manifest.get("runtimeBuildSha256"):
+            raise ValueError("python-wheelhouse requires runtimeBuildSha256")
+    elif manifest.get("runtimeEntrypoint"):
+        validate_runtime_entrypoint(str(manifest["runtimeEntrypoint"]))
     files = manifest.get("files") or []
     if schema == MANIFEST_SCHEMA and not files:
         raise ValueError("v3 manifest requires files[]")

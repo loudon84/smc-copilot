@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/client-release.schema.json",
+  "title": "smc.client-release.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "releaseVersion",
+    "platform",
+    "architecture",
+    "requirements",
+    "work",
+    "hermes",
+    "opsi",
+    "opsiClientAgent",
+    "buildId",
+    "liveEligible"
+  ],
+  "properties": {
+    "schema": { "const": "smc.client-release.v1" },
+    "releaseVersion": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "platform": { "enum": ["windows"] },
+    "architecture": { "enum": ["amd64"] },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "node"],
+      "properties": {
+        "python": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "node": { "type": "string", "minLength": 1, "maxLength": 32 }
+      }
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "setupSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "portableSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "hermes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "profile", "sourceRevision", "artifactSha256", "manifestSha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "profile": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "sourceRevision": { "type": "string", "minLength": 7, "maxLength": 64 },
+        "artifactSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "manifestSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "opsi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productVersion", "packageVersion", "controllerRevision", "artifactSha256"],
+      "properties": {
+        "productVersion": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "packageVersion": { "type": "string", "minLength": 1, "maxLength": 16 },
+        "controllerRevision": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "artifactSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "opsiClientAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "version": { "type": "string", "maxLength": 64 },
+        "authenticodeStatus": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "buildId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "liveEligible": { "type": "boolean" }
+  }
+}

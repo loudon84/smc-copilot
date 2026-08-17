@@ -77,9 +77,18 @@ if (Test-SmcSystemProfilePath -Path $extract) {
 }
 
 $entrypoint = "hermes.exe"
-if ($manifest.entrypoint) { $entrypoint = [string]$manifest.entrypoint }
+if ($manifest.runtimeEntrypoint) { $entrypoint = [string]$manifest.runtimeEntrypoint }
+elseif ($manifest.entrypoint) { $entrypoint = [string]$manifest.entrypoint }
+$installType = "binary-zip"
+if ($manifest.installType) { $installType = [string]$manifest.installType }
 $cliDigest = ""
-if ($manifest.cliSha256) { $cliDigest = [string]$manifest.cliSha256 }
+if ($installType -ne "python-wheelhouse" -and $manifest.cliSha256) { $cliDigest = [string]$manifest.cliSha256 }
+$requiresPython = ">=3.12,<3.13"
+$requiresNode = ">=22,<23"
+if ($manifest.requires) {
+    if ($manifest.requires.python) { $requiresPython = [string]$manifest.requires.python }
+    if ($manifest.requires.node) { $requiresNode = [string]$manifest.requires.node }
+}
 $files = @()
 if ($manifest.files) {
     foreach ($item in @($manifest.files)) {
@@ -100,7 +109,7 @@ else {
 $digest = [string]$manifest.sha256
 $slot = $null
 if (Get-Command Install-SmcRuntimeSlot -ErrorAction SilentlyContinue) {
-    $slot = Install-SmcRuntimeSlot -Extract $extract -Version $HermesVersion -Digest $digest -Files $files
+    $slot = Install-SmcRuntimeSlot -Extract $extract -Version $HermesVersion -Digest $digest -Files $files -InstallType $installType -RuntimeEntrypoint $entrypoint -RequiresPython $requiresPython -RequiresNode $requiresNode
 }
 else {
     $short = $digest.Substring(0, [Math]::Min(12, $digest.Length))

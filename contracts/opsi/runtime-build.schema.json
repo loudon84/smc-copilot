@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/contracts/opsi/runtime-build.schema.json",
+  "title": "smc.hermes.runtime-build.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "platform",
+    "architecture",
+    "requires",
+    "source",
+    "profile",
+    "python",
+    "node",
+    "buildId",
+    "liveEligible"
+  ],
+  "properties": {
+    "schema": { "const": "smc.hermes.runtime-build.v1" },
+    "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "platform": { "enum": ["windows"] },
+    "architecture": { "enum": ["amd64"] },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "node"],
+      "properties": {
+        "python": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "node": { "type": "string", "minLength": 1, "maxLength": 32 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "dirty", "pyprojectSha256", "lockSha256"],
+      "properties": {
+        "revision": { "type": "string", "minLength": 7, "maxLength": 64 },
+        "branch": { "type": "string", "maxLength": 128 },
+        "dirty": { "type": "boolean" },
+        "pyprojectSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "lockSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "python": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wheelCount", "wheelhouseDigest"],
+      "properties": {
+        "wheelCount": { "type": "integer", "minimum": 1 },
+        "wheelhouseDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "abi": { "type": "string", "maxLength": 32 }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packageCount", "packageLockDigest"],
+      "properties": {
+        "packageCount": { "type": "integer", "minimum": 0 },
+        "packageLockDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    },
+    "buildId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "liveEligible": { "type": "boolean" }
+  }
+}
