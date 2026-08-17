@@ -1,117 +1,180 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import zipfile
 from pathlib import Path
 
 import pytest
 
-from tools.release.client.build_client_release import assemble, build_all, copy_runtime_artifacts
-from tools.release.client.release_config import load_release_config
-from tools.release.client.release_inventory import capture_opsi_client_installer, capture_work_installers, scan_secrets, sha256_file
+from tools.release.client.build_client_release import build_all
+from tools.release.client.release_inventory import scan_secrets
 from tools.release.client.verify_client_release import verify_client_release
 
-ROOT = Path(__file__).resolve().parents[3]
-CONFIG = ROOT / "release" / "client-release.yaml"
+try:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+except ImportError:  # pragma: no cover
+    Ed25519PrivateKey = None
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_load_native_client_release_config():
-    data = load_release_config(CONFIG)
-    assert data["release"]["version"] == "1.7.1"
-    assert data["opsi"]["buildMode"] == "native"
-    assert data["opsi"]["productVersion"] != data["hermes"]["version"] or data["hermes"]["version"] == "auto"
+def _git(repo: Path, *args: str) -> None:
+    result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr or result.stdout or "git failed")
 
 
-def test_capture_work_and_opsi_client(tmp_path: Path):
-    work_src = tmp_path / "work-dist"
-    work_src.mkdir()
-    setup = work_src / "copilot-desktop-0.7.4-setup.exe"
-    portable = work_src / "copilot-desktop-0.7.4-portable.exe"
-    setup.write_bytes(b"setup")
-    portable.write_bytes(b"portable")
-    work = capture_work_installers(work_src, tmp_path / "out" / "work")
-    assert work["version"] == "0.7.4"
-    assert len(work["sha256"]) == 64
+def _hermes_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "hermes-agent"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text('[project]\nname = "hermes-agent"\nversion = "0.22.0"\n', encoding="utf-8")
+    (repo / "uv.lock").write_text("version = 1\nrequires-python = '>=3.12'\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "config", "user.email", "builder@example.com")
+    _git(repo, "config", "user.name", "builder")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "freeze")
+    return repo
+
+
+def _write_config(path: Path, hermes_repo: Path, installer: Path) -> Path:
+    path.write_text(
+        "\n".join(
+            [
+                "schema: smc.client-release.config.v1",
+                "release:",
+                '  version: "1.7.1"',
+                '  channel: "lab"',
+                "clientRuntime:",
+                "  platform: windows",
+                "  architecture: amd64",
+                "  python:",
+                '    version: "3.12"',
+                '    range: ">=3.12,<3.13"',
+                "  node:",
+                '    version: "22"',
+                '    range: ">=22,<23"',
+                "work:",
+                "  enabled: true",
+                "hermes:",
+                f'  repo: "{hermes_repo.as_posix()}"',
+                "  version: auto",
+                "  profile: smc-managed",
+                "opsi:",
+                '  productVersion: "1.7.1"',
+                '  packageVersion: "1"',
+                '  controllerRevision: "2"',
+                "  buildMode: native",
+                "external:",
+                f'  opsiClientInstaller: "{installer.as_posix()}"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _key_ref(tmp_path: Path) -> Path:
+    from cryptography.hazmat.primitives import serialization
+
+    private = Ed25519PrivateKey.generate()
+    key_ref = tmp_path / "TEST-ONLY-release.pem"
+    key_ref.write_bytes(
+        private.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    return key_ref
+
+
+def _inputs(tmp_path: Path) -> dict[str, Path]:
+    hermes_repo = _hermes_repo(tmp_path)
+    work = tmp_path / "work-dist"
+    work.mkdir()
+    (work / "copilot-desktop-1.7.1-setup.exe").write_bytes(b"setup")
+    (work / "copilot-desktop-1.7.1-portable.exe").write_bytes(b"portable")
+    hermes = tmp_path / "hermes-0.22.0-windows.zip"
+    with zipfile.ZipFile(hermes, "w") as zf:
+        zf.writestr("hermes.exe", b"SMOKE-HERMES-CLI 0.22.0\n")
+        zf.writestr("README.txt", b"fixture")
     installer = tmp_path / "opsi-client-agent-installer.exe"
     installer.write_bytes(b"opsi-client")
-    captured = capture_opsi_client_installer(installer, tmp_path / "out" / "bootstrap")
-    assert captured["name"] == "opsi-client-agent-installer.exe"
-    assert (tmp_path / "out" / "bootstrap" / "opsi-client-agent-installer.exe").is_file()
+    config = _write_config(tmp_path / "client-release.yaml", hermes_repo, installer)
+    return {
+        "config": config,
+        "hermes_repo": hermes_repo,
+        "work": work,
+        "hermes": hermes,
+        "installer": installer,
+        "key": _key_ref(tmp_path),
+    }
 
 
-def test_secret_scan_fail_closed(tmp_path: Path):
-    (tmp_path / "ok.txt").write_text("ok", encoding="utf-8")
-    scan_secrets(tmp_path)
-    (tmp_path / "release-private-key.pem").write_text("secret", encoding="utf-8")
+def test_rb14_secret_scan_fails(tmp_path: Path):
+    dest = tmp_path / "rel"
+    dest.mkdir()
+    (dest / ".env").write_text("SECRET=1\n", encoding="utf-8")
     with pytest.raises(ValueError, match="secret"):
-        scan_secrets(tmp_path)
+        scan_secrets(dest)
 
 
-def test_assemble_and_verify_client_release(tmp_path: Path):
-    dest = tmp_path / "client-release" / "1.7.1" / "build-test"
-    work_src = tmp_path / "work-dist"
-    work_src.mkdir()
-    (work_src / "copilot-desktop-0.7.4-setup.exe").write_bytes(b"setup")
-    (work_src / "copilot-desktop-0.7.4-portable.exe").write_bytes(b"portable")
-    work = capture_work_installers(work_src, dest / "work")
-    hermes_zip = tmp_path / "hermes-0.20.2-windows-amd64.zip"
-    hermes_zip.write_bytes(b"zip")
-    (tmp_path / "hermes-0.20.2-windows-amd64.manifest.json").write_text("{}", encoding="utf-8")
-    hermes_meta = copy_runtime_artifacts(hermes_zip, dest)
-    hermes_meta.update(
-        {
-            "profile": "smc-managed",
-            "sourceRevision": "abc1234",
-            "version": "0.20.2",
-        }
-    )
-    opsi_pkg = tmp_path / "smc-hermes-agent_1.7.1-1.opsi"
-    opsi_pkg.write_bytes(b"opsi")
-    opsi_dir = dest / "opsi"
-    opsi_dir.mkdir(parents=True)
-    (opsi_dir / opsi_pkg.name).write_bytes(b"opsi")
-    installer = tmp_path / "opsi-client-agent-installer.exe"
-    installer.write_bytes(b"client")
-    opsi_client = capture_opsi_client_installer(installer, dest / "bootstrap")
-    config = load_release_config(CONFIG)
-    opsi_sha = sha256_file(opsi_dir / opsi_pkg.name)
-    assemble(
-        dest,
-        config=config,
-        work=work,
-        hermes=hermes_meta,
-        opsi={
-            "productVersion": "1.7.1",
-            "packageVersion": "1",
-            "controllerRevision": "2",
-            "artifactSha256": opsi_sha,
-        },
-        opsi_client=opsi_client,
-        build_id="build-test",
-        live_eligible=False,
-    )
-    verified = verify_client_release(dest)
-    assert verified["schema"] == "smc.client-release.v1"
-    assert verified["liveEligible"] is False
-    assert verified["work"]["version"] == "0.7.4"
-    assert (dest / "manifests" / "SHA256SUMS").is_file()
+def test_rb15_final_release_ready(tmp_path: Path, monkeypatch):
+    if Ed25519PrivateKey is None:
+        pytest.skip("cryptography required")
+    from tools.release.client import build_client_release as bcr
 
-
-def test_build_all_requires_inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "tools.release.client.build_client_release.run_preflight",
-        lambda *a, **k: {
-            "smc": {"revision": "abc1234", "dirty": True, "liveEligible": False},
-            "hermes": {"revision": "def5678", "version": "0.20.2", "liveEligible": False},
-        },
+        bcr,
+        "freeze_smc",
+        lambda allow_dirty: {"revision": "a" * 40, "dirty": False, "liveEligible": True},
     )
-    work_src = tmp_path / "work-dist"
-    work_src.mkdir()
-    (work_src / "copilot-desktop-0.7.4-setup.exe").write_bytes(b"setup")
-    (work_src / "copilot-desktop-0.7.4-portable.exe").write_bytes(b"portable")
-    with pytest.raises(ValueError, match="hermes zip required"):
-        build_all(
-            config_path=CONFIG,
-            output=tmp_path,
-            allow_dirty=True,
-            work_dist=work_src,
-            hermes_zip=None,
-        )
+    paths = _inputs(tmp_path)
+    dest = bcr.build_all(
+        config_path=paths["config"],
+        output=tmp_path / "dist",
+        hermes_repo=paths["hermes_repo"],
+        opsi_client_installer=paths["installer"],
+        signing_key_ref=paths["key"],
+        allow_dirty=True,
+        work_dist=paths["work"],
+        hermes_zip=paths["hermes"],
+        opsi_tooling="zipfile",
+        mode="offline",
+    )
+    manifest = json.loads((dest / "manifests" / "client-release.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "smc.client-release.v1"
+    assert manifest["liveEligible"] is True
+    verified = verify_client_release(dest, stage=dest / "opsi" / "stage", require_signatures=True)
+    assert verified["liveEligible"] is True
+    assert any((dest / "opsi").glob("*.fixture.zip"))
+
+
+def test_stage_all_does_not_require_prebuilt_opsi(tmp_path: Path, monkeypatch):
+    if Ed25519PrivateKey is None:
+        pytest.skip("cryptography required")
+    from tools.release.client import build_client_release as bcr
+
+    monkeypatch.setattr(
+        bcr,
+        "freeze_smc",
+        lambda allow_dirty: {"revision": "a" * 40, "dirty": False, "liveEligible": True},
+    )
+    paths = _inputs(tmp_path)
+    dest = build_all(
+        config_path=paths["config"],
+        output=tmp_path / "dist",
+        hermes_repo=paths["hermes_repo"],
+        opsi_client_installer=paths["installer"],
+        signing_key_ref=paths["key"],
+        allow_dirty=True,
+        work_dist=paths["work"],
+        hermes_zip=paths["hermes"],
+        opsi_pkg=None,
+        opsi_tooling="zipfile",
+    )
+    assert dest.is_dir()
+    assert list((dest / "opsi").glob("*.fixture.zip"))

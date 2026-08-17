@@ -129,6 +129,39 @@ def venv_python(venv: Path) -> Path:
     return venv / "bin" / "python"
 
 
+def install_node_into_slot(slot: Path, *, npm: str = "npm", runner=subprocess.run) -> None:
+    node_root = slot / "node"
+    if not node_root.is_dir():
+        return
+    packages_dir = node_root / "packages"
+    lock = node_root / "package-lock.json"
+    if lock.is_file():
+        cmd = [npm, "ci", "--prefix", str(node_root), "--offline", "--omit=dev"]
+        result = runner(cmd, capture_output=True, text=True, check=False)
+        if getattr(result, "returncode", 1) != 0:
+            raise ValueError(getattr(result, "stderr", "") or "offline node ci failed")
+    elif packages_dir.is_dir():
+        for tgz in sorted(packages_dir.glob("*.tgz")):
+            cmd = [npm, "install", "--prefix", str(node_root), "--offline", "--omit=dev", str(tgz)]
+            result = runner(cmd, capture_output=True, text=True, check=False)
+            if getattr(result, "returncode", 1) != 0:
+                raise ValueError(getattr(result, "stderr", "") or "offline node install failed")
+    profile_path = slot / "runtime-profile.json"
+    declared: list[dict[str, str]] = []
+    if profile_path.is_file():
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        declared = list(((profile.get("profile") or {}).get("node") or {}).get("packages") or [])
+    for item in declared:
+        name = str(item.get("name") or "")
+        if "/" in name:
+            scope, pkg = name.split("/", 1)
+            rel = Path("node_modules") / scope / pkg
+        else:
+            rel = Path("node_modules") / name
+        if not (node_root / rel).exists():
+            raise ValueError(f"missing node dependency: {name}")
+
+
 def install_wheelhouse_into_slot(slot: Path, *, python: str, runner=subprocess.run) -> Path:
     wheelhouse = slot / "python" / "wheels"
     wheels = sorted((slot / "app").glob("*.whl"))
@@ -369,16 +402,17 @@ def install_runtime_slot(
         )
         if python_exe:
             install_wheelhouse_into_slot(slot, python=python_exe, runner=runner)
+            install_node_into_slot(slot, runner=runner)
         entry = runtime_entrypoint or "venv/Scripts/hermes.exe"
-        write_json(
-            slot / "runtime.json",
-            {
-                "version": version,
-                "digest": digest,
-                "installType": install_type,
-                "entrypoint": entry,
-            },
-        )
+        runtime_doc = {
+            "version": version,
+            "digest": digest,
+            "installType": install_type,
+            "entrypoint": entry,
+        }
+        if (slot / "node" / "node_modules").is_dir():
+            runtime_doc["NodeDependencyStatus"] = "PASS"
+        write_json(slot / "runtime.json", runtime_doc)
         cli = assert_contained(slot, entry)
         if cli.is_file():
             result = runner([str(cli), "--version"], capture_output=True, text=True, check=False)

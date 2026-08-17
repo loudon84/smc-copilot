@@ -1,23 +1,24 @@
 param(
     [Parameter(Mandatory = $true)][string]$Repo,
     [Parameter(Mandatory = $true)][string]$Dest,
-    [Parameter(Mandatory = $true)][string]$Wheelhouse,
+    [string]$Wheelhouse = "",
     [string]$Profile = "smc-managed",
     [string]$HermesVersion = "",
     [string]$NodeRoot = "",
     [string]$Wheel = "",
+    [ValidateSet("online", "offline")][string]$Mode = "online",
     [switch]$AllowDirty
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-$root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $argsList = @(
     (Join-Path $PSScriptRoot "build_runtime.py"),
     "--repo", $Repo,
     "--dest", $Dest,
-    "--wheelhouse", $Wheelhouse,
-    "--profile", $Profile
+    "--profile", $Profile,
+    "--mode", $Mode
 )
+if ($Wheelhouse) { $argsList += @("--wheelhouse", $Wheelhouse) }
 if ($HermesVersion) { $argsList += @("--hermes-version", $HermesVersion) }
 if ($NodeRoot) { $argsList += @("--node-root", $NodeRoot) }
 if ($Wheel) { $argsList += @("--wheel", $Wheel) }

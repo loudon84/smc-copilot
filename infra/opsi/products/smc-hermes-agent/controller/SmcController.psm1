@@ -213,6 +213,14 @@ function Resume-SmcJournalV2 {
     return (Get-Content -LiteralPath $path -Raw | ConvertFrom-Json)
 }
 
+function ConvertTo-SmcVersionBound {
+    param([Parameter(Mandatory = $true)][string]$Bound)
+    $text = $Bound.Trim()
+    if ($text -match '^\d+$') { return [version]"$text.0.0" }
+    if ($text -match '^\d+\.\d+$') { return [version]"$text.0" }
+    return [version]$text
+}
+
 function Test-SmcVersionRange {
     param([Parameter(Mandatory = $true)][string]$Actual, [Parameter(Mandatory = $true)][string]$Range)
     $verMatch = [regex]::Match($Actual, "(\d+)\.(\d+)(?:\.(\d+))?")
@@ -221,22 +229,16 @@ function Test-SmcVersionRange {
     foreach ($clause in $Range.Split(",")) {
         $item = $clause.Trim()
         if ($item.StartsWith(">=")) {
-            if ($actualVer -lt [version]($item.Substring(2).Trim() + $(if ($item.Substring(2).Trim() -match '^\d+\.\d+$') { ".0" } else { "" }))) { return $false }
+            if ($actualVer -lt (ConvertTo-SmcVersionBound -Bound $item.Substring(2).Trim())) { return $false }
         }
         elseif ($item.StartsWith("<=")) {
-            $bound = $item.Substring(2).Trim()
-            if ($bound -match '^\d+\.\d+$') { $bound = "$bound.0" }
-            if ($actualVer -gt [version]$bound) { return $false }
+            if ($actualVer -gt (ConvertTo-SmcVersionBound -Bound $item.Substring(2).Trim())) { return $false }
         }
         elseif ($item.StartsWith("<")) {
-            $bound = $item.Substring(1).Trim()
-            if ($bound -match '^\d+\.\d+$') { $bound = "$bound.0" }
-            if ($actualVer -ge [version]$bound) { return $false }
+            if ($actualVer -ge (ConvertTo-SmcVersionBound -Bound $item.Substring(1).Trim())) { return $false }
         }
         elseif ($item.StartsWith(">")) {
-            $bound = $item.Substring(1).Trim()
-            if ($bound -match '^\d+\.\d+$') { $bound = "$bound.0" }
-            if ($actualVer -le [version]$bound) { return $false }
+            if ($actualVer -le (ConvertTo-SmcVersionBound -Bound $item.Substring(1).Trim())) { return $false }
         }
     }
     return $true
@@ -314,20 +316,48 @@ function Install-SmcRuntimeSlot {
         if (-not $hermesWheel) { throw "missing python dependency" }
         & $pip install --no-index --find-links $wheels $hermesWheel.FullName
         if ($LASTEXITCODE -ne 0) { throw "offline wheel install failed" }
-        $nodePkgs = Join-Path $slot "node\packages"
-        if (Test-Path -LiteralPath $nodePkgs) {
-            Get-ChildItem -LiteralPath $nodePkgs -Filter "*.tgz" | ForEach-Object {
-                & npm install --offline --omit=dev $_.FullName
-                if ($LASTEXITCODE -ne 0) { throw "offline node install failed" }
+        $nodeRoot = Join-Path $slot "node"
+        if (Test-Path -LiteralPath $nodeRoot) {
+            $nodeLock = Join-Path $nodeRoot "package-lock.json"
+            if (Test-Path -LiteralPath $nodeLock) {
+                & npm ci --prefix $nodeRoot --offline --omit=dev
+                if ($LASTEXITCODE -ne 0) { throw "offline node ci failed" }
+            }
+            else {
+                $nodePkgs = Join-Path $nodeRoot "packages"
+                if (Test-Path -LiteralPath $nodePkgs) {
+                    Get-ChildItem -LiteralPath $nodePkgs -Filter "*.tgz" | ForEach-Object {
+                        & npm install --prefix $nodeRoot --offline --omit=dev $_.FullName
+                        if ($LASTEXITCODE -ne 0) { throw "offline node install failed" }
+                    }
+                }
+            }
+            $profilePath = Join-Path $slot "runtime-profile.json"
+            if (Test-Path -LiteralPath $profilePath) {
+                $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+                foreach ($pkg in @($profile.profile.node.packages)) {
+                    $name = [string]$pkg.name
+                    if ($name -match "^(@[^/]+)/(.+)$") {
+                        $rel = Join-Path $nodeRoot ("node_modules\" + $Matches[1] + "\" + $Matches[2])
+                    }
+                    else {
+                        $rel = Join-Path $nodeRoot ("node_modules\" + $name)
+                    }
+                    if (-not (Test-Path -LiteralPath $rel)) { throw "missing node dependency: $name" }
+                }
             }
         }
         if (-not $RuntimeEntrypoint) { $entrypoint = "venv\Scripts\hermes.exe" }
-        Write-SmcJsonAtomic -Path (Join-Path $slot "runtime.json") -Object ([ordered]@{
-                version     = $Version
-                digest      = $Digest
-                installType = $InstallType
-                entrypoint  = $entrypoint
-            })
+        $runtimeDoc = [ordered]@{
+            version     = $Version
+            digest      = $Digest
+            installType = $InstallType
+            entrypoint  = $entrypoint
+        }
+        if (Test-Path -LiteralPath (Join-Path $nodeRoot "node_modules")) {
+            $runtimeDoc["NodeDependencyStatus"] = "PASS"
+        }
+        Write-SmcJsonAtomic -Path (Join-Path $slot "runtime.json") -Object $runtimeDoc
         $cli = Join-Path $slot $entrypoint
         $verOut = & $cli --version 2>$null | Select-Object -First 1
         if ("$verOut" -notmatch [regex]::Escape($Version)) { throw "CLI version mismatch: expected $Version" }

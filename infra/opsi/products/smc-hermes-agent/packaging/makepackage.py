@@ -72,6 +72,35 @@ def _control_property_default(name: str) -> str:
     return match.group(1)
 
 
+def _replace_property_default(text: str, name: str, value: str) -> str:
+    pattern = re.compile(
+        rf"(\[ProductProperty\.unicode\.{re.escape(name)}\].*?default\s*=\s*\[)\"[^\"]*\"(\])",
+        re.S,
+    )
+    updated, count = pattern.subn(rf'\1"{value}"\2', text, count=1)
+    if count != 1:
+        raise SystemExit(f"failed to stage ProductProperty {name}")
+    return updated
+
+
+def stage_control_toml(
+    dest: Path,
+    *,
+    product_version: str,
+    package_version: str,
+    hermes_version: str,
+    controller_revision: str,
+) -> Path:
+    text = (PRODUCT / "OPSI" / "control.toml").read_text(encoding="utf-8")
+    text = re.sub(r'(?m)^(productVersion\s*=\s*)"[^"]+"', rf'\1"{product_version}"', text, count=1)
+    text = re.sub(r'(?m)^(packageVersion\s*=\s*)"[^"]+"', rf'\1"{package_version}"', text, count=1)
+    text = _replace_property_default(text, "hermes_version", hermes_version)
+    text = _replace_property_default(text, "controller_revision", controller_revision)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text, encoding="utf-8")
+    return dest
+
+
 def _write_cli_zip(path: Path, version: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as zf:
@@ -324,7 +353,13 @@ def stage_release(
         shutil.rmtree(stage)
     (stage / "OPSI").mkdir(parents=True)
     (stage / "CLIENT_DATA").mkdir(parents=True)
-    shutil.copy2(PRODUCT / "OPSI" / "control.toml", stage / "OPSI" / "control.toml")
+    stage_control_toml(
+        stage / "OPSI" / "control.toml",
+        product_version=str(release_index["productVersion"]),
+        package_version=str(release_index["packageVersion"]),
+        hermes_version=str(runtime["version"]),
+        controller_revision=str(controller["revision"]),
+    )
     for script in ("setup.opsiscript", "update.opsiscript", "uninstall.opsiscript", "custom.opsiscript"):
         shutil.copy2(PRODUCT / "CLIENT_DATA" / script, stage / "CLIENT_DATA" / script)
     bootstrap = stage / "CLIENT_DATA" / "scripts"
@@ -382,7 +417,9 @@ def stage_release(
 
 def write_opsi_archive(stage: Path, dest: Path, product_version: str, package_version: str) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
-    archive = dest / f"smc-hermes-agent_{product_version}-{package_version}.opsi"
+    archive = dest / f"smc-hermes-agent_{product_version}-{package_version}.fixture.zip"
+    if archive.name.endswith(".opsi") or archive.suffix == ".opsi":
+        raise SystemExit("zipfile path must not emit .opsi")
     if archive.exists():
         archive.unlink()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -525,24 +562,29 @@ def build_smoke(dest: Path) -> Path:
     return archive
 
 
-def build_release(
+def prepare_release_stage(
     dest: Path,
     hermes_zip: Path,
     key_ref: Path,
     *,
     hermes_version: str = "",
-    opsi_tooling: str = "zipfile",
-) -> Path:
+    product_version: str = "",
+    package_version: str = "",
+    controller_revision: str = "",
+) -> dict:
     if not hermes_zip.is_file():
         raise SystemExit("real Hermes Windows zip required")
     if not key_ref.is_file():
         raise SystemExit("release signing key ref missing; refusing to autogenerate")
     source_art = PRODUCT / "CLIENT_DATA" / "artifacts"
     before_arts = {p: p.read_bytes() for p in source_art.glob("*")} if source_art.is_dir() else {}
-    product_version = _control_field("productVersion")
-    package_version = _control_field("packageVersion")
-    runtime_version = hermes_version or _control_property_default("hermes_version")
-    controller_revision = _control_property_default("controller_revision")
+    product_version = product_version or _control_field("productVersion")
+    package_version = package_version or _control_field("packageVersion")
+    runtime_build = _runtime_build_from_zip(hermes_zip)
+    runtime_version = hermes_version or (str(runtime_build.get("version") or "") if runtime_build else "") or _control_property_default("hermes_version")
+    if runtime_build and str(runtime_build.get("version") or "") != runtime_version:
+        raise SystemExit(f"runtime-build version mismatch: {runtime_build.get('version')} != {runtime_version}")
+    controller_revision = controller_revision or _control_property_default("controller_revision")
     private = _load_private(key_ref)
     key_id = RELEASE_KEY_ID if "TEST-ONLY" not in key_ref.name.upper() else SMOKE_KEY_ID
     work = dest / "release-work"
@@ -594,16 +636,61 @@ def build_release(
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     stage = stage_release(work, runtime=runtime, controller=controller, release_index=signed, public_pem=public_pem)
-    if opsi_tooling == "native":
-        archive = build_opsi_native(stage, dest, product_version, package_version)
-    elif opsi_tooling == "zipfile":
-        archive = write_opsi_archive(stage, dest, product_version, package_version)
-    else:
-        raise SystemExit(f"unsupported opsi tooling: {opsi_tooling}")
-    readback_opsi(archive, stage)
     after_arts = {p: p.read_bytes() for p in source_art.glob("*")} if source_art.is_dir() else {}
     if before_arts != after_arts:
         raise SystemExit("release must not rewrite source artifacts")
+    return {
+        "stage": stage,
+        "runtime": runtime,
+        "controller": controller,
+        "release_index": signed,
+        "product_version": product_version,
+        "package_version": package_version,
+        "hermes_version": runtime_version,
+        "controller_revision": controller_revision,
+        "work": work,
+    }
+
+
+def package_stage(stage: Path, dest: Path, product_version: str, package_version: str, *, opsi_tooling: str) -> Path:
+    if opsi_tooling == "native":
+        return build_opsi_native(stage, dest, product_version, package_version)
+    if opsi_tooling == "zipfile":
+        archive = write_opsi_archive(stage, dest, product_version, package_version)
+        if archive.name.endswith(".opsi"):
+            raise SystemExit("zipfile path must not emit .opsi")
+        return archive
+    raise SystemExit(f"unsupported opsi tooling: {opsi_tooling}")
+
+
+def build_release(
+    dest: Path,
+    hermes_zip: Path,
+    key_ref: Path,
+    *,
+    hermes_version: str = "",
+    product_version: str = "",
+    package_version: str = "",
+    controller_revision: str = "",
+    opsi_tooling: str = "native",
+) -> Path:
+    prepared = prepare_release_stage(
+        dest,
+        hermes_zip,
+        key_ref,
+        hermes_version=hermes_version,
+        product_version=product_version,
+        package_version=package_version,
+        controller_revision=controller_revision,
+    )
+    archive = package_stage(
+        prepared["stage"],
+        dest,
+        prepared["product_version"],
+        prepared["package_version"],
+        opsi_tooling=opsi_tooling,
+    )
+    readback_opsi(archive, prepared["stage"], extract_root=dest / "readback")
     print(f"wrote {archive}")
     return archive
 
@@ -621,7 +708,7 @@ def main() -> int:
     parser.add_argument("--signing-key-ref", type=Path)
     parser.add_argument("--production-depot", action="store_true", help="forbidden unless operator override")
     parser.add_argument("--publish", action="store_true")
-    parser.add_argument("--opsi-tooling", choices=("zipfile", "native"), default="zipfile")
+    parser.add_argument("--opsi-tooling", choices=("zipfile", "native"), default="native")
     args = parser.parse_args()
     if args.production_depot or args.publish:
         raise SystemExit("refusing to publish to production depot from this script")

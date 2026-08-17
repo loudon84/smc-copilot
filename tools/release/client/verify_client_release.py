@@ -1,11 +1,16 @@
-"""Final verification for a client release tree."""
+"""Final verification: signature chain + OPSI read-back + secret scan."""
 
 from __future__ import annotations
 
 import json
+import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 from tools.release.client.release_inventory import scan_secrets, sha256_file
+
+ROOT = Path(__file__).resolve().parents[3]
+PACKAGING = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "packaging"
 
 REQUIRED_FILES = (
     "manifests/client-release.json",
@@ -13,7 +18,67 @@ REQUIRED_FILES = (
 )
 
 
-def verify_client_release(root: Path) -> dict:
+def _load_packaging(name: str):
+    path = PACKAGING / f"{name}.py"
+    spec = spec_from_file_location(f"smc_packaging_{name}", path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"packaging module missing: {name}")
+    module = module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_public_key(pem: bytes):
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+    return load_pem_public_key(pem)
+
+
+def _first(root: Path, pattern: str) -> Path:
+    matches = sorted(root.glob(pattern))
+    if not matches:
+        raise ValueError(f"Release FAILED: missing {pattern}")
+    return matches[0]
+
+
+def verify_signature_chain(extracted: Path, hermes_zip: Path) -> None:
+    artifact_v3 = _load_packaging("artifact_v3")
+    product_release = _load_packaging("product_release")
+    controller_manifest = _load_packaging("controller_manifest")
+    public_pem = (extracted / "CLIENT_DATA" / "keys" / "release-public-key.pem").read_bytes()
+    public = _load_public_key(public_pem)
+    runtime_zip = _first(extracted, "CLIENT_DATA/artifacts/hermes-*.zip")
+    runtime_man = _first(extracted, "CLIENT_DATA/artifacts/hermes-*.manifest.json")
+    runtime_sig = _first(extracted, "CLIENT_DATA/artifacts/hermes-*.sig")
+    manifest = json.loads(runtime_man.read_text(encoding="utf-8"))
+    artifact_v3.verify_envelope(manifest, artifact_v3.sha256_file(runtime_zip), runtime_sig.read_bytes(), public)
+    index = json.loads((extracted / "OPSI" / "product-release.json").read_text(encoding="utf-8"))
+    product_release.verify_index(index, public)
+    tree = extracted / "CLIENT_DATA" / "controller"
+    signed = json.loads((tree / "controller.manifest.json").read_text(encoding="utf-8"))
+    controller_manifest.verify_manifest(signed, public, tree)
+    if manifest.get("sha256") != index["runtimes"][0]["artifactSha256"]:
+        raise ValueError("Release FAILED: runtime artifact hash mismatch")
+    if artifact_v3.sha256_file(runtime_man) != index["runtimes"][0]["manifestSha256"]:
+        raise ValueError("Release FAILED: runtime manifest hash mismatch")
+    build_member = None
+    import zipfile
+
+    with zipfile.ZipFile(runtime_zip) as zf:
+        names = {name.replace("\\", "/"): name for name in zf.namelist()}
+        if "runtime-build.json" in names:
+            build_member = json.loads(zf.read(names["runtime-build.json"]))
+    if build_member and build_member.get("version") != manifest.get("version"):
+        raise ValueError("Release FAILED: runtime-build version mismatch")
+
+
+def verify_client_release(
+    root: Path,
+    *,
+    stage: Path | None = None,
+    require_signatures: bool = True,
+) -> dict:
     scan_secrets(root)
     missing = [rel for rel in REQUIRED_FILES if not (root / rel).is_file()]
     if missing:
@@ -27,21 +92,28 @@ def verify_client_release(root: Path) -> dict:
     bootstrap = root / "bootstrap"
     if not any(work_dir.glob("copilot-desktop-*-setup.exe")):
         raise ValueError("Work setup installer missing")
-    if not any(hermes_dir.glob("hermes-*.zip")):
-        raise ValueError("Hermes artifact missing")
-    if not any(opsi_dir.glob("*.opsi")):
+    hermes_zip = _first(hermes_dir, "hermes-*.zip")
+    packages = list(opsi_dir.glob("*.opsi")) + list(opsi_dir.glob("*.fixture.zip"))
+    if not packages:
         raise ValueError("OPSI product missing")
-    if not any(bootstrap.glob("opsi-client-agent-installer.exe")):
-        raise ValueError("OPSI client installer missing")
-    hermes_zip = next(hermes_dir.glob("hermes-*.zip"))
+    opsi_pkg = packages[0]
+    installer = _first(bootstrap, "opsi-client-agent-installer.exe")
     if sha256_file(hermes_zip) != manifest["hermes"]["artifactSha256"]:
         raise ValueError("Hermes artifact hash mismatch")
-    opsi_pkg = next(opsi_dir.glob("*.opsi"))
     if sha256_file(opsi_pkg) != manifest["opsi"]["artifactSha256"]:
         raise ValueError("OPSI artifact hash mismatch")
-    installer = next(bootstrap.glob("opsi-client-agent-installer.exe"))
     if sha256_file(installer) != manifest["opsiClientAgent"]["sha256"]:
         raise ValueError("OPSI client installer hash mismatch")
-    if manifest.get("liveEligible") and any("private" in p.name.lower() and "public" not in p.name.lower() for p in root.rglob("*")):
+    if any("private" in p.name.lower() and "public" not in p.name.lower() for p in root.rglob("*") if p.is_file()):
         raise ValueError("private material cannot be liveEligible")
+    readback = _load_packaging("opsi_readback")
+    extracted = Path(stage) if stage and (Path(stage) / "OPSI" / "control.toml").is_file() else None
+    if require_signatures:
+        extract_root = root / "opsi" / "readback"
+        packed_tree = readback.extract_opsi(opsi_pkg, extract_root)
+        compare_stage = extracted or packed_tree
+        readback.readback_opsi(opsi_pkg, compare_stage, extract_root=root / "opsi" / "readback-verify")
+        verify_signature_chain(packed_tree, hermes_zip)
+    if manifest.get("liveEligible") and not require_signatures:
+        raise ValueError("liveEligible requires signature chain")
     return manifest

@@ -82,6 +82,31 @@ def verify_required_wheels(items: list[dict[str, Any]], required_names: list[str
             raise ValueError(f"missing python dependency: {name}")
 
 
+def assert_wheelhouse_binary_only(dest: Path) -> None:
+    sdists = sorted(dest.glob("*.tar.gz")) + sorted(dest.glob("*.zip"))
+    if sdists:
+        raise ValueError(f"sdist-only dependency forbidden: {sdists[0].name}")
+
+
+def resolve_wheelhouse(
+    repo: Path,
+    dest: Path,
+    extras: list[str],
+    *,
+    supplied: Path | None = None,
+    mode: str = "online",
+    downloader=None,
+) -> Path:
+    if supplied is not None:
+        assert_wheelhouse_binary_only(supplied)
+        inventory_wheels(supplied)
+        return supplied
+    if mode == "offline":
+        raise ValueError("offline build requires --wheelhouse cache")
+    fetch = downloader or download_wheelhouse
+    return fetch(repo, dest, extras)
+
+
 def download_wheelhouse(repo: Path, dest: Path, extras: list[str]) -> Path:
     dest.mkdir(parents=True, exist_ok=True)
     uv = shutil.which("uv")
@@ -123,4 +148,6 @@ def download_wheelhouse(repo: Path, dest: Path, extras: list[str]) -> Path:
     result = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise ValueError(result.stderr.strip() or result.stdout.strip() or "wheelhouse download failed")
+    assert_wheelhouse_binary_only(dest)
+    inventory_wheels(dest)
     return dest

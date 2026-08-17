@@ -38,6 +38,7 @@ Describe "smc-hermes-agent adapter contracts" {
         $text = Get-Content (Join-Path $script:Product "packaging\makepackage.py") -Raw
         $text | Should Match "smoke.zip"
         $text | Should Match "must not emit .opsi"
+        $text | Should Match "default=`"native`""
     }
 
     It "uninstall does not delete .hermes user data" {
@@ -171,7 +172,11 @@ Describe "smc-hermes-agent adapter contracts" {
         $ctrl = Get-Content (Join-Path $script:Product "controller\SmcController.psm1") -Raw
         $ctrl | Should Match "PREREQUISITE_FAILED"
         $ctrl | Should Match "--no-index"
+        $ctrl | Should Match "--prefix"
+        $ctrl | Should Match "NodeDependencyStatus"
         $ctrl | Should Match "python-wheelhouse"
+        Test-Path (Join-Path $script:Product "controller\Test-SmcClientPrerequisites.ps1") | Should Be $true
+        Test-Path (Join-Path $script:Product "scripts\diagnostics\Collect-DeploymentDiagnosticBundle.ps1") | Should Be $true
         $install = Get-Content (Join-Path $script:Product "scripts\install\Install-Hermes.ps1") -Raw
         $install | Should Match "runtimeEntrypoint"
         $install | Should Match "InstallType"

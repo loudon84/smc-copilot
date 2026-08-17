@@ -47,6 +47,24 @@ def write_package_manifest(dest: Path, packages: list[dict[str, str]]) -> tuple[
     return pkg_path, lock_path
 
 
+def resolve_node_root(
+    packages: list[dict[str, str]],
+    dest: Path,
+    *,
+    supplied: Path | None = None,
+    mode: str = "online",
+) -> Path:
+    if supplied is not None:
+        verify_declared_packages(packages, supplied / "packages")
+        return supplied
+    if mode == "offline":
+        raise ValueError("offline build requires --node-root cache")
+    write_package_manifest(dest, packages)
+    if packages:
+        pack_packages(packages, dest)
+    return dest
+
+
 def pack_packages(packages: list[dict[str, str]], dest: Path) -> list[Path]:
     packages_dir = dest / "packages"
     packages_dir.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,6 +38,19 @@ class FakeRun:
             assert "--no-index" in joined
             assert "pypi.org" not in joined.lower()
             return SimpleNamespace(returncode=0, stdout="", stderr="")
+        if "npm" in joined:
+            assert "--prefix" in joined
+            assert "--offline" in joined
+            node_root = None
+            for idx, part in enumerate(cmd):
+                if part == "--prefix" and idx + 1 < len(cmd):
+                    node_root = Path(cmd[idx + 1])
+                    break
+            if node_root is not None:
+                modules = node_root / "node_modules" / "@modelcontextprotocol" / "server-filesystem"
+                modules.mkdir(parents=True, exist_ok=True)
+                (modules / "package.json").write_text('{"name":"@modelcontextprotocol/server-filesystem"}', encoding="utf-8")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         if "--version" in joined:
             return SimpleNamespace(returncode=0, stdout=f"{self.version}\n", stderr="")
         if "gateway" in joined:
@@ -48,14 +62,34 @@ def _wheelhouse_extract(root: Path, version: str = "0.20.2") -> tuple[Path, list
     extract = root / "extract"
     app = extract / "app"
     wheels = extract / "python" / "wheels"
+    node = extract / "node" / "packages"
     app.mkdir(parents=True)
     wheels.mkdir(parents=True)
+    node.mkdir(parents=True)
     hermes = app / f"hermes_agent-{version}-py3-none-any.whl"
     dep = wheels / "pydantic-2.11.0-py3-none-any.whl"
     hermes.write_bytes(b"wheel")
     dep.write_bytes(b"dep")
+    (extract / "node" / "package.json").write_text(
+        '{"name":"smc-hermes-managed-node","dependencies":{"@modelcontextprotocol/server-filesystem":"2025.8.21"}}',
+        encoding="utf-8",
+    )
+    (node / "modelcontextprotocol-server-filesystem-2025.8.21.tgz").write_bytes(b"tgz")
+    (extract / "runtime-profile.json").write_text(
+        json.dumps(
+            {
+                "schema": "smc.hermes.runtime-profile.v1",
+                "profile": {
+                    "node": {
+                        "packages": [{"name": "@modelcontextprotocol/server-filesystem", "version": "2025.8.21"}]
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     files = []
-    for path in (hermes, dep):
+    for path in sorted(p for p in extract.rglob("*") if p.is_file()):
         rel = path.relative_to(extract).as_posix()
         files.append(
             {
@@ -148,6 +182,11 @@ def test_e08_e09_e10_wheelhouse_slot_cli_and_gateway(tmp_path: Path):
     assert cli.name == "hermes.exe"
     assert any("--version" in cmd for cmd in runner.commands)
     assert any("gateway" in cmd for cmd in runner.commands)
+    runtime_doc = json.loads((slot / "runtime.json").read_text(encoding="utf-8"))
+    assert runtime_doc.get("NodeDependencyStatus") == "PASS"
+    npm_cmds = [cmd for cmd in runner.commands if "npm" in cmd]
+    assert npm_cmds
+    assert any("--prefix" in cmd for cmd in npm_cmds)
 
 
 def test_wheelhouse_failure_does_not_commit_active(tmp_path: Path):
@@ -177,7 +216,15 @@ def test_scripts_declare_prereq_and_offline_install():
     controller = (PRODUCT / "controller" / "SmcController.psm1").read_text(encoding="utf-8")
     assert "PREREQUISITE_FAILED" in controller
     assert "--no-index" in controller
+    assert "--prefix" in controller
+    assert "NodeDependencyStatus" in controller
     assert "python-wheelhouse" in controller
+    prereq = (PRODUCT / "controller" / "Test-SmcClientPrerequisites.ps1").read_text(encoding="utf-8")
+    assert "status" in prereq and "PASS" in prereq
+    assert "PREREQUISITE_FAILED" in prereq
+    bundle = (PRODUCT / "scripts" / "diagnostics" / "Collect-DeploymentDiagnosticBundle.ps1").read_text(encoding="utf-8")
+    assert "deployment-diagnostic" in bundle
+    assert "Protect-SmcObject" in bundle
     install = (PRODUCT / "scripts" / "install" / "Install-Hermes.ps1").read_text(encoding="utf-8")
     assert "runtimeEntrypoint" in install
     assert "InstallType" in install

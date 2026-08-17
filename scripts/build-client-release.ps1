@@ -8,6 +8,10 @@ param(
     [string]$WorkDist = "",
     [string]$HermesZip = "",
     [string]$OpsiPackage = "",
+    [string]$Wheelhouse = "",
+    [string]$NodeRoot = "",
+    [ValidateSet("online", "offline")][string]$Mode = "online",
+    [ValidateSet("zipfile", "native")][string]$OpsiTooling = "native",
     [switch]$AllowDirty
 )
 Set-StrictMode -Version Latest
@@ -22,6 +26,10 @@ if ($Output) { $argsList += @("--output", $Output) }
 if ($WorkDist) { $argsList += @("--work-dist", $WorkDist) }
 if ($HermesZip) { $argsList += @("--hermes-zip", $HermesZip) }
 if ($OpsiPackage) { $argsList += @("--opsi-package", $OpsiPackage) }
+if ($Wheelhouse) { $argsList += @("--wheelhouse", $Wheelhouse) }
+if ($NodeRoot) { $argsList += @("--node-root", $NodeRoot) }
+if ($Mode) { $argsList += @("--mode", $Mode) }
+if ($OpsiTooling) { $argsList += @("--opsi-tooling", $OpsiTooling) }
 if ($AllowDirty) { $argsList += "--allow-dirty" }
 & python @argsList
 if ($LASTEXITCODE -ne 0) { throw "client release build failed" }

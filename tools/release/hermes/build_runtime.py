@@ -19,12 +19,13 @@ if str(ROOT) not in sys.path:
 from tools.release.hermes.build_node_packages import (  # noqa: E402
     inventory_packages,
     package_lock_digest,
+    resolve_node_root,
     verify_declared_packages,
-    write_package_manifest,
 )
 from tools.release.hermes.build_wheel import build_wheel  # noqa: E402
 from tools.release.hermes.build_wheelhouse import (  # noqa: E402
     inventory_wheels,
+    resolve_wheelhouse,
     verify_required_wheels,
     wheelhouse_digest,
     write_requirements_lock,
@@ -173,7 +174,11 @@ def build_managed_bundle(
     node_root: Path | None = None,
     wheel: Path | None = None,
     requires: dict[str, str] | None = None,
+    mode: str = "online",
+    wheelhouse_downloader=None,
 ) -> Path:
+    if mode not in {"online", "offline"}:
+        raise ValueError(f"unsupported build mode: {mode}")
     source = freeze_source(repo, hermes_version=hermes_version, allow_dirty=allow_dirty)
     profiles = load_profiles(profiles_path or DEFAULT_PROFILE)
     profile = resolve_profile(profiles, profile_name)
@@ -183,16 +188,17 @@ def build_managed_bundle(
     work.mkdir(parents=True)
     if wheel is None:
         wheel = build_wheel(repo, work / "wheel")
-    if wheelhouse is None:
-        raise ValueError("wheelhouse path required (offline Windows AMD64 wheels)")
-    if node_root is None:
-        node_root = work / "node"
-        write_package_manifest(node_root, (profile.get("node") or {}).get("packages") or [])
-        declared = (profile.get("node") or {}).get("packages") or []
-        if declared:
-            from tools.release.hermes.build_node_packages import pack_packages
-
-            pack_packages(declared, node_root)
+    extras = list((profile.get("python") or {}).get("extras") or [])
+    wheelhouse = resolve_wheelhouse(
+        repo,
+        work / "wheelhouse",
+        extras,
+        supplied=wheelhouse,
+        mode=mode,
+        downloader=wheelhouse_downloader,
+    )
+    declared = (profile.get("node") or {}).get("packages") or []
+    node_root = resolve_node_root(declared, work / "node", supplied=node_root, mode=mode)
     tree = assemble_bundle(
         work / "bundle",
         wheel=wheel,
@@ -218,9 +224,10 @@ def main() -> int:
     parser.add_argument("--profiles", type=Path)
     parser.add_argument("--hermes-version", default="")
     parser.add_argument("--allow-dirty", action="store_true")
-    parser.add_argument("--wheelhouse", type=Path, required=True)
+    parser.add_argument("--wheelhouse", type=Path)
     parser.add_argument("--node-root", type=Path)
     parser.add_argument("--wheel", type=Path)
+    parser.add_argument("--mode", choices=("online", "offline"), default="online")
     args = parser.parse_args()
     archive = build_managed_bundle(
         args.repo,
@@ -232,6 +239,7 @@ def main() -> int:
         wheelhouse=args.wheelhouse,
         node_root=args.node_root,
         wheel=args.wheel,
+        mode=args.mode,
     )
     print(archive)
     return 0

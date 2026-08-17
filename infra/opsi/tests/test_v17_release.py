@@ -55,10 +55,11 @@ def test_build_release_emits_signed_envelopes_not_zip_copy(tmp_path):
     source_art = PRODUCT / "CLIENT_DATA" / "artifacts"
     before = {p: p.read_bytes() for p in source_art.glob("*")} if source_art.is_dir() else {}
     dest = tmp_path / "out"
-    archive = make.build_release(dest, hermes, key_ref, hermes_version="0.22.0")
+    archive = make.build_release(dest, hermes, key_ref, hermes_version="0.22.0", opsi_tooling="zipfile")
     after = {p: p.read_bytes() for p in source_art.glob("*")} if source_art.is_dir() else {}
     assert before == after
-    assert archive.name.endswith(".opsi")
+    assert archive.name.endswith(".fixture.zip")
+    assert not archive.name.endswith(".opsi")
     assert archive.is_file()
     with zipfile.ZipFile(archive) as zf:
         names = zf.namelist()
@@ -111,7 +112,7 @@ def test_build_release_wheelhouse_binds_runtime_build(tmp_path):
             encryption_algorithm=serialization.NoEncryption(),
         )
     )
-    archive = make.build_release(tmp_path / "out", hermes, key_ref, hermes_version="0.22.0")
+    archive = make.build_release(tmp_path / "out", hermes, key_ref, hermes_version="0.22.0", opsi_tooling="zipfile")
     with zipfile.ZipFile(archive) as zf:
         names = zf.namelist()
         manifest = json.loads(zf.read([n for n in names if n.endswith(".manifest.json") and "hermes-" in n][0]))

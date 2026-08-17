@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ from tools.release.client.release_inventory import (  # noqa: E402
 )
 from tools.release.client.release_manifest import build_client_release_manifest  # noqa: E402
 from tools.release.client.verify_client_release import verify_client_release  # noqa: E402
+from tools.release.hermes.build_runtime import build_managed_bundle  # noqa: E402
 from tools.release.hermes.source_metadata import freeze_source  # noqa: E402
 
 STAGES = (
@@ -39,12 +41,22 @@ STAGES = (
     "verify",
     "all",
 )
+MAKEPACKAGE = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "packaging" / "makepackage.py"
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> None:
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise SystemExit(result.stderr.strip() or result.stdout.strip() or "command failed")
+
+
+def load_makepackage():
+    spec = spec_from_file_location("smc_makepackage", MAKEPACKAGE)
+    if spec is None or spec.loader is None:
+        raise SystemExit("makepackage.py missing")
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def freeze_smc(allow_dirty: bool) -> dict[str, Any]:
@@ -89,15 +101,20 @@ def copy_runtime_artifacts(hermes_zip: Path, dest: Path) -> dict[str, Any]:
     hermes_dir = dest / "hermes"
     hermes_dir.mkdir(parents=True, exist_ok=True)
     copied = hermes_dir / hermes_zip.name
-    shutil.copy2(hermes_zip, copied)
+    if hermes_zip.resolve() != copied.resolve():
+        shutil.copy2(hermes_zip, copied)
     manifest = hermes_zip.with_name(hermes_zip.name.replace(".zip", ".manifest.json"))
     sig = hermes_zip.with_name(hermes_zip.name.replace(".zip", ".sig"))
+    manifest_dest = hermes_dir / manifest.name
     manifest_sha = ""
     if manifest.is_file():
-        shutil.copy2(manifest, hermes_dir / manifest.name)
-        manifest_sha = sha256_file(hermes_dir / manifest.name)
+        if manifest.resolve() != manifest_dest.resolve():
+            shutil.copy2(manifest, manifest_dest)
+        manifest_sha = sha256_file(manifest_dest)
     if sig.is_file():
-        shutil.copy2(sig, hermes_dir / sig.name)
+        sig_dest = hermes_dir / sig.name
+        if sig.resolve() != sig_dest.resolve():
+            shutil.copy2(sig, sig_dest)
     return {
         "artifactSha256": sha256_file(copied),
         "manifestSha256": manifest_sha or ("00" * 32),
@@ -109,11 +126,93 @@ def copy_opsi_package(opsi_pkg: Path, dest: Path) -> dict[str, Any]:
     opsi_dir = dest / "opsi"
     opsi_dir.mkdir(parents=True, exist_ok=True)
     copied = opsi_dir / opsi_pkg.name
-    shutil.copy2(opsi_pkg, copied)
+    if opsi_pkg.resolve() != copied.resolve():
+        shutil.copy2(opsi_pkg, copied)
     sha_file = opsi_pkg.with_name(opsi_pkg.name + ".sha256")
     if sha_file.is_file():
-        shutil.copy2(sha_file, opsi_dir / sha_file.name)
+        sha_dest = opsi_dir / sha_file.name
+        if sha_file.resolve() != sha_dest.resolve():
+            shutil.copy2(sha_file, sha_dest)
     return {"artifactSha256": sha256_file(copied)}
+
+
+def run_hermes(
+    config: dict[str, Any],
+    dest: Path,
+    *,
+    hermes_repo: Path | None,
+    allow_dirty: bool,
+    mode: str,
+    wheelhouse: Path | None,
+    node_root: Path | None,
+    hermes_zip: Path | None,
+    wheelhouse_downloader=None,
+) -> Path:
+    if hermes_zip is not None:
+        return hermes_zip
+    repo = Path(hermes_repo or config["hermes"]["repo"])
+    archive = build_managed_bundle(
+        repo,
+        dest / "hermes-build",
+        profile_name=str(config["hermes"]["profile"]),
+        hermes_version="" if config["hermes"]["version"] == "auto" else str(config["hermes"]["version"]),
+        allow_dirty=allow_dirty,
+        wheelhouse=wheelhouse,
+        node_root=node_root,
+        mode=mode,
+        wheelhouse_downloader=wheelhouse_downloader,
+    )
+    return archive
+
+
+def run_opsi_pipeline(
+    config: dict[str, Any],
+    dest: Path,
+    *,
+    hermes_zip: Path,
+    signing_key_ref: Path,
+    opsi_tooling: str,
+    stop_after: str = "package",
+) -> dict[str, Any]:
+    make = load_makepackage()
+    prepared = make.prepare_release_stage(
+        dest / "opsi-build",
+        hermes_zip,
+        signing_key_ref,
+        hermes_version="" if config["hermes"]["version"] == "auto" else str(config["hermes"]["version"]),
+        product_version=str(config["opsi"]["productVersion"]),
+        package_version=str(config["opsi"]["packageVersion"]),
+        controller_revision=str(config["opsi"]["controllerRevision"]),
+    )
+    stage = prepared["stage"]
+    stage_copy = dest / "opsi" / "stage"
+    if stage_copy.exists():
+        shutil.rmtree(stage_copy)
+    shutil.copytree(stage, stage_copy)
+    runtime = prepared["runtime"]
+    hermes_dir = dest / "hermes"
+    hermes_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(runtime["artifact"], hermes_dir / runtime["artifact"].name)
+    shutil.copy2(runtime["manifest"], hermes_dir / runtime["manifest"].name)
+    shutil.copy2(runtime["signature"], hermes_dir / runtime["signature"].name)
+    result = {
+        "stage": stage_copy,
+        "prepared": prepared,
+        "hermes_zip": hermes_dir / runtime["artifact"].name,
+        "archive": None,
+    }
+    if stop_after == "stage":
+        return result
+    archive = make.package_stage(
+        stage,
+        dest / "opsi-build",
+        prepared["product_version"],
+        prepared["package_version"],
+        opsi_tooling=opsi_tooling,
+    )
+    make.readback_opsi(archive, stage, extract_root=dest / "opsi-build" / "readback")
+    result["archive"] = archive
+    return result
 
 
 def assemble(
@@ -155,6 +254,16 @@ def assemble(
     return manifest
 
 
+def _enroll_script(explicit: Path | None) -> Path | None:
+    if explicit and explicit.is_file():
+        return explicit
+    preferred = ROOT / "scripts" / "opsi-enroll-local-client.ps1"
+    if preferred.is_file():
+        return preferred
+    fallback = ROOT / "scripts" / "opsi-connect-lab-client.ps1"
+    return fallback if fallback.is_file() else None
+
+
 def build_all(
     *,
     config_path: Path,
@@ -167,15 +276,39 @@ def build_all(
     hermes_zip: Path | None = None,
     opsi_pkg: Path | None = None,
     enroll_script: Path | None = None,
+    mode: str = "online",
+    wheelhouse: Path | None = None,
+    node_root: Path | None = None,
+    opsi_tooling: str = "native",
+    wheelhouse_downloader=None,
 ) -> Path:
     config = load_release_config(config_path)
     build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
     dest = stage_root(output, str(config["release"]["version"]), build_id)
     frozen = run_preflight(config, allow_dirty=allow_dirty, hermes_repo=hermes_repo)
     work = run_work(config, dest, work_dist=work_dist)
-    if hermes_zip is None:
-        raise ValueError("hermes zip required (build hermes/runtime stages first)")
-    hermes_meta = copy_runtime_artifacts(hermes_zip, dest)
+    built_zip = run_hermes(
+        config,
+        dest,
+        hermes_repo=hermes_repo,
+        allow_dirty=allow_dirty,
+        mode=mode,
+        wheelhouse=wheelhouse,
+        node_root=node_root,
+        hermes_zip=hermes_zip,
+        wheelhouse_downloader=wheelhouse_downloader,
+    )
+    if signing_key_ref is None or not signing_key_ref.is_file():
+        raise SystemExit("Release FAILED: --signing-key-ref required")
+    pipeline = run_opsi_pipeline(
+        config,
+        dest,
+        hermes_zip=built_zip,
+        signing_key_ref=signing_key_ref,
+        opsi_tooling=opsi_tooling,
+        stop_after="package" if opsi_pkg is None else "stage",
+    )
+    hermes_meta = copy_runtime_artifacts(pipeline["hermes_zip"], dest)
     hermes_meta.update(
         {
             "profile": config["hermes"]["profile"],
@@ -183,9 +316,10 @@ def build_all(
             "version": frozen["hermes"]["version"],
         }
     )
-    if opsi_pkg is None:
-        raise ValueError("opsi package required (build opsi-package stage first)")
-    opsi_meta = copy_opsi_package(opsi_pkg, dest)
+    packaged = opsi_pkg or pipeline["archive"]
+    if packaged is None:
+        raise SystemExit("Release FAILED: OPSI package missing")
+    opsi_meta = copy_opsi_package(packaged, dest)
     opsi_meta.update(
         {
             "productVersion": config["opsi"]["productVersion"],
@@ -195,10 +329,10 @@ def build_all(
     )
     installer = Path(opsi_client_installer or config["external"]["opsiClientInstaller"])
     opsi_client = capture_opsi_client_installer(installer, dest / "bootstrap")
-    script = enroll_script or (ROOT / "scripts" / "opsi-connect-lab-client.ps1")
-    if script.is_file():
+    script = _enroll_script(enroll_script)
+    if script is not None:
         shutil.copy2(script, dest / "bootstrap" / "opsi-enroll-local-client.ps1")
-    live = bool(frozen["smc"]["liveEligible"] and frozen["hermes"]["liveEligible"] and signing_key_ref)
+    live = bool(frozen["smc"]["liveEligible"] and frozen["hermes"]["liveEligible"])
     assemble(
         dest,
         config=config,
@@ -207,9 +341,14 @@ def build_all(
         opsi=opsi_meta,
         opsi_client=opsi_client,
         build_id=build_id,
-        live_eligible=live,
+        live_eligible=False,
     )
-    verify_client_release(dest)
+    verified = verify_client_release(dest, stage=pipeline["stage"], require_signatures=True)
+    if live:
+        verified["liveEligible"] = True
+        write_json(dest / "manifests" / "client-release.json", verified)
+        write_sha256sums(dest)
+        verify_client_release(dest, stage=pipeline["stage"], require_signatures=True)
     return dest
 
 
@@ -225,18 +364,85 @@ def main() -> int:
     parser.add_argument("--work-dist", type=Path)
     parser.add_argument("--hermes-zip", type=Path)
     parser.add_argument("--opsi-package", type=Path)
+    parser.add_argument("--wheelhouse", type=Path)
+    parser.add_argument("--node-root", type=Path)
+    parser.add_argument("--mode", choices=("online", "offline"), default="online")
+    parser.add_argument("--opsi-tooling", choices=("zipfile", "native"), default="native")
     args = parser.parse_args()
     config = load_release_config(args.config)
+    build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
+    dest = stage_root(args.output, str(config["release"]["version"]), build_id)
     if args.stage == "preflight":
         run_preflight(config, allow_dirty=args.allow_dirty, hermes_repo=args.hermes_repo)
         return 0
     if args.stage == "work":
-        build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
-        dest = stage_root(args.output, str(config["release"]["version"]), build_id)
         run_work(config, dest, work_dist=args.work_dist)
         return 0
-    if args.stage in {"hermes", "runtime", "opsi-stage", "opsi-package"}:
-        raise SystemExit(f"{args.stage} requires hermes builder / makepackage inputs; use --hermes-zip/--opsi-package with assemble")
+    if args.stage == "hermes":
+        archive = run_hermes(
+            config,
+            dest,
+            hermes_repo=args.hermes_repo,
+            allow_dirty=args.allow_dirty,
+            mode=args.mode,
+            wheelhouse=args.wheelhouse,
+            node_root=args.node_root,
+            hermes_zip=args.hermes_zip,
+        )
+        copy_runtime_artifacts(archive, dest)
+        print(archive)
+        return 0
+    if args.stage in {"runtime", "opsi-stage", "opsi-package"}:
+        if args.signing_key_ref is None:
+            raise SystemExit("Release FAILED: --signing-key-ref required")
+        archive = run_hermes(
+            config,
+            dest,
+            hermes_repo=args.hermes_repo,
+            allow_dirty=args.allow_dirty,
+            mode=args.mode,
+            wheelhouse=args.wheelhouse,
+            node_root=args.node_root,
+            hermes_zip=args.hermes_zip,
+        )
+        stop = "package" if args.stage == "opsi-package" else "stage"
+        pipeline = run_opsi_pipeline(
+            config,
+            dest,
+            hermes_zip=archive,
+            signing_key_ref=args.signing_key_ref,
+            opsi_tooling=args.opsi_tooling,
+            stop_after=stop,
+        )
+        if pipeline["archive"] is not None:
+            copy_opsi_package(pipeline["archive"], dest)
+        print(pipeline["stage"] if stop == "stage" else pipeline["archive"])
+        return 0
+    if args.stage == "assemble":
+        if not args.work_dist or not args.hermes_zip or not args.opsi_package:
+            raise SystemExit("Release FAILED: assemble requires --work-dist --hermes-zip --opsi-package")
+        if args.signing_key_ref is None:
+            raise SystemExit("Release FAILED: --signing-key-ref required")
+        dest = build_all(
+            config_path=args.config,
+            output=args.output,
+            hermes_repo=args.hermes_repo,
+            opsi_client_installer=args.opsi_client_installer,
+            signing_key_ref=args.signing_key_ref,
+            allow_dirty=args.allow_dirty,
+            work_dist=args.work_dist,
+            hermes_zip=args.hermes_zip,
+            opsi_pkg=args.opsi_package,
+            mode=args.mode,
+            wheelhouse=args.wheelhouse,
+            node_root=args.node_root,
+            opsi_tooling=args.opsi_tooling,
+        )
+        print(dest)
+        return 0
+    if args.stage == "verify":
+        verify_client_release(args.output, require_signatures=True)
+        return 0
     dest = build_all(
         config_path=args.config,
         output=args.output,
@@ -247,6 +453,10 @@ def main() -> int:
         work_dist=args.work_dist,
         hermes_zip=args.hermes_zip,
         opsi_pkg=args.opsi_package,
+        mode=args.mode,
+        wheelhouse=args.wheelhouse,
+        node_root=args.node_root,
+        opsi_tooling=args.opsi_tooling,
     )
     print(dest)
     return 0
