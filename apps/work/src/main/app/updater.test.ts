@@ -5,7 +5,7 @@ const handlers = new Map<string, (...args: unknown[]) => unknown>();
 const send = vi.fn();
 const appMock = {
   getVersion: vi.fn(() => "1.0.0"),
-  getPath: vi.fn(() => "C:\\Users\\test\\AppData\\Roaming\\smc-work"),
+  getPath: vi.fn(() => "C:\\Users\\test\\AppData\\Roaming\\smc-copilot"),
   isPackaged: true,
   once: vi.fn(),
 };

@@ -1,3 +1,7 @@
+param(
+  [string]$ReleaseNotesPath
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -45,11 +49,47 @@ function Assert-Authenticode {
     return $false
   }
 
+  $expectedPublisher = $env:SMC_WORK_EXPECTED_PUBLISHER
+  if (-not $expectedPublisher) {
+    throw "SMC_WORK_EXPECTED_PUBLISHER is required for signed release builds"
+  }
+
   $signature = Get-AuthenticodeSignature -FilePath $Path
   if ($signature.Status -ne "Valid") {
     throw "Authenticode signature is not valid: $($signature.Status)"
   }
+  $subject = [string]$signature.SignerCertificate.Subject
+  if ($subject -notmatch $expectedPublisher) {
+    throw "Unexpected release publisher: $subject"
+  }
   return $true
+}
+
+function Add-ReleaseNotesToLatestYml {
+  param(
+    [Parameter(Mandatory = $true)][string]$LatestPath,
+    [Parameter(Mandatory = $true)][string]$NotesPath
+  )
+
+  $notes = Get-Content -Raw -LiteralPath $NotesPath
+  $yamlLines = New-Object System.Collections.Generic.List[string]
+  $skipNotes = $false
+  foreach ($line in Get-Content -LiteralPath $LatestPath) {
+    if ($line -match "^releaseNotes\s*:") {
+      $skipNotes = $true
+      continue
+    }
+    if ($skipNotes -and $line -match "^\s") {
+      continue
+    }
+    $skipNotes = $false
+    $yamlLines.Add($line)
+  }
+  $yamlLines.Add("releaseNotes: |")
+  foreach ($noteLine in ($notes -split "`r?`n")) {
+    $yamlLines.Add("  $noteLine")
+  }
+  Set-Content -LiteralPath $LatestPath -Value $yamlLines -Encoding utf8
 }
 
 function Get-PackageVersion {
@@ -63,13 +103,20 @@ function Get-PackageVersion {
 Push-Location $repoRoot
 try {
   $version = Get-PackageVersion
+  if (-not $ReleaseNotesPath) {
+    $ReleaseNotesPath = Join-Path $repoRoot "release-notes\$version.md"
+  }
+  if (-not (Test-Path -LiteralPath $ReleaseNotesPath)) {
+    throw "Release notes required for $version : $ReleaseNotesPath"
+  }
   $distDir = Join-Path $repoRoot "dist"
   $releaseDir = Join-Path $repoRoot "release/work/$version"
-  $installerName = "smc-work-$version-setup.exe"
+  $installerName = "smc-copilot-$version-setup.exe"
   $blockmapName = "$installerName.blockmap"
   $installerPath = Join-Path $distDir $installerName
   $blockmapPath = Join-Path $distDir $blockmapName
   $latestPath = Join-Path $distDir "latest.yml"
+  $appUpdateYml = Join-Path $distDir "win-unpacked\resources\app-update.yml"
 
   Invoke-Step "Check git state" { Require-CleanGitTree }
   Invoke-Step "Validate update URL" { Require-ValidUpdateUrl }
@@ -84,10 +131,15 @@ try {
   Invoke-Step "Build Windows NSIS artifact" { npx electron-builder --win nsis --x64 --publish never }
   if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 
-  foreach ($path in @($installerPath, $blockmapPath, $latestPath)) {
+  foreach ($path in @($installerPath, $blockmapPath, $latestPath, $appUpdateYml)) {
     if (-not (Test-Path -LiteralPath $path)) {
       throw "Missing build artifact: $path"
     }
+  }
+
+  Invoke-Step "Verify packaged update feed" {
+    node $guardScript validate-app-update-yml $appUpdateYml
+    if ($LASTEXITCODE -ne 0) { throw "Packaged app-update.yml feed verification failed" }
   }
 
   $signed = Assert-Authenticode -Path $installerPath
@@ -100,6 +152,7 @@ try {
   Copy-Item -LiteralPath $installerPath -Destination (Join-Path $releaseDir $installerName)
   Copy-Item -LiteralPath $blockmapPath -Destination (Join-Path $releaseDir $blockmapName)
   Copy-Item -LiteralPath $latestPath -Destination (Join-Path $releaseDir "latest.yml")
+  Add-ReleaseNotesToLatestYml -LatestPath (Join-Path $releaseDir "latest.yml") -NotesPath $ReleaseNotesPath
 
   $hash = (Get-FileHash -LiteralPath (Join-Path $releaseDir $installerName) -Algorithm SHA256).Hash.ToLowerInvariant()
   $gitCommit = (git -C $repoRoot rev-parse HEAD).Trim()

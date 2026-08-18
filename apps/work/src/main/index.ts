@@ -3,12 +3,14 @@ import { applyGpuPreferences, installGpuCrashGuard } from "./gpu-fallback";
 import { startMainProcess } from "./app/start";
 import { loadDotEnvForDev } from "./load-env";
 import { registerArtifactSchemePrivileged } from "./artifact-protocol";
+import { applyLegacyUserDataMigration } from "./user-data-migration";
 
 // Dev only: make process.env reflect the project `.env` so runtime env reads
 // (e.g. the SMC Copilot API endpoint) pick up edits on relaunch without a
 // rebuild. Packaged builds carry their config baked in and ship no `.env`.
 if (!app.isPackaged) loadDotEnvForDev();
 
+applyLegacyUserDataMigration(app);
 applyGpuPreferences();
 installGpuCrashGuard();
 

@@ -4,6 +4,8 @@ import { join } from "path";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error - .mjs module has no declarations.
 import {
+  PRODUCTION_UPDATE_URL,
+  assertPackagedAppUpdateYml,
   assertReleaseArtifacts,
   buildReleaseManifest,
   getBlockmapName,
@@ -38,25 +40,31 @@ afterEach(() => {
 });
 
 describe("work release guard helpers", () => {
-  it("accepts only HTTPS stable update URLs", () => {
-    expect(validateUpdateUrl("https://release.example.org/work/stable/")).toBe(
-      "https://release.example.org/work/stable/",
-    );
-    expect(() => validateUpdateUrl("http://release.example.org/work/stable/")).toThrow(
+  it("accepts only the production HTTPS stable update URL", () => {
+    expect(validateUpdateUrl(PRODUCTION_UPDATE_URL)).toBe(PRODUCTION_UPDATE_URL);
+    expect(() => validateUpdateUrl("http://release.superic.com/work/stable/")).toThrow(
       /https/,
     );
     expect(() => validateUpdateUrl("https://localhost/work/stable/")).toThrow(
       /localhost/,
     );
-    expect(() => validateUpdateUrl("https://example.com/work/stable/")).toThrow(
-      /example.com/,
+    expect(() => validateUpdateUrl("https://10.0.0.8/work/stable/")).toThrow(
+      /IP address/,
+    );
+    expect(() => validateUpdateUrl("https://release.example.org/work/stable/")).toThrow(
+      /release\.superic\.com/,
     );
     expect(() => validateUpdateUrl("${env.SMC_WORK_UPDATE_URL}")).toThrow(
       /unexpanded/,
     );
-    expect(() => validateUpdateUrl("https://release.example.org/work/releases/0.7.5/")).toThrow(
+    expect(() => validateUpdateUrl("https://release.superic.com/work/releases/0.7.5/")).toThrow(
       /\/work\/stable\//,
     );
+  });
+
+  it("names Windows installers as smc-copilot setup artifacts", () => {
+    expect(getInstallerName("0.7.5")).toBe("smc-copilot-0.7.5-setup.exe");
+    expect(getBlockmapName("0.7.5")).toBe("smc-copilot-0.7.5-setup.exe.blockmap");
   });
 
   it("detects missing artifacts and version mismatches", () => {
@@ -65,7 +73,7 @@ describe("work release guard helpers", () => {
 
     writeFileSync(
       join(releaseDir, "latest.yml"),
-      "version: 0.7.4\npath: smc-work-0.7.4-setup.exe\n",
+      "version: 0.7.4\npath: smc-copilot-0.7.4-setup.exe\n",
     );
     expect(() => assertReleaseArtifacts(releaseDir, "0.7.5")).toThrow(/version mismatch/);
 
@@ -88,8 +96,8 @@ describe("work release guard helpers", () => {
     const manifest = buildReleaseManifest({
       version: "0.7.5",
       gitCommit: "abc123",
-      updateUrl: "https://release.example.org/work/stable/",
-      installer: "smc-work-0.7.5-setup.exe",
+      updateUrl: PRODUCTION_UPDATE_URL,
+      installer: "smc-copilot-0.7.5-setup.exe",
       sha256: "f".repeat(64),
       signed: true,
       createdAt: "2026-08-18T00:00:00.000Z",
@@ -102,6 +110,23 @@ describe("work release guard helpers", () => {
       arch: "x64",
       updateChannel: "stable",
       signed: true,
+      updateUrl: PRODUCTION_UPDATE_URL,
     });
+  });
+
+  it("rejects a packaged app-update.yml that does not carry the production feed", () => {
+    testDir = mkdtempSync(join(tmpdir(), "app-update-yml-"));
+    const validPath = join(testDir, "app-update.yml");
+    writeFileSync(
+      validPath,
+      "provider: generic\nurl: https://release.superic.com/work/stable/\nchannel: latest\n",
+    );
+    assertPackagedAppUpdateYml(validPath);
+
+    writeFileSync(
+      validPath,
+      "provider: generic\nurl: https://test.example/work/stable/\nchannel: latest\n",
+    );
+    expect(() => assertPackagedAppUpdateYml(validPath)).toThrow(/url mismatch/);
   });
 });

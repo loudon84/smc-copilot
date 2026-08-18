@@ -1,10 +1,10 @@
-$ErrorActionPreference = "Stop"
-Set-StrictMode -Version Latest
-
 param(
   [string]$ReleaseDir,
   [string]$PackageJsonPath = (Join-Path (Split-Path -Parent $PSScriptRoot) "package.json")
 )
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
 $guardScript = Join-Path $PSScriptRoot "lib/work-release-guard.mjs"
 
@@ -26,9 +26,18 @@ function Assert-Authenticode {
     return
   }
 
+  $expectedPublisher = $env:SMC_WORK_EXPECTED_PUBLISHER
+  if (-not $expectedPublisher) {
+    throw "SMC_WORK_EXPECTED_PUBLISHER is required for signed release validation"
+  }
+
   $signature = Get-AuthenticodeSignature -FilePath $Path
   if ($signature.Status -ne "Valid") {
     throw "Authenticode signature is not valid: $($signature.Status)"
+  }
+  $subject = [string]$signature.SignerCertificate.Subject
+  if ($subject -notmatch $expectedPublisher) {
+    throw "Unexpected release publisher: $subject"
   }
 }
 
@@ -42,7 +51,7 @@ if (-not (Test-Path -LiteralPath $ReleaseDir)) {
 }
 
 $version = Get-PackageVersion
-$installerName = "smc-work-$version-setup.exe"
+$installerName = "smc-copilot-$version-setup.exe"
 $installerPath = Join-Path $ReleaseDir $installerName
 $manifestPath = Join-Path $ReleaseDir "release-manifest.json"
 

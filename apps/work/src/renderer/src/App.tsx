@@ -13,6 +13,9 @@ import { LoginScreen } from "./modules/auth/LoginScreen";
 import { RuntimeProvider } from "./runtime/RuntimeProvider";
 import { useRuntime } from "./runtime/use-runtime";
 import { AppUpdateProvider } from "./update/AppUpdateProvider";
+import { UpdateAvailableDialog } from "./update/UpdateAvailableDialog";
+import { UpdateDownloadStatus } from "./update/UpdateDownloadStatus";
+import { UpdateReadyDialog } from "./update/UpdateReadyDialog";
 import { captureScreenView } from "./utils/analytics";
 import type { HermesRuntimeProbe } from "../../shared/runtime/runtime-contract";
 
@@ -285,6 +288,9 @@ function App(): React.JSX.Element {
             <AppUpdateProvider>
               <SettingsModalProvider>
                 <AppBootstrap />
+                <UpdateAvailableDialog />
+                <UpdateDownloadStatus />
+                <UpdateReadyDialog />
               </SettingsModalProvider>
             </AppUpdateProvider>
           </RuntimeProvider>

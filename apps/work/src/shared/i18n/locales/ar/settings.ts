@@ -23,7 +23,7 @@ export default {
     logs: "السجلات والتشخيص",
   },
   agentSubtitle: "محرك الذكاء الاصطناعي المحلي",
-  desktopTitle: "SMC Copilot Desktop",
+  desktopTitle: "SMC-Copilot",
   desktopSubtitle: "تطبيق سطح المكتب هذا",
   statusUpToDate: "محدث",
   statusUpdateAvailable: "تحديث متاح",

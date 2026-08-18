@@ -3,9 +3,11 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
 import { basename, join } from "path";
 
 export const RELEASE_MANIFEST_SCHEMA = "smc.work.release.v1";
+export const PRODUCTION_UPDATE_HOST = "release.superic.com";
+export const PRODUCTION_UPDATE_URL = "https://release.superic.com/work/stable/";
 
 export function getInstallerName(version) {
-  return `smc-work-${version}-setup.exe`;
+  return `smc-copilot-${version}-setup.exe`;
 }
 
 export function getBlockmapName(version) {
@@ -54,16 +56,38 @@ export function validateUpdateUrl(rawUrl) {
     throw new Error("SMC_WORK_UPDATE_URL must use https://");
   }
   const parsed = new URL(value);
-  if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(parsed.hostname) || parsed.hostname.includes(":")) {
+    throw new Error("SMC_WORK_UPDATE_URL must not use an IP address");
+  }
+  if (parsed.hostname === "localhost") {
     throw new Error("SMC_WORK_UPDATE_URL must not point to localhost");
   }
-  if (parsed.hostname === "example.com" || parsed.hostname.endsWith(".example.com")) {
-    throw new Error("SMC_WORK_UPDATE_URL must not point to example.com");
+  if (parsed.hostname !== PRODUCTION_UPDATE_HOST) {
+    throw new Error(`SMC_WORK_UPDATE_URL hostname must be ${PRODUCTION_UPDATE_HOST}`);
   }
   if (!parsed.pathname.endsWith("/work/stable/")) {
     throw new Error("SMC_WORK_UPDATE_URL must end with /work/stable/");
   }
   return value;
+}
+
+export function assertPackagedAppUpdateYml(ymlPath, expectedUrl = PRODUCTION_UPDATE_URL) {
+  if (!existsSync(ymlPath) || !statSync(ymlPath).isFile()) {
+    throw new Error(`Missing packaged app-update.yml: ${ymlPath}`);
+  }
+  const map = parseSimpleYaml(readFileSync(ymlPath, "utf8"));
+  const provider = map.get("provider") ?? "";
+  const url = map.get("url") ?? "";
+  const channel = map.get("channel") ?? "";
+  if (provider !== "generic") {
+    throw new Error(`Packaged app-update.yml provider mismatch: expected generic, got ${provider || "<empty>"}`);
+  }
+  if (url !== expectedUrl) {
+    throw new Error(`Packaged app-update.yml url mismatch: expected ${expectedUrl}, got ${url || "<empty>"}`);
+  }
+  if (channel !== "latest") {
+    throw new Error(`Packaged app-update.yml channel mismatch: expected latest, got ${channel || "<empty>"}`);
+  }
 }
 
 export function parseSimpleYaml(content) {
@@ -171,6 +195,15 @@ function main() {
 
   if (command === "validate-url") {
     validateUpdateUrl(args[0] ?? "");
+    return;
+  }
+
+  if (command === "validate-app-update-yml") {
+    const [ymlPath] = args;
+    if (!ymlPath) {
+      throw new Error("Usage: validate-app-update-yml <path>");
+    }
+    assertPackagedAppUpdateYml(ymlPath);
     return;
   }
 

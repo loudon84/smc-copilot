@@ -4,6 +4,10 @@ set -eu
 VERSION="${1:-}"
 STAGING_ID="${2:-}"
 RELEASE_ROOT="${RELEASE_ROOT:-/data/smc-release/work}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+# shellcheck disable=SC1091
+. "${SCRIPT_DIR}/assert-work-release.sh"
 
 if [ -z "${VERSION}" ] || [ -z "${STAGING_ID}" ]; then
   echo "Usage: promote-work-release.sh <version> <staging-id>" >&2
@@ -27,23 +31,10 @@ if [ ! -d "${STAGING_DIR}" ]; then
   exit 1
 fi
 
-for file in \
-  "smc-work-${VERSION}-setup.exe" \
-  "smc-work-${VERSION}-setup.exe.blockmap" \
-  "latest.yml" \
-  "SHA256SUMS.txt" \
-  "release-manifest.json"
-do
-  if [ ! -f "${STAGING_DIR}/${file}" ]; then
-    echo "PROMOTION_FAILED: MISSING_${file}" >&2
-    exit 1
-  fi
-done
-
-(
-  cd "${STAGING_DIR}"
-  sha256sum -c SHA256SUMS.txt >/dev/null
-)
+if ! assert_work_release_dir "${VERSION}" "${STAGING_DIR}"; then
+  echo "PROMOTION_FAILED: RELEASE_GATE" >&2
+  exit 1
+fi
 
 if [ -e "${TARGET_DIR}" ]; then
   echo "PROMOTION_FAILED: RELEASE_ALREADY_EXISTS" >&2

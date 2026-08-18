@@ -1,5 +1,5 @@
-appId: com.smc.work
-productName: SMC Work
+appId: com.smc.copilot
+productName: SMC-Copilot
 directories:
   buildResources: build
 files:
@@ -13,13 +13,14 @@ asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/build/Release/*.node
 win:
-  executableName: smc-work
+  executableName: smc-copilot
   target:
     - nsis
 nsis:
-  artifactName: smc-work-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  artifactName: smc-copilot-${version}-setup.${ext}
+  shortcutName: SMC-Copilot
+  uninstallDisplayName: SMC-Copilot
+  include: installer.nsh
   createDesktopShortcut: always
   createStartMenuShortcut: true
   oneClick: false
@@ -48,7 +49,7 @@ linux:
     - deb
     - rpm
   maintainer: electronjs.org
-  vendor: Nous Research
+  vendor: SMC
   category: Utility
   synopsis: Self-improving AI assistant desktop app
   description: >-

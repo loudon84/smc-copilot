@@ -1,10 +1,9 @@
 {
-  "name": "copilot-desktop",
+  "name": "smc-copilot",
   "version": "0.7.4",
-  "description": "Copilot Desktop — internal desktop application infrastructure",
+  "description": "SMC-Copilot Desktop",
   "main": "./out/main/index.js",
-  "author": "fathah",
-  "homepage": "https://github.com/fathah/hermes-desktop",
+  "author": "SMC",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

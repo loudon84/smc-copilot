@@ -8,22 +8,26 @@ const COMPOSE = readFileSync(join(RELEASE_SERVER_ROOT, "docker-compose.yml"), "u
 const NGINX = readFileSync(join(RELEASE_SERVER_ROOT, "nginx", "default.conf"), "utf8");
 const README = readFileSync(join(RELEASE_SERVER_ROOT, "README.md"), "utf8");
 
-describe("work v2.1 release server infrastructure", () => {
+describe("work v2.2 release server infrastructure", () => {
+  // @lat: [[desktop-updates#Internal release server]]
   it("pins the nginx image and mounts the release data volume read-only", () => {
     expect(COMPOSE).toContain("image: nginx:1.26.3-alpine");
     expect(COMPOSE).toContain("container_name: smc-release-server");
     expect(COMPOSE).toContain("${RELEASE_DATA_ROOT:-/data/smc-release}:/srv/releases:ro");
     expect(COMPOSE).toContain("./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro");
     expect(COMPOSE).toContain("./certs:/etc/nginx/certs:ro");
+    expect(COMPOSE).toContain("healthcheck:");
+    expect(COMPOSE).toContain("https://127.0.0.1/healthz");
   });
 
   it("locks nginx down to HTTPS GET/HEAD traffic", () => {
     expect(NGINX).toContain("listen 443 ssl;");
-    expect(NGINX).toContain("server_name _;");
+    expect(NGINX).toContain("server_name release.superic.com;");
     expect(NGINX).toContain("root /srv/releases;");
     expect(NGINX).toContain("autoindex off;");
     expect(NGINX).toContain("server_tokens off;");
     expect(NGINX).toContain('return 200 "OK\\n";');
+    expect(NGINX).toMatch(/location = \/healthz \{[\s\S]*limit_except GET HEAD \{[\s\S]*deny all;/);
     expect(NGINX).toMatch(/location ~\* \/latest\\\.yml\$ \{[\s\S]*limit_except GET HEAD \{[\s\S]*deny all;/);
     expect(NGINX).toMatch(/location ~\* \\\.\(exe\|blockmap\)\$ \{[\s\S]*limit_except GET HEAD \{[\s\S]*deny all;/);
     expect(NGINX).toMatch(/location \/ \{[\s\S]*limit_except GET HEAD \{[\s\S]*deny all;/);

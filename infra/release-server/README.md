@@ -19,7 +19,7 @@ Expected host storage layout:
 Nginx maps `/data/smc-release` to `/srv/releases`, so the client-visible update feed is:
 
 ```text
-https://<release-host>/work/stable/latest.yml
+https://release.superic.com/work/stable/latest.yml
 ```
 
 ## Compose
@@ -31,12 +31,13 @@ Use the pinned Compose stack in `docker-compose.yml`:
 - `${RELEASE_DATA_ROOT:-/data/smc-release}:/srv/releases:ro`
 - `./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro`
 - `./certs:/etc/nginx/certs:ro`
+- container `healthcheck` against `https://127.0.0.1/healthz`
 
-The release volume is always mounted read-only inside the container.
+The release volume is always mounted read-only inside the container. Production Nginx `server_name` is `release.superic.com`.
 
 ## TLS
 
-Production must provide a real certificate chain trusted by Windows clients. Do not commit real certificate material.
+Production must provide a real certificate chain trusted by Windows clients, with SAN `DNS:release.superic.com`. Do not commit real certificate material. Windows clients must not skip TLS verification.
 
 For local smoke tests only, generate throwaway certs with:
 
@@ -52,8 +53,8 @@ Validate the deployed server with:
 
 ```bash
 nginx -t
-./scripts/healthcheck.sh https://<release-host>
-./scripts/healthcheck.sh https://<release-host> /work/stable/smc-work-<version>-setup.exe
+./scripts/healthcheck.sh https://release.superic.com
+./scripts/healthcheck.sh https://release.superic.com /work/stable/smc-copilot-<version>-setup.exe
 ```
 
 The server must:

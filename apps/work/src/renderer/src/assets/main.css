@@ -11993,6 +11993,74 @@ body:has(.shell-vibrant),
   gap: 8px;
 }
 
+.app-update-dialog {
+  z-index: 320;
+  height: fit-content;
+  width: min(440px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.app-update-dialog-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.app-update-dialog-lead {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app-update-dialog-notes {
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+}
+
+.app-update-dialog-notes-label {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-update-dialog-notes pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+}
+
+.app-update-dialog-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+}
+
+.app-update-dialog-progress > div {
+  height: 100%;
+  background: var(--accent, #3b82f6);
+}
+
+.app-update-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* ── New-profile modal ── */
 .agents-create-modal {
   z-index: 301;
@@ -16884,6 +16952,7 @@ body:has(.shell-vibrant),
 .profile-wallet-modal,
 .profile-wallet-delete-modal,
 .agents-create-modal,
+.app-update-dialog,
 .follow-us-modal,
 .discover-modal,
 .schedules-modal {

@@ -20,7 +20,7 @@ import { useSettings } from "./SettingsDataContext";
 
 /**
  * About & Updates. Two clearly-separated cards for the two distinct update
- * channels: the **Hermes Agent** (Python engine) and **Copilot Desktop** (this
+ * channels: the **Hermes Agent** (Python engine) and **SMC-Copilot** (this
  * Electron app). They ship independently, so each owns its own update action.
  */
 export default function AboutPane(): React.JSX.Element {
