@@ -1,18 +1,30 @@
 from __future__ import annotations
 
 import base64
-from datetime import UTC, datetime
+import hashlib
+import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.auth import digest_payload
 from core.errors import ErrorCode, OpsiControlError
-from db.repositories.interfaces import RepositoryBundle
+from db.repositories.interfaces import ActionRecord, RepositoryBundle, ResultRecord, TargetRecord
 from domain.product_release import compat_holds
-from integrations.dto import ProductPropertyState, property_from_wire, property_to_wire
+from integrations.dto import ProductPropertyState, host_control_from_wire, property_from_wire, property_to_wire
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import CUSTOM_OPERATIONS, SETUP_UPDATE, ActionStatus, Operation
 
 MAX_ATTEMPTS = 5
+RESULT_BODY_MAX = 65_536
+HERMES_VERSION_COMMAND = '"D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe" --version'
+_SECRET_RE = re.compile(r"api_key|password|bearer |secret", re.IGNORECASE)
+_WAITING_STATUSES = {
+    ActionStatus.QUEUED,
+    ActionStatus.DISPATCHED,
+    ActionStatus.RUNNING,
+    ActionStatus.CREATED,
+    ActionStatus.WAITING_CLIENT,
+}
 
 
 def opsi_action_for(operation: Operation) -> str:
@@ -153,6 +165,88 @@ async def dispatch_target(
     return digest
 
 
+def _redact_and_cap(text: str) -> str:
+    return _SECRET_RE.sub("***", text)[:RESULT_BODY_MAX]
+
+
+def _waiting_lease(attempt: int) -> datetime:
+    delay = min(300, 2 ** min(max(attempt, 1), 8))
+    return datetime.now(UTC) + timedelta(seconds=delay)
+
+
+async def _put_version_result(
+    repos: RepositoryBundle,
+    target: TargetRecord,
+    status: ActionStatus,
+    *,
+    body: str = "",
+    error_code: str = "",
+) -> str:
+    digest = hashlib.sha256(body.encode("utf-8")).hexdigest() if body else ""
+    await repos.results.put(
+        ResultRecord(
+            request_id=target.request_id,
+            client_id=target.client_id,
+            status=status,
+            sha256=digest,
+            body=body,
+            redacted=True,
+            bytes=len(body.encode("utf-8")),
+            error_code=error_code,
+            body_digest=digest,
+        )
+    )
+    return digest
+
+
+async def dispatch_version_target(
+    *,
+    rpc: OpsiJsonRpc,
+    repos: RepositoryBundle,
+    target: TargetRecord,
+    action: ActionRecord,
+    worker_id: str,
+) -> None:
+    now = datetime.now(UTC)
+    if action.deadline and now > action.deadline:
+        target.status = ActionStatus.UNKNOWN
+        target.error_code = "CLIENT_OFFLINE"
+        target.message = "deadline exceeded while waiting for client"
+        await _put_version_result(repos, target, ActionStatus.UNKNOWN, error_code="CLIENT_OFFLINE")
+        await repos.audit.add(target.request_id, worker_id, "target.unknown", target.client_id)
+        return
+    raw_reachable = await rpc.call("hostControlSafe_reachable", [target.client_id])
+    reachable = host_control_from_wire("hostControlSafe_reachable", target.client_id, raw_reachable)
+    if reachable.reachable is not True:
+        target.status = ActionStatus.WAITING_CLIENT
+        target.error_code = "CLIENT_OFFLINE"
+        target.message = (reachable.error or "endpoint not reachable")[:512]
+        target.dispatched = False
+        target.lease_until = _waiting_lease(target.attempt)
+        await _put_version_result(repos, target, ActionStatus.WAITING_CLIENT, error_code="CLIENT_OFFLINE")
+        await repos.audit.add(target.request_id, worker_id, "target.waiting_client", target.client_id)
+        return
+    raw_execute = await rpc.call("hostControlSafe_execute", HERMES_VERSION_COMMAND, [target.client_id])
+    executed = host_control_from_wire("hostControlSafe_execute", target.client_id, raw_execute)
+    body = _redact_and_cap(executed.stdout)
+    if not executed.success:
+        target.status = ActionStatus.FAILED
+        target.error_code = ErrorCode.OPSI_UNAVAILABLE.value
+        target.message = (executed.error or "version command failed")[:512]
+        await _put_version_result(repos, target, ActionStatus.FAILED, body=body, error_code=target.error_code)
+        await repos.audit.add(target.request_id, worker_id, "target.failed", executed.error)
+        return
+    digest = await _put_version_result(repos, target, ActionStatus.SUCCEEDED, body=body)
+    target.status = ActionStatus.SUCCEEDED
+    target.dispatched = True
+    target.error_code = ""
+    target.message = body[:512]
+    target.property_digest = digest
+    target.opsi_action = "hostControlSafe_execute"
+    target.last_observed_at = now
+    await repos.audit.add(target.request_id, worker_id, "target.dispatched", target.client_id)
+
+
 async def dispatch_queued(
     repos: RepositoryBundle, rpc: OpsiJsonRpc, product_id: str, worker_id: str = "dispatcher"
 ) -> int:
@@ -160,7 +254,10 @@ async def dispatch_queued(
     claimed = await repos.targets.claim_queued(worker_id)
     handled = 0
     for target in claimed:
-        if target.attempt > MAX_ATTEMPTS:
+        action = await repos.actions.get(target.request_id)
+        if action is None:
+            continue
+        if target.attempt > MAX_ATTEMPTS and target.status != ActionStatus.WAITING_CLIENT:
             target.status = ActionStatus.FAILED
             target.error_code = ErrorCode.OPSI_UNAVAILABLE.value
             target.message = "bounded attempts exceeded"
@@ -168,8 +265,19 @@ async def dispatch_queued(
             await recompute_aggregate(repos, target.request_id)
             handled += 1
             continue
-        action = await repos.actions.get(target.request_id)
-        if action is None:
+        if action.operation == Operation.VERSION:
+            try:
+                await dispatch_version_target(
+                    rpc=rpc, repos=repos, target=target, action=action, worker_id=worker_id
+                )
+            except OpsiControlError as exc:
+                target.status = ActionStatus.FAILED
+                target.error_code = exc.code
+                target.message = exc.message
+                await repos.audit.add(target.request_id, worker_id, "target.failed", exc.message)
+            await repos.targets.put(target)
+            await recompute_aggregate(repos, target.request_id)
+            handled += 1
             continue
         config_payload = ""
         config_digest = ""
@@ -233,8 +341,8 @@ async def recompute_aggregate(repos: RepositoryBundle, request_id: str) -> None:
         action.status = ActionStatus.QUEUED
     elif ActionStatus.DISPATCHED in statuses or ActionStatus.RUNNING in statuses:
         action.status = ActionStatus.DISPATCHED if ActionStatus.DISPATCHED in statuses else ActionStatus.RUNNING
-    elif ActionStatus.RUNNING in statuses:
-        action.status = ActionStatus.RUNNING
+    elif ActionStatus.WAITING_CLIENT in statuses:
+        action.status = ActionStatus.WAITING_CLIENT
     elif all(item.status == ActionStatus.SUCCEEDED for item in targets):
         action.status = ActionStatus.SUCCEEDED
     elif all(
@@ -248,8 +356,7 @@ async def recompute_aggregate(repos: RepositoryBundle, request_id: str) -> None:
         else:
             action.status = ActionStatus.SUCCEEDED
     if action.deadline and datetime.now(UTC) > action.deadline:
-        open_like = {ActionStatus.QUEUED, ActionStatus.DISPATCHED, ActionStatus.RUNNING, ActionStatus.CREATED}
-        if any(item.status in open_like for item in targets):
+        if any(item.status in _WAITING_STATUSES for item in targets):
             action.status = ActionStatus.UNKNOWN
     action.aggregate_version += 1
     await repos.actions.put(action)

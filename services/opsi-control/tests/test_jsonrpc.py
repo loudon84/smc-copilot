@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from core.errors import ErrorCode, OpsiControlError
+from integrations.dto import host_control_from_wire
 from integrations.opsi_jsonrpc import ALLOWED_METHODS, FakeOpsiJsonRpc
 
 
@@ -62,4 +63,48 @@ async def test_unavailable():
 def test_allowlist_fixed():
     assert "log_read" in ALLOWED_METHODS
     assert "configState_getObjects" in ALLOWED_METHODS
-    assert len(ALLOWED_METHODS) == 9
+    assert "hostControlSafe_reachable" in ALLOWED_METHODS
+    assert "hostControlSafe_execute" in ALLOWED_METHODS
+    assert "hostControlSafe_opsiclientdRpc" not in ALLOWED_METHODS
+    assert "hostControlSafe_getActiveSessions" not in ALLOWED_METHODS
+    assert len(ALLOWED_METHODS) == 11
+
+
+@pytest.mark.asyncio
+async def test_hostcontrol_single_client_reachable_and_execute_shape():
+    rpc = FakeOpsiJsonRpc()
+    reachable = await rpc.call("hostControlSafe_reachable", ["client-a.example"])
+    outcome = host_control_from_wire("hostControlSafe_reachable", "client-a.example", reachable)
+    assert outcome.success is True
+    assert outcome.reachable is True
+    executed = await rpc.call(
+        "hostControlSafe_execute",
+        '"D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe" --version',
+        ["client-a.example"],
+    )
+    result = host_control_from_wire("hostControlSafe_execute", "client-a.example", executed)
+    assert result.success is True
+    assert result.stdout
+    assert result.error == ""
+
+
+@pytest.mark.asyncio
+async def test_hostcontrol_rejects_wildcard_and_batch_host_ids():
+    rpc = FakeOpsiJsonRpc()
+    with pytest.raises(OpsiControlError) as wildcard:
+        await rpc.call("hostControlSafe_reachable", ["*"])
+    assert wildcard.value.code == ErrorCode.OPSI_RPC_DENIED.value
+    with pytest.raises(OpsiControlError) as batch:
+        await rpc.call("hostControlSafe_execute", "whoami", ["client-a.example", "client-b.example"])
+    assert batch.value.code == ErrorCode.OPSI_RPC_DENIED.value
+    with pytest.raises(OpsiControlError) as empty:
+        await rpc.call("hostControlSafe_reachable", [])
+    assert empty.value.code == ErrorCode.OPSI_RPC_DENIED.value
+
+
+@pytest.mark.asyncio
+async def test_hostcontrol_opsiclientd_rpc_denied():
+    rpc = FakeOpsiJsonRpc()
+    with pytest.raises(OpsiControlError) as exc:
+        await rpc.call("hostControlSafe_opsiclientdRpc", "execute", ["whoami"], ["client-a.example"])
+    assert exc.value.code == ErrorCode.OPSI_RPC_DENIED.value

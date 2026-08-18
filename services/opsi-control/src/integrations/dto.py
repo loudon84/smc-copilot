@@ -83,3 +83,57 @@ def host_from_wire(item: dict[str, Any]) -> HostObject:
         host_type=str(item.get("type") or "OpsiClient"),
         description=str(item.get("description") or ""),
     )
+
+
+class HostControlOutcome(BaseModel):
+    """Normalized per-host HostControl result. Never expose raw OPSI objects."""
+
+    host_id: str
+    success: bool = False
+    reachable: bool | None = None
+    stdout: str = ""
+    error: str = ""
+
+
+def _error_text(raw: Any) -> str:
+    if isinstance(raw, dict):
+        nested = raw.get("error")
+        if isinstance(nested, dict):
+            return str(nested.get("message") or nested.get("class") or "hostcontrol error")
+        if nested:
+            return str(nested)
+        if raw.get("message"):
+            return str(raw["message"])
+    if raw is None:
+        return ""
+    return str(raw)
+
+
+def host_control_from_wire(method: str, host_id: str, raw: Any) -> HostControlOutcome:
+    per_host = raw
+    if isinstance(raw, dict) and host_id in raw:
+        per_host = raw[host_id]
+    if method == "hostControlSafe_reachable":
+        if per_host is True:
+            return HostControlOutcome(host_id=host_id, success=True, reachable=True)
+        if per_host is False:
+            return HostControlOutcome(host_id=host_id, success=False, reachable=False)
+        error = _error_text(per_host)
+        return HostControlOutcome(host_id=host_id, success=False, reachable=False, error=error)
+    if method != "hostControlSafe_execute":
+        raise ValueError(f"unsupported hostcontrol method: {method}")
+    stdout = ""
+    error = ""
+    success = False
+    if isinstance(per_host, str):
+        stdout = per_host
+        success = True
+    elif isinstance(per_host, dict):
+        error = _error_text(per_host)
+        if not error:
+            stdout = str(per_host.get("stdout") or per_host.get("result") or per_host.get("output") or "")
+            success = True
+    elif per_host is not None:
+        stdout = str(per_host)
+        success = True
+    return HostControlOutcome(host_id=host_id, success=success, stdout=stdout, error=error)

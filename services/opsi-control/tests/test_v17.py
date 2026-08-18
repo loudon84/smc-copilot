@@ -189,7 +189,7 @@ def test_openapi_exposes_release_routes():
     app = create_app(build_test_state())
     paths = app.openapi()["paths"]
     assert "/api/v1/opsi/products/releases" in paths
-    assert app.openapi()["info"]["version"] == "1.7.0"
+    assert app.openapi()["info"]["version"] == "1.8.0"
     assert PRODUCTION_REENTRY_GATE
     assert CONTROLLER_GATE
     assert CLIENT_DEPLOYMENT_GATE

@@ -24,7 +24,8 @@
         "restart-gateway",
         "diagnose",
         "repair",
-        "reconcile-controller"
+        "reconcile-controller",
+        "version"
       ]
     },
     "targets": {

@@ -99,6 +99,88 @@ components:
       - targets
       title: ActionCreateRequest
       type: object
+    ActionStatus:
+      enum:
+      - CREATED
+      - QUEUED
+      - DISPATCHED
+      - RUNNING
+      - SUCCEEDED
+      - FAILED
+      - CANCELLED
+      - UNKNOWN
+      - WAITING_CLIENT
+      title: ActionStatus
+      type: string
+    ActionTargetView:
+      additionalProperties: false
+      properties:
+        attempt:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Attempt
+        clientId:
+          title: Clientid
+          type: string
+        errorCode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Errorcode
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        status:
+          $ref: '#/components/schemas/ActionStatus'
+        userBinding:
+          anyOf:
+          - $ref: '#/components/schemas/UserBinding'
+          - type: 'null'
+      required:
+      - clientId
+      - status
+      title: ActionTargetView
+      type: object
+    ActionView:
+      additionalProperties: false
+      properties:
+        createdAt:
+          format: date-time
+          title: Createdat
+          type: string
+        operation:
+          $ref: '#/components/schemas/Operation'
+        payloadDigest:
+          title: Payloaddigest
+          type: string
+        requestId:
+          title: Requestid
+          type: string
+        status:
+          $ref: '#/components/schemas/ActionStatus'
+        targets:
+          items:
+            $ref: '#/components/schemas/ActionTargetView'
+          title: Targets
+          type: array
+        updatedAt:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Updatedat
+      required:
+      - requestId
+      - operation
+      - status
+      - payloadDigest
+      - targets
+      - createdAt
+      title: ActionView
+      type: object
     ApprovalKind:
       enum:
       - start
@@ -682,6 +764,7 @@ components:
       - diagnose
       - repair
       - reconcile-controller
+      - version
       title: Operation
       type: string
     PauseRequest:
@@ -1214,7 +1297,7 @@ components:
       type: object
 info:
   title: SMC OPSI Control
-  version: 1.7.0
+  version: 1.8.0
 openapi: 3.1.0
 paths:
   /api/v1/opsi/actions:
@@ -1239,7 +1322,8 @@ paths:
         '200':
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/ActionView'
           description: Successful Response
         '422':
           content:
@@ -1272,7 +1356,8 @@ paths:
         '200':
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: '#/components/schemas/ActionView'
           description: Successful Response
         '422':
           content:

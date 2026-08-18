@@ -62,9 +62,9 @@ class MemoryTargetRepository:
         for item in self.items:
             if len(claimed) >= limit:
                 break
-            if item.status.value != "QUEUED":
+            if item.status.value not in {"QUEUED", "WAITING_CLIENT"}:
                 continue
-            if item.lease_until and item.lease_until > now and item.lease_owner and item.lease_owner != worker_id:
+            if item.lease_until and item.lease_until > now:
                 continue
             item.lease_owner = worker_id
             item.lease_until = now + timedelta(seconds=30)

@@ -25,6 +25,7 @@ class ActionStatus(StrEnum):
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     UNKNOWN = "UNKNOWN"
+    WAITING_CLIENT = "WAITING_CLIENT"
 
 
 class HealthStatus(StrEnum):
@@ -54,6 +55,7 @@ class Operation(StrEnum):
     DIAGNOSE = "diagnose"
     REPAIR = "repair"
     RECONCILE_CONTROLLER = "reconcile-controller"
+    VERSION = "version"
 
 
 CUSTOM_OPERATIONS = {

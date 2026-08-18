@@ -7,7 +7,7 @@ import httpx
 from core.config import Settings
 from core.errors import ErrorCode, OpsiControlError
 from core.logging import safe_log_fields
-from integrations.opsi_jsonrpc import ALLOWED_METHODS
+from integrations.opsi_jsonrpc import assert_rpc_call
 from integrations.secret_provider import SecretProvider
 
 
@@ -47,8 +47,7 @@ class HttpOpsiJsonRpc:
         return self.settings.opsi_rpc_password
 
     async def call(self, method: str, *params: Any) -> Any:
-        if method not in ALLOWED_METHODS:
-            raise OpsiControlError(ErrorCode.OPSI_RPC_DENIED, f"rpc not allowed: {method}", status_code=400)
+        assert_rpc_call(method, *params)
         self._id += 1
         payload = {"jsonrpc": "2.0", "id": self._id, "method": method, "params": list(params)}
         auth = None

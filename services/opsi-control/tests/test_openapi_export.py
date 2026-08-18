@@ -56,4 +56,7 @@ def test_openapi_export_stable():
     assert "/api/v1/opsi/policies/apply" in paths
     assert "/api/v1/opsi/diagnostics/{request_id}" in paths
     assert "/api/v1/opsi/rollouts" in paths
-    assert first["info"]["version"] == "1.7.0"
+    assert first["info"]["version"] == "1.8.0"
+    assert "version" in first["components"]["schemas"]["Operation"]["enum"]
+    assert "WAITING_CLIENT" in first["components"]["schemas"]["ActionStatus"]["enum"]
+    assert all(not path.startswith("/api/v2") for path in paths)

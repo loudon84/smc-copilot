@@ -5,12 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 
 from core.auth import AuthPrincipal, Scope, require_scope
-from schemas.models import ActionCreateRequest
+from schemas.models import ActionCreateRequest, ActionView
 
 router = APIRouter(tags=["actions"])
 
 
-@router.post("/actions")
+@router.post("/actions", response_model=ActionView)
 async def create_action(
     body: ActionCreateRequest,
     request: Request,
@@ -19,7 +19,7 @@ async def create_action(
     return await request.app.state.actions.create(body, principal.subject)
 
 
-@router.get("/actions/{request_id}")
+@router.get("/actions/{request_id}", response_model=ActionView)
 async def get_action(
     request_id: str,
     request: Request,

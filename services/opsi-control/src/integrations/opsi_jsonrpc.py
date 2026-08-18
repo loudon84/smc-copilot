@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -18,8 +19,12 @@ ALLOWED_METHODS = frozenset(
         "productPropertyState_updateObjects",
         "log_read",
         "configState_getObjects",
+        "hostControlSafe_reachable",
+        "hostControlSafe_execute",
     }
 )
+HOSTCONTROL_METHODS = frozenset({"hostControlSafe_reachable", "hostControlSafe_execute"})
+CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 FIXTURE_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "opsi-4.3"
 INSTLOG_MAX = 262_144
@@ -29,6 +34,27 @@ class OpsiJsonRpc(Protocol):
     async def call(self, method: str, *params: Any) -> Any: ...
 
     async def ready(self) -> bool: ...
+
+
+def host_ids_from_params(method: str, params: tuple[Any, ...] | list[Any]) -> Any:
+    if method == "hostControlSafe_reachable":
+        return params[0] if params else None
+    if method == "hostControlSafe_execute":
+        return params[1] if len(params) > 1 else None
+    return None
+
+
+def assert_rpc_call(method: str, *params: Any) -> None:
+    if method not in ALLOWED_METHODS:
+        raise OpsiControlError(ErrorCode.OPSI_RPC_DENIED, f"rpc not allowed: {method}", status_code=400)
+    if method not in HOSTCONTROL_METHODS:
+        return
+    host_ids = host_ids_from_params(method, params)
+    if not isinstance(host_ids, list) or len(host_ids) != 1:
+        raise OpsiControlError(ErrorCode.OPSI_RPC_DENIED, "hostIds must be a single client id", status_code=400)
+    host_id = str(host_ids[0])
+    if "*" in host_id or "?" in host_id or not CLIENT_ID_RE.fullmatch(host_id):
+        raise OpsiControlError(ErrorCode.OPSI_RPC_DENIED, "wildcard hostIds are not allowed", status_code=400)
 
 
 def load_fixture(name: str) -> Any:
@@ -76,6 +102,9 @@ class FakeOpsiJsonRpc:
         self.calls: list[tuple[str, tuple[Any, ...]]] = []
         self.write_timeouts: set[str] = set()
         self.depot_mapping: dict[str, str] = {host["id"]: "depot.example" for host in self.hosts}
+        self.host_reachable: dict[str, bool] = {host["id"]: True for host in self.hosts}
+        self.execute_stdout: dict[str, str] = {host["id"]: "0.22.0-smc.1" for host in self.hosts}
+        self.execute_error: dict[str, str] = {}
 
     @property
     def available(self) -> bool:
@@ -92,8 +121,7 @@ class FakeOpsiJsonRpc:
         return values[0] if values else ""
 
     async def call(self, method: str, *params: Any) -> Any:
-        if method not in ALLOWED_METHODS:
-            raise OpsiControlError(ErrorCode.OPSI_RPC_DENIED, f"rpc not allowed: {method}", status_code=400)
+        assert_rpc_call(method, *params)
         if not self._available:
             raise OpsiControlError(ErrorCode.OPSI_UNAVAILABLE, "opsi rpc unavailable", status_code=503)
         self.calls.append((method, params))
@@ -189,6 +217,17 @@ class FakeOpsiJsonRpc:
             max_size = min(max(max_size, 0), INSTLOG_MAX)
             body = self.logs.get(client_id, "")
             return body[-max_size:]
+        if method == "hostControlSafe_reachable":
+            host_id = str(params[0][0])
+            return {host_id: bool(self.host_reachable.get(host_id, False))}
+        if method == "hostControlSafe_execute":
+            host_id = str(params[1][0])
+            if not self.host_reachable.get(host_id, False):
+                return {host_id: {"error": {"class": "BackendIOError", "message": "not reachable"}}}
+            error = self.execute_error.get(host_id)
+            if error:
+                return {host_id: {"error": {"class": "RuntimeError", "message": error}}}
+            return {host_id: self.execute_stdout.get(host_id, "")}
         raise OpsiControlError(ErrorCode.OPSI_RPC_DENIED, f"rpc not allowed: {method}", status_code=400)
 
     def put_result_log(self, client_id: str, request_id: str, status: str, sha256: str, bytes_n: int = 128) -> None:

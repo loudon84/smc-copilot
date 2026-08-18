@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 from core.auth import Scope
 from integrations.opsi_jsonrpc import ALLOWED_METHODS, FakeOpsiJsonRpc
+from schemas.models import ActionStatus
+
+HERMES_VERSION_COMMAND = '"D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe" --version'
 
 BINDING_A = {"sid": "S-1-5-21-1-2-3-1001", "account": "lab\\user-a"}
 BINDING_B = {"sid": "S-1-5-21-1-2-3-1002", "account": "lab\\user-b"}
@@ -96,3 +100,115 @@ def test_setup_requires_user_binding(client, token):
 def test_rpc_allowlist():
     assert "host_getObjects" in ALLOWED_METHODS
     assert "execute" not in ALLOWED_METHODS
+    assert "hostControlSafe_opsiclientdRpc" not in ALLOWED_METHODS
+
+
+def _action_headers(token):
+    return {"Authorization": f"Bearer {token(Scope.ACTION_DISPATCH.value, Scope.INVENTORY_READ.value)}"}
+
+
+def test_version_uses_hostcontrol_not_product_lifecycle(client, token, state):
+    headers = _action_headers(token)
+    body = {
+        "schema": "smc.opsi.action-request.v1",
+        "requestId": "req_version01",
+        "operation": "version",
+        "targets": [{"clientId": "client-a.example"}],
+        "command": "whoami",
+        "path": "C:\\\\Windows\\\\System32\\\\cmd.exe",
+    }
+    created = client.post("/api/v1/opsi/actions", json=body, headers=headers)
+    assert created.status_code == 422
+
+    body.pop("command")
+    body.pop("path")
+    first = client.post("/api/v1/opsi/actions", json=body, headers=headers)
+    assert first.status_code == 200, first.text
+    replay = client.post("/api/v1/opsi/actions", json=body, headers=headers)
+    assert replay.status_code == 200
+    conflict = client.post("/api/v1/opsi/actions", json={**body, "note": "other"}, headers=headers)
+    assert conflict.status_code == 409
+
+    rpc: FakeOpsiJsonRpc = state.rpc
+    asyncio.run(state.actions.dispatch_once())
+    methods = [method for method, _params in rpc.calls]
+    assert methods == ["hostControlSafe_reachable", "hostControlSafe_execute"]
+    execute_params = next(params for method, params in rpc.calls if method == "hostControlSafe_execute")
+    assert execute_params[0] == HERMES_VERSION_COMMAND
+    assert execute_params[1] == ["client-a.example"]
+    assert rpc.properties == {}
+    assert rpc.product_on_client == {}
+    after = client.get("/api/v1/opsi/actions/req_version01", headers=headers).json()
+    assert after["status"] == "SUCCEEDED"
+    assert after["targets"][0]["status"] == "SUCCEEDED"
+    results = client.get("/api/v1/opsi/actions/req_version01/results", headers=headers).json()["items"]
+    assert results[0]["status"] == "SUCCEEDED"
+    assert results[0]["redacted"] is True
+    assert results[0]["sha256"]
+    assert "0.22.0-smc.1" in (results[0]["message"] or "")
+
+
+def test_version_partial_target_failure_does_not_mark_other_success(client, token, state):
+    headers = _action_headers(token)
+    state.rpc.execute_error["client-b.example"] = "cli failed"
+    body = {
+        "schema": "smc.opsi.action-request.v1",
+        "requestId": "req_verpart1",
+        "operation": "version",
+        "targets": [{"clientId": "client-a.example"}, {"clientId": "client-b.example"}],
+    }
+    assert client.post("/api/v1/opsi/actions", json=body, headers=headers).status_code == 200
+    asyncio.run(state.actions.dispatch_once())
+    payload = client.get("/api/v1/opsi/actions/req_verpart1", headers=headers).json()
+    by_client = {item["clientId"]: item["status"] for item in payload["targets"]}
+    assert by_client["client-a.example"] == "SUCCEEDED"
+    assert by_client["client-b.example"] == "FAILED"
+    assert payload["status"] == "FAILED"
+
+
+def test_version_offline_waits_then_unknown_on_deadline(client, token, state):
+    headers = _action_headers(token)
+    rpc: FakeOpsiJsonRpc = state.rpc
+    rpc.host_reachable["client-a.example"] = False
+    body = {
+        "schema": "smc.opsi.action-request.v1",
+        "requestId": "req_veroff01",
+        "operation": "version",
+        "targets": [{"clientId": "client-a.example"}],
+    }
+    assert client.post("/api/v1/opsi/actions", json=body, headers=headers).status_code == 200
+    asyncio.run(state.actions.dispatch_once())
+    waiting = client.get("/api/v1/opsi/actions/req_veroff01", headers=headers).json()
+    assert waiting["status"] == ActionStatus.WAITING_CLIENT.value
+    assert waiting["targets"][0]["status"] == ActionStatus.WAITING_CLIENT.value
+    assert waiting["targets"][0]["errorCode"] == "CLIENT_OFFLINE"
+    assert [method for method, _params in rpc.calls] == ["hostControlSafe_reachable"]
+
+    calls_after_wait = len(rpc.calls)
+    asyncio.run(state.actions.dispatch_once())
+    assert len(rpc.calls) == calls_after_wait
+
+    target = asyncio.run(state.repos.targets.list_for_request("req_veroff01"))[0]
+    target.lease_until = datetime.now(UTC) - timedelta(seconds=1)
+    asyncio.run(state.repos.targets.put(target))
+    asyncio.run(state.actions.dispatch_once())
+    retried = client.get("/api/v1/opsi/actions/req_veroff01", headers=headers).json()
+    assert retried["status"] == ActionStatus.WAITING_CLIENT.value
+    assert retried["targets"][0]["status"] != "FAILED"
+    methods = [method for method, _params in rpc.calls]
+    assert methods.count("hostControlSafe_reachable") == 2
+    assert "hostControlSafe_execute" not in methods
+
+    action = asyncio.run(state.repos.actions.get("req_veroff01"))
+    assert action is not None
+    action.deadline = datetime.now(UTC) - timedelta(seconds=1)
+    asyncio.run(state.repos.actions.put(action))
+    expired = asyncio.run(state.repos.targets.list_for_request("req_veroff01"))[0]
+    expired.lease_until = datetime.now(UTC) - timedelta(seconds=1)
+    asyncio.run(state.repos.targets.put(expired))
+    asyncio.run(state.actions.dispatch_once())
+    done = client.get("/api/v1/opsi/actions/req_veroff01", headers=headers).json()
+    assert done["status"] == "UNKNOWN"
+    assert done["targets"][0]["status"] == "UNKNOWN"
+    assert done["targets"][0]["errorCode"] == "CLIENT_OFFLINE"
+    assert "hostControlSafe_execute" not in [method for method, _params in rpc.calls]

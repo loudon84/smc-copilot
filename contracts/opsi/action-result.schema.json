@@ -28,7 +28,7 @@
       "pattern": "^[A-Za-z0-9._-]+$"
     },
     "status": {
-      "enum": ["CREATED", "QUEUED", "DISPATCHED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN"]
+      "enum": ["CREATED", "QUEUED", "DISPATCHED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "WAITING_CLIENT"]
     },
     "timestamp": {
       "type": "string",

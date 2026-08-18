@@ -125,7 +125,7 @@ class SqlTargetRepository:
             async with session.begin():
                 stmt = (
                     select(ActionTargetRow)
-                    .where(ActionTargetRow.status == "QUEUED")
+                    .where(ActionTargetRow.status.in_(("QUEUED", "WAITING_CLIENT")))
                     .where(or_(ActionTargetRow.lease_until.is_(None), ActionTargetRow.lease_until < now))
                     .order_by(ActionTargetRow.id)
                     .limit(limit)
