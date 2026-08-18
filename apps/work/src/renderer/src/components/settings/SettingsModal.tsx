@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import {
-  Database,
+  // Database,
   FileText,
   Info,
   Languages,
   Palette,
-  Plug,
-  Server,
-  ShieldCheck,
-  Users,
+  // Plug,
+  // Server,
+  // ShieldCheck,
+  // Users,
   X,
 } from "lucide-react";
 import { useI18n } from "../useI18n";
@@ -57,6 +57,7 @@ const SETTINGS_NAV: ReadonlyArray<{
     labelKey: "settings.nav.language",
     Icon: Languages,
   },
+  /*
   {
     group: "general",
     id: "privacy",
@@ -74,20 +75,22 @@ const SETTINGS_NAV: ReadonlyArray<{
     id: "data",
     labelKey: "settings.nav.data",
     Icon: Database,
-  },
+  },  
   {
     group: "hermes",
     id: "runtime",
     labelKey: "settings.nav.runtime",
     Icon: Server,
   },
-  { group: "hermes", id: "about", labelKey: "settings.nav.about", Icon: Info },
+  
   {
     group: "hermes",
     id: "community",
     labelKey: "settings.nav.community",
     Icon: Users,
   },
+  */
+  { group: "hermes", id: "about", labelKey: "settings.nav.about", Icon: Info },
   {
     group: "hermes",
     id: "logs",

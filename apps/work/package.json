@@ -35,6 +35,9 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "build:rpm": "npm run build && electron-builder --linux rpm",
+    "release:build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-work-release.ps1",
+    "release:validate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate-work-release.ps1",
+    "release:publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-work-release.ps1",
     "test:watch": "vitest"
   },
   "dependencies": {

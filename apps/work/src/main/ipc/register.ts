@@ -426,7 +426,7 @@ export interface IpcContext {
   requestQuit?: () => void;
 }
 
-const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC Copilot";
+const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC Work";
 
 type RemoteSessionBridgeConfig = RemoteSessionConfig;
 

@@ -1,5 +1,5 @@
-appId: com.nousresearch.hermes
-productName: Copilot Desktop
+appId: com.smc.work
+productName: SMC Work
 directories:
   buildResources: build
 files:
@@ -13,19 +13,19 @@ asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/build/Release/*.node
 win:
-  executableName: copilot-desktop
+  executableName: smc-work
   target:
     - nsis
-    - portable
-portable:
-  artifactName: ${name}-${version}-portable.${ext}
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: smc-work-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-  oneClick: true
-  perMachine: false
+  createStartMenuShortcut: true
+  oneClick: false
+  perMachine: true
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
 mac:
   artifactName: ${name}-${version}-${arch}-${os}.${ext}
   icon: build/icon.icns
@@ -68,6 +68,6 @@ rpm:
   afterInstall: build/linux-after-install.sh
 npmRebuild: false
 publish:
-  provider: github
-  owner: fathah
-  repo: hermes-desktop
+  provider: generic
+  url: ${env.SMC_WORK_UPDATE_URL}
+  channel: latest

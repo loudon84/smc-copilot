@@ -80,7 +80,7 @@ function RuntimePane(): React.JSX.Element {
       <p className="settings-pane-desc">
         {saltMode
           ? "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
-          : "Copilot Desktop connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
+          : "SMC Work connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
       </p>
 
       <dl className="settings-kv">

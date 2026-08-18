@@ -10,6 +10,16 @@ Desktop updates use a Main-process snapshot with monotonic `revision`, so Layout
 
 [[src/renderer/src/screens/Layout/Layout.tsx#Layout]] and [[src/renderer/src/components/settings/AboutPane.tsx#AboutPane]] both consume [[src/renderer/src/update/AppUpdateProvider.tsx#useAppUpdate]] through shared actions. The desktop app card in Settings remains separate from the Hermes Agent updater, but it no longer owns local updater listeners or an auto-upgrade preference toggle: users explicitly check, download, and install app updates from the shared snapshot state.
 
+## Internal release server
+
+Work v2.1 switches packaged Windows releases to a static HTTPS Generic Provider pipeline rooted at `https://<release-host>/work/stable/`.
+
+`electron-builder.yml` now brands the Windows package as **SMC Work** (`appId: com.smc.work`, `executableName: smc-work`) and points `publish` at `${env.SMC_WORK_UPDATE_URL}` with the `generic` provider. The build path is intentionally split into `scripts/build-work-release.ps1`, `scripts/validate-work-release.ps1`, and `scripts/publish-work-release.ps1` so a normal local package build cannot accidentally promote production `stable`.
+
+The static server lives under `infra/release-server/` in the monorepo and serves artifacts from a read-only bind mount through its `nginx/default.conf`. Promotion is host-side, not in Nginx: `promote-work-release.sh` moves a fully validated `staging/<release-id>` into immutable `releases/<version>` storage, then atomically flips `stable` with `ln -s ... stable.new` plus `mv -Tf stable.new stable`. `rollback-work-stable.sh` only repoints that symlink; it does not downgrade already-upgraded clients.
+
+Because the packaged identity changed from `com.nousresearch.hermes` / `copilot-desktop` to `com.smc.work` / `smc-work`, old `0.7.4` installs are not expected to in-place auto-upgrade into this line. The v2.1 release server covers new installs and future updates within the SMC Work identity; any old-install migration remains a separate IDM/CUTOVER exercise.
+
 ## Stable and beta release channels
 
 Two GitHub Actions workflows publish builds; only the stable channel reaches end users' auto-update, so a beta can be tested without risking their devices.

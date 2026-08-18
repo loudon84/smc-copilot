@@ -25,8 +25,7 @@ import { createAppTray, type AppTray } from "./tray";
 import { setupUpdater } from "./updater";
 import { registerArtifactProtocolHandler } from "../artifact-protocol";
 
-const APP_NAME =
-  process.env.HERMES_DESKTOP_APP_NAME?.trim() || "Copilot Desktop";
+const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC Work";
 const OPEN_DEVTOOLS_ON_START =
   process.env.HERMES_OPEN_DEVTOOLS === "1" ||
   process.env.HERMES_DESKTOP_OPEN_DEVTOOLS === "1";

@@ -56,7 +56,7 @@ function ConnectionErrorScreen({
         <p className="connection-error-lead">
           {saltMode
             ? "Managed by organization. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
-            : "Copilot Desktop needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
+            : "SMC Work needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
         </p>
         <ConnectionErrorDetails status={status} error={error} />
         <div className="connection-error-actions">
