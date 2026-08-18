@@ -498,3 +498,55 @@ class ProductReleaseRow(Base):
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class HermesReleaseRow(Base):
+    __tablename__ = "opsi_hermes_releases"
+    __table_args__ = (UniqueConstraint("release_version", name="uq_opsi_hermes_release_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    release_version: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    hermes_version: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    smc_revision: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    signer_key_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    artifact_id: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    live_eligible: Mapped[bool] = mapped_column(Boolean, default=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class ConfigArtifactRow(Base):
+    __tablename__ = "opsi_config_artifacts"
+
+    revision: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+
+
+class V2ArtifactRow(Base):
+    __tablename__ = "opsi_v2_artifacts"
+
+    artifact_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    artifact_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    request_id: Mapped[str] = mapped_column(String(80), nullable=False, default="", index=True)
+    client_id: Mapped[str] = mapped_column(String(128), nullable=False, default="", index=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClientSnapshotRow(Base):
+    __tablename__ = "opsi_client_snapshots"
+
+    client_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    reachable: Mapped[bool] = mapped_column(Boolean, default=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

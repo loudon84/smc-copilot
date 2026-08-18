@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     pilot_start_enabled: bool = False
     pilot_live_gate: str = "NO-GO"
     production_reentry_go: str = Field(default="NO-GO", validation_alias=AliasChoices("SMC_OPSI_PRODUCTION_GO"))
+    artifact_hmac_secret: str = ""
+    artifact_token_ttl_seconds: int = 900
+    artifact_max_bytes: int = 52_428_800
+    artifact_base_url: str = "https://opsi-control.local/api/v2/opsi"
+    installer_manual_gate_signed: bool = False
+    legacy_product_frozen: bool = False
 
     @field_validator("opsi_env")
     @classmethod

@@ -56,6 +56,7 @@ class Operation(StrEnum):
     REPAIR = "repair"
     RECONCILE_CONTROLLER = "reconcile-controller"
     VERSION = "version"
+    V2_COMMAND = "v2-command"
 
 
 CUSTOM_OPERATIONS = {

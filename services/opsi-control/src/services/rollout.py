@@ -86,6 +86,7 @@ from schemas.rollout import (
     TargetStatus,
 )
 from services.control import ActionService
+from services.v2.action_utils import is_v2_action
 
 _TEST_ATTESTATION_KEYS = {
     "opsi-lab-signer": "74d053ad636f9884be52c8a3c4e5e02973837f27a76e20273f0dcdd2bf179de6",
@@ -107,11 +108,13 @@ class RolloutService:
         actions: ActionService,
         facts: dict[str, dict[str, Any]] | None = None,
         inventory: InventoryStore | None = None,
+        v2_actions: Any | None = None,
     ) -> None:
         self.store = store
         self.rpc = rpc
         self.settings = settings
         self.actions = actions
+        self._v2_actions = v2_actions
         self.inventory = inventory or MemoryInventoryStore()
         self.facts = facts if facts is not None else {}
         self.issuer_allowlist = {"opsi-lab-signer", "opsi-release-signer"}
@@ -179,6 +182,7 @@ class RolloutService:
             pilot_policy_digest=policy.digest() if policy else "",
             production_policy_revision=production_policy.revision if production_policy else "",
             production_policy_digest=production_policy.digest() if production_policy else "",
+            dispatch_mode=body.dispatch_mode.value if hasattr(body, "dispatch_mode") else "v1",
             created_at=now,
             updated_at=now,
         )
@@ -614,20 +618,35 @@ class RolloutService:
                         await self.store.put_target(target)
                         continue
                     request_id = f"req_ro_{campaign.campaign_id[4:12]}_{target.client_id.split('.')[0]}"[:80]
-                    await self.actions.create(
-                        ActionCreateRequest(
-                            request_id=request_id,
-                            operation=Operation.UPDATE,
-                            targets=[
-                                TargetRef(
-                                    client_id=target.client_id,
-                                    user_binding=UserBinding(sid=snapshot.user_sid, account=snapshot.user_account),
-                                )
-                            ],
-                            hermes_version=campaign.product_version,
-                        ),
-                        "rollout-worker",
-                    )
+                    if campaign.dispatch_mode == "v2":
+                        from schemas.v2.models import V2ActionCreateRequest, V2Operation, V2TargetRef
+
+                        await self._v2_actions.create(
+                            V2ActionCreateRequest(
+                                request_id=request_id,
+                                operation=V2Operation.UPDATE,
+                                targets=[V2TargetRef(client_id=target.client_id)],
+                                release_version=campaign.product_version,
+                                operator="rollout-worker",
+                                reason=f"rollout {campaign.campaign_id}",
+                            ),
+                            "rollout-worker",
+                        )
+                    else:
+                        await self.actions.create(
+                            ActionCreateRequest(
+                                request_id=request_id,
+                                operation=Operation.UPDATE,
+                                targets=[
+                                    TargetRef(
+                                        client_id=target.client_id,
+                                        user_binding=UserBinding(sid=snapshot.user_sid, account=snapshot.user_account),
+                                    )
+                                ],
+                                hermes_version=campaign.product_version,
+                            ),
+                            "rollout-worker",
+                        )
                     target.status = TargetStatus.DISPATCHED.value
                     target.action_id = request_id
                     target.parent_action_id = request_id

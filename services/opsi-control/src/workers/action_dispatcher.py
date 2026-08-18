@@ -13,6 +13,7 @@ from domain.product_release import compat_holds
 from integrations.dto import ProductPropertyState, host_control_from_wire, property_from_wire, property_to_wire
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from schemas.models import CUSTOM_OPERATIONS, SETUP_UPDATE, ActionStatus, Operation
+from services.v2.action_utils import is_v2_action
 
 MAX_ATTEMPTS = 5
 RESULT_BODY_MAX = 65_536
@@ -256,6 +257,8 @@ async def dispatch_queued(
     for target in claimed:
         action = await repos.actions.get(target.request_id)
         if action is None:
+            continue
+        if is_v2_action(action):
             continue
         if target.attempt > MAX_ATTEMPTS and target.status != ActionStatus.WAITING_CLIENT:
             target.status = ActionStatus.FAILED

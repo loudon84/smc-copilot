@@ -38,6 +38,7 @@ class CampaignRecord:
     pilot_policy_digest: str = ""
     production_policy_revision: str = ""
     production_policy_digest: str = ""
+    dispatch_mode: str = "v1"
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
     payload_json: str = "{}"

@@ -21,8 +21,11 @@ ALLOWED_METHODS = frozenset(
         "configState_getObjects",
         "hostControlSafe_reachable",
         "hostControlSafe_execute",
+        "group_getObjects",
+        "objectToGroup_getObjects",
     }
 )
+GROUP_READ_METHODS = frozenset({"group_getObjects", "objectToGroup_getObjects"})
 HOSTCONTROL_METHODS = frozenset({"hostControlSafe_reachable", "hostControlSafe_execute"})
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -105,6 +108,12 @@ class FakeOpsiJsonRpc:
         self.host_reachable: dict[str, bool] = {host["id"]: True for host in self.hosts}
         self.execute_stdout: dict[str, str] = {host["id"]: "0.22.0-smc.1" for host in self.hosts}
         self.execute_error: dict[str, str] = {}
+        self.groups: list[dict[str, Any]] = [
+            {"id": "grp_lab_batch", "type": "HostGroup", "description": "Lab batch test group"},
+        ]
+        self.group_members: dict[str, list[str]] = {
+            "grp_lab_batch": ["client-a.example", "client-b.example", "client-c.example"],
+        }
 
     @property
     def available(self) -> bool:
@@ -217,6 +226,20 @@ class FakeOpsiJsonRpc:
             max_size = min(max(max_size, 0), INSTLOG_MAX)
             body = self.logs.get(client_id, "")
             return body[-max_size:]
+        if method == "group_getObjects":
+            filters = params[0] if params else {}
+            out = list(self.groups)
+            if isinstance(filters, dict) and filters.get("id"):
+                out = [item for item in out if item["id"] == filters["id"]]
+            return out
+        if method == "objectToGroup_getObjects":
+            filters = params[0] if params else {}
+            group_id = filters.get("groupId", "") if isinstance(filters, dict) else ""
+            members = self.group_members.get(group_id, [])
+            return [
+                {"groupType": "HostGroup", "groupId": group_id, "objectId": cid}
+                for cid in members
+            ]
         if method == "hostControlSafe_reachable":
             host_id = str(params[0][0])
             return {host_id: bool(self.host_reachable.get(host_id, False))}

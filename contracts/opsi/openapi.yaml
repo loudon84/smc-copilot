@@ -547,6 +547,12 @@ components:
       - cause
       title: DepotPauseRequest
       type: object
+    DispatchMode:
+      enum:
+      - v1
+      - v2
+      title: DispatchMode
+      type: string
     FreezeClearRequest:
       additionalProperties: false
       properties:
@@ -765,6 +771,7 @@ components:
       - repair
       - reconcile-controller
       - version
+      - v2-command
       title: Operation
       type: string
     PauseRequest:
@@ -1120,6 +1127,9 @@ components:
           minimum: 1.0
           title: Configrevision
           type: integer
+        dispatchMode:
+          $ref: '#/components/schemas/DispatchMode'
+          default: v1
         evidencePolicyRevision:
           default: 1
           minimum: 1.0
@@ -1269,6 +1279,498 @@ components:
       - account
       title: UserBinding
       type: object
+    V2ActionCreateRequest:
+      additionalProperties: false
+      properties:
+        concurrency:
+          default: 1
+          maximum: 50.0
+          minimum: 1.0
+          title: Concurrency
+          type: integer
+        configRevision:
+          anyOf:
+          - maximum: 1000000.0
+            minimum: 1.0
+            type: integer
+          - type: 'null'
+          title: Configrevision
+        deadlineHours:
+          default: 24
+          maximum: 168.0
+          minimum: 1.0
+          title: Deadlinehours
+          type: integer
+        groupId:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          title: Groupid
+        maxBytes:
+          anyOf:
+          - maximum: 52428800.0
+            minimum: 1.0
+            type: integer
+          - type: 'null'
+          title: Maxbytes
+        maxCount:
+          anyOf:
+          - maximum: 500.0
+            minimum: 1.0
+            type: integer
+          - type: 'null'
+          title: Maxcount
+        operation:
+          $ref: '#/components/schemas/V2Operation'
+        operator:
+          maxLength: 128
+          minLength: 1
+          title: Operator
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        releaseVersion:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Releaseversion
+        repairLevel:
+          anyOf:
+          - maximum: 5.0
+            minimum: 1.0
+            type: integer
+          - type: 'null'
+          title: Repairlevel
+        requestId:
+          maxLength: 80
+          minLength: 12
+          pattern: ^req_[A-Za-z0-9_-]{8,64}$
+          title: Requestid
+          type: string
+        schema:
+          const: smc.opsi.action-request.v2
+          default: smc.opsi.action-request.v2
+          title: Schema
+          type: string
+        sessionId:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          title: Sessionid
+        sinceHours:
+          anyOf:
+          - maximum: 168.0
+            minimum: 1.0
+            type: integer
+          - type: 'null'
+          title: Sincehours
+        targets:
+          items:
+            $ref: '#/components/schemas/V2TargetRef'
+          maxItems: 500
+          minItems: 1
+          title: Targets
+          type: array
+      required:
+      - requestId
+      - operation
+      - targets
+      - operator
+      - reason
+      title: V2ActionCreateRequest
+      type: object
+    V2ArtifactTokenRequest:
+      additionalProperties: false
+      properties:
+        artifactId:
+          maxLength: 80
+          minLength: 8
+          title: Artifactid
+          type: string
+        clientId:
+          maxLength: 128
+          minLength: 1
+          title: Clientid
+          type: string
+        direction:
+          enum:
+          - upload
+          - download
+          title: Direction
+          type: string
+        requestId:
+          maxLength: 80
+          minLength: 12
+          title: Requestid
+          type: string
+      required:
+      - artifactId
+      - clientId
+      - requestId
+      - direction
+      title: V2ArtifactTokenRequest
+      type: object
+    V2ArtifactTokenView:
+      additionalProperties: false
+      properties:
+        artifactId:
+          title: Artifactid
+          type: string
+        downloadUrl:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Downloadurl
+        expiresAt:
+          title: Expiresat
+          type: string
+        token:
+          title: Token
+          type: string
+        uploadUrl:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Uploadurl
+      required:
+      - artifactId
+      - token
+      - expiresAt
+      title: V2ArtifactTokenView
+      type: object
+    V2ArtifactView:
+      additionalProperties: false
+      properties:
+        artifactId:
+          title: Artifactid
+          type: string
+        artifactType:
+          title: Artifacttype
+          type: string
+        clientId:
+          default: ''
+          title: Clientid
+          type: string
+        requestId:
+          default: ''
+          title: Requestid
+          type: string
+        sha256:
+          default: ''
+          title: Sha256
+          type: string
+        sizeBytes:
+          default: 0
+          title: Sizebytes
+          type: integer
+        status:
+          default: pending
+          title: Status
+          type: string
+      required:
+      - artifactId
+      - artifactType
+      title: V2ArtifactView
+      type: object
+    V2BatchActionView:
+      additionalProperties: false
+      properties:
+        cancelled:
+          default: 0
+          title: Cancelled
+          type: integer
+        concurrency:
+          default: 1
+          title: Concurrency
+          type: integer
+        failed:
+          default: 0
+          title: Failed
+          type: integer
+        groupId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Groupid
+        operation:
+          $ref: '#/components/schemas/V2Operation'
+        pending:
+          default: 0
+          title: Pending
+          type: integer
+        requestId:
+          title: Requestid
+          type: string
+        status:
+          $ref: '#/components/schemas/V2BatchAggregateStatus'
+        succeeded:
+          default: 0
+          title: Succeeded
+          type: integer
+        targetsDigest:
+          default: ''
+          title: Targetsdigest
+          type: string
+        total:
+          default: 0
+          title: Total
+          type: integer
+      required:
+      - requestId
+      - operation
+      - status
+      title: V2BatchActionView
+      type: object
+    V2BatchAggregateStatus:
+      enum:
+      - QUEUED
+      - RUNNING
+      - SUCCEEDED
+      - PARTIAL_FAILURE
+      - FAILED
+      - CANCELLED
+      title: V2BatchAggregateStatus
+      type: string
+    V2CancelRequest:
+      additionalProperties: false
+      properties:
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+      required:
+      - reason
+      title: V2CancelRequest
+      type: object
+    V2ClientStatusView:
+      additionalProperties: false
+      properties:
+        clientId:
+          title: Clientid
+          type: string
+        config:
+          additionalProperties: true
+          title: Config
+          type: object
+        gateway:
+          additionalProperties: true
+          title: Gateway
+          type: object
+        hermes:
+          additionalProperties: true
+          title: Hermes
+          type: object
+        reachable:
+          title: Reachable
+          type: boolean
+        updatedAt:
+          default: ''
+          title: Updatedat
+          type: string
+      required:
+      - clientId
+      - reachable
+      title: V2ClientStatusView
+      type: object
+    V2ConfigCreateRequest:
+      additionalProperties: false
+      properties:
+        contentYaml:
+          maxLength: 262144
+          minLength: 1
+          title: Contentyaml
+          type: string
+        operator:
+          maxLength: 128
+          minLength: 1
+          title: Operator
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        revision:
+          maximum: 1000000.0
+          minimum: 1.0
+          title: Revision
+          type: integer
+        schema:
+          const: smc.opsi.config-artifact.v2
+          default: smc.opsi.config-artifact.v2
+          title: Schema
+          type: string
+      required:
+      - revision
+      - contentYaml
+      - operator
+      - reason
+      title: V2ConfigCreateRequest
+      type: object
+    V2ConfigView:
+      additionalProperties: false
+      properties:
+        artifactId:
+          title: Artifactid
+          type: string
+        createdAt:
+          title: Createdat
+          type: string
+        createdBy:
+          default: ''
+          title: Createdby
+          type: string
+        revision:
+          title: Revision
+          type: integer
+        sha256:
+          title: Sha256
+          type: string
+      required:
+      - revision
+      - sha256
+      - artifactId
+      - createdAt
+      title: V2ConfigView
+      type: object
+    V2Operation:
+      enum:
+      - status
+      - version
+      - gateway-status
+      - gateway-start
+      - gateway-stop
+      - gateway-restart
+      - config-check
+      - config-apply
+      - doctor
+      - collect-logs
+      - collect-sessions
+      - update
+      - repair
+      title: V2Operation
+      type: string
+    V2ReleaseUpsertRequest:
+      additionalProperties: false
+      properties:
+        hermesVersion:
+          maxLength: 32
+          minLength: 1
+          title: Hermesversion
+          type: string
+        liveEligible:
+          default: false
+          title: Liveeligible
+          type: boolean
+        manifestSha256:
+          maxLength: 64
+          minLength: 64
+          title: Manifestsha256
+          type: string
+        operator:
+          maxLength: 128
+          minLength: 1
+          title: Operator
+          type: string
+        reason:
+          maxLength: 256
+          minLength: 3
+          title: Reason
+          type: string
+        releaseVersion:
+          maxLength: 64
+          minLength: 1
+          title: Releaseversion
+          type: string
+        schema:
+          const: smc.opsi.hermes-release.v2
+          default: smc.opsi.hermes-release.v2
+          title: Schema
+          type: string
+        sha256:
+          maxLength: 64
+          minLength: 64
+          title: Sha256
+          type: string
+        signerKeyId:
+          maxLength: 64
+          minLength: 1
+          title: Signerkeyid
+          type: string
+        smcRevision:
+          maxLength: 16
+          minLength: 1
+          title: Smcrevision
+          type: string
+      required:
+      - releaseVersion
+      - hermesVersion
+      - smcRevision
+      - sha256
+      - manifestSha256
+      - signerKeyId
+      - operator
+      - reason
+      title: V2ReleaseUpsertRequest
+      type: object
+    V2ReleaseView:
+      additionalProperties: false
+      properties:
+        artifactId:
+          title: Artifactid
+          type: string
+        hermesVersion:
+          title: Hermesversion
+          type: string
+        liveEligible:
+          default: false
+          title: Liveeligible
+          type: boolean
+        manifestSha256:
+          title: Manifestsha256
+          type: string
+        releaseVersion:
+          title: Releaseversion
+          type: string
+        sha256:
+          title: Sha256
+          type: string
+        signerKeyId:
+          title: Signerkeyid
+          type: string
+        smcRevision:
+          title: Smcrevision
+          type: string
+      required:
+      - releaseVersion
+      - hermesVersion
+      - smcRevision
+      - sha256
+      - manifestSha256
+      - signerKeyId
+      - artifactId
+      title: V2ReleaseView
+      type: object
+    V2TargetRef:
+      additionalProperties: false
+      properties:
+        clientId:
+          maxLength: 128
+          minLength: 1
+          pattern: ^[A-Za-z0-9._-]+$
+          title: Clientid
+          type: string
+      required:
+      - clientId
+      title: V2TargetRef
+      type: object
     ValidationError:
       properties:
         ctx:
@@ -1297,7 +1799,7 @@ components:
       type: object
 info:
   title: SMC OPSI Control
-  version: 1.8.0
+  version: 2.0.0
 openapi: 3.1.0
 paths:
   /api/v1/opsi/actions:
@@ -3071,6 +3573,419 @@ paths:
       summary: Rollout Targets
       tags:
       - rollouts
+  /api/v2/opsi/actions:
+    post:
+      operationId: create_v2_action_api_v2_opsi_actions_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/V2ActionCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create V2 Action
+      tags:
+      - v2-actions
+  /api/v2/opsi/actions/{request_id}:
+    get:
+      operationId: get_v2_action_api_v2_opsi_actions__request_id__get
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get V2 Action
+      tags:
+      - v2-actions
+  /api/v2/opsi/actions/{request_id}/batch:
+    get:
+      operationId: v2_batch_status_api_v2_opsi_actions__request_id__batch_get
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2BatchActionView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: V2 Batch Status
+      tags:
+      - v2-actions
+  /api/v2/opsi/actions/{request_id}/cancel:
+    post:
+      operationId: cancel_v2_action_api_v2_opsi_actions__request_id__cancel_post
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/V2CancelRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Cancel V2 Action
+      tags:
+      - v2-actions
+  /api/v2/opsi/actions/{request_id}/results:
+    get:
+      operationId: v2_action_results_api_v2_opsi_actions__request_id__results_get
+      parameters:
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          title: Request Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: V2 Action Results
+      tags:
+      - v2-actions
+  /api/v2/opsi/artifacts/token:
+    post:
+      operationId: mint_artifact_token_api_v2_opsi_artifacts_token_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/V2ArtifactTokenRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ArtifactTokenView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Mint Artifact Token
+      tags:
+      - v2-artifacts
+  /api/v2/opsi/artifacts/{artifact_id}:
+    get:
+      operationId: get_artifact_api_v2_opsi_artifacts__artifact_id__get
+      parameters:
+      - in: path
+        name: artifact_id
+        required: true
+        schema:
+          title: Artifact Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ArtifactView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Artifact
+      tags:
+      - v2-artifacts
+  /api/v2/opsi/clients/{client_id}/status:
+    get:
+      operationId: client_status_api_v2_opsi_clients__client_id__status_get
+      parameters:
+      - in: path
+        name: client_id
+        required: true
+        schema:
+          title: Client Id
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ClientStatusView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Client Status
+      tags:
+      - v2-clients
+  /api/v2/opsi/configs:
+    post:
+      operationId: create_config_api_v2_opsi_configs_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/V2ConfigCreateRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ConfigView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Create Config
+      tags:
+      - v2-configs
+  /api/v2/opsi/configs/{revision}:
+    get:
+      operationId: get_config_api_v2_opsi_configs__revision__get
+      parameters:
+      - in: path
+        name: revision
+        required: true
+        schema:
+          title: Revision
+          type: integer
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ConfigView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Config
+      tags:
+      - v2-configs
+  /api/v2/opsi/releases:
+    post:
+      operationId: upsert_release_api_v2_opsi_releases_post
+      parameters:
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/V2ReleaseUpsertRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ReleaseView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Upsert Release
+      tags:
+      - v2-releases
+  /api/v2/opsi/releases/{release_version}:
+    get:
+      operationId: get_release_api_v2_opsi_releases__release_version__get
+      parameters:
+      - in: path
+        name: release_version
+        required: true
+        schema:
+          title: Release Version
+          type: string
+      - in: header
+        name: authorization
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Authorization
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ReleaseView'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Get Release
+      tags:
+      - v2-releases
   /health:
     get:
       operationId: health_health_get

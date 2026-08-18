@@ -9,6 +9,8 @@ from core.config import Settings
 from db.repositories.interfaces import RepositoryBundle
 from integrations.opsi_jsonrpc import OpsiJsonRpc
 from workers.action_dispatcher import dispatch_queued
+from workers.command_dispatcher import dispatch_v2_queued
+from workers.command_reconciler import reconcile_v2_open
 from workers.result_reconciler import reconcile_open
 
 log = logging.getLogger("opsi.workers")
@@ -27,6 +29,7 @@ class WorkerRuntime:
         while not self.stop.is_set():
             try:
                 await dispatch_queued(self.repos, self.rpc, self.settings.product_id, worker_id)
+                await dispatch_v2_queued(self.repos, self.rpc, self.settings, worker_id)
             except Exception:
                 log.exception("dispatcher tick failed")
             try:
@@ -59,6 +62,7 @@ class WorkerRuntime:
         while not self.stop.is_set():
             try:
                 await reconcile_open(self.repos, self.rpc, self.settings.product_id, worker_id)
+                await reconcile_v2_open(self.repos, self.rpc, self.settings, worker_id)
             except Exception:
                 log.exception("reconciler tick failed")
             try:

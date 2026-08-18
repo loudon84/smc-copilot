@@ -27,6 +27,14 @@ from integrations.opsi_jsonrpc import FakeOpsiJsonRpc, OpsiJsonRpc
 from integrations.secret_provider import EnvSecretProvider, HttpSecretProvider, SecretProvider
 from services.control import ActionService, DiagnosticService, InventoryService, PolicyService
 from services.rollout import RolloutService
+from services.v2.control import (
+    V2ActionService,
+    V2ArtifactService,
+    V2ClientService,
+    V2ConfigService,
+    V2ReleaseService,
+    build_v2_store,
+)
 from workers.runtime import WorkerRuntime
 
 
@@ -40,6 +48,12 @@ class AppState:
     policies: PolicyService
     diagnostics: DiagnosticService
     rollouts: RolloutService
+    v2_store: object
+    v2_actions: V2ActionService
+    v2_configs: V2ConfigService
+    v2_releases: V2ReleaseService
+    v2_artifacts: V2ArtifactService
+    v2_clients: V2ClientService
     inventory_store: InventoryStore
     collector: InventoryCollector
     session_factory: Any | None = None
@@ -117,11 +131,17 @@ def build_test_state(settings: Settings | None = None) -> AppState:
         if snap:
             inventory_store.snapshots[client_id] = snap
     inventory = InventoryService(rpc, cfg.product_id, store=inventory_store, collector=collector)
+    v2_store = build_v2_store(cfg)
     actions = ActionService(repos, rpc, cfg)
+    v2_actions = V2ActionService(repos, rpc, cfg)
+    v2_configs = V2ConfigService(v2_store, repos)
+    v2_releases = V2ReleaseService(v2_store, repos, cfg)
+    v2_artifacts = V2ArtifactService(v2_store, repos, cfg)
+    v2_clients = V2ClientService(v2_store, rpc)
     store = MemoryRolloutStore()
     if type(store).__name__.find("Sql") >= 0:
         raise ValueError("test assembly forbids SQL store")
-    rollouts = RolloutService(store, rpc, cfg, actions, inventory=inventory_store)
+    rollouts = RolloutService(store, rpc, cfg, actions, inventory=inventory_store, v2_actions=v2_actions)
     for host in rpc.hosts:
         rollouts.facts.setdefault(str(host["id"]), {})
     return AppState(
@@ -134,6 +154,12 @@ def build_test_state(settings: Settings | None = None) -> AppState:
         diagnostics=DiagnosticService(repos),
         secrets=EnvSecretProvider(),
         rollouts=rollouts,
+        v2_store=v2_store,
+        v2_actions=v2_actions,
+        v2_configs=v2_configs,
+        v2_releases=v2_releases,
+        v2_artifacts=v2_artifacts,
+        v2_clients=v2_clients,
         inventory_store=inventory_store,
         collector=collector,
     )
@@ -159,9 +185,15 @@ def build_real_state(settings: Settings, *, auth_mode: str, secret_mode: str) ->
     repos.inventory_store = inventory_store
     collector = InventoryCollector(rpc, inventory_store)
     inventory = InventoryService(rpc, settings.product_id, store=inventory_store, collector=collector)
+    v2_store = build_v2_store(settings, factory)
     actions = ActionService(repos, rpc, settings)
+    v2_actions = V2ActionService(repos, rpc, settings)
+    v2_configs = V2ConfigService(v2_store, repos)
+    v2_releases = V2ReleaseService(v2_store, repos, settings)
+    v2_artifacts = V2ArtifactService(v2_store, repos, settings)
+    v2_clients = V2ClientService(v2_store, rpc)
     store = SqlRolloutStore(factory)
-    rollouts = RolloutService(store, rpc, settings, actions, inventory=inventory_store)
+    rollouts = RolloutService(store, rpc, settings, actions, inventory=inventory_store, v2_actions=v2_actions)
     return AppState(
         settings=settings,
         repos=repos,
@@ -174,6 +206,12 @@ def build_real_state(settings: Settings, *, auth_mode: str, secret_mode: str) ->
         engine=engine,
         secrets=secrets,
         rollouts=rollouts,
+        v2_store=v2_store,
+        v2_actions=v2_actions,
+        v2_configs=v2_configs,
+        v2_releases=v2_releases,
+        v2_artifacts=v2_artifacts,
+        v2_clients=v2_clients,
         inventory_store=inventory_store,
         collector=collector,
     )
@@ -231,7 +269,7 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if secret_close:
             await secret_close()
 
-    app = FastAPI(title="SMC OPSI Control", version="1.8.0", lifespan=lifespan)
+    app = FastAPI(title="SMC OPSI Control", version="2.0.0", lifespan=lifespan)
     if state is None:
         if cfg.opsi_env == "test":
             state = build_test_state(cfg)
@@ -249,6 +287,12 @@ def create_app(state: AppState | None = None) -> FastAPI:
     app.state.policies = state.policies
     app.state.diagnostics = state.diagnostics
     app.state.rollouts = state.rollouts
+    app.state.v2_store = state.v2_store
+    app.state.v2_actions = state.v2_actions
+    app.state.v2_configs = state.v2_configs
+    app.state.v2_releases = state.v2_releases
+    app.state.v2_artifacts = state.v2_artifacts
+    app.state.v2_clients = state.v2_clients
     app.state.inventory_store = state.inventory_store
     app.state.collector = state.collector
     app.state.engine = state.engine

@@ -129,11 +129,17 @@ class CommandBase(CamelModel):
         return self
 
 
+class DispatchMode(StrEnum):
+    V1 = "v1"
+    V2 = "v2"
+
+
 class RolloutCreateRequest(CommandBase):
     schema_: Literal["smc.opsi.rollout-campaign.v1"] = Field(default="smc.opsi.rollout-campaign.v1", alias="schema")
     campaign_id: str = Field(min_length=12, max_length=80, pattern=r"^cmp_[A-Za-z0-9_-]{8,64}$")
     name: str = Field(min_length=3, max_length=128)
     mode: CampaignMode = CampaignMode.PILOT
+    dispatch_mode: DispatchMode = DispatchMode.V1
     client_ids: list[str] = Field(min_length=2, max_length=500)
     product_id: str = "smc-hermes-agent"
     product_version: str = Field(min_length=1, max_length=64)

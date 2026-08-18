@@ -243,6 +243,14 @@ class ActionService:
         self.settings = settings
 
     async def create(self, body: ActionCreateRequest, actor_id: str) -> ActionView:
+        if self.settings.legacy_product_frozen and body.operation in {
+            Operation.SETUP, Operation.UPDATE, Operation.UNINSTALL
+        }:
+            raise OpsiControlError(
+                ErrorCode.PRECONDITION_FAILED,
+                "legacy Product mutations frozen; migrate to /api/v2/opsi",
+                status_code=410,
+            )
         digest = digest_payload(body.model_dump(by_alias=True, exclude_none=True))
         existing = await self.repos.actions.get(body.request_id)
         if existing is not None:

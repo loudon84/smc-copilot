@@ -97,7 +97,7 @@ def test_openapi_includes_rollout_paths():
     assert "/api/v1/opsi/rollouts" in paths
     assert "/api/v1/opsi/rollouts/{campaign_id}/start" in paths
     assert "/api/v1/opsi/artifacts/promote" in paths
-    assert app.openapi()["info"]["version"] == "1.8.0"
+    assert app.openapi()["info"]["version"] == "2.0.0"
 
 
 def test_production_rejects_pilot_flag_without_go():
@@ -613,6 +613,25 @@ def test_outbox_records_create_event(rollout_client, token, rollout_state):
         return len(await rollout_state.rollouts.store.unpublished_outbox())
 
     assert asyncio.run(_outbox()) >= 1
+
+
+def test_v2_dispatch_mode_skips_product_lifecycle(rollout_client, token, rollout_state):
+    """v2 dispatch_mode campaigns create V2 batch actions, not Product mutations."""
+    asyncio.run(rollout_state.rollouts.seed_live_gate_for_test())
+    _promote(rollout_client, token)
+    body = {
+        **_campaign_body(),
+        "campaignId": "cmp_v2dispatch1",
+        "dispatchMode": "v2",
+    }
+    created = rollout_client.post(
+        "/api/v1/opsi/rollouts",
+        headers=_auth(token, "release_owner", subject="alice", idem="idem-v2d"),
+        json=body,
+    )
+    assert created.status_code == 200, created.text
+    campaign = asyncio.run(rollout_state.rollouts.store.get_campaign("cmp_v2dispatch1"))
+    assert campaign.dispatch_mode == "v2"
 
 
 def test_restart_does_not_duplicate_dispatched_target(rollout_client, token, rollout_state):

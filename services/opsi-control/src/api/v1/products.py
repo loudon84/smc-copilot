@@ -32,6 +32,9 @@ async def put_release(
     request: Request,
     _auth: Annotated[object, Depends(require_scope(Scope.INVENTORY_WRITE))],
 ):
+    settings = request.app.state.settings
+    if settings.legacy_product_frozen:
+        return _legacy_frozen_response("PUT /products/releases")
     store = request.app.state.inventory_store
     putter = getattr(store, "put_product_release", None)
     if putter is None:
@@ -39,3 +42,12 @@ async def put_release(
     payload = body.model_dump(by_alias=True)
     await putter(body.product_id, payload)
     return payload
+
+
+def _legacy_frozen_response(endpoint: str) -> dict:
+    from fastapi.responses import JSONResponse
+    raise OpsiControlError(
+        ErrorCode.PRECONDITION_FAILED,
+        f"legacy Product mutation frozen; migrate to /api/v2/opsi — endpoint: {endpoint}",
+        status_code=410,
+    )

@@ -67,7 +67,9 @@ def test_allowlist_fixed():
     assert "hostControlSafe_execute" in ALLOWED_METHODS
     assert "hostControlSafe_opsiclientdRpc" not in ALLOWED_METHODS
     assert "hostControlSafe_getActiveSessions" not in ALLOWED_METHODS
-    assert len(ALLOWED_METHODS) == 11
+    assert len(ALLOWED_METHODS) == 13
+    assert "group_getObjects" in ALLOWED_METHODS
+    assert "objectToGroup_getObjects" in ALLOWED_METHODS
 
 
 @pytest.mark.asyncio
