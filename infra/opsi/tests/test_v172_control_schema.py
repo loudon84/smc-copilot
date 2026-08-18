@@ -109,6 +109,37 @@ default = ["0.22.0"]
     assert "ProductProperty.unicode" in str(exc.value)
 
 
+def test_opsi_canonicalized_control_after_makepackage_passes():
+    """opsi-makepackage rewrites short type names to opsicommon class names."""
+    schema = _schema()
+    source = CONTROL.read_text(encoding="utf-8")
+    rewritten = (
+        source.replace('type = "localboot"', 'type = "LocalbootProduct"', 1)
+        .replace('type = "bool"', 'type = "BoolProductProperty"')
+        .replace('type = "unicode"', 'type = "UnicodeProductProperty"')
+    )
+    # Empty optional scripts may be dropped after rewrite.
+    for line in (
+        'alwaysScript = ""',
+        'onceScript = ""',
+        'userLoginScript = ""',
+    ):
+        rewritten = rewritten.replace(line + "\n", "")
+    data = schema.validate_control_schema(
+        rewritten,
+        expected_product_version="1.7.2",
+        expected_package_version="1",
+        require_scripts=False,
+    )
+    assert schema.is_localboot_product_type(data["Product"]["type"])
+    assert schema.product_version(data) == "1.7.2"
+    assert schema.property_default(data, "hermes_version")
+    assert schema.is_bool_property_type(data["ProductProperty"][0]["type"])
+    assert schema.is_unicode_property_type(
+        next(item for item in data["ProductProperty"] if item["name"] == "hermes_version")["type"]
+    )
+
+
 def test_internal_manifest_fields_are_not_serialized_into_control(tmp_path: Path):
     make = _load("makepackage", PACKAGING / "makepackage.py")
     dest = tmp_path / "control.toml"

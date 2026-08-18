@@ -22,7 +22,8 @@ from control_schema import (  # noqa: E402
 )
 
 COMPARE_PATHS = (
-    "OPSI/control.toml",
+    # control.toml is intentionally excluded: opsi-makepackage rewrites it to
+    # opsicommon canonical forms (LocalbootProduct / BoolProductProperty / ...).
     "OPSI/product-release.json",
     "OPSI/smc-artifact-manifest.json",
     "CLIENT_DATA/keys/release-public-key.pem",
@@ -118,6 +119,7 @@ def readback_opsi(archive: Path, stage: Path, *, extract_root: Path | None = Non
         if sha256_file(staged_file) != sha256_file(packed_file):
             mismatches.append(pattern)
     control_path = extracted / "OPSI" / "control.toml"
+    stage_control_path = stage / "OPSI" / "control.toml"
     index_path = extracted / "OPSI" / "product-release.json"
     if not index_path.is_file():
         mismatches.append("product-release.json")
@@ -134,13 +136,32 @@ def readback_opsi(archive: Path, stage: Path, *, extract_root: Path | None = Non
                 control_path,
                 expected_product_version=str(index.get("productVersion") or "") or None,
                 expected_package_version=str(index.get("packageVersion") or "") or None,
+                # Empty optional scripts may be omitted after opsi rewrite.
+                require_scripts=False,
             )
         except ControlSchemaError as exc:
             raise ValueError(str(exc)) from exc
+        if not str((control.get("Product") or {}).get("setupScript") or "").strip():
+            mismatches.append("setupScript")
         product_version = control_product_version(control)
         package_version = control_package_version(control)
         hermes_version = property_default(control, "hermes_version")
         controller_revision = property_default(control, "controller_revision")
+        if stage_control_path.is_file():
+            try:
+                staged_control = validate_control_schema(stage_control_path, require_scripts=False)
+            except ControlSchemaError as exc:
+                raise ValueError(str(exc)) from exc
+            if control_product_version(staged_control) != product_version:
+                mismatches.append("control product version")
+            if control_package_version(staged_control) != package_version:
+                mismatches.append("control package version")
+            if property_default(staged_control, "hermes_version") != hermes_version:
+                mismatches.append("control hermes_version")
+            if property_default(staged_control, "controller_revision") != controller_revision:
+                mismatches.append("control controller_revision")
+    else:
+        mismatches.append("OPSI/control.toml")
     runtime = (index.get("runtimes") or [None])[0]
     if not runtime:
         mismatches.append("runtime catalog missing")

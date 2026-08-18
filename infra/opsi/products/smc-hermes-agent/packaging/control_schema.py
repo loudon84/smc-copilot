@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any
 
 PRODUCT_ID = "smc-hermes-agent"
+# Source may use short names; opsi-makepackage rewrites to opsicommon class names.
+LOCALBOOT_TYPES = frozenset({"localboot", "localbootproduct"})
+BOOL_PROPERTY_TYPES = frozenset({"bool", "boolproductproperty"})
+UNICODE_PROPERTY_TYPES = frozenset({"unicode", "unicodeproductproperty"})
 REQUIRED_SCRIPTS = ("setupScript", "updateScript", "uninstallScript", "customScript")
 REQUIRED_PROPERTIES = (
     "gateway_autostart",
@@ -124,11 +128,32 @@ def _reject_windows_software_id_tables(product: dict[str, Any]) -> None:
         )
 
 
+def normalize_product_type(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def normalize_property_type(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def is_localboot_product_type(value: Any) -> bool:
+    return normalize_product_type(value) in LOCALBOOT_TYPES
+
+
+def is_bool_property_type(value: Any) -> bool:
+    return normalize_property_type(value) in BOOL_PROPERTY_TYPES
+
+
+def is_unicode_property_type(value: Any) -> bool:
+    return normalize_property_type(value) in UNICODE_PROPERTY_TYPES
+
+
 def validate_control_schema(
     source: Path | str | bytes,
     *,
     expected_product_version: str | None = None,
     expected_package_version: str | None = None,
+    require_scripts: bool = True,
 ) -> dict[str, Any]:
     data = parse_control_toml(source)
     package = data.get("Package")
@@ -142,8 +167,11 @@ def validate_control_schema(
     _reject_windows_software_id_tables(product)
     pkg_version = package_version(data)
     prod_version = product_version(data)
-    if str(product.get("type") or "") != "localboot":
-        raise ControlSchemaError("Product.type must be localboot.")
+    if not is_localboot_product_type(product.get("type")):
+        raise ControlSchemaError(
+            "Product.type must be localboot or LocalbootProduct "
+            f"(got {product.get('type')!r})."
+        )
     if str(product.get("id") or "") != PRODUCT_ID:
         raise ControlSchemaError(f"Product.id must be {PRODUCT_ID}.")
     if expected_product_version is not None and prod_version != expected_product_version:
@@ -156,20 +184,24 @@ def validate_control_schema(
         )
     if prod_version.lower() == "latest":
         raise ControlSchemaError("Product.version must be exact; latest is forbidden.")
-    for field in REQUIRED_SCRIPTS:
-        value = product.get(field)
-        if value is None or str(value).strip() == "":
-            raise ControlSchemaError(f"Product.{field} is required.")
+    if require_scripts:
+        for field in REQUIRED_SCRIPTS:
+            value = product.get(field)
+            if value is None or str(value).strip() == "":
+                raise ControlSchemaError(f"Product.{field} is required.")
     names: list[str] = []
     for item in data["ProductProperty"]:
         if not isinstance(item, dict):
             raise ControlSchemaError("each ProductProperty must be a table.")
         name = str(item.get("name") or "")
-        prop_type = str(item.get("type") or "")
+        prop_type = item.get("type")
         if not name:
             raise ControlSchemaError("ProductProperty.name is required.")
-        if prop_type not in {"bool", "unicode"}:
-            raise ControlSchemaError(f"ProductProperty {name} type must be bool or unicode.")
+        if not (is_bool_property_type(prop_type) or is_unicode_property_type(prop_type)):
+            raise ControlSchemaError(
+                f"ProductProperty {name} type must be bool/BoolProductProperty "
+                f"or unicode/UnicodeProductProperty (got {prop_type!r})."
+            )
         names.append(name)
     missing = [name for name in REQUIRED_PROPERTIES if name not in names]
     if missing:

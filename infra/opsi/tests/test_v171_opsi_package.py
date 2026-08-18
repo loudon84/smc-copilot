@@ -101,7 +101,8 @@ def test_o04_native_does_not_fallback_to_zipfile(tmp_path: Path):
 def test_o06_readback_mismatch_fails(tmp_path: Path):
     _, archive, stage = _signed_release(tmp_path)
     control = stage / "OPSI" / "control.toml"
-    control.write_text(control.read_text(encoding="utf-8") + "\n# tamper\n", encoding="utf-8")
+    text = control.read_text(encoding="utf-8")
+    control.write_text(text.replace('version = "1.7.2"', 'version = "9.9.9"', 1), encoding="utf-8")
     readback = _load("opsi_readback", PRODUCT / "packaging" / "opsi_readback.py")
     with pytest.raises(ValueError, match="Release FAILED"):
         readback.readback_opsi(archive, stage)
@@ -181,7 +182,8 @@ def test_rb13_opsi_readback_consistent_and_mismatch(tmp_path: Path):
     assert result["hermesVersion"] == "0.22.0"
     assert (tmp_path / "readback-ok" / "OPSI" / "control.toml").is_file()
     control = stage / "OPSI" / "control.toml"
-    control.write_text(control.read_text(encoding="utf-8") + "\n# tamper\n", encoding="utf-8")
+    text = control.read_text(encoding="utf-8")
+    control.write_text(text.replace('default = ["0.22.0"]', 'default = ["9.9.9"]', 1), encoding="utf-8")
     with pytest.raises(ValueError, match="Release FAILED"):
         readback.readback_opsi(archive, stage, extract_root=tmp_path / "readback-bad")
 
