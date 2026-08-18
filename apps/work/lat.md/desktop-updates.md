@@ -1,12 +1,14 @@
 # Desktop Updates
 
-Desktop updates use GitHub releases and expose both a startup upgrade action and a Settings auto-upgrade preference.
+Desktop updates use a Main-process snapshot with monotonic `revision`, so Layout and Settings render the same updater truth without racing event timing.
 
-The Electron main process configures `electron-updater` against the repository publisher metadata from `electron-builder.yml`, which points at `fathah/hermes-desktop`. [[src/main/app/updater.ts#setupUpdater]] registers update IPC handlers, persists the auto-upgrade preference under Electron `userData`, and applies that preference to `autoUpdater.autoDownload`.
+[[src/main/app/updater.ts#setupUpdater]] is the single updater state machine. It only enables `electron-updater` on packaged Windows non-portable builds, fixes `autoDownload=false` and `autoInstallOnAppQuit=false`, keeps a structured [[src/shared/app-update.ts#AppUpdateState]] snapshot in Main, and emits namespaced IPC over `app-update:*`. Startup and scheduled checks are silent background work: failures log and preserve actionable states like `available`, `downloading`, and `ready`.
 
-When GitHub reports a newer release, [[src/renderer/src/screens/Layout/Layout.tsx#Layout]] shows an upgrade button in the sidebar footer as soon as the app reaches the main layout. The button downloads the update when needed, shows download progress, and changes into a restart action after the update is ready.
+[[src/preload/index.ts]] exposes the v2 renderer contract: `getUpdateState`, `checkForUpdates`, `downloadUpdate`, `installUpdate`, and `onUpdateStateChanged`. Legacy listener helpers remain as thin compatibility wrappers during migration, but they derive from the v2 snapshot instead of maintaining a second updater state shape.
 
-[[src/renderer/src/components/settings/AboutPane.tsx#AboutPane]] (the About & Updates pane of the settings modal) presents the desktop app as its own card, separate from the Hermes Agent engine card — the two update on independent channels. The card shows the app version, the auto-upgrade toggle, and an explicit update action: [[src/renderer/src/components/settings/useSettingsData.ts#useSettingsData]] subscribes to the same `onUpdateAvailable`/`onUpdateDownloadProgress`/`onUpdateDownloaded`/`onUpdateError` events as the footer button and adds a manual `checkDesktopUpdate` (via `checkForUpdates`) plus a `handleDesktopUpdate` that downloads, then restarts via `installUpdate`. When auto-upgrade is enabled the startup release check downloads automatically; when disabled, downloading waits for the user's click (footer button or this card's action).
+[[src/renderer/src/update/AppUpdateProvider.tsx#AppUpdateProvider]] subscribes first, fetches the snapshot second, and only accepts higher revisions. That prevents older snapshots from overwriting newer updater events when the app boots, when Settings opens late, or when React unmounts/remounts consumers.
+
+[[src/renderer/src/screens/Layout/Layout.tsx#Layout]] and [[src/renderer/src/components/settings/AboutPane.tsx#AboutPane]] both consume [[src/renderer/src/update/AppUpdateProvider.tsx#useAppUpdate]] through shared actions. The desktop app card in Settings remains separate from the Hermes Agent updater, but it no longer owns local updater listeners or an auto-upgrade preference toggle: users explicitly check, download, and install app updates from the shared snapshot state.
 
 ## Stable and beta release channels
 

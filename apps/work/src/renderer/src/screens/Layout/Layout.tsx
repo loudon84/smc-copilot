@@ -49,6 +49,7 @@ import {
 } from "../../assets/icons";
 import type { LucideIcon } from "lucide-react";
 import { useI18n } from "../../components/useI18n";
+import { useAppUpdate } from "../../update/AppUpdateProvider";
 
 type View =
   | "chat"
@@ -87,6 +88,7 @@ const SIDEBAR_SCROLLBAR_HIDE_MS = 700;
 function Layout(): React.JSX.Element {
   const { t } = useI18n();
   const { openSettings } = useSettingsModal();
+  const { state: appUpdate, downloadUpdate, installUpdate } = useAppUpdate();
   const [view, setView] = useState<View>("chat");
   // Multiple conversations coexist (background sessions + multi-agent). Each is
   // a ChatRun; all are mounted, only the active one is shown. Profile switches
@@ -338,79 +340,31 @@ function Layout(): React.JSX.Element {
     };
   }, []);
 
-  // Auto-update state
-  const [updateState, setUpdateState] = useState<
-    "available" | "downloading" | "ready" | "error" | null
-  >(null);
-  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updatePercent, setUpdatePercent] = useState<number | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Surface a startup upgrade button as soon as GitHub reports a newer
-    // release. If auto-upgrade is enabled, electron-updater also downloads in
-    // the background and this state advances to downloading/ready.
-    const cleanupAvailable = window.hermesAPI.onUpdateAvailable((info) => {
-      setUpdateState("available");
-      setUpdateVersion(info.version);
-      setUpdateError(null);
-    });
-    const cleanupProgress = window.hermesAPI.onUpdateDownloadProgress(
-      (info) => {
-        setUpdateState("downloading");
-        setUpdatePercent(info.percent);
-        setUpdateError(null);
-      },
-    );
-    const cleanupDownloaded = window.hermesAPI.onUpdateDownloaded(() => {
-      setUpdateState("ready");
-      setUpdatePercent(null);
-      setUpdateError(null);
-    });
-    const cleanupError = window.hermesAPI.onUpdateError((message) => {
-      setUpdateState("error");
-      setUpdateError(message);
-    });
-    return () => {
-      cleanupAvailable();
-      cleanupProgress();
-      cleanupDownloaded();
-      cleanupError();
-    };
-  }, []);
-
   async function handleUpdate(): Promise<void> {
-    if (updateState === "ready") {
-      // The only user action: restart into the already-downloaded update.
-      await window.hermesAPI.installUpdate();
-    } else if (updateState === "available" || updateState === "error") {
-      // Download the available update (or retry a failed auto-download).
-      // Set downloading state immediately to prevent re-entrancy.
-      setUpdateState("downloading");
-      setUpdatePercent(null);
-      setUpdateError(null);
-      try {
-        const ok = await window.hermesAPI.downloadUpdate();
-        if (!ok) setUpdateState("error");
-        // On success, we wait for the onUpdateDownloaded callback to set "ready"
-      } catch (err) {
-        setUpdateError(err instanceof Error ? err.message : String(err));
-        setUpdateState("error");
-      }
+    if (!appUpdate) return;
+    if (appUpdate.status === "ready") {
+      await installUpdate();
+    } else if (
+      appUpdate.status === "available" ||
+      (appUpdate.status === "error" &&
+        appUpdate.error?.operation === "download" &&
+        appUpdate.availableVersion)
+    ) {
+      await downloadUpdate();
     }
   }
 
   const updateButtonTitle =
-    updateError ??
-    (updateState === "available" && updateVersion
-      ? t("common.updateAvailable", { version: updateVersion })
-      : updateState === "downloading"
-        ? updatePercent === null
+    appUpdate?.error?.message ??
+    (appUpdate?.status === "available" && appUpdate.availableVersion
+      ? t("common.updateAvailable", { version: appUpdate.availableVersion })
+      : appUpdate?.status === "downloading"
+        ? appUpdate.percent === null
           ? t("common.downloading", { percent: 0 })
-          : t("common.downloading", { percent: updatePercent })
-        : updateState === "ready"
+          : t("common.downloading", { percent: appUpdate.percent })
+        : appUpdate?.status === "ready"
           ? t("common.restartToUpdate")
-          : updateState === "error"
+          : appUpdate?.status === "error"
             ? t("common.updateFailed")
             : undefined);
 
@@ -754,33 +708,38 @@ function Layout(): React.JSX.Element {
           <div className="sidebar-footer">
             {/* Show an upgrade affordance at startup when GitHub has a newer
               release; it becomes a restart action once downloaded. */}
-            {updateState && (
+            {appUpdate &&
+              ["available", "downloading", "ready", "error"].includes(
+                appUpdate.status,
+              ) && (
               <button
                 className={`sidebar-update-btn ${
-                  updateState === "error" ? "error" : ""
+                  appUpdate.status === "error" ? "error" : ""
                 }`}
                 onClick={handleUpdate}
-                disabled={updateState === "downloading"}
+                disabled={appUpdate.status === "downloading"}
                 title={updateButtonTitle}
                 aria-label={updateButtonTitle}
               >
                 <Download size={13} />
-                {updateState === "available" && (
+                {appUpdate.status === "available" && (
                   <span>
-                    {updateVersion
-                      ? t("common.updateAvailable", { version: updateVersion })
+                    {appUpdate.availableVersion
+                      ? t("common.updateAvailable", {
+                          version: appUpdate.availableVersion,
+                        })
                       : t("common.updateAvailable", { version: "" })}
                   </span>
                 )}
-                {updateState === "downloading" && (
+                {appUpdate.status === "downloading" && (
                   <span>
-                    {t("common.downloading", { percent: updatePercent ?? 0 })}
+                    {t("common.downloading", { percent: appUpdate.percent ?? 0 })}
                   </span>
                 )}
-                {updateState === "ready" && (
+                {appUpdate.status === "ready" && (
                   <span>{t("common.restartToUpdate")}</span>
                 )}
-                {updateState === "error" && (
+                {appUpdate.status === "error" && (
                   <span>{t("common.updateFailed")}</span>
                 )}
               </button>

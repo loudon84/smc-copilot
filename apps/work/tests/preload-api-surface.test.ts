@@ -72,6 +72,19 @@ describe("Preload API Surface", () => {
 // ─── New APIs exist ─────────────────────────────────────
 
 describe("New APIs from v0.8/v0.9 features", () => {
+  it("has app update v2 APIs", () => {
+    expect(preloadMethods).toContain("getUpdateState");
+    expect(preloadMethods).toContain("checkForUpdates");
+    expect(preloadMethods).toContain("downloadUpdate");
+    expect(preloadMethods).toContain("installUpdate");
+    expect(preloadMethods).toContain("onUpdateStateChanged");
+    expect(typeMethods).toContain("getUpdateState");
+    expect(typeMethods).toContain("checkForUpdates");
+    expect(typeMethods).toContain("downloadUpdate");
+    expect(typeMethods).toContain("installUpdate");
+    expect(typeMethods).toContain("onUpdateStateChanged");
+  });
+
   it("has backup/import APIs", () => {
     expect(preloadMethods).toContain("runHermesBackup");
     expect(preloadMethods).toContain("runHermesImport");
@@ -251,9 +264,9 @@ describe("IPC channel consistency", () => {
       ...preloadSrc.matchAll(/ipcRenderer\.invoke\(\s*["']([^"']+)["']/g),
     ].map((m) => m[1]);
     expect(invokeChannels.length).toBeGreaterThan(30);
-    // Every channel should be kebab-case
+    // Every channel should be kebab-case or a namespaced `foo:bar` variant.
     for (const ch of invokeChannels) {
-      expect(ch).toMatch(/^[a-z][a-z0-9-]*$/);
+      expect(ch).toMatch(/^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)*$/);
     }
   });
 
@@ -263,7 +276,7 @@ describe("IPC channel consistency", () => {
     ].map((m) => m[1]);
     expect(onChannels.length).toBeGreaterThan(0);
     for (const ch of onChannels) {
-      expect(ch).toMatch(/^[a-z][a-z0-9-]*$/);
+      expect(ch).toMatch(/^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)*$/);
     }
   });
 });

@@ -35,15 +35,12 @@ export default function AboutPane(): React.JSX.Element {
     updating,
     updateResult,
     updateResultType,
-    autoUpgradeEnabled,
-    autoUpgradeSaved,
     dumpOutput,
     dumpRunning,
     setDumpOutput,
     setDumpRunning,
     handleUpdateHermes,
     handleDoctor,
-    handleAutoUpgradeChange,
     desktopUpdateState,
     desktopUpdateVersion,
     desktopUpdatePercent,
@@ -263,28 +260,6 @@ export default function AboutPane(): React.JSX.Element {
               {desktopUpdateError}
             </div>
           )}
-
-          <div className="settings-toggle-row">
-            <div className="settings-toggle-text">
-              <div className="settings-toggle-title">
-                {t("settings.autoUpgradeDesktop")}
-                {autoUpgradeSaved && (
-                  <span className="settings-saved">{t("settings.saved")}</span>
-                )}
-              </div>
-              <div className="settings-field-hint">
-                {t("settings.autoUpgradeDesktopHint")}
-              </div>
-            </div>
-            <label className="tools-toggle">
-              <input
-                type="checkbox"
-                checked={autoUpgradeEnabled}
-                onChange={(e) => void handleAutoUpgradeChange(e.target.checked)}
-              />
-              <span className="tools-toggle-track" />
-            </label>
-          </div>
         </div>
       </section>
     </div>
@@ -346,9 +321,11 @@ function DesktopUpdateButton({
   onAct,
 }: {
   state:
+    | "idle"
     | "available"
     | "downloading"
     | "ready"
+    | "installing"
     | "error"
     | "checking"
     | "uptodate"
