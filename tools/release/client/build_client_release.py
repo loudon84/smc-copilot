@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from tools.release.client.release_config import load_release_config  # noqa: E402
 from tools.release.subprocess_text import command_output, run_command
 from tools.release.client.release_inventory import (  # noqa: E402
+    capture_hermes_installer,
     capture_opsi_client_installer,
     capture_work_installers,
     scan_secrets,
@@ -35,6 +36,7 @@ STAGES = (
     "preflight",
     "work",
     "hermes",
+    "hermes-installer",
     "runtime",
     "opsi-stage",
     "opsi-package",
@@ -43,6 +45,7 @@ STAGES = (
     "all",
 )
 MAKEPACKAGE = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "packaging" / "makepackage.py"
+HERMES_INSTALLER_SCRIPT = ROOT / "infra" / "windows" / "hermes-agent" / "installer" / "build.ps1"
 
 
 def _run(cmd: list[str], cwd: Path | None = None) -> None:
@@ -98,6 +101,57 @@ def run_preflight(config: dict[str, Any], *, allow_dirty: bool, hermes_repo: Pat
     return {"smc": smc, "hermes": hermes}
 
 
+def copy_release_v2_artifacts(hermes_build_dir: Path, dest: Path) -> dict[str, Any]:
+    hermes_dir = dest / "hermes"
+    hermes_dir.mkdir(parents=True, exist_ok=True)
+    copied: dict[str, Path] = {}
+    for name in ("hermes-windows-amd64.zip", "release-manifest.json", "release-manifest.sig", "release-public-key.pem"):
+        src = hermes_build_dir / name
+        if src.is_file():
+            target = hermes_dir / name
+            if src.resolve() != target.resolve():
+                shutil.copy2(src, target)
+            copied[name] = target
+    archive = copied.get("hermes-windows-amd64.zip", hermes_dir / "hermes-windows-amd64.zip")
+    manifest = copied.get("release-manifest.json", hermes_dir / "release-manifest.json")
+    manifest_sha = sha256_file(manifest) if manifest.is_file() else ("00" * 32)
+    manifest_data = json.loads(manifest.read_text(encoding="utf-8")) if manifest.is_file() else {}
+    return {
+        "artifactSha256": sha256_file(archive) if archive.is_file() else ("00" * 32),
+        "manifestSha256": manifest_sha,
+        "version": str(manifest_data.get("hermesVersion") or manifest_data.get("releaseVersion") or ""),
+        "releaseVersion": str(manifest_data.get("releaseVersion") or ""),
+    }
+
+
+def run_hermes_installer(dest: Path, *, release_version: str, smoke: bool = True) -> Path:
+    if not HERMES_INSTALLER_SCRIPT.is_file():
+        raise ValueError("hermes installer build script missing")
+    out = dest / "hermes-installer-build"
+    out.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(HERMES_INSTALLER_SCRIPT),
+        "-ReleaseVersion",
+        release_version,
+        "-OutputDir",
+        str(out),
+    ]
+    if smoke:
+        cmd.append("-Smoke")
+    result = run_command(cmd)
+    if result.returncode != 0:
+        raise SystemExit(command_output(result, "hermes installer build failed"))
+    matches = sorted(out.glob("smc-hermes-agent_*_windows-amd64.exe"))
+    if not matches:
+        raise SystemExit("Release FAILED: hermes installer exe missing")
+    return matches[0]
+
+
 def copy_runtime_artifacts(hermes_zip: Path, dest: Path) -> dict[str, Any]:
     hermes_dir = dest / "hermes"
     hermes_dir.mkdir(parents=True, exist_ok=True)
@@ -148,6 +202,8 @@ def run_hermes(
     node_root: Path | None,
     hermes_zip: Path | None,
     wheelhouse_downloader=None,
+    release_version: str = "",
+    signing_key_ref: Path | None = None,
 ) -> Path:
     if hermes_zip is not None:
         return hermes_zip
@@ -162,6 +218,8 @@ def run_hermes(
         node_root=node_root,
         mode=mode,
         wheelhouse_downloader=wheelhouse_downloader,
+        release_version=release_version,
+        signing_key_ref=signing_key_ref,
     )
     return archive
 
@@ -222,10 +280,11 @@ def assemble(
     config: dict[str, Any],
     work: dict[str, Any],
     hermes: dict[str, Any],
-    opsi: dict[str, Any],
-    opsi_client: dict[str, Any],
+    opsi: dict[str, Any] | None,
+    opsi_client: dict[str, Any] | None,
     build_id: str,
     live_eligible: bool,
+    hermes_installer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     scan_secrets(dest)
     requirements = {
@@ -241,6 +300,7 @@ def assemble(
         opsi_client_agent=opsi_client,
         build_id=build_id,
         live_eligible=live_eligible,
+        hermes_installer=hermes_installer,
     )
     write_json(dest / "manifests" / "client-release.json", manifest)
     write_json(
@@ -265,6 +325,83 @@ def _enroll_script(explicit: Path | None) -> Path | None:
     return fallback if fallback.is_file() else None
 
 
+def _hermes_installer_enabled(config: dict[str, Any]) -> bool:
+    installer = config.get("hermesInstaller") or {}
+    return bool(installer.get("enabled"))
+
+
+def build_hermes_installer_release(
+    *,
+    config_path: Path,
+    output: Path,
+    hermes_repo: Path | None = None,
+    signing_key_ref: Path | None = None,
+    allow_dirty: bool = False,
+    work_dist: Path | None = None,
+    mode: str = "online",
+    wheelhouse: Path | None = None,
+    node_root: Path | None = None,
+    wheelhouse_downloader=None,
+    installer_exe: Path | None = None,
+    smoke_installer: bool = True,
+) -> Path:
+    from tools.release.client.verify_client_release import verify_hermes_installer_release
+
+    config = load_release_config(config_path)
+    build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
+    dest = stage_root(output, str(config["release"]["version"]), build_id)
+    frozen = run_preflight(config, allow_dirty=allow_dirty, hermes_repo=hermes_repo)
+    work = run_work(config, dest, work_dist=work_dist)
+    hermes_version = "" if config["hermes"]["version"] == "auto" else str(config["hermes"]["version"])
+    release_version = str((config.get("hermesInstaller") or {}).get("releaseVersion") or "")
+    if not release_version:
+        release_version = f"{frozen['hermes']['version']}-smc.1"
+    if signing_key_ref is None or not signing_key_ref.is_file():
+        raise SystemExit("Release FAILED: --signing-key-ref required")
+    built_zip = run_hermes(
+        config,
+        dest,
+        hermes_repo=hermes_repo,
+        allow_dirty=allow_dirty,
+        mode=mode,
+        wheelhouse=wheelhouse,
+        node_root=node_root,
+        hermes_zip=None,
+        wheelhouse_downloader=wheelhouse_downloader,
+        release_version=release_version,
+        signing_key_ref=signing_key_ref,
+    )
+    hermes_meta = copy_release_v2_artifacts(dest / "hermes-build", dest)
+    hermes_meta.update(
+        {
+            "profile": config["hermes"]["profile"],
+            "sourceRevision": frozen["hermes"]["revision"],
+            "version": frozen["hermes"]["version"],
+        }
+    )
+    built_installer = installer_exe or run_hermes_installer(dest, release_version=release_version, smoke=smoke_installer)
+    installer_meta = capture_hermes_installer(built_installer, dest / "hermes-installer")
+    live = bool(frozen["smc"]["liveEligible"] and frozen["hermes"]["liveEligible"])
+    assemble(
+        dest,
+        config=config,
+        work=work,
+        hermes=hermes_meta,
+        opsi=None,
+        opsi_client=None,
+        build_id=build_id,
+        live_eligible=False,
+        hermes_installer=installer_meta,
+    )
+    verified = verify_hermes_installer_release(dest, require_signatures=True, signing_key_ref=signing_key_ref)
+    if live:
+        verified["liveEligible"] = True
+        write_json(dest / "manifests" / "client-release.json", verified)
+        write_sha256sums(dest)
+        verify_hermes_installer_release(dest, require_signatures=True, signing_key_ref=signing_key_ref)
+    return dest
+
+
 def build_all(
     *,
     config_path: Path,
@@ -284,6 +421,19 @@ def build_all(
     wheelhouse_downloader=None,
 ) -> Path:
     config = load_release_config(config_path)
+    if _hermes_installer_enabled(config):
+        return build_hermes_installer_release(
+            config_path=config_path,
+            output=output,
+            hermes_repo=hermes_repo,
+            signing_key_ref=signing_key_ref,
+            allow_dirty=allow_dirty,
+            work_dist=work_dist,
+            mode=mode,
+            wheelhouse=wheelhouse,
+            node_root=node_root,
+            wheelhouse_downloader=wheelhouse_downloader,
+        )
     build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
     dest = stage_root(output, str(config["release"]["version"]), build_id)
     frozen = run_preflight(config, allow_dirty=allow_dirty, hermes_repo=hermes_repo)
@@ -392,6 +542,26 @@ def main() -> int:
         )
         copy_runtime_artifacts(archive, dest)
         print(archive)
+        return 0
+    if args.stage == "hermes-installer":
+        if args.signing_key_ref is None:
+            raise SystemExit("Release FAILED: --signing-key-ref required")
+        archive = run_hermes(
+            config,
+            dest,
+            hermes_repo=args.hermes_repo,
+            allow_dirty=args.allow_dirty,
+            mode=args.mode,
+            wheelhouse=args.wheelhouse,
+            node_root=args.node_root,
+            hermes_zip=args.hermes_zip,
+            release_version=str((config.get("hermesInstaller") or {}).get("releaseVersion") or f"{run_preflight(config, allow_dirty=args.allow_dirty, hermes_repo=args.hermes_repo)['hermes']['version']}-smc.1"),
+            signing_key_ref=args.signing_key_ref,
+        )
+        copy_release_v2_artifacts(dest / "hermes-build", dest)
+        installer = run_hermes_installer(dest, release_version=str((config.get("hermesInstaller") or {}).get("releaseVersion") or "0.22.0-smc.1"))
+        capture_hermes_installer(installer, dest / "hermes-installer")
+        print(installer)
         return 0
     if args.stage in {"runtime", "opsi-stage", "opsi-package"}:
         if args.signing_key_ref is None:

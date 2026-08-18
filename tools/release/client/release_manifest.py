@@ -13,12 +13,13 @@ def build_client_release_manifest(
     requirements: dict[str, str],
     work: dict[str, Any],
     hermes: dict[str, Any],
-    opsi: dict[str, Any],
-    opsi_client_agent: dict[str, Any],
+    opsi: dict[str, Any] | None,
+    opsi_client_agent: dict[str, Any] | None,
     build_id: str,
     live_eligible: bool,
+    hermes_installer: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "schema": SCHEMA,
         "releaseVersion": release_version,
         "platform": "windows",
@@ -37,17 +38,26 @@ def build_client_release_manifest(
             "artifactSha256": hermes["artifactSha256"],
             "manifestSha256": hermes["manifestSha256"],
         },
-        "opsi": {
+        "buildId": build_id,
+        "liveEligible": live_eligible,
+    }
+    if opsi is not None:
+        payload["opsi"] = {
             "productVersion": opsi["productVersion"],
             "packageVersion": opsi["packageVersion"],
             "controllerRevision": opsi["controllerRevision"],
             "artifactSha256": opsi["artifactSha256"],
-        },
-        "opsiClientAgent": {
+        }
+    if opsi_client_agent is not None:
+        payload["opsiClientAgent"] = {
             "sha256": opsi_client_agent["sha256"],
             "version": opsi_client_agent.get("version", ""),
             "authenticodeStatus": opsi_client_agent.get("authenticodeStatus", ""),
-        },
-        "buildId": build_id,
-        "liveEligible": live_eligible,
-    }
+        }
+    if hermes_installer is not None:
+        payload["hermesInstaller"] = {
+            "sha256": hermes_installer["sha256"],
+            "version": hermes_installer.get("version", ""),
+            "authenticodeStatus": hermes_installer.get("authenticodeStatus", ""),
+        }
+    return payload

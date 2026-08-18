@@ -312,3 +312,32 @@ def test_rb08_bundle_build(tmp_path: Path):
     lock = (tmp_path / "out" / "work" / "bundle" / "python" / "requirements.lock").read_text(encoding="utf-8")
     assert "sha256=" in lock
     assert "hermes_agent-0.20.2-py3-none-any.whl" in lock
+
+
+def test_release_v2_self_contained(tmp_path: Path):
+    repo, wheel, house, node_root = _bundle_inputs(tmp_path)
+    dest = tmp_path / "out"
+    archive = build_managed_bundle(
+        repo,
+        dest,
+        wheel=wheel,
+        wheelhouse=house,
+        node_root=node_root,
+        mode="offline",
+        release_version="0.20.2-smc.1",
+    )
+    release_zip = dest / "hermes-windows-amd64.zip"
+    manifest_path = dest / "release-manifest.json"
+    assert release_zip.is_file()
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["schema"] == "smc.hermes.release.v2"
+    assert manifest["releaseVersion"] == "0.20.2-smc.1"
+    assert manifest["sha256"] == hashlib.sha256(release_zip.read_bytes()).hexdigest()
+    with zipfile.ZipFile(release_zip) as zf:
+        names = set(zf.namelist())
+    assert "bin/hermes.exe" in names
+    assert "python/embedded/python.exe" in names
+    assert "node/embedded/node.exe" in names
+    assert "runtime/bundle/runtime-build.json" in names
+    assert archive.is_file()

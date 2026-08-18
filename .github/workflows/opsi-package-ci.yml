@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - "infra/opsi/**"
+      - "infra/windows/hermes-agent/**"
       - "contracts/opsi/*.schema.json"
       - ".github/workflows/opsi-package-ci.yml"
   pull_request:
     paths:
       - "infra/opsi/**"
+      - "infra/windows/hermes-agent/**"
       - "contracts/opsi/*.schema.json"
       - ".github/workflows/opsi-package-ci.yml"
 
@@ -64,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Pester adapter contracts
         shell: pwsh
-        run: Invoke-Pester -Path infra/opsi/tests/SmcHermesAgent.Tests.ps1 -EnableExit
+        run: Invoke-Pester -Path infra/opsi/tests/SmcHermesAgent.Tests.ps1,infra/windows/hermes-agent/tests/SmcHermesManaged.Tests.ps1,infra/windows/hermes-agent/tests/Installer.Tests.ps1 -EnableExit
 
   builder:
     runs-on: ubuntu-latest
@@ -78,5 +80,5 @@ jobs:
           python infra/opsi/products/smc-hermes-agent/packaging/makepackage.py --smoke --dest /tmp/opsi-smoke
           ls /tmp/opsi-smoke/*.smoke.zip
           test ! -e /tmp/opsi-smoke/*.opsi
-      - name: Real builder script present
-        run: test -f infra/opsi/products/smc-hermes-agent/packaging/build-real.sh
+      - name: Hermes release builder pytest
+        run: python -m pytest tools/release/tests/test_hermes_builder.py tools/release/tests/test_client_release.py -q

@@ -73,6 +73,58 @@ def verify_signature_chain(extracted: Path, hermes_zip: Path) -> None:
         raise ValueError("Release FAILED: runtime-build version mismatch")
 
 
+def verify_hermes_installer_release(
+    root: Path,
+    *,
+    require_signatures: bool = True,
+    signing_key_ref: Path | None = None,
+) -> dict:
+    scan_secrets(root)
+    missing = [rel for rel in REQUIRED_FILES if not (root / rel).is_file()]
+    if missing:
+        raise ValueError(f"client release incomplete: {missing}")
+    manifest = json.loads((root / "manifests" / "client-release.json").read_text(encoding="utf-8"))
+    if manifest.get("schema") != "smc.client-release.v1":
+        raise ValueError("invalid client-release schema")
+    if "hermesInstaller" not in manifest:
+        raise ValueError("hermesInstaller missing from client release manifest")
+    work_dir = root / "work"
+    hermes_dir = root / "hermes"
+    installer_dir = root / "hermes-installer"
+    if not any(work_dir.glob("copilot-desktop-*-setup.exe")):
+        raise ValueError("Work setup installer missing")
+    release_zip = _first(hermes_dir, "hermes-windows-amd64.zip")
+    release_manifest = _first(hermes_dir, "release-manifest.json")
+    installer = _first(installer_dir, "smc-hermes-agent_*_windows-amd64.exe")
+    if (root / "opsi").is_dir() and list((root / "opsi").glob("*.opsi")):
+        raise ValueError("Hermes installer release must not include .opsi product")
+    if sha256_file(release_zip) != manifest["hermes"]["artifactSha256"]:
+        raise ValueError("Hermes release artifact hash mismatch")
+    if sha256_file(release_manifest) != manifest["hermes"]["manifestSha256"]:
+        raise ValueError("Hermes release manifest hash mismatch")
+    if sha256_file(installer) != manifest["hermesInstaller"]["sha256"]:
+        raise ValueError("Hermes installer hash mismatch")
+    if require_signatures and signing_key_ref is not None and signing_key_ref.is_file():
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+        from tools.release.hermes.release_v2 import verify_release_manifest
+
+        private = load_pem_private_key(signing_key_ref.read_bytes(), password=None)
+        public = private.public_key()
+        payload = json.loads(release_manifest.read_text(encoding="utf-8"))
+        sig_path = hermes_dir / "release-manifest.sig"
+        if sig_path.is_file() and sig_path.stat().st_size > 0:
+            verify_release_manifest(
+                payload,
+                sha256_file(release_zip),
+                sig_path.read_bytes(),
+                public,
+            )
+    if manifest.get("liveEligible") and not require_signatures:
+        raise ValueError("liveEligible requires signature chain")
+    return manifest
+
+
 def verify_client_release(
     root: Path,
     *,

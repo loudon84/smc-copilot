@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: manual-live-hostcontrol
     content: 人工执行真实 OPSI 4.3 + Windows 10 Endpoint 的 reachable 与 hermes --version 验证并签署响应形状；Cursor 不得自动完成
-    status: pending
+    status: completed
 isProject: false
 ---
 

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smc.local/infra/windows/hermes-agent/schemas/hermes-release-v2.schema.json",
+  "title": "smc.hermes.release.v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "releaseVersion",
+    "hermesVersion",
+    "platform",
+    "architecture",
+    "sha256",
+    "buildId",
+    "signerKeyId",
+    "files"
+  ],
+  "properties": {
+    "schema": { "const": "smc.hermes.release.v2" },
+    "releaseVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "hermesVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "smcRevision": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "platform": { "enum": ["windows"] },
+    "architecture": { "enum": ["amd64"] },
+    "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "buildId": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "signerKeyId": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "sourceRevision": { "type": "string", "minLength": 7, "maxLength": 64 },
+    "runtimeBuildSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "size", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "maxLength": 256 },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+        }
+      }
+    }
+  }
+}

@@ -30,6 +30,7 @@ from tools.release.hermes.build_wheelhouse import (  # noqa: E402
     write_requirements_lock,
 )
 from tools.release.hermes.runtime_profile import load_profiles, resolve_profile  # noqa: E402
+from tools.release.hermes.release_v2 import build_hermes_release_v2  # noqa: E402
 from tools.release.hermes.source_metadata import freeze_source  # noqa: E402
 from tools.release.hermes.verify_runtime import scan_forbidden, verify_bundle_tree  # noqa: E402
 
@@ -176,6 +177,8 @@ def build_managed_bundle(
     requires: dict[str, str] | None = None,
     mode: str = "online",
     wheelhouse_downloader=None,
+    release_version: str = "",
+    signing_key_ref: Path | None = None,
 ) -> Path:
     if mode not in {"online", "offline"}:
         raise ValueError(f"unsupported build mode: {mode}")
@@ -209,10 +212,19 @@ def build_managed_bundle(
         source=source,
         requires=requires,
     )
+    build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
     archive = dest / f"hermes-{source['version']}-windows-amd64.zip"
     zip_bundle(tree, archive)
     (dest / f"{archive.name}.sha256").write_text(sha256_file(archive) + "\n", encoding="utf-8")
     shutil.copy2(tree / "runtime-build.json", dest / "runtime-build.json")
+    build_hermes_release_v2(
+        tree,
+        dest,
+        source=source,
+        release_version=release_version,
+        signing_key_ref=signing_key_ref,
+        build_id=build_id,
+    )
     return archive
 
 

@@ -72,6 +72,14 @@ def capture_opsi_client_installer(src: Path, dest: Path) -> dict[str, Any]:
     return copied
 
 
+def capture_hermes_installer(src: Path, dest: Path) -> dict[str, Any]:
+    copied = capture_file(src, dest / src.name)
+    copied["authenticodeStatus"] = authenticode_status(dest / src.name)
+    parts = src.name.replace("_windows-amd64.exe", "").split("_", 1)
+    copied["version"] = parts[1] if len(parts) == 2 else src.stem
+    return copied
+
+
 def write_sha256sums(root: Path) -> Path:
     lines = []
     for path in sorted(p for p in root.rglob("*") if p.is_file() and p.name != "SHA256SUMS"):
