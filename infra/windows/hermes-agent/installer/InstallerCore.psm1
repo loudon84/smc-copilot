@@ -17,7 +17,7 @@ $script:SmcManagedModule = $script:SmcManagedModuleCandidates | Where-Object { T
 if (-not $script:SmcManagedModule) {
     throw "SmcHermesManaged.psm1 missing next to InstallerCore"
 }
-Import-Module $script:SmcManagedModule -Force
+Import-Module $script:SmcManagedModule -Force -DisableNameChecking
 
 function Get-SmcInstallerLayout {
     param(
@@ -193,17 +193,29 @@ function Remove-SmcHermesGatewayTask {
 }
 
 function Get-SmcHermesCliVersion {
-    param([Parameter(Mandatory = $true)][string]$CliPath)
-    if (-not (Test-Path -LiteralPath $CliPath)) { return $null }
-    try {
-        $output = & $CliPath --version 2>&1
-        if ($LASTEXITCODE -eq 0) { return ([string]$output).Trim() }
-    } catch {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CliPath
+    )
+
+    if (-not (Test-Path -LiteralPath $CliPath)) {
+        throw "hermes cli missing: $CliPath"
     }
-    $text = Get-Content -LiteralPath $CliPath -Raw -ErrorAction SilentlyContinue
-    if ($text -match 'SMC Hermes\s+(\S+)') { return $Matches[1] }
-    if ($text -match 'echo\s+(\S+)') { return $Matches[1] }
-    return $null
+
+    $output = & $CliPath --version 2>&1
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        throw "hermes --version failed: exit=$exitCode output=$($output -join ' ')"
+    }
+
+    $version = ([string]($output -join "`n")).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($version)) {
+        throw "hermes --version returned empty output"
+    }
+
+    return $version
 }
 
 function Test-SmcHermesReady {

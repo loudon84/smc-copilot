@@ -146,7 +146,7 @@ def _load_distlib_launcher() -> bytes:
     return launcher.read_bytes()
 
 
-def write_hermes_launcher(dest: Path, *, python_rel: str = r"..\python\python.exe") -> Path:
+def write_hermes_launcher(dest: Path, *, python_rel: str = r"<launcher_dir>\..\python\python.exe") -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
     script = (
         "# -*- coding: utf-8 -*-\n"

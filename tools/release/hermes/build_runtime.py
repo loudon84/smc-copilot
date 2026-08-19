@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 import argparse
 import hashlib
 import json
@@ -165,6 +167,66 @@ def zip_bundle(tree: Path, archive: Path) -> Path:
     return archive
 
 
+def verify_windows_runtime(
+    runtime_tree: Path,
+    *,
+    expected_version: str = "",
+) -> None:
+    hermes_exe = runtime_tree / "bin" / "hermes.exe"
+    python_exe = runtime_tree / "python" / "python.exe"
+    node_exe = runtime_tree / "node" / "node.exe"
+
+    for executable in (hermes_exe, python_exe, node_exe):
+        if not executable.is_file():
+            raise ValueError(
+                f"runtime executable missing: {executable}"
+            )
+
+    if os.name != "nt":
+        raise ValueError(
+            "Windows runtime functional verification requires Windows build host"
+        )
+
+    system_root = Path(
+        os.environ.get("SystemRoot", r"C:\Windows")
+    )
+    test_cwd = system_root / "Temp"
+
+    test_home = runtime_tree.parent / "runtime-functional-test-home"
+    test_home.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env["HERMES_HOME"] = str(test_home)
+
+    result = subprocess.run(
+        [str(hermes_exe), "--version"],
+        cwd=str(test_cwd),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise ValueError(
+            "Hermes runtime launcher verification failed: "
+            f"exit={result.returncode}; "
+            f"stdout={result.stdout.strip()}; "
+            f"stderr={result.stderr.strip()}"
+        )
+
+    output = (
+        result.stdout.strip()
+        or result.stderr.strip()
+    )
+
+    if expected_version and expected_version not in output:
+        raise ValueError(
+            "Hermes runtime version mismatch: "
+            f"expected={expected_version}; actual={output}"
+        )
+
 def build_managed_bundle(
     repo: Path,
     dest: Path,
@@ -235,6 +297,10 @@ def build_managed_bundle(
         mode=mode,
         downloader=runtime_downloader,
     )
+
+    # Windows Runtime Functional Gate
+    verify_windows_runtime(runtime_tree, expected_version=str(source["version"]))
+
     build_hermes_release_v2(
         runtime_tree,
         dest,
