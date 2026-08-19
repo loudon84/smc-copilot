@@ -23,6 +23,8 @@ PYTHON_EMBED_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSION}/python-{
 PYTHON_EMBED_SHA256 = "8d3f33be9eb810f23c102f08475af2854e50484b8e4e06275e937be61ce3d2fb"
 NODE_DIST_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip"
 NODE_DIST_SHA256 = "905373a059aecaf7f48c1ce10ffbd5334457ca00f678747f19db5ea7d256c236"
+WINDOWS_VT_HOOK = Path(__file__).with_name("smc_windows_vt.py")
+WINDOWS_VT_PTH_NAME = "zz_smc_windows_vt.pth"
 
 PE_AMD64 = 0x8664
 Downloader = Callable[[str, Path, str], Path]
@@ -117,6 +119,15 @@ def _enable_python_site(python_root: Path) -> None:
     ]
     pth.write_text("\n".join(lines), encoding="ascii")
     (python_root / "Lib" / "site-packages").mkdir(parents=True, exist_ok=True)
+
+
+def _install_windows_console_hook(site_packages: Path) -> None:
+    # Isolated embed skips sitecustomize; site-packages .pth import lines still run.
+    if not WINDOWS_VT_HOOK.is_file():
+        raise ValueError("missing Windows console VT hook")
+    site_packages.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(WINDOWS_VT_HOOK, site_packages / WINDOWS_VT_HOOK.name)
+    (site_packages / WINDOWS_VT_PTH_NAME).write_text("import smc_windows_vt\n", encoding="ascii")
 
 
 def _install_wheels(wheels: list[Path], site_packages: Path) -> None:
@@ -261,9 +272,20 @@ def build_windows_runtime(
     shutil.rmtree(node_extract, ignore_errors=True)
 
     _enable_python_site(python_root)
-    _install_wheels(_collect_wheels(bundle_root), python_root / "Lib" / "site-packages")
+    site_packages = python_root / "Lib" / "site-packages"
+    _install_wheels(_collect_wheels(bundle_root), site_packages)
+    _install_windows_console_hook(site_packages)
+
+    # Build node/hermes-agent workspace: package manifests + node_modules from tgz tarballs.
+    # Node binary stays at node/node.exe; workspace is node/hermes-agent/ (HERMES_AGENT_ROOT).
+    hermes_agent_ws = node_root / "hermes-agent"
+    hermes_agent_ws.mkdir(parents=True, exist_ok=True)
+    for manifest_name in ("package.json", "package-lock.json"):
+        src_manifest = bundle_root / "node" / manifest_name
+        if src_manifest.is_file():
+            shutil.copy2(src_manifest, hermes_agent_ws / manifest_name)
     packages = bundle_root / "node" / "packages"
-    node_modules = node_root / "node_modules"
+    node_modules = hermes_agent_ws / "node_modules"
     tarballs = sorted(packages.glob("*.tgz")) if packages.is_dir() else []
     if tarballs:
         node_modules.mkdir(parents=True, exist_ok=True)
@@ -290,6 +312,12 @@ def build_windows_runtime(
     assert_pe_amd64(dest / "bin" / "hermes.exe")
     assert_pe_amd64(python_root / "python.exe")
     assert_pe_amd64(node_root / "node.exe")
-    if not (python_root / "Lib" / "site-packages").is_dir():
+    if not site_packages.is_dir():
         raise ValueError("site-packages missing")
+    if not (site_packages / WINDOWS_VT_HOOK.name).is_file():
+        raise ValueError("Windows console VT hook missing")
+    if not (site_packages / WINDOWS_VT_PTH_NAME).is_file():
+        raise ValueError("Windows console VT hook missing")
+    if not (node_root / "hermes-agent").is_dir():
+        raise ValueError("node/hermes-agent workspace missing")
     return dest

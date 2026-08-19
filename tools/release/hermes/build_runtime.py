@@ -271,6 +271,12 @@ def build_managed_bundle(
     )
     declared = (profile.get("node") or {}).get("packages") or []
     node_root = resolve_node_root(declared, work / "node", supplied=node_root, mode=mode)
+    # Copy Node workspace manifests from the same Hermes source revision into node_root,
+    # so build_windows_runtime can place them in node/hermes-agent/ (HERMES_AGENT_ROOT).
+    for manifest_name in ("package.json", "package-lock.json"):
+        src_manifest = repo / manifest_name
+        if src_manifest.is_file():
+            shutil.copy2(src_manifest, node_root / manifest_name)
     tree = assemble_bundle(
         work / "bundle",
         wheel=wheel,

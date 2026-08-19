@@ -27,7 +27,11 @@ from tools.release.hermes.release_version import resolve_from_source, resolve_re
 from tools.release.hermes.runtime_profile import load_profiles, resolve_profile
 from tools.release.hermes.source_metadata import freeze_source
 from tools.release.hermes.verify_runtime import verify_bundle_tree, verify_bundle_zip
-from tools.release.hermes.windows_runtime import assert_pe_amd64, build_windows_runtime
+from tools.release.hermes.windows_runtime import (
+    _install_windows_console_hook,
+    assert_pe_amd64,
+    build_windows_runtime,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 PROFILES = ROOT / "release" / "hermes-runtime-profiles.yaml"
@@ -47,6 +51,11 @@ def _hermes_repo(tmp_path: Path, version: str = "0.20.2", dirty: bool = False) -
         encoding="utf-8",
     )
     (repo / "uv.lock").write_text("version = 1\nrequires-python = '>=3.12'\n", encoding="utf-8")
+    # Stub Node workspace manifests so build_managed_bundle can copy them into the release tree.
+    pkg_json = json.dumps({"name": "hermes-agent", "version": version, "private": True}, indent=2)
+    lock_json = json.dumps({"name": "hermes-agent", "lockfileVersion": 3, "packages": {}}, indent=2)
+    (repo / "package.json").write_text(pkg_json + "\n", encoding="utf-8")
+    (repo / "package-lock.json").write_text(lock_json + "\n", encoding="utf-8")
     _git(repo, "init")
     _git(repo, "config", "user.email", "builder@example.com")
     _git(repo, "config", "user.name", "builder")
@@ -406,6 +415,11 @@ def test_release_v2_self_contained(tmp_path: Path):
     assert "node/node.exe" in names
     assert "scripts/HostOperations.ps1" in names
     assert "runtime/runtime-build.json" in names
+    assert "python/Lib/site-packages/smc_windows_vt.py" in names
+    assert "python/Lib/site-packages/zz_smc_windows_vt.pth" in names
+    # v2.1: node workspace must be under node/hermes-agent/, not node/node_modules/
+    assert "node/hermes-agent/package.json" in names
+    assert not any(n.startswith("node/node_modules/") for n in names)
     assert archive.is_file()
 
 
@@ -440,3 +454,41 @@ def test_windows_runtime_builder(tmp_path: Path):
     assert_pe_amd64(tree / "python" / "python.exe")
     assert_pe_amd64(tree / "node" / "node.exe")
     assert (tree / "scripts" / "SmcHermesManaged.psm1").is_file()
+    # v2.1: hermes-agent workspace must be at node/hermes-agent/
+    assert (tree / "node" / "hermes-agent").is_dir()
+    # node/node_modules must not exist at the top level (workspace is under hermes-agent/)
+    assert not (tree / "node" / "node_modules").exists()
+    site = tree / "python" / "Lib" / "site-packages"
+    hook = (site / "smc_windows_vt.py").read_text(encoding="utf-8")
+    pth = (site / "zz_smc_windows_vt.pth").read_text(encoding="ascii")
+    assert "ENABLE_VIRTUAL_TERMINAL_PROCESSING" in hook
+    assert "just_fix_windows_console" in hook
+    assert pth.strip() == "import smc_windows_vt"
+    assert not (tree / "python" / "sitecustomize.py").exists()
+
+
+def test_windows_console_hook_uses_pth_not_sitecustomize(tmp_path: Path):
+    site = tmp_path / "site-packages"
+    _install_windows_console_hook(site)
+    assert (site / "smc_windows_vt.py").is_file()
+    assert (site / "zz_smc_windows_vt.pth").read_text(encoding="ascii") == "import smc_windows_vt\n"
+    assert not (tmp_path / "sitecustomize.py").exists()
+
+
+def test_windows_vt_hook_is_noop_off_windows(monkeypatch: pytest.MonkeyPatch):
+    from tools.release.hermes import smc_windows_vt
+
+    monkeypatch.setattr(smc_windows_vt.sys, "platform", "linux")
+    smc_windows_vt.enable_windows_vt()
+
+
+def test_windows_vt_hook_loads_as_site_module(tmp_path: Path):
+    import importlib.util
+
+    site = tmp_path / "site-packages"
+    _install_windows_console_hook(site)
+    spec = importlib.util.spec_from_file_location("smc_windows_vt", site / "smc_windows_vt.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert callable(module.enable_windows_vt)
