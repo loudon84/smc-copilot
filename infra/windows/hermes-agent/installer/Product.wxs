@@ -71,7 +71,7 @@
     <InstallExecuteSequence>
       <Custom Action="SmcHermesInstall" After="InstallFiles" Condition="NOT Installed AND NOT REMOVE" />
       <Custom Action="SmcHermesRepair" After="InstallFiles" Condition="REINSTALL" />
-      <Custom Action="SmcHermesUninstall" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="SmcHermesUninstall" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT SMC_SKIP_HERMES_CLEANUP" />
     </InstallExecuteSequence>
   </Package>
 </Wix>
