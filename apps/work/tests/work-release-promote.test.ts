@@ -18,7 +18,8 @@ describe("work release promotion pipeline", () => {
     expect(PROMOTE).toContain("assert_work_release_dir");
     expect(ASSERT).toContain("smc-copilot-${VERSION}-setup.exe");
     expect(ASSERT).toContain("https://release.superic.com/work/stable/");
-    expect(ASSERT).toContain('"signed"[[:space:]]*:[[:space:]]*true');
+    expect(ASSERT).toContain("LATEST_SHA512_MISMATCH");
+    expect(ASSERT).toContain("openssl dgst -sha512");
     expect(PROMOTE).toContain('if [ -e "${TARGET_DIR}" ]; then');
     expect(PROMOTE).toContain("RELEASE_ALREADY_EXISTS");
     expect(PROMOTE).toContain('mv "${STAGING_DIR}" "${TARGET_DIR}"');
@@ -46,5 +47,21 @@ describe("work release promotion pipeline", () => {
     expect(PUBLISH).toContain("https://release.superic.com/work/stable/");
     expect(PUBLISH).toContain("scp ");
     expect(PUBLISH).not.toContain("electron-builder");
+  });
+
+  it("uses independent Work CI and a manual promote release workflow", () => {
+    const workCi = readFileSync(join(REPO_ROOT, ".github", "workflows", "work-ci.yml"), "utf8");
+    const workRelease = readFileSync(
+      join(REPO_ROOT, ".github", "workflows", "work-release.yml"),
+      "utf8",
+    );
+    expect(workCi).toContain("apps/work/**");
+    expect(workCi).toContain("infra/release-server/**");
+    expect(workCi).toContain("npm run guard");
+    expect(workRelease).toContain("work-v*");
+    expect(workRelease).toContain("environment: work-stable");
+    expect(workRelease).toContain("release:build:win");
+    expect(workRelease).toContain("release:publish");
+    expect(workRelease).toContain("inputs.promote");
   });
 });

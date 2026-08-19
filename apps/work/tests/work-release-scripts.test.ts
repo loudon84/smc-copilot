@@ -7,9 +7,11 @@ import {
   PRODUCTION_UPDATE_URL,
   assertPackagedAppUpdateYml,
   assertReleaseArtifacts,
+  assertReleaseDirectoryAbsent,
   buildReleaseManifest,
   getBlockmapName,
   getInstallerName,
+  sha512FileBase64,
   validateUpdateUrl,
   verifySha256Sums,
   writeSha256Sums,
@@ -25,9 +27,10 @@ function setupReleaseDir(version = "0.7.5") {
   const blockmap = getBlockmapName(version);
   writeFileSync(join(releaseDir, installer), "fake-exe");
   writeFileSync(join(releaseDir, blockmap), "fake-blockmap");
+  const sha512 = sha512FileBase64(join(releaseDir, installer));
   writeFileSync(
     join(releaseDir, "latest.yml"),
-    `version: ${version}\npath: ${installer}\nsha512: fake\nreleaseDate: '2026-08-18T00:00:00.000Z'\n`,
+    `version: ${version}\npath: ${installer}\nsha512: ${sha512}\nreleaseDate: '2026-08-18T00:00:00.000Z'\n`,
   );
   return { releaseDir, installer, blockmap };
 }
@@ -110,8 +113,24 @@ describe("work release guard helpers", () => {
       arch: "x64",
       updateChannel: "stable",
       signed: true,
+      publisher: "",
       updateUrl: PRODUCTION_UPDATE_URL,
     });
+  });
+
+  // @lat: [[desktop-updates#Release integrity]]
+  it("rejects a latest.yml sha512 that does not match the installer", () => {
+    const { releaseDir, installer } = setupReleaseDir();
+    writeFileSync(
+      join(releaseDir, "latest.yml"),
+      `version: 0.7.5\npath: ${installer}\nsha512: not-the-real-hash\n`,
+    );
+    expect(() => assertReleaseArtifacts(releaseDir, "0.7.5")).toThrow(/sha512 mismatch/);
+  });
+
+  it("refuses to overwrite an existing immutable release directory", () => {
+    const { releaseDir } = setupReleaseDir();
+    expect(() => assertReleaseDirectoryAbsent(releaseDir)).toThrow(/already exists/);
   });
 
   it("rejects a packaged app-update.yml that does not carry the production feed", () => {

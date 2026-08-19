@@ -109,11 +109,37 @@ export function readLatestYml(releaseDir) {
     content,
     version: map.get("version") ?? "",
     path: map.get("path") ?? "",
+    sha512: map.get("sha512") ?? "",
   };
 }
 
 export function sha256File(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+export function sha512FileBase64(path) {
+  return createHash("sha512").update(readFileSync(path)).digest("base64");
+}
+
+export function assertReleaseDirectoryAbsent(releaseDir) {
+  if (existsSync(releaseDir)) {
+    throw new Error(`Release directory already exists (immutable): ${releaseDir}`);
+  }
+}
+
+export function assertLatestYmlSha512(releaseDir, version) {
+  const installer = getInstallerName(version);
+  const installerPath = join(releaseDir, installer);
+  const latest = readLatestYml(releaseDir);
+  if (!latest.sha512) {
+    throw new Error("latest.yml missing sha512");
+  }
+  const actual = sha512FileBase64(installerPath);
+  if (latest.sha512 !== actual) {
+    throw new Error(
+      `latest.yml sha512 mismatch: expected ${actual}, got ${latest.sha512}`,
+    );
+  }
 }
 
 export function writeSha256Sums(releaseDir, fileNames) {
@@ -163,6 +189,7 @@ export function assertReleaseArtifacts(releaseDir, version) {
   if (basename(latest.path) !== installer) {
     throw new Error(`latest.yml path mismatch: expected ${installer}, got ${latest.path || "<empty>"}`);
   }
+  assertLatestYmlSha512(releaseDir, version);
 }
 
 export function buildReleaseManifest({
@@ -172,6 +199,7 @@ export function buildReleaseManifest({
   installer,
   sha256,
   signed,
+  publisher = "",
   createdAt = new Date().toISOString(),
 }) {
   return {
@@ -185,6 +213,7 @@ export function buildReleaseManifest({
     installer,
     sha256,
     signed,
+    publisher,
     createdAt,
   };
 }
@@ -214,6 +243,24 @@ function main() {
     }
     assertReleaseArtifacts(releaseDir, version);
     verifySha256Sums(releaseDir);
+    return;
+  }
+
+  if (command === "validate-sha512") {
+    const [releaseDir, version] = args;
+    if (!releaseDir || !version) {
+      throw new Error("Usage: validate-sha512 <releaseDir> <version>");
+    }
+    assertLatestYmlSha512(releaseDir, version);
+    return;
+  }
+
+  if (command === "assert-immutable") {
+    const [releaseDir] = args;
+    if (!releaseDir) {
+      throw new Error("Usage: assert-immutable <releaseDir>");
+    }
+    assertReleaseDirectoryAbsent(releaseDir);
     return;
   }
 

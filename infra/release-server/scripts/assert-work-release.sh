@@ -44,6 +44,17 @@ assert_work_release_dir() {
     return 1
   fi
 
+  LATEST_SHA512="$(sed -n 's/^sha512:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"' ")"
+  if [ -z "${LATEST_SHA512}" ]; then
+    echo "RELEASE_GATE_FAILED: LATEST_SHA512_MISSING" >&2
+    return 1
+  fi
+  ACTUAL_SHA512="$(openssl dgst -sha512 -binary "${DIR}/${INSTALLER}" | openssl base64 -A)"
+  if [ "${LATEST_SHA512}" != "${ACTUAL_SHA512}" ]; then
+    echo "RELEASE_GATE_FAILED: LATEST_SHA512_MISMATCH" >&2
+    return 1
+  fi
+
   if ! grep -q "\"version\"[[:space:]]*:[[:space:]]*\"${VERSION}\"" "${DIR}/release-manifest.json"; then
     echo "RELEASE_GATE_FAILED: MANIFEST_VERSION_MISMATCH" >&2
     return 1

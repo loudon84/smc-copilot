@@ -144,9 +144,16 @@ try {
 
   $signed = Assert-Authenticode -Path $installerPath
 
-  if (Test-Path -LiteralPath $releaseDir) {
-    Remove-Item -LiteralPath $releaseDir -Recurse -Force
+  Invoke-Step "Verify latest.yml sha512 against signed installer" {
+    node $guardScript validate-sha512 $distDir $version
+    if ($LASTEXITCODE -ne 0) { throw "latest.yml sha512 does not match the signed installer" }
   }
+
+  Invoke-Step "Refuse overwrite of an existing version directory" {
+    node $guardScript assert-immutable $releaseDir
+    if ($LASTEXITCODE -ne 0) { throw "Release directory already exists (immutable)" }
+  }
+
   New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
   Copy-Item -LiteralPath $installerPath -Destination (Join-Path $releaseDir $installerName)
@@ -177,6 +184,7 @@ try {
     installer     = $installerName
     sha256        = $hash
     signed        = [bool]$signed
+    publisher     = [string]($env:SMC_WORK_EXPECTED_PUBLISHER)
     createdAt     = [DateTime]::UtcNow.ToString("o")
   }
   $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $releaseDir "release-manifest.json")

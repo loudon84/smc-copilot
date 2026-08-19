@@ -42,9 +42,12 @@ describe("work v2.2 release server infrastructure", () => {
     expect(README).toContain("./scripts/gen-dev-certs.sh");
     expect(README).toContain("not acceptable for production");
     expect(existsSync(join(RELEASE_SERVER_ROOT, "scripts", "gen-dev-certs.sh"))).toBe(true);
-    expect(existsSync(join(RELEASE_SERVER_ROOT, "certs", ".gitignore"))).toBe(true);
-    expect(readFileSync(join(RELEASE_SERVER_ROOT, "certs", ".gitignore"), "utf8")).toContain(
-      "!.gitignore",
+    expect(existsSync(join(RELEASE_SERVER_ROOT, "scripts", "production-smoke.sh"))).toBe(true);
+    expect(readFileSync(join(RELEASE_SERVER_ROOT, "scripts", "production-smoke.sh"), "utf8")).toContain(
+      "sha512",
+    );
+    expect(readFileSync(join(RELEASE_SERVER_ROOT, "scripts", "healthcheck.sh"), "utf8")).toContain(
+      "production-smoke.sh",
     );
   });
 });

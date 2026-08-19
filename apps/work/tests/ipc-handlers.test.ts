@@ -103,11 +103,6 @@ function extractPreloadInvokeChannels(src: string): string[] {
 
 const mainChannels = extractIpcHandleChannels(indexSrc);
 const preloadChannels = extractPreloadInvokeChannels(preloadSrc);
-const compatOnlyMainChannels = new Set([
-  "check-for-updates",
-  "download-update",
-  "install-update",
-]);
 
 describe("IPC Handler �?Preload Consistency", () => {
   it("main process registers IPC handlers", () => {
@@ -124,9 +119,7 @@ describe("IPC Handler �?Preload Consistency", () => {
   });
 
   it("every main handler has a matching preload invoke", () => {
-    const missing = mainChannels.filter(
-      (ch) => !preloadChannels.includes(ch) && !compatOnlyMainChannels.has(ch),
-    );
+    const missing = mainChannels.filter((ch) => !preloadChannels.includes(ch));
     expect(missing).toEqual([]);
   });
 });

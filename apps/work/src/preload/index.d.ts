@@ -979,19 +979,9 @@ interface HermesAPI {
   downloadUpdate: () => Promise<AppUpdateState>;
   installUpdate: () => Promise<AppUpdateState>;
   getAppVersion: () => Promise<string>;
-  getAutoUpgradeEnabled: () => Promise<boolean>;
-  setAutoUpgradeEnabled: (enabled: boolean) => Promise<boolean>;
   onUpdateStateChanged: (
     callback: (state: AppUpdateState) => void,
   ) => () => void;
-  onUpdateAvailable: (
-    callback: (info: { version: string; releaseNotes: string }) => void,
-  ) => () => void;
-  onUpdateDownloadProgress: (
-    callback: (info: { percent: number }) => void,
-  ) => () => void;
-  onUpdateDownloaded: (callback: () => void) => () => void;
-  onUpdateError: (callback: (message: string) => void) => () => void;
 
   // Menu events
   onMenuNewChat: (callback: () => void) => () => void;

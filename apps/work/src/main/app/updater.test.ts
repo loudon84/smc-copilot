@@ -163,4 +163,24 @@ describe("setupUpdater", () => {
     expect(installing).toMatchObject({ status: "installing" });
     expect(mockUpdater.quitAndInstall).toHaveBeenCalledWith(false, true);
   });
+
+  it("maps metadata parse failures to UPDATE_METADATA_INVALID", async () => {
+    mockUpdater.checkForUpdates.mockImplementationOnce(async () => {
+      throw new Error("Cannot parse latest.yml");
+    });
+    const { setupUpdater } = await import("./updater");
+    setupUpdater({
+      getMainWindow: () => ({ webContents: { send } }) as never,
+      loadAutoUpdater: () => mockUpdater as never,
+    });
+
+    const check = handlers.get("app-update:check");
+    const state = await check?.();
+    expect(state).toMatchObject({
+      status: "error",
+      error: { code: "UPDATE_METADATA_INVALID", operation: "check" },
+    });
+    expect(handlers.has("check-for-updates")).toBe(false);
+    expect(handlers.has("get-auto-upgrade-enabled")).toBe(false);
+  });
 });

@@ -55,6 +55,8 @@ Validate the deployed server with:
 nginx -t
 ./scripts/healthcheck.sh https://release.superic.com
 ./scripts/healthcheck.sh https://release.superic.com /work/stable/smc-copilot-<version>-setup.exe
+SMC_WORK_SMOKE=1 ./scripts/healthcheck.sh https://release.superic.com
+./scripts/production-smoke.sh https://release.superic.com
 ```
 
 The server must:
@@ -64,3 +66,6 @@ The server must:
 - disable directory listing
 - serve `latest.yml` with `Cache-Control: no-cache, no-store, must-revalidate`
 - serve `.exe` and `.blockmap` with `Cache-Control: public, max-age=31536000, immutable`
+- answer Range requests for the installer (`206` or `200`)
+
+`production-smoke.sh` is the production gate for DNS, TLS, `latest.yml` fields including `sha512`, installer HEAD, Cache-Control, and Range. Windows live upgrade (`0.7.4 → 0.7.5`) remains a human Gate.

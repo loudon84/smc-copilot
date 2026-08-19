@@ -1374,10 +1374,6 @@ const hermesAPI = {
     return state;
   },
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("get-app-version"),
-  getAutoUpgradeEnabled: (): Promise<boolean> =>
-    ipcRenderer.invoke("get-auto-upgrade-enabled"),
-  setAutoUpgradeEnabled: (enabled: boolean): Promise<boolean> =>
-    ipcRenderer.invoke("set-auto-upgrade-enabled", enabled),
   onUpdateStateChanged: (
     callback: (state: AppUpdateState) => void,
   ): (() => void) => {
@@ -1390,39 +1386,6 @@ const hermesAPI = {
     ipcRenderer.on(APP_UPDATE_CHANNELS.stateChanged, handler);
     return () =>
       ipcRenderer.removeListener(APP_UPDATE_CHANNELS.stateChanged, handler);
-  },
-
-  onUpdateAvailable: (
-    callback: (info: { version: string; releaseNotes: string }) => void,
-  ): (() => void) => {
-    return hermesAPI.onUpdateStateChanged((state) => {
-      if (state.status !== "available" || !state.availableVersion) return;
-      callback({
-        version: state.availableVersion,
-        releaseNotes: state.releaseNotes ?? "",
-      });
-    });
-  },
-
-  onUpdateDownloadProgress: (
-    callback: (info: { percent: number }) => void,
-  ): (() => void) => {
-    return hermesAPI.onUpdateStateChanged((state) => {
-      if (state.status !== "downloading") return;
-      callback({ percent: state.percent ?? 0 });
-    });
-  },
-
-  onUpdateDownloaded: (callback: () => void): (() => void) => {
-    return hermesAPI.onUpdateStateChanged((state) => {
-      if (state.status === "ready") callback();
-    });
-  },
-
-  onUpdateError: (callback: (message: string) => void): (() => void) => {
-    return hermesAPI.onUpdateStateChanged((state) => {
-      if (state.status === "error" && state.error) callback(state.error.message);
-    });
   },
 
   // Menu events (from native menu bar)

@@ -9,3 +9,8 @@ curl --fail --silent --show-error --head "${BASE_URL}/healthz" >/dev/null
 if [ -n "${INSTALLER_PATH}" ]; then
   curl --fail --silent --show-error --head "${BASE_URL}${INSTALLER_PATH}" >/dev/null
 fi
+
+if [ "${SMC_WORK_SMOKE:-}" = "1" ]; then
+  SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+  "${SCRIPT_DIR}/production-smoke.sh" "${BASE_URL}"
+fi

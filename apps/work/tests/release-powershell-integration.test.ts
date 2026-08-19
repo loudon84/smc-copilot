@@ -10,6 +10,7 @@ import {
   getBlockmapName,
   getInstallerName,
   sha256File,
+  sha512FileBase64,
   writeSha256Sums,
 } from "../scripts/lib/work-release-guard.mjs";
 
@@ -17,7 +18,7 @@ const ROOT = join(__dirname, "..");
 const VALIDATE_SCRIPT = join(ROOT, "scripts", "validate-work-release.ps1");
 const PUBLISH_SCRIPT = join(ROOT, "scripts", "publish-work-release.ps1");
 const isWindows = process.platform === "win32";
-const PACKAGE_VERSION = "0.7.4";
+const PACKAGE_VERSION = "0.7.5";
 
 let testDir = "";
 
@@ -50,9 +51,10 @@ function writeReleaseFixture(
   const installerPath = join(releaseDir, installer);
   writeFileSync(installerPath, "fake-exe");
   writeFileSync(join(releaseDir, blockmap), "fake-blockmap");
+  const sha512 = sha512FileBase64(installerPath);
   writeFileSync(
     join(releaseDir, "latest.yml"),
-    `version: ${version}\npath: ${installer}\nsha512: fake\n`,
+    `version: ${version}\npath: ${installer}\nsha512: ${sha512}\n`,
   );
   writeSha256Sums(releaseDir, [installer, blockmap, "latest.yml"]);
   const manifest = buildReleaseManifest({

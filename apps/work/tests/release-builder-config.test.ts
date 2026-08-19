@@ -61,6 +61,13 @@ describe("work v2.2 builder configuration", () => {
     expect(installerNsh).toContain("$PROGRAMFILES\\SMC\\Copilot");
     expect(installerNsh).toContain('FileExists} "D:\\"');
     expect(installerNsh).toContain("InstallLocation");
+    expect(installerNsh).toContain("SetRegView 64");
+    expect(installerNsh).toContain("SetRegView 32");
+    expect(installerNsh).toContain("com.nousresearch.hermes");
+    expect(installerNsh).toContain("!macro customInstall");
+    expect(installerNsh.indexOf("SetRegView 64")).toBeLessThan(installerNsh.indexOf("SetRegView 32"));
+    expect(installerNsh).toContain("SMC_TryCurrentInstallLocation HKLM");
+    expect(installerNsh).toContain("SMC_TryCurrentInstallLocation HKCU");
   });
 
   it("adds explicit release script entrypoints", () => {
@@ -85,6 +92,10 @@ describe("work v2.2 builder configuration", () => {
     expect(buildScript).toContain("ReleaseNotesPath");
     expect(buildScript).toContain("Add-ReleaseNotesToLatestYml");
     expect(buildScript).toContain("validate-app-update-yml");
+    expect(buildScript).toContain("validate-sha512");
+    expect(buildScript).toContain("assert-immutable");
+    expect(buildScript).toContain("publisher");
+    expect(buildScript).not.toContain("Remove-Item -LiteralPath $releaseDir");
     expect(existsSync(join(ROOT, "release-notes", `${PACKAGE_JSON.version}.md`))).toBe(
       true,
     );

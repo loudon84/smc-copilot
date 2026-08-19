@@ -1,14 +1,8 @@
 import { app, ipcMain, type BrowserWindow } from "electron";
 import type { AppUpdater, ProgressInfo, UpdateInfo } from "electron-updater";
 import { updaterLogger } from "../updater-log";
-import {
-  APP_UPDATE_CHANNELS,
-  type AppUpdateError,
-  type AppUpdateErrorCode,
-  type AppUpdateOperation,
-  type AppUpdateSource,
-  type AppUpdateState,
-} from "../../shared/app-update";
+import { APP_UPDATE_CHANNELS, type AppUpdateSource, type AppUpdateState } from "../../shared/app-update";
+import { normalizeUpdaterError } from "./update-error";
 
 interface UpdaterDeps {
   getMainWindow: () => BrowserWindow | null;
@@ -88,23 +82,6 @@ function clampPercent(value: unknown): number | null {
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
-function structuredError(
-  code: AppUpdateErrorCode,
-  operation: AppUpdateOperation,
-  source: AppUpdateSource,
-  message: string,
-  retryable = true,
-): AppUpdateError {
-  return {
-    code,
-    operation,
-    source,
-    message,
-    retryable,
-    at: isoNow(),
-  };
-}
-
 function logUpdaterEvent(
   event: string,
   extra: Record<string, unknown> = {},
@@ -121,27 +98,6 @@ function logUpdaterEvent(
   });
 }
 
-function emitLegacyEvents(win: BrowserWindow | null, prev: AppUpdateState, next: AppUpdateState): void {
-  if (!win) return;
-  if (next.status === "available" && prev.availableVersion !== next.availableVersion) {
-    win.webContents.send("update-available", {
-      version: next.availableVersion,
-      releaseNotes: next.releaseNotes ?? "",
-    });
-  }
-  if (next.status === "downloading") {
-    win.webContents.send("update-download-progress", {
-      percent: next.percent ?? 0,
-    });
-  }
-  if (next.status === "ready" && prev.status !== "ready") {
-    win.webContents.send("update-downloaded");
-  }
-  if (next.status === "error" && next.error && prev.error?.at !== next.error.at) {
-    win.webContents.send("update-error", next.error.message);
-  }
-}
-
 function updateState(
   patch: UpdateStatePatch,
   getMainWindow: () => BrowserWindow | null,
@@ -156,7 +112,6 @@ function updateState(
   appUpdateState = next;
   const mainWindow = getMainWindow();
   mainWindow?.webContents.send(APP_UPDATE_CHANNELS.stateChanged, next);
-  emitLegacyEvents(mainWindow, previous, next);
   return next;
 }
 
@@ -228,7 +183,7 @@ async function performCheck(
         return updateState(
           {
             status: "error",
-            error: structuredError("CHECK_FAILED", "check", source, message, true),
+            error: normalizeUpdaterError(error, "check", source),
           },
           getMainWindow,
         );
@@ -284,13 +239,7 @@ async function performDownload(
       return updateState(
         {
           status: "error",
-          error: structuredError(
-            "DOWNLOAD_FAILED",
-            "download",
-            "manual",
-            message,
-            true,
-          ),
+          error: normalizeUpdaterError(error, "download", "manual"),
         },
         getMainWindow,
       );
@@ -343,30 +292,6 @@ export function setupUpdater({
     autoUpdaterInstance.quitAndInstall(false, true);
     return next;
   });
-
-  ipcMain.handle("check-for-updates", async () => {
-    const state = autoUpdaterInstance
-      ? await performCheck(autoUpdaterInstance, getMainWindow, "manual")
-      : appUpdateState;
-    return state.availableVersion;
-  });
-  ipcMain.handle("download-update", async () => {
-    const before = appUpdateState.revision;
-    const state = autoUpdaterInstance
-      ? await performDownload(autoUpdaterInstance, getMainWindow)
-      : appUpdateState;
-    return state.status !== "error" || state.revision === before;
-  });
-  ipcMain.handle("install-update", async () => {
-    if (!autoUpdaterInstance || appUpdateState.status !== "ready") return;
-    installRequested = true;
-    updateState({ status: "installing", error: null }, getMainWindow);
-    logUpdaterEvent("install.started", { source: "manual", legacy: true });
-    autoUpdaterInstance.quitAndInstall(false, true);
-  });
-
-  ipcMain.handle("get-auto-upgrade-enabled", () => false);
-  ipcMain.handle("set-auto-upgrade-enabled", () => false);
 
   if (!supportsRealUpdater()) {
     autoUpdaterInstance = null;
@@ -452,16 +377,11 @@ export function setupUpdater({
     const message = error?.message || "Unknown updater error";
     logUpdaterEvent("event.error", { message });
     if (appUpdateState.status === "downloading" || installRequested) {
+      const operation = installRequested ? "install" : "download";
       updateState(
         {
           status: "error",
-          error: structuredError(
-            installRequested ? "INSTALL_FAILED" : "DOWNLOAD_FAILED",
-            installRequested ? "install" : "download",
-            "manual",
-            message,
-            true,
-          ),
+          error: normalizeUpdaterError(error, operation, "manual"),
         },
         getMainWindow,
       );

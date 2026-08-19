@@ -86,4 +86,15 @@ if ($manifest.sha256 -ne $actualSha) {
   throw "release-manifest.json sha256 mismatch"
 }
 
+if ($env:SMC_WORK_RELEASE_ALLOW_UNSIGNED -ne "1") {
+  $publisher = [string]$manifest.publisher
+  if (-not $publisher) {
+    throw "release-manifest.json missing publisher"
+  }
+  $expectedPublisher = $env:SMC_WORK_EXPECTED_PUBLISHER
+  if ($expectedPublisher -and $publisher -notmatch $expectedPublisher) {
+    throw "release-manifest.json publisher mismatch"
+  }
+}
+
 Write-Host "Release validation passed for $ReleaseDir"
