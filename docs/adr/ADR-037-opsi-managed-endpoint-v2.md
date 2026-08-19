@@ -1,8 +1,15 @@
 # ADR-037: OPSI Managed Endpoint v2 (machine Hermes instance)
 
+
 ## Status
 
-Proposed. Architecture Owner must accept this ADR before Phase 2 production filesystem, ACL, environment, or `control-owner.json` changes are treated as authorized. Cursor/CI must not write `Accepted`, `proven`, or `GO`.
+Accepted
+
+- Reviewer: xxx
+- Accepted At: 2026-08-19
+- Decision: Approved for OPSI Managed Endpoint v2 implementation
+
+Accepted. Architecture Owner must accept this ADR before Phase 2 production filesystem, ACL, environment, or `control-owner.json` changes are treated as authorized. Cursor/CI must not write `Accepted`, `proven`, or `GO`.
 
 ## Context
 

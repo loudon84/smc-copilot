@@ -30,6 +30,7 @@ from tools.release.client.release_inventory import (  # noqa: E402
 from tools.release.client.release_manifest import build_client_release_manifest  # noqa: E402
 from tools.release.client.verify_client_release import verify_client_release, verify_hermes_installer_release  # noqa: E402
 from tools.release.hermes.build_runtime import build_managed_bundle  # noqa: E402
+from tools.release.hermes.release_version import resolve_from_source, smc_revision_from_config  # noqa: E402
 from tools.release.hermes.source_metadata import freeze_source  # noqa: E402
 
 STAGES = (
@@ -250,6 +251,7 @@ def run_hermes(
         wheelhouse_downloader=wheelhouse_downloader,
         release_version=release_version,
         signing_key_ref=signing_key_ref,
+        smc_revision=smc_revision_from_config(config),
     )
     return archive
 
@@ -380,10 +382,7 @@ def build_hermes_installer_release(
     dest = stage_root(output, str(config["release"]["version"]), build_id)
     frozen = run_preflight(config, allow_dirty=allow_dirty, hermes_repo=hermes_repo)
     work = run_work(config, dest, work_dist=work_dist)
-    hermes_version = "" if config["hermes"]["version"] == "auto" else str(config["hermes"]["version"])
-    release_version = str((config.get("hermesInstaller") or {}).get("releaseVersion") or "")
-    if not release_version:
-        release_version = f"{frozen['hermes']['version']}-smc.1"
+    release_version = resolve_from_source(str(frozen["hermes"]["version"]), config)
     if signing_key_ref is None or not signing_key_ref.is_file():
         raise SystemExit("Release FAILED: --signing-key-ref required")
     built_zip = run_hermes(
@@ -588,6 +587,7 @@ def main() -> int:
             wheelhouse=args.wheelhouse,
             node_root=args.node_root,
             hermes_zip=args.hermes_zip,
+            signing_key_ref=args.signing_key_ref,
         )
         copy_runtime_artifacts(archive, dest)
         print(archive)
@@ -595,6 +595,8 @@ def main() -> int:
     if args.stage == "hermes-installer":
         if args.signing_key_ref is None:
             raise SystemExit("Release FAILED: --signing-key-ref required")
+        frozen = run_preflight(config, allow_dirty=args.allow_dirty, hermes_repo=args.hermes_repo)
+        release_version = resolve_from_source(str(frozen["hermes"]["version"]), config)
         archive = run_hermes(
             config,
             dest,
@@ -604,11 +606,10 @@ def main() -> int:
             wheelhouse=args.wheelhouse,
             node_root=args.node_root,
             hermes_zip=args.hermes_zip,
-            release_version=str((config.get("hermesInstaller") or {}).get("releaseVersion") or f"{run_preflight(config, allow_dirty=args.allow_dirty, hermes_repo=args.hermes_repo)['hermes']['version']}-smc.1"),
+            release_version=release_version,
             signing_key_ref=args.signing_key_ref,
         )
         copy_release_v2_artifacts(dest / "hermes-build", dest)
-        release_version = str((config.get("hermesInstaller") or {}).get("releaseVersion") or "0.22.0-smc.1")
         installer = run_hermes_installer(
             dest,
             release_version=release_version,

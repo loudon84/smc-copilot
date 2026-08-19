@@ -87,13 +87,18 @@ $exeName = "smc-hermes-agent_${ReleaseVersion}_windows-amd64.exe"
 $bundlePath = Join-Path $dist $exeName
 $balExt = "WixToolset.BootstrapperApplications.wixext"
 
-& $wix --version | Out-Null
-$extList = & $wix extension list 2>&1 | Out-String
+$wixVerText = (& $wix --version 2>&1 | Out-String).Trim()
+$acceptEulaArgs = @()
+if ($wixVerText -match '(?m)^7\.') {
+    # WiX v7+ OSMF: build scripts must pass -acceptEula (https://wixtoolset.org/osmf/)
+    $acceptEulaArgs = @("-acceptEula", "wix7")
+}
+$extList = & $wix extension list @acceptEulaArgs 2>&1 | Out-String
 if ($extList -notmatch [regex]::Escape($balExt)) {
-    & $wix extension add $balExt | Out-Null
+    & $wix extension add @acceptEulaArgs $balExt | Out-Null
 }
 
-$productBuild = & $wix build `
+$productBuild = & $wix build @acceptEulaArgs `
     (Join-Path $installerDir "Product.wxs") `
     -arch x64 `
     -d "ProductVersion=$wixVersion" `
@@ -101,7 +106,7 @@ $productBuild = & $wix build `
     -o $msiPath 2>&1
 if ($LASTEXITCODE -ne 0) { throw "WiX MSI build failed: $($productBuild | Out-String)" }
 
-$bundleBuild = & $wix build `
+$bundleBuild = & $wix build @acceptEulaArgs `
     (Join-Path $installerDir "Bundle.wxs") `
     -arch x64 `
     -ext $balExt `

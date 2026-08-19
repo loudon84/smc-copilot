@@ -30,9 +30,11 @@ from tools.release.hermes.build_wheelhouse import (  # noqa: E402
     write_requirements_lock,
 )
 from tools.release.hermes.runtime_profile import load_profiles, resolve_profile  # noqa: E402
+from tools.release.hermes.release_version import resolve_release_version  # noqa: E402
 from tools.release.hermes.release_v2 import build_hermes_release_v2  # noqa: E402
 from tools.release.hermes.source_metadata import freeze_source  # noqa: E402
 from tools.release.hermes.verify_runtime import scan_forbidden, verify_bundle_tree  # noqa: E402
+from tools.release.hermes.windows_runtime import build_windows_runtime  # noqa: E402
 
 DEFAULT_PROFILE = ROOT / "release" / "hermes-runtime-profiles.yaml"
 DEFAULT_REQUIRES = {"python": ">=3.12,<3.13", "node": ">=22,<23"}
@@ -179,6 +181,11 @@ def build_managed_bundle(
     wheelhouse_downloader=None,
     release_version: str = "",
     signing_key_ref: Path | None = None,
+    smc_revision: int = 1,
+    python_archive: Path | None = None,
+    node_archive: Path | None = None,
+    runtime_cache: Path | None = None,
+    runtime_downloader=None,
 ) -> Path:
     if mode not in {"online", "offline"}:
         raise ValueError(f"unsupported build mode: {mode}")
@@ -217,8 +224,19 @@ def build_managed_bundle(
     zip_bundle(tree, archive)
     (dest / f"{archive.name}.sha256").write_text(sha256_file(archive) + "\n", encoding="utf-8")
     shutil.copy2(tree / "runtime-build.json", dest / "runtime-build.json")
-    build_hermes_release_v2(
+    if not release_version:
+        release_version = resolve_release_version(str(source["version"]), smc_revision)
+    runtime_tree = build_windows_runtime(
         tree,
+        dest / "windows-runtime",
+        cache_dir=runtime_cache or (dest / "runtime-cache"),
+        python_archive=python_archive,
+        node_archive=node_archive,
+        mode=mode,
+        downloader=runtime_downloader,
+    )
+    build_hermes_release_v2(
+        runtime_tree,
         dest,
         source=source,
         release_version=release_version,

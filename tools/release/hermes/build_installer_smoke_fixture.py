@@ -18,6 +18,16 @@ from tools.release.hermes.release_v2 import (  # noqa: E402
     build_release_manifest,
     zip_release_tree,
 )
+from tools.release.hermes.windows_runtime import write_hermes_launcher  # noqa: E402
+
+
+def _pe_amd64() -> bytes:
+    data = bytearray(0x88)
+    data[0:2] = b"MZ"
+    data[0x3C:0x40] = (0x80).to_bytes(4, "little")
+    data[0x80:0x84] = b"PE\x00\x00"
+    data[0x84:0x86] = (0x8664).to_bytes(2, "little")
+    return bytes(data)
 
 
 def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
@@ -25,14 +35,29 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
     work = dest / "_work"
-    work.mkdir()
-    (work / "bundle").mkdir(parents=True)
-    (work / "bundle" / "runtime-build.json").write_text(
+    runtime = work / "runtime"
+    for rel in ("bin", "python", "node", "scripts", "runtime", "manifest", "uninstall"):
+        (runtime / rel).mkdir(parents=True, exist_ok=True)
+    pe = _pe_amd64()
+    try:
+        write_hermes_launcher(runtime / "bin" / "hermes.exe")
+    except ValueError:
+        (runtime / "bin" / "hermes.exe").write_bytes(pe)
+    (runtime / "python" / "python.exe").write_bytes(pe)
+    (runtime / "node" / "node.exe").write_bytes(pe)
+    scripts_src = ROOT / "infra" / "windows" / "hermes-agent" / "scripts"
+    for name in ("HostOperations.ps1", "HostOperations.psm1", "SmcHermesManaged.psm1"):
+        shutil.copy2(scripts_src / name, runtime / "scripts" / name)
+    (runtime / "runtime" / "runtime-build.json").write_text(
         json.dumps({"schema": "smc.hermes.runtime-build.v1", "liveEligible": False}) + "\n",
         encoding="utf-8",
     )
+    (runtime / "runtime" / "windows-runtime.json").write_text(
+        json.dumps({"schema": "smc.hermes.windows-runtime.v1", "python": "3.12.8", "node": "22.11.0"}) + "\n",
+        encoding="utf-8",
+    )
     tree = assemble_self_contained_tree(
-        work / "bundle",
+        runtime,
         work / "tree",
         release_version=release_version,
         hermes_version="0.22.0",

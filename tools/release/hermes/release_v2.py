@@ -12,13 +12,21 @@ from pathlib import Path
 from typing import Any
 
 from tools.release.hermes.source_metadata import FORBIDDEN_VERSIONS, sha256_file
+from tools.release.hermes.windows_runtime import assert_pe_amd64
 
 RELEASE_V2_SCHEMA = "smc.hermes.release.v2"
 RELEASE_KEY_ID = "smc-hermes-release-ed25519-v1"
 SMOKE_KEY_ID = "TEST-ONLY-ed25519"
 RELEASE_VERSION_RE = re.compile(r"^(?P<hermes>\d+\.\d+\.\d+)-(?P<smc>smc\.\d+)$")
 FORBIDDEN_V2_NAMES = {".env", "config.yaml", "auth.json"}
-FORBIDDEN_V2_PARTS = {".git", ".github", ".venv", "node_modules", "tests"}
+FORBIDDEN_V2_PARTS = {".git", ".github", ".venv"}
+REQUIRED_RUNTIME_FILES = (
+    "bin/hermes.exe",
+    "python/python.exe",
+    "node/node.exe",
+    "scripts/HostOperations.ps1",
+    "scripts/SmcHermesManaged.psm1",
+)
 
 
 def parse_release_version(release_version: str, *, hermes_version: str = "") -> tuple[str, str, str]:
@@ -45,6 +53,15 @@ def scan_release_v2_tree(root: Path) -> None:
             raise ValueError(f"forbidden file in release v2 tree: {rel}")
 
 
+def assert_required_runtime(root: Path) -> None:
+    for rel in REQUIRED_RUNTIME_FILES:
+        path = root.joinpath(*rel.split("/"))
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"missing runtime file: {rel}")
+        if rel.endswith(".exe"):
+            assert_pe_amd64(path)
+
+
 def inventory_tree(root: Path) -> list[dict[str, Any]]:
     files: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -56,35 +73,19 @@ def inventory_tree(root: Path) -> list[dict[str, Any]]:
         seen.add(rel)
         data = path.read_bytes()
         if not data:
-            raise ValueError(f"empty file forbidden: {rel}")
+            continue
         files.append({"path": rel, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
     if not files:
         raise ValueError("release v2 tree is empty")
+    inventory_paths = {item["path"] for item in files}
+    for rel in REQUIRED_RUNTIME_FILES:
+        if rel not in inventory_paths:
+            raise ValueError(f"missing runtime file: {rel}")
     return files
 
 
-def _write_stub_exe(path: Path, *, version: str) -> None:
-    payload = f"@echo off\r\necho SMC Hermes {version}\r\n".encode("ascii")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
-
-
-def _write_embedded_runtime(dest: Path, *, kind: str, version: str) -> None:
-    root = dest / kind
-    embedded = root / "embedded"
-    embedded.mkdir(parents=True, exist_ok=True)
-    marker = {"schema": f"smc.hermes.{kind}.embedded.v1", "version": version, "platform": "windows", "architecture": "amd64"}
-    (embedded / f"{kind}.json").write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
-    if kind == "python":
-        _write_stub_exe(embedded / "python.exe", version=version)
-        (embedded / "python312._pth").write_text("import site\n", encoding="utf-8")
-    else:
-        _write_stub_exe(embedded / "node.exe", version=version)
-        (embedded / "npm.cmd").write_text("@echo off\r\n", encoding="utf-8")
-
-
 def assemble_self_contained_tree(
-    bundle_root: Path,
+    runtime_tree: Path,
     dest: Path,
     *,
     release_version: str,
@@ -92,17 +93,14 @@ def assemble_self_contained_tree(
     build_id: str,
 ) -> Path:
     release_version, upstream, smc_revision = parse_release_version(release_version, hermes_version=hermes_version)
-    if dest.exists():
-        shutil.rmtree(dest)
-    for name in ("bin", "runtime", "python", "node", "manifest", "uninstall"):
-        (dest / name).mkdir(parents=True, exist_ok=True)
-    _write_stub_exe(dest / "bin" / "hermes.exe", version=upstream)
-    runtime_dest = dest / "runtime" / "bundle"
-    if runtime_dest.exists():
-        shutil.rmtree(runtime_dest)
-    shutil.copytree(bundle_root, runtime_dest)
-    _write_embedded_runtime(dest, kind="python", version="3.12.8")
-    _write_embedded_runtime(dest, kind="node", version="22.11.0")
+    runtime_tree = runtime_tree.resolve()
+    dest = dest.resolve()
+    if runtime_tree != dest:
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(runtime_tree, dest)
+    (dest / "manifest").mkdir(parents=True, exist_ok=True)
+    (dest / "uninstall").mkdir(parents=True, exist_ok=True)
     metadata = {
         "schema": RELEASE_V2_SCHEMA,
         "releaseVersion": release_version,
@@ -111,7 +109,10 @@ def assemble_self_contained_tree(
         "buildId": build_id,
     }
     (dest / "manifest" / "release-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    (dest / "uninstall" / "README.txt").write_text("SMC Hermes uninstall metadata\n", encoding="utf-8")
+    uninstall = dest / "uninstall" / "README.txt"
+    if not uninstall.is_file() or uninstall.stat().st_size == 0:
+        uninstall.write_text("SMC Hermes uninstall metadata\n", encoding="utf-8")
+    assert_required_runtime(dest)
     scan_release_v2_tree(dest)
     return dest
 
@@ -120,9 +121,13 @@ def zip_release_tree(tree: Path, archive: Path) -> Path:
     archive.parent.mkdir(parents=True, exist_ok=True)
     if archive.exists():
         archive.unlink()
+    fixed_mtime = (2020, 1, 1, 0, 0, 0)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for path in sorted(p for p in tree.rglob("*") if p.is_file()):
-            zf.write(path, arcname=path.relative_to(tree).as_posix())
+            arcname = path.relative_to(tree).as_posix()
+            info = zipfile.ZipInfo(filename=arcname, date_time=fixed_mtime)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, path.read_bytes())
     return archive
 
 
@@ -144,6 +149,8 @@ def canonical_manifest_bytes(manifest: dict[str, Any]) -> bytes:
         payload["sourceRevision"] = manifest["sourceRevision"]
     if manifest.get("runtimeBuildSha256"):
         payload["runtimeBuildSha256"] = manifest["runtimeBuildSha256"]
+    if manifest.get("runtime"):
+        payload["runtime"] = manifest["runtime"]
     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
@@ -169,6 +176,18 @@ def verify_release_manifest(manifest: dict[str, Any], artifact_digest: str, sign
     public_key.verify(signature, signature_payload(manifest, artifact_digest))
 
 
+def _runtime_versions(tree: Path) -> dict[str, str]:
+    meta = tree / "runtime" / "windows-runtime.json"
+    if not meta.is_file():
+        return {}
+    data = json.loads(meta.read_text(encoding="utf-8"))
+    python = str(data.get("python") or "").strip()
+    node = str(data.get("node") or "").strip()
+    if not python or not node:
+        return {}
+    return {"python": python, "node": node}
+
+
 def build_release_manifest(
     *,
     tree: Path,
@@ -183,7 +202,7 @@ def build_release_manifest(
     _, upstream, smc_revision = parse_release_version(release_version, hermes_version=hermes_version)
     digest = sha256_file(archive)
     files = inventory_tree(tree)
-    return {
+    payload: dict[str, Any] = {
         "schema": RELEASE_V2_SCHEMA,
         "releaseVersion": release_version,
         "hermesVersion": upstream,
@@ -197,34 +216,39 @@ def build_release_manifest(
         "runtimeBuildSha256": runtime_build_sha256 or "",
         "files": files,
     }
+    runtime = _runtime_versions(tree)
+    if runtime:
+        payload["runtime"] = runtime
+    return payload
 
 
 def build_hermes_release_v2(
-    bundle_root: Path,
+    runtime_tree: Path,
     dest: Path,
     *,
     source: dict[str, Any],
-    release_version: str = "",
+    release_version: str,
     signing_key_ref: Path | None = None,
     build_id: str = "",
 ) -> dict[str, Path]:
     hermes_version = str(source["version"])
-    smc_revision = "smc.1"
-    release_version = release_version or f"{hermes_version}-{smc_revision}"
+    release_version, _, _ = parse_release_version(release_version, hermes_version=hermes_version)
     build_id = build_id or datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
     work = dest / "release-v2"
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)
     tree = assemble_self_contained_tree(
-        bundle_root,
+        runtime_tree,
         work / "tree",
         release_version=release_version,
         hermes_version=hermes_version,
         build_id=build_id,
     )
     archive = zip_release_tree(tree, work / "hermes-windows-amd64.zip")
-    runtime_build_path = bundle_root / "runtime-build.json"
+    runtime_build_path = tree / "runtime" / "runtime-build.json"
+    if not runtime_build_path.is_file():
+        runtime_build_path = runtime_tree / "runtime" / "runtime-build.json"
     runtime_build_sha256 = sha256_file(runtime_build_path) if runtime_build_path.is_file() else ""
     key_id = SMOKE_KEY_ID
     private_key = None
