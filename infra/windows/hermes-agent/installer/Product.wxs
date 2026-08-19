@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="SMC Hermes Agent"
+    Manufacturer="SMC"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="a1b2c3d4-e5f6-4789-a012-3456789abcde"
+    Scope="perMachine"
+    Compressed="yes">
+    <!-- Platform is x64 via `wix build -arch x64`; CustomActions launch Windows PowerShell 5.1 only. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SMC Hermes Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="SmcDataFolder" Name="SMC">
+        <Directory Id="INSTALLFOLDER" Name="HermesInstaller">
+          <Directory Id="PayloadFolder" Name="payload" />
+          <Directory Id="ScriptsFolder" Name="scripts" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <ComponentGroup Id="SmcHermesInstallerFiles">
+      <Component Id="BootstrapPs1" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="BootstrapPs1" Source="$(var.StagingDir)\bootstrap.ps1" KeyPath="yes" />
+      </Component>
+      <Component Id="InstallerCorePsm1" Directory="INSTALLFOLDER" Guid="*">
+        <File Id="InstallerCorePsm1" Source="$(var.StagingDir)\InstallerCore.psm1" KeyPath="yes" />
+      </Component>
+      <Component Id="PayloadArchive" Directory="PayloadFolder" Guid="*">
+        <File Id="PayloadArchive" Source="$(var.StagingDir)\payload\hermes-windows-amd64.zip" KeyPath="yes" />
+      </Component>
+      <Component Id="PayloadManifest" Directory="PayloadFolder" Guid="*">
+        <File Id="PayloadManifest" Source="$(var.StagingDir)\payload\release-manifest.json" KeyPath="yes" />
+      </Component>
+      <Component Id="PayloadSignature" Directory="PayloadFolder" Guid="*">
+        <File Id="PayloadSignature" Source="$(var.StagingDir)\payload\release-manifest.sig" KeyPath="yes" />
+      </Component>
+      <Component Id="ManagedModule" Directory="ScriptsFolder" Guid="*">
+        <File Id="ManagedModule" Source="$(var.StagingDir)\scripts\SmcHermesManaged.psm1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="SMC Hermes Agent" Level="1">
+      <ComponentGroupRef Id="SmcHermesInstallerFiles" />
+    </Feature>
+
+    <!-- Fixed Windows PowerShell 5.1 path only; no pwsh, no managed/.NET host. -->
+    <CustomAction
+      Id="SmcHermesInstall"
+      Directory="INSTALLFOLDER"
+      ExeCommand="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[#BootstrapPs1]&quot; /install /silent"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+    <CustomAction
+      Id="SmcHermesRepair"
+      Directory="INSTALLFOLDER"
+      ExeCommand="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[#BootstrapPs1]&quot; /repair /silent"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+    <CustomAction
+      Id="SmcHermesUninstall"
+      Directory="INSTALLFOLDER"
+      ExeCommand="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[#BootstrapPs1]&quot; /uninstall /silent"
+      Execute="deferred"
+      Impersonate="no"
+      Return="check" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SmcHermesInstall" After="InstallFiles">NOT Installed AND NOT REMOVE</Custom>
+      <Custom Action="SmcHermesRepair" After="InstallFiles">REINSTALL</Custom>
+      <Custom Action="SmcHermesUninstall" Before="RemoveFiles">REMOVE="ALL"</Custom>
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

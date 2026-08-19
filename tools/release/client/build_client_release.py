@@ -28,7 +28,7 @@ from tools.release.client.release_inventory import (  # noqa: E402
     write_sha256sums,
 )
 from tools.release.client.release_manifest import build_client_release_manifest  # noqa: E402
-from tools.release.client.verify_client_release import verify_client_release  # noqa: E402
+from tools.release.client.verify_client_release import verify_client_release, verify_hermes_installer_release  # noqa: E402
 from tools.release.hermes.build_runtime import build_managed_bundle  # noqa: E402
 from tools.release.hermes.source_metadata import freeze_source  # noqa: E402
 
@@ -124,7 +124,29 @@ def copy_release_v2_artifacts(hermes_build_dir: Path, dest: Path) -> dict[str, A
     }
 
 
-def run_hermes_installer(dest: Path, *, release_version: str, smoke: bool = True) -> Path:
+def _is_pe_executable(path: Path) -> bool:
+    try:
+        with path.open("rb") as fh:
+            return fh.read(2) == b"MZ"
+    except OSError:
+        return False
+
+
+def _is_msi_package(path: Path) -> bool:
+    try:
+        with path.open("rb") as fh:
+            return fh.read(2) == b"\xd0\xcf"
+    except OSError:
+        return False
+
+
+def run_hermes_installer(
+    dest: Path,
+    *,
+    release_version: str,
+    smoke: bool = True,
+    payload_source: Path | None = None,
+) -> Path:
     if not HERMES_INSTALLER_SCRIPT.is_file():
         raise ValueError("hermes installer build script missing")
     out = dest / "hermes-installer-build"
@@ -143,13 +165,21 @@ def run_hermes_installer(dest: Path, *, release_version: str, smoke: bool = True
     ]
     if smoke:
         cmd.append("-Smoke")
+    elif payload_source is not None:
+        cmd.extend(["-PayloadSource", str(payload_source)])
     result = run_command(cmd)
     if result.returncode != 0:
         raise SystemExit(command_output(result, "hermes installer build failed"))
     matches = sorted(out.glob("smc-hermes-agent_*_windows-amd64.exe"))
     if not matches:
         raise SystemExit("Release FAILED: hermes installer exe missing")
-    return matches[0]
+    exe = matches[0]
+    if not _is_pe_executable(exe):
+        raise SystemExit("Release FAILED: hermes installer is not a PE executable (ZIP rename forbidden)")
+    msi_matches = sorted(out.glob("smc-hermes-agent_*_windows-amd64.msi"))
+    if not msi_matches or not _is_msi_package(msi_matches[0]):
+        raise SystemExit("Release FAILED: hermes installer MSI missing or invalid")
+    return exe
 
 
 def copy_runtime_artifacts(hermes_zip: Path, dest: Path) -> dict[str, Any]:
@@ -343,10 +373,8 @@ def build_hermes_installer_release(
     node_root: Path | None = None,
     wheelhouse_downloader=None,
     installer_exe: Path | None = None,
-    smoke_installer: bool = True,
+    smoke_installer: bool = False,
 ) -> Path:
-    from tools.release.client.verify_client_release import verify_hermes_installer_release
-
     config = load_release_config(config_path)
     build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
     dest = stage_root(output, str(config["release"]["version"]), build_id)
@@ -379,9 +407,28 @@ def build_hermes_installer_release(
             "version": frozen["hermes"]["version"],
         }
     )
-    built_installer = installer_exe or run_hermes_installer(dest, release_version=release_version, smoke=smoke_installer)
+    built_installer = installer_exe or run_hermes_installer(
+        dest,
+        release_version=release_version,
+        smoke=smoke_installer,
+        payload_source=None if smoke_installer else (dest / "hermes-build"),
+    )
+    if not _is_pe_executable(built_installer):
+        raise SystemExit("Release FAILED: hermes installer is not a PE executable (ZIP rename forbidden)")
     installer_meta = capture_hermes_installer(built_installer, dest / "hermes-installer")
-    live = bool(frozen["smc"]["liveEligible"] and frozen["hermes"]["liveEligible"])
+    auth_status = str(installer_meta.get("authenticodeStatus") or "unknown")
+    smoke_key = False
+    release_manifest_path = dest / "hermes" / "release-manifest.json"
+    if release_manifest_path.is_file():
+        release_manifest = json.loads(release_manifest_path.read_text(encoding="utf-8"))
+        smoke_key = str(release_manifest.get("signerKeyId") or "").startswith("TEST-ONLY")
+    live = bool(
+        frozen["smc"]["liveEligible"]
+        and frozen["hermes"]["liveEligible"]
+        and not smoke_installer
+        and not smoke_key
+        and auth_status == "Valid"
+    )
     assemble(
         dest,
         config=config,
@@ -399,6 +446,8 @@ def build_hermes_installer_release(
         write_json(dest / "manifests" / "client-release.json", verified)
         write_sha256sums(dest)
         verify_hermes_installer_release(dest, require_signatures=True, signing_key_ref=signing_key_ref)
+    elif verified.get("liveEligible"):
+        raise SystemExit("Release FAILED: liveEligible requires production PE/MSI, Authenticode Valid, and non-smoke provenance")
     return dest
 
 
@@ -559,7 +608,15 @@ def main() -> int:
             signing_key_ref=args.signing_key_ref,
         )
         copy_release_v2_artifacts(dest / "hermes-build", dest)
-        installer = run_hermes_installer(dest, release_version=str((config.get("hermesInstaller") or {}).get("releaseVersion") or "0.22.0-smc.1"))
+        release_version = str((config.get("hermesInstaller") or {}).get("releaseVersion") or "0.22.0-smc.1")
+        installer = run_hermes_installer(
+            dest,
+            release_version=release_version,
+            smoke=False,
+            payload_source=dest / "hermes-build",
+        )
+        if not _is_pe_executable(installer):
+            raise SystemExit("Release FAILED: hermes installer is not a PE executable (ZIP rename forbidden)")
         capture_hermes_installer(installer, dest / "hermes-installer")
         print(installer)
         return 0

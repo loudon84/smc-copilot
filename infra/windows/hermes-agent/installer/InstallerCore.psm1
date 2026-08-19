@@ -9,7 +9,15 @@ $script:SmcInstallerExitOwnerConflict = 3
 $script:SmcGatewayTaskName = "SMC Hermes Gateway"
 $script:SmcAllowedKeyIds = @("smc-hermes-release-ed25519-v1", "TEST-ONLY-ed25519")
 
-Import-Module (Join-Path $PSScriptRoot "..\scripts\SmcHermesManaged.psm1") -Force
+$script:SmcManagedModuleCandidates = @(
+    (Join-Path $PSScriptRoot "scripts\SmcHermesManaged.psm1"),
+    (Join-Path $PSScriptRoot "..\scripts\SmcHermesManaged.psm1")
+)
+$script:SmcManagedModule = $script:SmcManagedModuleCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $script:SmcManagedModule) {
+    throw "SmcHermesManaged.psm1 missing next to InstallerCore"
+}
+Import-Module $script:SmcManagedModule -Force
 
 function Get-SmcInstallerLayout {
     param(
@@ -105,7 +113,6 @@ function Test-SmcHermesReleaseFiles {
     )
     $archive = Join-Path $PayloadRoot "hermes-windows-amd64.zip"
     $manifestPath = Join-Path $PayloadRoot "release-manifest.json"
-    $signaturePath = Join-Path $PayloadRoot "release-manifest.sig"
     if (-not (Test-Path -LiteralPath $archive)) { throw "release archive missing" }
     if (-not (Test-Path -LiteralPath $manifestPath)) { throw "release manifest missing" }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -113,17 +120,8 @@ function Test-SmcHermesReleaseFiles {
     if ($script:SmcAllowedKeyIds -notcontains [string]$manifest.signerKeyId) { throw "untrusted signerKeyId" }
     $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($digest -ne [string]$manifest.sha256) { throw "release digest mismatch" }
-    if ((Test-Path -LiteralPath $signaturePath) -and ((Get-Item -LiteralPath $signaturePath).Length -gt 0)) {
-        $verifier = Join-Path $PSScriptRoot "verify_release_v2.py"
-        if (-not (Test-Path -LiteralPath $verifier)) { throw "release verifier missing" }
-        $key = Join-Path $PayloadRoot "release-public-key.pem"
-        if (-not (Test-Path -LiteralPath $key)) {
-            $key = Join-Path $PSScriptRoot "keys\smoke-public-key.pem"
-        }
-        if (-not (Test-Path -LiteralPath $key)) { throw "release public key missing" }
-        & python $verifier --archive $archive --manifest $manifestPath --signature $signaturePath --public-key $key
-        if ($LASTEXITCODE -ne 0) { throw "release signature verification failed" }
-    }
+    # Endpoint trust is Authenticode plus release-manifest SHA256.
+    # Python signature verification stays in Build/CI and is not invoked here.
     return $manifest
 }
 

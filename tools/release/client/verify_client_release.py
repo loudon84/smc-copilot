@@ -104,6 +104,13 @@ def verify_hermes_installer_release(
         raise ValueError("Hermes release manifest hash mismatch")
     if sha256_file(installer) != manifest["hermesInstaller"]["sha256"]:
         raise ValueError("Hermes installer hash mismatch")
+    with installer.open("rb") as fh:
+        pe_header = fh.read(2)
+    if pe_header != b"MZ":
+        raise ValueError("Hermes installer is not a PE executable (ZIP rename forbidden)")
+    signer = str(json.loads(release_manifest.read_text(encoding="utf-8")).get("signerKeyId") or "")
+    if manifest.get("liveEligible") and signer.startswith("TEST-ONLY"):
+        raise ValueError("TEST-ONLY signer cannot be liveEligible")
     if require_signatures and signing_key_ref is not None and signing_key_ref.is_file():
         from cryptography.hazmat.primitives.serialization import load_pem_private_key
 

@@ -168,7 +168,8 @@ def test_hermes_installer_release_without_opsi(tmp_path: Path, monkeypatch):
     config_path = tmp_path / "client-release-v2.yaml"
     config_path.write_text(config_text, encoding="utf-8")
     fake_installer = tmp_path / "smc-hermes-agent_0.22.0-smc.1_windows-amd64.exe"
-    fake_installer.write_bytes(b"installer-smoke")
+    # Minimal MZ stub so release gates reject ZIP-rename while unit tests stay offline.
+    fake_installer.write_bytes(b"MZ" + b"\0" * 126)
 
     def _fake_bundle(repo, dest, **kwargs):
         build_dir = dest
@@ -210,6 +211,240 @@ def test_hermes_installer_release_without_opsi(tmp_path: Path, monkeypatch):
     assert "opsi" not in manifest
     assert not list((dest / "opsi").glob("*.opsi"))
     verify_hermes_installer_release(dest, require_signatures=True, signing_key_ref=paths["key"])
+    assert manifest.get("liveEligible") is False
+
+
+def test_hermes_installer_rejects_renamed_zip(tmp_path: Path):
+    from tools.release.client.build_client_release import _is_pe_executable, _is_msi_package
+
+    renamed = tmp_path / "smc-hermes-agent_0.22.0-smc.1_windows-amd64.exe"
+    with zipfile.ZipFile(renamed, "w") as zf:
+        zf.writestr("bootstrap.ps1", "exit 0")
+    assert not _is_pe_executable(renamed)
+    msi = tmp_path / "smc-hermes-agent_0.22.0-smc.1_windows-amd64.msi"
+    msi.write_bytes(b"not-an-msi")
+    assert not _is_msi_package(msi)
+
+
+def test_hermes_installer_smoke_and_test_key_not_live(tmp_path: Path, monkeypatch):
+    if Ed25519PrivateKey is None:
+        pytest.skip("cryptography required")
+    from tools.release.client import build_client_release as bcr
+
+    monkeypatch.setattr(
+        bcr,
+        "freeze_smc",
+        lambda allow_dirty: {"revision": "a" * 40, "dirty": False, "liveEligible": True},
+    )
+    paths = _inputs(tmp_path)
+    config_text = (
+        paths["config"].read_text(encoding="utf-8")
+        + "\nhermesInstaller:\n  enabled: true\n  releaseVersion: \"0.22.0-smc.1\"\n"
+    )
+    config_path = tmp_path / "client-release-v2-smoke.yaml"
+    config_path.write_text(config_text, encoding="utf-8")
+    fake_installer = tmp_path / "smc-hermes-agent_0.22.0-smc.1_windows-amd64.exe"
+    fake_installer.write_bytes(b"MZ" + b"\0" * 126)
+
+    def _fake_bundle(repo, dest, **kwargs):
+        build_dir = dest
+        build_dir.mkdir(parents=True, exist_ok=True)
+        archive = build_dir / "hermes-windows-amd64.zip"
+        manifest = build_dir / "release-manifest.json"
+        sig = build_dir / "release-manifest.sig"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("bin/hermes.exe", b"@echo off\r\necho 0.22.0\r\n")
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema": "smc.hermes.release.v2",
+                    "releaseVersion": "0.22.0-smc.1",
+                    "hermesVersion": "0.22.0",
+                    "sha256": __import__("hashlib").sha256(archive.read_bytes()).hexdigest(),
+                    "signerKeyId": "TEST-ONLY-ed25519",
+                    "files": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        sig.write_bytes(b"")
+        return archive
+
+    monkeypatch.setattr(bcr, "build_managed_bundle", _fake_bundle)
+
+    def _capture(src, dest):
+        dest.mkdir(parents=True, exist_ok=True)
+        target = dest / src.name
+        target.write_bytes(src.read_bytes())
+        return {
+            "name": src.name,
+            "sha256": __import__("hashlib").sha256(target.read_bytes()).hexdigest(),
+            "bytes": target.stat().st_size,
+            "authenticodeStatus": "Valid",
+            "version": "0.22.0-smc.1",
+        }
+
+    monkeypatch.setattr(bcr, "capture_hermes_installer", _capture)
+    dest = bcr.build_hermes_installer_release(
+        config_path=config_path,
+        output=tmp_path / "dist",
+        hermes_repo=paths["hermes_repo"],
+        signing_key_ref=paths["key"],
+        allow_dirty=True,
+        work_dist=paths["work"],
+        installer_exe=fake_installer,
+        smoke_installer=True,
+    )
+    manifest = json.loads((dest / "manifests" / "client-release.json").read_text(encoding="utf-8"))
+    assert manifest["liveEligible"] is False
+
+
+def test_hermes_installer_unsigned_not_live(tmp_path: Path, monkeypatch):
+    if Ed25519PrivateKey is None:
+        pytest.skip("cryptography required")
+    from tools.release.client import build_client_release as bcr
+
+    monkeypatch.setattr(
+        bcr,
+        "freeze_smc",
+        lambda allow_dirty: {"revision": "a" * 40, "dirty": False, "liveEligible": True},
+    )
+    paths = _inputs(tmp_path)
+    config_text = (
+        paths["config"].read_text(encoding="utf-8")
+        + "\nhermesInstaller:\n  enabled: true\n  releaseVersion: \"0.22.0-smc.1\"\n"
+    )
+    config_path = tmp_path / "client-release-v2-unsigned.yaml"
+    config_path.write_text(config_text, encoding="utf-8")
+    fake_installer = tmp_path / "smc-hermes-agent_0.22.0-smc.1_windows-amd64.exe"
+    fake_installer.write_bytes(b"MZ" + b"\0" * 126)
+
+    def _fake_bundle(repo, dest, **kwargs):
+        build_dir = dest
+        build_dir.mkdir(parents=True, exist_ok=True)
+        archive = build_dir / "hermes-windows-amd64.zip"
+        manifest = build_dir / "release-manifest.json"
+        sig = build_dir / "release-manifest.sig"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("bin/hermes.exe", b"@echo off\r\necho 0.22.0\r\n")
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema": "smc.hermes.release.v2",
+                    "releaseVersion": "0.22.0-smc.1",
+                    "hermesVersion": "0.22.0",
+                    "sha256": __import__("hashlib").sha256(archive.read_bytes()).hexdigest(),
+                    "signerKeyId": "smc-hermes-release-ed25519-v1",
+                    "files": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        sig.write_bytes(b"")
+        return archive
+
+    def _capture(src, dest):
+        dest.mkdir(parents=True, exist_ok=True)
+        target = dest / src.name
+        target.write_bytes(src.read_bytes())
+        return {
+            "name": src.name,
+            "sha256": __import__("hashlib").sha256(target.read_bytes()).hexdigest(),
+            "bytes": target.stat().st_size,
+            "authenticodeStatus": "NotSigned",
+            "version": "0.22.0-smc.1",
+        }
+
+    monkeypatch.setattr(bcr, "build_managed_bundle", _fake_bundle)
+    monkeypatch.setattr(bcr, "capture_hermes_installer", _capture)
+    dest = bcr.build_hermes_installer_release(
+        config_path=config_path,
+        output=tmp_path / "dist",
+        hermes_repo=paths["hermes_repo"],
+        signing_key_ref=paths["key"],
+        allow_dirty=True,
+        work_dist=paths["work"],
+        installer_exe=fake_installer,
+        smoke_installer=False,
+    )
+    manifest = json.loads((dest / "manifests" / "client-release.json").read_text(encoding="utf-8"))
+    assert manifest["liveEligible"] is False
+
+
+def test_hermes_installer_verifier_exception_fail_closed(tmp_path: Path, monkeypatch):
+    if Ed25519PrivateKey is None:
+        pytest.skip("cryptography required")
+    from tools.release.client import build_client_release as bcr
+
+    monkeypatch.setattr(
+        bcr,
+        "freeze_smc",
+        lambda allow_dirty: {"revision": "a" * 40, "dirty": False, "liveEligible": True},
+    )
+    paths = _inputs(tmp_path)
+    config_text = (
+        paths["config"].read_text(encoding="utf-8")
+        + "\nhermesInstaller:\n  enabled: true\n  releaseVersion: \"0.22.0-smc.1\"\n"
+    )
+    config_path = tmp_path / "client-release-v2-verify-fail.yaml"
+    config_path.write_text(config_text, encoding="utf-8")
+    fake_installer = tmp_path / "smc-hermes-agent_0.22.0-smc.1_windows-amd64.exe"
+    fake_installer.write_bytes(b"MZ" + b"\0" * 126)
+
+    def _fake_bundle(repo, dest, **kwargs):
+        build_dir = dest
+        build_dir.mkdir(parents=True, exist_ok=True)
+        archive = build_dir / "hermes-windows-amd64.zip"
+        manifest = build_dir / "release-manifest.json"
+        sig = build_dir / "release-manifest.sig"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("bin/hermes.exe", b"@echo off\r\necho 0.22.0\r\n")
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema": "smc.hermes.release.v2",
+                    "releaseVersion": "0.22.0-smc.1",
+                    "hermesVersion": "0.22.0",
+                    "sha256": __import__("hashlib").sha256(archive.read_bytes()).hexdigest(),
+                    "signerKeyId": "TEST-ONLY-ed25519",
+                    "files": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        sig.write_bytes(b"")
+        return archive
+
+    def _capture(src, dest):
+        dest.mkdir(parents=True, exist_ok=True)
+        target = dest / src.name
+        target.write_bytes(src.read_bytes())
+        return {
+            "name": src.name,
+            "sha256": __import__("hashlib").sha256(target.read_bytes()).hexdigest(),
+            "bytes": target.stat().st_size,
+            "authenticodeStatus": "NotSigned",
+            "version": "0.22.0-smc.1",
+        }
+
+    monkeypatch.setattr(bcr, "build_managed_bundle", _fake_bundle)
+    monkeypatch.setattr(bcr, "capture_hermes_installer", _capture)
+
+    def _boom(*args, **kwargs):
+        raise ValueError("verifier exception")
+
+    monkeypatch.setattr(bcr, "verify_hermes_installer_release", _boom)
+    with pytest.raises((ValueError, SystemExit)):
+        bcr.build_hermes_installer_release(
+            config_path=config_path,
+            output=tmp_path / "dist",
+            hermes_repo=paths["hermes_repo"],
+            signing_key_ref=paths["key"],
+            allow_dirty=True,
+            work_dist=paths["work"],
+            installer_exe=fake_installer,
+            smoke_installer=False,
+        )
 
 
 def test_stage_all_does_not_require_prebuilt_opsi(tmp_path: Path, monkeypatch):

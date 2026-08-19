@@ -1,20 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
-  <!--
-    WiX 5 Burn bundle template for smc-hermes-agent.
-    Production builds pin WiX 5.x and compile a self-contained Bootstrapper Application.
-    CI smoke builds use build.ps1 -Smoke until the Burn toolchain is wired in release CI.
-  -->
-  <Bundle Name="SMC Hermes Agent" Version="!(bind.packageVersion)" Manufacturer="SMC">
-    <BootstrapperApplicationRef Id="WixStandardBootstrapperApplication.HyperlinkLicense" />
+  <Bundle
+    Name="SMC Hermes Agent"
+    Version="$(var.BundleVersion)"
+    Manufacturer="SMC"
+    UpgradeCode="5c8a2e1d-7b4f-4a91-9e3c-1d2b3c4e5f60"
+    Compressed="yes">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+        LicenseUrl="https://superic.com/"
+        Theme="hyperlinkLicense" />
+    </BootstrapperApplication>
     <Chain>
-      <ExePackage
-        Id="SmcHermesInstallerCore"
-        SourceFile="bootstrap.cmd"
-        DetectCondition="false"
+      <MsiPackage
+        Id="SmcHermesAgentMsi"
+        SourceFile="$(var.MsiPath)"
         Vital="yes"
-        Permanent="yes" />
+        Compressed="yes"
+        Visible="no" />
     </Chain>
   </Bundle>
 </Wix>

@@ -6,12 +6,14 @@ on:
       - "infra/opsi/**"
       - "infra/windows/hermes-agent/**"
       - "contracts/opsi/*.schema.json"
+      - "tools/release/**"
       - ".github/workflows/opsi-package-ci.yml"
   pull_request:
     paths:
       - "infra/opsi/**"
       - "infra/windows/hermes-agent/**"
       - "contracts/opsi/*.schema.json"
+      - "tools/release/**"
       - ".github/workflows/opsi-package-ci.yml"
 
 jobs:
@@ -89,13 +91,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
       - name: Smoke package is not .opsi
         run: |
           python infra/opsi/products/smc-hermes-agent/packaging/makepackage.py --smoke --dest /tmp/opsi-smoke
           ls /tmp/opsi-smoke/*.smoke.zip
           test ! -e /tmp/opsi-smoke/*.opsi
       - name: Hermes release builder pytest
-        run: python -m pytest tools/release/tests/test_hermes_builder.py tools/release/tests/test_client_release.py -q 2>/dev/null || echo "ok: no client_release tests yet"
+        run: uv run --project services/opsi-control pytest tools/release/tests/test_hermes_builder.py tools/release/tests/test_client_release.py -q
       - name: Verify hermes-installer is release SOT
         run: |
           python - <<'PY'
@@ -107,3 +110,83 @@ jobs:
               "build script must reference hermes-installer stage"
           print("ok: hermes-installer is release SOT")
           PY
+      - name: Installer no-.NET / offline source guard
+        run: |
+          python - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+          root = Path("infra/windows/hermes-agent/installer")
+          pattern = re.compile(
+              r"SmcHermesInstallerHost|ManagedBootstrapperApplicationHost|DotNetCoreSearch|NetFx|"
+              r"dotnet-runtime|dotnet-hosting|Microsoft\.NETCore|RemotePayload|DownloadUrl|"
+              r"Compress-Archive"
+          )
+          hits = []
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".wxs", ".ps1", ".psm1", ".xml", ".json"}:
+                  continue
+              text = path.read_text(encoding="utf-8", errors="replace")
+              for i, line in enumerate(text.splitlines(), 1):
+                  if pattern.search(line):
+                      hits.append(f"{path}:{i}:{line.strip()}")
+          if hits:
+              print("\n".join(hits))
+              sys.exit(1)
+          core = Path("infra/windows/hermes-agent/installer/InstallerCore.psm1").read_text(encoding="utf-8")
+          if "verify_release_v2.py" in core or "python $verifier" in core:
+              print("InstallerCore still calls Endpoint Python verifier")
+              sys.exit(1)
+          print("ok: installer sources have no .NET/host/ZIP-rename/Endpoint-python paths")
+          PY
+
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install WiX CLI
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix --version
+          wix extension add WixToolset.BootstrapperApplications.wixext
+      - name: Build native Burn + MSI (smoke payload)
+        shell: pwsh
+        run: |
+          $out = "infra/windows/hermes-agent/installer/dist"
+          $exe = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File infra/windows/hermes-agent/installer/build.ps1 `
+            -ReleaseVersion "0.22.0-smc.1" `
+            -OutputDir $out `
+            -Smoke
+          $exe = [string]($exe | Select-Object -Last 1)
+          if (-not (Test-Path -LiteralPath $exe)) { throw "installer exe missing: $exe" }
+          $msi = Join-Path $out "smc-hermes-agent_0.22.0-smc.1_windows-amd64.msi"
+          if (-not (Test-Path -LiteralPath $msi)) { throw "installer msi missing" }
+          $pe = [System.IO.File]::ReadAllBytes($exe)
+          if ($pe.Length -lt 2 -or $pe[0] -ne 0x4D -or $pe[1] -ne 0x5A) { throw "exe is not PE" }
+          $mb = [System.IO.File]::ReadAllBytes($msi)
+          if ($mb.Length -lt 2 -or $mb[0] -ne 0xD0 -or $mb[1] -ne 0xCF) { throw "msi invalid" }
+          if ((Get-Item -LiteralPath $exe).Length -le (Get-Item -LiteralPath $msi).Length) {
+            throw "bundle does not embed MSI"
+          }
+          if (Test-Path -LiteralPath (Join-Path $out "verify_release_v2.py")) {
+            throw "Endpoint must not ship verify_release_v2.py"
+          }
+          $sig = Get-AuthenticodeSignature -LiteralPath $exe
+          Write-Host "authenticode=$($sig.Status)"
+          if ($sig.Status -eq "Valid") {
+            throw "smoke/test builds must not be production-signed liveEligible artifacts"
+          }
+          Write-Host "ok: native installer PE+MSI built (smoke provenance)"
+      - name: No-.NET string scan on installer sources
+        shell: pwsh
+        run: |
+          $pattern = 'SmcHermesInstallerHost|ManagedBootstrapperApplicationHost|DotNetCoreSearch|NetFx|dotnet-runtime|dotnet-hosting|Microsoft.NETCore|RemotePayload|DownloadUrl'
+          $hits = Get-ChildItem -Path infra/windows/hermes-agent/installer -File |
+            Where-Object { $_.Extension -in '.wxs', '.ps1', '.psm1' } |
+            Select-String -Pattern $pattern
+          if ($hits) { $hits | ForEach-Object { $_.ToString() }; exit 1 }
+          Write-Host "ok: no-.NET guard passed"

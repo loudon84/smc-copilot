@@ -115,4 +115,80 @@ Describe "Hermes installer core" {
         )
         $code | Should Be 0
     }
+
+    It "uses fixed WindowsPowerShell path and rejects managed/.NET installer hosts" {
+        $product = Get-Content -LiteralPath (Join-Path $script:Root "installer\Product.wxs") -Raw
+        $bundle = Get-Content -LiteralPath (Join-Path $script:Root "installer\Bundle.wxs") -Raw
+        $build = Get-Content -LiteralPath (Join-Path $script:Root "installer\build.ps1") -Raw
+        $core = Get-Content -LiteralPath (Join-Path $script:Root "installer\InstallerCore.psm1") -Raw
+        $product | Should Match 'System32\\WindowsPowerShell\\v1\.0\\powershell\.exe'
+        $product | Should Not Match 'pwsh\.exe'
+        $bundle | Should Match 'MsiPackage'
+        $bundle | Should Not Match 'SmcHermesInstallerHost'
+        $bundle | Should Not Match 'ManagedBootstrapperApplicationHost'
+        $build | Should Not Match 'Compress-Archive'
+        $build | Should Not Match 'Move-Item.*\.zip.*\.exe'
+        $core | Should Not Match 'python \$verifier'
+        $core | Should Not Match 'verify_release_v2\.py'
+        $bootstrap = Get-Content -LiteralPath (Join-Path $script:Root "installer\bootstrap.ps1") -Raw
+        $bootstrap | Should Match 'WindowsPowerShell\\v1\.0'
+        $bootstrap | Should Not Match '\bpython\b'
+        $bootstrap | Should Not Match 'pwsh'
+    }
+
+    It "rejects tampered payload digests before program write" {
+        $tampered = Join-Path $env:TEMP ("smc-hermes-tamper-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force -Path $tampered | Out-Null
+        try {
+            Copy-Item -Path (Join-Path $script:Payload "*") -Destination $tampered -Force
+            $archive = Join-Path $tampered "hermes-windows-amd64.zip"
+            Add-Content -LiteralPath $archive -Value "tamper" -Encoding ascii
+            { Test-SmcHermesReleaseFiles -PayloadRoot $tampered } | Should Throw
+            Test-Path -LiteralPath (Join-Path $script:Layout.ProgramRoot "bin\hermes.exe") | Should Be $false
+        } finally {
+            Remove-Item -LiteralPath $tampered -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "builds native PE with embedded MSI when WiX is available" {
+        $wix = Get-Command wix -ErrorAction SilentlyContinue
+        if (-not $wix) {
+            Write-Host "SKIP: wix.exe not on PATH"
+            return
+        }
+        $out = Join-Path $env:TEMP ("smc-hermes-wix-" + [guid]::NewGuid().ToString("N"))
+        try {
+            $buildOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $script:Root "installer\build.ps1") `
+                -ReleaseVersion "0.22.0-smc.1" `
+                -OutputDir $out `
+                -Smoke 2>&1 | Out-String
+            if ($buildOutput -match 'WIX7015|Open Source Maintenance Fee') {
+                Write-Host "SKIP: WiX Toolset EULA not accepted on this machine"
+                return
+            }
+            $exe = ($buildOutput -split "`r?`n" | Where-Object { $_ -like "*smc-hermes-agent_*_windows-amd64.exe" } | Select-Object -Last 1)
+            if (-not $exe) { $exe = Join-Path $out "smc-hermes-agent_0.22.0-smc.1_windows-amd64.exe" }
+            Test-Path -LiteralPath $exe | Should Be $true
+            $msi = Join-Path $out "smc-hermes-agent_0.22.0-smc.1_windows-amd64.msi"
+            Test-Path -LiteralPath $msi | Should Be $true
+            $fs = [System.IO.File]::OpenRead($exe)
+            try {
+                $b0 = $fs.ReadByte(); $b1 = $fs.ReadByte()
+                ($b0 -eq 0x4D -and $b1 -eq 0x5A) | Should Be $true
+            } finally { $fs.Dispose() }
+            $ms = [System.IO.File]::OpenRead($msi)
+            try {
+                $m0 = $ms.ReadByte(); $m1 = $ms.ReadByte()
+                ($m0 -eq 0xD0 -and $m1 -eq 0xCF) | Should Be $true
+            } finally { $ms.Dispose() }
+            ((Get-Item -LiteralPath $exe).Length -gt (Get-Item -LiteralPath $msi).Length) | Should Be $true
+            Test-Path -LiteralPath (Join-Path $out "verify_release_v2.py") | Should Be $false
+            $product = Get-Content -LiteralPath (Join-Path $script:Root "installer\Product.wxs") -Raw
+            $product | Should Match 'WindowsPowerShell\\v1\.0\\powershell\.exe'
+        } finally {
+            if (Test-Path -LiteralPath $out) {
+                Remove-Item -LiteralPath $out -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }

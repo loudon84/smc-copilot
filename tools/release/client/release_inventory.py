@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -32,17 +33,25 @@ def capture_file(src: Path, dest: Path) -> dict[str, Any]:
 def authenticode_status(path: Path) -> str:
     if path.suffix.lower() not in {".exe", ".msi"}:
         return "n/a"
-    result = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-Command",
-            f"(Get-AuthenticodeSignature -LiteralPath '{path}').Status",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    if os.name != "nt":
+        return "n/a"
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                f"(Get-AuthenticodeSignature -LiteralPath '{path}').Status",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
     status = (result.stdout or "").strip()
     return status or "unknown"
 
