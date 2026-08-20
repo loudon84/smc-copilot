@@ -24,6 +24,10 @@ const filesIpcContractSrc = readFileSync(
   join(ROOT, "src/shared/files/file-ipc.ts"),
   "utf-8",
 );
+const appUpdateContractSrc = readFileSync(
+  join(ROOT, "src/shared/app-update.ts"),
+  "utf-8",
+);
 
 /**
  * Extract all IPC channel names registered in main/index.ts.
@@ -43,10 +47,26 @@ function extractIpcHandleChannels(src: string): string[] {
     const resolved = constMap[m[1]];
     if (resolved) channels.push(resolved);
   }
+  const appUpdateMap = extractAppUpdateChannelMap(appUpdateContractSrc);
+  const appUpdateRefRe = /ipcMain\.handle\(\s*APP_UPDATE_CHANNELS\.(\w+)/g;
+  while ((m = appUpdateRefRe.exec(src)) !== null) {
+    const resolved = appUpdateMap[m[1]];
+    if (resolved) channels.push(resolved);
+  }
   return [...new Set(channels)];
 }
 
 function extractFilesIpcChannelMap(src: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  const re = /(\w+)\s*:\s*["']([^"']+)["']/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    map[m[1]] = m[2];
+  }
+  return map;
+}
+
+function extractAppUpdateChannelMap(src: string): Record<string, string> {
   const map: Record<string, string> = {};
   const re = /(\w+)\s*:\s*["']([^"']+)["']/g;
   let m: RegExpExecArray | null;
@@ -70,6 +90,12 @@ function extractPreloadInvokeChannels(src: string): string[] {
   const refRe = /ipcRenderer\.invoke\(\s*FILES_IPC_CHANNELS\.(\w+)/g;
   while ((m = refRe.exec(src)) !== null) {
     const resolved = constMap[m[1]];
+    if (resolved) channels.push(resolved);
+  }
+  const appUpdateMap = extractAppUpdateChannelMap(appUpdateContractSrc);
+  const appUpdateRefRe = /ipcRenderer\.invoke\(\s*APP_UPDATE_CHANNELS\.(\w+)/g;
+  while ((m = appUpdateRefRe.exec(src)) !== null) {
+    const resolved = appUpdateMap[m[1]];
     if (resolved) channels.push(resolved);
   }
   return [...new Set(channels)];

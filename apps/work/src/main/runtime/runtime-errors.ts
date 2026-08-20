@@ -14,7 +14,7 @@ export const RUNTIME_ERROR_CODES = {
   MODEL_UNAVAILABLE: "MODEL_UNAVAILABLE",
   PROVIDER_AUTH_FAILED: "PROVIDER_AUTH_FAILED",
   CHAT_REQUEST_FAILED: "CHAT_REQUEST_FAILED",
-  CONFIGURATION_ERROR: "CONFIGURATION_ERROR",
+  MANAGED_RUNTIME_RESTART_REQUIRED: "MANAGED_RUNTIME_RESTART_REQUIRED",
 } as const;
 
 export type RuntimeErrorCode =
@@ -46,6 +46,8 @@ export function runtimeErrorMessage(code: RuntimeErrorCode): string {
       return "Chat request failed.";
     case "CONFIGURATION_ERROR":
       return "Hermes runtime configuration is invalid.";
+    case "MANAGED_RUNTIME_RESTART_REQUIRED":
+      return "Hermes Gateway is managed by the endpoint management service.";
     default:
       return "Unknown runtime error.";
   }

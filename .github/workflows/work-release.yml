@@ -1,0 +1,92 @@
+name: Work Release
+
+on:
+  push:
+    tags:
+      - "work-v*"
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: "Promote validated Windows artifacts to stable after environment approval"
+        type: boolean
+        default: false
+
+concurrency:
+  group: work-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/work
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/work/package-lock.json
+      - run: npm ci
+      - run: npm run guard
+      - run: npm run typecheck
+      - run: npm test
+
+  build-windows:
+    needs: quality
+    runs-on: windows-latest
+    env:
+      SMC_WORK_UPDATE_URL: ${{ secrets.SMC_WORK_UPDATE_URL }}
+      SMC_WORK_EXPECTED_PUBLISHER: ${{ secrets.SMC_WORK_EXPECTED_PUBLISHER }}
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+    defaults:
+      run:
+        working-directory: apps/work
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/work/package-lock.json
+      - name: Build signed Windows release
+        run: npm run release:build:win
+      - name: Validate release artifacts
+        run: npm run release:validate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: work-windows-release
+          path: apps/work/release/work/**
+          if-no-files-found: error
+
+  promote:
+    if: github.event_name == 'workflow_dispatch' && inputs.promote == true
+    needs: build-windows
+    runs-on: windows-latest
+    environment: work-stable
+    env:
+      SMC_WORK_UPDATE_URL: ${{ secrets.SMC_WORK_UPDATE_URL }}
+      SMC_WORK_EXPECTED_PUBLISHER: ${{ secrets.SMC_WORK_EXPECTED_PUBLISHER }}
+      SMC_WORK_RELEASE_HOST: ${{ secrets.SMC_WORK_RELEASE_HOST }}
+      SMC_WORK_RELEASE_USER: ${{ secrets.SMC_WORK_RELEASE_USER }}
+      SMC_WORK_RELEASE_REMOTE_ROOT: ${{ secrets.SMC_WORK_RELEASE_REMOTE_ROOT }}
+      SMC_WORK_RELEASE_PROMOTE_SCRIPT: ${{ secrets.SMC_WORK_RELEASE_PROMOTE_SCRIPT }}
+    defaults:
+      run:
+        working-directory: apps/work
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/work/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: work-windows-release
+          path: apps/work/release/work
+      - run: npm ci
+      - name: Publish with manual stable gate
+        run: npm run release:publish

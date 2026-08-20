@@ -9,7 +9,7 @@ export default {
   nav: {
     groups: {
       general: "General",
-      hermes: "Copilot Desktop",
+      hermes: "SMC-Copilot",
     },
     appearance: "Appearance",
     language: "Language",
@@ -23,7 +23,7 @@ export default {
     logs: "Logs & Diagnostics",
   },
   agentSubtitle: "The local AI engine",
-  desktopTitle: "Copilot Desktop",
+  desktopTitle: "SMC-Copilot",
   desktopSubtitle: "This desktop app",
   statusUpToDate: "Up to date",
   statusUpdateAvailable: "Update available",

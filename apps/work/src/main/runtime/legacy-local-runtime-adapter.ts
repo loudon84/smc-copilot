@@ -1,6 +1,6 @@
 /**
- * Legacy local Runtime Adapter — locates and starts an existing Hermes
- * Gateway. Does not install, upgrade, or write model API keys.
+ * Managed local Hermes Runtime Consumer — probe and connect only.
+ * OPSI owns Gateway process lifecycle; Work must not spawn or kill Gateway.
  */
 // @lat: [[runtime-connection#Adapter]]
 import type {
@@ -9,21 +9,18 @@ import type {
   HermesRuntimeProbe,
   HermesRuntimeState,
 } from "../../shared/runtime/runtime-contract";
-import { getApiServerKey } from "../config";
-import {
-  getApiUrl,
-  isGatewayHealthy,
-  isGatewayRunning,
-  restartGateway,
-  startGatewayWithRecovery,
-} from "../hermes";
 import { getHermesVersion } from "../installer";
+import {
+  probeGatewayAuthentication,
+  probeGatewayHealth,
+} from "./gateway-probe";
 import {
   RUNTIME_ERROR_CODES,
   runtimeErrorMessage,
   type RuntimeErrorCode,
 } from "./runtime-errors";
 import { locateHermesRuntime } from "./hermes-runtime-locator";
+import { MANAGED_GATEWAY_MESSAGE } from "./hermes-runtime-paths";
 
 function resultFromProbe(
   probe: HermesRuntimeProbe,
@@ -78,13 +75,6 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
   if (!loc.runtimeValid) {
     return fail("runtime_invalid", RUNTIME_ERROR_CODES.RUNTIME_INVALID, base);
   }
-  if (!loc.cliAvailable) {
-    return fail(
-      "runtime_invalid",
-      RUNTIME_ERROR_CODES.CLI_NOT_AVAILABLE,
-      base,
-    );
-  }
 
   let version: string | undefined;
   try {
@@ -93,44 +83,50 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
     version = undefined;
   }
 
-  const running = isGatewayRunning(profile);
-  const healthy = running ? await isGatewayHealthy(profile) : false;
-  const apiKey = getApiServerKey(profile)?.trim() ?? "";
-  const authenticated = healthy && apiKey.length > 0;
+  if (!loc.cliAvailable && !version) {
+    return fail(
+      "runtime_invalid",
+      RUNTIME_ERROR_CODES.CLI_NOT_AVAILABLE,
+      { ...base, version },
+    );
+  }
 
+  const gatewayHealthy = await probeGatewayHealth(loc.endpoint);
+  const gatewayRunning = gatewayHealthy;
   const withStatus = {
     ...base,
-    gatewayRunning: running,
-    gatewayHealthy: healthy,
-    authenticated,
+    gatewayRunning,
+    gatewayHealthy,
     version,
   };
 
-  if (!running) {
-    return fail(
-      "gateway_stopped",
-      RUNTIME_ERROR_CODES.GATEWAY_UNREACHABLE,
-      withStatus,
-      runtimeErrorMessage(RUNTIME_ERROR_CODES.GATEWAY_UNREACHABLE),
-    );
-  }
-  if (!healthy) {
+  if (!gatewayHealthy) {
     return fail(
       "gateway_unreachable",
       RUNTIME_ERROR_CODES.GATEWAY_UNREACHABLE,
       withStatus,
     );
   }
-  if (!authenticated) {
+
+  const authResult = await probeGatewayAuthentication(profile, loc.endpoint);
+  if (authResult === "unauthorized") {
     return fail(
       "gateway_auth_failed",
       RUNTIME_ERROR_CODES.GATEWAY_AUTH_FAILED,
+      { ...withStatus, authenticated: false },
+    );
+  }
+  if (authResult === "unreachable") {
+    return fail(
+      "gateway_unreachable",
+      RUNTIME_ERROR_CODES.GATEWAY_UNREACHABLE,
       withStatus,
     );
   }
 
   return {
     ...withStatus,
+    authenticated: true,
     state: "ready",
     probedAt: Date.now(),
   };
@@ -169,89 +165,18 @@ export class LegacyLocalRuntimeAdapter implements HermesRuntimeAdapter {
   async ensureReady(
     profile?: string,
   ): Promise<HermesRuntimeConnectionResult> {
-    const initial = await this.probe(profile);
-    if (initial.state === "ready") {
-      return resultFromProbe(initial);
-    }
-    if (
-      initial.state === "runtime_missing" ||
-      initial.state === "runtime_invalid" ||
-      initial.state === "configuration_error"
-    ) {
-      return resultFromProbe(initial);
-    }
-
-    // Gateway stopped or unhealthy — attempt start/recovery.
-    const started = await startGatewayWithRecovery(profile);
-    if (!started) {
-      const after = await this.probe(profile);
-      if (after.state === "ready") return resultFromProbe(after);
-      return {
-        ok: false,
-        state: after.gatewayRunning ? "gateway_unreachable" : "gateway_stopped",
-        profile: after.profile,
-        endpoint: after.endpoint,
-        version: after.version,
-        errorCode: after.gatewayRunning
-          ? RUNTIME_ERROR_CODES.GATEWAY_TIMEOUT
-          : RUNTIME_ERROR_CODES.GATEWAY_START_FAILED,
-        errorMessage: after.gatewayRunning
-          ? runtimeErrorMessage(RUNTIME_ERROR_CODES.GATEWAY_TIMEOUT)
-          : runtimeErrorMessage(RUNTIME_ERROR_CODES.GATEWAY_START_FAILED),
-      };
-    }
-
-    // Re-probe for auth + health after start.
-    const finalProbe = await this.probe(profile);
-    if (finalProbe.state === "ready") {
-      // Ensure endpoint reflects live getApiUrl when possible.
-      try {
-        finalProbe.endpoint = getApiUrl(profile);
-      } catch {
-        /* keep locator endpoint */
-      }
-    }
-    return resultFromProbe(finalProbe);
+    return resultFromProbe(await this.probe(profile));
   }
 
   async restart(profile?: string): Promise<HermesRuntimeConnectionResult> {
     const loc = locateHermesRuntime(profile);
-    if (!loc.runtimeFound) {
-      return {
-        ok: false,
-        state: "runtime_missing",
-        profile: loc.profile,
-        endpoint: loc.endpoint,
-        errorCode: RUNTIME_ERROR_CODES.RUNTIME_NOT_FOUND,
-        errorMessage: runtimeErrorMessage(
-          RUNTIME_ERROR_CODES.RUNTIME_NOT_FOUND,
-        ),
-      };
-    }
-    if (!loc.runtimeValid || !loc.cliAvailable) {
-      return {
-        ok: false,
-        state: "runtime_invalid",
-        profile: loc.profile,
-        endpoint: loc.endpoint,
-        errorCode: RUNTIME_ERROR_CODES.RUNTIME_INVALID,
-        errorMessage: runtimeErrorMessage(RUNTIME_ERROR_CODES.RUNTIME_INVALID),
-      };
-    }
-
-    const ok = await restartGateway(profile);
-    if (!ok) {
-      return {
-        ok: false,
-        state: "gateway_unreachable",
-        profile: loc.profile,
-        endpoint: loc.endpoint,
-        errorCode: RUNTIME_ERROR_CODES.GATEWAY_START_FAILED,
-        errorMessage: runtimeErrorMessage(
-          RUNTIME_ERROR_CODES.GATEWAY_START_FAILED,
-        ),
-      };
-    }
-    return resultFromProbe(await this.probe(profile));
+    return {
+      ok: false,
+      state: "gateway_unreachable",
+      profile: loc.profile,
+      endpoint: loc.endpoint,
+      errorCode: RUNTIME_ERROR_CODES.MANAGED_RUNTIME_RESTART_REQUIRED,
+      errorMessage: MANAGED_GATEWAY_MESSAGE,
+    };
   }
 }

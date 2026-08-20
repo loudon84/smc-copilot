@@ -72,24 +72,21 @@ function RuntimePane(): React.JSX.Element {
     }
   }
 
-  const externallyManaged =
-    owner?.owner === "salt" || owner?.owner === "opsi";
-  const providerLabel =
-    owner?.owner === "opsi" ? "OPSI" : owner?.owner === "salt" ? "Salt" : null;
+  const saltMode = owner?.owner === "salt";
 
   return (
     <div className="settings-pane">
-      <h2>{externallyManaged ? "Hermes Availability" : "Hermes Runtime"}</h2>
+      <h2>{saltMode ? "Hermes Availability" : "Hermes Runtime"}</h2>
       <p className="settings-pane-desc">
-        {externallyManaged
-          ? `Managed by organization${providerLabel ? ` / Provider: ${providerLabel}` : ""}. This app only checks whether Gateway is reachable.`
-          : "Copilot Desktop connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
+        {saltMode
+          ? "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
+          : "SMC-Copilot connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
       </p>
 
       <dl className="settings-kv">
         <div>
           <dt>Control owner</dt>
-          <dd>{externallyManaged ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
+          <dd>{saltMode ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
         </div>
         <div>
           <dt>Hermes status</dt>
@@ -113,7 +110,7 @@ function RuntimePane(): React.JSX.Element {
           <dt>Version</dt>
           <dd>{status?.version || "—"}</dd>
         </div>
-        {!externallyManaged && (
+        {!saltMode && (
           <>
             <div>
               <dt>Owner source</dt>
@@ -142,9 +139,9 @@ function RuntimePane(): React.JSX.Element {
           disabled={busy}
           onClick={() => void handleReconnect()}
         >
-          {externallyManaged ? "Retry" : "Reconnect"}
+          {saltMode ? "Retry" : "Reconnect"}
         </button>
-        {!externallyManaged && (
+        {!saltMode && (
           <button
             type="button"
             disabled={busy}

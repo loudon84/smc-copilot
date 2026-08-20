@@ -6,35 +6,13 @@ import type {
   HermesRuntimeConnectionResult,
   HermesRuntimeProbe,
 } from "../../shared/runtime/runtime-contract";
-import { RuntimeServiceAdapter } from "./runtime-service-adapter";
 import { LegacyLocalRuntimeAdapter } from "./legacy-local-runtime-adapter";
-import { HermesAvailabilityBackend } from "../hermes/availability-backend";
-import { getHermesControlOwner } from "../hermes/control-owner";
 import {
   setHermesHomeOverride,
-  HERMES_HOME,
+  getHermesHome,
+  invalidateHermesRuntimeConfigCache,
 } from "./hermes-runtime-paths";
 import { validateHermesHomeDir } from "./hermes-runtime-locator";
-
-function defaultAdapter(): HermesRuntimeAdapter {
-  const owner = getHermesControlOwner();
-  switch (owner) {
-    case "salt":
-    case "opsi":
-      // Probe-only Availability (Gateway :8642 /health). No Runtime :8765.
-      return new HermesAvailabilityBackend();
-    case "direct":
-      // Default Work path: locate Hermes home + probe/start Gateway locally.
-      return new LegacyLocalRuntimeAdapter();
-    case "runtime":
-      // Opt-in Copilot Runtime HTTP control plane (:8765).
-      return new RuntimeServiceAdapter();
-    default: {
-      const _exhaustive: never = owner;
-      throw new Error(`Unknown control owner: ${_exhaustive}`);
-    }
-  }
-}
 
 export class RuntimeManager {
   private adapter: HermesRuntimeAdapter;
@@ -42,7 +20,7 @@ export class RuntimeManager {
   private listeners = new Set<(probe: HermesRuntimeProbe) => void>();
 
   constructor(adapter?: HermesRuntimeAdapter) {
-    this.adapter = adapter ?? defaultAdapter();
+    this.adapter = adapter ?? new LegacyLocalRuntimeAdapter();
   }
 
   setAdapter(adapter: HermesRuntimeAdapter): void {
@@ -83,7 +61,6 @@ export class RuntimeManager {
     profile?: string,
   ): Promise<HermesRuntimeConnectionResult> {
     const result = await this.adapter.ensureReady(profile);
-    // Refresh and broadcast full probe after ensure.
     await this.probe(profile);
     return result;
   }
@@ -101,17 +78,18 @@ export class RuntimeManager {
   adoptHome(path: string): { ok: boolean; hermesHome: string; error?: string } {
     const trimmed = path?.trim() ?? "";
     if (!trimmed) {
-      return { ok: false, hermesHome: HERMES_HOME, error: "Path is empty" };
+      return { ok: false, hermesHome: getHermesHome(), error: "Path is empty" };
     }
     if (!validateHermesHomeDir(trimmed)) {
       return {
         ok: false,
-        hermesHome: HERMES_HOME,
+        hermesHome: getHermesHome(),
         error: "Directory is not a valid Hermes home",
       };
     }
     setHermesHomeOverride(trimmed);
-    return { ok: true, hermesHome: trimmed };
+    invalidateHermesRuntimeConfigCache();
+    return { ok: true, hermesHome: getHermesHome() };
   }
 
   getLastProbe(): HermesRuntimeProbe | null {

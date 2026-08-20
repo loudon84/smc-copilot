@@ -3,6 +3,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useSettingsData } from "./useSettingsData";
 
 vi.mock("../useI18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("../../update/AppUpdateProvider", () => ({
+  useAppUpdate: () => ({
+    state: {
+      schemaVersion: 2,
+      revision: 0,
+      supported: true,
+      status: "idle",
+      currentVersion: "1.0.0",
+      availableVersion: null,
+      releaseDate: null,
+      releaseNotes: null,
+      percent: null,
+      transferred: null,
+      total: null,
+      bytesPerSecond: null,
+      error: null,
+      checkedAt: null,
+      updatedAt: new Date(0).toISOString(),
+    },
+    checkForUpdates: vi.fn(async () => ({})),
+    downloadUpdate: vi.fn(async () => ({})),
+    installUpdate: vi.fn(async () => ({})),
+  }),
+}));
 
 type PublicConnectionConfig = Awaited<
   ReturnType<typeof window.hermesAPI.getConnectionConfig>
@@ -46,15 +70,10 @@ describe("useSettingsData remote OAuth", () => {
         getAppVersion: vi.fn(async () => "1.0.0"),
         getConnectionConfig: vi.fn(async () => connectionConfig()),
         getApiServerKeyStatus: vi.fn(async () => ({ hasKey: true })),
-        getAutoUpgradeEnabled: vi.fn(async () => true),
         getHermesHome: vi.fn(async () => "/tmp/hermes"),
         getHermesVersion: vi.fn(async () => "Hermes Agent v1.0.0"),
         getConfig: vi.fn(async () => ""),
         onConnectionConfigChanged: vi.fn(() => vi.fn()),
-        onUpdateAvailable: vi.fn(() => vi.fn()),
-        onUpdateDownloadProgress: vi.fn(() => vi.fn()),
-        onUpdateDownloaded: vi.fn(() => vi.fn()),
-        onUpdateError: vi.fn(() => vi.fn()),
         probeRemoteAuthMode: vi.fn(async () => ({
           authMode: "oauth" as const,
           version: "1.0.0",

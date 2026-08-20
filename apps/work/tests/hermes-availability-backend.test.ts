@@ -41,13 +41,13 @@ describe("HermesAvailabilityBackend", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it("reports runtime_missing when Hermes is absent", async () => {
+  it("reports runtime_invalid when Hermes CLI is absent", async () => {
     const { HermesAvailabilityBackend } = await import(
       "../src/main/hermes/availability-backend"
     );
     const backend = new HermesAvailabilityBackend();
     const probe = await backend.probe();
-    expect(probe.state).toBe("runtime_missing");
+    expect(probe.state).toBe("runtime_invalid");
     expect(probe.gatewayHealthy).toBe(false);
     expect(probe.authenticated).toBe(false);
     const ready = await backend.ensureReady();

@@ -71,12 +71,13 @@ import {
   type InstallProgress,
 } from "../installer";
 import { getRuntimeManager } from "../runtime/runtime-manager";
+import { MANAGED_GATEWAY_MESSAGE } from "../runtime/hermes-runtime-paths";
 import { getRuntimeManagementBackend } from "../runtime/runtime-management-backend";
 import {
   isRuntimeControlOwner,
-  isExternallyManagedControlOwner,
+  isSaltControlOwner,
   readControlOwnerSnapshot,
-  externallyManagedMessage,
+  saltManagedMessage,
 } from "../hermes/control-owner";
 import { resolveProfileToInstance } from "../runtime/runtime-management-mapper";
 import type {
@@ -426,7 +427,7 @@ export interface IpcContext {
   requestQuit?: () => void;
 }
 
-const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC Copilot";
+const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC-Copilot";
 
 type RemoteSessionBridgeConfig = RemoteSessionConfig;
 
@@ -746,7 +747,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         () => sshGetHermesVersion(conn.ssh),
         activeSshProfile(),
       );
-    if (isExternallyManagedControlOwner()) {
+    if (isSaltControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.version ?? null;
     }
@@ -766,7 +767,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         activeSshProfile(),
       );
     clearVersionCache();
-    if (isExternallyManagedControlOwner()) {
+    if (isSaltControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.version ?? null;
     }
@@ -776,7 +777,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     return getHermesVersion();
   });
   ipcMain.handle("run-hermes-doctor", async () => {
-    if (isExternallyManagedControlOwner()) return externallyManagedMessage("Doctor");
+    if (isSaltControlOwner()) return saltManagedMessage("Doctor");
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshRunDoctor(conn.ssh);
     if (isRuntimeControlOwner()) {
@@ -786,8 +787,8 @@ export function registerIpcHandlers(context: IpcContext): void {
   });
   ipcMain.handle("run-hermes-update", async (event) => {
     try {
-      if (isExternallyManagedControlOwner()) {
-        return { success: false, error: externallyManagedMessage("Update") };
+      if (isSaltControlOwner()) {
+        return { success: false, error: saltManagedMessage("Update") };
       }
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) {
@@ -1262,12 +1263,6 @@ export function registerIpcHandlers(context: IpcContext): void {
       setEnvValue("API_SERVER_KEY", key, profile);
       if (profile && profile !== "default") {
         setEnvValue("API_SERVER_KEY", key);
-      }
-      // Restart gateway so it picks up the new key immediately.
-      if (isGatewayRunning(profile)) {
-        stopGateway(profile, true);
-        await new Promise<void>((r) => setTimeout(r, 800));
-        startGateway(profile);
       }
       return { key };
     },
@@ -1767,22 +1762,12 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   // Gateway
   ipcMain.handle("start-gateway", async () => {
-    if (isExternallyManagedControlOwner()) {
-      return {
-        success: false,
-        running: false,
-        error: externallyManagedMessage("Start Gateway"),
-      };
-    }
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStartGateway(conn.ssh);
       return { success: true, running: true };
     }
     if (conn.mode === "remote") {
-      // The remote server runs its own gateway; nothing to start locally.
-      // Without this guard we'd fall through to `startGateway()` and
-      // spawn a non-existent local hermes-agent (issue #266).
       return {
         success: false,
         running: false,
@@ -1790,29 +1775,24 @@ export function registerIpcHandlers(context: IpcContext): void {
           "Remote mode points at an already-running Hermes server. Start or restart the gateway on that remote host.",
       };
     }
-    if (isRuntimeControlOwner()) {
-      return getRuntimeManagementBackend().startGateway();
-    }
-    return startGatewayDetailed();
+    return {
+      success: false,
+      running: false,
+      error: MANAGED_GATEWAY_MESSAGE,
+    };
   });
   ipcMain.handle("stop-gateway", async () => {
-    if (isExternallyManagedControlOwner()) return false;
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
       return true;
     }
     if (conn.mode === "remote") {
-      // No local gateway to stop in pure remote mode.
       return true;
     }
-    if (isRuntimeControlOwner()) {
-      return getRuntimeManagementBackend().stopGateway();
-    }
-    return stopGateway(undefined, true);
+    return false;
   });
   ipcMain.handle("restart-gateway", async (_event, profile?: string) => {
-    if (isExternallyManagedControlOwner()) return false;
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -1822,22 +1802,13 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "remote") {
       return false;
     }
-    if (
-      isRuntimeControlOwner() &&
-      resolveProfileToInstance(profile).supported
-    ) {
-      return getRuntimeManagementBackend().restartGateway(profile);
-    }
-    return restartGateway(profile);
+    return false;
   });
   ipcMain.handle("gateway-status", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshGatewayStatus(conn.ssh);
-    if (isExternallyManagedControlOwner() || !isRuntimeControlOwner()) {
-      const probe = await runtimeManager.getStatus();
-      return probe.gatewayRunning;
-    }
-    return getRuntimeManagementBackend().gatewayStatus();
+    const probe = await runtimeManager.getStatus();
+    return probe.gatewayRunning;
   });
 
   // Keep the native window appearance in step with the app's theme so the

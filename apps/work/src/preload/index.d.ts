@@ -40,6 +40,7 @@ import type {
   HermesRuntimeProbe,
 } from "../shared/runtime/runtime-contract";
 import type { ControlOwnerSnapshot } from "../shared/runtime/control-owner";
+import type { AppUpdateState } from "../shared/app-update";
 
 interface ElectronAPI {
   process: {
@@ -973,20 +974,14 @@ interface HermesAPI {
   claw3dStopAdapter: () => Promise<boolean>;
 
   // Updates
-  checkForUpdates: () => Promise<string | null>;
-  downloadUpdate: () => Promise<boolean>;
-  installUpdate: () => Promise<void>;
+  getUpdateState: () => Promise<AppUpdateState>;
+  checkForUpdates: () => Promise<AppUpdateState>;
+  downloadUpdate: () => Promise<AppUpdateState>;
+  installUpdate: () => Promise<AppUpdateState>;
   getAppVersion: () => Promise<string>;
-  getAutoUpgradeEnabled: () => Promise<boolean>;
-  setAutoUpgradeEnabled: (enabled: boolean) => Promise<boolean>;
-  onUpdateAvailable: (
-    callback: (info: { version: string; releaseNotes: string }) => void,
+  onUpdateStateChanged: (
+    callback: (state: AppUpdateState) => void,
   ) => () => void;
-  onUpdateDownloadProgress: (
-    callback: (info: { percent: number }) => void,
-  ) => () => void;
-  onUpdateDownloaded: (callback: () => void) => () => void;
-  onUpdateError: (callback: (message: string) => void) => () => void;
 
   // Menu events
   onMenuNewChat: (callback: () => void) => () => void;

@@ -43,21 +43,20 @@ function ConnectionErrorScreen({
     }
   }
 
-  const externallyManaged = owner === "salt" || owner === "opsi";
-  const providerLabel = owner === "opsi" ? "OPSI" : owner === "salt" ? "Salt" : null;
+  const saltMode = owner === "salt";
 
   return (
     <div className="connection-error">
       <div className="connection-error-card">
         <h1>
-          {externallyManaged
+          {saltMode
             ? "Waiting for enterprise Hermes Agent"
             : "Cannot connect to Hermes Agent"}
         </h1>
         <p className="connection-error-lead">
-          {externallyManaged
-            ? `Managed by organization${providerLabel ? ` / Provider: ${providerLabel}` : ""}. Hermes install, update, and Gateway lifecycle are handled by the organization. Retry after recovery. Restart OPSI is not available here.`
-            : "Copilot Desktop needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
+          {saltMode
+            ? "Managed by organization. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
+            : "SMC-Copilot needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
         </p>
         <ConnectionErrorDetails status={status} error={error} />
         <div className="connection-error-actions">
@@ -69,7 +68,7 @@ function ConnectionErrorScreen({
           >
             {connecting || busy ? "Connecting…" : "Retry"}
           </button>
-          {!externallyManaged && (
+          {!saltMode && (
             <button
               type="button"
               disabled={busy}
@@ -85,7 +84,7 @@ function ConnectionErrorScreen({
           >
             Open Hermes logs
           </button>
-          {!externallyManaged && (
+          {!saltMode && (
             <button
               type="button"
               disabled={busy}

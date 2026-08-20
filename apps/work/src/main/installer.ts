@@ -18,6 +18,11 @@ import {
   getEnhancedPath,
   canInvokeHermesCli,
 } from "./runtime/hermes-runtime-paths";
+import {
+  cliPathExists,
+  runHermesCliAsync,
+  runHermesCliSync,
+} from "./runtime/hermes-cli-runner";
 
 // Re-export runtime paths for legacy callers.
 export {
@@ -138,17 +143,8 @@ let _versionFetching = false;
 
 export async function getHermesVersion(): Promise<string | null> {
   if (_cachedVersion !== null) return _cachedVersion;
-  if (!canInvokeHermesCli()) return null;
+  if (!canInvokeHermesCli() && !cliPathExists()) return null;
   if (_versionFetching) {
-    // Wait for the in-flight fetch but cap the wait. The execFile below
-    // has a 15s timeout and its callback unconditionally clears
-    // `_versionFetching`, so under normal failure paths the poll
-    // unblocks on its own. Pathological cases (callback never invoked,
-    // worker killed mid-callback, async exception in handler) would
-    // otherwise leak a 100 ms interval per caller forever. Cap at 20s
-    // — comfortably above the execFile timeout — and resolve with
-    // whatever `_cachedVersion` happens to be (typically `null`),
-    // which matches the same return shape callers already handle.
     return new Promise((resolve) => {
       const startedAt = Date.now();
       const check = setInterval(() => {
@@ -160,32 +156,12 @@ export async function getHermesVersion(): Promise<string | null> {
     });
   }
   _versionFetching = true;
-  return new Promise((resolve) => {
-    execFile(
-      HERMES_PYTHON,
-      hermesCliArgs(["--version"]),
-      {
-        cwd: HERMES_REPO,
-        env: {
-          ...process.env,
-          PATH: getEnhancedPath(),
-          HOME: homedir(),
-          HERMES_HOME,
-        },
-        timeout: 15000,
-        ...HIDDEN_SUBPROCESS_OPTIONS,
-      },
-      (error, stdout) => {
-        _versionFetching = false;
-        if (error) {
-          resolve(null);
-        } else {
-          _cachedVersion = stdout.toString().trim();
-          resolve(_cachedVersion);
-        }
-      },
-    );
-  });
+  const version = await runHermesCliAsync(["--version"]);
+  _versionFetching = false;
+  if (version) {
+    _cachedVersion = version;
+  }
+  return version || null;
 }
 
 export function clearVersionCache(): void {
@@ -193,23 +169,11 @@ export function clearVersionCache(): void {
 }
 
 export function runHermesDoctor(): string {
-  if (!canInvokeHermesCli()) {
+  if (!canInvokeHermesCli() && !cliPathExists()) {
     return "Hermes is not installed.";
   }
   try {
-    const output = execFileSync(HERMES_PYTHON, hermesCliArgs(["doctor"]), {
-      cwd: HERMES_REPO,
-      env: {
-        ...process.env,
-        PATH: getEnhancedPath(),
-        HOME: homedir(),
-        HERMES_HOME,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 30000,
-      ...HIDDEN_SUBPROCESS_OPTIONS,
-    });
-    return stripAnsi(output.toString());
+    return stripAnsi(runHermesCliSync(["doctor"]));
   } catch (err) {
     const stderr = (err as { stderr?: Buffer }).stderr?.toString() || "";
     return stripAnsi(stderr) || "Doctor check failed.";

@@ -1,41 +1,40 @@
 /**
- * Read-only locator for an existing Hermes Agent installation.
+ * Read-only locator for OPSI Managed Hermes Runtime.
  * Never installs, upgrades, or writes model/API key configuration.
  */
 import { existsSync } from "fs";
 import { join } from "path";
 import {
-  HERMES_HOME,
-  HERMES_REPO,
-  HERMES_PYTHON,
-  HERMES_SCRIPT,
-  canInvokeHermesCli,
-  installBinariesFor,
-  looksLikeHermesHome,
-} from "./hermes-runtime-paths";
-import { getProfilePort } from "../gateway-ports";
+  getGatewayBaseUrl,
+  getHermesCliPath,
+  getHermesHome,
+  getHermesProgramRoot,
+} from "./hermes-runtime-config";
+import { cliPathExists } from "./hermes-cli-runner";
 import { normalizeProfileName, profileHome } from "../utils";
 
 export interface HermesRuntimeLocation {
   homePath: string;
-  repoPath: string;
-  pythonPath: string;
+  programRoot: string;
   executablePath: string;
   profile: string;
   profilePath: string;
   endpoint: string;
-  port: number;
   runtimeFound: boolean;
   runtimeValid: boolean;
   cliAvailable: boolean;
 }
 
-/** True when `dir` is a Hermes home the desktop can drive as-is. */
+/** True when `dir` is a Hermes home Work can reference. */
 export function validateHermesHomeDir(dir: string): boolean {
   const home = dir?.trim();
   if (!home || !existsSync(home)) return false;
-  const { python, script } = installBinariesFor(home);
-  return existsSync(python) && existsSync(script);
+  return (
+    existsSync(join(home, "config.yaml")) ||
+    existsSync(join(home, ".env")) ||
+    existsSync(join(home, "profiles")) ||
+    existsSync(join(home, "auth.json"))
+  );
 }
 
 export function locateHermesRuntime(profile?: string): HermesRuntimeLocation {
@@ -45,41 +44,28 @@ export function locateHermesRuntime(profile?: string): HermesRuntimeLocation {
   } catch {
     resolvedProfile = "default";
   }
-  const homePath = HERMES_HOME;
-  const repoPath = HERMES_REPO;
+
+  const homePath = getHermesHome();
+  const programRoot = getHermesProgramRoot();
+  const executablePath = getHermesCliPath();
   const profilePath = profileHome(
     resolvedProfile === "default" ? undefined : resolvedProfile,
   );
-  const port = getProfilePort(
-    resolvedProfile === "default" ? undefined : resolvedProfile,
-  );
-  const endpoint = `http://127.0.0.1:${port}`;
+  const endpoint = getGatewayBaseUrl();
 
-  const runtimeFound =
-    existsSync(homePath) &&
-    (looksLikeHermesHome(homePath) || existsSync(repoPath));
-
-  const bins = installBinariesFor(homePath);
-  const runtimeValid =
-    runtimeFound &&
-    existsSync(repoPath) &&
-    existsSync(bins.python) &&
-    (process.platform === "win32"
-      ? existsSync(join(repoPath, "hermes_cli", "main.py"))
-      : existsSync(bins.script));
-
-  const cliAvailable = canInvokeHermesCli();
+  const homeExists = existsSync(homePath);
+  const cliExists = cliPathExists();
+  const runtimeFound = homeExists || cliExists;
+  const runtimeValid = cliExists;
+  const cliAvailable = cliExists;
 
   return {
     homePath,
-    repoPath,
-    pythonPath: HERMES_PYTHON,
-    executablePath:
-      process.platform === "win32" ? HERMES_PYTHON : HERMES_SCRIPT,
+    programRoot,
+    executablePath,
     profile: resolvedProfile,
     profilePath,
     endpoint,
-    port,
     runtimeFound,
     runtimeValid,
     cliAvailable,

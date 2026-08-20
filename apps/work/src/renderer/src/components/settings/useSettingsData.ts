@@ -11,6 +11,7 @@ import {
   type RemoteChatTransport,
   type TransportProbe,
 } from "./settingsHelpers";
+import { useAppUpdate } from "../../update/AppUpdateProvider";
 
 export { CHAT_TRANSPORT_OPTIONS };
 export type { RemoteChatTransport, TransportProbe };
@@ -28,6 +29,12 @@ export type { RemoteChatTransport, TransportProbe };
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useSettingsData(profile?: string) {
   const { t } = useI18n();
+  const {
+    state: appUpdate,
+    checkForUpdates: checkAppUpdate,
+    downloadUpdate,
+    installUpdate,
+  } = useAppUpdate();
   const [hermesHome, setHermesHome] = useState("");
 
   const [hermesVersion, setHermesVersion] = useState<string | null>(null);
@@ -39,8 +46,6 @@ export function useSettingsData(profile?: string) {
   const [updateResultType, setUpdateResultType] = useState<
     "success" | "error" | null
   >(null);
-  const [autoUpgradeEnabled, setAutoUpgradeEnabled] = useState(true);
-  const [autoUpgradeSaved, setAutoUpgradeSaved] = useState(false);
 
   // OpenClaw migration — initialize from localStorage cache
   const cachedClaw = getCachedOpenClaw();
@@ -125,25 +130,6 @@ export function useSettingsData(profile?: string) {
   // Hermes Agent engine update above: this ships the desktop shell itself via
   // electron-updater / GitHub releases. Mirrors the sidebar-footer updater so
   // the About pane can check/download/restart on its own.
-  const [desktopUpdateState, setDesktopUpdateState] = useState<
-    | "available"
-    | "downloading"
-    | "ready"
-    | "error"
-    | "checking"
-    | "uptodate"
-    | null
-  >(null);
-  const [desktopUpdateVersion, setDesktopUpdateVersion] = useState<
-    string | null
-  >(null);
-  const [desktopUpdatePercent, setDesktopUpdatePercent] = useState<
-    number | null
-  >(null);
-  const [desktopUpdateError, setDesktopUpdateError] = useState<string | null>(
-    null,
-  );
-
   const loadConfigRequestRef = useRef(0);
 
   const loadConfig = useCallback(async (): Promise<void> => {
@@ -152,11 +138,10 @@ export function useSettingsData(profile?: string) {
     setHermesVersion(null);
 
     // Load fast config first (cached in main process)
-    const [aVersion, conn, keyStatus, autoUpgrade] = await Promise.all([
+    const [aVersion, conn, keyStatus] = await Promise.all([
       window.hermesAPI.getAppVersion(),
       window.hermesAPI.getConnectionConfig(),
       window.hermesAPI.getApiServerKeyStatus(profile),
-      window.hermesAPI.getAutoUpgradeEnabled(),
     ]);
 
     if (requestId !== loadConfigRequestRef.current) return;
@@ -180,7 +165,6 @@ export function useSettingsData(profile?: string) {
     setSshRemotePort(conn.ssh?.remotePort ? String(conn.ssh.remotePort) : "");
     setSshLocalPort(conn.ssh?.localPort ? String(conn.ssh.localPort) : "");
     setApiServerKeyMissing(!keyStatus.hasKey);
-    setAutoUpgradeEnabled(autoUpgrade);
     connLoaded.current = true;
 
     if (conn.mode === "remote" && conn.remoteUrl.trim()) {
@@ -261,71 +245,25 @@ export function useSettingsData(profile?: string) {
     return unsubscribe;
   }, [loadConfig]);
 
-  // Track desktop-app update lifecycle events (the same ones the sidebar-footer
-  // upgrade button listens to) so the About pane reflects live progress.
-  useEffect(() => {
-    const cleanupAvailable = window.hermesAPI.onUpdateAvailable((info) => {
-      setDesktopUpdateState("available");
-      setDesktopUpdateVersion(info.version);
-      setDesktopUpdateError(null);
-    });
-    const cleanupProgress = window.hermesAPI.onUpdateDownloadProgress(
-      (info) => {
-        setDesktopUpdateState("downloading");
-        setDesktopUpdatePercent(info.percent);
-        setDesktopUpdateError(null);
-      },
-    );
-    const cleanupDownloaded = window.hermesAPI.onUpdateDownloaded(() => {
-      setDesktopUpdateState("ready");
-      setDesktopUpdatePercent(null);
-      setDesktopUpdateError(null);
-    });
-    const cleanupError = window.hermesAPI.onUpdateError((message) => {
-      setDesktopUpdateState("error");
-      setDesktopUpdateError(message);
-    });
-    return () => {
-      cleanupAvailable();
-      cleanupProgress();
-      cleanupDownloaded();
-      cleanupError();
-    };
-  }, []);
-
   async function checkDesktopUpdate(): Promise<void> {
-    setDesktopUpdateState("checking");
-    setDesktopUpdateError(null);
-    try {
-      const version = await window.hermesAPI.checkForUpdates();
-      if (version) {
-        setDesktopUpdateState("available");
-        setDesktopUpdateVersion(version);
-      } else {
-        setDesktopUpdateState("uptodate");
-      }
-    } catch (err) {
-      setDesktopUpdateState("error");
-      setDesktopUpdateError(err instanceof Error ? err.message : String(err));
-    }
+    await checkAppUpdate();
   }
 
   async function handleDesktopUpdate(): Promise<void> {
-    if (desktopUpdateState === "ready") {
-      await window.hermesAPI.installUpdate();
+    if (!appUpdate) {
       return;
     }
-    // "available" or "error" → (re)start the download. Set downloading state
-    // immediately to block re-entrancy; `onUpdateDownloaded` flips to "ready".
-    setDesktopUpdateState("downloading");
-    setDesktopUpdatePercent(null);
-    setDesktopUpdateError(null);
-    try {
-      const ok = await window.hermesAPI.downloadUpdate();
-      if (!ok) setDesktopUpdateState("error");
-    } catch (err) {
-      setDesktopUpdateError(err instanceof Error ? err.message : String(err));
-      setDesktopUpdateState("error");
+    if (appUpdate.status === "ready") {
+      await installUpdate();
+      return;
+    }
+    if (
+      appUpdate.status === "available" ||
+      (appUpdate.status === "error" &&
+        appUpdate.error?.operation === "download" &&
+        appUpdate.availableVersion)
+    ) {
+      await downloadUpdate();
     }
   }
 
@@ -781,13 +719,6 @@ export function useSettingsData(profile?: string) {
     }
   }
 
-  async function handleAutoUpgradeChange(enabled: boolean): Promise<void> {
-    setAutoUpgradeEnabled(enabled);
-    await window.hermesAPI.setAutoUpgradeEnabled(enabled);
-    setAutoUpgradeSaved(true);
-    setTimeout(() => setAutoUpgradeSaved(false), 2000);
-  }
-
   // Parse "Hermes Agent v0.7.0 (2026.4.3) Project: ... Python: 3.11.15 OpenAI SDK: 2.30.0 Update available: ..."
   const parsedVersion = (() => {
     if (!hermesVersion) return null;
@@ -813,20 +744,17 @@ export function useSettingsData(profile?: string) {
     updating,
     updateResult,
     updateResultType,
-    autoUpgradeEnabled,
-    autoUpgradeSaved,
     dumpOutput,
     dumpRunning,
     setDumpOutput,
     setDumpRunning,
     handleUpdateHermes,
     handleDoctor,
-    handleAutoUpgradeChange,
     // desktop app (Electron) update — separate channel from the engine update
-    desktopUpdateState,
-    desktopUpdateVersion,
-    desktopUpdatePercent,
-    desktopUpdateError,
+    desktopUpdateState: appUpdate?.status ?? null,
+    desktopUpdateVersion: appUpdate?.availableVersion ?? null,
+    desktopUpdatePercent: appUpdate?.percent ?? null,
+    desktopUpdateError: appUpdate?.error?.message ?? null,
     checkDesktopUpdate,
     handleDesktopUpdate,
     // migration / community

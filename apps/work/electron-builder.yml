@@ -1,5 +1,5 @@
-appId: com.nousresearch.hermes
-productName: Copilot Desktop
+appId: com.smc.copilot
+productName: SMC-Copilot
 directories:
   buildResources: build
 files:
@@ -13,19 +13,20 @@ asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/build/Release/*.node
 win:
-  executableName: copilot-desktop
+  executableName: smc-copilot
   target:
     - nsis
-    - portable
-portable:
-  artifactName: ${name}-${version}-portable.${ext}
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  artifactName: smc-copilot-${version}-setup.${ext}
+  shortcutName: SMC-Copilot
+  uninstallDisplayName: SMC-Copilot
+  include: installer.nsh
   createDesktopShortcut: always
-  oneClick: true
-  perMachine: false
+  createStartMenuShortcut: true
+  oneClick: false
+  perMachine: true
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
 mac:
   artifactName: ${name}-${version}-${arch}-${os}.${ext}
   icon: build/icon.icns
@@ -48,7 +49,7 @@ linux:
     - deb
     - rpm
   maintainer: electronjs.org
-  vendor: Nous Research
+  vendor: SMC
   category: Utility
   synopsis: Self-improving AI assistant desktop app
   description: >-
@@ -68,6 +69,6 @@ rpm:
   afterInstall: build/linux-after-install.sh
 npmRebuild: false
 publish:
-  provider: github
-  owner: fathah
-  repo: hermes-desktop
+  provider: generic
+  url: ${env.SMC_WORK_UPDATE_URL}
+  channel: latest

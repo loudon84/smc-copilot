@@ -35,6 +35,11 @@ import type {
   HermesRuntimeProbe,
 } from "../shared/runtime/runtime-contract";
 import type { ControlOwnerSnapshot } from "../shared/runtime/control-owner";
+import {
+  APP_UPDATE_CHANNELS,
+  isAppUpdateState,
+  type AppUpdateState,
+} from "../shared/app-update";
 import { createFilesApi } from "./files-api";
 import type { HermesFilesAPI } from "../shared/files";
 
@@ -1340,48 +1345,47 @@ const hermesAPI = {
     ipcRenderer.invoke("claw3d-stop-adapter"),
 
   // Updates
-  checkForUpdates: (): Promise<string | null> =>
-    ipcRenderer.invoke("check-for-updates"),
-  downloadUpdate: (): Promise<boolean> => ipcRenderer.invoke("download-update"),
-  installUpdate: (): Promise<void> => ipcRenderer.invoke("install-update"),
+  getUpdateState: async (): Promise<AppUpdateState> => {
+    const state = await ipcRenderer.invoke(APP_UPDATE_CHANNELS.getState);
+    if (!isAppUpdateState(state)) {
+      throw new Error("Invalid app update state payload");
+    }
+    return state;
+  },
+  checkForUpdates: async (): Promise<AppUpdateState> => {
+    const state = await ipcRenderer.invoke(APP_UPDATE_CHANNELS.check);
+    if (!isAppUpdateState(state)) {
+      throw new Error("Invalid app update check payload");
+    }
+    return state;
+  },
+  downloadUpdate: async (): Promise<AppUpdateState> => {
+    const state = await ipcRenderer.invoke(APP_UPDATE_CHANNELS.download);
+    if (!isAppUpdateState(state)) {
+      throw new Error("Invalid app update download payload");
+    }
+    return state;
+  },
+  installUpdate: async (): Promise<AppUpdateState> => {
+    const state = await ipcRenderer.invoke(APP_UPDATE_CHANNELS.install);
+    if (!isAppUpdateState(state)) {
+      throw new Error("Invalid app update install payload");
+    }
+    return state;
+  },
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("get-app-version"),
-  getAutoUpgradeEnabled: (): Promise<boolean> =>
-    ipcRenderer.invoke("get-auto-upgrade-enabled"),
-  setAutoUpgradeEnabled: (enabled: boolean): Promise<boolean> =>
-    ipcRenderer.invoke("set-auto-upgrade-enabled", enabled),
-
-  onUpdateAvailable: (
-    callback: (info: { version: string; releaseNotes: string }) => void,
+  onUpdateStateChanged: (
+    callback: (state: AppUpdateState) => void,
   ): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, info: unknown): void =>
-      callback(info as { version: string; releaseNotes: string });
-    ipcRenderer.on("update-available", handler);
-    return () => ipcRenderer.removeListener("update-available", handler);
-  },
-
-  onUpdateDownloadProgress: (
-    callback: (info: { percent: number }) => void,
-  ): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, info: unknown): void =>
-      callback(info as { percent: number });
-    ipcRenderer.on("update-download-progress", handler);
-    return () =>
-      ipcRenderer.removeListener("update-download-progress", handler);
-  },
-
-  onUpdateDownloaded: (callback: () => void): (() => void) => {
-    const handler = (): void => callback();
-    ipcRenderer.on("update-downloaded", handler);
-    return () => ipcRenderer.removeListener("update-downloaded", handler);
-  },
-
-  onUpdateError: (callback: (message: string) => void): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      message: unknown,
-    ): void => callback(String(message));
-    ipcRenderer.on("update-error", handler);
-    return () => ipcRenderer.removeListener("update-error", handler);
+      state: unknown,
+    ): void => {
+      if (isAppUpdateState(state)) callback(state);
+    };
+    ipcRenderer.on(APP_UPDATE_CHANNELS.stateChanged, handler);
+    return () =>
+      ipcRenderer.removeListener(APP_UPDATE_CHANNELS.stateChanged, handler);
   },
 
   // Menu events (from native menu bar)

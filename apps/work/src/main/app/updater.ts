@@ -1,115 +1,420 @@
 import { app, ipcMain, type BrowserWindow } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import type { AppUpdater } from "electron-updater";
-import { dirname, join } from "path";
+import type { AppUpdater, ProgressInfo, UpdateInfo } from "electron-updater";
 import { updaterLogger } from "../updater-log";
+import { APP_UPDATE_CHANNELS, type AppUpdateSource, type AppUpdateState } from "../../shared/app-update";
+import { normalizeUpdaterError } from "./update-error";
 
 interface UpdaterDeps {
   getMainWindow: () => BrowserWindow | null;
+  loadAutoUpdater?: () => AppUpdater;
 }
+
+type UpdateStatePatch = Partial<AppUpdateState>;
+
+const STARTUP_DELAY_MS = 15_000;
+const STARTUP_JITTER_MS = 45_000;
+const SCHEDULE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const SCHEDULE_JITTER_RATIO = 0.1;
 
 let autoUpdaterInstance: AppUpdater | null = null;
+let appUpdateState: AppUpdateState = createInitialState(false);
+let scheduledCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let startupCheckTimer: ReturnType<typeof setTimeout> | null = null;
+let checkPromise: Promise<AppUpdateState> | null = null;
+let downloadPromise: Promise<AppUpdateState> | null = null;
+let installRequested = false;
 
-function updatePreferencesPath(): string {
-  return join(app.getPath("userData"), "update-preferences.json");
+function isoNow(): string {
+  return new Date().toISOString();
 }
 
-function getAutoUpgradeEnabled(): boolean {
-  const file = updatePreferencesPath();
-  if (!existsSync(file)) {
-    return true;
+function createInitialState(supported: boolean): AppUpdateState {
+  return {
+    schemaVersion: 2,
+    revision: 0,
+    supported,
+    status: "idle",
+    currentVersion: app.getVersion(),
+    availableVersion: null,
+    releaseDate: null,
+    releaseNotes: null,
+    percent: null,
+    transferred: null,
+    total: null,
+    bytesPerSecond: null,
+    error: null,
+    checkedAt: null,
+    updatedAt: isoNow(),
+  };
+}
+
+function normalizeReleaseNotes(value: UpdateInfo["releaseNotes"]): string | null {
+  if (typeof value === "string") {
+    return value.slice(0, 8_000) || null;
   }
-
-  try {
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as {
-      autoUpgrade?: unknown;
-    };
-    return parsed.autoUpgrade !== false;
-  } catch {
-    return true;
+  if (Array.isArray(value)) {
+    const text = value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (!item || typeof item !== "object") return "";
+        const note = "note" in item && typeof item.note === "string" ? item.note : "";
+        const version =
+          "version" in item && typeof item.version === "string" ? item.version : "";
+        return version && note ? `${version}\n${note}` : note || version;
+      })
+      .filter(Boolean)
+      .join("\n\n");
+    return text.slice(0, 8_000) || null;
   }
+  return null;
 }
 
-function setAutoUpgradeEnabled(enabled: boolean): void {
-  const file = updatePreferencesPath();
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ autoUpgrade: enabled }, null, 2)}\n`);
+function finiteNonNegative(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value;
 }
 
-export function setupUpdater({ getMainWindow }: UpdaterDeps): void {
-  ipcMain.handle("get-app-version", () => app.getVersion());
-  ipcMain.handle("get-auto-upgrade-enabled", () => getAutoUpgradeEnabled());
-  ipcMain.handle("set-auto-upgrade-enabled", (_event, enabled: boolean) => {
-    setAutoUpgradeEnabled(enabled);
-    if (autoUpdaterInstance) {
-      autoUpdaterInstance.autoDownload = enabled;
+function clampPercent(value: unknown): number | null {
+  const numeric = finiteNonNegative(value);
+  if (numeric === null) return null;
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function logUpdaterEvent(
+  event: string,
+  extra: Record<string, unknown> = {},
+): void {
+  updaterLogger.info({
+    event,
+    currentVersion: appUpdateState.currentVersion,
+    availableVersion: appUpdateState.availableVersion,
+    providerKind: "electron-updater",
+    revision: appUpdateState.revision,
+    result: appUpdateState.status,
+    errorCode: appUpdateState.error?.code ?? null,
+    ...extra,
+  });
+}
+
+function updateState(
+  patch: UpdateStatePatch,
+  getMainWindow: () => BrowserWindow | null,
+): AppUpdateState {
+  const previous = appUpdateState;
+  const next: AppUpdateState = {
+    ...previous,
+    ...patch,
+    revision: previous.revision + 1,
+    updatedAt: isoNow(),
+  };
+  appUpdateState = next;
+  const mainWindow = getMainWindow();
+  mainWindow?.webContents.send(APP_UPDATE_CHANNELS.stateChanged, next);
+  return next;
+}
+
+function clearTimers(): void {
+  if (startupCheckTimer) clearTimeout(startupCheckTimer);
+  if (scheduledCheckTimer) clearTimeout(scheduledCheckTimer);
+  startupCheckTimer = null;
+  scheduledCheckTimer = null;
+}
+
+function scheduleNextBackgroundCheck(run: () => Promise<void>): void {
+  if (scheduledCheckTimer) clearTimeout(scheduledCheckTimer);
+  const jitter = SCHEDULE_INTERVAL_MS * SCHEDULE_JITTER_RATIO;
+  const offset = Math.round((Math.random() * 2 - 1) * jitter);
+  scheduledCheckTimer = setTimeout(() => {
+    void run();
+  }, SCHEDULE_INTERVAL_MS + offset);
+  scheduledCheckTimer.unref?.();
+}
+
+function shouldSkipBackgroundCheck(): boolean {
+  return ["available", "downloading", "ready", "installing"].includes(
+    appUpdateState.status,
+  );
+}
+
+async function performCheck(
+  autoUpdater: AppUpdater,
+  getMainWindow: () => BrowserWindow | null,
+  source: AppUpdateSource,
+): Promise<AppUpdateState> {
+  if (checkPromise) return checkPromise;
+  checkPromise = (async () => {
+    if (!appUpdateState.supported) return appUpdateState;
+    if (shouldSkipBackgroundCheck()) return appUpdateState;
+    updateState(
+      {
+        status: "checking",
+        error:
+          appUpdateState.error?.operation === "check" ? null : appUpdateState.error,
+      },
+      getMainWindow,
+    );
+    logUpdaterEvent("check.started", { source });
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const version = result?.updateInfo?.version ?? null;
+      if (!version) {
+        const next = updateState(
+          {
+            status: "uptodate",
+            checkedAt: isoNow(),
+            error: null,
+            percent: null,
+            transferred: null,
+            total: null,
+            bytesPerSecond: null,
+          },
+          getMainWindow,
+        );
+        logUpdaterEvent("check.uptodate", { source });
+        return next;
+      }
+      return appUpdateState;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logUpdaterEvent("check.failed", { source, message });
+      if (source === "manual") {
+        return updateState(
+          {
+            status: "error",
+            error: normalizeUpdaterError(error, "check", source),
+          },
+          getMainWindow,
+        );
+      }
+      if (appUpdateState.status === "checking" || appUpdateState.status === "idle") {
+        return updateState(
+          {
+            status: "idle",
+            error: appUpdateState.error?.operation === "check" ? null : appUpdateState.error,
+          },
+          getMainWindow,
+        );
+      }
+      return appUpdateState;
+    } finally {
+      checkPromise = null;
     }
-    return true;
+  })();
+  return checkPromise;
+}
+
+async function performDownload(
+  autoUpdater: AppUpdater,
+  getMainWindow: () => BrowserWindow | null,
+): Promise<AppUpdateState> {
+  if (downloadPromise) return downloadPromise;
+  downloadPromise = (async () => {
+    if (appUpdateState.status !== "available" && !(
+      appUpdateState.status === "error" &&
+      appUpdateState.error?.operation === "download" &&
+      appUpdateState.availableVersion
+    )) {
+      return appUpdateState;
+    }
+    updateState(
+      {
+        status: "downloading",
+        error: null,
+        percent: 0,
+        transferred: 0,
+        total: null,
+        bytesPerSecond: null,
+      },
+      getMainWindow,
+    );
+    logUpdaterEvent("download.started", { source: "manual" });
+    try {
+      await autoUpdater.downloadUpdate();
+      return appUpdateState;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logUpdaterEvent("download.failed", { source: "manual", message });
+      return updateState(
+        {
+          status: "error",
+          error: normalizeUpdaterError(error, "download", "manual"),
+        },
+        getMainWindow,
+      );
+    } finally {
+      downloadPromise = null;
+    }
+  })();
+  return downloadPromise;
+}
+
+function supportsRealUpdater(): boolean {
+  const isPortableBuild = !!process.env.PORTABLE_EXECUTABLE_DIR;
+  return process.platform === "win32" && app.isPackaged && !isPortableBuild;
+}
+
+export function setupUpdater({
+  getMainWindow,
+  loadAutoUpdater,
+}: UpdaterDeps): void {
+  clearTimers();
+  installRequested = false;
+  appUpdateState = createInitialState(supportsRealUpdater());
+
+  ipcMain.handle("get-app-version", () => app.getVersion());
+  ipcMain.handle(APP_UPDATE_CHANNELS.getState, () => appUpdateState);
+  ipcMain.handle(APP_UPDATE_CHANNELS.check, async () => {
+    if (!autoUpdaterInstance) return appUpdateState;
+    return performCheck(autoUpdaterInstance, getMainWindow, "manual");
+  });
+  ipcMain.handle(APP_UPDATE_CHANNELS.download, async () => {
+    if (!autoUpdaterInstance) return appUpdateState;
+    return performDownload(autoUpdaterInstance, getMainWindow);
+  });
+  ipcMain.handle(APP_UPDATE_CHANNELS.install, async () => {
+    if (!autoUpdaterInstance || appUpdateState.status !== "ready") {
+      return appUpdateState;
+    }
+    installRequested = true;
+    const next = updateState(
+      {
+        status: "installing",
+        error: null,
+      },
+      getMainWindow,
+    );
+    logUpdaterEvent("install.started", { source: "manual" });
+    updaterLogger.info(
+      "User confirmed installation — calling quitAndInstall(isSilent=false, isForceRunAfter=true)",
+    );
+    autoUpdaterInstance.quitAndInstall(false, true);
+    return next;
   });
 
-  const isPortableBuild = !!process.env.PORTABLE_EXECUTABLE_DIR;
-  if (!app.isPackaged || isPortableBuild) {
+  if (!supportsRealUpdater()) {
     autoUpdaterInstance = null;
-    ipcMain.handle("check-for-updates", async () => null);
-    ipcMain.handle("download-update", () => true);
-    ipcMain.handle("install-update", () => {});
     return;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { autoUpdater } = require("electron-updater") as {
-    autoUpdater: AppUpdater;
-  };
-
+  const autoUpdater = loadAutoUpdater
+    ? loadAutoUpdater()
+    : // eslint-disable-next-line @typescript-eslint/no-require-imports
+      ((require("electron-updater") as { autoUpdater: AppUpdater }).autoUpdater);
   autoUpdaterInstance = autoUpdater;
   autoUpdater.logger = updaterLogger;
-  autoUpdater.autoDownload = getAutoUpgradeEnabled();
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
 
-  autoUpdater.on("update-available", (info) => {
-    getMainWindow()?.webContents.send("update-available", {
-      version: info.version,
-      releaseNotes: info.releaseNotes,
-    });
+  autoUpdater.on("checking-for-update", () => {
+    logUpdaterEvent("event.checking");
   });
-  autoUpdater.on("download-progress", (progress) => {
-    getMainWindow()?.webContents.send("update-download-progress", {
-      percent: Math.round(progress.percent),
-    });
-  });
-  autoUpdater.on("update-downloaded", () => {
-    getMainWindow()?.webContents.send("update-downloaded");
-  });
-  autoUpdater.on("error", (err) => {
-    getMainWindow()?.webContents.send("update-error", err.message);
-  });
-
-  ipcMain.handle("check-for-updates", async () => {
-    try {
-      const result = await autoUpdater.checkForUpdates();
-      return result?.updateInfo?.version || null;
-    } catch {
-      return null;
-    }
-  });
-  ipcMain.handle("download-update", async () => {
-    try {
-      await autoUpdater.downloadUpdate();
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      getMainWindow()?.webContents.send("update-error", message);
-      return false;
-    }
-  });
-  ipcMain.handle("install-update", () => {
-    updaterLogger.info(
-      "Restart requested by user — calling quitAndInstall(isSilent=false, isForceRunAfter=true)",
+  autoUpdater.on("update-available", (info: UpdateInfo) => {
+    updateState(
+      {
+        status: "available",
+        availableVersion: info.version,
+        releaseDate: info.releaseDate ? new Date(info.releaseDate).toISOString() : null,
+        releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+        checkedAt: isoNow(),
+        error: null,
+        percent: null,
+        transferred: null,
+        total: null,
+        bytesPerSecond: null,
+      },
+      getMainWindow,
     );
-    autoUpdater.quitAndInstall(false, true);
+    logUpdaterEvent("event.available", { availableVersion: info.version });
+  });
+  autoUpdater.on("update-not-available", () => {
+    updateState(
+      {
+        status: "uptodate",
+        availableVersion: null,
+        releaseDate: null,
+        releaseNotes: null,
+        checkedAt: isoNow(),
+        error: null,
+        percent: null,
+        transferred: null,
+        total: null,
+        bytesPerSecond: null,
+      },
+      getMainWindow,
+    );
+    logUpdaterEvent("event.not-available");
+  });
+  autoUpdater.on("download-progress", (progress: ProgressInfo) => {
+    updateState(
+      {
+        status: "downloading",
+        percent: clampPercent(progress.percent),
+        transferred: finiteNonNegative(progress.transferred),
+        total: finiteNonNegative(progress.total),
+        bytesPerSecond: finiteNonNegative(progress.bytesPerSecond),
+        error: null,
+      },
+      getMainWindow,
+    );
+  });
+  autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+    updateState(
+      {
+        status: "ready",
+        availableVersion: info.version,
+        releaseDate: info.releaseDate ? new Date(info.releaseDate).toISOString() : null,
+        releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+        error: null,
+        percent: null,
+      },
+      getMainWindow,
+    );
+    logUpdaterEvent("event.downloaded", { availableVersion: info.version });
+  });
+  autoUpdater.on("error", (error: Error) => {
+    const message = error?.message || "Unknown updater error";
+    logUpdaterEvent("event.error", { message });
+    if (appUpdateState.status === "downloading" || installRequested) {
+      const operation = installRequested ? "install" : "download";
+      updateState(
+        {
+          status: "error",
+          error: normalizeUpdaterError(error, operation, "manual"),
+        },
+        getMainWindow,
+      );
+      installRequested = false;
+      return;
+    }
+    if (appUpdateState.status === "checking" || appUpdateState.status === "idle") {
+      updateState(
+        {
+          status: "idle",
+        },
+        getMainWindow,
+      );
+    }
   });
 
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
-  }, 5000);
+  const runBackgroundCheck = async (): Promise<void> => {
+    if (!autoUpdaterInstance) return;
+    try {
+      await performCheck(autoUpdaterInstance, getMainWindow, "scheduled");
+    } finally {
+      scheduleNextBackgroundCheck(runBackgroundCheck);
+    }
+  };
+
+  startupCheckTimer = setTimeout(() => {
+    void performCheck(autoUpdater, getMainWindow, "startup").finally(() => {
+      scheduleNextBackgroundCheck(runBackgroundCheck);
+    });
+  }, STARTUP_DELAY_MS + Math.round(Math.random() * STARTUP_JITTER_MS));
+  startupCheckTimer.unref?.();
+
+  app.once("before-quit", () => {
+    clearTimers();
+  });
 }

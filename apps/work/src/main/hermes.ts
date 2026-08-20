@@ -55,7 +55,7 @@ import {
   normalizeProfileName,
   getActiveProfileNameSync,
 } from "./utils";
-import { getProfilePort } from "./gateway-ports";
+import { getGatewayBaseUrl } from "./runtime/hermes-runtime-paths";
 import { promptSudoPassword, promptSecretValue } from "./gatewayPrompt";
 import { getSecret } from "./secrets";
 import { readModels } from "./models";
@@ -131,7 +131,7 @@ export function normaliseRemoteUrl(raw: string): string {
   return url;
 }
 
-export function getApiUrl(profile?: string): string {
+export function getApiUrl(_profile?: string): string {
   const conn = getConnectionConfig();
   if (conn.mode === "ssh") {
     const sshUrl = getSshTunnelUrl();
@@ -141,11 +141,7 @@ export function getApiUrl(profile?: string): string {
   if (conn.mode === "remote" && conn.remoteUrl) {
     return normaliseRemoteUrl(conn.remoteUrl);
   }
-  // Local mode: each profile's gateway binds its own port so they can run
-  // concurrently. Address the active (or explicitly requested) profile's
-  // gateway rather than a fixed 8642 �?that constant would always resolve to
-  // whichever gateway grabbed the port first, regardless of active profile.
-  return `http://127.0.0.1:${getProfilePort(resolveProfile(profile))}`;
+  return getGatewayBaseUrl();
 }
 
 export function isRemoteMode(): boolean {

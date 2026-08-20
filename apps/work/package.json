@@ -1,10 +1,9 @@
 {
-  "name": "copilot-desktop",
-  "version": "0.7.4",
-  "description": "Copilot Desktop — internal desktop application infrastructure",
+  "name": "smc-copilot",
+  "version": "0.7.5",
+  "description": "SMC-Copilot Desktop",
   "main": "./out/main/index.js",
-  "author": "fathah",
-  "homepage": "https://github.com/fathah/hermes-desktop",
+  "author": "SMC",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -35,6 +34,9 @@
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
     "build:rpm": "npm run build && electron-builder --linux rpm",
+    "release:build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-work-release.ps1",
+    "release:validate": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate-work-release.ps1",
+    "release:publish": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/publish-work-release.ps1",
     "test:watch": "vitest"
   },
   "dependencies": {
