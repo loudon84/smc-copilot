@@ -24,6 +24,8 @@ import { buildMenu } from "./menu";
 import { createAppTray, type AppTray } from "./tray";
 import { setupUpdater } from "./updater";
 import { registerArtifactProtocolHandler } from "../artifact-protocol";
+import { logWorkStartupIdentity } from "../build-info";
+import { readControlOwnerSnapshot } from "../hermes/control-owner";
 
 const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC-Copilot";
 const OPEN_DEVTOOLS_ON_START =
@@ -70,6 +72,7 @@ export function startMainProcess(): void {
 
   app.whenReady().then(() => {
     electronApp.setAppUserModelId("com.smc.copilot");
+    logWorkStartupIdentity(readControlOwnerSnapshot().owner);
 
     registerArtifactProtocolHandler();
 

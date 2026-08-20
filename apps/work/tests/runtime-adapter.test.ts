@@ -129,6 +129,93 @@ describe("LegacyLocalRuntimeAdapter", () => {
     expect(result.state).toBe("gateway_unreachable");
   });
 
+  function locatorMock(overrides: Record<string, unknown> = {}) {
+    return {
+      locateHermesRuntime: () => ({
+        homePath: "C:\\ProgramData\\SMC\\Hermes",
+        programRoot: "D:\\Programs\\SMC\\Hermes",
+        executablePath: "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
+        profile: "default",
+        profilePath: "C:\\ProgramData\\SMC\\Hermes",
+        endpoint: "http://127.0.0.1:8642",
+        runtimeFound: true,
+        runtimeValid: true,
+        cliAvailable: true,
+        ...overrides,
+      }),
+    };
+  }
+
+  it("maps home missing to runtime_missing", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () =>
+      locatorMock({ runtimeFound: false, runtimeValid: false, cliAvailable: false }),
+    );
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("runtime_missing");
+    expect(probe.errorCode).toBe("RUNTIME_NOT_FOUND");
+  });
+
+  it("keeps CLI missing as runtime_invalid even when Gateway is healthy", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () =>
+      locatorMock({
+        runtimeFound: true,
+        runtimeValid: true,
+        cliAvailable: false,
+      }),
+    );
+    vi.doMock("../src/main/runtime/gateway-probe", () => ({
+      probeGatewayHealth: vi.fn(async () => true),
+      probeGatewayAuthentication: vi.fn(async () => "ok" as const),
+    }));
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => null),
+    }));
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("runtime_invalid");
+    expect(probe.gatewayHealthy).toBe(false);
+  });
+
+  it("maps auth failure to gateway_auth_failed", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
+    vi.doMock("../src/main/runtime/gateway-probe", () => ({
+      probeGatewayHealth: vi.fn(async () => true),
+      probeGatewayAuthentication: vi.fn(async () => "unauthorized" as const),
+    }));
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("gateway_auth_failed");
+    expect(probe.authenticated).toBe(false);
+  });
+
+  it("maps full ready when CLI, health, and auth succeed", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
+    vi.doMock("../src/main/runtime/gateway-probe", () => ({
+      probeGatewayHealth: vi.fn(async () => true),
+      probeGatewayAuthentication: vi.fn(async () => "ok" as const),
+    }));
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("ready");
+    expect(probe.authenticated).toBe(true);
+    expect(probe.gatewayHealthy).toBe(true);
+  });
+
   it("restart returns MANAGED_RUNTIME_RESTART_REQUIRED", async () => {
     vi.doMock("../src/main/runtime/hermes-runtime-locator", () => ({
       locateHermesRuntime: () => ({
@@ -155,15 +242,55 @@ describe("LegacyLocalRuntimeAdapter", () => {
 
 describe("RuntimeManager default adapter", () => {
   it("uses LegacyLocalRuntimeAdapter by default", async () => {
-    const { RuntimeManager } = await import(
-      "../src/main/runtime/runtime-manager"
-    );
+    const { RuntimeManager, RUNTIME_ADAPTER_ID, RUNTIME_CONTRACT_ID } =
+      await import("../src/main/runtime/runtime-manager");
     const { LegacyLocalRuntimeAdapter } = await import(
       "../src/main/runtime/legacy-local-runtime-adapter"
     );
     const manager = new RuntimeManager();
     expect(manager).toBeDefined();
+    expect(manager.getAdapterIdentity()).toEqual({
+      adapter: RUNTIME_ADAPTER_ID,
+      contract: RUNTIME_CONTRACT_ID,
+    });
+    expect(RUNTIME_ADAPTER_ID).toBe("legacy-local");
+    expect(RUNTIME_CONTRACT_ID).toBe("managed-local-v1");
     expect(LegacyLocalRuntimeAdapter).toBeTypeOf("function");
+    expect(manager).toBeInstanceOf(RuntimeManager);
+  });
+
+  it("logs hermes_runtime_probe on state change without secrets", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const { RuntimeManager } = await import("../src/main/runtime/runtime-manager");
+    const probe = {
+      mode: "local" as const,
+      state: "gateway_auth_failed" as const,
+      endpoint: "http://127.0.0.1:8642",
+      homePath: "C:\\ProgramData\\SMC\\Hermes",
+      executablePath: "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
+      runtimeFound: true,
+      cliAvailable: true,
+      gatewayRunning: true,
+      gatewayHealthy: true,
+      authenticated: false,
+      errorCode: "GATEWAY_AUTH_FAILED",
+      errorMessage: "Bearer sk-secret-key-12345 rejected",
+    };
+    const manager = new RuntimeManager({
+      probe: vi.fn(async () => probe),
+      getStatus: vi.fn(async () => probe),
+      ensureReady: vi.fn(async () => ({ ok: false, state: probe.state })),
+      restart: vi.fn(async () => ({ ok: false, state: probe.state })),
+    });
+    await manager.probe();
+    const logged = infoSpy.mock.calls
+      .map((call) => String(call[0]))
+      .find((line) => line.includes("hermes_runtime_probe"));
+    expect(logged).toBeDefined();
+    expect(logged).toContain("legacy-local");
+    expect(logged).not.toContain("sk-secret");
+    expect(logged).not.toContain("Bearer");
+    infoSpy.mockRestore();
   });
 });
 

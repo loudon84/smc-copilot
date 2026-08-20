@@ -74,12 +74,11 @@ import { getRuntimeManager } from "../runtime/runtime-manager";
 import { MANAGED_GATEWAY_MESSAGE } from "../runtime/hermes-runtime-paths";
 import { getRuntimeManagementBackend } from "../runtime/runtime-management-backend";
 import {
+  isExternallyManagedControlOwner,
   isRuntimeControlOwner,
-  isSaltControlOwner,
   readControlOwnerSnapshot,
-  saltManagedMessage,
+  externallyManagedMessage,
 } from "../hermes/control-owner";
-import { resolveProfileToInstance } from "../runtime/runtime-management-mapper";
 import type {
   HermesRuntimeConnectionResult,
   HermesRuntimeProbe,
@@ -125,8 +124,6 @@ import {
   sendMessage,
   transcribeAudio,
   startGateway,
-  startGatewayDetailed,
-  stopGateway,
   isGatewayRunning,
   testRemoteConnection,
   restartGateway,
@@ -747,7 +744,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         () => sshGetHermesVersion(conn.ssh),
         activeSshProfile(),
       );
-    if (isSaltControlOwner()) {
+    if (isExternallyManagedControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.version ?? null;
     }
@@ -767,7 +764,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         activeSshProfile(),
       );
     clearVersionCache();
-    if (isSaltControlOwner()) {
+    if (isExternallyManagedControlOwner()) {
       const probe = await runtimeManager.getStatus();
       return probe.version ?? null;
     }
@@ -777,7 +774,9 @@ export function registerIpcHandlers(context: IpcContext): void {
     return getHermesVersion();
   });
   ipcMain.handle("run-hermes-doctor", async () => {
-    if (isSaltControlOwner()) return saltManagedMessage("Doctor");
+    if (isExternallyManagedControlOwner()) {
+      return externallyManagedMessage("Doctor");
+    }
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) return sshRunDoctor(conn.ssh);
     if (isRuntimeControlOwner()) {
@@ -787,8 +786,8 @@ export function registerIpcHandlers(context: IpcContext): void {
   });
   ipcMain.handle("run-hermes-update", async (event) => {
     try {
-      if (isSaltControlOwner()) {
-        return { success: false, error: saltManagedMessage("Update") };
+      if (isExternallyManagedControlOwner()) {
+        return { success: false, error: externallyManagedMessage("Update") };
       }
       const conn = getConnectionConfig();
       if (conn.mode === "ssh" && conn.ssh) {
@@ -1792,7 +1791,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     }
     return false;
   });
-  ipcMain.handle("restart-gateway", async (_event, profile?: string) => {
+  ipcMain.handle("restart-gateway", async (_event, _profile?: string) => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -2159,8 +2158,6 @@ export function registerIpcHandlers(context: IpcContext): void {
       if (!(await sshGatewayStatus(conn.ssh, name))) {
         await sshStartGateway(conn.ssh, name);
       }
-    } else if (!isRemoteMode() && !isGatewayRunning(name)) {
-      startGateway(name);
     }
     return true;
   });

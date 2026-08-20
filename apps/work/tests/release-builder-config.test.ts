@@ -37,6 +37,11 @@ describe("work v2.2 builder configuration", () => {
     expect(START).not.toContain("com.hermes.desktop");
   });
 
+  it("packages work-build-info.json as extraResources", () => {
+    expect(BUILDER).toContain("from: resources/work-build-info.json");
+    expect(BUILDER).toContain("to: work-build-info.json");
+  });
+
   it("uses only the generic stable provider for production updates", () => {
     expect(BUILDER).toContain("provider: generic");
     expect(BUILDER).toContain("url: ${env.SMC_WORK_UPDATE_URL}");
@@ -80,6 +85,13 @@ describe("work v2.2 builder configuration", () => {
     expect(PACKAGE_JSON.scripts["release:publish"]).toContain(
       "scripts/publish-work-release.ps1",
     );
+    expect(PACKAGE_JSON.scripts["build:unpack"]).toContain(
+      "scripts/run-electron-builder.mjs",
+    );
+    expect(PACKAGE_JSON.scripts["build:win"]).toContain(
+      "scripts/run-electron-builder.mjs",
+    );
+    expect(PACKAGE_JSON.scripts.guard).toContain("check:runtime-adapter-contract");
   });
 
   it("keeps updater feed selection out of the main-process runtime", () => {
@@ -90,6 +102,10 @@ describe("work v2.2 builder configuration", () => {
     const buildScript = readFileSync(join(ROOT, "scripts", "build-work-release.ps1"), "utf8");
     expect(buildScript.trimStart().startsWith("param(")).toBe(true);
     expect(buildScript).toContain("ReleaseNotesPath");
+    expect(buildScript).toContain("Import-DotEnvFile");
+    expect(buildScript).toContain("generate-work-build-info.mjs");
+    expect(buildScript).toContain("run-electron-builder.mjs");
+    expect(buildScript).toContain("validate-build-info");
     expect(buildScript).toContain("Add-ReleaseNotesToLatestYml");
     expect(buildScript).toContain("validate-app-update-yml");
     expect(buildScript).toContain("validate-sha512");

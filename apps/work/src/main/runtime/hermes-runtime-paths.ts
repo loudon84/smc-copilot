@@ -12,10 +12,8 @@ import { join, delimiter } from "path";
 import { homedir } from "os";
 import { app } from "electron";
 import {
-  getGatewayBaseUrl,
   getHermesCliPath,
   getHermesHome,
-  getHermesProgramRoot,
   getHermesRuntimeConfig,
   invalidateHermesRuntimeConfigCache,
 } from "./hermes-runtime-config";

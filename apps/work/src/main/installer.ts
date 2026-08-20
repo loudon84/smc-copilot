@@ -1,4 +1,4 @@
-import { spawn, execFile, execFileSync } from "child_process";
+import { spawn, execFile } from "child_process";
 import {
   existsSync,
   readFileSync,

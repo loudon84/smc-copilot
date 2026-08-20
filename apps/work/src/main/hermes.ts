@@ -56,6 +56,7 @@ import {
   getActiveProfileNameSync,
 } from "./utils";
 import { getGatewayBaseUrl } from "./runtime/hermes-runtime-paths";
+import { getProfilePort } from "./gateway-ports";
 import { promptSudoPassword, promptSecretValue } from "./gatewayPrompt";
 import { getSecret } from "./secrets";
 import { readModels } from "./models";

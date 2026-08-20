@@ -12,6 +12,9 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/build/Release/*.node
+extraResources:
+  - from: resources/work-build-info.json
+    to: work-build-info.json
 win:
   executableName: smc-copilot
   target:

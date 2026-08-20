@@ -38,7 +38,7 @@ Build signs first, then `scripts/lib/work-release-guard.mjs` `assertLatestYmlSha
 
 Packaged Windows releases use a static HTTPS Generic Provider at `https://release.superic.com/work/stable/`.
 
-`electron-builder.yml` points `publish` at `${env.SMC_WORK_UPDATE_URL}` with the `generic` provider. The build path is split into `scripts/build-work-release.ps1`, `scripts/validate-work-release.ps1`, and `scripts/publish-work-release.ps1` so a normal local package build cannot accidentally promote production `stable`.
+`electron-builder.yml` points `publish` at `${env.SMC_WORK_UPDATE_URL}` with the `generic` provider. Local package scripts and `scripts/build-work-release.ps1` load `apps/work/.env` as a fallback, but explicit process env still wins. The build path is split into `scripts/build-work-release.ps1`, `scripts/validate-work-release.ps1`, and `scripts/publish-work-release.ps1` so a normal local package build cannot accidentally promote production `stable`.
 
 Production gates require hostname `release.superic.com`, a packaged `app-update.yml` with that feed, Authenticode `Valid` plus `SMC_WORK_EXPECTED_PUBLISHER`, `latest.yml.sha512`, and `manifest.signed=true` on remote publish. `SMC_WORK_RELEASE_ALLOW_UNSIGNED=1` is fixture-only and is `PUBLISH_DENIED` for remote publish. After promote, publish GETs `latest.yml` and HEADs the installer or reports `PUBLISH_NOT_CONFIRMED`.
 

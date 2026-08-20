@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $packageJsonPath = Join-Path $repoRoot "package.json"
 $guardScript = Join-Path $PSScriptRoot "lib/work-release-guard.mjs"
+$dotenvPath = Join-Path $repoRoot ".env"
 
 function Invoke-Step {
   param(
@@ -17,6 +18,39 @@ function Invoke-Step {
 
   Write-Host "==> $Label"
   & $Action
+}
+
+function Import-DotEnvFile {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return
+  }
+
+  foreach ($line in Get-Content -LiteralPath $Path) {
+    if ($line -match '^\s*(?:#.*)?$') {
+      continue
+    }
+    if ($line -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+      continue
+    }
+
+    $name = $matches[1]
+    $value = $matches[2].Trim()
+    if (
+      ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+      ($value.StartsWith("'") -and $value.EndsWith("'"))
+    ) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+
+    if (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name))) {
+      continue
+    }
+    Set-Item -Path "Env:$name" -Value $value
+  }
 }
 
 function Require-CleanGitTree {
@@ -102,6 +136,7 @@ function Get-PackageVersion {
 
 Push-Location $repoRoot
 try {
+  Import-DotEnvFile -Path $dotenvPath
   $version = Get-PackageVersion
   if (-not $ReleaseNotesPath) {
     $ReleaseNotesPath = Join-Path $repoRoot "release-notes\$version.md"
@@ -120,6 +155,11 @@ try {
 
   Invoke-Step "Check git state" { Require-CleanGitTree }
   Invoke-Step "Validate update URL" { Require-ValidUpdateUrl }
+  Invoke-Step "Generate build identity" {
+    $env:SMC_WORK_BUILD_FAIL_DIRTY = "1"
+    node (Join-Path $PSScriptRoot "generate-work-build-info.mjs")
+  }
+  if ($LASTEXITCODE -ne 0) { throw "generate-work-build-info.mjs failed" }
   Invoke-Step "Install dependencies" { npm ci }
   if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
   Invoke-Step "Run guards" { npm run guard }
@@ -128,7 +168,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "npm run typecheck failed" }
   Invoke-Step "Run tests" { npm test }
   if ($LASTEXITCODE -ne 0) { throw "npm test failed" }
-  Invoke-Step "Build Windows NSIS artifact" { npx electron-builder --win nsis --x64 --publish never }
+  Invoke-Step "Build Windows NSIS artifact" { node (Join-Path $PSScriptRoot "run-electron-builder.mjs") --win nsis --x64 --publish never }
   if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 
   foreach ($path in @($installerPath, $blockmapPath, $latestPath, $appUpdateYml)) {
@@ -140,6 +180,18 @@ try {
   Invoke-Step "Verify packaged update feed" {
     node $guardScript validate-app-update-yml $appUpdateYml
     if ($LASTEXITCODE -ne 0) { throw "Packaged app-update.yml feed verification failed" }
+  }
+
+  $gitCommit = (git -C $repoRoot rev-parse HEAD).Trim()
+  if ($LASTEXITCODE -ne 0) {
+    throw "git rev-parse HEAD failed"
+  }
+
+  $unpackedResources = Join-Path $repoRoot "dist\win-unpacked\resources"
+  $buildInfoPath = Join-Path $unpackedResources "work-build-info.json"
+  Invoke-Step "Verify packaged build identity" {
+    node $guardScript validate-build-info $buildInfoPath $version $gitCommit
+    if ($LASTEXITCODE -ne 0) { throw "Packaged work-build-info.json verification failed" }
   }
 
   $signed = Assert-Authenticode -Path $installerPath
@@ -162,10 +214,6 @@ try {
   Add-ReleaseNotesToLatestYml -LatestPath (Join-Path $releaseDir "latest.yml") -NotesPath $ReleaseNotesPath
 
   $hash = (Get-FileHash -LiteralPath (Join-Path $releaseDir $installerName) -Algorithm SHA256).Hash.ToLowerInvariant()
-  $gitCommit = (git -C $repoRoot rev-parse HEAD).Trim()
-  if ($LASTEXITCODE -ne 0) {
-    throw "git rev-parse HEAD failed"
-  }
 
   @(
     "$hash  $installerName"

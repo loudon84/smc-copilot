@@ -90,6 +90,38 @@ export function assertPackagedAppUpdateYml(ymlPath, expectedUrl = PRODUCTION_UPD
   }
 }
 
+export const WORK_BUILD_INFO_SCHEMA = "smc.work.build.v1";
+
+export function assertWorkBuildInfo(path, expectedVersion, expectedCommit) {
+  if (!existsSync(path) || !statSync(path).isFile()) {
+    throw new Error(`Missing packaged work-build-info.json: ${path}`);
+  }
+  const info = readJson(path);
+  if (info.schema !== WORK_BUILD_INFO_SCHEMA) {
+    throw new Error(`work-build-info.json schema mismatch: ${info.schema || "<empty>"}`);
+  }
+  if (info.version !== expectedVersion) {
+    throw new Error(
+      `work-build-info.json version mismatch: expected ${expectedVersion}, got ${info.version || "<empty>"}`,
+    );
+  }
+  if (expectedCommit && info.gitCommit !== expectedCommit) {
+    throw new Error(
+      `work-build-info.json gitCommit mismatch: expected ${expectedCommit}, got ${info.gitCommit || "<empty>"}`,
+    );
+  }
+  if (info.runtimeAdapter !== "legacy-local") {
+    throw new Error(`work-build-info.json runtimeAdapter mismatch: ${info.runtimeAdapter || "<empty>"}`);
+  }
+  if (info.runtimeContract !== "managed-local-v1") {
+    throw new Error(`work-build-info.json runtimeContract mismatch: ${info.runtimeContract || "<empty>"}`);
+  }
+  if (info.dirty) {
+    throw new Error("work-build-info.json dirty=true is not allowed for release builds");
+  }
+  return info;
+}
+
 export function parseSimpleYaml(content) {
   const map = new Map();
   for (const line of content.split(/\r?\n/)) {
@@ -233,6 +265,15 @@ function main() {
       throw new Error("Usage: validate-app-update-yml <path>");
     }
     assertPackagedAppUpdateYml(ymlPath);
+    return;
+  }
+
+  if (command === "validate-build-info") {
+    const [infoPath, version, gitCommit] = args;
+    if (!infoPath || !version) {
+      throw new Error("Usage: validate-build-info <path> <version> [gitCommit]");
+    }
+    assertWorkBuildInfo(infoPath, version, gitCommit ?? "");
     return;
   }
 

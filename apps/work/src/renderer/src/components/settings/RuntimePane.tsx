@@ -72,21 +72,23 @@ function RuntimePane(): React.JSX.Element {
     }
   }
 
-  const saltMode = owner?.owner === "salt";
+  const managedMode = owner?.owner === "salt" || owner?.owner === "opsi";
 
   return (
     <div className="settings-pane">
-      <h2>{saltMode ? "Hermes Availability" : "Hermes Runtime"}</h2>
+      <h2>{managedMode ? "Hermes Availability" : "Hermes Runtime"}</h2>
       <p className="settings-pane-desc">
-        {saltMode
-          ? "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
+        {managedMode
+          ? owner?.owner === "opsi"
+            ? "Managed by organization (OPSI). Endpoint management owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
+            : "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
           : "SMC-Copilot connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
       </p>
 
       <dl className="settings-kv">
         <div>
           <dt>Control owner</dt>
-          <dd>{saltMode ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
+          <dd>{managedMode ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
         </div>
         <div>
           <dt>Hermes status</dt>
@@ -110,7 +112,7 @@ function RuntimePane(): React.JSX.Element {
           <dt>Version</dt>
           <dd>{status?.version || "—"}</dd>
         </div>
-        {!saltMode && (
+        {!managedMode && (
           <>
             <div>
               <dt>Owner source</dt>
@@ -139,9 +141,9 @@ function RuntimePane(): React.JSX.Element {
           disabled={busy}
           onClick={() => void handleReconnect()}
         >
-          {saltMode ? "Retry" : "Reconnect"}
+          {managedMode ? "Retry" : "Reconnect"}
         </button>
-        {!saltMode && (
+        {!managedMode && (
           <button
             type="button"
             disabled={busy}

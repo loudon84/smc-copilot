@@ -28,8 +28,9 @@ pnpm-debug.log*
 # Local isolated Hermes homes for development/tests
 .sandbox/
 
-# Electron packaging artifacts
-release/
+# Generated packaged identity (rebuilds on npm run build)
+resources/work-build-info.json
+
 .claude/worktrees
 
 # Tauri

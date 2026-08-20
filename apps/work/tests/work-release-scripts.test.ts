@@ -8,6 +8,7 @@ import {
   assertPackagedAppUpdateYml,
   assertReleaseArtifacts,
   assertReleaseDirectoryAbsent,
+  assertWorkBuildInfo,
   buildReleaseManifest,
   getBlockmapName,
   getInstallerName,
@@ -68,6 +69,45 @@ describe("work release guard helpers", () => {
   it("names Windows installers as smc-copilot setup artifacts", () => {
     expect(getInstallerName("0.7.5")).toBe("smc-copilot-0.7.5-setup.exe");
     expect(getBlockmapName("0.7.5")).toBe("smc-copilot-0.7.5-setup.exe.blockmap");
+  });
+
+  it("validates packaged work-build-info.json identity", () => {
+    const dir = mkdtempSync(join(tmpdir(), "work-build-info-"));
+    const infoPath = join(dir, "work-build-info.json");
+    writeFileSync(
+      infoPath,
+      JSON.stringify({
+        schema: "smc.work.build.v1",
+        version: "0.7.5",
+        gitCommit: "abc123",
+        gitBranch: "main",
+        buildTime: "2026-08-20T00:00:00.000Z",
+        runtimeAdapter: "legacy-local",
+        runtimeContract: "managed-local-v1",
+        dirty: false,
+      }),
+    );
+    assertWorkBuildInfo(infoPath, "0.7.5", "abc123");
+    expect(() => assertWorkBuildInfo(infoPath, "0.7.5", "def456")).toThrow(
+      /gitCommit mismatch/,
+    );
+    writeFileSync(
+      infoPath,
+      JSON.stringify({
+        schema: "smc.work.build.v1",
+        version: "0.7.5",
+        gitCommit: "abc123",
+        gitBranch: "main",
+        buildTime: "2026-08-20T00:00:00.000Z",
+        runtimeAdapter: "legacy-local",
+        runtimeContract: "managed-local-v1",
+        dirty: true,
+      }),
+    );
+    expect(() => assertWorkBuildInfo(infoPath, "0.7.5", "abc123")).toThrow(
+      /dirty=true/,
+    );
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("detects missing artifacts and version mismatches", () => {

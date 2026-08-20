@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * CI guard: local Gateway lifecycle must not be spawned from apps/work Main
- * after Runtime ownership migration (except LegacyLocalRuntimeAdapter fallback).
+ * CI guard: local Gateway lifecycle must not be spawned from apps/work Main.
+ * Work probes managed Gateway state only; OPSI/Salt own install and lifecycle.
  */
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -16,12 +16,12 @@ const banned = [
     pattern: /return\s+startGatewayDetailed\s*\(/,
   },
   {
-    label: "runHermesUpdate( local path without Runtime backend",
-    pattern: /await\s+runHermesUpdate\s*\(/,
+    label: "RuntimeManagementBackend.startGateway() in local lifecycle path",
+    pattern: /getRuntimeManagementBackend\(\)\.startGateway/,
   },
   {
-    label: "runHermesDoctor() local path without Runtime backend",
-    pattern: /return\s+runHermesDoctor\s*\(/,
+    label: "local startGateway() spawn from register.ts",
+    pattern: /(?<![\w.])startGateway\s*\(/,
   },
 ];
 
@@ -32,10 +32,9 @@ if (hits.length > 0) {
   process.exit(1);
 }
 
-// Local start-gateway must route through RuntimeManagementBackend.
-if (!register.includes("getRuntimeManagementBackend().startGateway")) {
+if (!register.includes("MANAGED_GATEWAY_MESSAGE")) {
   console.error(
-    "[check:no-work-gateway-spawn] start-gateway local path must call getRuntimeManagementBackend().startGateway()",
+    "[check:no-work-gateway-spawn] local start-gateway must refuse lifecycle with MANAGED_GATEWAY_MESSAGE",
   );
   process.exit(1);
 }

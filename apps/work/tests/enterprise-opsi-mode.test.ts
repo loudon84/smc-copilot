@@ -95,4 +95,14 @@ describe("enterprise opsi mode canary", () => {
     expect(restart.ok).toBe(false);
     expect(restart.errorCode).toBe("EXTERNALLY_MANAGED");
   });
+
+  // @lat: [[runtime-connection#OPSI owner / lifecycle]]
+  it("keeps LegacyLocalRuntimeAdapter identity when control owner is opsi", async () => {
+    const { getRuntimeManager, RUNTIME_ADAPTER_ID } = await import(
+      "../src/main/runtime/runtime-manager"
+    );
+    const manager = getRuntimeManager();
+    expect(manager.getAdapterIdentity().adapter).toBe(RUNTIME_ADAPTER_ID);
+    expect(RUNTIME_ADAPTER_ID).toBe("legacy-local");
+  });
 });

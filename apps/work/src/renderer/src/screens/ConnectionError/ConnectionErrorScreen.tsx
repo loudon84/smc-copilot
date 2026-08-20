@@ -43,19 +43,21 @@ function ConnectionErrorScreen({
     }
   }
 
-  const saltMode = owner === "salt";
+  const managedMode = owner === "salt" || owner === "opsi";
 
   return (
     <div className="connection-error">
       <div className="connection-error-card">
         <h1>
-          {saltMode
+          {managedMode
             ? "Waiting for enterprise Hermes Agent"
             : "Cannot connect to Hermes Agent"}
         </h1>
         <p className="connection-error-lead">
-          {saltMode
-            ? "Managed by organization. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
+          {managedMode
+            ? owner === "opsi"
+              ? "Managed by organization (OPSI). Hermes install, update, and Gateway lifecycle are handled by endpoint management. Retry after recovery completes."
+              : "Managed by organization. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
             : "SMC-Copilot needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
         </p>
         <ConnectionErrorDetails status={status} error={error} />
@@ -68,7 +70,7 @@ function ConnectionErrorScreen({
           >
             {connecting || busy ? "Connecting…" : "Retry"}
           </button>
-          {!saltMode && (
+          {!managedMode && (
             <button
               type="button"
               disabled={busy}
@@ -84,7 +86,7 @@ function ConnectionErrorScreen({
           >
             Open Hermes logs
           </button>
-          {!saltMode && (
+          {!managedMode && (
             <button
               type="button"
               disabled={busy}

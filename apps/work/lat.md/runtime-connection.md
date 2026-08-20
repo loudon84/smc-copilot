@@ -22,7 +22,17 @@ Resolution priority: Work `runtime.json`, enterprise descriptor, machine `HERMES
 
 ## Adapter
 
-[[src/main/runtime/runtime-manager.ts]] always uses [[src/main/runtime/legacy-local-runtime-adapter.ts]] (Managed Local Hermes Runtime Consumer). `probe()` checks CLI + Gateway health + authenticated API probe; `ensureReady()` is probe-only; `restart()` returns `MANAGED_RUNTIME_RESTART_REQUIRED`.
+[[src/main/runtime/runtime-manager.ts]] always uses [[src/main/runtime/legacy-local-runtime-adapter.ts]] (Managed Local Hermes Runtime Consumer). Production Main/IPC/Startup must not construct `RuntimeServiceAdapter` or `HermesAvailabilityBackend`; tests may inject adapters via constructor or `setRuntimeManagerForTests`.
+
+`probe()` checks CLI + Gateway health + authenticated API probe; `ensureReady()` is probe-only; `restart()` returns `MANAGED_RUNTIME_RESTART_REQUIRED`.
+
+## Adapter freeze
+
+v2.1.2 freezes `RuntimeManager` default adapter to `legacy-local` / contract `managed-local-v1`. `check:runtime-adapter-contract` rejects alternate adapters in production Main/IPC/Startup sources.
+
+## Build identity
+
+Release writes `resources/work-build-info.json` (`smc.work.build.v1`) with version, commit, adapter, and contract. Startup logs `work_startup_identity`; probes log `hermes_runtime_probe` without secrets.
 
 ## Gateway probe
 
@@ -65,6 +75,16 @@ Probe-only Connection Ready for enterprise/Salt mode. Legacy — v2.4 P0 uses th
 v2.3.1 regression: Salt control-owner keeps Work on Availability-only Connection Ready and refuses local Gateway restart while Chat stays off Runtime `:8765`.
 
 Covered by `apps/work/tests/enterprise-salt-mode.test.ts`.
+
+## OPSI enterprise mode canary
+
+OPSI control-owner changes only Hermes lifecycle capability: Work keeps the managed local adapter for Runtime/CLI/Gateway readiness, refuses local restart/update/doctor, and never routes Chat through Runtime `:8765`.
+
+Covered by `apps/work/tests/enterprise-opsi-mode.test.ts`.
+
+## OPSI owner / lifecycle
+
+`owner=opsi` denies install, update, repair, start, stop, and restart. Discovery, CLI, Gateway health/auth, and Chat stay on [[src/main/runtime/runtime-manager.ts]]. Local IPC lifecycle handlers refuse with a managed message and must not call `RuntimeManagementBackend.startGateway()`.
 
 ## Portal Auth Login
 
