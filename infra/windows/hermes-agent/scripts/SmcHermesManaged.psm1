@@ -11,6 +11,7 @@ function Get-SmcHermesManagedLayout {
             ProgramRoot    = $programRoot
             HermesHome     = $hermesHome
             AgentRoot      = Join-Path $programRoot "node\hermes-agent"
+            NodeRoot       = Join-Path $programRoot "node"
             BinPath        = Join-Path $programRoot "bin"
             ScriptsPath    = Join-Path $programRoot "scripts"
             CliPath        = Join-Path $programRoot "bin\hermes.exe"
@@ -24,6 +25,7 @@ function Get-SmcHermesManagedLayout {
         ProgramRoot    = $programRoot
         HermesHome     = $hermesHome
         AgentRoot      = Join-Path $programRoot "node\hermes-agent"
+        NodeRoot       = Join-Path $programRoot "node"
         BinPath        = Join-Path $programRoot "bin"
         ScriptsPath    = Join-Path $programRoot "scripts"
         CliPath        = Join-Path $programRoot "bin\hermes.exe"
@@ -88,10 +90,13 @@ function Set-SmcHermesEnvironment {
     )
     $layout = Get-SmcHermesManagedLayout
     $agentRoot = $layout.AgentRoot
+    $nodeRoot = $layout.NodeRoot
     [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $HermesHome, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $agentRoot, "Machine")
+    [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $nodeRoot, "Machine")
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $agentRoot
+    $env:HERMES_NODE_ROOT = $nodeRoot
     Add-SmcMachinePath -Entry $layout.BinPath
     Add-SmcMachinePath -Entry $layout.ScriptsPath
 }
@@ -100,8 +105,10 @@ function Remove-SmcHermesEnvironment {
     $layout = Get-SmcHermesManagedLayout
     [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $null, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $null, "Machine")
+    [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $null, "Machine")
     Remove-Item Env:HERMES_HOME -ErrorAction SilentlyContinue
     Remove-Item Env:HERMES_AGENT_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:HERMES_NODE_ROOT -ErrorAction SilentlyContinue
     Remove-SmcMachinePath -Entry $layout.BinPath
     Remove-SmcMachinePath -Entry $layout.ScriptsPath
 }

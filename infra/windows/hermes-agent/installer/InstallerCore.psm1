@@ -138,11 +138,25 @@ function Expand-SmcHermesReleasePayload {
 }
 
 function Stop-SmcHermesProgramProcesses {
-    param([Parameter(Mandatory = $true)][string]$ProgramRoot)
+    param(
+        [Parameter(Mandatory = $true)][string]$ProgramRoot,
+        [int]$GracefulTimeoutMs = 5000
+    )
+    # Phase 1: graceful — stop the scheduled task and wait for the gateway to exit
     $task = Get-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
-    if ($null -ne $task) {
+    if ($null -ne $task -and $task.State -eq "Running") {
+        Stop-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
+        $waited = 0
+        while ($waited -lt $GracefulTimeoutMs) {
+            $hermesProcs = @(Get-Process -Name hermes -ErrorAction SilentlyContinue)
+            if ($hermesProcs.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 500
+            $waited += 500
+        }
+    } elseif ($null -ne $task) {
         Stop-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
     }
+    # Phase 2: forceful — kill any remaining processes under ProgramRoot
     Get-Process -Name hermes -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (-not (Test-Path -LiteralPath $ProgramRoot)) {
         Start-Sleep -Milliseconds 200
@@ -232,10 +246,12 @@ function Set-SmcHermesGatewayTask {
     if (-not (Test-Path -LiteralPath $cli)) { throw "hermes cli missing" }
     $layout = Get-SmcHermesManagedLayout
     $agentRoot = $layout.AgentRoot
+    $nodeRoot = $layout.NodeRoot
     $psExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
     $launcher = @(
         "`$env:HERMES_HOME = '$HermesHome'",
         "`$env:HERMES_AGENT_ROOT = '$agentRoot'",
+        "`$env:HERMES_NODE_ROOT = '$nodeRoot'",
         "& '$cli' gateway run"
     ) -join "; "
     $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($launcher))
@@ -247,6 +263,7 @@ function Set-SmcHermesGatewayTask {
     Register-ScheduledTask -TaskName $script:SmcGatewayTaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $agentRoot
+    $env:HERMES_NODE_ROOT = $nodeRoot
 }
 
 function Remove-SmcHermesGatewayTask {

@@ -16,6 +16,8 @@ Describe "SmcHermesManaged machine home" {
         $script:PrevProcess = $env:HERMES_HOME
         $script:PrevAgentMachine = [Environment]::GetEnvironmentVariable("HERMES_AGENT_ROOT", "Machine")
         $script:PrevAgentProcess = $env:HERMES_AGENT_ROOT
+        $script:PrevNodeMachine = [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
+        $script:PrevNodeProcess = $env:HERMES_NODE_ROOT
         $script:PrevMachinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $script:CreatedFiles = @()
         foreach ($name in $script:Layout.PreservedFiles) {
@@ -33,11 +35,17 @@ Describe "SmcHermesManaged machine home" {
         if ($null -ne $script:PrevAgentProcess) {
             $env:HERMES_AGENT_ROOT = $script:PrevAgentProcess
         }
+        if ($null -ne $script:PrevNodeProcess) {
+            $env:HERMES_NODE_ROOT = $script:PrevNodeProcess
+        }
         try {
             [Environment]::SetEnvironmentVariable("HERMES_HOME", $script:PrevMachine, "Machine")
         } catch {}
         try {
             [Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $script:PrevAgentMachine, "Machine")
+        } catch {}
+        try {
+            [Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $script:PrevNodeMachine, "Machine")
         } catch {}
         try {
             [Environment]::SetEnvironmentVariable("PATH", $script:PrevMachinePath, "Machine")
@@ -126,6 +134,10 @@ Describe "SmcHermesManaged machine home" {
         $expectedAgentRoot = $script:Layout.AgentRoot
         $env:HERMES_AGENT_ROOT | Should Be $expectedAgentRoot
         [Environment]::GetEnvironmentVariable("HERMES_AGENT_ROOT", "Machine") | Should Be $expectedAgentRoot
+
+        $expectedNodeRoot = $script:Layout.NodeRoot
+        $env:HERMES_NODE_ROOT | Should Be $expectedNodeRoot
+        [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine") | Should Be $expectedNodeRoot
 
         # Machine PATH must contain bin and scripts
         $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")

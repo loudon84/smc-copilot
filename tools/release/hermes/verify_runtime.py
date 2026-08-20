@@ -18,6 +18,7 @@ FORBIDDEN_NAMES = {
     "config.yaml",
 }
 FORBIDDEN_PARTS = {".git", ".github", ".venv", "node_modules", "tests"}
+CHROMIUM_FORBIDDEN_DIR_NAMES = {"chromium", ".local-chromium", "chrome-win", "chrome-linux"}
 FORBIDDEN_SUFFIXES = {".key", ".pfx", ".p12"}
 
 

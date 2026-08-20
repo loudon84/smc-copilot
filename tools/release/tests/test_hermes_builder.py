@@ -28,9 +28,13 @@ from tools.release.hermes.runtime_profile import load_profiles, resolve_profile
 from tools.release.hermes.source_metadata import freeze_source
 from tools.release.hermes.verify_runtime import verify_bundle_tree, verify_bundle_zip
 from tools.release.hermes.windows_runtime import (
+    NODE_MIN_SAFE_VERSION,
+    SQLITE_MIN_SAFE_VERSION,
     _install_windows_console_hook,
     assert_pe_amd64,
     build_windows_runtime,
+    parse_version_tuple,
+    sha3_256_file,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -94,18 +98,26 @@ def _zip_tree(root: Path, archive: Path) -> Path:
     return archive
 
 
-def _runtime_archives(tmp_path: Path) -> tuple[Path, Path]:
+def _runtime_archives(tmp_path: Path) -> tuple[Path, Path, Path]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     python_root = tmp_path / "python-embed"
     python_root.mkdir()
     (python_root / "python.exe").write_bytes(_pe_amd64())
     (python_root / "python312._pth").write_text("python312.zip\n.\n", encoding="ascii")
-    node_root = tmp_path / "node-v22.11.0-win-x64"
+    node_root = tmp_path / "node-v22.22.0-win-x64"
     node_root.mkdir()
     (node_root / "node.exe").write_bytes(_pe_amd64())
+    (node_root / "npm.cmd").write_text("@echo 10.9.4\n", encoding="ascii")
+    (node_root / "npx.cmd").write_text("@echo 10.9.4\n", encoding="ascii")
+    # Stub sqlite DLL archive
+    sqlite_dir = tmp_path / "sqlite-dll"
+    sqlite_dir.mkdir()
+    (sqlite_dir / "sqlite3.dll").write_bytes(_pe_amd64())
+    sqlite_zip = _zip_tree(sqlite_dir, tmp_path / "sqlite-dll-win-x64-3530400.zip")
     return (
         _zip_tree(python_root, tmp_path / "python-3.12.8-embed-amd64.zip"),
-        _zip_tree(node_root, tmp_path / "node-v22.11.0-win-x64.zip"),
+        _zip_tree(node_root, tmp_path / "node-v22.22.0-win-x64.zip"),
+        sqlite_zip,
     )
 
 
@@ -119,9 +131,35 @@ def _npm_pack(name: str, version: str) -> bytes:
     return buf.getvalue()
 
 
+def _hermes_workspace(tmp_path: Path) -> Path:
+    ws = tmp_path / "hermes-workspace"
+    ws.mkdir(parents=True)
+    (ws / "package.json").write_text(
+        json.dumps({"name": "hermes-agent", "private": True, "dependencies": {"agent-browser": "1.0.0"}}) + "\n",
+        encoding="utf-8",
+    )
+    (ws / "package-lock.json").write_text(
+        json.dumps({"name": "hermes-agent", "lockfileVersion": 3, "packages": {}}) + "\n",
+        encoding="utf-8",
+    )
+    nm = ws / "node_modules" / "agent-browser"
+    nm.mkdir(parents=True)
+    (nm / "package.json").write_text(
+        json.dumps({"name": "agent-browser", "version": "1.0.0"}) + "\n",
+        encoding="utf-8",
+    )
+    return ws
+
+
 def _bundle_kwargs(tmp_path: Path) -> dict[str, Path]:
-    python_archive, node_archive = _runtime_archives(tmp_path / "runtime-archives")
-    return {"python_archive": python_archive, "node_archive": node_archive}
+    python_archive, node_archive, sqlite_archive = _runtime_archives(tmp_path / "runtime-archives")
+    ws = _hermes_workspace(tmp_path / "ws")
+    return {
+        "python_archive": python_archive,
+        "node_archive": node_archive,
+        "sqlite_archive": sqlite_archive,
+        "hermes_workspace": ws,
+    }
 
 
 def test_h01_clean_git_source(tmp_path: Path):
@@ -417,9 +455,11 @@ def test_release_v2_self_contained(tmp_path: Path):
     assert "runtime/runtime-build.json" in names
     assert "python/Lib/site-packages/smc_windows_vt.py" in names
     assert "python/Lib/site-packages/zz_smc_windows_vt.pth" in names
-    # v2.1: node workspace must be under node/hermes-agent/, not node/node_modules/
+    assert "python/sqlite3.dll" in names
+    # v2.1.1: Layer A at node/node_modules/, Layer B at node/hermes-agent/
     assert "node/hermes-agent/package.json" in names
-    assert not any(n.startswith("node/node_modules/") for n in names)
+    assert any(n.startswith("node/node_modules/") for n in names)
+    assert "node/hermes-agent/node_modules/agent-browser/package.json" in names
     assert archive.is_file()
 
 
@@ -442,22 +482,32 @@ def test_windows_runtime_builder(tmp_path: Path):
         profile=profile,
         source=source,
     )
-    python_archive, node_archive = _runtime_archives(tmp_path / "runtime-archives")
+    python_archive, node_archive, sqlite_archive = _runtime_archives(tmp_path / "runtime-archives")
+    # Place a stub Hermes workspace in the bundle so runtime builder picks it up as Layer B
+    ws = _hermes_workspace(tmp_path / "ws")
+    hermes_ws_dest = bundle / "node" / "hermes-workspace"
+    import shutil as _shutil
+
+    _shutil.copytree(ws, hermes_ws_dest)
     tree = build_windows_runtime(
         bundle,
         tmp_path / "runtime",
         python_archive=python_archive,
         node_archive=node_archive,
+        sqlite_archive=sqlite_archive,
         mode="offline",
     )
     assert_pe_amd64(tree / "bin" / "hermes.exe")
     assert_pe_amd64(tree / "python" / "python.exe")
     assert_pe_amd64(tree / "node" / "node.exe")
+    assert_pe_amd64(tree / "python" / "sqlite3.dll")
     assert (tree / "scripts" / "SmcHermesManaged.psm1").is_file()
-    # v2.1: hermes-agent workspace must be at node/hermes-agent/
+    assert (tree / "node" / "npm.cmd").is_file()
+    assert (tree / "node" / "npx.cmd").is_file()
+    # v2.1.1: Layer A at node/node_modules/, Layer B at node/hermes-agent/
     assert (tree / "node" / "hermes-agent").is_dir()
-    # node/node_modules must not exist at the top level (workspace is under hermes-agent/)
-    assert not (tree / "node" / "node_modules").exists()
+    assert (tree / "node" / "node_modules").is_dir()
+    assert (tree / "node" / "hermes-agent" / "node_modules" / "agent-browser").is_dir()
     site = tree / "python" / "Lib" / "site-packages"
     hook = (site / "smc_windows_vt.py").read_text(encoding="utf-8")
     pth = (site / "zz_smc_windows_vt.pth").read_text(encoding="ascii")
@@ -465,6 +515,11 @@ def test_windows_runtime_builder(tmp_path: Path):
     assert "just_fix_windows_console" in hook
     assert pth.strip() == "import smc_windows_vt"
     assert not (tree / "python" / "sitecustomize.py").exists()
+    # v2.1.1: runtime metadata v2 with sqlite/node versions
+    meta = json.loads((tree / "runtime" / "windows-runtime.json").read_text(encoding="utf-8"))
+    assert meta["schema"] == "smc.hermes.windows-runtime.v2"
+    assert meta["sqlite"]
+    assert meta["node"] == "22.22.0"
 
 
 def test_windows_console_hook_uses_pth_not_sitecustomize(tmp_path: Path):
@@ -492,3 +547,92 @@ def test_windows_vt_hook_loads_as_site_module(tmp_path: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     assert callable(module.enable_windows_vt)
+
+
+def test_node_workspace_chromium_scan_rejects(tmp_path: Path):
+    from tools.release.hermes.build_node_workspace import _scan_chromium
+
+    ws = tmp_path / "ws"
+    nm = ws / "node_modules" / "agent-browser"
+    nm.mkdir(parents=True)
+    (nm / "package.json").write_text("{}", encoding="utf-8")
+    _scan_chromium(ws)
+    chromium_dir = nm / ".local-chromium" / "win64"
+    chromium_dir.mkdir(parents=True)
+    with pytest.raises(ValueError, match="Chromium"):
+        _scan_chromium(ws)
+
+
+def test_node_workspace_requires_agent_browser(tmp_path: Path):
+    from tools.release.hermes.build_node_workspace import _verify_workspace
+
+    ws = tmp_path / "ws"
+    nm = ws / "node_modules"
+    nm.mkdir(parents=True)
+    with pytest.raises(ValueError, match="agent-browser"):
+        _verify_workspace(ws)
+
+
+def test_sqlite_version_gate_constants():
+    assert SQLITE_MIN_SAFE_VERSION == (3, 51, 3)
+    assert parse_version_tuple("3.53.4") >= SQLITE_MIN_SAFE_VERSION
+    assert parse_version_tuple("3.46.1") < SQLITE_MIN_SAFE_VERSION
+
+
+def test_node_version_gate_constants():
+    assert NODE_MIN_SAFE_VERSION == (22, 22, 0)
+    assert parse_version_tuple("22.22.0") >= NODE_MIN_SAFE_VERSION
+    assert parse_version_tuple("22.11.0") < NODE_MIN_SAFE_VERSION
+
+
+def test_sqlite_archive_integrity(tmp_path: Path):
+    sqlite_dir = tmp_path / "sqlite"
+    sqlite_dir.mkdir()
+    (sqlite_dir / "sqlite3.dll").write_bytes(_pe_amd64())
+    archive = _zip_tree(sqlite_dir, tmp_path / "sqlite.zip")
+    digest = sha3_256_file(archive)
+    assert len(digest) == 64
+
+
+def test_sqlite_overlay_applied(tmp_path: Path):
+    from tools.release.hermes.windows_runtime import _overlay_safe_sqlite
+
+    python_root = tmp_path / "python"
+    python_root.mkdir()
+    sqlite_dir = tmp_path / "sqlite-src"
+    sqlite_dir.mkdir()
+    (sqlite_dir / "sqlite3.dll").write_bytes(_pe_amd64())
+    archive = _zip_tree(sqlite_dir, tmp_path / "sqlite.zip")
+    _overlay_safe_sqlite(python_root, archive)
+    assert (python_root / "sqlite3.dll").is_file()
+    assert_pe_amd64(python_root / "sqlite3.dll")
+
+
+def test_release_v2_rejects_chromium_in_tree(tmp_path: Path):
+    from tools.release.hermes.release_v2 import scan_release_v2_tree
+
+    tree = tmp_path / "release"
+    chromium = tree / "node" / "hermes-agent" / "node_modules" / ".local-chromium"
+    chromium.mkdir(parents=True)
+    with pytest.raises(ValueError, match="Chromium"):
+        scan_release_v2_tree(tree)
+
+
+def test_release_v2_requires_sqlite_dll(tmp_path: Path):
+    from tools.release.hermes.release_v2 import assert_required_runtime
+
+    tree = tmp_path / "release"
+    (tree / "bin").mkdir(parents=True)
+    (tree / "python").mkdir(parents=True)
+    (tree / "node" / "hermes-agent").mkdir(parents=True)
+    (tree / "scripts").mkdir(parents=True)
+    (tree / "bin" / "hermes.exe").write_bytes(_pe_amd64())
+    (tree / "python" / "python.exe").write_bytes(_pe_amd64())
+    (tree / "node" / "node.exe").write_bytes(_pe_amd64())
+    (tree / "node" / "npm.cmd").write_text("@echo ok", encoding="ascii")
+    (tree / "node" / "npx.cmd").write_text("@echo ok", encoding="ascii")
+    (tree / "node" / "hermes-agent" / "package.json").write_text("{}", encoding="utf-8")
+    (tree / "scripts" / "HostOperations.ps1").write_text("# stub", encoding="utf-8")
+    (tree / "scripts" / "SmcHermesManaged.psm1").write_text("# stub", encoding="utf-8")
+    with pytest.raises(ValueError, match="python/sqlite3.dll"):
+        assert_required_runtime(tree)

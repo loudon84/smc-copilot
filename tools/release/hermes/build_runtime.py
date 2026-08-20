@@ -36,10 +36,15 @@ from tools.release.hermes.release_version import resolve_release_version  # noqa
 from tools.release.hermes.release_v2 import build_hermes_release_v2  # noqa: E402
 from tools.release.hermes.source_metadata import freeze_source  # noqa: E402
 from tools.release.hermes.verify_runtime import scan_forbidden, verify_bundle_tree  # noqa: E402
-from tools.release.hermes.windows_runtime import build_windows_runtime  # noqa: E402
+from tools.release.hermes.build_node_workspace import build_hermes_node_workspace  # noqa: E402
+from tools.release.hermes.windows_runtime import (  # noqa: E402
+    _extract_zip,
+    _promote_runtime_root,
+    build_windows_runtime,
+)
 
 DEFAULT_PROFILE = ROOT / "release" / "hermes-runtime-profiles.yaml"
-DEFAULT_REQUIRES = {"python": ">=3.12,<3.13", "node": ">=22,<23"}
+DEFAULT_REQUIRES = {"python": ">=3.12,<3.13", "node": ">=22.22,<23"}
 
 
 def sha256_file(path: Path) -> str:
@@ -246,6 +251,8 @@ def build_managed_bundle(
     smc_revision: int = 1,
     python_archive: Path | None = None,
     node_archive: Path | None = None,
+    sqlite_archive: Path | None = None,
+    hermes_workspace: Path | None = None,
     runtime_cache: Path | None = None,
     runtime_downloader=None,
 ) -> Path:
@@ -287,6 +294,21 @@ def build_managed_bundle(
         source=source,
         requires=requires,
     )
+    # Layer B: Hermes production workspace (from npm ci).
+    # If hermes_workspace is supplied (pre-built), copy it into the bundle for runtime builder.
+    # If not supplied but online mode + real repo with package-lock.json, build it on the fly.
+    hermes_ws_dest = tree / "node" / "hermes-workspace"
+    if hermes_workspace is not None:
+        if not hermes_workspace.is_dir():
+            raise ValueError(f"hermes workspace missing: {hermes_workspace}")
+        shutil.copytree(hermes_workspace, hermes_ws_dest)
+    elif mode == "online" and (repo / "package-lock.json").is_file() and node_archive:
+        ws_node_extract = work / "_node-for-workspace"
+        _extract_zip(node_archive, ws_node_extract)
+        ws_node_root = _promote_runtime_root(ws_node_extract, ("node.exe",))
+        build_hermes_node_workspace(repo, ws_node_root, hermes_ws_dest)
+        shutil.rmtree(ws_node_extract, ignore_errors=True)
+
     build_id = datetime.now(UTC).strftime("build-%Y%m%dT%H%M%SZ")
     archive = dest / f"hermes-{source['version']}-windows-amd64.zip"
     zip_bundle(tree, archive)
@@ -300,6 +322,7 @@ def build_managed_bundle(
         cache_dir=runtime_cache or (dest / "runtime-cache"),
         python_archive=python_archive,
         node_archive=node_archive,
+        sqlite_archive=sqlite_archive,
         mode=mode,
         downloader=runtime_downloader,
     )

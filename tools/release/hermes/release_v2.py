@@ -23,10 +23,15 @@ FORBIDDEN_V2_PARTS = {".git", ".github", ".venv"}
 REQUIRED_RUNTIME_FILES = (
     "bin/hermes.exe",
     "python/python.exe",
+    "python/sqlite3.dll",
     "node/node.exe",
+    "node/npm.cmd",
+    "node/npx.cmd",
+    "node/hermes-agent/package.json",
     "scripts/HostOperations.ps1",
     "scripts/SmcHermesManaged.psm1",
 )
+CHROMIUM_FORBIDDEN_IN_RELEASE = {"chromium", ".local-chromium", "chrome-win", "chrome-linux"}
 
 
 def parse_release_version(release_version: str, *, hermes_version: str = "") -> tuple[str, str, str]:
@@ -51,6 +56,8 @@ def scan_release_v2_tree(root: Path) -> None:
             raise ValueError(f"forbidden path in release v2 tree: {rel}")
         if path.name.lower() in FORBIDDEN_V2_NAMES:
             raise ValueError(f"forbidden file in release v2 tree: {rel}")
+        if path.is_dir() and path.name.lower() in CHROMIUM_FORBIDDEN_IN_RELEASE:
+            raise ValueError(f"Chromium forbidden in release tree: {rel}")
 
 
 def assert_required_runtime(root: Path) -> None:
@@ -185,7 +192,12 @@ def _runtime_versions(tree: Path) -> dict[str, str]:
     node = str(data.get("node") or "").strip()
     if not python or not node:
         return {}
-    return {"python": python, "node": node}
+    result = {"python": python, "node": node}
+    for key in ("sqlite", "npm", "npx"):
+        val = str(data.get(key) or "").strip()
+        if val:
+            result[key] = val
+    return result
 
 
 def build_release_manifest(

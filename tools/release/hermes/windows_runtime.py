@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
+import subprocess
 import tarfile
 import zipfile
 from pathlib import Path
@@ -18,13 +20,19 @@ SCRIPTS_ROOT = ROOT / "infra" / "windows" / "hermes-agent" / "scripts"
 ENDPOINT_SCRIPTS = ("HostOperations.ps1", "HostOperations.psm1", "SmcHermesManaged.psm1")
 
 PYTHON_VERSION = "3.12.8"
-NODE_VERSION = "22.11.0"
+NODE_VERSION = "22.22.0"
 PYTHON_EMBED_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSION}/python-{PYTHON_VERSION}-embed-amd64.zip"
 PYTHON_EMBED_SHA256 = "8d3f33be9eb810f23c102f08475af2854e50484b8e4e06275e937be61ce3d2fb"
 NODE_DIST_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip"
-NODE_DIST_SHA256 = "905373a059aecaf7f48c1ce10ffbd5334457ca00f678747f19db5ea7d256c236"
+NODE_DIST_SHA256 = "c97fa376d2becdc8863fcd3ca2dd9a83a9f3468ee7ccf7a6d076ec66a645c77a"
 WINDOWS_VT_HOOK = Path(__file__).with_name("smc_windows_vt.py")
 WINDOWS_VT_PTH_NAME = "zz_smc_windows_vt.pth"
+
+SQLITE_VERSION = "3.53.4"
+SQLITE_DLL_URL = "https://www3.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip"
+SQLITE_DLL_SHA3_256 = "deddee963c810d1eeac3ce5e15c7c41da21a1c54d7a39cf54fbf577d2f50de3a"
+SQLITE_MIN_SAFE_VERSION = (3, 51, 3)
+NODE_MIN_SAFE_VERSION = (22, 22, 0)
 
 PE_AMD64 = 0x8664
 Downloader = Callable[[str, Path, str], Path]
@@ -32,6 +40,14 @@ Downloader = Callable[[str, Path, str], Path]
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def sha3_256_file(path: Path) -> str:
+    return hashlib.sha3_256(path.read_bytes()).hexdigest()
+
+
+def parse_version_tuple(version_str: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in version_str.split("."))
 
 
 def assert_pe_amd64(path: Path) -> None:
@@ -119,6 +135,125 @@ def _enable_python_site(python_root: Path) -> None:
     ]
     pth.write_text("\n".join(lines), encoding="ascii")
     (python_root / "Lib" / "site-packages").mkdir(parents=True, exist_ok=True)
+
+
+def _resolve_sqlite_archive(
+    *,
+    cache_dir: Path,
+    supplied: Path | None,
+    mode: str,
+    downloader: Downloader | None,
+) -> Path:
+    if supplied is not None:
+        if not supplied.is_file():
+            raise ValueError(f"sqlite archive missing: {supplied}")
+        return supplied
+    cached = cache_dir / Path(SQLITE_DLL_URL).name
+    if cached.is_file() and sha3_256_file(cached) == SQLITE_DLL_SHA3_256:
+        return cached
+    if mode == "offline":
+        raise ValueError("offline build requires sqlite archive cache")
+    fetch = downloader or _download_sha3
+    archive = fetch(SQLITE_DLL_URL, cached, SQLITE_DLL_SHA3_256)
+    if sha3_256_file(archive) != SQLITE_DLL_SHA3_256:
+        raise ValueError("hash mismatch for sqlite archive")
+    return archive
+
+
+def _download_sha3(url: str, dest: Path, expected_sha3_256: str) -> Path:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_file() and sha3_256_file(dest) == expected_sha3_256:
+        return dest
+    with urlopen(url, timeout=60) as response:  # noqa: S310
+        payload = response.read()
+    digest = hashlib.sha3_256(payload).hexdigest()
+    if digest != expected_sha3_256:
+        raise ValueError(f"hash mismatch for {dest.name}")
+    dest.write_bytes(payload)
+    return dest
+
+
+def _overlay_safe_sqlite(python_root: Path, sqlite_archive: Path) -> str:
+    extract = python_root / "_sqlite-extract"
+    extract.mkdir(parents=True, exist_ok=True)
+    with ZipFile(sqlite_archive) as zf:
+        zf.extractall(extract)
+    dll = _find_file(extract, "sqlite3.dll")
+    assert_pe_amd64(dll)
+    target = python_root / "sqlite3.dll"
+    shutil.copy2(dll, target)
+    shutil.rmtree(extract, ignore_errors=True)
+    return str(target)
+
+
+def _gate_sqlite_version(python_exe: Path) -> str:
+    result = subprocess.run(
+        [str(python_exe), "-c", "import sqlite3; print(sqlite3.sqlite_version)"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"sqlite3 import failed: {result.stderr.strip()}")
+    version_str = result.stdout.strip()
+    version_tuple = parse_version_tuple(version_str)
+    if version_tuple < SQLITE_MIN_SAFE_VERSION:
+        raise ValueError(
+            f"sqlite3 version {version_str} below minimum safe version "
+            f"{'.'.join(str(x) for x in SQLITE_MIN_SAFE_VERSION)}"
+        )
+    return version_str
+
+
+def _gate_node_version(node_exe: Path) -> str:
+    result = subprocess.run(
+        [str(node_exe), "--version"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"node version check failed: {result.stderr.strip()}")
+    version_str = result.stdout.strip().lstrip("v")
+    version_tuple = parse_version_tuple(version_str)
+    if version_tuple < NODE_MIN_SAFE_VERSION:
+        raise ValueError(
+            f"node version {version_str} below minimum safe version "
+            f"{'.'.join(str(x) for x in NODE_MIN_SAFE_VERSION)}"
+        )
+    return version_str
+
+
+def _gate_npm_npx(node_root: Path) -> tuple[str, str]:
+    npm_cmd = node_root / "npm.cmd"
+    npx_cmd = node_root / "npx.cmd"
+    if not npm_cmd.is_file():
+        raise ValueError("npm.cmd missing from node root")
+    if not npx_cmd.is_file():
+        raise ValueError("npx.cmd missing from node root")
+    npm_result = subprocess.run(
+        [str(npm_cmd), "--version"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        cwd=str(node_root),
+    )
+    if npm_result.returncode != 0:
+        raise ValueError(f"npm version check failed: {npm_result.stderr.strip()}")
+    npx_result = subprocess.run(
+        [str(npx_cmd), "--version"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        cwd=str(node_root),
+    )
+    if npx_result.returncode != 0:
+        raise ValueError(f"npx version check failed: {npx_result.stderr.strip()}")
+    return npm_result.stdout.strip(), npx_result.stdout.strip()
 
 
 def _install_windows_console_hook(site_packages: Path) -> None:
@@ -231,6 +366,7 @@ def build_windows_runtime(
     cache_dir: Path | None = None,
     python_archive: Path | None = None,
     node_archive: Path | None = None,
+    sqlite_archive: Path | None = None,
     mode: str = "online",
     downloader: Downloader | None = None,
 ) -> Path:
@@ -257,6 +393,12 @@ def build_windows_runtime(
         mode=mode,
         downloader=downloader,
     )
+    sqlite_zip = _resolve_sqlite_archive(
+        cache_dir=cache,
+        supplied=sqlite_archive,
+        mode=mode,
+        downloader=downloader,
+    )
 
     python_extract = dest / "_python-extract"
     node_extract = dest / "_node-extract"
@@ -275,22 +417,29 @@ def build_windows_runtime(
     site_packages = python_root / "Lib" / "site-packages"
     _install_wheels(_collect_wheels(bundle_root), site_packages)
     _install_windows_console_hook(site_packages)
+    _overlay_safe_sqlite(python_root, sqlite_zip)
 
-    # Build node/hermes-agent workspace: package manifests + node_modules from tgz tarballs.
-    # Node binary stays at node/node.exe; workspace is node/hermes-agent/ (HERMES_AGENT_ROOT).
-    hermes_agent_ws = node_root / "hermes-agent"
-    hermes_agent_ws.mkdir(parents=True, exist_ok=True)
-    for manifest_name in ("package.json", "package-lock.json"):
-        src_manifest = bundle_root / "node" / manifest_name
-        if src_manifest.is_file():
-            shutil.copy2(src_manifest, hermes_agent_ws / manifest_name)
+    # Layer A: profile-declared MCP packages (tgz tarballs) → node/node_modules/
     packages = bundle_root / "node" / "packages"
-    node_modules = hermes_agent_ws / "node_modules"
     tarballs = sorted(packages.glob("*.tgz")) if packages.is_dir() else []
     if tarballs:
-        node_modules.mkdir(parents=True, exist_ok=True)
+        top_node_modules = node_root / "node_modules"
+        top_node_modules.mkdir(parents=True, exist_ok=True)
         for archive in tarballs:
-            _extract_npm_pack(archive, node_modules)
+            _extract_npm_pack(archive, top_node_modules)
+
+    # Layer B: Hermes production workspace → node/hermes-agent/
+    # Contains package.json, package-lock.json, and node_modules from npm ci (or bundle copy).
+    hermes_agent_ws = node_root / "hermes-agent"
+    hermes_ws_src = bundle_root / "node" / "hermes-workspace"
+    if hermes_ws_src.is_dir():
+        shutil.copytree(hermes_ws_src, hermes_agent_ws)
+    else:
+        hermes_agent_ws.mkdir(parents=True, exist_ok=True)
+        for manifest_name in ("package.json", "package-lock.json"):
+            src_manifest = bundle_root / "node" / manifest_name
+            if src_manifest.is_file():
+                shutil.copy2(src_manifest, hermes_agent_ws / manifest_name)
 
     write_hermes_launcher(dest / "bin" / "hermes.exe")
     _copy_endpoint_scripts(dest / "scripts")
@@ -300,10 +449,23 @@ def build_windows_runtime(
         src = bundle_root / name
         if src.is_file():
             shutil.copy2(src, runtime_dir / name)
+    # Runtime gates (functional verification on Windows build host)
+    actual_sqlite = ""
+    actual_node = ""
+    actual_npm = ""
+    actual_npx = ""
+    if os.name == "nt":
+        actual_sqlite = _gate_sqlite_version(python_root / "python.exe")
+        actual_node = _gate_node_version(node_root / "node.exe")
+        actual_npm, actual_npx = _gate_npm_npx(node_root)
+
     metadata = {
-        "schema": "smc.hermes.windows-runtime.v1",
+        "schema": "smc.hermes.windows-runtime.v2",
         "python": python_version,
         "node": node_version,
+        "sqlite": actual_sqlite or SQLITE_VERSION,
+        "npm": actual_npm,
+        "npx": actual_npx,
         "platform": "windows",
         "architecture": "amd64",
     }
@@ -312,6 +474,8 @@ def build_windows_runtime(
     assert_pe_amd64(dest / "bin" / "hermes.exe")
     assert_pe_amd64(python_root / "python.exe")
     assert_pe_amd64(node_root / "node.exe")
+    if not (python_root / "sqlite3.dll").is_file():
+        raise ValueError("sqlite3.dll overlay missing")
     if not site_packages.is_dir():
         raise ValueError("site-packages missing")
     if not (site_packages / WINDOWS_VT_HOOK.name).is_file():
