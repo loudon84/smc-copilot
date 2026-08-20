@@ -6,9 +6,12 @@ Describe "Hermes installer core" {
         New-Item -ItemType Directory -Force -Path $script:TestRoot | Out-Null
         $env:SMC_HERMES_MANAGED_TEST_ROOT = $script:TestRoot
         $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
-        Import-Module (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Force
+        Import-Module (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Force -DisableNameChecking
         $script:Layout = Get-SmcHermesManagedLayout
-        Import-Module (Join-Path $script:Root "installer\InstallerCore.psm1") -Force
+        Import-Module (Join-Path $script:Root "installer\InstallerCore.psm1") -Force -DisableNameChecking
+        # Re-import Managed into the test session after InstallerCore nested import.
+        Import-Module (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Force -DisableNameChecking
+        $script:Layout = Get-SmcHermesManagedLayout
         $fixture = Join-Path $PSScriptRoot "fixtures\release-v2-smoke"
         if (-not (Test-Path -LiteralPath (Join-Path $fixture "hermes-windows-amd64.zip"))) {
             $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:Root))
@@ -68,10 +71,30 @@ Describe "Hermes installer core" {
             -Silent
         $code | Should Be 0
         Test-Path -LiteralPath (Join-Path $script:Layout.ProgramRoot "bin\hermes.exe") | Should Be $true
+        Test-Path -LiteralPath $script:Layout.WorkspaceRoot | Should Be $true
+        Test-Path -LiteralPath $script:Layout.TempRoot | Should Be $true
+        Assert-SmcHermesManagedTerminalConfig -ConfigPath $script:Layout.ConfigPath -WorkspaceRoot $script:Layout.WorkspaceRoot -HermesHome $script:Layout.HermesHome
         (Test-SmcHermesReady -ProgramRoot $script:Layout.ProgramRoot -HermesHome $script:Layout.HermesHome -ExpectedVersion "0.22.0") | Should Be $true
         Test-Path -LiteralPath $script:OwnerPath | Should Be $true
         $owner = Get-Content -LiteralPath $script:OwnerPath -Raw | ConvertFrom-Json
         $owner.hermes | Should Be "opsi"
+    }
+
+    It "gateway task spec uses WorkspaceRoot and process TEMP/TMP only" {
+        $spec = Get-SmcHermesGatewayTaskSpec -ProgramRoot $script:Layout.ProgramRoot -HermesHome $script:Layout.HermesHome
+        $spec.WorkingDirectory | Should Be $script:Layout.WorkspaceRoot
+        $spec.LauncherScript | Should Match "TERMINAL_CWD"
+        $spec.LauncherScript | Should Match ([regex]::Escape("`$env:TEMP = '$($script:Layout.TempRoot)'"))
+        $spec.LauncherScript | Should Match ([regex]::Escape("`$env:TMP = '$($script:Layout.TempRoot)'"))
+        $spec.LauncherScript | Should Match "Set-Location -LiteralPath"
+        $spec.LauncherScript | Should Match "managed_runtime_context"
+        $core = Get-Content -LiteralPath (Join-Path $script:Root "installer\InstallerCore.psm1") -Raw
+        $managed = Get-Content -LiteralPath (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Raw
+        $core | Should Not Match 'SetEnvironmentVariable\("TEMP"'
+        $core | Should Not Match 'SetEnvironmentVariable\("TMP"'
+        $managed | Should Not Match 'SetEnvironmentVariable\("TEMP"'
+        $managed | Should Not Match 'SetEnvironmentVariable\("HOME"'
+        $managed | Should Not Match 'SetEnvironmentVariable\("USERPROFILE"'
     }
 
     It "repairs without deleting preserved home data" {
@@ -79,27 +102,44 @@ Describe "Hermes installer core" {
         if (-not (Test-Path -LiteralPath (Split-Path -Parent $config))) {
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $config) | Out-Null
         }
-        Set-Content -LiteralPath $config -Value "keep-me" -Encoding ascii
+        Set-Content -LiteralPath $config -Value "models:`n  default: keep-me`n" -Encoding ascii
+        $marker = Join-Path $script:Layout.WorkspaceRoot "user-file.txt"
+        New-Item -ItemType Directory -Force -Path $script:Layout.WorkspaceRoot | Out-Null
+        Set-Content -LiteralPath $marker -Value "preserve-me" -Encoding ascii
+        if (Test-Path -LiteralPath $script:Layout.TempRoot) {
+            Remove-Item -LiteralPath $script:Layout.TempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
         $code = Repair-SmcHermesAgent `
             -PayloadRoot $script:Payload `
             -InstallDir $script:Layout.ProgramRoot `
             -HermesHome $script:Layout.HermesHome `
             -RepairLevel 4
         $code | Should Be 0
-        (Get-Content -LiteralPath $config -Raw).Trim() | Should Be "keep-me"
+        (Get-Content -LiteralPath $config -Raw) | Should Match "keep-me"
+        Assert-SmcHermesManagedTerminalConfig -ConfigPath $config -WorkspaceRoot $script:Layout.WorkspaceRoot -HermesHome $script:Layout.HermesHome
+        Test-Path -LiteralPath $marker | Should Be $true
+        Test-Path -LiteralPath $script:Layout.TempRoot | Should Be $true
     }
 
-    It "uninstalls program and owner while preserving home data" {
+    It "uninstalls program and owner while preserving workspace data" {
         $config = Join-Path $script:Layout.HermesHome "config.yaml"
         if (-not (Test-Path -LiteralPath $config)) {
-            Set-Content -LiteralPath $config -Value "keep-me" -Encoding ascii
+            Set-Content -LiteralPath $config -Value "models:`n  default: keep-me`n" -Encoding ascii
         }
+        $marker = Join-Path $script:Layout.WorkspaceRoot "user-file.txt"
+        New-Item -ItemType Directory -Force -Path $script:Layout.WorkspaceRoot | Out-Null
+        Set-Content -LiteralPath $marker -Value "preserve-me" -Encoding ascii
+        $staleTemp = Join-Path $script:Layout.TempRoot "stale.tmp"
+        New-Item -ItemType Directory -Force -Path $script:Layout.TempRoot | Out-Null
+        Set-Content -LiteralPath $staleTemp -Value "temp" -Encoding ascii
         $code = Uninstall-SmcHermesAgent `
             -InstallDir $script:Layout.ProgramRoot `
             -HermesHome $script:Layout.HermesHome
         $code | Should Be 0
         Test-Path -LiteralPath $script:Layout.ProgramRoot | Should Be $false
         Test-Path -LiteralPath $config | Should Be $true
+        Test-Path -LiteralPath $marker | Should Be $true
+        Test-Path -LiteralPath $staleTemp | Should Be $false
         Test-Path -LiteralPath $script:OwnerPath | Should Be $false
     }
 
@@ -147,6 +187,22 @@ Describe "Hermes installer core" {
             Test-Path -LiteralPath (Join-Path $script:Layout.ProgramRoot "bin\hermes.exe") | Should Be $false
         } finally {
             Remove-Item -LiteralPath $tampered -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "production sources do not default Hermes roots to USERPROFILE or %TEMP%" {
+        $files = @(
+            (Join-Path $script:Root "scripts\SmcHermesManaged.psm1"),
+            (Join-Path $script:Root "scripts\HostOperations.ps1"),
+            (Join-Path $script:Root "installer\InstallerCore.psm1")
+        )
+        foreach ($path in $files) {
+            $text = Get-Content -LiteralPath $path -Raw
+            $text | Should Not Match 'HermesHome\s*=\s*\$env:USERPROFILE'
+            $text | Should Not Match 'WorkspaceRoot\s*=\s*\$env:TEMP'
+            $text | Should Not Match 'TempRoot\s*=\s*\$env:TEMP'
+            $text | Should Not Match 'os\.homedir\(\)'
+            $text | Should Not Match 'Join-Path \$env:LOCALAPPDATA .*Hermes'
         }
     }
 

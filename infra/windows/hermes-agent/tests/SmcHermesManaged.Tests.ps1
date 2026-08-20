@@ -19,6 +19,11 @@ Describe "SmcHermesManaged machine home" {
         $script:PrevNodeMachine = [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
         $script:PrevNodeProcess = $env:HERMES_NODE_ROOT
         $script:PrevMachinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $script:PrevMachineTemp = [Environment]::GetEnvironmentVariable("TEMP", "Machine")
+        $script:PrevMachineTmp = [Environment]::GetEnvironmentVariable("TMP", "Machine")
+        $script:PrevMachineHome = [Environment]::GetEnvironmentVariable("HOME", "Machine")
+        $script:PrevMachineUserProfile = [Environment]::GetEnvironmentVariable("USERPROFILE", "Machine")
+        $script:PrevProcessUserProfile = $env:USERPROFILE
         $script:CreatedFiles = @()
         foreach ($name in $script:Layout.PreservedFiles) {
             $path = Join-Path $script:ManagedHome $name
@@ -66,6 +71,9 @@ Describe "SmcHermesManaged machine home" {
     It "returns exact Program and HERMES_HOME layout" {
         $script:Layout.ProgramRoot | Should Be "D:\Programs\SMC\Hermes"
         $script:Layout.HermesHome | Should Be "C:\ProgramData\SMC\Hermes"
+        $script:Layout.WorkspaceRoot | Should Be "C:\ProgramData\SMC\Hermes\workspace"
+        $script:Layout.TempRoot | Should Be "C:\ProgramData\SMC\Hermes\tmp"
+        $script:Layout.ConfigPath | Should Be "C:\ProgramData\SMC\Hermes\config.yaml"
         $script:Layout.CliPath | Should Be "D:\Programs\SMC\Hermes\bin\hermes.exe"
         $script:Layout.AgentRoot | Should Be "D:\Programs\SMC\Hermes\node\hermes-agent"
         $script:Layout.BinPath | Should Be "D:\Programs\SMC\Hermes\bin"
@@ -74,6 +82,27 @@ Describe "SmcHermesManaged machine home" {
         ($script:Layout.Directories -contains "memories") | Should Be $true
         ($script:Layout.Directories -contains "skills") | Should Be $true
         ($script:Layout.Directories -contains "sessions") | Should Be $true
+        ($script:Layout.Directories -contains "workspace") | Should Be $true
+        ($script:Layout.Directories -contains "tmp") | Should Be $true
+    }
+
+    It "test-root override keeps workspace/tmp under HermesHome" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\ManagedTests" ("layout-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        try {
+            $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            $layout.WorkspaceRoot | Should Be (Join-Path $layout.HermesHome "workspace")
+            $layout.TempRoot | Should Be (Join-Path $layout.HermesHome "tmp")
+            ($layout.Directories -contains "tmp") | Should Be $true
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue }
+            else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            Import-Module $script:Module -Force
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     It "rejects user profile, systemprofile, relative, and escaped paths" {
@@ -138,6 +167,13 @@ Describe "SmcHermesManaged machine home" {
         $expectedNodeRoot = $script:Layout.NodeRoot
         $env:HERMES_NODE_ROOT | Should Be $expectedNodeRoot
         [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine") | Should Be $expectedNodeRoot
+
+        # Machine TEMP/TMP/HOME/USERPROFILE must remain untouched
+        [Environment]::GetEnvironmentVariable("TEMP", "Machine") | Should Be $script:PrevMachineTemp
+        [Environment]::GetEnvironmentVariable("TMP", "Machine") | Should Be $script:PrevMachineTmp
+        [Environment]::GetEnvironmentVariable("HOME", "Machine") | Should Be $script:PrevMachineHome
+        [Environment]::GetEnvironmentVariable("USERPROFILE", "Machine") | Should Be $script:PrevMachineUserProfile
+        $env:USERPROFILE | Should Be $script:PrevProcessUserProfile
 
         # Machine PATH must contain bin and scripts
         $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
@@ -256,5 +292,145 @@ Describe "SmcHermesManaged machine home" {
             $threwProgram = $true
         }
         $threwProgram | Should Be $true
+    }
+
+    It "merges terminal.cwd atomically and preserves unknown fields" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\ManagedTests" ("config-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        $prevSkip = $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY
+        try {
+            $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+            $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
+            $config = $layout.ConfigPath
+            Set-Content -LiteralPath $config -Value @"
+models:
+  default: keep-model
+providers:
+  openai:
+    api_key: REDACTED
+custom_unknown:
+  nested: value
+"@ -Encoding utf8
+
+            $first = Set-SmcHermesManagedTerminalConfig
+            $first.Changed | Should Be $true
+            Assert-SmcHermesManagedTerminalConfig
+            $text = Get-Content -LiteralPath $config -Raw
+            $text | Should Match "keep-model"
+            $text | Should Match "custom_unknown"
+            $text | Should Match "REDACTED"
+            (Get-SmcHermesConfigTerminalCwd -ConfigText $text) | Should Be $layout.WorkspaceRoot
+
+            $second = Set-SmcHermesManagedTerminalConfig
+            $second.Changed | Should Be $false
+
+            Set-Content -LiteralPath $config -Value @"
+models:
+  default: keep-model
+terminal:
+  cwd: "C:\\Users\\Administrator"
+"@ -Encoding utf8
+            $fixed = Set-SmcHermesManagedTerminalConfig
+            $fixed.Changed | Should Be $true
+            Assert-SmcHermesManagedTerminalConfig
+            (Get-Content -LiteralPath $config -Raw) | Should Match "keep-model"
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            if ($null -eq $prevSkip) { Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = $prevSkip }
+            Import-Module $script:Module -Force
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "rolls back terminal.cwd write when candidate is invalid" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\ManagedTests" ("rollback-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        $prevSkip = $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY
+        try {
+            $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+            $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
+            $original = "models:`n  default: original-keep`n"
+            Set-Content -LiteralPath $layout.ConfigPath -Value $original -Encoding utf8
+
+            # Force merge helper to produce empty cwd by temporarily shadowing with bad workspace outside home — must fail closed.
+            $threw = $false
+            try {
+                Set-SmcHermesManagedTerminalConfig -WorkspaceRoot "C:\Users\Administrator\bad-workspace" -ErrorAction Stop
+            } catch {
+                $threw = $true
+            }
+            $threw | Should Be $true
+            (Get-Content -LiteralPath $layout.ConfigPath -Raw).Trim() | Should Be $original.Trim()
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            if ($null -eq $prevSkip) { Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = $prevSkip }
+            Import-Module $script:Module -Force
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "clears only aged files under TempRoot and refuses path escape" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\ManagedTests" ("temp-" + [guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        try {
+            $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            New-Item -ItemType Directory -Force -Path $layout.TempRoot | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            $oldFile = Join-Path $layout.TempRoot "old.tmp"
+            $newFile = Join-Path $layout.TempRoot "new.tmp"
+            $wsFile = Join-Path $layout.WorkspaceRoot "keep.txt"
+            Set-Content -LiteralPath $oldFile -Value "old" -Encoding ascii
+            Set-Content -LiteralPath $newFile -Value "new" -Encoding ascii
+            Set-Content -LiteralPath $wsFile -Value "keep" -Encoding ascii
+            (Get-Item -LiteralPath $oldFile).LastWriteTimeUtc = (Get-Date).ToUniversalTime().AddHours(-30)
+
+            $result = Clear-SmcHermesManagedTemp -MaxAgeHours 24
+            $result.ok | Should Be $true
+            Test-Path -LiteralPath $oldFile | Should Be $false
+            Test-Path -LiteralPath $newFile | Should Be $true
+            Test-Path -LiteralPath $wsFile | Should Be $true
+
+            $threw = $false
+            try {
+                Clear-SmcHermesManagedTemp -TempRoot $layout.WorkspaceRoot -ErrorAction Stop
+            } catch {
+                $threw = $true
+            }
+            $threw | Should Be $true
+            Test-Path -LiteralPath $wsFile | Should Be $true
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            Import-Module $script:Module -Force
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "rejects UNC and home-child path escapes" {
+        $threwUnc = $false
+        try {
+            Assert-SmcHermesHomeChildPath -Path "\\server\share\hermes" -ErrorAction Stop
+        } catch {
+            $threwUnc = $true
+        }
+        $threwUnc | Should Be $true
+
+        $threwOutside = $false
+        try {
+            Assert-SmcHermesHomeChildPath -Path "C:\Windows\Temp\hermes-escape" -ErrorAction Stop
+        } catch {
+            $threwOutside = $true
+        }
+        $threwOutside | Should Be $true
     }
 }

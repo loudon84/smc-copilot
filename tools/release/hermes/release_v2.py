@@ -29,6 +29,7 @@ REQUIRED_RUNTIME_FILES = (
     "node/npx.cmd",
     "node/hermes-agent/package.json",
     "scripts/HostOperations.ps1",
+    "scripts/HostOperations.psm1",
     "scripts/SmcHermesManaged.psm1",
 )
 CHROMIUM_FORBIDDEN_IN_RELEASE = {"chromium", ".local-chromium", "chrome-win", "chrome-linux"}

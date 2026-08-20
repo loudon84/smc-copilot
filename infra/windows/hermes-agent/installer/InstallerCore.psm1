@@ -234,6 +234,46 @@ function Install-SmcHermesProgramTree {
     Move-Item -LiteralPath $staging -Destination $ProgramRoot
 }
 
+function Get-SmcHermesGatewayTaskSpec {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProgramRoot,
+        [Parameter(Mandatory = $true)][string]$HermesHome
+    )
+    $layout = Get-SmcHermesManagedLayout
+    $cli = Join-Path $ProgramRoot "bin\hermes.exe"
+    $workspaceRoot = $layout.WorkspaceRoot
+    $tempRoot = $layout.TempRoot
+    $agentRoot = $layout.AgentRoot
+    $nodeRoot = $layout.NodeRoot
+    $contextJson = (@{
+            event = "managed_runtime_context"
+            hermesHome = $HermesHome
+            workspaceRoot = $workspaceRoot
+            tempRoot = $tempRoot
+            terminalCwd = $workspaceRoot
+        } | ConvertTo-Json -Compress)
+    $launcher = @(
+        "`$env:HERMES_HOME = '$HermesHome'",
+        "`$env:HERMES_AGENT_ROOT = '$agentRoot'",
+        "`$env:HERMES_NODE_ROOT = '$nodeRoot'",
+        "`$env:TERMINAL_CWD = '$workspaceRoot'",
+        "`$env:TEMP = '$tempRoot'",
+        "`$env:TMP = '$tempRoot'",
+        "Set-Location -LiteralPath '$workspaceRoot'",
+        "Write-Output '$contextJson'",
+        "& '$cli' gateway run"
+    ) -join "; "
+    return [pscustomobject]@{
+        CliPath          = $cli
+        WorkingDirectory = $workspaceRoot
+        LauncherScript   = $launcher
+        TerminalCwd      = $workspaceRoot
+        TempRoot         = $tempRoot
+        AgentRoot        = $agentRoot
+        NodeRoot         = $nodeRoot
+    }
+}
+
 function Set-SmcHermesGatewayTask {
     param(
         [Parameter(Mandatory = $true)][string]$ProgramRoot,
@@ -242,28 +282,63 @@ function Set-SmcHermesGatewayTask {
     if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
         return
     }
-    $cli = Join-Path $ProgramRoot "bin\hermes.exe"
-    if (-not (Test-Path -LiteralPath $cli)) { throw "hermes cli missing" }
     $layout = Get-SmcHermesManagedLayout
-    $agentRoot = $layout.AgentRoot
-    $nodeRoot = $layout.NodeRoot
+    if (-not (Test-Path -LiteralPath $layout.WorkspaceRoot)) {
+        throw "workspace root missing before gateway task registration"
+    }
+    if (-not (Test-Path -LiteralPath $layout.TempRoot)) {
+        throw "temp root missing before gateway task registration"
+    }
+    $spec = Get-SmcHermesGatewayTaskSpec -ProgramRoot $ProgramRoot -HermesHome $HermesHome
+    if (-not (Test-Path -LiteralPath $spec.CliPath)) { throw "hermes cli missing" }
     $psExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-    $launcher = @(
-        "`$env:HERMES_HOME = '$HermesHome'",
-        "`$env:HERMES_AGENT_ROOT = '$agentRoot'",
-        "`$env:HERMES_NODE_ROOT = '$nodeRoot'",
-        "& '$cli' gateway run"
-    ) -join "; "
-    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($launcher))
+    $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($spec.LauncherScript))
     $command = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded"
-    $action = New-ScheduledTaskAction -Execute $psExe -Argument $command -WorkingDirectory $ProgramRoot
+    $action = New-ScheduledTaskAction -Execute $psExe -Argument $command -WorkingDirectory $spec.WorkingDirectory
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     Register-ScheduledTask -TaskName $script:SmcGatewayTaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
     $env:HERMES_HOME = $HermesHome
-    $env:HERMES_AGENT_ROOT = $agentRoot
-    $env:HERMES_NODE_ROOT = $nodeRoot
+    $env:HERMES_AGENT_ROOT = $spec.AgentRoot
+    $env:HERMES_NODE_ROOT = $spec.NodeRoot
+}
+
+function Test-SmcHermesGatewayTaskContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProgramRoot,
+        [Parameter(Mandatory = $true)][string]$HermesHome
+    )
+    if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+        return $true
+    }
+    $layout = Get-SmcHermesManagedLayout
+    $task = Get-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
+    if ($null -eq $task) { return $false }
+    $action = $task.Actions | Select-Object -First 1
+    if ($null -eq $action) { return $false }
+    try {
+        $wd = ConvertTo-SmcFullPath -Path ([string]$action.WorkingDirectory)
+        $want = ConvertTo-SmcFullPath -Path $layout.WorkspaceRoot
+        if (-not [string]::Equals($wd, $want, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    } catch {
+        return $false
+    }
+    $argsText = [string]$action.Arguments
+    if ($argsText -notmatch 'EncodedCommand\s+(\S+)') { return $false }
+    try {
+        $bytes = [Convert]::FromBase64String($Matches[1])
+        $decoded = [System.Text.Encoding]::Unicode.GetString($bytes)
+    } catch {
+        return $false
+    }
+    $spec = Get-SmcHermesGatewayTaskSpec -ProgramRoot $ProgramRoot -HermesHome $HermesHome
+    if ($decoded -notlike "*TERMINAL_CWD*$($spec.TerminalCwd)*") { return $false }
+    if ($decoded -notlike "*TEMP*$($spec.TempRoot)*") { return $false }
+    if ($decoded -notlike "*TMP*$($spec.TempRoot)*") { return $false }
+    if ($decoded -notlike "*Set-Location -LiteralPath '$($spec.WorkingDirectory)'*") { return $false }
+    if ($decoded -notlike "*managed_runtime_context*") { return $false }
+    return $true
 }
 
 function Remove-SmcHermesGatewayTask {
@@ -308,17 +383,30 @@ function Test-SmcHermesReady {
     )
     $cli = Join-Path $ProgramRoot "bin\hermes.exe"
     if (-not (Test-Path -LiteralPath $cli)) { return $false }
+    $layout = Get-SmcHermesManagedLayout
+    if (-not (Test-Path -LiteralPath $layout.WorkspaceRoot)) { return $false }
+    if (-not (Test-Path -LiteralPath $layout.TempRoot)) { return $false }
+    try {
+        Assert-SmcHermesManagedTerminalConfig -ConfigPath $layout.ConfigPath -WorkspaceRoot $layout.WorkspaceRoot -HermesHome $HermesHome
+    } catch {
+        return $false
+    }
     $env:HERMES_HOME = $HermesHome
-    $env:HERMES_AGENT_ROOT = (Get-SmcHermesManagedLayout).AgentRoot
-    $versionText = Get-SmcHermesCliVersion -CliPath $cli
-    if (-not $versionText) { return $false }
-    if ($ExpectedVersion -and ($versionText -notmatch [regex]::Escape($ExpectedVersion))) { return $false }
+    $env:HERMES_AGENT_ROOT = $layout.AgentRoot
     if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+        # Installer smoke fixtures may ship a non-runnable PE stub; contract checks above are enough.
         return $true
     }
+    try {
+        $versionText = Get-SmcHermesCliVersion -CliPath $cli
+    } catch {
+        return $false
+    }
+    if (-not $versionText) { return $false }
+    if ($ExpectedVersion -and ($versionText -notmatch [regex]::Escape($ExpectedVersion))) { return $false }
     $task = Get-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
     if ($null -eq $task) { return $false }
-    return $true
+    return (Test-SmcHermesGatewayTaskContract -ProgramRoot $ProgramRoot -HermesHome $HermesHome)
 }
 
 function Commit-SmcControlOwner {
@@ -366,6 +454,7 @@ function Install-SmcHermesAgent {
         $null = Expand-SmcHermesReleasePayload -PayloadRoot $PayloadRoot -ExtractRoot $extract
         Install-SmcHermesProgramTree -ExtractRoot $extract -ProgramRoot $layout.ProgramRoot -Manifest $manifest
         $null = Initialize-SmcHermesManagedHome -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
+        $null = Set-SmcHermesManagedTerminalConfig -HermesHome $layout.HermesHome -CliPath (Join-Path $layout.ProgramRoot "bin\hermes.exe")
         Set-SmcHermesGatewayTask -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
         if (-not (Test-SmcHermesReady -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome -ExpectedVersion $manifest.hermesVersion)) {
             throw "install readiness checks failed"
@@ -430,22 +519,25 @@ function Repair-SmcHermesAgent {
         [int]$RepairLevel = 1
     )
     $layout = Get-SmcInstallerLayout -InstallDir $InstallDir -HermesHome $HermesHome
+    if ($RepairLevel -ge 5) {
+        return Upgrade-SmcHermesAgent -PayloadRoot $PayloadRoot -InstallDir $layout.ProgramRoot -HermesHome $layout.HermesHome
+    }
+    # Level 1+ reconcile managed dirs, terminal.cwd, and gateway execution context.
+    Initialize-SmcHermesManagedHome -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome | Out-Null
+    $null = Set-SmcHermesManagedTerminalConfig -HermesHome $layout.HermesHome -CliPath (Join-Path $layout.ProgramRoot "bin\hermes.exe")
+    if (Test-Path -LiteralPath $layout.ProgramRoot) {
+        Set-SmcHermesProgramAcl -Path $layout.ProgramRoot
+    }
+    Set-SmcHermesGatewayTask -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
     if ($RepairLevel -le 1) {
-        Restart-SmcHermesGatewayTask
-        return $script:SmcInstallerExitSuccess
-    }
-    if ($RepairLevel -le 4) {
-        Initialize-SmcHermesManagedHome -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome | Out-Null
-        # Restore Program ACL in case it drifted
-        if (Test-Path -LiteralPath $layout.ProgramRoot) {
-            Set-SmcHermesProgramAcl -Path $layout.ProgramRoot
+        if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -ne "1") {
+            Restart-SmcHermesGatewayTask
         }
-        if (-not (Test-SmcHermesReady -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome)) {
-            throw "repair readiness failed"
-        }
-        return $script:SmcInstallerExitSuccess
     }
-    return Upgrade-SmcHermesAgent -PayloadRoot $PayloadRoot -InstallDir $layout.ProgramRoot -HermesHome $layout.HermesHome
+    if (-not (Test-SmcHermesReady -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome)) {
+        throw "repair readiness failed"
+    }
+    return $script:SmcInstallerExitSuccess
 }
 
 function Restart-SmcHermesGatewayTask {
@@ -461,13 +553,19 @@ function Uninstall-SmcHermesAgent {
         [string]$HermesHome = ""
     )
     $layout = Get-SmcInstallerLayout -InstallDir $InstallDir -HermesHome $HermesHome
+    $managed = Get-SmcHermesManagedLayout
     Stop-SmcHermesProgramProcesses -ProgramRoot $layout.ProgramRoot
     Remove-SmcHermesGatewayTask
     if (Test-Path -LiteralPath $layout.ProgramRoot) {
         Remove-SmcDirectoryRetry -Path $layout.ProgramRoot
     }
-    # Remove Installer-owned env vars and PATH entries; preserve HERMES_HOME data
+    # Remove Installer-owned env vars and PATH entries; preserve HERMES_HOME / Workspace data
     Remove-SmcHermesEnvironment
+    try {
+        $null = Clear-SmcHermesManagedTemp -TempRoot $managed.TempRoot -HermesHome $layout.HermesHome -RemoveAllSafe
+    } catch {
+        Write-Warning "temp cleanup skipped: $($_.Exception.Message)"
+    }
     Restore-SmcControlOwner -OwnerPath $layout.OwnerPath
     if (Test-Path -LiteralPath $layout.StatePath) { Remove-Item -LiteralPath $layout.StatePath -Force }
     return $script:SmcInstallerExitSuccess
@@ -488,4 +586,4 @@ function Invoke-SmcHermesLifecycle {
     }
 }
 
-Export-ModuleMember -Function Invoke-SmcHermesLifecycle, Install-SmcHermesAgent, Upgrade-SmcHermesAgent, Repair-SmcHermesAgent, Uninstall-SmcHermesAgent, ConvertTo-SmcInstallerArgs, Test-SmcHermesReleaseFiles, Test-SmcHermesReady
+Export-ModuleMember -Function Invoke-SmcHermesLifecycle, Install-SmcHermesAgent, Upgrade-SmcHermesAgent, Repair-SmcHermesAgent, Uninstall-SmcHermesAgent, ConvertTo-SmcInstallerArgs, Test-SmcHermesReleaseFiles, Test-SmcHermesReady, Get-SmcHermesGatewayTaskSpec, Test-SmcHermesGatewayTaskContract

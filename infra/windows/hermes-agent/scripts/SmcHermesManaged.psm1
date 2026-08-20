@@ -3,33 +3,53 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Get-SmcHermesManagedLayout {
+    $directories = @(
+        "profiles",
+        "skills",
+        "sessions",
+        "memories",
+        "logs",
+        "workspace",
+        "tmp",
+        "state"
+    )
     $testRoot = [Environment]::GetEnvironmentVariable("SMC_HERMES_MANAGED_TEST_ROOT", "Process")
     if (-not [string]::IsNullOrWhiteSpace($testRoot)) {
         $programRoot = Join-Path $testRoot "Program\Hermes"
         $hermesHome = Join-Path $testRoot "Data\Hermes"
+        $workspaceRoot = Join-Path $hermesHome "workspace"
+        $tempRoot = Join-Path $hermesHome "tmp"
         return [pscustomobject]@{
             ProgramRoot    = $programRoot
             HermesHome     = $hermesHome
+            WorkspaceRoot  = $workspaceRoot
+            TempRoot       = $tempRoot
             AgentRoot      = Join-Path $programRoot "node\hermes-agent"
             NodeRoot       = Join-Path $programRoot "node"
             BinPath        = Join-Path $programRoot "bin"
             ScriptsPath    = Join-Path $programRoot "scripts"
             CliPath        = Join-Path $programRoot "bin\hermes.exe"
-            Directories    = @("profiles", "skills", "sessions", "memories", "logs", "workspace", "state")
+            ConfigPath     = Join-Path $hermesHome "config.yaml"
+            Directories    = $directories
             PreservedFiles = @("config.yaml", ".env", "auth.json")
         }
     }
     $programRoot = "D:\Programs\SMC\Hermes"
     $hermesHome = "C:\ProgramData\SMC\Hermes"
+    $workspaceRoot = Join-Path $hermesHome "workspace"
+    $tempRoot = Join-Path $hermesHome "tmp"
     return [pscustomobject]@{
         ProgramRoot    = $programRoot
         HermesHome     = $hermesHome
+        WorkspaceRoot  = $workspaceRoot
+        TempRoot       = $tempRoot
         AgentRoot      = Join-Path $programRoot "node\hermes-agent"
         NodeRoot       = Join-Path $programRoot "node"
         BinPath        = Join-Path $programRoot "bin"
         ScriptsPath    = Join-Path $programRoot "scripts"
         CliPath        = Join-Path $programRoot "bin\hermes.exe"
-        Directories    = @("profiles", "skills", "sessions", "memories", "logs", "workspace", "state")
+        ConfigPath     = Join-Path $hermesHome "config.yaml"
+        Directories    = $directories
         PreservedFiles = @("config.yaml", ".env", "auth.json")
     }
 }
@@ -80,6 +100,46 @@ function Assert-SmcHermesManagedPath {
     }
     if (-not [string]::Equals($full, $want, [StringComparison]::OrdinalIgnoreCase)) {
         throw "path is not the managed $Kind root"
+    }
+}
+
+function Assert-SmcHermesHomeChildPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$HermesHome = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) {
+        $HermesHome = $layout.HermesHome
+    }
+    $full = ConvertTo-SmcFullPath -Path $Path
+    $home = ConvertTo-SmcFullPath -Path $HermesHome
+    if (Test-SmcForbiddenHomePath -FullPath $full) {
+        throw "forbidden home path: user profile or systemprofile"
+    }
+    $prefix = $home + "\"
+    if (-not [string]::Equals($full, $home, [StringComparison]::OrdinalIgnoreCase) -and
+        -not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "path is outside managed HermesHome"
+    }
+    if (Test-Path -LiteralPath $full) {
+        $item = Get-Item -LiteralPath $full -Force
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            $target = $null
+            try {
+                if ($item.PSIsContainer) {
+                    $target = ConvertTo-SmcFullPath -Path $item.FullName
+                } else {
+                    $target = ConvertTo-SmcFullPath -Path $item.FullName
+                }
+            } catch {
+                throw "reparse path cannot be resolved safely"
+            }
+            if (-not [string]::Equals($target, $home, [StringComparison]::OrdinalIgnoreCase) -and
+                -not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "reparse path escapes managed HermesHome"
+            }
+        }
     }
 }
 
@@ -297,11 +357,15 @@ function Initialize-SmcHermesManagedHome {
     }
     Assert-SmcHermesManagedPath -Path $ProgramRoot -Kind Program
     Assert-SmcHermesManagedPath -Path $HermesHome -Kind Home
+    Assert-SmcHermesHomeChildPath -Path $layout.WorkspaceRoot -HermesHome $HermesHome
+    Assert-SmcHermesHomeChildPath -Path $layout.TempRoot -HermesHome $HermesHome
 
     $prevHermesHome       = [System.Environment]::GetEnvironmentVariable("HERMES_HOME", "Machine")
     $prevHermesHomeProc   = $env:HERMES_HOME
     $prevAgentRoot        = [System.Environment]::GetEnvironmentVariable("HERMES_AGENT_ROOT", "Machine")
     $prevAgentRootProc    = $env:HERMES_AGENT_ROOT
+    $prevNodeRoot         = [System.Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
+    $prevNodeRootProc     = $env:HERMES_NODE_ROOT
     $prevMachinePath      = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
 
     $envSet = $false
@@ -317,6 +381,7 @@ function Initialize-SmcHermesManagedHome {
             if (-not [System.IO.Directory]::Exists($child)) {
                 [void][System.IO.Directory]::CreateDirectory($child)
             }
+            Assert-SmcHermesHomeChildPath -Path $child -HermesHome $HermesHome
         }
 
         Set-SmcHermesEnvironment -ProgramRoot $ProgramRoot -HermesHome $HermesHome
@@ -326,18 +391,395 @@ function Initialize-SmcHermesManagedHome {
             # best-effort rollback
             [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $prevHermesHome, "Machine")
             [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $prevAgentRoot, "Machine")
+            [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $prevNodeRoot, "Machine")
             [System.Environment]::SetEnvironmentVariable("PATH", $prevMachinePath, "Machine")
             $env:HERMES_HOME = $prevHermesHomeProc
             $env:HERMES_AGENT_ROOT = $prevAgentRootProc
+            $env:HERMES_NODE_ROOT = $prevNodeRootProc
         }
         throw
     }
     return $layout
 }
 
+function ConvertTo-SmcYamlDoubleQuotedPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $escaped = $Path.Replace("\", "\\").Replace('"', '\"')
+    return '"' + $escaped + '"'
+}
+
+function Get-SmcHermesConfigTerminalCwd {
+    param([AllowEmptyString()][AllowNull()][string]$ConfigText = "")
+    if ([string]::IsNullOrEmpty($ConfigText)) { return $null }
+    $lines = $ConfigText -split "`r?`n", -1
+    $inTerminal = $false
+    foreach ($line in $lines) {
+        if ($line -match '^(?![ \t])\S') {
+            if ($line -match '^terminal\s*:') {
+                $inTerminal = $true
+                if ($line -match '^terminal\s*:\s*(.+)$') {
+                    # inline mapping not used for cwd
+                }
+                continue
+            }
+            $inTerminal = $false
+        }
+        if (-not $inTerminal) { continue }
+        if ($line -match '^[ \t]+cwd\s*:\s*(.+)$') {
+            $raw = $Matches[1].Trim()
+            if ($raw.StartsWith('"') -and $raw.EndsWith('"') -and $raw.Length -ge 2) {
+                return $raw.Substring(1, $raw.Length - 2).Replace("\\", "\").Replace('\"', '"')
+            }
+            if ($raw.StartsWith("'") -and $raw.EndsWith("'") -and $raw.Length -ge 2) {
+                return $raw.Substring(1, $raw.Length - 2)
+            }
+            return $raw
+        }
+    }
+    return $null
+}
+
+function Merge-SmcHermesConfigTerminalCwd {
+    param(
+        [AllowEmptyString()][AllowNull()][string]$ConfigText = "",
+        [Parameter(Mandatory = $true)][string]$WorkspaceRoot
+    )
+    if ($null -eq $ConfigText) { $ConfigText = "" }
+    $quoted = ConvertTo-SmcYamlDoubleQuotedPath -Path $WorkspaceRoot
+    $current = Get-SmcHermesConfigTerminalCwd -ConfigText $ConfigText
+    if (-not [string]::IsNullOrWhiteSpace($current)) {
+        $curFull = $null
+        try { $curFull = ConvertTo-SmcFullPath -Path $current } catch { $curFull = $null }
+        $wantFull = ConvertTo-SmcFullPath -Path $WorkspaceRoot
+        if ($null -ne $curFull -and [string]::Equals($curFull, $wantFull, [StringComparison]::OrdinalIgnoreCase)) {
+            return [pscustomobject]@{ Text = $ConfigText; Changed = $false }
+        }
+    }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($ConfigText)) {
+        foreach ($line in ($ConfigText -split "`r?`n", -1)) {
+            [void]$lines.Add($line)
+        }
+        # Drop a single trailing empty artifact from -split only when original had no trailing newline intent —
+        # keep exact line list for rewrite.
+    }
+
+    $terminalIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^terminal\s*:') {
+            $terminalIndex = $i
+            break
+        }
+    }
+
+    if ($terminalIndex -lt 0) {
+        if ($lines.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+            [void]$lines.Add("")
+        }
+        [void]$lines.Add("terminal:")
+        [void]$lines.Add("  cwd: $quoted")
+        return [pscustomobject]@{ Text = ($lines -join "`n"); Changed = $true }
+    }
+
+    $cwdIndex = -1
+    $sectionEnd = $lines.Count
+    for ($i = $terminalIndex + 1; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        if ($line -match '^(?![ \t])\S') {
+            $sectionEnd = $i
+            break
+        }
+        if ($line -match '^[ \t]+cwd\s*:') {
+            $cwdIndex = $i
+            break
+        }
+    }
+
+    if ($cwdIndex -ge 0) {
+        $lines[$cwdIndex] = "  cwd: $quoted"
+    } else {
+        $lines.Insert($terminalIndex + 1, "  cwd: $quoted")
+    }
+    return [pscustomobject]@{ Text = ($lines -join "`n"); Changed = $true }
+}
+
+function Invoke-SmcHermesConfigCheck {
+    param(
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [Parameter(Mandatory = $true)][string]$HermesHome,
+        [string]$CliPath = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($CliPath)) {
+        $CliPath = $layout.CliPath
+    }
+    $text = Get-Content -LiteralPath $ConfigPath -Raw -ErrorAction Stop
+    $cwd = Get-SmcHermesConfigTerminalCwd -ConfigText $text
+    if ([string]::IsNullOrWhiteSpace($cwd)) {
+        throw "config check failed: terminal.cwd missing"
+    }
+    # Smoke/unit fixtures may ship a non-functional PE stub; structural check is enough there.
+    if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+        return
+    }
+    if (-not (Test-Path -LiteralPath $CliPath)) {
+        return
+    }
+    $prevHome = $env:HERMES_HOME
+    try {
+        $env:HERMES_HOME = $HermesHome
+        $output = & $CliPath config check 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "hermes config check failed: $($output -join ' ')"
+        }
+    } finally {
+        $env:HERMES_HOME = $prevHome
+    }
+}
+
+function Set-SmcHermesManagedTerminalConfig {
+    param(
+        [string]$ConfigPath = "",
+        [string]$WorkspaceRoot = "",
+        [string]$HermesHome = "",
+        [string]$CliPath = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ConfigPath)) { $ConfigPath = $layout.ConfigPath }
+    if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) { $WorkspaceRoot = $layout.WorkspaceRoot }
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) { $HermesHome = $layout.HermesHome }
+    if ([string]::IsNullOrWhiteSpace($CliPath)) { $CliPath = $layout.CliPath }
+
+    Assert-SmcHermesHomeChildPath -Path $ConfigPath -HermesHome $HermesHome
+    Assert-SmcHermesHomeChildPath -Path $WorkspaceRoot -HermesHome $HermesHome
+    $WorkspaceRoot = ConvertTo-SmcFullPath -Path $WorkspaceRoot
+
+    $original = ""
+    $hadFile = Test-Path -LiteralPath $ConfigPath
+    if ($hadFile) {
+        $raw = Get-Content -LiteralPath $ConfigPath -Raw -ErrorAction Stop
+        if ($null -ne $raw) { $original = [string]$raw }
+    }
+    $merged = Merge-SmcHermesConfigTerminalCwd -ConfigText $original -WorkspaceRoot $WorkspaceRoot
+    if (-not $merged.Changed -and $hadFile) {
+        return [pscustomobject]@{ Changed = $false; ConfigPath = $ConfigPath; WorkspaceRoot = $WorkspaceRoot }
+    }
+
+    $dir = Split-Path -Parent $ConfigPath
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+    $backup = "$ConfigPath.bak.smc"
+    $tmp = "$ConfigPath.tmp.smc"
+    if ($hadFile) {
+        Copy-Item -LiteralPath $ConfigPath -Destination $backup -Force
+    } elseif (Test-Path -LiteralPath $backup) {
+        Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+    }
+    try {
+        [System.IO.File]::WriteAllText($tmp, $merged.Text, [System.Text.UTF8Encoding]::new($false))
+        # Offline structural check against candidate before replace.
+        $null = Get-SmcHermesConfigTerminalCwd -ConfigText $merged.Text
+        if ([string]::IsNullOrWhiteSpace((Get-SmcHermesConfigTerminalCwd -ConfigText $merged.Text))) {
+            throw "config merge failed: terminal.cwd missing"
+        }
+        Move-Item -LiteralPath $tmp -Destination $ConfigPath -Force
+        Invoke-SmcHermesConfigCheck -ConfigPath $ConfigPath -HermesHome $HermesHome -CliPath $CliPath
+        if (Test-Path -LiteralPath $backup) {
+            Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        if (Test-Path -LiteralPath $tmp) {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        }
+        if ($hadFile -and (Test-Path -LiteralPath $backup)) {
+            Move-Item -LiteralPath $backup -Destination $ConfigPath -Force
+        } elseif (-not $hadFile -and (Test-Path -LiteralPath $ConfigPath)) {
+            Remove-Item -LiteralPath $ConfigPath -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+    return [pscustomobject]@{ Changed = $true; ConfigPath = $ConfigPath; WorkspaceRoot = $WorkspaceRoot }
+}
+
+function Assert-SmcHermesManagedTerminalConfig {
+    param(
+        [string]$ConfigPath = "",
+        [string]$WorkspaceRoot = "",
+        [string]$HermesHome = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ConfigPath)) { $ConfigPath = $layout.ConfigPath }
+    if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) { $WorkspaceRoot = $layout.WorkspaceRoot }
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) { $HermesHome = $layout.HermesHome }
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        throw "config missing: $ConfigPath"
+    }
+    $text = Get-Content -LiteralPath $ConfigPath -Raw -ErrorAction Stop
+    $cwd = Get-SmcHermesConfigTerminalCwd -ConfigText $text
+    if ([string]::IsNullOrWhiteSpace($cwd)) {
+        throw "terminal.cwd missing"
+    }
+    $got = ConvertTo-SmcFullPath -Path $cwd
+    $want = ConvertTo-SmcFullPath -Path $WorkspaceRoot
+    if (-not [string]::Equals($got, $want, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "terminal.cwd drift: $got != $want"
+    }
+}
+
+function Test-SmcPathIsLocked {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $item = Get-Item -LiteralPath $Path -Force
+    if ($item.PSIsContainer) { return $false }
+    try {
+        $stream = [System.IO.File]::Open($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        $stream.Close()
+        return $false
+    } catch {
+        return $true
+    }
+}
+
+function Clear-SmcHermesManagedTemp {
+    param(
+        [string]$TempRoot = "",
+        [string]$HermesHome = "",
+        [int]$MaxAgeHours = 24,
+        [switch]$RemoveAllSafe
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($TempRoot)) { $TempRoot = $layout.TempRoot }
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) { $HermesHome = $layout.HermesHome }
+
+    $want = ConvertTo-SmcFullPath -Path $layout.TempRoot
+    $target = ConvertTo-SmcFullPath -Path $TempRoot
+    if (-not [string]::Equals($target, $want, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "temp cleanup refused: target is not Managed TempRoot"
+    }
+    Assert-SmcHermesHomeChildPath -Path $target -HermesHome $HermesHome
+    if (-not (Test-Path -LiteralPath $target)) { return @{ ok = $true; removed = 0; warnings = @() } }
+
+    $rootItem = Get-Item -LiteralPath $target -Force
+    if (($rootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "temp cleanup refused: TempRoot is a reparse point"
+    }
+
+    $cutoff = (Get-Date).ToUniversalTime().AddHours(-1 * [Math]::Abs($MaxAgeHours))
+    $removed = 0
+    $warnings = New-Object System.Collections.Generic.List[string]
+    $entries = @(Get-ChildItem -LiteralPath $target -Force -ErrorAction SilentlyContinue)
+    foreach ($entry in $entries) {
+        try {
+            $full = ConvertTo-SmcFullPath -Path $entry.FullName
+            Assert-SmcHermesHomeChildPath -Path $full -HermesHome $HermesHome
+            $prefix = $want + "\"
+            if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "entry escapes TempRoot"
+            }
+            if (($entry.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "reparse entry skipped"
+            }
+            if (-not $RemoveAllSafe) {
+                $stamp = $entry.LastWriteTimeUtc
+                if ($stamp -gt $cutoff) { continue }
+            }
+            if (-not $entry.PSIsContainer -and (Test-SmcPathIsLocked -Path $full)) {
+                [void]$warnings.Add("locked: skipped")
+                continue
+            }
+            Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction Stop
+            $removed++
+        } catch {
+            [void]$warnings.Add("cleanup warning: entry skipped")
+        }
+    }
+    return @{ ok = $true; removed = $removed; warnings = @($warnings) }
+}
+
+function Get-SmcHermesManagedDoctorReport {
+    param(
+        [string]$ProgramRoot = "",
+        [string]$HermesHome = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) { $HermesHome = $layout.HermesHome }
+
+    $checks = New-Object System.Collections.Generic.List[object]
+
+    $homeOk = [string]::Equals((ConvertTo-SmcFullPath $HermesHome), (ConvertTo-SmcFullPath $layout.HermesHome), [StringComparison]::OrdinalIgnoreCase)
+    [void]$checks.Add([pscustomobject]@{ name = "Hermes Home"; status = $(if ($homeOk) { "PASS" } else { "FAIL" }); detail = $layout.HermesHome })
+
+    $progOk = [string]::Equals((ConvertTo-SmcFullPath $ProgramRoot), (ConvertTo-SmcFullPath $layout.ProgramRoot), [StringComparison]::OrdinalIgnoreCase)
+    [void]$checks.Add([pscustomobject]@{ name = "Program Root"; status = $(if ($progOk) { "PASS" } else { "FAIL" }); detail = $layout.ProgramRoot })
+
+    $wsOk = Test-Path -LiteralPath $layout.WorkspaceRoot
+    [void]$checks.Add([pscustomobject]@{ name = "Workspace Root"; status = $(if ($wsOk) { "PASS" } else { "FAIL" }); detail = $layout.WorkspaceRoot })
+
+    $tmpOk = Test-Path -LiteralPath $layout.TempRoot
+    [void]$checks.Add([pscustomobject]@{ name = "Temp Root"; status = $(if ($tmpOk) { "PASS" } else { "FAIL" }); detail = $layout.TempRoot })
+
+    $cwdOk = $false
+    $cwdDetail = "missing"
+    try {
+        Assert-SmcHermesManagedTerminalConfig -ConfigPath $layout.ConfigPath -WorkspaceRoot $layout.WorkspaceRoot -HermesHome $HermesHome
+        $cwdOk = $true
+        $cwdDetail = $layout.WorkspaceRoot
+    } catch {
+        $cwdDetail = "FAIL"
+    }
+    [void]$checks.Add([pscustomobject]@{ name = "terminal.cwd"; status = $(if ($cwdOk) { "PASS" } else { "FAIL" }); detail = $cwdDetail })
+
+    $taskWdOk = $false
+    $taskEnvOk = $false
+    $taskWdDetail = "missing"
+    $taskEnvDetail = "missing"
+    if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+        $taskWdOk = $true
+        $taskEnvOk = $true
+        $taskWdDetail = "skipped"
+        $taskEnvDetail = "skipped"
+    } else {
+        $task = Get-ScheduledTask -TaskName "SMC Hermes Gateway" -ErrorAction SilentlyContinue
+        if ($null -ne $task) {
+            $action = $task.Actions | Select-Object -First 1
+            $wd = [string]$action.WorkingDirectory
+            try {
+                $taskWdOk = [string]::Equals((ConvertTo-SmcFullPath $wd), (ConvertTo-SmcFullPath $layout.WorkspaceRoot), [StringComparison]::OrdinalIgnoreCase)
+            } catch {
+                $taskWdOk = $false
+            }
+            $taskWdDetail = $wd
+            $argsText = [string]$action.Arguments
+            $taskEnvOk = ($argsText -match 'TERMINAL_CWD') -and ($argsText -match 'TEMP') -and ($argsText -match 'TMP')
+            $taskEnvDetail = $(if ($taskEnvOk) { "contract present" } else { "contract missing" })
+        }
+    }
+    [void]$checks.Add([pscustomobject]@{ name = "Gateway Working Directory"; status = $(if ($taskWdOk) { "PASS" } else { "FAIL" }); detail = $taskWdDetail })
+    [void]$checks.Add([pscustomobject]@{ name = "Gateway TERMINAL_CWD/TEMP/TMP contract"; status = $(if ($taskEnvOk) { "PASS" } else { "FAIL" }); detail = $taskEnvDetail })
+
+    $failed = 0
+    foreach ($item in $checks) {
+        if ([string]$item.status -eq "FAIL") { $failed++ }
+    }
+    return [pscustomobject]@{
+        ok = ($failed -eq 0)
+        layout = [pscustomobject]@{
+            hermesHome = [string]$layout.HermesHome
+            programRoot = [string]$layout.ProgramRoot
+            workspaceRoot = [string]$layout.WorkspaceRoot
+            tempRoot = [string]$layout.TempRoot
+        }
+        checks = @($checks.ToArray())
+    }
+}
+
 Export-ModuleMember -Function `
     Get-SmcHermesManagedLayout, `
     Assert-SmcHermesManagedPath, `
+    Assert-SmcHermesHomeChildPath, `
     Initialize-SmcHermesManagedHome, `
     Set-SmcHermesEnvironment, `
     Remove-SmcHermesEnvironment, `
@@ -348,4 +790,10 @@ Export-ModuleMember -Function `
     Set-SmcHermesManagedAcl, `
     Assert-SmcHermesProgramAcl, `
     Assert-SmcHermesHomeAcl, `
-    Assert-SmcHermesManagedAcl
+    Assert-SmcHermesManagedAcl, `
+    Get-SmcHermesConfigTerminalCwd, `
+    Merge-SmcHermesConfigTerminalCwd, `
+    Set-SmcHermesManagedTerminalConfig, `
+    Assert-SmcHermesManagedTerminalConfig, `
+    Clear-SmcHermesManagedTemp, `
+    Get-SmcHermesManagedDoctorReport
