@@ -82,6 +82,9 @@ function Invoke-SmcHostOperation {
         "repair" {
             if ($RepairLevel -lt 1 -or $RepairLevel -gt 5) { throw "repair level out of range" }
             Initialize-SmcHermesManagedHome -ProgramRoot $hostLayout.ProgramRoot -HermesHome $hostLayout.HermesHome | Out-Null
+            if (Get-Command Merge-SmcHermesManagedConfig -ErrorAction SilentlyContinue) {
+                $null = Merge-SmcHermesManagedConfig -ProgramRoot $hostLayout.ProgramRoot -HermesHome $hostLayout.HermesHome -CliPath $hostLayout.CliPath
+            }
             $null = Set-SmcHermesManagedTerminalConfig -ConfigPath $hostLayout.ConfigPath -WorkspaceRoot $hostLayout.WorkspaceRoot -HermesHome $hostLayout.HermesHome -CliPath $hostLayout.CliPath
             return @{ ok = $true; repairLevel = $RepairLevel; workspaceRoot = $hostLayout.WorkspaceRoot; tempRoot = $hostLayout.TempRoot }
         }

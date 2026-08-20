@@ -36,7 +36,16 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
     dest.mkdir(parents=True)
     work = dest / "_work"
     runtime = work / "runtime"
-    for rel in ("bin", "python", "node", "scripts", "runtime", "manifest", "uninstall"):
+    for rel in (
+        "bin",
+        "python",
+        "node/hermes-agent",
+        "scripts",
+        "runtime",
+        "manifest",
+        "uninstall",
+        "config",
+    ):
         (runtime / rel).mkdir(parents=True, exist_ok=True)
     pe = _pe_amd64()
     try:
@@ -44,16 +53,71 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
     except ValueError:
         (runtime / "bin" / "hermes.exe").write_bytes(pe)
     (runtime / "python" / "python.exe").write_bytes(pe)
+    (runtime / "python" / "sqlite3.dll").write_bytes(pe)
     (runtime / "node" / "node.exe").write_bytes(pe)
+    (runtime / "node" / "npm.cmd").write_text("@echo 10.9.4\r\n", encoding="ascii")
+    (runtime / "node" / "npx.cmd").write_text("@echo 10.9.4\r\n", encoding="ascii")
+    (runtime / "node" / "hermes-agent" / "package.json").write_text(
+        json.dumps({"name": "hermes-agent", "private": True}) + "\n",
+        encoding="utf-8",
+    )
+    (runtime / "config" / "managed.defaults.yaml").write_text(
+        "\n".join(
+            [
+                "schema: smc.opsi.managed-config.v2",
+                "profile: smc-managed",
+                "profileVersion: 2",
+                "profileDigest: smoke",
+                "defaults:",
+                "  logging:",
+                "    level: INFO",
+                "enforced:",
+                "  security:",
+                "    allow_lazy_installs: false",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
     scripts_src = ROOT / "infra" / "windows" / "hermes-agent" / "scripts"
     for name in ("HostOperations.ps1", "HostOperations.psm1", "SmcHermesManaged.psm1"):
         shutil.copy2(scripts_src / name, runtime / "scripts" / name)
     (runtime / "runtime" / "runtime-build.json").write_text(
-        json.dumps({"schema": "smc.hermes.runtime-build.v1", "liveEligible": False}) + "\n",
+        json.dumps(
+            {
+                "schema": "smc.hermes.runtime-build.v1",
+                "liveEligible": False,
+                "capabilities": {
+                    "apiServer": True,
+                    "mcp": True,
+                    "filesystemMcp": True,
+                    "web": True,
+                    "localStt": True,
+                    "edgeTts": True,
+                    "hindsight": True,
+                    "tirith": False,
+                    "lspAutoInstall": False,
+                },
+                "managedConfigVersion": 2,
+                "runtimeProfileVersion": 2,
+                "runtimeProfile": "smc-managed",
+                "runtimeProfileDigest": "smoke",
+                "environment": {"path": {"policy": "immutable"}},
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     (runtime / "runtime" / "windows-runtime.json").write_text(
-        json.dumps({"schema": "smc.hermes.windows-runtime.v1", "python": "3.12.8", "node": "22.11.0"}) + "\n",
+        json.dumps(
+            {
+                "schema": "smc.hermes.windows-runtime.v2",
+                "python": "3.12.8",
+                "node": "22.22.0",
+                "sqlite": "3.53.4",
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     tree = assemble_self_contained_tree(

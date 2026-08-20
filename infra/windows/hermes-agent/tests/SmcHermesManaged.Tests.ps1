@@ -18,12 +18,13 @@ Describe "SmcHermesManaged machine home" {
         $script:PrevAgentProcess = $env:HERMES_AGENT_ROOT
         $script:PrevNodeMachine = [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
         $script:PrevNodeProcess = $env:HERMES_NODE_ROOT
-        $script:PrevMachinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $script:PrevMachineTemp = [Environment]::GetEnvironmentVariable("TEMP", "Machine")
         $script:PrevMachineTmp = [Environment]::GetEnvironmentVariable("TMP", "Machine")
         $script:PrevMachineHome = [Environment]::GetEnvironmentVariable("HOME", "Machine")
         $script:PrevMachineUserProfile = [Environment]::GetEnvironmentVariable("USERPROFILE", "Machine")
         $script:PrevProcessUserProfile = $env:USERPROFILE
+        $script:MachinePathBeforeSuite = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $script:UserPathBeforeSuite = [Environment]::GetEnvironmentVariable("PATH", "User")
         $script:CreatedFiles = @()
         foreach ($name in $script:Layout.PreservedFiles) {
             $path = Join-Path $script:ManagedHome $name
@@ -52,9 +53,15 @@ Describe "SmcHermesManaged machine home" {
         try {
             [Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $script:PrevNodeMachine, "Machine")
         } catch {}
-        try {
-            [Environment]::SetEnvironmentVariable("PATH", $script:PrevMachinePath, "Machine")
-        } catch {}
+        # Never restore/write Machine or User PATH in unit tests (FR-215-21)
+        $machineAfter = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $userAfter = [Environment]::GetEnvironmentVariable("PATH", "User")
+        if (-not [string]::Equals([string]$script:MachinePathBeforeSuite, [string]$machineAfter, [StringComparison]::Ordinal)) {
+            throw "test suite mutated Machine PATH (forbidden)"
+        }
+        if (-not [string]::Equals([string]$script:UserPathBeforeSuite, [string]$userAfter, [StringComparison]::Ordinal)) {
+            throw "test suite mutated User PATH (forbidden)"
+        }
         foreach ($path in @($script:CreatedFiles)) {
             if (Test-Path -LiteralPath $path) {
                 Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
@@ -175,10 +182,11 @@ Describe "SmcHermesManaged machine home" {
         [Environment]::GetEnvironmentVariable("USERPROFILE", "Machine") | Should Be $script:PrevMachineUserProfile
         $env:USERPROFILE | Should Be $script:PrevProcessUserProfile
 
-        # Machine PATH must contain bin and scripts
+        # Machine/User PATH must be bit-for-bit unchanged (PATH immutability)
         $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-        ($machinePath -split ";") | Where-Object { [string]::Equals($_.TrimEnd("\"), $script:Layout.BinPath.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase) } | Should Not BeNullOrEmpty
-        ($machinePath -split ";") | Where-Object { [string]::Equals($_.TrimEnd("\"), $script:Layout.ScriptsPath.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase) } | Should Not BeNullOrEmpty
+        $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+        [string]::Equals([string]$script:MachinePathBeforeSuite, [string]$machinePath, [StringComparison]::Ordinal) | Should Be $true
+        [string]::Equals([string]$script:UserPathBeforeSuite, [string]$userPath, [StringComparison]::Ordinal) | Should Be $true
 
         # Home ACL: SYSTEM+Admins FullControl, Users Modify (CI+OI)
         $acl = (Get-Item -LiteralPath $managedHome).GetAccessControl()
@@ -203,30 +211,21 @@ Describe "SmcHermesManaged machine home" {
         }
     }
 
-    It "Add-SmcMachinePath is idempotent and Remove-SmcMachinePath only removes target" {
-        $testEntry = "C:\SMC-TEST-PATH-ENTRY-UNIQUE"
-        $before = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-
-        Add-SmcMachinePath -Entry $testEntry
-        $afterAdd = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-        ($afterAdd -split ";") | Where-Object { [string]::Equals($_.TrimEnd("\"), $testEntry, [StringComparison]::OrdinalIgnoreCase) } | Should Not BeNullOrEmpty
-
-        # Second add must not duplicate
-        Add-SmcMachinePath -Entry $testEntry
-        $afterDup = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-        $count = @(($afterDup -split ";") | Where-Object { [string]::Equals($_.TrimEnd("\"), $testEntry, [StringComparison]::OrdinalIgnoreCase) }).Count
-        $count | Should Be 1
-
-        # Remove only removes the target, leaves others intact
-        $beforeParts = $before -split ";"
-        Remove-SmcMachinePath -Entry $testEntry
-        $afterRemove = [Environment]::GetEnvironmentVariable("PATH", "Machine")
-        ($afterRemove -split ";") | Where-Object { [string]::Equals($_.TrimEnd("\"), $testEntry, [StringComparison]::OrdinalIgnoreCase) } | Should BeNullOrEmpty
-        foreach ($part in $beforeParts) {
-            if (-not [string]::IsNullOrWhiteSpace($part)) {
-                ($afterRemove -split ";") | Where-Object { [string]::Equals($_.TrimEnd("\"), $part.TrimEnd("\"), [StringComparison]::OrdinalIgnoreCase) } | Should Not BeNullOrEmpty
-            }
-        }
+    It "Set/Remove-SmcHermesEnvironment never mutate Machine/User PATH and PATH helpers are gone" {
+        $beforeMachine = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $beforeUser = [Environment]::GetEnvironmentVariable("PATH", "User")
+        Set-SmcHermesEnvironment -ProgramRoot $script:Layout.ProgramRoot -HermesHome $script:Layout.HermesHome
+        $afterSetMachine = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $afterSetUser = [Environment]::GetEnvironmentVariable("PATH", "User")
+        [string]::Equals([string]$beforeMachine, [string]$afterSetMachine, [StringComparison]::Ordinal) | Should Be $true
+        [string]::Equals([string]$beforeUser, [string]$afterSetUser, [StringComparison]::Ordinal) | Should Be $true
+        Remove-SmcHermesEnvironment
+        $afterRemoveMachine = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $afterRemoveUser = [Environment]::GetEnvironmentVariable("PATH", "User")
+        [string]::Equals([string]$beforeMachine, [string]$afterRemoveMachine, [StringComparison]::Ordinal) | Should Be $true
+        [string]::Equals([string]$beforeUser, [string]$afterRemoveUser, [StringComparison]::Ordinal) | Should Be $true
+        (Get-Command Add-SmcMachinePath -ErrorAction SilentlyContinue) | Should Be $null
+        (Get-Command Remove-SmcMachinePath -ErrorAction SilentlyContinue) | Should Be $null
     }
 
     It "Assert-SmcHermesHomeAcl passes with Users Modify (CI+OI) and fails when missing" {
@@ -432,5 +431,104 @@ terminal:
             $threwOutside = $true
         }
         $threwOutside | Should Be $true
+    }
+
+    It "merges managed defaults/enforced without overwriting models/providers" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\InstallerTests" ("merge-" + [guid]::NewGuid().ToString("N"))
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+        $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        try {
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "config") | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            $cwdQuoted = ConvertTo-SmcYamlDoubleQuotedPath -Path $layout.WorkspaceRoot
+            $managed = @(
+                "schema: smc.opsi.managed-config.v2",
+                "profile: smc-managed",
+                "profileVersion: 2",
+                "profileDigest: test",
+                "defaults:",
+                "  logging:",
+                "    level: INFO",
+                "  sessions:",
+                "    retention_days: 90",
+                "enforced:",
+                "  security:",
+                "    allow_lazy_installs: false",
+                "  terminal:",
+                "    cwd: $cwdQuoted"
+            ) -join "`n"
+            Set-Content -LiteralPath (Join-Path $layout.ProgramRoot "config\managed.defaults.yaml") -Value $managed -Encoding utf8
+            Set-Content -LiteralPath $layout.ConfigPath -Value "models:`n  default: keep-me`nlogging:`n  level: DEBUG`n" -Encoding utf8
+            $result = Merge-SmcHermesManagedConfig -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
+            $result.Changed | Should Be $true
+            $text = Get-Content -LiteralPath $layout.ConfigPath -Raw
+            $text | Should Match "keep-me"
+            $text | Should Match "allow_lazy_installs"
+            $text | Should Match "retention_days"
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Import-Module $script:Module -Force
+            if (Test-Path -LiteralPath $testRoot) {
+                Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    It "doctor reports runtime capabilities from manifest" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\InstallerTests" ("doctor-" + [guid]::NewGuid().ToString("N"))
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+        $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        try {
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "runtime") | Out-Null
+            New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "config") | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.TempRoot | Out-Null
+            $build = @{
+                schema = "smc.hermes.runtime-build.v1"
+                capabilities = @{
+                    apiServer = $true
+                    mcp = $true
+                    filesystemMcp = $true
+                    web = $true
+                    localStt = $true
+                    edgeTts = $true
+                    hindsight = $true
+                    tirith = $false
+                    lspAutoInstall = $false
+                }
+                runtimeProfile = "smc-managed"
+                runtimeProfileVersion = 2
+                runtimeProfileDigest = "abc"
+            } | ConvertTo-Json -Depth 6
+            Set-Content -LiteralPath (Join-Path $layout.ProgramRoot "runtime\runtime-build.json") -Value $build -Encoding utf8
+            Set-Content -LiteralPath (Join-Path $layout.ProgramRoot "config\managed.defaults.yaml") -Value "schema: smc.opsi.managed-config.v2`nenforced:`n  security:`n    allow_lazy_installs: false`n" -Encoding utf8
+            $cwdQuoted = ConvertTo-SmcYamlDoubleQuotedPath -Path $layout.WorkspaceRoot
+            Set-Content -LiteralPath $layout.ConfigPath -Value ("terminal:`n  cwd: {0}`n" -f $cwdQuoted) -Encoding utf8
+            $checks = @(Get-SmcHermesCapabilityDoctorChecks -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome)
+            ($checks | Where-Object { $_.name -eq "API Server / aiohttp" }).status | Should Be "PASS"
+            ($checks | Where-Object { $_.name -eq "Tirith policy" }).status | Should Be "DISABLED"
+            ($checks | Where-Object { $_.name -eq "Offline/lazy install policy" }).status | Should Be "PASS"
+            $report = Get-SmcHermesManagedDoctorReport -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
+            ($report.checks | Where-Object { $_.name -eq "PATH Policy" }).status | Should Be "PASS"
+            ($report.checks | Where-Object { $_.name -eq "PATH Policy" }).detail | Should Match "persistent Hermes PATH not required"
+            ($report.checks | Where-Object { $_.name -eq "Hermes CLI Path" }).detail | Should Be $layout.CliPath
+            ($report.checks | Where-Object { $_.name -eq "Gateway Process PATH contract" }).status | Should Be "PASS"
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Import-Module $script:Module -Force
+            if (Test-Path -LiteralPath $testRoot) {
+                Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
 }

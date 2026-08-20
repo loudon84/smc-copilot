@@ -31,6 +31,7 @@ REQUIRED_RUNTIME_FILES = (
     "scripts/HostOperations.ps1",
     "scripts/HostOperations.psm1",
     "scripts/SmcHermesManaged.psm1",
+    "config/managed.defaults.yaml",
 )
 CHROMIUM_FORBIDDEN_IN_RELEASE = {"chromium", ".local-chromium", "chrome-win", "chrome-linux"}
 
@@ -159,6 +160,15 @@ def canonical_manifest_bytes(manifest: dict[str, Any]) -> bytes:
         payload["runtimeBuildSha256"] = manifest["runtimeBuildSha256"]
     if manifest.get("runtime"):
         payload["runtime"] = manifest["runtime"]
+    for key in (
+        "capabilities",
+        "managedConfigVersion",
+        "runtimeProfileVersion",
+        "runtimeProfile",
+        "runtimeProfileDigest",
+    ):
+        if key in manifest:
+            payload[key] = manifest[key]
     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
@@ -201,6 +211,26 @@ def _runtime_versions(tree: Path) -> dict[str, str]:
     return result
 
 
+def _runtime_capability_meta(tree: Path) -> dict[str, Any]:
+    build_path = tree / "runtime" / "runtime-build.json"
+    if not build_path.is_file():
+        return {}
+    data = json.loads(build_path.read_text(encoding="utf-8"))
+    meta: dict[str, Any] = {}
+    caps = data.get("capabilities")
+    if isinstance(caps, dict):
+        meta["capabilities"] = caps
+    for key in (
+        "managedConfigVersion",
+        "runtimeProfileVersion",
+        "runtimeProfile",
+        "runtimeProfileDigest",
+    ):
+        if key in data:
+            meta[key] = data[key]
+    return meta
+
+
 def build_release_manifest(
     *,
     tree: Path,
@@ -232,6 +262,7 @@ def build_release_manifest(
     runtime = _runtime_versions(tree)
     if runtime:
         payload["runtime"] = runtime
+    payload.update(_runtime_capability_meta(tree))
     return payload
 
 

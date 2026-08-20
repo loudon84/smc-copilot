@@ -1,20 +1,39 @@
-schema: smc.hermes.runtime-profile.v1
+schema: smc.hermes.runtime-profile.v2
 
 profiles:
 
   smc-managed:
-    version: 1
+    version: 2
+
+    capabilities:
+      apiServer: true
+      mcp: true
+      filesystemMcp: true
+      web: true
+      localStt: true
+      edgeTts: true
+      hindsight: true
+      tirith: false
+      lspAutoInstall: false
 
     python:
       extras:
+        - messaging
         - mcp
         - web
         - google
-
+        - voice
+        - edge-tts
+        - hindsight
+      requiredPackages:
+        - aiohttp
+        - mcp
+        - edge-tts
       lazyInstall:
         allowed: false
 
     node:
+      required: true
       packages:
         - name: "@modelcontextprotocol/server-filesystem"
           version: "2025.8.21"
@@ -23,3 +42,81 @@ profiles:
       enabled: true
       bind: "127.0.0.1"
       port: 8642
+      authRequired: true
+
+    managedConfig:
+      defaults:
+        terminal:
+          backend: local
+          timeout: 180
+          persistent_shell: true
+        code_execution:
+          mode: project
+        web:
+          backend: duckduckgo
+          search_backend: duckduckgo
+          extract_backend: duckduckgo
+        gateway:
+          strict: false
+        logging:
+          level: INFO
+          max_size_mb: 5
+          backup_count: 3
+        sessions:
+          auto_prune: false
+          retention_days: 90
+        timezone: Asia/Shanghai
+        memory:
+          memory_enabled: true
+          provider: hindsight
+          mode: local_external
+        stt:
+          enabled: true
+          provider: local
+        lsp:
+          enabled: false
+          install_strategy: manual
+        secrets:
+          bitwarden:
+            enabled: false
+            auto_install: false
+        platform_toolsets:
+          api:
+            - web
+            - file
+            - skills
+            - session_search
+            - todo
+            - clarify
+            - terminal
+          gateway:
+            - web
+            - file
+            - skills
+            - session_search
+            - todo
+            - clarify
+            - terminal
+        toolsets:
+          - web
+          - file
+          - skills
+          - session_search
+          - todo
+          - clarify
+          - terminal
+      enforced:
+        terminal:
+          cwd: "C:\\ProgramData\\SMC\\Hermes\\workspace"
+        security:
+          allow_private_urls: false
+          redact_secrets: true
+          allow_lazy_installs: false
+          tirith_enabled: false
+        mcp_servers:
+          workspace:
+            command: managed-node
+            args:
+              - "@modelcontextprotocol/server-filesystem"
+              - "C:\\ProgramData\\SMC\\Hermes\\workspace"
+            enabled: true

@@ -1,4 +1,4 @@
-"""Minimal YAML subset loader (mappings, lists, scalars). No new package."""
+"""Minimal YAML subset loader/dumper (mappings, lists, scalars). No new package."""
 
 from __future__ import annotations
 
@@ -13,6 +13,92 @@ def load_yaml(path: Path) -> Any:
     if value is None:
         raise ValueError(f"empty yaml: {path}")
     return value
+
+
+def dump_yaml(data: Any) -> str:
+    """Deterministic YAML subset: sorted map keys, stable 2-space indent."""
+    lines: list[str] = []
+    _dump_value(data, lines, indent=0, inline_empty=False)
+    return "\n".join(lines) + "\n"
+
+
+def _dump_value(value: Any, lines: list[str], *, indent: int, inline_empty: bool) -> None:
+    prefix = " " * indent
+    if isinstance(value, dict):
+        if not value:
+            if inline_empty and lines:
+                lines[-1] = lines[-1] + " {}"
+            else:
+                lines.append(f"{prefix}{{}}")
+            return
+        for key in sorted(value.keys(), key=lambda item: str(item)):
+            child = value[key]
+            key_text = str(key)
+            if isinstance(child, dict) and not child:
+                lines.append(f"{prefix}{key_text}: {{}}")
+            elif isinstance(child, list) and not child:
+                lines.append(f"{prefix}{key_text}: []")
+            elif isinstance(child, (dict, list)):
+                lines.append(f"{prefix}{key_text}:")
+                _dump_value(child, lines, indent=indent + 2, inline_empty=True)
+            else:
+                lines.append(f"{prefix}{key_text}: {_format_scalar(child)}")
+        return
+    if isinstance(value, list):
+        if not value:
+            if inline_empty and lines:
+                lines[-1] = lines[-1] + " []"
+            else:
+                lines.append(f"{prefix}[]")
+            return
+        for item in value:
+            if isinstance(item, (dict, list)):
+                lines.append(f"{prefix}-")
+                _dump_value(item, lines, indent=indent + 2, inline_empty=True)
+            else:
+                lines.append(f"{prefix}- {_format_scalar(item)}")
+        return
+    lines.append(f"{prefix}{_format_scalar(value)}")
+
+
+def _format_scalar(value: Any) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    text = str(value)
+    if _needs_quotes(text):
+        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return text
+
+
+def _needs_quotes(text: str) -> bool:
+    if text == "":
+        return True
+    if text.lower() in {"true", "false", "null", "~"}:
+        return True
+    if any(ch in text for ch in (":", "#", "{", "}", "[", "]", ",", '"', "'", "\\", "\n", "\r")):
+        return True
+    if text.startswith((" ", "-", "?")) or text.endswith(" "):
+        return True
+    if "\\" in text or "/" in text and (":" in text or text.startswith("/")):
+        return True
+    if text.startswith("C:\\") or "\\\\" in text or ":\\" in text:
+        return True
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
 
 
 def _parse_block(lines: list[str], index: int, indent: int) -> tuple[Any, int]:
@@ -106,12 +192,19 @@ def _indent(line: str) -> int:
 def _parse_scalar(text: str) -> Any:
     if text in ("", "~", "null"):
         return None
+    if text in ("{}",):
+        return {}
+    if text in ("[]",):
+        return []
     if text in ("true", "True"):
         return True
     if text in ("false", "False"):
         return False
     if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
-        return text[1:-1]
+        inner = text[1:-1]
+        if text[0] == '"':
+            return inner.replace('\\"', '"').replace("\\\\", "\\")
+        return inner
     try:
         if "." in text:
             return float(text)

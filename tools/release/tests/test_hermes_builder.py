@@ -220,11 +220,15 @@ def test_h06_wrong_platform_wheel_fails(tmp_path: Path):
 def test_h07_runtime_profile_valid():
     data = load_profiles(PROFILES)
     profile = resolve_profile(data, "smc-managed")
+    assert profile["version"] == 2
     assert profile["python"]["lazyInstall"]["allowed"] is False
+    assert profile["capabilities"]["apiServer"] is True
+    assert "messaging" in profile["python"]["extras"]
+    assert "aiohttp" in profile["python"]["requiredPackages"]
+    assert profile["gateway"]["authRequired"] is True
     assert profile["node"]["packages"][0]["version"] != "latest"
     with pytest.raises(ValueError, match="not defined"):
         resolve_profile(data, "smc-finance")
-
 
 def test_h08_missing_python_dependency(tmp_path: Path):
     house = tmp_path / "empty"
@@ -253,6 +257,9 @@ def test_assemble_bundle_rejects_python_runtime_and_secrets(tmp_path: Path):
     house = tmp_path / "wheels"
     _wheel(house, "hermes_agent-0.20.2-py3-none-any.whl", module="hermes_cli/main.py", content="def main():\n    return 0\n")
     _wheel(house, "pydantic-2.11.0-py3-none-any.whl")
+    _wheel(house, "aiohttp-3.11.0-py3-none-any.whl")
+    _wheel(house, "mcp-1.0.0-py3-none-any.whl")
+    _wheel(house, "edge_tts-6.1.0-py3-none-any.whl")
     node_root = tmp_path / "node"
     write_package_manifest(node_root, profile["node"]["packages"])
     tgz = node_root / "packages" / "modelcontextprotocol-server-filesystem-2025.8.21.tgz"
@@ -269,9 +276,16 @@ def test_assemble_bundle_rejects_python_runtime_and_secrets(tmp_path: Path):
         source=source,
     )
     assert (dest / "runtime-build.json").is_file()
+    assert (dest / "config" / "managed.defaults.yaml").is_file()
+    managed = (dest / "config" / "managed.defaults.yaml").read_text(encoding="utf-8")
+    assert "smc.opsi.managed-config.v2" in managed
+    assert "keys: {}" not in managed
     assert not (dest / "python.exe").exists()
     build = json.loads((dest / "runtime-build.json").read_text(encoding="utf-8"))
     assert build["schema"] == "smc.hermes.runtime-build.v1"
+    assert build["capabilities"]["apiServer"] is True
+    assert build["runtimeProfileDigest"]
+    assert build["managedConfigVersion"] == 2
     assert build["liveEligible"] is True
     (dest / "python.exe").write_bytes(b"no")
     with pytest.raises(ValueError, match="forbidden"):
@@ -282,9 +296,9 @@ def test_assemble_bundle_rejects_python_runtime_and_secrets(tmp_path: Path):
         names = zf.namelist()
     assert "runtime-build.json" in names
     assert "python/wheels/pydantic-2.11.0-py3-none-any.whl" in names
+    assert "config/managed.defaults.yaml" in names
     verify_bundle_zip(archive)
     hashlib.sha256(archive.read_bytes()).hexdigest()
-
 
 def _bundle_inputs(tmp_path: Path, *, dirty: bool = False) -> tuple[Path, Path, Path, Path]:
     repo = _hermes_repo(tmp_path, dirty=dirty)
@@ -297,6 +311,9 @@ def _bundle_inputs(tmp_path: Path, *, dirty: bool = False) -> tuple[Path, Path, 
     house = tmp_path / "wheels"
     _wheel(house, "hermes_agent-0.20.2-py3-none-any.whl", module="hermes_cli/main.py", content="def main():\n    return 0\n")
     _wheel(house, "pydantic-2.11.0-py3-none-any.whl")
+    _wheel(house, "aiohttp-3.11.0-py3-none-any.whl", module="__init__.py", content="# aiohttp stub\n")
+    _wheel(house, "mcp-1.0.0-py3-none-any.whl", module="__init__.py", content="# mcp stub\n")
+    _wheel(house, "edge_tts-6.1.0-py3-none-any.whl", module="__init__.py", content="# edge_tts stub\n")
     node_root = tmp_path / "node"
     write_package_manifest(node_root, [{"name": "@modelcontextprotocol/server-filesystem", "version": "2025.8.21"}])
     tgz = node_root / "packages" / "modelcontextprotocol-server-filesystem-2025.8.21.tgz"
@@ -304,6 +321,12 @@ def _bundle_inputs(tmp_path: Path, *, dirty: bool = False) -> tuple[Path, Path, 
     tgz.write_bytes(_npm_pack("@modelcontextprotocol/server-filesystem", "2025.8.21"))
     return repo, wheel, house, node_root
 
+
+def _build_kwargs(tmp_path: Path) -> dict:
+    kwargs = _bundle_kwargs(tmp_path)
+    kwargs["skip_runtime_functional"] = True
+    kwargs["skip_gateway_smoke"] = True
+    return kwargs
 
 def test_rb01_clean_sources(tmp_path: Path):
     repo, wheel, house, node_root = _bundle_inputs(tmp_path)
@@ -314,7 +337,7 @@ def test_rb01_clean_sources(tmp_path: Path):
         wheelhouse=house,
         node_root=node_root,
         mode="offline",
-        **_bundle_kwargs(tmp_path),
+        **_build_kwargs(tmp_path),
     )
     assert archive.is_file()
     build = json.loads((tmp_path / "out" / "runtime-build.json").read_text(encoding="utf-8"))
@@ -332,7 +355,7 @@ def test_rb02_dirty_source_fails(tmp_path: Path):
             wheelhouse=house,
             node_root=node_root,
             mode="offline",
-            **_bundle_kwargs(tmp_path),
+            **_build_kwargs(tmp_path),
         )
 
 
@@ -354,7 +377,7 @@ def test_rb03_automatic_wheelhouse(tmp_path: Path):
         node_root=node_root,
         mode="online",
         wheelhouse_downloader=_download,
-        **_bundle_kwargs(tmp_path),
+        **_build_kwargs(tmp_path),
     )
     assert archive.is_file()
     assert fetched
@@ -417,7 +440,7 @@ def test_rb08_bundle_build(tmp_path: Path):
         wheelhouse=house,
         node_root=node_root,
         mode="offline",
-        **_bundle_kwargs(tmp_path),
+        **_build_kwargs(tmp_path),
     )
     verify_bundle_zip(archive)
     lock = (tmp_path / "out" / "work" / "bundle" / "python" / "requirements.lock").read_text(encoding="utf-8")
@@ -436,7 +459,7 @@ def test_release_v2_self_contained(tmp_path: Path):
         node_root=node_root,
         mode="offline",
         release_version="0.20.2-smc.1",
-        **_bundle_kwargs(tmp_path),
+        **_build_kwargs(tmp_path),
     )
     release_zip = dest / "hermes-windows-amd64.zip"
     manifest_path = dest / "release-manifest.json"
@@ -496,6 +519,7 @@ def test_windows_runtime_builder(tmp_path: Path):
         node_archive=node_archive,
         sqlite_archive=sqlite_archive,
         mode="offline",
+        skip_functional_gates=True,
     )
     assert_pe_amd64(tree / "bin" / "hermes.exe")
     assert_pe_amd64(tree / "python" / "python.exe")
@@ -520,6 +544,7 @@ def test_windows_runtime_builder(tmp_path: Path):
     assert meta["schema"] == "smc.hermes.windows-runtime.v2"
     assert meta["sqlite"]
     assert meta["node"] == "22.22.0"
+    assert (tree / "config" / "managed.defaults.yaml").is_file()
 
 
 def test_windows_console_hook_uses_pth_not_sitecustomize(tmp_path: Path):
@@ -636,3 +661,211 @@ def test_release_v2_requires_sqlite_dll(tmp_path: Path):
     (tree / "scripts" / "SmcHermesManaged.psm1").write_text("# stub", encoding="utf-8")
     with pytest.raises(ValueError, match="python/sqlite3.dll"):
         assert_required_runtime(tree)
+
+def test_dep001_missing_aiohttp_fails(tmp_path: Path):
+    from tools.release.hermes.build_wheelhouse import verify_required_wheels
+
+    house = tmp_path / "wheels"
+    _wheel(house, "mcp-1.0.0-py3-none-any.whl")
+    items = inventory_wheels(house)
+    with pytest.raises(ValueError, match="missing python dependency: aiohttp"):
+        verify_required_wheels(items, ["aiohttp", "mcp"])
+
+
+def test_dep002_api_server_requires_messaging():
+    from copy import deepcopy
+    from tools.release.hermes.capability_matrix import validate_capability_declaration
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    bad = deepcopy(profile)
+    bad["python"]["extras"] = [e for e in bad["python"]["extras"] if e != "messaging"]
+    with pytest.raises(ValueError, match="apiServer requires Python extra messaging"):
+        validate_capability_declaration(bad)
+
+
+def test_cfg001_linux_path_rejected():
+    from copy import deepcopy
+    from tools.release.hermes.runtime_profile import validate_profile
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    bad = deepcopy(profile)
+    bad["managedConfig"]["defaults"]["terminal"] = {"cwd": "/data/hermes/workspace"}
+    with pytest.raises(ValueError, match="Linux/instance path forbidden"):
+        validate_profile("smc-managed", bad)
+
+
+def test_cfg002_lazy_install_rejected():
+    from copy import deepcopy
+    from tools.release.hermes.runtime_profile import validate_profile
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    bad = deepcopy(profile)
+    bad["python"]["lazyInstall"]["allowed"] = True
+    with pytest.raises(ValueError, match="lazy"):
+        validate_profile("smc-managed", bad)
+
+
+def test_cfg004_instance_secret_rejected():
+    from copy import deepcopy
+    from tools.release.hermes.runtime_profile import validate_profile
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    bad = deepcopy(profile)
+    bad["managedConfig"]["defaults"]["models"] = {"default": "x"}
+    with pytest.raises(ValueError, match="instance/secret key forbidden"):
+        validate_profile("smc-managed", bad)
+
+
+def test_managed_defaults_compile_deterministic():
+    from tools.release.hermes.managed_config import compile_managed_defaults, render_managed_defaults_yaml
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    a = render_managed_defaults_yaml(profile, profile_name="smc-managed")
+    b = render_managed_defaults_yaml(profile, profile_name="smc-managed")
+    assert a == b
+    assert "smc.opsi.managed-config.v2" in a
+    assert "allow_lazy_installs: false" in a
+    payload = compile_managed_defaults(profile, profile_name="smc-managed")
+    assert payload["profileVersion"] == 2
+    assert payload["profileDigest"]
+
+
+def test_import_gate_uses_allowlist(tmp_path: Path):
+    from tools.release.hermes.build_runtime import verify_capability_imports
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    seen: list[str] = []
+
+    def runner(_python, module: str) -> None:
+        seen.append(module)
+
+    modules = verify_capability_imports(tmp_path, profile, runner=runner)
+    assert "aiohttp" in modules
+    assert "mcp" in modules
+    assert "edge_tts" in modules
+    assert seen == modules
+
+
+def test_gateway_smoke_mock_success(tmp_path: Path):
+    from tools.release.hermes import gateway_smoke as smoke
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    runtime = tmp_path / "runtime"
+    (runtime / "bin").mkdir(parents=True)
+    (runtime / "bin" / "hermes.exe").write_bytes(_pe_amd64())
+
+    class FakeProc:
+        def __init__(self):
+            self.returncode = None
+            self.stdout = None
+            self.stderr = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+    old_popen = smoke.subprocess.Popen
+    old_wait = smoke._wait_tcp
+    smoke.subprocess.Popen = lambda *a, **k: FakeProc()
+    smoke._wait_tcp = lambda *a, **k: None
+    try:
+        def fake_get(url, headers, _timeout):
+            if url.endswith("/health"):
+                return 200, "ok"
+            if url.endswith("/v1/models"):
+                assert headers and "Bearer " in headers.get("Authorization", "")
+                return 200, '{"data":[]}'
+            return 500, "no"
+
+        result = smoke.run_gateway_smoke(
+            runtime,
+            profile=profile,
+            skip_if_not_windows=False,
+            http_get=fake_get,
+            port=18765,
+        )
+        assert result["ok"] is True
+    finally:
+        smoke.subprocess.Popen = old_popen
+        smoke._wait_tcp = old_wait
+
+
+def test_gateway_smoke_auth_fail(tmp_path: Path):
+    from tools.release.hermes import gateway_smoke as smoke
+
+    profile = resolve_profile(load_profiles(PROFILES), "smc-managed")
+    runtime = tmp_path / "runtime"
+    (runtime / "bin").mkdir(parents=True)
+    (runtime / "bin" / "hermes.exe").write_bytes(_pe_amd64())
+
+    class FakeProc:
+        returncode = None
+        stdout = None
+        stderr = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = 0
+
+        def kill(self):
+            self.returncode = 0
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+    old_popen = smoke.subprocess.Popen
+    old_wait = smoke._wait_tcp
+    smoke.subprocess.Popen = lambda *a, **k: FakeProc()
+    smoke._wait_tcp = lambda *a, **k: None
+    try:
+        def fake_get(url, headers, _timeout):
+            if url.endswith("/health"):
+                return 200, "ok"
+            return 401, "unauthorized"
+
+        with pytest.raises(ValueError, match="auth failed"):
+            smoke.run_gateway_smoke(
+                runtime,
+                profile=profile,
+                skip_if_not_windows=False,
+                http_get=fake_get,
+                port=18766,
+            )
+    finally:
+        smoke.subprocess.Popen = old_popen
+        smoke._wait_tcp = old_wait
+
+
+def test_release_v2_requires_managed_defaults(tmp_path: Path):
+    from tools.release.hermes.release_v2 import assert_required_runtime
+
+    tree = tmp_path / "release"
+    (tree / "bin").mkdir(parents=True)
+    (tree / "python").mkdir(parents=True)
+    (tree / "node" / "hermes-agent").mkdir(parents=True)
+    (tree / "scripts").mkdir(parents=True)
+    (tree / "bin" / "hermes.exe").write_bytes(_pe_amd64())
+    (tree / "python" / "python.exe").write_bytes(_pe_amd64())
+    (tree / "python" / "sqlite3.dll").write_bytes(_pe_amd64())
+    (tree / "node" / "node.exe").write_bytes(_pe_amd64())
+    (tree / "node" / "npm.cmd").write_text("@echo ok", encoding="ascii")
+    (tree / "node" / "npx.cmd").write_text("@echo ok", encoding="ascii")
+    (tree / "node" / "hermes-agent" / "package.json").write_text("{}", encoding="utf-8")
+    (tree / "scripts" / "HostOperations.ps1").write_text("# stub", encoding="utf-8")
+    (tree / "scripts" / "HostOperations.psm1").write_text("# stub", encoding="utf-8")
+    (tree / "scripts" / "SmcHermesManaged.psm1").write_text("# stub", encoding="utf-8")
+    with pytest.raises(ValueError, match="config/managed.defaults.yaml"):
+        assert_required_runtime(tree)
+

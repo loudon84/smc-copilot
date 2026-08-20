@@ -12,6 +12,8 @@ Describe "Hermes installer core" {
         # Re-import Managed into the test session after InstallerCore nested import.
         Import-Module (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Force -DisableNameChecking
         $script:Layout = Get-SmcHermesManagedLayout
+        $script:MachinePathBefore = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $script:UserPathBefore = [Environment]::GetEnvironmentVariable("PATH", "User")
         $fixture = Join-Path $PSScriptRoot "fixtures\release-v2-smoke"
         if (-not (Test-Path -LiteralPath (Join-Path $fixture "hermes-windows-amd64.zip"))) {
             $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:Root))
@@ -29,6 +31,14 @@ Describe "Hermes installer core" {
     AfterAll {
         Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue
         Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+        $machineAfter = [Environment]::GetEnvironmentVariable("PATH", "Machine")
+        $userAfter = [Environment]::GetEnvironmentVariable("PATH", "User")
+        if (-not [string]::Equals([string]$script:MachinePathBefore, [string]$machineAfter, [StringComparison]::Ordinal)) {
+            throw "Installer tests mutated Machine PATH (forbidden)"
+        }
+        if (-not [string]::Equals([string]$script:UserPathBefore, [string]$userAfter, [StringComparison]::Ordinal)) {
+            throw "Installer tests mutated User PATH (forbidden)"
+        }
         if (Test-Path -LiteralPath $script:TestRoot) {
             Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -88,13 +98,59 @@ Describe "Hermes installer core" {
         $spec.LauncherScript | Should Match ([regex]::Escape("`$env:TMP = '$($script:Layout.TempRoot)'"))
         $spec.LauncherScript | Should Match "Set-Location -LiteralPath"
         $spec.LauncherScript | Should Match "managed_runtime_context"
+        $spec.LauncherScript | Should Match "API_SERVER_ENABLED"
+        $spec.LauncherScript | Should Match "API_SERVER_KEY"
+        $spec.LauncherScript | Should Match ([regex]::Escape("`$env:PATH"))
+        $spec.ManagedPath | Should Be (@($script:Layout.BinPath, $script:Layout.ScriptsPath, $script:Layout.NodeRoot) -join ";")
+        $spec.LauncherScript | Should Match ([regex]::Escape($spec.ManagedPath))
         $core = Get-Content -LiteralPath (Join-Path $script:Root "installer\InstallerCore.psm1") -Raw
         $managed = Get-Content -LiteralPath (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Raw
         $core | Should Not Match 'SetEnvironmentVariable\("TEMP"'
         $core | Should Not Match 'SetEnvironmentVariable\("TMP"'
+        $core | Should Not Match 'SetEnvironmentVariable\("PATH"'
         $managed | Should Not Match 'SetEnvironmentVariable\("TEMP"'
         $managed | Should Not Match 'SetEnvironmentVariable\("HOME"'
         $managed | Should Not Match 'SetEnvironmentVariable\("USERPROFILE"'
+        $managed | Should Not Match 'SetEnvironmentVariable\("PATH"'
+        $managed | Should Not Match 'Add-SmcMachinePath'
+        $managed | Should Not Match 'Remove-SmcMachinePath'
+    }
+
+    It "path snapshot digests distinguish null vs empty and equality is Ordinal" {
+        $nullDigest = Get-SmcPathSha256 -Raw $null
+        $emptyDigest = Get-SmcPathSha256 -Raw ""
+        $nullDigest | Should Not Be $emptyDigest
+        (Test-SmcRawPathEqual -Left $null -Right $null) | Should Be $true
+        (Test-SmcRawPathEqual -Left $null -Right "") | Should Be $false
+        (Test-SmcRawPathEqual -Left "a;b;" -Right "a;b;") | Should Be $true
+        (Test-SmcRawPathEqual -Left "a;b;" -Right "a;B;") | Should Be $false
+        $snap = Get-SmcEnvironmentPathSnapshot -Operation install
+        $snap.schema | Should Be "smc.windows.environment-snapshot.v1"
+        Assert-SmcEnvironmentPathUnchanged -Before $snap -Operation install | Out-Null
+        [string]::Equals([string]$script:MachinePathBefore, [string]([Environment]::GetEnvironmentVariable("PATH", "Machine")), [StringComparison]::Ordinal) | Should Be $true
+    }
+
+    It "generates per-endpoint gateway secret and preserves on upgrade path" {
+        New-Item -ItemType Directory -Force -Path $script:Layout.HermesHome | Out-Null
+        $first = Set-SmcHermesEndpointSecret -HermesHome $script:Layout.HermesHome
+        $first.HasKey | Should Be $true
+        $envPath = Join-Path $script:Layout.HermesHome ".env"
+        Test-Path -LiteralPath $envPath | Should Be $true
+        $key1 = Get-SmcHermesEnvValue -EnvPath $envPath -Key "API_SERVER_KEY"
+        ($key1.Length -ge 24) | Should Be $true
+        $serialized = ($first | ConvertTo-Json -Compress)
+        $serialized | Should Not Match $key1
+        $second = Set-SmcHermesEndpointSecret -HermesHome $script:Layout.HermesHome
+        $second.HasKey | Should Be $true
+        $key2 = Get-SmcHermesEnvValue -EnvPath $envPath -Key "API_SERVER_KEY"
+        $key2 | Should Be $key1
+    }
+
+    It "gateway ready fails when endpoint is down even if task contract could pass" {
+        New-Item -ItemType Directory -Force -Path $script:Layout.HermesHome | Out-Null
+        $null = Set-SmcHermesEndpointSecret -HermesHome $script:Layout.HermesHome
+        $ready = Test-SmcHermesGatewayReady -HermesHome $script:Layout.HermesHome -Attempts 1 -DelayMs 0
+        $ready | Should Be $false
     }
 
     It "repairs without deleting preserved home data" {

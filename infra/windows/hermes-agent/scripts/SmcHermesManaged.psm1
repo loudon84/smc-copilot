@@ -157,48 +157,15 @@ function Set-SmcHermesEnvironment {
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $agentRoot
     $env:HERMES_NODE_ROOT = $nodeRoot
-    Add-SmcMachinePath -Entry $layout.BinPath
-    Add-SmcMachinePath -Entry $layout.ScriptsPath
 }
 
 function Remove-SmcHermesEnvironment {
-    $layout = Get-SmcHermesManagedLayout
     [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $null, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $null, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $null, "Machine")
     Remove-Item Env:HERMES_HOME -ErrorAction SilentlyContinue
     Remove-Item Env:HERMES_AGENT_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:HERMES_NODE_ROOT -ErrorAction SilentlyContinue
-    Remove-SmcMachinePath -Entry $layout.BinPath
-    Remove-SmcMachinePath -Entry $layout.ScriptsPath
-}
-
-function Add-SmcMachinePath {
-    param([Parameter(Mandatory = $true)][string]$Entry)
-    $current = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-    if ([string]::IsNullOrEmpty($current)) { $current = "" }
-    $parts = @($current -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    $norm = $Entry.TrimEnd("\")
-    $exists = @($parts | Where-Object { [string]::Equals($_.TrimEnd("\"), $norm, [StringComparison]::OrdinalIgnoreCase) })
-    if ($exists.Count -eq 0) {
-        $newPath = (@($parts) + $norm) -join ";"
-        [System.Environment]::SetEnvironmentVariable("PATH", $newPath, "Machine")
-    }
-    $procParts = @($env:PATH -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    $procExists = @($procParts | Where-Object { [string]::Equals($_.TrimEnd("\"), $norm, [StringComparison]::OrdinalIgnoreCase) })
-    if ($procExists.Count -eq 0) {
-        $env:PATH = (@($procParts) + $norm) -join ";"
-    }
-}
-
-function Remove-SmcMachinePath {
-    param([Parameter(Mandatory = $true)][string]$Entry)
-    $norm = $Entry.TrimEnd("\")
-    $current = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
-    if ([string]::IsNullOrEmpty($current)) { return }
-    $parts = @($current -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    $filtered = @($parts | Where-Object { -not [string]::Equals($_.TrimEnd("\"), $norm, [StringComparison]::OrdinalIgnoreCase) })
-    [System.Environment]::SetEnvironmentVariable("PATH", ($filtered -join ";"), "Machine")
 }
 
 function Test-SmcAclHasModify {
@@ -366,7 +333,6 @@ function Initialize-SmcHermesManagedHome {
     $prevAgentRootProc    = $env:HERMES_AGENT_ROOT
     $prevNodeRoot         = [System.Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
     $prevNodeRootProc     = $env:HERMES_NODE_ROOT
-    $prevMachinePath      = [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
 
     $envSet = $false
     try {
@@ -388,11 +354,10 @@ function Initialize-SmcHermesManagedHome {
         $envSet = $true
     } catch {
         if ($envSet) {
-            # best-effort rollback
+            # best-effort rollback — Installer-owned Hermes variables only (PATH immutable)
             [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $prevHermesHome, "Machine")
             [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $prevAgentRoot, "Machine")
             [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $prevNodeRoot, "Machine")
-            [System.Environment]::SetEnvironmentVariable("PATH", $prevMachinePath, "Machine")
             $env:HERMES_HOME = $prevHermesHomeProc
             $env:HERMES_AGENT_ROOT = $prevAgentRootProc
             $env:HERMES_NODE_ROOT = $prevNodeRootProc
@@ -698,6 +663,413 @@ function Clear-SmcHermesManagedTemp {
     return @{ ok = $true; removed = $removed; warnings = @($warnings) }
 }
 
+function ConvertFrom-SmcYamlSubset {
+    param([AllowEmptyString()][AllowNull()][string]$Text = "")
+    if ([string]::IsNullOrWhiteSpace($Text)) { return @{} }
+    $lines = @($Text -split "`r?`n", -1)
+    $index = 0
+    return (Read-SmcYamlBlock -Lines $lines -Index ([ref]$index) -Indent 0)
+}
+
+function Read-SmcYamlBlock {
+    param(
+        [string[]]$Lines,
+        [ref]$Index,
+        [int]$Indent
+    )
+    while ($Index.Value -lt $Lines.Count) {
+        $raw = $Lines[$Index.Value]
+        if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith("#")) {
+            $Index.Value++
+            continue
+        }
+        $current = ($raw.Length - $raw.TrimStart().Length)
+        if ($current -lt $Indent) { return $null }
+        $stripped = $raw.Trim()
+        if ($stripped.StartsWith("- ")) {
+            return (Read-SmcYamlList -Lines $Lines -Index $Index -Indent $current)
+        }
+        if ($stripped.Contains(":")) {
+            return (Read-SmcYamlMap -Lines $Lines -Index $Index -Indent $current)
+        }
+        $Index.Value++
+        return (ConvertFrom-SmcYamlScalar $stripped)
+    }
+    return $null
+}
+
+function Read-SmcYamlMap {
+    param([string[]]$Lines, [ref]$Index, [int]$Indent)
+    $result = @{}
+    while ($Index.Value -lt $Lines.Count) {
+        $raw = $Lines[$Index.Value]
+        if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith("#")) {
+            $Index.Value++
+            continue
+        }
+        $current = ($raw.Length - $raw.TrimStart().Length)
+        if ($current -lt $Indent) { break }
+        if ($current -gt $Indent) { throw "unexpected yaml indent" }
+        $stripped = $raw.Trim()
+        if ($stripped.StartsWith("- ")) { break }
+        if (-not $stripped.Contains(":")) { throw "expected yaml mapping" }
+        $colon = $stripped.IndexOf(":")
+        $key = $stripped.Substring(0, $colon).Trim()
+        $rest = ""
+        if ($colon + 1 -lt $stripped.Length) {
+            $rest = $stripped.Substring($colon + 1).Trim()
+        }
+        $Index.Value++
+        if ($rest -eq "{}") {
+            $result[$key] = @{}
+        } elseif ($rest -eq "[]") {
+            $result[$key] = @()
+        } elseif ($rest) {
+            $result[$key] = ConvertFrom-SmcYamlScalar $rest
+        } else {
+            $child = Read-SmcYamlBlock -Lines $Lines -Index $Index -Indent ($Indent + 2)
+            if ($null -eq $child) { $result[$key] = @{} } else { $result[$key] = $child }
+        }
+    }
+    return $result
+}
+
+function Read-SmcYamlList {
+    param([string[]]$Lines, [ref]$Index, [int]$Indent)
+    $result = New-Object System.Collections.ArrayList
+    while ($Index.Value -lt $Lines.Count) {
+        $raw = $Lines[$Index.Value]
+        if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith("#")) {
+            $Index.Value++
+            continue
+        }
+        $current = ($raw.Length - $raw.TrimStart().Length)
+        if ($current -lt $Indent) { break }
+        $stripped = $raw.Trim()
+        if (-not $stripped.StartsWith("- ")) { break }
+        $item = $stripped.Substring(2).Trim()
+        $Index.Value++
+        if (-not $item) {
+            $child = Read-SmcYamlBlock -Lines $Lines -Index $Index -Indent ($Indent + 2)
+            [void]$result.Add($(if ($null -eq $child) { @{} } else { $child }))
+        } else {
+            [void]$result.Add((ConvertFrom-SmcYamlScalar $item))
+        }
+    }
+    return ,@($result.ToArray())
+}
+
+function ConvertFrom-SmcYamlScalar {
+    param([string]$Text)
+    if ($Text -eq "{}" ) { return @{} }
+    if ($Text -eq "[]") { return @() }
+    if ($Text -eq "true") { return $true }
+    if ($Text -eq "false") { return $false }
+    if ($Text -eq "null" -or $Text -eq "~") { return $null }
+    if ($Text.Length -ge 2 -and (($Text.StartsWith('"') -and $Text.EndsWith('"')) -or ($Text.StartsWith("'") -and $Text.EndsWith("'")))) {
+        $inner = $Text.Substring(1, $Text.Length - 2)
+        if ($Text.StartsWith('"')) {
+            return $inner.Replace('\"', '"').Replace("\\", "\")
+        }
+        return $inner
+    }
+    $intVal = 0
+    if ([int]::TryParse($Text, [ref]$intVal)) { return $intVal }
+    return $Text
+}
+
+function ConvertTo-SmcYamlScalar {
+    param($Value)
+    if ($null -eq $Value) { return "null" }
+    if ($Value -is [bool]) { if ($Value) { return "true" } else { return "false" } }
+    if ($Value -is [int] -or $Value -is [long]) { return [string]$Value }
+    $text = [string]$Value
+    if ($text -match '[:#{}\[\],\"''\\]' -or $text -match '\\' -or $text -match '^\s|\s$' -or $text -match '^[0-9]+$' -or $text -in @("true","false","null")) {
+        $escaped = $text.Replace("\", "\\").Replace('"', '\"')
+        return '"' + $escaped + '"'
+    }
+    return $text
+}
+
+function ConvertTo-SmcYamlSubset {
+    param($Data, [int]$Indent = 0)
+    $lines = New-Object System.Collections.Generic.List[string]
+    Write-SmcYamlValue -Value $Data -Lines $lines -Indent $Indent
+    return (($lines.ToArray()) -join "`n") + "`n"
+}
+
+function Write-SmcYamlValue {
+    param($Value, $Lines, [int]$Indent)
+    $prefix = " " * $Indent
+    if ($Value -is [hashtable] -or ($Value -is [System.Collections.IDictionary])) {
+        $keys = @($Value.Keys | ForEach-Object { [string]$_ } | Sort-Object)
+        if ($keys.Count -eq 0) {
+            [void]$Lines.Add("${prefix}{}")
+            return
+        }
+        foreach ($key in $keys) {
+            $child = $Value[$key]
+            if (($child -is [hashtable] -or $child -is [System.Collections.IDictionary]) -and @($child.Keys).Count -eq 0) {
+                [void]$Lines.Add("${prefix}${key}: {}")
+            } elseif ($child -is [System.Collections.IList] -and -not ($child -is [string]) -and @($child).Count -eq 0) {
+                [void]$Lines.Add("${prefix}${key}: []")
+            } elseif (($child -is [hashtable] -or $child -is [System.Collections.IDictionary]) -or ($child -is [System.Collections.IList] -and -not ($child -is [string]))) {
+                [void]$Lines.Add("${prefix}${key}:")
+                Write-SmcYamlValue -Value $child -Lines $Lines -Indent ($Indent + 2)
+            } else {
+                [void]$Lines.Add("${prefix}${key}: $(ConvertTo-SmcYamlScalar $child)")
+            }
+        }
+        return
+    }
+    if ($Value -is [System.Collections.IList] -and -not ($Value -is [string])) {
+        $items = @($Value)
+        if ($items.Count -eq 0) {
+            [void]$Lines.Add("${prefix}[]")
+            return
+        }
+        foreach ($item in $items) {
+            if (($item -is [hashtable] -or $item -is [System.Collections.IDictionary]) -or ($item -is [System.Collections.IList] -and -not ($item -is [string]))) {
+                [void]$Lines.Add("${prefix}-")
+                Write-SmcYamlValue -Value $item -Lines $Lines -Indent ($Indent + 2)
+            } else {
+                [void]$Lines.Add("${prefix}- $(ConvertTo-SmcYamlScalar $item)")
+            }
+        }
+        return
+    }
+    [void]$Lines.Add("${prefix}$(ConvertTo-SmcYamlScalar $Value)")
+}
+
+function Merge-SmcHashtableDeep {
+    param(
+        $Base,
+        $Overlay,
+        [ValidateSet("PreferBase", "PreferOverlay")][string]$Conflict = "PreferBase"
+    )
+    if ($null -eq $Base) { $Base = @{} }
+    if ($null -eq $Overlay) { return $Base }
+    if (-not ($Base -is [hashtable] -or $Base -is [System.Collections.IDictionary])) { return $Base }
+    if (-not ($Overlay -is [hashtable] -or $Overlay -is [System.Collections.IDictionary])) {
+        if ($Conflict -eq "PreferOverlay") { return $Overlay }
+        return $Base
+    }
+    $result = @{}
+    foreach ($key in @($Base.Keys)) { $result[$key] = $Base[$key] }
+    foreach ($key in @($Overlay.Keys)) {
+        if (-not $result.ContainsKey($key)) {
+            $result[$key] = $Overlay[$key]
+            continue
+        }
+        $left = $result[$key]
+        $right = $Overlay[$key]
+        if (($left -is [hashtable] -or $left -is [System.Collections.IDictionary]) -and ($right -is [hashtable] -or $right -is [System.Collections.IDictionary])) {
+            $result[$key] = Merge-SmcHashtableDeep -Base $left -Overlay $right -Conflict $Conflict
+        } elseif ($Conflict -eq "PreferOverlay") {
+            $result[$key] = $right
+        }
+    }
+    return $result
+}
+
+$script:SmcProtectedConfigKeys = @("model", "models", "providers", "provider", "auxiliary", "delegation", "API_SERVER_KEY", "api_server_key")
+
+function Merge-SmcHermesManagedConfig {
+    param(
+        [string]$ProgramRoot = "",
+        [string]$HermesHome = "",
+        [string]$CliPath = "",
+        [string]$ManagedDefaultsPath = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) { $HermesHome = $layout.HermesHome }
+    if ([string]::IsNullOrWhiteSpace($CliPath)) { $CliPath = $layout.CliPath }
+    if ([string]::IsNullOrWhiteSpace($ManagedDefaultsPath)) {
+        $ManagedDefaultsPath = Join-Path $ProgramRoot "config\managed.defaults.yaml"
+    }
+    Assert-SmcHermesManagedPath -Path $ProgramRoot -Kind Program
+    Assert-SmcHermesManagedPath -Path $HermesHome -Kind Home
+    Assert-SmcHermesHomeChildPath -Path $layout.ConfigPath -HermesHome $HermesHome
+
+    if (-not (Test-Path -LiteralPath $ManagedDefaultsPath)) {
+        throw "managed.defaults.yaml missing: $ManagedDefaultsPath"
+    }
+    $managedText = Get-Content -LiteralPath $ManagedDefaultsPath -Raw -ErrorAction Stop
+    $managed = ConvertFrom-SmcYamlSubset -Text $managedText
+    if ([string]$managed.schema -ne "smc.opsi.managed-config.v2") {
+        throw "unsupported managed.defaults schema"
+    }
+    $defaults = $managed.defaults
+    $enforced = $managed.enforced
+    if ($null -eq $defaults) { $defaults = @{} }
+    if ($null -eq $enforced) { $enforced = @{} }
+
+    foreach ($section in @($defaults, $enforced)) {
+        foreach ($key in @($section.Keys)) {
+            if ($script:SmcProtectedConfigKeys -contains [string]$key) {
+                throw "managed config must not contain instance/secret key: $key"
+            }
+        }
+    }
+
+    $configPath = $layout.ConfigPath
+    $existingText = ""
+    $hadFile = Test-Path -LiteralPath $configPath
+    if ($hadFile) {
+        $raw = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop
+        if ($null -ne $raw) { $existingText = [string]$raw }
+    }
+    $existing = ConvertFrom-SmcYamlSubset -Text $existingText
+    if ($null -eq $existing) { $existing = @{} }
+
+    # Preserve protected instance keys from existing config.
+    $preserved = @{}
+    foreach ($key in $script:SmcProtectedConfigKeys) {
+        if ($existing.ContainsKey($key)) { $preserved[$key] = $existing[$key] }
+    }
+
+    # defaults: existing value wins; enforced: enterprise value wins.
+    $merged = Merge-SmcHashtableDeep -Base $defaults -Overlay $existing -Conflict PreferOverlay
+    $merged = Merge-SmcHashtableDeep -Base $merged -Overlay $enforced -Conflict PreferOverlay
+    foreach ($key in @($preserved.Keys)) {
+        $merged[$key] = $preserved[$key]
+    }
+
+    $newText = ConvertTo-SmcYamlSubset -Data $merged
+    $backup = "$configPath.bak.smc-managed"
+    $tmp = "$configPath.tmp.smc-managed"
+    $dir = Split-Path -Parent $configPath
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    }
+    if ($hadFile) {
+        Copy-Item -LiteralPath $configPath -Destination $backup -Force
+    }
+    try {
+        [System.IO.File]::WriteAllText($tmp, $newText, [System.Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $tmp -Destination $configPath -Force
+        # Ensure terminal.cwd still matches managed workspace after merge.
+        $null = Set-SmcHermesManagedTerminalConfig -ConfigPath $configPath -WorkspaceRoot $layout.WorkspaceRoot -HermesHome $HermesHome -CliPath $CliPath
+        if (Test-Path -LiteralPath $backup) {
+            Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        if (Test-Path -LiteralPath $tmp) {
+            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        }
+        if ($hadFile -and (Test-Path -LiteralPath $backup)) {
+            Move-Item -LiteralPath $backup -Destination $configPath -Force
+        }
+        throw
+    }
+    return [pscustomobject]@{
+        Changed = $true
+        ConfigPath = $configPath
+        Profile = [string]$managed.profile
+        ProfileVersion = [int]$managed.profileVersion
+        ProfileDigest = [string]$managed.profileDigest
+    }
+}
+
+function Get-SmcHermesCapabilityDoctorChecks {
+    param(
+        [string]$ProgramRoot = "",
+        [string]$HermesHome = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    if ([string]::IsNullOrWhiteSpace($HermesHome)) { $HermesHome = $layout.HermesHome }
+    $checks = New-Object System.Collections.Generic.List[object]
+
+    $buildPath = Join-Path $ProgramRoot "runtime\runtime-build.json"
+    $managedPath = Join-Path $ProgramRoot "config\managed.defaults.yaml"
+    $caps = $null
+    $profileName = ""
+    $profileVersion = ""
+    $profileDigest = ""
+    if (Test-Path -LiteralPath $buildPath) {
+        try {
+            $build = Get-Content -LiteralPath $buildPath -Raw | ConvertFrom-Json
+            $caps = $build.capabilities
+            $profileName = [string]$build.runtimeProfile
+            $profileVersion = [string]$build.runtimeProfileVersion
+            $profileDigest = [string]$build.runtimeProfileDigest
+        } catch {
+            $caps = $null
+        }
+    }
+    $meta = "profile=$profileName version=$profileVersion digest=$profileDigest"
+    if ($null -eq $caps) {
+        [void]$checks.Add([pscustomobject]@{ name = "Hermes Runtime Capabilities"; status = "FAIL"; detail = "runtime-build capabilities missing" })
+        return @($checks.ToArray())
+    }
+
+    $capPairs = @(
+        @{ name = "API Server / aiohttp"; enabled = $caps.apiServer },
+        @{ name = "MCP"; enabled = $caps.mcp },
+        @{ name = "Filesystem MCP"; enabled = $caps.filesystemMcp },
+        @{ name = "Web backend"; enabled = $caps.web },
+        @{ name = "Local STT"; enabled = $caps.localStt },
+        @{ name = "Edge TTS"; enabled = $caps.edgeTts },
+        @{ name = "Hindsight"; enabled = $caps.hindsight }
+    )
+    foreach ($pair in $capPairs) {
+        if ($pair.enabled -eq $true) {
+            [void]$checks.Add([pscustomobject]@{ name = $pair.name; status = "PASS"; detail = "declared; $meta" })
+        } elseif ($pair.enabled -eq $false) {
+            [void]$checks.Add([pscustomobject]@{ name = $pair.name; status = "DISABLED"; detail = $meta })
+        } else {
+            [void]$checks.Add([pscustomobject]@{ name = $pair.name; status = "FAIL"; detail = "capability missing; $meta" })
+        }
+    }
+    if ($caps.tirith -eq $true) {
+        [void]$checks.Add([pscustomobject]@{ name = "Tirith policy"; status = "FAIL"; detail = "tirith enabled without packaged binary; $meta" })
+    } else {
+        [void]$checks.Add([pscustomobject]@{ name = "Tirith policy"; status = "DISABLED"; detail = $meta })
+    }
+    if ($caps.lspAutoInstall -eq $true) {
+        [void]$checks.Add([pscustomobject]@{ name = "LSP auto install policy"; status = "FAIL"; detail = "lspAutoInstall enabled; $meta" })
+    } else {
+        [void]$checks.Add([pscustomobject]@{ name = "LSP auto install policy"; status = "DISABLED"; detail = $meta })
+    }
+
+    $managedOk = $false
+    $managedDetail = "missing"
+    if (Test-Path -LiteralPath $managedPath) {
+        $text = Get-Content -LiteralPath $managedPath -Raw
+        if ($text -match "smc.opsi.managed-config.v2" -and $text -match "allow_lazy_installs:\s*false") {
+            $managedOk = $true
+            $managedDetail = "offline/lazy install policy enforced"
+        } else {
+            $managedDetail = "managed defaults invalid"
+        }
+    }
+    [void]$checks.Add([pscustomobject]@{ name = "Offline/lazy install policy"; status = $(if ($managedOk) { "PASS" } else { "FAIL" }); detail = "$managedDetail; $meta" })
+
+    $wsOk = Test-Path -LiteralPath $layout.WorkspaceRoot
+    [void]$checks.Add([pscustomobject]@{ name = "Workspace"; status = $(if ($wsOk) { "PASS" } else { "FAIL" }); detail = $layout.WorkspaceRoot })
+
+    $gwStatus = "FAIL"
+    $gwDetail = "not probed"
+    if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+        $gwStatus = "PASS"
+        $gwDetail = "skipped"
+    } elseif (Get-Command Test-SmcHermesGatewayReady -ErrorAction SilentlyContinue) {
+        if (Test-SmcHermesGatewayReady -HermesHome $HermesHome -Attempts 1 -DelayMs 0) {
+            $gwStatus = "PASS"
+            $gwDetail = "health+auth ok"
+        } else {
+            $gwDetail = "health/auth failed"
+        }
+    } else {
+        $gwDetail = "probe unavailable"
+    }
+    [void]$checks.Add([pscustomobject]@{ name = "Gateway Health/Auth"; status = $gwStatus; detail = "$gwDetail; $meta" })
+
+    return @($checks.ToArray())
+}
+
 function Get-SmcHermesManagedDoctorReport {
     param(
         [string]$ProgramRoot = "",
@@ -714,6 +1086,12 @@ function Get-SmcHermesManagedDoctorReport {
 
     $progOk = [string]::Equals((ConvertTo-SmcFullPath $ProgramRoot), (ConvertTo-SmcFullPath $layout.ProgramRoot), [StringComparison]::OrdinalIgnoreCase)
     [void]$checks.Add([pscustomobject]@{ name = "Program Root"; status = $(if ($progOk) { "PASS" } else { "FAIL" }); detail = $layout.ProgramRoot })
+
+    $cliPath = [string]$layout.CliPath
+    [void]$checks.Add([pscustomobject]@{ name = "Hermes CLI Path"; status = "PASS"; detail = $cliPath })
+    $cliExists = Test-Path -LiteralPath $cliPath
+    [void]$checks.Add([pscustomobject]@{ name = "CLI Exists"; status = $(if ($cliExists) { "PASS" } else { "FAIL" }); detail = $cliPath })
+    [void]$checks.Add([pscustomobject]@{ name = "PATH Policy"; status = "PASS"; detail = "persistent Hermes PATH not required" })
 
     $wsOk = Test-Path -LiteralPath $layout.WorkspaceRoot
     [void]$checks.Add([pscustomobject]@{ name = "Workspace Root"; status = $(if ($wsOk) { "PASS" } else { "FAIL" }); detail = $layout.WorkspaceRoot })
@@ -734,13 +1112,17 @@ function Get-SmcHermesManagedDoctorReport {
 
     $taskWdOk = $false
     $taskEnvOk = $false
+    $taskPathOk = $false
     $taskWdDetail = "missing"
     $taskEnvDetail = "missing"
+    $taskPathDetail = "missing"
     if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
         $taskWdOk = $true
         $taskEnvOk = $true
+        $taskPathOk = $true
         $taskWdDetail = "skipped"
         $taskEnvDetail = "skipped"
+        $taskPathDetail = "skipped"
     } else {
         $task = Get-ScheduledTask -TaskName "SMC Hermes Gateway" -ErrorAction SilentlyContinue
         if ($null -ne $task) {
@@ -755,10 +1137,17 @@ function Get-SmcHermesManagedDoctorReport {
             $argsText = [string]$action.Arguments
             $taskEnvOk = ($argsText -match 'TERMINAL_CWD') -and ($argsText -match 'TEMP') -and ($argsText -match 'TMP')
             $taskEnvDetail = $(if ($taskEnvOk) { "contract present" } else { "contract missing" })
+            $taskPathOk = ($argsText -match '\$env:PATH')
+            $taskPathDetail = $(if ($taskPathOk) { "process-local PATH contract present" } else { "process-local PATH contract missing" })
         }
     }
     [void]$checks.Add([pscustomobject]@{ name = "Gateway Working Directory"; status = $(if ($taskWdOk) { "PASS" } else { "FAIL" }); detail = $taskWdDetail })
     [void]$checks.Add([pscustomobject]@{ name = "Gateway TERMINAL_CWD/TEMP/TMP contract"; status = $(if ($taskEnvOk) { "PASS" } else { "FAIL" }); detail = $taskEnvDetail })
+    [void]$checks.Add([pscustomobject]@{ name = "Gateway Process PATH contract"; status = $(if ($taskPathOk) { "PASS" } else { "FAIL" }); detail = $taskPathDetail })
+
+    foreach ($capCheck in @(Get-SmcHermesCapabilityDoctorChecks -ProgramRoot $ProgramRoot -HermesHome $HermesHome)) {
+        [void]$checks.Add($capCheck)
+    }
 
     $failed = 0
     foreach ($item in $checks) {
@@ -783,8 +1172,6 @@ Export-ModuleMember -Function `
     Initialize-SmcHermesManagedHome, `
     Set-SmcHermesEnvironment, `
     Remove-SmcHermesEnvironment, `
-    Add-SmcMachinePath, `
-    Remove-SmcMachinePath, `
     Set-SmcHermesProgramAcl, `
     Set-SmcHermesHomeAcl, `
     Set-SmcHermesManagedAcl, `
@@ -796,4 +1183,7 @@ Export-ModuleMember -Function `
     Set-SmcHermesManagedTerminalConfig, `
     Assert-SmcHermesManagedTerminalConfig, `
     Clear-SmcHermesManagedTemp, `
+    ConvertTo-SmcYamlDoubleQuotedPath, `
+    Merge-SmcHermesManagedConfig, `
+    Get-SmcHermesCapabilityDoctorChecks, `
     Get-SmcHermesManagedDoctorReport

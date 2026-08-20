@@ -17,6 +17,7 @@ extraResources:
     to: work-build-info.json
 win:
   executableName: smc-copilot
+  icon: build/icon.ico
   target:
     - nsis
 nsis:

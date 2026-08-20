@@ -5,7 +5,7 @@
   "smcRevision": "smc.1",
   "platform": "windows",
   "architecture": "amd64",
-  "sha256": "fad959c699e72d730150443286ab2c69128096e9130dfe393bba715a37e6439c",
+  "sha256": "33290d2fc1da8d21db4f2c78a9e5fe39f770de24821b9ae49d35338c199e3ff4",
   "buildId": "build-smoke-fixture",
   "signerKeyId": "TEST-ONLY-ed25519",
   "sourceRevision": "smoke",
@@ -13,8 +13,13 @@
   "files": [
     {
       "path": "bin/hermes.exe",
-      "size": 35,
-      "sha256": "492a5dcf1fe82850df4d61c42f1a6e948bc76900535b8c7286085c631618bdd1"
+      "size": 108387,
+      "sha256": "757085c4f670bb8d60fca49e4f0e928e61b41ec72b8b1d4e145fb7a7bd9bbc43"
+    },
+    {
+      "path": "config/managed.defaults.yaml",
+      "size": 195,
+      "sha256": "e712b8ce0f4a23038909aed2297f32f111e73720babe92521f9ce207ec7d581f"
     },
     {
       "path": "manifest/release-metadata.json",
@@ -22,44 +27,84 @@
       "sha256": "7edba8c27f30f985d7efee4b6c0a5e9b0b2622638e45e712c9da182ca0b5b13e"
     },
     {
-      "path": "node/embedded/node.exe",
-      "size": 36,
-      "sha256": "616aa5148c5aded3f1c58125a09554e32e5ae0429e0fc6c2f47bde023fd82cd4"
+      "path": "node/hermes-agent/package.json",
+      "size": 43,
+      "sha256": "1e94e0a81ff43f08e61fcfa158fc0f7ebf45b5c13c2ec591b29161819ca76bf8"
     },
     {
-      "path": "node/embedded/node.json",
-      "size": 128,
-      "sha256": "9c2d3e03cc7a412fc54f635c91c956b68bcc768cea78f9f305cb15cc9db31662"
+      "path": "node/node.exe",
+      "size": 136,
+      "sha256": "a76e7b74c68e476a40a1b5227c85830b2d80c0a06f6f545628dbc776646cc480"
     },
     {
-      "path": "node/embedded/npm.cmd",
-      "size": 12,
-      "sha256": "d97b296c77337427617a37b74a83ad60e10f3a0e8a9b82c045dbdc3c8f50fafb"
+      "path": "node/npm.cmd",
+      "size": 15,
+      "sha256": "89c0989e5a72ef3ac5e71c180c869140c5903834a7b39f73fd661c9e6d6f1032"
     },
     {
-      "path": "python/embedded/python.exe",
-      "size": 35,
-      "sha256": "96da69995b5ffe5ab5c43699d9b4b5f02e7bdaf50a535bd7cee36e1d0225fd27"
+      "path": "node/npx.cmd",
+      "size": 15,
+      "sha256": "89c0989e5a72ef3ac5e71c180c869140c5903834a7b39f73fd661c9e6d6f1032"
     },
     {
-      "path": "python/embedded/python.json",
-      "size": 129,
-      "sha256": "7c8cf236f2eb65afa57f657c40788eb88f59a806d0ca770f87f4bcd1e9e2c719"
+      "path": "python/python.exe",
+      "size": 136,
+      "sha256": "a76e7b74c68e476a40a1b5227c85830b2d80c0a06f6f545628dbc776646cc480"
     },
     {
-      "path": "python/embedded/python312._pth",
-      "size": 13,
-      "sha256": "1e56a6b0f85b439274894b31fa2188e2bbf105753217521c68a3ee5d037efe3c"
+      "path": "python/sqlite3.dll",
+      "size": 136,
+      "sha256": "a76e7b74c68e476a40a1b5227c85830b2d80c0a06f6f545628dbc776646cc480"
     },
     {
-      "path": "runtime/bundle/runtime-build.json",
-      "size": 66,
-      "sha256": "c8850367871f832692ca4b4e676b8275a4ff356156da121f7bced92a2c35d289"
+      "path": "runtime/runtime-build.json",
+      "size": 369,
+      "sha256": "e52f9eef9d57907a66e85fa0c1224c2ffca9996dbe53b8ad9d872d4724c1a900"
+    },
+    {
+      "path": "runtime/windows-runtime.json",
+      "size": 104,
+      "sha256": "7446c0d3ae9e9b5e10b79004460fb6ff2a8430238830e093039601b3439716f0"
+    },
+    {
+      "path": "scripts/HostOperations.ps1",
+      "size": 5064,
+      "sha256": "379a15f3320d2166e9c6d5bdc2aae649b18f33370a2da65d3ab37c6574072826"
+    },
+    {
+      "path": "scripts/HostOperations.psm1",
+      "size": 241,
+      "sha256": "c9bbd58027e5c9239c11a049756f7dfe56c8418574840b841a6ea7afe2128ada"
+    },
+    {
+      "path": "scripts/SmcHermesManaged.psm1",
+      "size": 53144,
+      "sha256": "2f069827dc58c10962514acc089f9b140e9ae76b44ddbc600eee83e33ff96cbe"
     },
     {
       "path": "uninstall/README.txt",
       "size": 31,
       "sha256": "ded69bffe36ab9660ddcb62caebc4cf37eb5a148ab91ee0170d91ce3078b632f"
     }
-  ]
+  ],
+  "runtime": {
+    "python": "3.12.8",
+    "node": "22.22.0",
+    "sqlite": "3.53.4"
+  },
+  "capabilities": {
+    "apiServer": true,
+    "mcp": true,
+    "filesystemMcp": true,
+    "web": true,
+    "localStt": true,
+    "edgeTts": true,
+    "hindsight": true,
+    "tirith": false,
+    "lspAutoInstall": false
+  },
+  "managedConfigVersion": 2,
+  "runtimeProfileVersion": 2,
+  "runtimeProfile": "smc-managed",
+  "runtimeProfileDigest": "smoke"
 }

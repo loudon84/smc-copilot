@@ -369,6 +369,7 @@ def build_windows_runtime(
     sqlite_archive: Path | None = None,
     mode: str = "online",
     downloader: Downloader | None = None,
+    skip_functional_gates: bool = False,
 ) -> Path:
     bundle_root = bundle_root.resolve()
     if dest.exists():
@@ -449,12 +450,17 @@ def build_windows_runtime(
         src = bundle_root / name
         if src.is_file():
             shutil.copy2(src, runtime_dir / name)
+    config_src = bundle_root / "config" / "managed.defaults.yaml"
+    if config_src.is_file():
+        config_dest = dest / "config"
+        config_dest.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(config_src, config_dest / "managed.defaults.yaml")
     # Runtime gates (functional verification on Windows build host)
     actual_sqlite = ""
     actual_node = ""
     actual_npm = ""
     actual_npx = ""
-    if os.name == "nt":
+    if os.name == "nt" and not skip_functional_gates:
         actual_sqlite = _gate_sqlite_version(python_root / "python.exe")
         actual_node = _gate_node_version(node_root / "node.exe")
         actual_npm, actual_npx = _gate_npm_npx(node_root)

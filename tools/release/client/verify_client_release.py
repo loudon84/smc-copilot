@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import json
 import sys
+import zipfile
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 from tools.release.client.release_inventory import scan_secrets, sha256_file
+from tools.release.hermes.path_policy_gate import (
+    assert_hermes_path_policy,
+    assert_path_policy_metadata,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 PACKAGING = ROOT / "infra" / "opsi" / "products" / "smc-hermes-agent" / "packaging"
@@ -129,6 +134,16 @@ def verify_hermes_installer_release(
             )
     if manifest.get("liveEligible") and not require_signatures:
         raise ValueError("liveEligible requires signature chain")
+    assert_hermes_path_policy()
+    with zipfile.ZipFile(release_zip) as zf:
+        names = {name.replace("\\", "/"): name for name in zf.namelist()}
+        build_member = None
+        if "runtime/runtime-build.json" in names:
+            build_member = json.loads(zf.read(names["runtime/runtime-build.json"]))
+        elif "runtime-build.json" in names:
+            build_member = json.loads(zf.read(names["runtime-build.json"]))
+        if build_member is not None:
+            assert_path_policy_metadata(build_member)
     return manifest
 
 
@@ -175,4 +190,5 @@ def verify_client_release(
         verify_signature_chain(packed_tree, hermes_zip)
     if manifest.get("liveEligible") and not require_signatures:
         raise ValueError("liveEligible requires signature chain")
+    assert_hermes_path_policy()
     return manifest
