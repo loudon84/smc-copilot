@@ -36,7 +36,7 @@ describe("hermes-runtime-paths", () => {
     vi.resetModules();
   });
 
-  it("looksLikeHermesHome detects config.yaml and hermes-agent", async () => {
+  it("looksLikeHermesHome detects config.yaml markers", async () => {
     const { looksLikeHermesHome } = await import(
       "../src/main/runtime/hermes-runtime-paths"
     );
@@ -48,10 +48,6 @@ describe("hermes-runtime-paths", () => {
     mkdirSync(withConfig, { recursive: true });
     writeFileSync(join(withConfig, "config.yaml"), "model:\n  provider: x\n");
     expect(looksLikeHermesHome(withConfig)).toBe(true);
-
-    const withRepo = join(base, "with-repo");
-    mkdirSync(join(withRepo, "hermes-agent"), { recursive: true });
-    expect(looksLikeHermesHome(withRepo)).toBe(true);
   });
 
   it("defaultHermesHome falls back to ~/.hermes on non-Windows", async () => {

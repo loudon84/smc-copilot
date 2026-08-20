@@ -1,70 +1,64 @@
 # Runtime Connection
 
-Work connects to Hermes Gateway for Connection Ready by default (`direct`). Copilot Runtime (`services/runtime` :8765) is opt-in (`control owner = runtime`). Salt mode uses Availability probe only.
+Work connects to the OPSI-managed Hermes Gateway for Connection Ready. Work discovers runtime state, probes Gateway health, and calls Gateway HTTP APIs — it does not install Hermes or own Gateway lifecycle.
 
 ## Boundary
 
-Desktop owns login, Chat, Sessions, and settings. Control owner selects who manages Hermes install and Gateway lifecycle:
+OPSI / Hermes Installer owns install, upgrade, repair, machine Hermes config, ACL, and the `SMC Hermes Gateway` scheduled task. Work owns discovery, status, authentication probing, and Chat/Session/Model HTTP calls. See [[src/shared/runtime/runtime-contract.ts]] for shared probe types.
 
-- `direct` (default): Work probes and may start Gateway against Hermes home / `:8642`.
-- `salt`: Salt owns install/lifecycle; Work only probes Availability.
-- `runtime`: Copilot Runtime HTTP (`:8765`) owns install/lifecycle.
+## Runtime Descriptor
 
-Hermes Agent owns agent loop, session data, skills/tools. See [[src/shared/runtime/runtime-contract.ts]] for shared probe types.
+[[src/main/runtime/hermes-runtime-config.ts]] resolves `HermesRuntimeConfig`: home, programRoot, cliPath, and gateway.baseUrl for managed runtime discovery.
+
+Resolution priority: Work `runtime.json`, enterprise descriptor, machine `HERMES_HOME`, then platform defaults (`C:\ProgramData\SMC\Hermes`, `D:\Programs\SMC\Hermes\bin\hermes.exe`, `http://127.0.0.1:8642`).
 
 ## Path resolution
 
-Runtime paths live outside the install module so Gateway and Chat stay decoupled.
+[[src/main/runtime/hermes-runtime-paths.ts]] re-exports runtime getters and legacy compatibility helpers. New code must call `getHermesHome()`, `getHermesCliPath()`, and `getGatewayBaseUrl()` instead of deriving repo/venv/python paths.
 
-[[src/main/runtime/hermes-runtime-paths.ts]] owns `HERMES_HOME` and derived paths so Gateway/Chat no longer import `installer.ts`.
+## CLI invocation
+
+[[src/main/runtime/hermes-cli-runner.ts]] invokes `hermes.exe` by absolute path with managed PATH segments for subprocesses. Version and doctor checks use `hermes.exe --version` / `hermes.exe doctor`.
 
 ## Adapter
 
-[[src/main/runtime/runtime-manager.ts]] picks the adapter from control owner:
+[[src/main/runtime/runtime-manager.ts]] always uses [[src/main/runtime/legacy-local-runtime-adapter.ts]] (Managed Local Hermes Runtime Consumer). `probe()` checks CLI + Gateway health + authenticated API probe; `ensureReady()` is probe-only; `restart()` returns `MANAGED_RUNTIME_RESTART_REQUIRED`.
 
-- `direct` → [[src/main/runtime/legacy-local-runtime-adapter.ts]] (Gateway `:8642`, no Runtime HTTP)
-- `salt` → [[src/main/hermes/availability-backend.ts]]
-- `runtime` → [[src/main/runtime/runtime-service-adapter.ts]] via [[src/main/runtime/runtime-management-backend.ts]]
+## Gateway probe
 
-## Runtime Service Adapter
-
-Opt-in adapter when `SMC_HERMES_CONTROL_OWNER=runtime`. Delegates probe/ensureReady/restart to the Runtime HTTP backend and falls back to Legacy for non-default profiles.
-
-## Runtime Management Backend
-
-HTTP facade over `/api/v1/runtime/*` and `/api/v1/instances/*` used by IPC and the adapter when control owner is `runtime`.
-
-Instance routes require the instance **UUID**. [[src/main/runtime/runtime-management-backend.ts]] resolves `default` via `instances.resolve` / `instances.list` before `getHealth` / `start` / `stop` / `reconcile` — calling `/instances/default/health` 404s and used to be mapped as a false `gateway_stopped`. When start fails with port ownership conflict, the backend re-probes; a healthy authenticated gateway still counts as ready. `ensureReady` also best-effort `reconcile`s before start.
-
-## Runtime Management Mapper
-
-Maps Runtime readiness/health/job SSE payloads into Desktop `HermesRuntimeProbe` and legacy `install-progress` events.
-
-## Runtime Service Client
-
-Main-only HTTP client targets `http://127.0.0.1:8765` (override with `HERMES_RUNTIME_SERVICE_URL`). Only used when control owner is `runtime`.
-
-[[src/main/runtime/runtime-service-client.ts]] constructs `createRuntimeClient`. Mappers live in [[src/main/runtime/runtime-management-mapper.ts]]. Errors map through [[src/main/runtime/runtime-service-errors.ts]].
+[[src/main/runtime/gateway-probe.ts]] performs `GET /health` and authenticated `GET /v1/models`. Authentication success is determined by Gateway HTTP responses, not by reading `API_SERVER_KEY` alone.
 
 ## Startup
 
 App splash checks Portal Auth, then connects Hermes before main UI, or shows Connection Error / Login.
 
-[[src/renderer/src/App.tsx]] starts at splash, may route to [[src/renderer/src/modules/auth/LoginScreen.tsx]], then `runtimeEnsureLocalReady` for local `direct`/`runtime` mode, and routes to main or Connection Error. Remote and SSH skip local probe. [[src/renderer/src/screens/SplashScreen/SplashScreen.tsx]] shows a centered `hermes-one.png` image on a black splash (no intro video), plus status text and the remote escape hatch when needed.
+[[src/renderer/src/App.tsx]] starts at splash, may route to [[src/renderer/src/modules/auth/LoginScreen.tsx]], then `runtimeEnsureLocalReady` for local mode, and routes to main or Connection Error. Remote and SSH skip local probe. [[src/renderer/src/screens/SplashScreen/SplashScreen.tsx]] shows a centered `hermes-one.png` image on a black splash (no intro video), plus status text and the remote escape hatch when needed.
 
 `RuntimeProvider` wraps `SettingsModalProvider` so [[src/renderer/src/components/settings/RuntimePane.tsx]] (mounted as a settings-modal sibling) can call `useRuntime`.
 
 ## Direct Hermes Mode
 
-Default Work mode (`direct`) and Salt-managed Work (`SMC_HERMES_CONTROL_OWNER=salt` or `%ProgramData%\SMC\control-owner.json`) do not depend on Runtime `:8765` for Connection Ready.
+Default Work local mode probes Gateway at `runtimeConfig.gateway.baseUrl` and never spawns or kills Gateway processes. IPC `start-gateway` / `stop-gateway` / `restart-gateway` refuse local lifecycle changes with a managed-runtime message.
 
-[[src/main/hermes/control-owner.ts]] is the owner mutex (default `direct`). `direct` uses Legacy local adapter to probe/start Gateway. Salt mode uses [[src/main/hermes/availability-backend.ts]] and splash [[src/renderer/src/runtime/RuntimeProvider.tsx]] calls `runtimeGetStatus` instead of `runtimeEnsureLocalReady`. Chat transport stays in [[src/main/hermes.ts]].
+## Runtime Service Adapter
+
+Legacy opt-in adapter when `SMC_HERMES_CONTROL_OWNER=runtime`. Not used in v2.4 P0 managed-runtime production path; retained for P1 decommission.
+
+## Runtime Management Backend
+
+HTTP facade over `/api/v1/runtime/*` and `/api/v1/instances/*`. Legacy Runtime `:8765` control plane — not used in v2.4 P0 managed-runtime production path.
+
+## Runtime Management Mapper
+
+Maps Runtime readiness/health/job SSE payloads into Desktop `HermesRuntimeProbe`. Legacy — retained for P1 decommission.
+
+## Runtime Service Client
+
+Main-only HTTP client targets `http://127.0.0.1:8765`. Legacy — not used in v2.4 P0 managed-runtime production path.
 
 ## Hermes Availability Backend
 
-Probe-only Connection Ready for enterprise/Salt mode. Never install, update, or spawn Gateway.
-
-Uses [[src/main/hermes/transport/gateway-http.ts]] for Gateway URL and `/health` (same path as Chat transport). `authenticated` is derived from local API key presence and is not equal to `gatewayHealthy`.
+Probe-only Connection Ready for enterprise/Salt mode. Legacy — v2.4 P0 uses the same managed consumer adapter for local Connection Ready.
 
 ## Salt enterprise mode canary
 

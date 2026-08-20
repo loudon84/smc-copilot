@@ -11,7 +11,12 @@ import { RUNTIME_ERROR_CODES } from "../src/main/runtime/runtime-errors";
 
 vi.mock("electron", () => ({
   app: {
-    getPath: (): string => tmpdir(),
+    getPath: (name: string): string => {
+      if (name === "userData") {
+        return process.env.HERMES_DESKTOP_USER_DATA_DIR || tmpdir();
+      }
+      return tmpdir();
+    },
     setPath: (): void => {},
   },
   BrowserWindow: class {
@@ -35,48 +40,130 @@ describe("runtime-errors", () => {
 
 describe("hermes-runtime-locator", () => {
   const base = join(tmpdir(), `runtime-loc-${Date.now()}`);
+  const userData = join(tmpdir(), `runtime-loc-user-${Date.now()}`);
 
   beforeEach(() => {
     mkdirSync(base, { recursive: true });
-    process.env.HERMES_HOME = base;
+    mkdirSync(userData, { recursive: true });
+    process.env.HERMES_DESKTOP_USER_DATA_DIR = userData;
+    writeFileSync(
+      join(userData, "runtime.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        hermes: {
+          home: base,
+          programRoot: join(base, "program"),
+          cliPath: join(base, "program", "bin", "hermes.exe"),
+        },
+        gateway: { baseUrl: "http://127.0.0.1:8642", healthPath: "/health" },
+      }),
+      "utf-8",
+    );
     vi.resetModules();
+    vi.doUnmock("../src/main/runtime/hermes-runtime-locator");
   });
 
   afterEach(() => {
-    delete process.env.HERMES_HOME;
+    delete process.env.HERMES_DESKTOP_USER_DATA_DIR;
     rmSync(base, { recursive: true, force: true });
+    rmSync(userData, { recursive: true, force: true });
     vi.resetModules();
   });
 
-  it("reports runtime missing when home is empty", async () => {
+  it("reports runtime invalid when CLI is missing", async () => {
     const { locateHermesRuntime } = await import(
       "../src/main/runtime/hermes-runtime-locator"
     );
     const loc = locateHermesRuntime();
-    expect(loc.runtimeFound).toBe(false);
+    expect(loc.runtimeFound).toBe(true);
     expect(loc.runtimeValid).toBe(false);
-    expect(loc.endpoint).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(loc.endpoint).toBe("http://127.0.0.1:8642");
   });
 
-  it("validateHermesHomeDir requires python and hermes binaries", async () => {
+  it("validateHermesHomeDir accepts config markers", async () => {
     const { validateHermesHomeDir } = await import(
       "../src/main/runtime/hermes-runtime-locator"
     );
     expect(validateHermesHomeDir(base)).toBe(false);
-
-    const venvScripts =
-      process.platform === "win32"
-        ? join(base, "hermes-agent", "venv", "Scripts")
-        : join(base, "hermes-agent", "venv", "bin");
-    mkdirSync(venvScripts, { recursive: true });
-    if (process.platform === "win32") {
-      writeFileSync(join(venvScripts, "python.exe"), "");
-      writeFileSync(join(venvScripts, "hermes.exe"), "");
-    } else {
-      writeFileSync(join(venvScripts, "python"), "");
-      writeFileSync(join(base, "hermes-agent", "hermes"), "");
-    }
+    writeFileSync(join(base, "config.yaml"), "model:\n  provider: x\n");
     expect(validateHermesHomeDir(base)).toBe(true);
+  });
+});
+
+describe("LegacyLocalRuntimeAdapter", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.doUnmock("../src/main/runtime/hermes-runtime-locator");
+    vi.doUnmock("../src/main/runtime/gateway-probe");
+    vi.doUnmock("../src/main/installer");
+  });
+
+  it("ensureReady does not start gateway", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => ({
+      locateHermesRuntime: () => ({
+        homePath: "C:\\ProgramData\\SMC\\Hermes",
+        programRoot: "D:\\Programs\\SMC\\Hermes",
+        executablePath: "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
+        profile: "default",
+        profilePath: "C:\\ProgramData\\SMC\\Hermes",
+        endpoint: "http://127.0.0.1:8642",
+        runtimeFound: true,
+        runtimeValid: true,
+        cliAvailable: true,
+      }),
+    }));
+    vi.doMock("../src/main/runtime/gateway-probe", () => ({
+      probeGatewayHealth: vi.fn(async () => false),
+      probeGatewayAuthentication: vi.fn(async () => "unreachable" as const),
+    }));
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const adapter = new LegacyLocalRuntimeAdapter();
+    const result = await adapter.ensureReady();
+    expect(result.ok).toBe(false);
+    expect(result.state).toBe("gateway_unreachable");
+  });
+
+  it("restart returns MANAGED_RUNTIME_RESTART_REQUIRED", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => ({
+      locateHermesRuntime: () => ({
+        homePath: "C:\\ProgramData\\SMC\\Hermes",
+        programRoot: "D:\\Programs\\SMC\\Hermes",
+        executablePath: "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
+        profile: "default",
+        profilePath: "C:\\ProgramData\\SMC\\Hermes",
+        endpoint: "http://127.0.0.1:8642",
+        runtimeFound: true,
+        runtimeValid: true,
+        cliAvailable: true,
+      }),
+    }));
+
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const result = await new LegacyLocalRuntimeAdapter().restart();
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("MANAGED_RUNTIME_RESTART_REQUIRED");
+  });
+});
+
+describe("RuntimeManager default adapter", () => {
+  it("uses LegacyLocalRuntimeAdapter by default", async () => {
+    const { RuntimeManager } = await import(
+      "../src/main/runtime/runtime-manager"
+    );
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const manager = new RuntimeManager();
+    expect(manager).toBeDefined();
+    expect(LegacyLocalRuntimeAdapter).toBeTypeOf("function");
   });
 });
 
