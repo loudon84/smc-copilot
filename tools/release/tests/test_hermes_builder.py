@@ -619,6 +619,31 @@ def test_sqlite_archive_integrity(tmp_path: Path):
     assert len(digest) == 64
 
 
+def test_download_retries_on_incomplete_read(tmp_path: Path, monkeypatch):
+    from http.client import IncompleteRead
+
+    from tools.release.hermes import windows_runtime as wr
+
+    dest = tmp_path / "sqlite-dll-win-x64-3530400.zip"
+    payload = b"complete-sqlite-payload"
+    digest = hashlib.sha3_256(payload).hexdigest()
+    calls = {"n": 0}
+
+    def fake_read(_url: str) -> bytes:
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise IncompleteRead(b"partial", 10)
+        return payload
+
+    monkeypatch.setattr(wr, "_read_url_bytes", fake_read)
+    monkeypatch.setattr(wr, "DOWNLOAD_ATTEMPTS", 4)
+    monkeypatch.setattr(wr.time, "sleep", lambda _s: None)
+    out = wr._download_sha3(wr.SQLITE_DLL_URL, dest, digest)
+    assert out == dest
+    assert dest.read_bytes() == payload
+    assert calls["n"] == 3
+
+
 def test_sqlite_overlay_applied(tmp_path: Path):
     from tools.release.hermes.windows_runtime import _overlay_safe_sqlite
 

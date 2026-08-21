@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 from tools.release.hermes.managed_config import render_managed_defaults_yaml
-from tools.release.subprocess_text import command_output
 
 HttpGetter = Callable[[str, dict[str, str] | None, float], tuple[int, str]]
 
@@ -63,6 +62,29 @@ def _terminate_process(proc: subprocess.Popen[Any], *, grace_s: float = 5.0) -> 
         raise ValueError("gateway orphan process after force kill") from exc
 
 
+def _tail_text(path: Path, *, limit: int = 4000) -> str:
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if len(text) <= limit:
+        return text
+    return text[-limit:]
+
+
+def _runtime_process_path(runtime_tree: Path) -> str:
+    """Process-local PATH: bin;scripts;node;python;<inherited> (FR-215-06)."""
+    managed = [
+        str(runtime_tree / "bin"),
+        str(runtime_tree / "scripts"),
+        str(runtime_tree / "node"),
+        str(runtime_tree / "python"),
+    ]
+    inherited = str(os.environ.get("PATH") or "")
+    if not inherited:
+        return os.pathsep.join(managed)
+    return os.pathsep.join(managed + [inherited])
+
+
 def run_gateway_smoke(
     runtime_tree: Path,
     *,
@@ -92,6 +114,8 @@ def run_gateway_smoke(
     api_key = secrets.token_urlsafe(32)
     env_path = work / ".env"
     config_path = work / "config.yaml"
+    stdout_log = work / "gateway.stdout.log"
+    stderr_log = work / "gateway.stderr.log"
     try:
         (work / "workspace").mkdir(parents=True, exist_ok=True)
         (work / "tmp").mkdir(parents=True, exist_ok=True)
@@ -125,6 +149,11 @@ def run_gateway_smoke(
 
         env = os.environ.copy()
         env["HERMES_HOME"] = str(work)
+        env["HERMES_AGENT_ROOT"] = str(runtime_tree / "node" / "hermes-agent")
+        env["HERMES_NODE_ROOT"] = str(runtime_tree / "node")
+        env["TEMP"] = str(work / "tmp")
+        env["TMP"] = str(work / "tmp")
+        env["PATH"] = _runtime_process_path(runtime_tree)
         env["API_SERVER_ENABLED"] = "true"
         env["API_SERVER_HOST"] = bind
         env["API_SERVER_PORT"] = str(port)
@@ -132,50 +161,61 @@ def run_gateway_smoke(
         # Do not leak key into parent process env permanently.
         env.pop("SMC_GATEWAY_SMOKE_KEY", None)
 
-        proc = subprocess.Popen(
-            [str(hermes_exe), "gateway", "run"],
-            cwd=str(work / "workspace"),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-        try:
-            if proc.poll() is not None:
-                out = command_output(
-                    type(
-                        "R",
-                        (),
-                        {
-                            "returncode": proc.returncode,
-                            "stdout": (proc.stdout.read() if proc.stdout else "") or "",
-                            "stderr": (proc.stderr.read() if proc.stderr else "") or "",
-                        },
-                    )(),
-                    "gateway exited early",
-                )
-                raise ValueError(out)
-            _wait_tcp(bind, port, startup_timeout_s)
-            health_url = f"http://{bind}:{port}/health"
-            models_url = f"http://{bind}:{port}/v1/models"
-            status, _ = getter(health_url, None, http_timeout_s)
-            if status != 200:
-                raise ValueError(f"gateway /health failed: HTTP {status}")
-            status, _ = getter(
-                models_url,
-                {"Authorization": f"Bearer {api_key}"},
-                http_timeout_s,
+        # Never use PIPE here: hermes logs can fill the buffer and deadlock before TCP bind.
+        with stdout_log.open("w", encoding="utf-8", errors="replace") as out_fh, stderr_log.open(
+            "w", encoding="utf-8", errors="replace"
+        ) as err_fh:
+            proc = subprocess.Popen(
+                [str(hermes_exe), "gateway", "run"],
+                cwd=str(work / "workspace"),
+                env=env,
+                stdout=out_fh,
+                stderr=err_fh,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
-            if status in {401, 403}:
-                raise ValueError(f"gateway /v1/models auth failed: HTTP {status}")
-            if status != 200:
-                raise ValueError(f"gateway /v1/models failed: HTTP {status}")
-        finally:
-            _terminate_process(proc)
-            if proc.poll() is None:
-                raise ValueError("gateway orphan process remaining")
+            try:
+                if proc.poll() is not None:
+                    raise ValueError(
+                        "gateway exited early: "
+                        f"exit={proc.returncode}; "
+                        f"stdout={_tail_text(stdout_log)}; "
+                        f"stderr={_tail_text(stderr_log)}"
+                    )
+                try:
+                    _wait_tcp(bind, port, startup_timeout_s)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{exc}; "
+                        f"exit={proc.poll()}; "
+                        f"stdout={_tail_text(stdout_log)}; "
+                        f"stderr={_tail_text(stderr_log)}"
+                    ) from exc
+                health_url = f"http://{bind}:{port}/health"
+                models_url = f"http://{bind}:{port}/v1/models"
+                status, _ = getter(health_url, None, http_timeout_s)
+                if status != 200:
+                    raise ValueError(
+                        f"gateway /health failed: HTTP {status}; "
+                        f"stderr={_tail_text(stderr_log)}"
+                    )
+                status, _ = getter(
+                    models_url,
+                    {"Authorization": f"Bearer {api_key}"},
+                    http_timeout_s,
+                )
+                if status in {401, 403}:
+                    raise ValueError(f"gateway /v1/models auth failed: HTTP {status}")
+                if status != 200:
+                    raise ValueError(
+                        f"gateway /v1/models failed: HTTP {status}; "
+                        f"stderr={_tail_text(stderr_log)}"
+                    )
+            finally:
+                _terminate_process(proc)
+                if proc.poll() is None:
+                    raise ValueError("gateway orphan process remaining")
     finally:
         # Wipe secrets from temp tree.
         if env_path.is_file():

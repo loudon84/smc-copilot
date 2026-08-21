@@ -386,43 +386,67 @@ function Set-SmcHermesGatewayTask {
     $env:HERMES_NODE_ROOT = $spec.NodeRoot
 }
 
-function Test-SmcHermesGatewayTaskContract {
+function Get-SmcHermesGatewayTaskContractFailure {
     param(
         [Parameter(Mandatory = $true)][string]$ProgramRoot,
         [Parameter(Mandatory = $true)][string]$HermesHome
     )
     if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
-        return $true
+        return ""
     }
     $layout = Get-SmcHermesManagedLayout
     $task = Get-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
-    if ($null -eq $task) { return $false }
+    if ($null -eq $task) { return "task missing" }
     $action = $task.Actions | Select-Object -First 1
-    if ($null -eq $action) { return $false }
+    if ($null -eq $action) { return "task action missing" }
     try {
         $wd = ConvertTo-SmcFullPath -Path ([string]$action.WorkingDirectory)
         $want = ConvertTo-SmcFullPath -Path $layout.WorkspaceRoot
-        if (-not [string]::Equals($wd, $want, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+        if (-not [string]::Equals($wd, $want, [StringComparison]::OrdinalIgnoreCase)) {
+            return "WorkingDirectory mismatch got=$wd want=$want"
+        }
     } catch {
-        return $false
+        return "WorkingDirectory invalid: $($_.Exception.Message)"
     }
     $argsText = [string]$action.Arguments
-    if ($argsText -notmatch 'EncodedCommand\s+(\S+)') { return $false }
+    if ($argsText -notmatch 'EncodedCommand\s+(\S+)') { return "EncodedCommand missing" }
     try {
         $bytes = [Convert]::FromBase64String($Matches[1])
         $decoded = [System.Text.Encoding]::Unicode.GetString($bytes)
     } catch {
-        return $false
+        return "EncodedCommand decode failed: $($_.Exception.Message)"
     }
     $spec = Get-SmcHermesGatewayTaskSpec -ProgramRoot $ProgramRoot -HermesHome $HermesHome
-    if ($decoded -notlike "*TERMINAL_CWD*$($spec.TerminalCwd)*") { return $false }
-    if ($decoded -notlike "*TEMP*$($spec.TempRoot)*") { return $false }
-    if ($decoded -notlike "*TMP*$($spec.TempRoot)*") { return $false }
-    if ($decoded -notlike "*`$env:PATH*") { return $false }
-    if ($decoded -notlike "*$($spec.ManagedPath)*") { return $false }
-    if ($decoded -notlike "*Set-Location -LiteralPath '$($spec.WorkingDirectory)'*") { return $false }
-    if ($decoded -notlike "*managed_runtime_context*") { return $false }
-    return $true
+    # Use IndexOf/Contains — avoid -like wildcards ([]) colliding with PowerShell types in launcher.
+    if ($decoded.IndexOf("TERMINAL_CWD", [StringComparison]::Ordinal) -lt 0 -or
+        $decoded.IndexOf([string]$spec.TerminalCwd, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        return "TERMINAL_CWD missing"
+    }
+    if ($decoded.IndexOf([string]$spec.TempRoot, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        return "TEMP/TMP root missing"
+    }
+    if ($decoded.IndexOf('$env:TEMP', [StringComparison]::Ordinal) -lt 0) { return "TEMP assignment missing" }
+    if ($decoded.IndexOf('$env:TMP', [StringComparison]::Ordinal) -lt 0) { return "TMP assignment missing" }
+    if ($decoded.IndexOf('$env:PATH', [StringComparison]::Ordinal) -lt 0) { return "PATH assignment missing" }
+    if ($decoded.IndexOf([string]$spec.ManagedPath, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        return "ManagedPath missing"
+    }
+    $setLoc = "Set-Location -LiteralPath '$($spec.WorkingDirectory)'"
+    if ($decoded.IndexOf($setLoc, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        return "Set-Location missing"
+    }
+    if ($decoded.IndexOf("managed_runtime_context", [StringComparison]::Ordinal) -lt 0) {
+        return "managed_runtime_context missing"
+    }
+    return ""
+}
+
+function Test-SmcHermesGatewayTaskContract {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProgramRoot,
+        [Parameter(Mandatory = $true)][string]$HermesHome
+    )
+    return [string]::IsNullOrEmpty((Get-SmcHermesGatewayTaskContractFailure -ProgramRoot $ProgramRoot -HermesHome $HermesHome))
 }
 
 function Remove-SmcHermesGatewayTask {
@@ -493,13 +517,59 @@ function Test-SmcHermesGatewayHttp {
     }
 }
 
+function Write-SmcInstallerTrace {
+    param([Parameter(Mandatory = $true)][string]$Message)
+    $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-ddTHH:mm:ss"), $Message
+    Write-Verbose $line
+    try {
+        $logPath = Join-Path $PSScriptRoot "install.log"
+        $utf8 = New-Object System.Text.UTF8Encoding $false
+        [System.IO.File]::AppendAllText($logPath, ($line + "`r`n"), $utf8)
+    } catch {
+    }
+}
+
+function Get-SmcHermesGatewayProbeDetail {
+    param(
+        [Parameter(Mandatory = $true)][string]$HermesHome,
+        [string]$HostName = "127.0.0.1",
+        [int]$Port = 8642
+    )
+    $envPath = Get-SmcHermesEnvPath -HermesHome $HermesHome
+    $apiKey = Get-SmcHermesEnvValue -EnvPath $envPath -Key "API_SERVER_KEY"
+    if ([string]::IsNullOrWhiteSpace($apiKey)) {
+        return "API_SERVER_KEY missing"
+    }
+    $tcpOk = $false
+    try {
+        $client = New-Object System.Net.Sockets.TcpClient
+        $iar = $client.BeginConnect($HostName, $Port, $null, $null)
+        $tcpOk = $iar.AsyncWaitHandle.WaitOne(1000, $false) -and $client.Connected
+        $client.Close()
+    } catch {
+        $tcpOk = $false
+    }
+    if (-not $tcpOk) {
+        return "tcp ${HostName}:${Port} not listening"
+    }
+    $health = Test-SmcHermesGatewayHttp -Url "http://${HostName}:${Port}/health" -TimeoutSec 3
+    if ($health -ne 200) {
+        return "GET /health status=$health"
+    }
+    $auth = Test-SmcHermesGatewayHttp -Url "http://${HostName}:${Port}/v1/models" -Headers @{ Authorization = "Bearer $apiKey" } -TimeoutSec 5
+    if ($auth -ne 200) {
+        return "GET /v1/models status=$auth"
+    }
+    return ""
+}
+
 function Test-SmcHermesGatewayReady {
     param(
         [Parameter(Mandatory = $true)][string]$HermesHome,
         [string]$HostName = "127.0.0.1",
         [int]$Port = 8642,
-        [int]$Attempts = 12,
-        [int]$DelayMs = 500
+        [int]$Attempts = 45,
+        [int]$DelayMs = 1000
     )
     $envPath = Get-SmcHermesEnvPath -HermesHome $HermesHome
     $apiKey = Get-SmcHermesEnvValue -EnvPath $envPath -Key "API_SERVER_KEY"
@@ -529,46 +599,116 @@ function Test-SmcHermesGatewayReady {
     return $false
 }
 
-function Test-SmcHermesReady {
+function Start-SmcHermesGatewayTaskForReadiness {
+    param([Parameter(Mandatory = $true)][string]$TaskName)
+    Write-SmcInstallerTrace "readiness: Start-ScheduledTask name=$TaskName"
+    try {
+        Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    } catch {
+        return "gateway Start-ScheduledTask failed: $($_.Exception.Message)"
+    }
+    # Confirm scheduler accepted the start request (Running, or Ready after a brief handoff).
+    for ($i = 1; $i -le 10; $i++) {
+        $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        if ($null -eq $task) {
+            return "gateway task missing after Start-ScheduledTask"
+        }
+        $state = [string]$task.State
+        if ($state -eq "Running") {
+            Write-SmcInstallerTrace "readiness: gateway task state=Running"
+            return ""
+        }
+        $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+        $lastResult = if ($null -ne $info) { [int]$info.LastTaskResult } else { -1 }
+        # 267009 = SCHED_S_TASK_RUNNING; 267011 = has not yet run (still transitioning).
+        if (($lastResult -ne 0) -and ($lastResult -ne 267009) -and ($lastResult -ne 267011) -and ($i -ge 3)) {
+            return "gateway task start rejected (state=$state lastResult=$lastResult)"
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    $final = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    $finalState = if ($null -ne $final) { [string]$final.State } else { "missing" }
+    Write-SmcInstallerTrace "readiness: gateway task post-start state=$finalState (continuing probe)"
+    return ""
+}
+
+function Get-SmcHermesReadinessFailure {
     param(
         [Parameter(Mandatory = $true)][string]$ProgramRoot,
         [Parameter(Mandatory = $true)][string]$HermesHome,
         [string]$ExpectedVersion = ""
     )
     $cli = Join-Path $ProgramRoot "bin\hermes.exe"
-    if (-not (Test-Path -LiteralPath $cli)) { return $false }
+    if (-not (Test-Path -LiteralPath $cli)) {
+        return "hermes cli missing: $cli"
+    }
     $layout = Get-SmcHermesManagedLayout
-    if (-not (Test-Path -LiteralPath $layout.WorkspaceRoot)) { return $false }
-    if (-not (Test-Path -LiteralPath $layout.TempRoot)) { return $false }
+    if (-not (Test-Path -LiteralPath $layout.WorkspaceRoot)) {
+        return "workspace root missing: $($layout.WorkspaceRoot)"
+    }
+    if (-not (Test-Path -LiteralPath $layout.TempRoot)) {
+        return "temp root missing: $($layout.TempRoot)"
+    }
     try {
         Assert-SmcHermesManagedTerminalConfig -ConfigPath $layout.ConfigPath -WorkspaceRoot $layout.WorkspaceRoot -HermesHome $HermesHome
     } catch {
-        return $false
+        return "terminal.cwd contract failed: $($_.Exception.Message)"
     }
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $layout.AgentRoot
+    $env:HERMES_NODE_ROOT = $layout.NodeRoot
     if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
-        # Installer smoke fixtures may ship a non-runnable PE stub; contract checks above are enough.
-        return $true
+        return ""
     }
     try {
         $versionText = Get-SmcHermesCliVersion -CliPath $cli
     } catch {
-        return $false
+        return "hermes --version failed: $($_.Exception.Message)"
     }
-    if (-not $versionText) { return $false }
-    if ($ExpectedVersion -and ($versionText -notmatch [regex]::Escape($ExpectedVersion))) { return $false }
+    if (-not $versionText) {
+        return "hermes --version empty"
+    }
+    if ($ExpectedVersion -and ($versionText -notmatch [regex]::Escape($ExpectedVersion))) {
+        return "hermes version mismatch: expected=$ExpectedVersion actual=$versionText"
+    }
     $task = Get-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
-    if ($null -eq $task) { return $false }
-    if (-not (Test-SmcHermesGatewayTaskContract -ProgramRoot $ProgramRoot -HermesHome $HermesHome)) {
-        return $false
+    if ($null -eq $task) {
+        return "gateway scheduled task missing: $($script:SmcGatewayTaskName)"
     }
-    # Task existence alone is not READY (FR-214-23).
-    try {
-        Start-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue
-    } catch {
+    $contractFailure = Get-SmcHermesGatewayTaskContractFailure -ProgramRoot $ProgramRoot -HermesHome $HermesHome
+    if (-not [string]::IsNullOrEmpty($contractFailure)) {
+        return "gateway task contract failed: $contractFailure"
     }
-    return (Test-SmcHermesGatewayReady -HermesHome $HermesHome)
+    $startFailure = Start-SmcHermesGatewayTaskForReadiness -TaskName $script:SmcGatewayTaskName
+    if (-not [string]::IsNullOrEmpty($startFailure)) {
+        Write-SmcInstallerTrace "readiness FAILED: $startFailure"
+        return $startFailure
+    }
+    # Cold start can take tens of seconds on first install (bounded wait, not infinite).
+    Write-SmcInstallerTrace "readiness: probing gateway health/auth (attempts=45 delayMs=1000)"
+    if (-not (Test-SmcHermesGatewayReady -HermesHome $HermesHome -Attempts 45 -DelayMs 1000)) {
+        $taskState = ""
+        try { $taskState = [string](Get-ScheduledTask -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue).State } catch {}
+        $infoState = ""
+        try { $infoState = [string](Get-ScheduledTaskInfo -TaskName $script:SmcGatewayTaskName -ErrorAction SilentlyContinue).LastTaskResult } catch {}
+        $probe = Get-SmcHermesGatewayProbeDetail -HermesHome $HermesHome
+        if ([string]::IsNullOrEmpty($probe)) { $probe = "probe inconclusive" }
+        $reason = "gateway not ready within timeout ($probe; taskState=$taskState lastResult=$infoState)"
+        Write-SmcInstallerTrace "readiness FAILED: $reason"
+        return $reason
+    }
+    Write-SmcInstallerTrace "readiness: gateway health/auth OK"
+    return ""
+}
+
+function Test-SmcHermesReady {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProgramRoot,
+        [Parameter(Mandatory = $true)][string]$HermesHome,
+        [string]$ExpectedVersion = ""
+    )
+    $reason = Get-SmcHermesReadinessFailure -ProgramRoot $ProgramRoot -HermesHome $HermesHome -ExpectedVersion $ExpectedVersion
+    return [string]::IsNullOrEmpty($reason)
 }
 
 function Commit-SmcControlOwner {
@@ -701,9 +841,13 @@ function Install-SmcHermesAgent {
         }
         $null = Set-SmcHermesManagedTerminalConfig -HermesHome $layout.HermesHome -CliPath (Join-Path $layout.ProgramRoot "bin\hermes.exe")
         Set-SmcHermesGatewayTask -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
-        if (-not (Test-SmcHermesReady -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome -ExpectedVersion $manifest.hermesVersion)) {
-            throw "install readiness checks failed"
+        Write-SmcInstallerTrace "install: gateway task registered; running readiness (start+probe)"
+        $readyFailure = Get-SmcHermesReadinessFailure -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome -ExpectedVersion $manifest.hermesVersion
+        if (-not [string]::IsNullOrEmpty($readyFailure)) {
+            Write-SmcInstallerTrace "install readiness FAILED: $readyFailure"
+            throw "install readiness checks failed: $readyFailure"
         }
+        Write-SmcInstallerTrace "install readiness OK"
         Assert-SmcEnvironmentPathUnchanged -Before $pathBefore -Operation install | Out-Null
         Commit-SmcControlOwner -OwnerPath $layout.OwnerPath
         Set-SmcInstallerState -StatePath $layout.StatePath -State @{
@@ -800,9 +944,13 @@ function Repair-SmcHermesAgent {
                 Restart-SmcHermesGatewayTask
             }
         }
-        if (-not (Test-SmcHermesReady -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome)) {
-            throw "repair readiness failed"
+        Write-SmcInstallerTrace "repair: running readiness (start+probe)"
+        $readyFailure = Get-SmcHermesReadinessFailure -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
+        if (-not [string]::IsNullOrEmpty($readyFailure)) {
+            Write-SmcInstallerTrace "repair readiness FAILED: $readyFailure"
+            throw "repair readiness failed: $readyFailure"
         }
+        Write-SmcInstallerTrace "repair readiness OK"
         Assert-SmcEnvironmentPathUnchanged -Before $pathBefore -Operation repair | Out-Null
         return $script:SmcInstallerExitSuccess
     } catch {
@@ -874,4 +1022,4 @@ function Invoke-SmcHermesLifecycle {
     }
 }
 
-Export-ModuleMember -Function Invoke-SmcHermesLifecycle, Install-SmcHermesAgent, Upgrade-SmcHermesAgent, Repair-SmcHermesAgent, Uninstall-SmcHermesAgent, ConvertTo-SmcInstallerArgs, Test-SmcHermesReleaseFiles, Test-SmcHermesReady, Test-SmcHermesGatewayReady, Set-SmcHermesEndpointSecret, Get-SmcHermesEnvValue, Get-SmcHermesGatewayTaskSpec, Test-SmcHermesGatewayTaskContract, Get-SmcEnvironmentPathSnapshot, Assert-SmcEnvironmentPathUnchanged, Get-SmcPathSha256, Test-SmcRawPathEqual
+Export-ModuleMember -Function Invoke-SmcHermesLifecycle, Install-SmcHermesAgent, Upgrade-SmcHermesAgent, Repair-SmcHermesAgent, Uninstall-SmcHermesAgent, ConvertTo-SmcInstallerArgs, Test-SmcHermesReleaseFiles, Test-SmcHermesReady, Test-SmcHermesGatewayReady, Get-SmcHermesReadinessFailure, Get-SmcHermesGatewayProbeDetail, Set-SmcHermesEndpointSecret, Get-SmcHermesEnvValue, Get-SmcHermesGatewayTaskSpec, Test-SmcHermesGatewayTaskContract, Get-SmcHermesGatewayTaskContractFailure, Get-SmcEnvironmentPathSnapshot, Assert-SmcEnvironmentPathUnchanged, Get-SmcPathSha256, Test-SmcRawPathEqual

@@ -663,12 +663,34 @@ function Clear-SmcHermesManagedTemp {
     return @{ ok = $true; removed = $removed; warnings = @($warnings) }
 }
 
+function Get-SmcYamlIndent {
+    param([string]$Raw)
+    return ($Raw.Length - $Raw.TrimStart(" ", "`t").Length)
+}
+
+function Test-SmcYamlBlankOrComment {
+    param([string]$Raw)
+    return ([string]::IsNullOrWhiteSpace($Raw) -or $Raw.TrimStart().StartsWith("#"))
+}
+
+function Find-SmcYamlNextContent {
+    param([string[]]$Lines, [int]$Start)
+    $i = $Start
+    while ($i -lt $Lines.Count) {
+        if (-not (Test-SmcYamlBlankOrComment -Raw $Lines[$i])) { return $i }
+        $i++
+    }
+    return -1
+}
+
 function ConvertFrom-SmcYamlSubset {
     param([AllowEmptyString()][AllowNull()][string]$Text = "")
     if ([string]::IsNullOrWhiteSpace($Text)) { return @{} }
     $lines = @($Text -split "`r?`n", -1)
     $index = 0
-    return (Read-SmcYamlBlock -Lines $lines -Index ([ref]$index) -Indent 0)
+    $parsed = Read-SmcYamlBlock -Lines $lines -Index ([ref]$index) -Indent 0
+    if ($null -eq $parsed) { return @{} }
+    return $parsed
 }
 
 function Read-SmcYamlBlock {
@@ -679,14 +701,14 @@ function Read-SmcYamlBlock {
     )
     while ($Index.Value -lt $Lines.Count) {
         $raw = $Lines[$Index.Value]
-        if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith("#")) {
+        if (Test-SmcYamlBlankOrComment -Raw $raw) {
             $Index.Value++
             continue
         }
-        $current = ($raw.Length - $raw.TrimStart().Length)
+        $current = Get-SmcYamlIndent -Raw $raw
         if ($current -lt $Indent) { return $null }
         $stripped = $raw.Trim()
-        if ($stripped.StartsWith("- ")) {
+        if ($stripped -eq "-" -or $stripped.StartsWith("- ")) {
             return (Read-SmcYamlList -Lines $Lines -Index $Index -Indent $current)
         }
         if ($stripped.Contains(":")) {
@@ -698,20 +720,78 @@ function Read-SmcYamlBlock {
     return $null
 }
 
-function Read-SmcYamlMap {
-    param([string[]]$Lines, [ref]$Index, [int]$Indent)
-    $result = @{}
+function Read-SmcYamlChild {
+    param([string[]]$Lines, [ref]$Index, [int]$KeyIndent)
+    $next = Find-SmcYamlNextContent -Lines $Lines -Start $Index.Value
+    if ($next -lt 0) { return @{} }
+    $raw = $Lines[$next]
+    $current = Get-SmcYamlIndent -Raw $raw
+    $stripped = $raw.Trim()
+    $isList = ($stripped -eq "-" -or $stripped.StartsWith("- "))
+    # PyYAML compact sequences sit at the same indent as the parent key:
+    #   args:
+    #   - foo
+    if ($isList -and $current -ge $KeyIndent) {
+        $Index.Value = $next
+        return (Read-SmcYamlList -Lines $Lines -Index $Index -Indent $current)
+    }
+    if ($current -le $KeyIndent) { return @{} }
+    $Index.Value = $next
+    $child = Read-SmcYamlBlock -Lines $Lines -Index $Index -Indent $current
+    if ($null -eq $child) { return @{} }
+    return $child
+}
+
+function Read-SmcYamlBlockScalar {
+    param([string[]]$Lines, [ref]$Index, [int]$KeyIndent)
+    $parts = New-Object System.Collections.Generic.List[string]
     while ($Index.Value -lt $Lines.Count) {
         $raw = $Lines[$Index.Value]
-        if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith("#")) {
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            $next = Find-SmcYamlNextContent -Lines $Lines -Start ($Index.Value + 1)
+            if ($next -lt 0) { break }
+            if ((Get-SmcYamlIndent -Raw $Lines[$next]) -le $KeyIndent) { break }
+            [void]$parts.Add("")
             $Index.Value++
             continue
         }
-        $current = ($raw.Length - $raw.TrimStart().Length)
+        $current = Get-SmcYamlIndent -Raw $raw
+        if ($current -le $KeyIndent) { break }
+        [void]$parts.Add($raw.Substring($current))
+        $Index.Value++
+    }
+    return (($parts.ToArray()) -join "`n")
+}
+
+function Read-SmcYamlMap {
+    param([string[]]$Lines, [ref]$Index, [int]$Indent)
+    $result = @{}
+    $lastKey = $null
+    while ($Index.Value -lt $Lines.Count) {
+        $raw = $Lines[$Index.Value]
+        if (Test-SmcYamlBlankOrComment -Raw $raw) {
+            $Index.Value++
+            continue
+        }
+        $current = Get-SmcYamlIndent -Raw $raw
         if ($current -lt $Indent) { break }
-        if ($current -gt $Indent) { throw "unexpected yaml indent" }
         $stripped = $raw.Trim()
-        if ($stripped.StartsWith("- ")) { break }
+        if ($stripped -eq "-" -or $stripped.StartsWith("- ")) { break }
+        if ($current -gt $Indent) {
+            # Nested/continuation content that the previous key did not consume
+            # (block scalars, 4-space children, compact-list leftovers).
+            if ([string]::IsNullOrEmpty($lastKey)) { throw "unexpected yaml indent" }
+            $child = Read-SmcYamlBlock -Lines $Lines -Index $Index -Indent $current
+            $prev = $result[$lastKey]
+            if ($null -eq $prev -or (($prev -is [string]) -and ($prev -in @("", "|", ">", "{", "[")))) {
+                $result[$lastKey] = $(if ($null -eq $child) { @{} } else { $child })
+            } elseif ($child -is [hashtable] -or $child -is [System.Collections.IDictionary]) {
+                if ($prev -is [hashtable] -or $prev -is [System.Collections.IDictionary]) {
+                    foreach ($k in @($child.Keys)) { $prev[$k] = $child[$k] }
+                }
+            }
+            continue
+        }
         if (-not $stripped.Contains(":")) { throw "expected yaml mapping" }
         $colon = $stripped.IndexOf(":")
         $key = $stripped.Substring(0, $colon).Trim()
@@ -720,15 +800,17 @@ function Read-SmcYamlMap {
             $rest = $stripped.Substring($colon + 1).Trim()
         }
         $Index.Value++
+        $lastKey = $key
         if ($rest -eq "{}") {
             $result[$key] = @{}
         } elseif ($rest -eq "[]") {
             $result[$key] = @()
+        } elseif ($rest -match '^[>|][+-]?\d*$') {
+            $result[$key] = Read-SmcYamlBlockScalar -Lines $Lines -Index $Index -Indent $Indent
         } elseif ($rest) {
             $result[$key] = ConvertFrom-SmcYamlScalar $rest
         } else {
-            $child = Read-SmcYamlBlock -Lines $Lines -Index $Index -Indent ($Indent + 2)
-            if ($null -eq $child) { $result[$key] = @{} } else { $result[$key] = $child }
+            $result[$key] = Read-SmcYamlChild -Lines $Lines -Index $Index -KeyIndent $Indent
         }
     }
     return $result
@@ -739,19 +821,33 @@ function Read-SmcYamlList {
     $result = New-Object System.Collections.ArrayList
     while ($Index.Value -lt $Lines.Count) {
         $raw = $Lines[$Index.Value]
-        if ([string]::IsNullOrWhiteSpace($raw) -or $raw.TrimStart().StartsWith("#")) {
+        if (Test-SmcYamlBlankOrComment -Raw $raw) {
             $Index.Value++
             continue
         }
-        $current = ($raw.Length - $raw.TrimStart().Length)
+        $current = Get-SmcYamlIndent -Raw $raw
         if ($current -lt $Indent) { break }
         $stripped = $raw.Trim()
-        if (-not $stripped.StartsWith("- ")) { break }
-        $item = $stripped.Substring(2).Trim()
+        $isListItem = ($stripped -eq "-" -or $stripped.StartsWith("- "))
+        if (-not $isListItem) { break }
+        $item = ""
+        if ($stripped.StartsWith("- ") -and $stripped.Length -gt 2) {
+            $item = $stripped.Substring(2).Trim()
+        }
         $Index.Value++
         if (-not $item) {
-            $child = Read-SmcYamlBlock -Lines $Lines -Index $Index -Indent ($Indent + 2)
-            [void]$result.Add($(if ($null -eq $child) { @{} } else { $child }))
+            $child = Read-SmcYamlChild -Lines $Lines -Index $Index -KeyIndent $Indent
+            [void]$result.Add($child)
+        } elseif (-not ($item.StartsWith('"') -or $item.StartsWith("'")) -and $item.Contains(":")) {
+            $colon = $item.IndexOf(":")
+            $nested = @{}
+            $ik = $item.Substring(0, $colon).Trim()
+            $ir = ""
+            if ($colon + 1 -lt $item.Length) { $ir = $item.Substring($colon + 1).Trim() }
+            if ($ir) { $nested[$ik] = ConvertFrom-SmcYamlScalar $ir } else { $nested[$ik] = Read-SmcYamlChild -Lines $Lines -Index $Index -KeyIndent $Indent }
+            $extra = Read-SmcYamlMap -Lines $Lines -Index $Index -Indent ($Indent + 2)
+            foreach ($k in @($extra.Keys)) { $nested[$k] = $extra[$k] }
+            [void]$result.Add($nested)
         } else {
             [void]$result.Add((ConvertFrom-SmcYamlScalar $item))
         }
@@ -895,7 +991,7 @@ function Merge-SmcHermesManagedConfig {
     if (-not (Test-Path -LiteralPath $ManagedDefaultsPath)) {
         throw "managed.defaults.yaml missing: $ManagedDefaultsPath"
     }
-    $managedText = Get-Content -LiteralPath $ManagedDefaultsPath -Raw -ErrorAction Stop
+    $managedText = [System.IO.File]::ReadAllText($ManagedDefaultsPath, [System.Text.UTF8Encoding]::new($false))
     $managed = ConvertFrom-SmcYamlSubset -Text $managedText
     if ([string]$managed.schema -ne "smc.opsi.managed-config.v2") {
         throw "unsupported managed.defaults schema"
@@ -917,7 +1013,7 @@ function Merge-SmcHermesManagedConfig {
     $existingText = ""
     $hadFile = Test-Path -LiteralPath $configPath
     if ($hadFile) {
-        $raw = Get-Content -LiteralPath $configPath -Raw -ErrorAction Stop
+        $raw = [System.IO.File]::ReadAllText($configPath, [System.Text.UTF8Encoding]::new($false))
         if ($null -ne $raw) { $existingText = [string]$raw }
     }
     $existing = ConvertFrom-SmcYamlSubset -Text $existingText
@@ -1167,6 +1263,7 @@ function Get-SmcHermesManagedDoctorReport {
 
 Export-ModuleMember -Function `
     Get-SmcHermesManagedLayout, `
+    ConvertTo-SmcFullPath, `
     Assert-SmcHermesManagedPath, `
     Assert-SmcHermesHomeChildPath, `
     Initialize-SmcHermesManagedHome, `

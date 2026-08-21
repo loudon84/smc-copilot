@@ -9,9 +9,12 @@ import os
 import shutil
 import subprocess
 import tarfile
+import time
 import zipfile
+from http.client import IncompleteRead
 from pathlib import Path
 from typing import Any, Callable
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 from zipfile import ZIP_STORED, ZipFile
 
@@ -30,11 +33,18 @@ WINDOWS_VT_PTH_NAME = "zz_smc_windows_vt.pth"
 
 SQLITE_VERSION = "3.53.4"
 SQLITE_DLL_URL = "https://www3.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip"
+SQLITE_DLL_MIRROR_URLS = (
+    SQLITE_DLL_URL,
+    "https://www.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip",
+)
 SQLITE_DLL_SHA3_256 = "deddee963c810d1eeac3ce5e15c7c41da21a1c54d7a39cf54fbf577d2f50de3a"
 SQLITE_MIN_SAFE_VERSION = (3, 51, 3)
 NODE_MIN_SAFE_VERSION = (22, 22, 0)
 
 PE_AMD64 = 0x8664
+DOWNLOAD_ATTEMPTS = 4
+DOWNLOAD_TIMEOUT_S = 120
+DOWNLOAD_CHUNK = 256 * 1024
 Downloader = Callable[[str, Path, str], Path]
 
 
@@ -62,17 +72,81 @@ def assert_pe_amd64(path: Path) -> None:
         raise ValueError(f"wrong architecture: {path.name}")
 
 
-def _download(url: str, dest: Path, expected_sha256: str) -> Path:
+def _hash_bytes(payload: bytes, algo: str) -> str:
+    if algo == "sha256":
+        return hashlib.sha256(payload).hexdigest()
+    if algo == "sha3_256":
+        return hashlib.sha3_256(payload).hexdigest()
+    raise ValueError(f"unsupported hash algo: {algo}")
+
+
+def _read_url_bytes(url: str) -> bytes:
+    """Read full response with Content-Length validation when present."""
+    with urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response:  # noqa: S310 - pinned official URL + digest
+        expected = response.headers.get("Content-Length")
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = response.read(DOWNLOAD_CHUNK)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        payload = b"".join(chunks)
+        if expected is not None:
+            try:
+                want = int(expected)
+            except ValueError:
+                want = -1
+            if want >= 0 and total != want:
+                raise IncompleteRead(payload, want - total)
+        return payload
+
+
+def _download_with_retries(
+    url: str,
+    dest: Path,
+    expected_digest: str,
+    *,
+    algo: str,
+    mirrors: tuple[str, ...] | None = None,
+) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.is_file() and sha256_file(dest) == expected_sha256:
+    if dest.is_file() and _hash_bytes(dest.read_bytes(), algo) == expected_digest:
         return dest
-    with urlopen(url, timeout=60) as response:  # noqa: S310 - pinned official distro URL + digest
-        payload = response.read()
-    digest = hashlib.sha256(payload).hexdigest()
-    if digest != expected_sha256:
-        raise ValueError(f"hash mismatch for {dest.name}")
-    dest.write_bytes(payload)
-    return dest
+    # Drop stale/partial cache so IncompleteRead leftovers never poison retry.
+    if dest.is_file():
+        dest.unlink(missing_ok=True)
+    urls = mirrors or (url,)
+    errors: list[str] = []
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        for candidate in urls:
+            tmp = dest.with_suffix(dest.suffix + f".part.{attempt}")
+            try:
+                if tmp.is_file():
+                    tmp.unlink(missing_ok=True)
+                payload = _read_url_bytes(candidate)
+                digest = _hash_bytes(payload, algo)
+                if digest != expected_digest:
+                    raise ValueError(f"hash mismatch for {dest.name} from {candidate}")
+                tmp.write_bytes(payload)
+                tmp.replace(dest)
+                return dest
+            except (IncompleteRead, TimeoutError, URLError, HTTPError, OSError, ValueError) as exc:
+                errors.append(f"attempt={attempt} url={candidate}: {type(exc).__name__}: {exc}")
+                if tmp.is_file():
+                    tmp.unlink(missing_ok=True)
+                continue
+        if attempt < DOWNLOAD_ATTEMPTS:
+            time.sleep(min(2 ** (attempt - 1), 8))
+    raise ValueError(
+        f"download failed for {dest.name} after {DOWNLOAD_ATTEMPTS} attempts: "
+        + "; ".join(errors[-6:])
+    )
+
+
+def _download(url: str, dest: Path, expected_sha256: str) -> Path:
+    return _download_with_retries(url, dest, expected_sha256, algo="sha256")
 
 
 def _resolve_archive(
@@ -161,16 +235,14 @@ def _resolve_sqlite_archive(
 
 
 def _download_sha3(url: str, dest: Path, expected_sha3_256: str) -> Path:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.is_file() and sha3_256_file(dest) == expected_sha3_256:
-        return dest
-    with urlopen(url, timeout=60) as response:  # noqa: S310
-        payload = response.read()
-    digest = hashlib.sha3_256(payload).hexdigest()
-    if digest != expected_sha3_256:
-        raise ValueError(f"hash mismatch for {dest.name}")
-    dest.write_bytes(payload)
-    return dest
+    mirrors = SQLITE_DLL_MIRROR_URLS if url in SQLITE_DLL_MIRROR_URLS or url == SQLITE_DLL_URL else (url,)
+    return _download_with_retries(
+        url,
+        dest,
+        expected_sha3_256,
+        algo="sha3_256",
+        mirrors=mirrors,
+    )
 
 
 def _overlay_safe_sqlite(python_root: Path, sqlite_archive: Path) -> str:

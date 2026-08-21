@@ -479,6 +479,67 @@ terminal:
         }
     }
 
+    It "merges existing Hermes PyYAML compact lists and block scalars without indent errors" {
+        $testRoot = Join-Path "C:\ProgramData\SMC\InstallerTests" ("merge-indent-" + [guid]::NewGuid().ToString("N"))
+        $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
+        $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
+        $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        try {
+            Import-Module $script:Module -Force
+            $layout = Get-SmcHermesManagedLayout
+            New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "config") | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
+            New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            $cwdQuoted = ConvertTo-SmcYamlDoubleQuotedPath -Path $layout.WorkspaceRoot
+            $managed = @(
+                "schema: smc.opsi.managed-config.v2",
+                "profile: smc-managed",
+                "profileVersion: 2",
+                "profileDigest: test",
+                "defaults:",
+                "  logging:",
+                "    level: INFO",
+                "enforced:",
+                "  security:",
+                "    allow_lazy_installs: false",
+                "  terminal:",
+                "    cwd: $cwdQuoted"
+            ) -join "`n"
+            $existing = @(
+                "models:",
+                "  default: keep-me",
+                "mcp_servers:",
+                "  filesystem:",
+                "    command: npx",
+                "    args:",
+                "    - -y",
+                "    - '@modelcontextprotocol/server-filesystem'",
+                "    enabled: true",
+                "plugins:",
+                "  - name: sample",
+                "    enabled: true",
+                "personality:",
+                "  extra: |",
+                "    hello",
+                "      nested line"
+            ) -join "`n"
+            Set-Content -LiteralPath (Join-Path $layout.ProgramRoot "config\managed.defaults.yaml") -Value $managed -Encoding utf8
+            [System.IO.File]::WriteAllText($layout.ConfigPath, $existing + "`n", [System.Text.UTF8Encoding]::new($false))
+            $result = Merge-SmcHermesManagedConfig -ProgramRoot $layout.ProgramRoot -HermesHome $layout.HermesHome
+            $result.Changed | Should Be $true
+            $text = [System.IO.File]::ReadAllText($layout.ConfigPath)
+            $text | Should Match "keep-me"
+            $text | Should Match "allow_lazy_installs"
+        } finally {
+            if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Import-Module $script:Module -Force
+            if (Test-Path -LiteralPath $testRoot) {
+                Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
     It "doctor reports runtime capabilities from manifest" {
         $testRoot = Join-Path "C:\ProgramData\SMC\InstallerTests" ("doctor-" + [guid]::NewGuid().ToString("N"))
         $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT

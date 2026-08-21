@@ -151,6 +151,34 @@ Describe "Hermes installer core" {
         $null = Set-SmcHermesEndpointSecret -HermesHome $script:Layout.HermesHome
         $ready = Test-SmcHermesGatewayReady -HermesHome $script:Layout.HermesHome -Attempts 1 -DelayMs 0
         $ready | Should Be $false
+        $probe = Get-SmcHermesGatewayProbeDetail -HermesHome $script:Layout.HermesHome
+        $probe | Should Match "tcp|API_SERVER_KEY|/health|/v1/models"
+    }
+
+    It "readiness starts gateway with ErrorAction Stop and writes install.log traces" {
+        $core = Get-Content -LiteralPath (Join-Path $script:Root "installer\InstallerCore.psm1") -Raw
+        $core | Should Match 'function Start-SmcHermesGatewayTaskForReadiness'
+        $core | Should Match 'Start-ScheduledTask -TaskName \$TaskName -ErrorAction Stop'
+        $core | Should Not Match 'Start-ScheduledTask -TaskName \$script:SmcGatewayTaskName -ErrorAction SilentlyContinue'
+        $core | Should Match 'Write-SmcInstallerTrace'
+        $core | Should Match 'install readiness checks failed: \$readyFailure'
+        $core | Should Match 'repair readiness failed: \$readyFailure'
+        $core | Should Match 'function Get-SmcHermesGatewayTaskContractFailure'
+        # Repair must not double-wait by calling Test then Get readiness.
+        $repair = [regex]::Match($core, 'function Repair-SmcHermesAgent[\s\S]*?function Restart-SmcHermesGatewayTask').Value
+        ($repair -match 'Test-SmcHermesReady') | Should Be $false
+        ($repair -match 'Get-SmcHermesReadinessFailure') | Should Be $true
+    }
+
+    It "exports ConvertTo-SmcFullPath so gateway task contract can validate WorkingDirectory" {
+        (Get-Command ConvertTo-SmcFullPath -ErrorAction Stop) | Should Not Be $null
+        $full = ConvertTo-SmcFullPath -Path $script:Layout.WorkspaceRoot
+        $full | Should Match 'workspace$'
+        $managed = Get-Content -LiteralPath (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Raw
+        $managed | Should Match 'ConvertTo-SmcFullPath,'
+        $core = Get-Content -LiteralPath (Join-Path $script:Root "installer\InstallerCore.psm1") -Raw
+        $core | Should Match 'WorkingDirectory invalid'
+        $core | Should Match 'Get-SmcHermesGatewayTaskContractFailure'
     }
 
     It "repairs without deleting preserved home data" {
