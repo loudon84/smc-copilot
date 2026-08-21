@@ -13,11 +13,16 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.release.hermes.managed_config import (  # noqa: E402
+    compile_managed_defaults,
+    render_managed_defaults_yaml,
+)
 from tools.release.hermes.release_v2 import (  # noqa: E402
     assemble_self_contained_tree,
     build_release_manifest,
     zip_release_tree,
 )
+from tools.release.hermes.runtime_profile import load_profiles, resolve_profile  # noqa: E402
 from tools.release.hermes.windows_runtime import write_hermes_launcher  # noqa: E402
 
 
@@ -61,27 +66,22 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
         json.dumps({"name": "hermes-agent", "private": True}) + "\n",
         encoding="utf-8",
     )
-    (runtime / "config" / "managed.defaults.yaml").write_text(
-        "\n".join(
-            [
-                "schema: smc.opsi.managed-config.v2",
-                "profile: smc-managed",
-                "profileVersion: 2",
-                "profileDigest: smoke",
-                "defaults:",
-                "  logging:",
-                "    level: INFO",
-                "enforced:",
-                "  security:",
-                "    allow_lazy_installs: false",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    # FR-216-19: fixture managed.defaults.yaml from real Runtime Profile compiler.
+    profiles = load_profiles(ROOT / "release" / "hermes-runtime-profiles.yaml")
+    profile = resolve_profile(profiles, "smc-managed")
+    managed_payload = compile_managed_defaults(profile, profile_name="smc-managed")
+    managed_text = render_managed_defaults_yaml(profile, profile_name="smc-managed")
+    (runtime / "config" / "managed.defaults.yaml").write_text(managed_text, encoding="utf-8")
     scripts_src = ROOT / "infra" / "windows" / "hermes-agent" / "scripts"
-    for name in ("HostOperations.ps1", "HostOperations.psm1", "SmcHermesManaged.psm1"):
-        shutil.copy2(scripts_src / name, runtime / "scripts" / name)
+    for name in (
+        "HostOperations.ps1",
+        "HostOperations.psm1",
+        "SmcHermesManaged.psm1",
+        "managed_config_apply.py",
+    ):
+        src = scripts_src / name
+        if src.is_file():
+            shutil.copy2(src, runtime / "scripts" / name)
     (runtime / "runtime" / "runtime-build.json").write_text(
         json.dumps(
             {
@@ -99,9 +99,9 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
                     "lspAutoInstall": False,
                 },
                 "managedConfigVersion": 2,
-                "runtimeProfileVersion": 2,
+                "runtimeProfileVersion": int(managed_payload["profileVersion"]),
                 "runtimeProfile": "smc-managed",
-                "runtimeProfileDigest": "smoke",
+                "runtimeProfileDigest": str(managed_payload["profileDigest"]),
                 "environment": {"path": {"policy": "immutable"}},
             }
         )

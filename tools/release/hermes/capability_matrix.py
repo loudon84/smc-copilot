@@ -2,6 +2,9 @@
 
 Import module names come only from this allowlist. Profile text is never
 interpolated into Python probe code.
+
+v2.1.6: baseline PyYAML is always required for Managed Config Apply (FR-216-04),
+independent of capability toggles — not a new capability key.
 """
 
 from __future__ import annotations
@@ -20,6 +23,10 @@ CAPABILITY_KEYS = (
     "tirith",
     "lspAutoInstall",
 )
+
+# Always-on Runtime packages / imports (Config Integrity, FR-216-04).
+BASELINE_REQUIRED_PACKAGES = ("pyyaml",)
+BASELINE_IMPORTS = ("yaml",)
 
 # Controlled matrix: extras / required Python packages / import probes /
 # node package names / binary ids required when capability is enabled.
@@ -89,11 +96,12 @@ CAPABILITY_MATRIX: dict[str, dict[str, list[str]]] = {
     },
 }
 
-# Import names that probes may execute. Subset of matrix imports only.
+# Import names that probes may execute. Subset of matrix imports + baseline.
 ALLOWED_IMPORT_MODULES = frozenset(
-    module
-    for spec in CAPABILITY_MATRIX.values()
-    for module in spec.get("imports", [])
+    {
+        *(module for spec in CAPABILITY_MATRIX.values() for module in spec.get("imports", [])),
+        *BASELINE_IMPORTS,
+    }
 )
 
 
@@ -177,7 +185,7 @@ def validate_capability_declaration(profile: dict[str, Any]) -> None:
 
 
 def expected_required_packages(profile: dict[str, Any]) -> list[str]:
-    """Union of profile.requiredPackages and matrix-derived required packages."""
+    """Union of profile.requiredPackages, matrix-derived, and baseline packages."""
     declared = list(_declared_required(profile))
     seen = {name.replace("-", "_").lower() for name in declared}
     result = list(declared)
@@ -189,13 +197,24 @@ def expected_required_packages(profile: dict[str, Any]) -> list[str]:
             if key not in seen:
                 seen.add(key)
                 result.append(pkg)
+    for pkg in BASELINE_REQUIRED_PACKAGES:
+        key = pkg.replace("-", "_").lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(pkg)
     return result
 
 
 def expected_imports(profile: dict[str, Any]) -> list[str]:
-    """Import probe modules for enabled capabilities (allowlist only)."""
+    """Import probe modules for enabled capabilities + baseline (allowlist only)."""
     modules: list[str] = []
     seen: set[str] = set()
+    for module in BASELINE_IMPORTS:
+        if module not in ALLOWED_IMPORT_MODULES:
+            raise ValueError(f"import module not allowlisted: {module}")
+        if module not in seen:
+            seen.add(module)
+            modules.append(module)
     for cap, on in _enabled_caps(profile).items():
         if not on:
             continue

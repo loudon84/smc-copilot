@@ -20,7 +20,12 @@ from zipfile import ZIP_STORED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_ROOT = ROOT / "infra" / "windows" / "hermes-agent" / "scripts"
-ENDPOINT_SCRIPTS = ("HostOperations.ps1", "HostOperations.psm1", "SmcHermesManaged.psm1")
+ENDPOINT_SCRIPTS = (
+    "HostOperations.ps1",
+    "HostOperations.psm1",
+    "SmcHermesManaged.psm1",
+    "managed_config_apply.py",
+)
 
 PYTHON_VERSION = "3.12.8"
 NODE_VERSION = "22.22.0"

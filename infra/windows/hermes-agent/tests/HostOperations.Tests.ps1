@@ -5,6 +5,7 @@ Describe "HostOperations" {
         New-Item -ItemType Directory -Force -Path $script:TestRoot | Out-Null
         $env:SMC_HERMES_MANAGED_TEST_ROOT = $script:TestRoot
         $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
         $managed = Join-Path $PSScriptRoot "..\scripts\SmcHermesManaged.psm1"
         $script:Module = Join-Path $PSScriptRoot "..\scripts\HostOperations.psm1"
         Import-Module $managed -Force -DisableNameChecking
@@ -18,6 +19,8 @@ Describe "HostOperations" {
     AfterAll {
         Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue
         Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+        Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+        Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue
         if ($script:TestRoot -and (Test-Path -LiteralPath $script:TestRoot)) {
             Remove-Item -LiteralPath $script:TestRoot -Recurse -Force -ErrorAction SilentlyContinue
         }

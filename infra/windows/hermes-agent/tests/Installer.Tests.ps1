@@ -6,6 +6,8 @@ Describe "Hermes installer core" {
         New-Item -ItemType Directory -Force -Path $script:TestRoot | Out-Null
         $env:SMC_HERMES_MANAGED_TEST_ROOT = $script:TestRoot
         $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
+        $env:SMC_HERMES_MANAGED_APPLY_PYTHON = (Get-Command python -ErrorAction SilentlyContinue).Source
         Import-Module (Join-Path $script:Root "scripts\SmcHermesManaged.psm1") -Force -DisableNameChecking
         $script:Layout = Get-SmcHermesManagedLayout
         Import-Module (Join-Path $script:Root "installer\InstallerCore.psm1") -Force -DisableNameChecking
@@ -15,11 +17,9 @@ Describe "Hermes installer core" {
         $script:MachinePathBefore = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $script:UserPathBefore = [Environment]::GetEnvironmentVariable("PATH", "User")
         $fixture = Join-Path $PSScriptRoot "fixtures\release-v2-smoke"
-        if (-not (Test-Path -LiteralPath (Join-Path $fixture "hermes-windows-amd64.zip"))) {
-            $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:Root))
-            $generator = Join-Path $repoRoot "tools\release\hermes\build_installer_smoke_fixture.py"
-            & python $generator --dest $fixture | Out-Null
-        }
+        $repoRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $script:Root))
+        $generator = Join-Path $repoRoot "tools\release\hermes\build_installer_smoke_fixture.py"
+        & python $generator --dest $fixture | Out-Null
         $script:Payload = Join-Path $env:TEMP ("smc-hermes-payload-" + [guid]::NewGuid().ToString("N"))
         New-Item -ItemType Directory -Force -Path $script:Payload | Out-Null
         Copy-Item -Path (Join-Path $fixture "hermes-windows-amd64.zip") -Destination (Join-Path $script:Payload "hermes-windows-amd64.zip") -Force
@@ -31,6 +31,8 @@ Describe "Hermes installer core" {
     AfterAll {
         Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue
         Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+        Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+        Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue
         $machineAfter = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $userAfter = [Environment]::GetEnvironmentVariable("PATH", "User")
         if (-not [string]::Equals([string]$script:MachinePathBefore, [string]$machineAfter, [StringComparison]::Ordinal)) {

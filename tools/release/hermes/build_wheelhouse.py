@@ -133,6 +133,38 @@ def download_wheelhouse(repo: Path, dest: Path, extras: list[str]) -> Path:
     result = run_command(cmd, cwd=repo)
     if result.returncode != 0:
         raise ValueError(command_output(result, "wheelhouse download failed"))
+    # FR-216-04: ensure baseline Managed Config dependency is present offline.
+    _ensure_baseline_wheels(dest, ("PyYAML",))
     assert_wheelhouse_binary_only(dest)
     inventory_wheels(dest)
     return dest
+
+
+def _ensure_baseline_wheels(dest: Path, packages: tuple[str, ...]) -> None:
+    existing = list(dest.glob("*.whl"))
+    present: set[str] = set()
+    if existing:
+        present = {item["name"].replace("-", "_").lower() for item in inventory_wheels(dest)}
+    missing = [pkg for pkg in packages if pkg.replace("-", "_").lower() not in present]
+    if not missing:
+        return
+    cmd = [
+        "python",
+        "-m",
+        "pip",
+        "download",
+        "--only-binary",
+        ":all:",
+        "--platform",
+        "win_amd64",
+        "--python-version",
+        "3.12",
+        "--implementation",
+        "cp",
+        "-d",
+        str(dest),
+        *missing,
+    ]
+    result = run_command(cmd)
+    if result.returncode != 0:
+        raise ValueError(command_output(result, f"baseline wheel download failed: {missing}"))

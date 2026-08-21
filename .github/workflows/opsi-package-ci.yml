@@ -7,6 +7,7 @@ on:
       - "infra/windows/hermes-agent/**"
       - "contracts/opsi/*.schema.json"
       - "tools/release/**"
+      - "release/hermes-runtime-profiles.yaml"
       - ".github/workflows/opsi-package-ci.yml"
   pull_request:
     paths:
@@ -14,9 +15,26 @@ on:
       - "infra/windows/hermes-agent/**"
       - "contracts/opsi/*.schema.json"
       - "tools/release/**"
+      - "release/hermes-runtime-profiles.yaml"
       - ".github/workflows/opsi-package-ci.yml"
+  workflow_dispatch:
 
 jobs:
+  yaml-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+      - name: PyYAML independent corpus and managed apply unit tests
+        run: |
+          uv run --project services/opsi-control python -c "import yaml; print(yaml.__version__)"
+          uv run --project services/opsi-control pytest \
+            tools/release/tests/test_yaml_compatibility.py \
+            tools/release/tests/test_managed_config_apply.py -q
+
   package:
     runs-on: ubuntu-latest
     steps:
@@ -80,9 +98,17 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Pester adapter contracts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML for MOCK managed apply harness
         shell: pwsh
-        run: Invoke-Pester -Path infra/opsi/tests/SmcHermesAgent.Tests.ps1,infra/windows/hermes-agent/tests/SmcHermesManaged.Tests.ps1,infra/windows/hermes-agent/tests/Installer.Tests.ps1,infra/windows/hermes-agent/tests/HostOperations.Tests.ps1 -EnableExit
+        run: python -m pip install "pyyaml>=6,<7"
+      - name: Pester adapter contracts (MOCK/UNIT)
+        shell: pwsh
+        run: |
+          Write-Host "level=MOCK/UNIT (T0-T2); not Artifact/Installer/E2E certification"
+          Invoke-Pester -Path infra/opsi/tests/SmcHermesAgent.Tests.ps1,infra/windows/hermes-agent/tests/SmcHermesManaged.Tests.ps1,infra/windows/hermes-agent/tests/Installer.Tests.ps1,infra/windows/hermes-agent/tests/HostOperations.Tests.ps1 -EnableExit
 
   builder:
     runs-on: ubuntu-latest
@@ -98,7 +124,7 @@ jobs:
           ls /tmp/opsi-smoke/*.smoke.zip
           test ! -e /tmp/opsi-smoke/*.opsi
       - name: Hermes release builder pytest
-        run: uv run --project services/opsi-control pytest tools/release/tests/test_hermes_builder.py tools/release/tests/test_client_release.py -q
+        run: uv run --project services/opsi-control pytest tools/release/tests/test_hermes_builder.py tools/release/tests/test_client_release.py tools/release/tests/test_yaml_compatibility.py tools/release/tests/test_managed_config_apply.py -q
       - name: Verify hermes-installer is release SOT
         run: |
           python - <<'PY'
@@ -141,9 +167,16 @@ jobs:
           PY
 
   windows-installer:
+    name: windows-installer-build (SMOKE/MOCK)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML for smoke fixture profile compile
+        shell: pwsh
+        run: python -m pip install "pyyaml>=6,<7"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
@@ -153,9 +186,10 @@ jobs:
           dotnet tool install --global wix --version 5.0.2
           wix --version
           wix extension add WixToolset.BootstrapperApplications.wixext
-      - name: Build native Burn + MSI (smoke payload)
+      - name: Build native Burn + MSI (smoke payload — NOT certification)
         shell: pwsh
         run: |
+          Write-Host "level=SMOKE/MOCK (T2); certificationStatus remains uncertified"
           $out = "infra/windows/hermes-agent/installer/dist"
           $exe = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File infra/windows/hermes-agent/installer/build.ps1 `
             -ReleaseVersion "0.22.0-smc.1" `
@@ -180,7 +214,7 @@ jobs:
           if ($sig.Status -eq "Valid") {
             throw "smoke/test builds must not be production-signed liveEligible artifacts"
           }
-          Write-Host "ok: native installer PE+MSI built (smoke provenance)"
+          Write-Host "ok: native installer PE+MSI built (smoke provenance; not Release Certified)"
       - name: No-.NET string scan on installer sources
         shell: pwsh
         run: |
@@ -190,3 +224,64 @@ jobs:
             Select-String -Pattern $pattern
           if ($hits) { $hits | ForEach-Object { $_.ToString() }; exit 1 }
           Write-Host "ok: no-.NET guard passed"
+
+  # T3–T6 certification (FR-216-22..28). Gated until smc-hermes-cert runners are online.
+  # When disabled, certificationStatus stays uncertified — never treat CI green as Release GO.
+  windows-runtime-certification:
+    if: ${{ vars.SMC_HERMES_CERT_ENABLED == 'true' }}
+    runs-on: [self-hosted, windows, smc-hermes-cert]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse skip/test-root flags
+        shell: pwsh
+        run: |
+          foreach ($flag in @(
+            "SMC_HERMES_INSTALLER_SKIP_GATEWAY",
+            "SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG",
+            "SMC_HERMES_MANAGED_TEST_ROOT"
+          )) {
+            if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($flag, "Process"))) {
+              throw "certification forbids $flag"
+            }
+          }
+      - name: Real runtime build + functional gates
+        shell: pwsh
+        run: |
+          Write-Host "level=T3 Runtime Artifact Certification"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/release/hermes/build_runtime.ps1
+          # Functional gates must not use skip_functional_gates / PE stubs.
+
+  windows-installer-build:
+    if: ${{ vars.SMC_HERMES_CERT_ENABLED == 'true' }}
+    needs: [windows-runtime-certification]
+    runs-on: [self-hosted, windows, smc-hermes-cert]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build frozen MSI from real runtime artifact
+        shell: pwsh
+        run: |
+          Write-Host "level=windows-installer-build (artifact generation only)"
+          # Consume runtime from prior certification workspace / artifact freeze.
+          throw "wire real runtime payload path when smc-hermes-cert is provisioned"
+
+  windows-installer-certification:
+    if: ${{ vars.SMC_HERMES_CERT_ENABLED == 'true' }}
+    needs: [windows-installer-build]
+    runs-on: [self-hosted, windows, smc-hermes-cert]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lifecycle certification on frozen MSI digest
+        shell: pwsh
+        run: |
+          Write-Host "level=T4-T6 Installer Certification (Fresh/Repair/Upgrade/Uninstall)"
+          $env:SMC_HERMES_INSTALLER_CERTIFICATION = "1"
+          foreach ($flag in @(
+            "SMC_HERMES_INSTALLER_SKIP_GATEWAY",
+            "SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG",
+            "SMC_HERMES_MANAGED_TEST_ROOT"
+          )) {
+            if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($flag, "Process"))) {
+              throw "certification forbids $flag"
+            }
+          }
+          throw "wire msiexec lifecycle against frozen MSI SHA256 when smc-hermes-cert is provisioned"

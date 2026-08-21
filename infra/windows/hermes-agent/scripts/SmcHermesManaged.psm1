@@ -2,6 +2,34 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+# PRD-OPSI-v2.1.6 FR-216-15 / FR-216-32
+$script:SmcConfigFallbackPatterns = @(
+    "Failed to parse",
+    "Falling back to default config",
+    "every user override",
+    "IGNORED"
+)
+$script:SmcProtectedConfigKeys = @("model", "models", "providers", "provider", "auxiliary", "delegation", "API_SERVER_KEY", "api_server_key")
+
+function Write-SmcConfigError {
+    param(
+        [Parameter(Mandatory = $true)][string]$ErrorCode,
+        [Parameter(Mandatory = $true)][string]$Stage,
+        [string]$ConfigPath = "",
+        [string]$Detail = "",
+        [string]$ParserSource = ""
+    )
+    $parts = @("errorCode=$ErrorCode", "stage=$Stage")
+    if (-not [string]::IsNullOrWhiteSpace($ConfigPath)) { $parts += "configPath=$ConfigPath" }
+    if (-not [string]::IsNullOrWhiteSpace($ParserSource)) { $parts += "parserSource=$ParserSource" }
+    if (-not [string]::IsNullOrWhiteSpace($Detail)) {
+        $safe = ([string]$Detail) -replace '(?i)(api[_-]?key|secret|password|bearer)\s*[:=]\s*\S+', '$1=***'
+        if ($safe.Length -gt 240) { $safe = $safe.Substring(0, 240) }
+        $parts += "detail=$safe"
+    }
+    return ($parts -join "; ")
+}
+
 function Get-SmcHermesManagedLayout {
     $directories = @(
         "profiles",
@@ -469,34 +497,110 @@ function Merge-SmcHermesConfigTerminalCwd {
     return [pscustomobject]@{ Text = ($lines -join "`n"); Changed = $true }
 }
 
+function Test-SmcHermesConfigFallbackOutput {
+    param([string]$OutputText)
+    if ([string]::IsNullOrWhiteSpace($OutputText)) { return $false }
+    foreach ($pattern in $script:SmcConfigFallbackPatterns) {
+        if ($OutputText -match [regex]::Escape($pattern)) { return $true }
+        # Case-insensitive contains for IGNORED / Failed to parse variants.
+        if ($OutputText.ToLowerInvariant().Contains($pattern.ToLowerInvariant())) { return $true }
+    }
+    return $false
+}
+
+function Resolve-SmcHermesManagedApplyPython {
+    param([string]$ProgramRoot = "")
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    $override = [Environment]::GetEnvironmentVariable("SMC_HERMES_MANAGED_APPLY_PYTHON", "Process")
+    if (-not [string]::IsNullOrWhiteSpace($override)) {
+        return $override
+    }
+    $embedded = Join-Path $ProgramRoot "python\python.exe"
+    if (Test-Path -LiteralPath $embedded) {
+        return $embedded
+    }
+    # MOCK/unit harness may inject host python with PyYAML.
+    return "python"
+}
+
+function Resolve-SmcHermesManagedApplyScript {
+    param([string]$ProgramRoot = "")
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    $candidates = @(
+        (Join-Path $layout.ScriptsPath "managed_config_apply.py"),
+        (Join-Path $ProgramRoot "scripts\managed_config_apply.py"),
+        (Join-Path $PSScriptRoot "managed_config_apply.py")
+    )
+    foreach ($path in $candidates) {
+        if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
+            return $path
+        }
+    }
+    throw (Write-SmcConfigError -ErrorCode "CONFIG_MANAGED_MERGE_FAILED" -Stage "apply_tool" -Detail "managed_config_apply.py missing")
+}
+
+function Invoke-SmcHermesStandardYamlValidate {
+    param(
+        [Parameter(Mandatory = $true)][string]$ConfigPath,
+        [string]$PythonExe = "",
+        [string]$ProgramRoot = ""
+    )
+    $layout = Get-SmcHermesManagedLayout
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    if ([string]::IsNullOrWhiteSpace($PythonExe)) {
+        $PythonExe = Resolve-SmcHermesManagedApplyPython -ProgramRoot $ProgramRoot
+    }
+    $applyScript = Resolve-SmcHermesManagedApplyScript -ProgramRoot $ProgramRoot
+    # Never use python -c with try/except: PowerShell 5.1 cannot join that into a valid -c script.
+    $output = & $PythonExe $applyScript "--validate-only" "--config" $ConfigPath 2>&1
+    $code = $LASTEXITCODE
+    $text = ($output | ForEach-Object { [string]$_ }) -join " "
+    if ($code -ne 0) {
+        throw (Write-SmcConfigError -ErrorCode "CONFIG_YAML_PARSE_FAILED" -Stage "standard_yaml" -ConfigPath $ConfigPath -ParserSource "managed_config_apply.py" -Detail $text)
+    }
+}
+
 function Invoke-SmcHermesConfigCheck {
     param(
         [Parameter(Mandatory = $true)][string]$ConfigPath,
         [Parameter(Mandatory = $true)][string]$HermesHome,
-        [string]$CliPath = ""
+        [string]$CliPath = "",
+        [string]$ProgramRoot = ""
     )
     $layout = Get-SmcHermesManagedLayout
     if ([string]::IsNullOrWhiteSpace($CliPath)) {
         $CliPath = $layout.CliPath
     }
+    if ([string]::IsNullOrWhiteSpace($ProgramRoot)) { $ProgramRoot = $layout.ProgramRoot }
+    if (-not (Test-Path -LiteralPath $ConfigPath)) {
+        throw (Write-SmcConfigError -ErrorCode "CONFIG_YAML_PARSE_FAILED" -Stage "config_exists" -ConfigPath $ConfigPath -Detail "config.yaml missing")
+    }
+    # Standard YAML validation always runs (FR-216-13); never gated by SKIP_GATEWAY.
+    Invoke-SmcHermesStandardYamlValidate -ConfigPath $ConfigPath -ProgramRoot $ProgramRoot
     $text = Get-Content -LiteralPath $ConfigPath -Raw -ErrorAction Stop
     $cwd = Get-SmcHermesConfigTerminalCwd -ConfigText $text
     if ([string]::IsNullOrWhiteSpace($cwd)) {
-        throw "config check failed: terminal.cwd missing"
+        throw (Write-SmcConfigError -ErrorCode "CONFIG_NATIVE_CHECK_FAILED" -Stage "terminal_cwd" -ConfigPath $ConfigPath -Detail "terminal.cwd missing")
     }
-    # Smoke/unit fixtures may ship a non-functional PE stub; structural check is enough there.
-    if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+    # Test-only native skip for PE stub harnesses — independent of SKIP_GATEWAY (FR-216-13).
+    if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG", "Process") -eq "1") {
         return
     }
     if (-not (Test-Path -LiteralPath $CliPath)) {
-        return
+        throw (Write-SmcConfigError -ErrorCode "CONFIG_NATIVE_CHECK_FAILED" -Stage "native_cli" -ConfigPath $ConfigPath -Detail "hermes cli missing for config check")
     }
     $prevHome = $env:HERMES_HOME
     try {
         $env:HERMES_HOME = $HermesHome
         $output = & $CliPath config check 2>&1
+        $joined = ($output | ForEach-Object { [string]$_ }) -join " "
         if ($LASTEXITCODE -ne 0) {
-            throw "hermes config check failed: $($output -join ' ')"
+            throw (Write-SmcConfigError -ErrorCode "CONFIG_NATIVE_CHECK_FAILED" -Stage "hermes_config_check" -ConfigPath $ConfigPath -ParserSource "hermes" -Detail $joined)
+        }
+        if (Test-SmcHermesConfigFallbackOutput -OutputText $joined) {
+            throw (Write-SmcConfigError -ErrorCode "CONFIG_FALLBACK_DETECTED" -Stage "hermes_config_check" -ConfigPath $ConfigPath -ParserSource "hermes" -Detail "fallback/ignored-config warning in config check output")
         }
     } finally {
         $env:HERMES_HOME = $prevHome
@@ -527,7 +631,9 @@ function Set-SmcHermesManagedTerminalConfig {
         if ($null -ne $raw) { $original = [string]$raw }
     }
     $merged = Merge-SmcHermesConfigTerminalCwd -ConfigText $original -WorkspaceRoot $WorkspaceRoot
+    # FR-216-11: Changed only decides write; validation always runs when file exists.
     if (-not $merged.Changed -and $hadFile) {
+        Invoke-SmcHermesConfigCheck -ConfigPath $ConfigPath -HermesHome $HermesHome -CliPath $CliPath -ProgramRoot $layout.ProgramRoot
         return [pscustomobject]@{ Changed = $false; ConfigPath = $ConfigPath; WorkspaceRoot = $WorkspaceRoot }
     }
 
@@ -547,10 +653,10 @@ function Set-SmcHermesManagedTerminalConfig {
         # Offline structural check against candidate before replace.
         $null = Get-SmcHermesConfigTerminalCwd -ConfigText $merged.Text
         if ([string]::IsNullOrWhiteSpace((Get-SmcHermesConfigTerminalCwd -ConfigText $merged.Text))) {
-            throw "config merge failed: terminal.cwd missing"
+            throw (Write-SmcConfigError -ErrorCode "CONFIG_MANAGED_MERGE_FAILED" -Stage "terminal_cwd" -ConfigPath $ConfigPath -Detail "terminal.cwd missing")
         }
         Move-Item -LiteralPath $tmp -Destination $ConfigPath -Force
-        Invoke-SmcHermesConfigCheck -ConfigPath $ConfigPath -HermesHome $HermesHome -CliPath $CliPath
+        Invoke-SmcHermesConfigCheck -ConfigPath $ConfigPath -HermesHome $HermesHome -CliPath $CliPath -ProgramRoot $layout.ProgramRoot
         if (Test-Path -LiteralPath $backup) {
             Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
         }
@@ -559,7 +665,11 @@ function Set-SmcHermesManagedTerminalConfig {
             Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
         }
         if ($hadFile -and (Test-Path -LiteralPath $backup)) {
-            Move-Item -LiteralPath $backup -Destination $ConfigPath -Force
+            try {
+                Move-Item -LiteralPath $backup -Destination $ConfigPath -Force
+            } catch {
+                throw (Write-SmcConfigError -ErrorCode "CONFIG_ROLLBACK_FAILED" -Stage "terminal_config_rollback" -ConfigPath $ConfigPath -Detail $_.Exception.Message)
+            }
         } elseif (-not $hadFile -and (Test-Path -LiteralPath $ConfigPath)) {
             Remove-Item -LiteralPath $ConfigPath -Force -ErrorAction SilentlyContinue
         }
@@ -880,7 +990,16 @@ function ConvertTo-SmcYamlScalar {
     if ($Value -is [bool]) { if ($Value) { return "true" } else { return "false" } }
     if ($Value -is [int] -or $Value -is [long]) { return [string]$Value }
     $text = [string]$Value
-    if ($text -match '[:#{}\[\],\"''\\]' -or $text -match '\\' -or $text -match '^\s|\s$' -or $text -match '^[0-9]+$' -or $text -in @("true","false","null")) {
+    # FR-216-02: plain-scalar forbidden prefixes and reserved literals (shared corpus with Python).
+    $needsQuotes = $false
+    if ([string]::IsNullOrEmpty($text)) { $needsQuotes = $true }
+    elseif ($text -in @("true", "false", "null", "~", "yes", "no", "on", "off", "True", "False", "NULL")) { $needsQuotes = $true }
+    elseif ($text -match '^\s|\s$') { $needsQuotes = $true }
+    elseif ($text -match '^[0-9]+(\.[0-9]+)?$') { $needsQuotes = $true }
+    elseif ($text -match '^[\?\-:,\[\]\{\}#&\*!\|>''\"%@`]') { $needsQuotes = $true }
+    elseif ($text -match '[:#@{}\[\],\"''\\`%&*!]') { $needsQuotes = $true }
+    elseif ($text -match '\\' -or $text -match '\$\{') { $needsQuotes = $true }
+    if ($needsQuotes) {
         $escaped = $text.Replace("\", "\\").Replace('"', '\"')
         return '"' + $escaped + '"'
     }
@@ -968,8 +1087,6 @@ function Merge-SmcHashtableDeep {
     return $result
 }
 
-$script:SmcProtectedConfigKeys = @("model", "models", "providers", "provider", "auxiliary", "delegation", "API_SERVER_KEY", "api_server_key")
-
 function Merge-SmcHermesManagedConfig {
     param(
         [string]$ProgramRoot = "",
@@ -989,82 +1106,84 @@ function Merge-SmcHermesManagedConfig {
     Assert-SmcHermesHomeChildPath -Path $layout.ConfigPath -HermesHome $HermesHome
 
     if (-not (Test-Path -LiteralPath $ManagedDefaultsPath)) {
-        throw "managed.defaults.yaml missing: $ManagedDefaultsPath"
+        throw (Write-SmcConfigError -ErrorCode "CONFIG_MANAGED_MERGE_FAILED" -Stage "read_managed_defaults" -ConfigPath $ManagedDefaultsPath -Detail "managed.defaults.yaml missing")
     }
-    $managedText = [System.IO.File]::ReadAllText($ManagedDefaultsPath, [System.Text.UTF8Encoding]::new($false))
-    $managed = ConvertFrom-SmcYamlSubset -Text $managedText
-    if ([string]$managed.schema -ne "smc.opsi.managed-config.v2") {
-        throw "unsupported managed.defaults schema"
-    }
-    $defaults = $managed.defaults
-    $enforced = $managed.enforced
-    if ($null -eq $defaults) { $defaults = @{} }
-    if ($null -eq $enforced) { $enforced = @{} }
 
-    foreach ($section in @($defaults, $enforced)) {
-        foreach ($key in @($section.Keys)) {
-            if ($script:SmcProtectedConfigKeys -contains [string]$key) {
-                throw "managed config must not contain instance/secret key: $key"
-            }
-        }
-    }
+    $applyScript = Resolve-SmcHermesManagedApplyScript -ProgramRoot $ProgramRoot
+    $pythonExe = Resolve-SmcHermesManagedApplyPython -ProgramRoot $ProgramRoot
 
     $configPath = $layout.ConfigPath
-    $existingText = ""
-    $hadFile = Test-Path -LiteralPath $configPath
-    if ($hadFile) {
-        $raw = [System.IO.File]::ReadAllText($configPath, [System.Text.UTF8Encoding]::new($false))
-        if ($null -ne $raw) { $existingText = [string]$raw }
-    }
-    $existing = ConvertFrom-SmcYamlSubset -Text $existingText
-    if ($null -eq $existing) { $existing = @{} }
-
-    # Preserve protected instance keys from existing config.
-    $preserved = @{}
-    foreach ($key in $script:SmcProtectedConfigKeys) {
-        if ($existing.ContainsKey($key)) { $preserved[$key] = $existing[$key] }
-    }
-
-    # defaults: existing value wins; enforced: enterprise value wins.
-    $merged = Merge-SmcHashtableDeep -Base $defaults -Overlay $existing -Conflict PreferOverlay
-    $merged = Merge-SmcHashtableDeep -Base $merged -Overlay $enforced -Conflict PreferOverlay
-    foreach ($key in @($preserved.Keys)) {
-        $merged[$key] = $preserved[$key]
-    }
-
-    $newText = ConvertTo-SmcYamlSubset -Data $merged
-    $backup = "$configPath.bak.smc-managed"
-    $tmp = "$configPath.tmp.smc-managed"
     $dir = Split-Path -Parent $configPath
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Force -Path $dir | Out-Null
     }
+
+    $hadFile = Test-Path -LiteralPath $configPath
+    $backup = "$configPath.bak.smc"
     if ($hadFile) {
         Copy-Item -LiteralPath $configPath -Destination $backup -Force
     }
+
+    $argsList = @(
+        $applyScript,
+        "--config", $configPath,
+        "--managed-defaults", $ManagedDefaultsPath,
+        "--workspace-root", $layout.WorkspaceRoot
+    )
     try {
-        [System.IO.File]::WriteAllText($tmp, $newText, [System.Text.UTF8Encoding]::new($false))
-        Move-Item -LiteralPath $tmp -Destination $configPath -Force
-        # Ensure terminal.cwd still matches managed workspace after merge.
-        $null = Set-SmcHermesManagedTerminalConfig -ConfigPath $configPath -WorkspaceRoot $layout.WorkspaceRoot -HermesHome $HermesHome -CliPath $CliPath
+        $output = & $pythonExe @argsList 2>&1
+        $code = $LASTEXITCODE
+        $joined = ($output | ForEach-Object { [string]$_ }) -join "`n"
+        if ($code -ne 0) {
+            $errorCode = "CONFIG_MANAGED_MERGE_FAILED"
+            if ($code -eq 10) { $errorCode = "CONFIG_YAML_PARSE_FAILED" }
+            elseif ($code -eq 12) { $errorCode = "CONFIG_ROLLBACK_FAILED" }
+            throw (Write-SmcConfigError -ErrorCode $errorCode -Stage "managed_config_apply" -ConfigPath $configPath -ParserSource "managed_config_apply.py" -Detail $joined)
+        }
+        $resultObj = $null
+        try { $resultObj = $joined | ConvertFrom-Json -ErrorAction Stop } catch { $resultObj = $null }
+
+        # Native config oracle after promote (or when unchanged still validate).
+        try {
+            Invoke-SmcHermesConfigCheck -ConfigPath $configPath -HermesHome $HermesHome -CliPath $CliPath -ProgramRoot $ProgramRoot
+        } catch {
+            if ($hadFile -and (Test-Path -LiteralPath $backup)) {
+                try {
+                    Move-Item -LiteralPath $backup -Destination $configPath -Force
+                } catch {
+                    throw (Write-SmcConfigError -ErrorCode "CONFIG_ROLLBACK_FAILED" -Stage "native_check_rollback" -ConfigPath $configPath -Detail $_.Exception.Message)
+                }
+            }
+            throw
+        }
         if (Test-Path -LiteralPath $backup) {
             Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
         }
-    } catch {
-        if (Test-Path -LiteralPath $tmp) {
-            Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+
+        $changed = $true
+        if ($null -ne $resultObj -and ($resultObj.PSObject.Properties.Name -contains "changed")) {
+            $changed = [bool]$resultObj.changed
         }
-        if ($hadFile -and (Test-Path -LiteralPath $backup)) {
-            Move-Item -LiteralPath $backup -Destination $configPath -Force
+        $profile = ""
+        $profileVersion = 0
+        $profileDigest = ""
+        if ($null -ne $resultObj) {
+            if ($resultObj.PSObject.Properties.Name -contains "profile") { $profile = [string]$resultObj.profile }
+            if ($resultObj.PSObject.Properties.Name -contains "profileVersion") { $profileVersion = [int]$resultObj.profileVersion }
+            if ($resultObj.PSObject.Properties.Name -contains "profileDigest") { $profileDigest = [string]$resultObj.profileDigest }
+        }
+        return [pscustomobject]@{
+            Changed = $changed
+            ConfigPath = $configPath
+            Profile = $profile
+            ProfileVersion = $profileVersion
+            ProfileDigest = $profileDigest
+        }
+    } catch {
+        if ($hadFile -and (Test-Path -LiteralPath $backup) -and (Test-Path -LiteralPath $configPath)) {
+            # Leave backup for evidence on unexpected failures already restored above when needed.
         }
         throw
-    }
-    return [pscustomobject]@{
-        Changed = $true
-        ConfigPath = $configPath
-        Profile = [string]$managed.profile
-        ProfileVersion = [int]$managed.profileVersion
-        ProfileDigest = [string]$managed.profileDigest
     }
 }
 
@@ -1282,5 +1401,7 @@ Export-ModuleMember -Function `
     Clear-SmcHermesManagedTemp, `
     ConvertTo-SmcYamlDoubleQuotedPath, `
     Merge-SmcHermesManagedConfig, `
+    Invoke-SmcHermesConfigCheck, `
+    Test-SmcHermesConfigFallbackOutput, `
     Get-SmcHermesCapabilityDoctorChecks, `
     Get-SmcHermesManagedDoctorReport

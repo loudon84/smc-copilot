@@ -29,6 +29,7 @@ profiles:
         - aiohttp
         - mcp
         - edge-tts
+        - pyyaml
       lazyInstall:
         allowed: false
 

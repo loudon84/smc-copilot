@@ -148,6 +148,8 @@ def test_rb15_final_release_ready(tmp_path: Path, monkeypatch):
     manifest = json.loads((dest / "manifests" / "client-release.json").read_text(encoding="utf-8"))
     assert manifest["schema"] == "smc.client-release.v1"
     assert manifest["liveEligible"] is True
+    assert manifest["buildStatus"] == "success"
+    assert manifest["certificationStatus"] == "uncertified"
     verified = verify_client_release(dest, stage=dest / "opsi" / "stage", require_signatures=True)
     assert verified["liveEligible"] is True
     assert any((dest / "opsi").glob("*.fixture.zip"))

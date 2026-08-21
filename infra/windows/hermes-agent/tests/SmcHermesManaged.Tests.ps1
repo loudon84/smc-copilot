@@ -1,4 +1,14 @@
 # Pester 3.4 compatible
+
+function Initialize-SmcHermesManagedApplyHarness {
+    param($Layout)
+    $scripts = Join-Path $Layout.ProgramRoot "scripts"
+    New-Item -ItemType Directory -Force -Path $scripts | Out-Null
+    $src = Join-Path $PSScriptRoot "..\scripts\managed_config_apply.py"
+    Copy-Item -LiteralPath $src -Destination (Join-Path $scripts "managed_config_apply.py") -Force
+    $env:SMC_HERMES_MANAGED_APPLY_PYTHON = (Get-Command python -ErrorAction Stop).Source
+}
+
 Describe "SmcHermesManaged machine home" {
     BeforeAll {
         $script:Module = Join-Path $PSScriptRoot "..\scripts\SmcHermesManaged.psm1"
@@ -301,6 +311,7 @@ Describe "SmcHermesManaged machine home" {
         try {
             $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
             $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
             Import-Module $script:Module -Force
             $layout = Get-SmcHermesManagedLayout
             New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
@@ -339,7 +350,9 @@ terminal:
             (Get-Content -LiteralPath $config -Raw) | Should Match "keep-model"
         } finally {
             if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
-            if ($null -eq $prevSkip) { Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = $prevSkip }
+            if ($null -eq $prevSkip) { Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = $prevSkip }
             Import-Module $script:Module -Force
             Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -353,6 +366,7 @@ terminal:
         try {
             $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
             $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
             Import-Module $script:Module -Force
             $layout = Get-SmcHermesManagedLayout
             New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
@@ -370,7 +384,9 @@ terminal:
             (Get-Content -LiteralPath $layout.ConfigPath -Raw).Trim() | Should Be $original.Trim()
         } finally {
             if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
-            if ($null -eq $prevSkip) { Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = $prevSkip }
+            if ($null -eq $prevSkip) { Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = $prevSkip }
             Import-Module $script:Module -Force
             Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -386,6 +402,7 @@ terminal:
             $layout = Get-SmcHermesManagedLayout
             New-Item -ItemType Directory -Force -Path $layout.TempRoot | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            Initialize-SmcHermesManagedApplyHarness -Layout $layout
             $oldFile = Join-Path $layout.TempRoot "old.tmp"
             $newFile = Join-Path $layout.TempRoot "new.tmp"
             $wsFile = Join-Path $layout.WorkspaceRoot "keep.txt"
@@ -438,12 +455,14 @@ terminal:
         $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
         $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
         $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
         try {
             Import-Module $script:Module -Force
             $layout = Get-SmcHermesManagedLayout
             New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "config") | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            Initialize-SmcHermesManagedApplyHarness -Layout $layout
             $cwdQuoted = ConvertTo-SmcYamlDoubleQuotedPath -Path $layout.WorkspaceRoot
             $managed = @(
                 "schema: smc.opsi.managed-config.v2",
@@ -472,6 +491,8 @@ terminal:
         } finally {
             if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
             Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue
             Import-Module $script:Module -Force
             if (Test-Path -LiteralPath $testRoot) {
                 Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -484,12 +505,14 @@ terminal:
         $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
         $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
         $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
         try {
             Import-Module $script:Module -Force
             $layout = Get-SmcHermesManagedLayout
             New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "config") | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            Initialize-SmcHermesManagedApplyHarness -Layout $layout
             $cwdQuoted = ConvertTo-SmcYamlDoubleQuotedPath -Path $layout.WorkspaceRoot
             $managed = @(
                 "schema: smc.opsi.managed-config.v2",
@@ -533,6 +556,8 @@ terminal:
         } finally {
             if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
             Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue
             Import-Module $script:Module -Force
             if (Test-Path -LiteralPath $testRoot) {
                 Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -545,6 +570,7 @@ terminal:
         $prev = $env:SMC_HERMES_MANAGED_TEST_ROOT
         $env:SMC_HERMES_MANAGED_TEST_ROOT = $testRoot
         $env:SMC_HERMES_INSTALLER_SKIP_GATEWAY = "1"
+        $env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG = "1"
         try {
             Import-Module $script:Module -Force
             $layout = Get-SmcHermesManagedLayout
@@ -552,6 +578,7 @@ terminal:
             New-Item -ItemType Directory -Force -Path (Join-Path $layout.ProgramRoot "config") | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.HermesHome | Out-Null
             New-Item -ItemType Directory -Force -Path $layout.WorkspaceRoot | Out-Null
+            Initialize-SmcHermesManagedApplyHarness -Layout $layout
             New-Item -ItemType Directory -Force -Path $layout.TempRoot | Out-Null
             $build = @{
                 schema = "smc.hermes.runtime-build.v1"
@@ -586,6 +613,8 @@ terminal:
         } finally {
             if ($null -eq $prev) { Remove-Item Env:SMC_HERMES_MANAGED_TEST_ROOT -ErrorAction SilentlyContinue } else { $env:SMC_HERMES_MANAGED_TEST_ROOT = $prev }
             Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_GATEWAY -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG -ErrorAction SilentlyContinue
+            Remove-Item Env:SMC_HERMES_MANAGED_APPLY_PYTHON -ErrorAction SilentlyContinue
             Import-Module $script:Module -Force
             if (Test-Path -LiteralPath $testRoot) {
                 Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue

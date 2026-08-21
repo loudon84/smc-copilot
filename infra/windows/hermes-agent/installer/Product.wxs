@@ -39,6 +39,9 @@
       <Component Id="ManagedModule" Directory="ScriptsFolder" Guid="*">
         <File Id="ManagedModule" Source="$(var.StagingDir)\scripts\SmcHermesManaged.psm1" KeyPath="yes" />
       </Component>
+      <Component Id="ManagedConfigApply" Directory="ScriptsFolder" Guid="*">
+        <File Id="ManagedConfigApply" Source="$(var.StagingDir)\scripts\managed_config_apply.py" KeyPath="yes" />
+      </Component>
     </ComponentGroup>
 
     <Feature Id="Main" Title="SMC Hermes Agent" Level="1">

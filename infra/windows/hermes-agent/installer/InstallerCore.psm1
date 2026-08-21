@@ -643,21 +643,53 @@ function Get-SmcHermesReadinessFailure {
         return "hermes cli missing: $cli"
     }
     $layout = Get-SmcHermesManagedLayout
+    if (-not (Test-Path -LiteralPath $layout.HermesHome)) {
+        return "managed home missing: $($layout.HermesHome)"
+    }
+    if (-not (Test-Path -LiteralPath $layout.ConfigPath)) {
+        return "config.yaml missing: $($layout.ConfigPath)"
+    }
     if (-not (Test-Path -LiteralPath $layout.WorkspaceRoot)) {
         return "workspace root missing: $($layout.WorkspaceRoot)"
     }
     if (-not (Test-Path -LiteralPath $layout.TempRoot)) {
         return "temp root missing: $($layout.TempRoot)"
     }
+
+    # FR-216-14: Config Valid is independent of Gateway Valid.
     try {
         Assert-SmcHermesManagedTerminalConfig -ConfigPath $layout.ConfigPath -WorkspaceRoot $layout.WorkspaceRoot -HermesHome $HermesHome
+        Invoke-SmcHermesConfigCheck -ConfigPath $layout.ConfigPath -HermesHome $HermesHome -CliPath $cli -ProgramRoot $ProgramRoot
+        Write-SmcInstallerTrace "config.standard_yaml=PASS"
+        Write-SmcInstallerTrace "config.hermes_native=PASS"
+        Write-SmcInstallerTrace "config.fallback_detected=false"
     } catch {
-        return "terminal.cwd contract failed: $($_.Exception.Message)"
+        Write-SmcInstallerTrace "config gate FAILED: $($_.Exception.Message)"
+        return "config gate failed: $($_.Exception.Message)"
     }
+
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $layout.AgentRoot
     $env:HERMES_NODE_ROOT = $layout.NodeRoot
+
+    # Certification must never run with skip/test-root flags (FR-216-24).
+    $certMode = [Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_CERTIFICATION", "Process")
+    if ($certMode -eq "1") {
+        foreach ($flag in @(
+            "SMC_HERMES_INSTALLER_SKIP_GATEWAY",
+            "SMC_HERMES_INSTALLER_SKIP_NATIVE_CONFIG",
+            "SMC_HERMES_MANAGED_TEST_ROOT"
+        )) {
+            $val = [Environment]::GetEnvironmentVariable($flag, "Process")
+            if (-not [string]::IsNullOrWhiteSpace($val)) {
+                return "certification forbids test mode flag: $flag=$val"
+            }
+        }
+    }
+
+    # SKIP_GATEWAY only skips Gateway / Scheduled Task / network — never config (FR-216-13).
     if ([Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_SKIP_GATEWAY", "Process") -eq "1") {
+        Write-SmcInstallerTrace "install.readiness=PASS (gateway skipped; config validated)"
         return ""
     }
     try {
@@ -667,6 +699,9 @@ function Get-SmcHermesReadinessFailure {
     }
     if (-not $versionText) {
         return "hermes --version empty"
+    }
+    if (Test-SmcHermesConfigFallbackOutput -OutputText $versionText) {
+        return "CONFIG_FALLBACK_DETECTED: hermes --version reported config fallback"
     }
     if ($ExpectedVersion -and ($versionText -notmatch [regex]::Escape($ExpectedVersion))) {
         return "hermes version mismatch: expected=$ExpectedVersion actual=$versionText"
@@ -697,7 +732,9 @@ function Get-SmcHermesReadinessFailure {
         Write-SmcInstallerTrace "readiness FAILED: $reason"
         return $reason
     }
-    Write-SmcInstallerTrace "readiness: gateway health/auth OK"
+    Write-SmcInstallerTrace "gateway.health=PASS"
+    Write-SmcInstallerTrace "gateway.auth=PASS"
+    Write-SmcInstallerTrace "install.readiness=PASS"
     return ""
 }
 

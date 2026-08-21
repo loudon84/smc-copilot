@@ -5,7 +5,7 @@
   "smcRevision": "smc.1",
   "platform": "windows",
   "architecture": "amd64",
-  "sha256": "33290d2fc1da8d21db4f2c78a9e5fe39f770de24821b9ae49d35338c199e3ff4",
+  "sha256": "b5f35f476d8e83b15d990609f05916566d3e4752645319b82f3b15c07894f637",
   "buildId": "build-smoke-fixture",
   "signerKeyId": "TEST-ONLY-ed25519",
   "sourceRevision": "smoke",
@@ -14,12 +14,12 @@
     {
       "path": "bin/hermes.exe",
       "size": 108387,
-      "sha256": "757085c4f670bb8d60fca49e4f0e928e61b41ec72b8b1d4e145fb7a7bd9bbc43"
+      "sha256": "894d9d9fcf5f34fd1f316606a41769c834a90d84299735cbd356290e23ca4953"
     },
     {
       "path": "config/managed.defaults.yaml",
-      "size": 195,
-      "sha256": "e712b8ce0f4a23038909aed2297f32f111e73720babe92521f9ce207ec7d581f"
+      "size": 1584,
+      "sha256": "4aa3a285754368f7b6c5ecccc0721b97eca873e7bc3c3b5b83df555949263037"
     },
     {
       "path": "manifest/release-metadata.json",
@@ -58,8 +58,8 @@
     },
     {
       "path": "runtime/runtime-build.json",
-      "size": 369,
-      "sha256": "e52f9eef9d57907a66e85fa0c1224c2ffca9996dbe53b8ad9d872d4724c1a900"
+      "size": 478,
+      "sha256": "b1eeab68271d4ddd5383d437ccce9fad55d98cfc8deeea65e92296a7f226c85b"
     },
     {
       "path": "runtime/windows-runtime.json",
@@ -68,8 +68,8 @@
     },
     {
       "path": "scripts/HostOperations.ps1",
-      "size": 5064,
-      "sha256": "379a15f3320d2166e9c6d5bdc2aae649b18f33370a2da65d3ab37c6574072826"
+      "size": 4961,
+      "sha256": "58ccb5f9ddfe16540be68dfb7d274a9884efccf31d725cd9f37d3ad86b1b8683"
     },
     {
       "path": "scripts/HostOperations.psm1",
@@ -77,9 +77,14 @@
       "sha256": "c9bbd58027e5c9239c11a049756f7dfe56c8418574840b841a6ea7afe2128ada"
     },
     {
+      "path": "scripts/managed_config_apply.py",
+      "size": 11703,
+      "sha256": "8d9bf576fbb5e908a0124b632ab14c05f9dbf684cc82170cc9d3ca5b17b0ae30"
+    },
+    {
       "path": "scripts/SmcHermesManaged.psm1",
-      "size": 53144,
-      "sha256": "2f069827dc58c10962514acc089f9b140e9ae76b44ddbc600eee83e33ff96cbe"
+      "size": 61972,
+      "sha256": "9dbdbd4a5c73bfcd6490dfc96f8ed70a67a89649e08b2248d6323a5a61aa2ece"
     },
     {
       "path": "uninstall/README.txt",
@@ -106,5 +111,5 @@
   "managedConfigVersion": 2,
   "runtimeProfileVersion": 2,
   "runtimeProfile": "smc-managed",
-  "runtimeProfileDigest": "smoke"
+  "runtimeProfileDigest": "8986e7eb2513cf46f25e048f904c7eb8d210b3f2c20f8e2bbbd78bc04f76c176"
 }

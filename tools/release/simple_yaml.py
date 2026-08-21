@@ -1,9 +1,17 @@
-"""Minimal YAML subset loader/dumper (mappings, lists, scalars). No new package."""
+"""Legacy YAML subset loader/dumper (mappings, lists, scalars).
+
+v2.1.6: Production Managed Config serialization uses PyYAML safe_dump.
+This module remains a compatibility reader/helper and quoting hotfix for
+legacy paths; it is not the Release Config Validity Oracle.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
+# YAML plain-scalar characters that cannot start an unquoted token (FR-216-01).
+_PLAIN_SCALAR_FORBIDDEN_START = frozenset("?-:,[]{}#&*!|>'\"%@`")
 
 
 def load_yaml(path: Path) -> Any:
@@ -16,7 +24,10 @@ def load_yaml(path: Path) -> Any:
 
 
 def dump_yaml(data: Any) -> str:
-    """Deterministic YAML subset: sorted map keys, stable 2-space indent."""
+    """Legacy deterministic YAML subset: sorted map keys, stable 2-space indent.
+
+    Prefer yaml.safe_dump for production managed.defaults.yaml writes.
+    """
     lines: list[str] = []
     _dump_value(data, lines, indent=0, inline_empty=False)
     return "\n".join(lines) + "\n"
@@ -82,6 +93,35 @@ def _format_scalar(value: Any) -> str:
 
 
 def _needs_quotes(text: str) -> bool:
+    """Return True when a string must be a quoted YAML scalar (FR-216-01)."""
+    if text == "":
+        return True
+    if text.lower() in {"true", "false", "null", "~", "yes", "no", "on", "off"}:
+        return True
+    if any(ord(ch) < 32 for ch in text):
+        return True
+    if text[0] in _PLAIN_SCALAR_FORBIDDEN_START or text.startswith((" ", "-")):
+        return True
+    if text.endswith(" "):
+        return True
+    # Flow / comment / mapping delimiters anywhere in the token.
+    if any(ch in text for ch in (":", "#", "{", "}", "[", "]", ",", '"', "'", "\\", "@", "`", "%", "&", "*", "!")):
+        return True
+    if "\\" in text or ("/" in text and (":" in text or text.startswith("/"))):
+        return True
+    if text.startswith("C:\\") or "\\\\" in text or ":\\" in text:
+        return True
+    if "${" in text:
+        return True
+    try:
+        float(text)
+        return True
+    except ValueError:
+        return False
+
+
+def _needs_quotes_pre_v216(text: str) -> bool:
+    """Pre-v2.1.6 quoting (missing @ and related prefixes) — for RED regression only."""
     if text == "":
         return True
     if text.lower() in {"true", "false", "null", "~"}:
@@ -90,7 +130,7 @@ def _needs_quotes(text: str) -> bool:
         return True
     if text.startswith((" ", "-", "?")) or text.endswith(" "):
         return True
-    if "\\" in text or "/" in text and (":" in text or text.startswith("/")):
+    if "\\" in text or ("/" in text and (":" in text or text.startswith("/"))):
         return True
     if text.startswith("C:\\") or "\\\\" in text or ":\\" in text:
         return True

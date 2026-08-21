@@ -79,6 +79,7 @@ if (Test-Path -LiteralPath $publicKey) {
 Copy-Item -LiteralPath (Join-Path $installerDir "bootstrap.ps1") -Destination (Join-Path $staging "bootstrap.ps1") -Force
 Copy-Item -LiteralPath (Join-Path $installerDir "InstallerCore.psm1") -Destination (Join-Path $staging "InstallerCore.psm1") -Force
 Copy-Item -LiteralPath (Join-Path $agentRoot "scripts\SmcHermesManaged.psm1") -Destination (Join-Path $scriptsOut "SmcHermesManaged.psm1") -Force
+Copy-Item -LiteralPath (Join-Path $agentRoot "scripts\managed_config_apply.py") -Destination (Join-Path $scriptsOut "managed_config_apply.py") -Force
 
 $wixVersion = ConvertTo-WiXVersion -ReleaseVersion $ReleaseVersion
 $wix = Resolve-WixExe

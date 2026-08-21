@@ -225,6 +225,7 @@ def test_h07_runtime_profile_valid():
     assert profile["capabilities"]["apiServer"] is True
     assert "messaging" in profile["python"]["extras"]
     assert "aiohttp" in profile["python"]["requiredPackages"]
+    assert "pyyaml" in profile["python"]["requiredPackages"]
     assert profile["gateway"]["authRequired"] is True
     assert profile["node"]["packages"][0]["version"] != "latest"
     with pytest.raises(ValueError, match="not defined"):
@@ -260,6 +261,7 @@ def test_assemble_bundle_rejects_python_runtime_and_secrets(tmp_path: Path):
     _wheel(house, "aiohttp-3.11.0-py3-none-any.whl")
     _wheel(house, "mcp-1.0.0-py3-none-any.whl")
     _wheel(house, "edge_tts-6.1.0-py3-none-any.whl")
+    _wheel(house, "PyYAML-6.0.2-cp312-cp312-win_amd64.whl")
     node_root = tmp_path / "node"
     write_package_manifest(node_root, profile["node"]["packages"])
     tgz = node_root / "packages" / "modelcontextprotocol-server-filesystem-2025.8.21.tgz"
@@ -314,6 +316,7 @@ def _bundle_inputs(tmp_path: Path, *, dirty: bool = False) -> tuple[Path, Path, 
     _wheel(house, "aiohttp-3.11.0-py3-none-any.whl", module="__init__.py", content="# aiohttp stub\n")
     _wheel(house, "mcp-1.0.0-py3-none-any.whl", module="__init__.py", content="# mcp stub\n")
     _wheel(house, "edge_tts-6.1.0-py3-none-any.whl", module="__init__.py", content="# edge_tts stub\n")
+    _wheel(house, "PyYAML-6.0.2-cp312-cp312-win_amd64.whl", module="yaml/__init__.py", content="# yaml stub\n")
     node_root = tmp_path / "node"
     write_package_manifest(node_root, [{"name": "@modelcontextprotocol/server-filesystem", "version": "2025.8.21"}])
     tgz = node_root / "packages" / "modelcontextprotocol-server-filesystem-2025.8.21.tgz"
@@ -765,10 +768,12 @@ def test_import_gate_uses_allowlist(tmp_path: Path):
         seen.append(module)
 
     modules = verify_capability_imports(tmp_path, profile, runner=runner)
+    assert "yaml" in modules
     assert "aiohttp" in modules
     assert "mcp" in modules
     assert "edge_tts" in modules
     assert seen == modules
+    assert modules[0] == "yaml"
 
 
 def test_gateway_smoke_mock_success(tmp_path: Path):
