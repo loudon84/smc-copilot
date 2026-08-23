@@ -11,10 +11,8 @@ import {
   type ExpertRetryInput,
   type ExpertStartInput,
 } from "../../shared/expert";
-import {
-  getCachedAccessToken,
-  readStoredSessionSync,
-} from "../auth/token-store";
+import { ensureFreshAccessToken } from "../auth/ensure-access-token";
+import { readStoredSessionSync } from "../auth/token-store";
 import { downloadExpertArtifact, cleanupExpertArtifactTemps } from "./expert-artifact-download";
 import {
   rehydrateExpertContinuationsForSession,
@@ -40,11 +38,8 @@ function assertSender(event: IpcMainInvokeEvent): void {
   }
 }
 
-function requireAuthSession(): { userId: string } {
-  const token = getCachedAccessToken();
-  if (!token) {
-    throw new Error("Not authenticated");
-  }
+async function requireAuthSession(): Promise<{ userId: string }> {
+  await ensureFreshAccessToken();
   const session = readStoredSessionSync();
   return { userId: session?.user?.id ?? "unknown" };
 }
@@ -138,7 +133,7 @@ export function registerExpertIpc(options: {
 
   ipcMain.handle(EXPERT_IPC_CHANNELS.listCatalog, async (event) => {
     assertSender(event);
-    requireAuthSession();
+    await requireAuthSession();
     return getExpertGatewayClient().listCatalog();
   });
 
@@ -146,7 +141,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.listSkills,
     async (event, expertSlug: unknown) => {
       assertSender(event);
-      requireAuthSession();
+      await requireAuthSession();
       if (typeof expertSlug !== "string" || !expertSlug.trim()) {
         throw new Error("expertSlug is required");
       }
@@ -158,7 +153,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.start,
     async (event, input: ExpertStartInput) => {
       assertSender(event);
-      const auth = requireAuthSession();
+      const auth = await requireAuthSession();
       const request = validateRequest(input?.request);
       assertAuthGeneration(request, auth.userId);
       return getExpertRunService().start(request);
@@ -169,7 +164,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.cancel,
     async (event, input: ExpertCancelInput) => {
       assertSender(event);
-      requireAuthSession();
+      await requireAuthSession();
       if (!input || typeof input.clientRequestId !== "string") {
         throw new Error("clientRequestId is required");
       }
@@ -184,7 +179,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.retry,
     async (event, input: ExpertRetryInput) => {
       assertSender(event);
-      const auth = requireAuthSession();
+      const auth = await requireAuthSession();
       if (!input || typeof input.previousClientRequestId !== "string") {
         throw new Error("previousClientRequestId is required");
       }
@@ -198,7 +193,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.getProjection,
     async (event, clientRequestId: unknown) => {
       assertSender(event);
-      requireAuthSession();
+      await requireAuthSession();
       if (typeof clientRequestId !== "string") return null;
       return getExpertRunService().getProjection(clientRequestId);
     },
@@ -208,7 +203,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.listProjections,
     async (event, sessionId: unknown) => {
       assertSender(event);
-      requireAuthSession();
+      await requireAuthSession();
       if (typeof sessionId !== "string") return [];
       return getExpertRunService().listProjections(sessionId);
     },
@@ -218,7 +213,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.rehydrateSession,
     async (event, sessionId: unknown) => {
       assertSender(event);
-      requireAuthSession();
+      await requireAuthSession();
       if (typeof sessionId !== "string" || !sessionId.trim()) return [];
       return rehydrateExpertContinuationsForSession(sessionId.trim());
     },
@@ -228,7 +223,7 @@ export function registerExpertIpc(options: {
     EXPERT_IPC_CHANNELS.downloadArtifact,
     async (event, input: ExpertDownloadArtifactInput) => {
       assertSender(event);
-      requireAuthSession();
+      await requireAuthSession();
       if (
         !input ||
         typeof input.artifactId !== "string" ||

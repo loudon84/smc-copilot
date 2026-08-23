@@ -22,6 +22,13 @@ vi.mock("../auth/token-store", () => ({
   getCachedAccessToken: () => "test-access-token",
 }));
 
+vi.mock("../auth/ensure-access-token", () => ({
+  ensureFreshAccessToken: async () => "test-access-token",
+  refreshStoredAccessToken: async () => "test-access-token",
+  isAuthExpiredMessage: (message: string) =>
+    /authentication expired|token expired|invalid authorization/i.test(message),
+}));
+
 describe("expert-gateway-client", () => {
   afterEach(() => {
     resetExpertGatewayClientForTests();
@@ -184,5 +191,56 @@ describe("expert-gateway-client", () => {
       status: 403,
       errorCode: "errors.task.owner_forbidden",
     });
+  });
+
+  // @lat: [[expert-execution-tests#Catalog auth refresh retry]]
+  it("refreshes and retries catalog after Authentication expired", async () => {
+    let token = "expired-token";
+    const refreshAccessToken = vi.fn(async () => {
+      token = "fresh-token";
+      return token;
+    });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: "1",
+            error: {
+              code: -32010,
+              message: "Authentication expired",
+              data: { errorCode: "MCP_AUTH_REQUIRED" },
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: "2",
+            result: {
+              tools: [{ name: "call-prep", annotations: { slug: "call-prep" } }],
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      ensureAccessToken: async () => token,
+      refreshAccessToken,
+    });
+    const items = await client.listCatalog();
+    expect(items[0]?.slug).toBe("call-prep");
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const firstAuth = (fetchImpl.mock.calls[0]?.[1] as RequestInit).headers as Headers;
+    const secondAuth = (fetchImpl.mock.calls[1]?.[1] as RequestInit).headers as Headers;
+    expect(firstAuth.get("Authorization")).toBe("Bearer expired-token");
+    expect(secondAuth.get("Authorization")).toBe("Bearer fresh-token");
   });
 });
