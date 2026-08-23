@@ -1,0 +1,56 @@
+.expert-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.expert-selector select {
+  max-width: 140px;
+  font-size: 12px;
+}
+
+.expert-selector-error {
+  color: var(--danger, #c44);
+  font-size: 11px;
+}
+
+.expert-run-card {
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: color-mix(in srgb, var(--panel, #1a1a1a) 90%, transparent);
+}
+
+.expert-run-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.expert-timeline {
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+.expert-timeline-active {
+  color: var(--accent-text, #6af);
+  font-weight: 600;
+}
+
+.expert-run-result {
+  white-space: pre-wrap;
+  font-size: 12px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.expert-runs-panel {
+  padding: 0 12px;
+}

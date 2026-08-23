@@ -102,8 +102,9 @@ export function runCompletedUsage(event: Record<string, unknown>): {
 
 export function parseRunSseBlock(
   block: string,
-): { eventType: string; data: string } | null {
+): { eventType: string; data: string; id?: string } | null {
   let eventType = "";
+  let id: string | undefined;
   const dataLines: string[] = [];
   for (const rawLine of block.split("\n")) {
     const line = rawLine.replace(/\r$/, "");
@@ -111,8 +112,12 @@ export function parseRunSseBlock(
       eventType = line.slice(7).trim();
     } else if (line.startsWith("data: ")) {
       dataLines.push(line.slice(6));
+    } else if (line.startsWith("id: ")) {
+      id = line.slice(4).trim();
     }
   }
   if (dataLines.length === 0) return null;
-  return { eventType, data: dataLines.join("\n") };
+  return id !== undefined
+    ? { eventType, data: dataLines.join("\n"), id }
+    : { eventType, data: dataLines.join("\n") };
 }

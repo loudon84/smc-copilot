@@ -70,8 +70,8 @@ export function normalizeEndpointConfig(input: AuthEndpointConfig): AuthEndpoint
 
 export function getDefaultAuthEndpointConfig(): AuthEndpointConfig {
   return {
-    backendUrl: "http://192.168.0.118:4510",
+    backendUrl: "http://192.168.102.247:4510",
     authPrefix: "/api/v1/auth",
-    aiosHomeUrl: "http://192.168.0.118:4517",
+    aiosHomeUrl: "http://192.168.102.247:4517",
   };
 }

@@ -37,3 +37,5 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[session-file-context]] — Explicit session context associations, FTS search, and ephemeral context builder.
 - [[rich-content]] — RichContentRenderer extracted from AgentMarkdown: Mermaid/SVG/Artifact fences, streaming fence gating, and sandboxed HTML preview.
 - [[file-config]] — `desktop.files.*` Main-only config and Local/Remote attachment transport rules.
+- [[expert-execution]] — Explicit Expert HermesTask runs: NoDeskClaw Gateway client, SSE lifecycle, narrow IPC, Chat integration, continuation, and Main-only artifact download.
+- [[expert-execution-tests]] — unit/component coverage for Gateway client, run lifecycle, IPC validation, continuation, SSE framing, and minimum-stage UI.

@@ -1279,6 +1279,9 @@ interface HermesAPI {
 
   // File Platform
   files: import("../shared/files").HermesFilesAPI;
+
+  // Explicit Expert
+  expert: import("../shared/expert").ExpertApi;
 }
 
 declare global {

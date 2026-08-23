@@ -44,6 +44,20 @@ import { SLASH_COMMANDS, type SlashCommand } from "./slashCommands";
 import { reconcileSlashCatalog } from "./slash/commandCatalog";
 import { useRuntimeOptional } from "../../runtime/use-runtime";
 import {
+  ExpertRunCard,
+  ExpertSelector,
+  ensureExpertProjectionSubscription,
+  getExpertProjectionsForSession,
+  subscribeExpertProjections,
+  upsertExpertProjection,
+  type ExpertSelection,
+} from "../../modules/expert";
+import "../../modules/expert/expert.css";
+import {
+  createClientRequestId,
+  type ExpertRequest,
+} from "../../../../shared/expert";
+import {
   DESKTOP_SLASH_COMMANDS,
   LOCAL_DESKTOP_SLASH_COMMANDS,
 } from "./slash/desktopCommands";
@@ -64,6 +78,8 @@ import { usePromptNavigator } from "./prompt-navigator/usePromptNavigator";
 interface QueuedMessage {
   text: string;
   attachments: Attachment[];
+  /** Immutable Expert snapshot when queued under Expert mode. */
+  expertRequest?: ExpertRequest;
 }
 
 export type { ChatMessage } from "./types";
@@ -341,6 +357,17 @@ function Chat({
   const chatInputRef = useRef<ChatInputHandle>(null);
   const queueRef = useRef<QueuedMessage[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
+  const [expertSelection, setExpertSelection] = useState<ExpertSelection>({
+    expertSlug: null,
+    skillName: null,
+  });
+  const [authGeneration, setAuthGeneration] = useState("user:unknown");
+  const [expertProjections, setExpertProjections] = useState(() =>
+    getExpertProjectionsForSession(initialSessionId || ""),
+  );
+  const expertModeActive = Boolean(
+    expertSelection.expertSlug && expertSelection.skillName,
+  );
   const activeTurnRef = useRef<ActiveTurn | null>(null);
   const dashboardChatEnabled = dashboardChatEnabledForConnection(
     import.meta.env.VITE_HERMES_DESKTOP_DASHBOARD_CHAT,
@@ -348,6 +375,38 @@ function Chat({
     connectionMode,
     chatTransportPreference,
   );
+
+  useEffect(() => {
+    ensureExpertProjectionSubscription();
+    const sync = () => {
+      setExpertProjections(
+        getExpertProjectionsForSession(
+          hermesSessionId || initialSessionId || "",
+        ),
+      );
+    };
+    sync();
+    return subscribeExpertProjections(sync);
+  }, [hermesSessionId, initialSessionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.desktopAuth.getState().then((state) => {
+      if (cancelled) return;
+      if (state.user?.id) setAuthGeneration(`user:${state.user.id}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const sessionId = hermesSessionId || initialSessionId;
+    if (!sessionId || !window.hermesAPI.expert?.rehydrateSession) return;
+    void window.hermesAPI.expert.rehydrateSession(sessionId).then((items) => {
+      for (const item of items) upsertExpertProjection(item);
+    });
+  }, [hermesSessionId, initialSessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -879,24 +938,104 @@ function Chat({
     handleBackgroundRef.current = actions.handleBackground;
   });
 
+  const buildExpertRequest = useCallback(
+    (prompt: string, attachmentRefs: string[] = []): ExpertRequest | null => {
+      if (!expertSelection.expertSlug || !expertSelection.skillName) return null;
+      const sessionId = hermesSessionId || initialSessionId || "";
+      if (!sessionId) {
+        toast.error("Start a session before invoking an expert.");
+        return null;
+      }
+      return {
+        kind: "expert",
+        expertSlug: expertSelection.expertSlug,
+        skillName: expertSelection.skillName,
+        prompt,
+        attachmentRefs,
+        sessionId,
+        profileId: profile ?? "default",
+        clientRequestId: createClientRequestId(),
+        authGeneration,
+      };
+    },
+    [
+      authGeneration,
+      expertSelection.expertSlug,
+      expertSelection.skillName,
+      hermesSessionId,
+      initialSessionId,
+      profile,
+    ],
+  );
+
+  const submitExpert = useCallback(
+    async (request: ExpertRequest) => {
+      if (request.authGeneration !== authGeneration) {
+        toast.error("Account changed since submit — please retry.");
+        return;
+      }
+      try {
+        const projection = await window.hermesAPI.expert.start({ request });
+        upsertExpertProjection(projection);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Expert request failed",
+        );
+      }
+    },
+    [authGeneration],
+  );
+
+  const handleExpertCancel = useCallback(
+    async (clientRequestId: string, taskId: string | null) => {
+      try {
+        const projection = await window.hermesAPI.expert.cancel({
+          clientRequestId,
+          taskId,
+        });
+        if (projection) upsertExpertProjection(projection);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Cancel failed");
+      }
+    },
+    [],
+  );
+
   // Drain queued messages one at a time when the agent finishes.
   useEffect(() => {
     if (isLoading) return;
     const next = queueRef.current.shift();
     if (!next) return;
     setQueuedMessages([...queueRef.current]);
+    if (next.expertRequest) {
+      if (next.expertRequest.authGeneration !== authGeneration) {
+        toast.error("Queued expert request expired after account change.");
+        return;
+      }
+      void submitExpert(next.expertRequest);
+      return;
+    }
     handleSendRef.current(next.text, next.attachments, true).catch(() => {
       // Put the message back at the front so it isn't silently lost if
       // the send fails (e.g. IPC error before onChatError fires).
       queueRef.current.unshift(next);
       setQueuedMessages([...queueRef.current]);
     });
-  }, [isLoading]);
+  }, [isLoading, authGeneration, submitExpert]);
 
-  const handleRemoveQueued = useCallback((index: number) => {
-    queueRef.current.splice(index, 1);
-    setQueuedMessages([...queueRef.current]);
-  }, []);
+  const handleRemoveQueued = useCallback(
+    (index: number) => {
+      const item = queueRef.current[index];
+      if (item?.expertRequest) {
+        void window.hermesAPI.expert.cancel({
+          clientRequestId: item.expertRequest.clientRequestId,
+        });
+      }
+      queueRef.current.splice(index, 1);
+      setQueuedMessages([...queueRef.current]);
+    },
+    [],
+  );
 
   const handleSubmitOrQueue = useCallback(
     (text: string, attachments: Attachment[]) => {
@@ -907,21 +1046,33 @@ function Chat({
         );
         return;
       }
-      // Side questions (`/btw`) run on a concurrent background agent, so they
-      // must never queue — fire them immediately even while the main turn is in
-      // flight. This is the whole point of "ask without affecting context".
       const bgQuestion = parseBackgroundCommand(text);
       if (bgQuestion !== null) {
         if (bgQuestion)
           void handleBackgroundRef.current(bgQuestion, attachments);
         return;
       }
-      // The central slash router owns queueing policy. Dispatch every slash
-      // command immediately so Desktop commands can run, Agent commands can use
-      // the concurrent worker, and model-bound commands can format once before
-      // they are queued.
+      // Slash always wins over Expert execution.
       if (text.startsWith("/")) {
         void handleSendRef.current(text, attachments, true);
+        return;
+      }
+      if (expertModeActive) {
+        const request = buildExpertRequest(text, []);
+        if (!request) return;
+        const expertBusy = expertProjections.some(
+          (p) =>
+            p.sessionId === request.sessionId &&
+            (p.phase === "queued" ||
+              p.phase === "starting" ||
+              p.phase === "running"),
+        );
+        if (expertBusy) {
+          queueRef.current.push({ text, attachments, expertRequest: request });
+          setQueuedMessages([...queueRef.current]);
+          return;
+        }
+        void submitExpert(request);
         return;
       }
       if (isLoading) {
@@ -931,7 +1082,15 @@ function Chat({
       }
       void handleSendRef.current(text, attachments);
     },
-    [isLoading, runtimeReady, runtime?.error],
+    [
+      buildExpertRequest,
+      expertModeActive,
+      expertProjections,
+      isLoading,
+      runtimeReady,
+      runtime?.error,
+      submitExpert,
+    ],
   );
 
   const handleSuggestion = useCallback((text: string) => {
@@ -1248,6 +1407,18 @@ function Chat({
       </div>
 
       <div className="chat-input-area">
+        {expertProjections.length > 0 ? (
+          <div className="expert-runs-panel">
+            {expertProjections.map((projection) => (
+              <ExpertRunCard
+                key={projection.clientRequestId}
+                projection={projection}
+                authGeneration={authGeneration}
+                onCancel={handleExpertCancel}
+              />
+            ))}
+          </div>
+        ) : null}
         <QueuedMessages
           messages={queuedMessages}
           onRemove={handleRemoveQueued}
@@ -1268,6 +1439,19 @@ function Chat({
           onPreviewFile={(fileId) => handleOpenManagedPreview(fileId)}
           toolbarExtras={
             <>
+              <ExpertSelector
+                disabled={isLoading}
+                value={expertSelection}
+                onChange={setExpertSelection}
+              />
+              <div
+                className="chat-toolbar-local-controls"
+                style={{
+                  display: "contents",
+                  opacity: expertModeActive ? 0.45 : 1,
+                  pointerEvents: expertModeActive ? "none" : "auto",
+                }}
+              >
               <ModelPicker
                 active={active}
                 currentModel={chatCurrentModel}
@@ -1317,6 +1501,7 @@ function Chat({
                 onToggleWorktree={handleToggleWorktree}
                 onSelectRecentFolder={handleSelectRecentFolder}
               />
+              </div>
               <button
                 type="button"
                 className={`btn-ghost chat-tool-btn ${webPreviewVisible ? "chat-tool-btn-active" : ""}`}

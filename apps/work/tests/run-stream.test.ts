@@ -127,4 +127,17 @@ describe("run stream event mapping", () => {
       },
     );
   });
+
+  // @lat: [[expert-execution-tests#SSE id line parsing]]
+  it("parses optional id: lines for Last-Event-ID resume", () => {
+    expect(
+      parseRunSseBlock(
+        'id: evt-42\nevent: task.progress\ndata: {"event":"task.progress","event_seq":42}\n\n',
+      ),
+    ).toEqual({
+      eventType: "task.progress",
+      data: '{"event":"task.progress","event_seq":42}',
+      id: "evt-42",
+    });
+  });
 });

@@ -20,6 +20,8 @@ import {
   readStoredSession,
   writeStoredSession,
 } from "./token-store";
+import { disposeExpertSubsystem, restoreExpertSubsystemAfterAuth } from "../expert/expert-ipc";
+import { cleanupExpertArtifactTemps } from "../expert/expert-artifact-download";
 
 async function buildAuthState() {
   const endpointConfig = readAuthEndpointConfig();
@@ -51,6 +53,7 @@ export function registerAuthIpc(): void {
       endpointConfig: endpoint,
     });
     await writeStoredSession(session);
+    restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
   });
 
@@ -65,6 +68,9 @@ export function registerAuthIpc(): void {
         /* ignore remote logout errors */
       }
     }
+    // Same idempotent Expert dispose path as before-quit.
+    cleanupExpertArtifactTemps();
+    disposeExpertSubsystem();
     const endpoint = readAuthEndpointConfig();
     await clearStoredSession();
     return toPublicState(null, endpoint);

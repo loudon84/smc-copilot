@@ -18,6 +18,12 @@ import {
 } from "../security";
 import { registerIpcHandlers } from "../ipc/register";
 import { registerAuthIpc } from "../auth/auth-ipc";
+import {
+  disposeExpertSubsystem,
+  registerExpertIpc,
+} from "../expert/expert-ipc";
+import { getExpertRunService } from "../expert/expert-run-service";
+import { cleanupExpertArtifactTemps } from "../expert/expert-artifact-download";
 import { setGatewayPromptParent } from "../gatewayPrompt";
 import { showChatContextMenu } from "./context-menu";
 import { buildMenu } from "./menu";
@@ -67,6 +73,9 @@ export function startMainProcess(): void {
     requestQuit,
   });
   registerAuthIpc();
+  // Construct Expert singleton before registering its IPC surface.
+  void getExpertRunService();
+  registerExpertIpc({ getMainWindow: () => mainWindow });
 
   setupUpdater({ getMainWindow: () => mainWindow });
 
@@ -187,6 +196,9 @@ export function startMainProcess(): void {
     stopHealthPolling();
     for (const abort of activeRuns.values()) abort();
     activeRuns.clear();
+    // Expert: stop new requests → abort SSE/polling → cancel downloads → clear cache → dispose
+    cleanupExpertArtifactTemps();
+    disposeExpertSubsystem();
     cleanupTempMediaFiles();
     stopAllDashboards();
     // Kill the SSH tunnel process on quit — otherwise the `ssh -N -L` child is

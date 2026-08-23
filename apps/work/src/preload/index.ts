@@ -41,6 +41,7 @@ import {
   type AppUpdateState,
 } from "../shared/app-update";
 import { createFilesApi } from "./files-api";
+import { createExpertApi } from "./expert-api";
 import type { HermesFilesAPI } from "../shared/files";
 
 /**
@@ -1695,8 +1696,11 @@ const hermesAPI = {
   ): Promise<{ content: string; path: string }> =>
     ipcRenderer.invoke("read-logs", logFile, lines),
 
-  // File Platform (nested API �?Phase 0+)
+  // File Platform (nested API — Phase 0+)
   files: createFilesApi() as HermesFilesAPI,
+
+  // Explicit Expert (WORK-EXPERT-CONTRACT v1.0.1)
+  expert: createExpertApi(),
 };
 
 if (process.contextIsolated) {
