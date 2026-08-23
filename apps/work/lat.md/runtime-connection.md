@@ -90,4 +90,4 @@ Covered by `apps/work/tests/enterprise-opsi-mode.test.ts`.
 
 Phase 5 migrates Portal Auth Login only (not Hermes Panel / JSSDK / Service Settings).
 
-Main handlers live in [[src/main/auth/auth-ipc.ts]]; preload exposes `window.desktopAuth` via [[src/preload/auth-api.ts]]. Tokens stay Main-only in [[src/main/auth/token-store.ts]].
+Main handlers live in [[src/main/auth/auth-ipc.ts]]; preload exposes `window.desktopAuth` via [[src/preload/auth-api.ts]]. Tokens stay Main-only in [[src/main/auth/token-store.ts]]. [[src/main/auth/ensure-access-token.ts#ensureFreshAccessToken]] refreshes User JWT when `expiresAt` is due so restart does not keep a dead access token.

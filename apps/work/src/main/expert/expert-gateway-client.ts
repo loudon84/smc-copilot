@@ -8,6 +8,11 @@ import {
   getDefaultAuthEndpointConfig,
   readAuthEndpointConfig,
 } from "../auth/auth-endpoint-config-store";
+import {
+  ensureFreshAccessToken,
+  isAuthExpiredMessage,
+  refreshStoredAccessToken,
+} from "../auth/ensure-access-token";
 import { getCachedAccessToken } from "../auth/token-store";
 import { normalizeBackendBaseUrl } from "../../shared/auth/auth-url";
 import type {
@@ -250,16 +255,34 @@ function parseAcceptedStructuredContent(
   };
 }
 
+function isAuthExpiredGatewayError(err: unknown): boolean {
+  if (!(err instanceof ExpertGatewayError)) return false;
+  if (err.status === 401) return true;
+  if (
+    err.errorCode === "MCP_AUTH_REQUIRED" ||
+    err.errorCode === "UNAUTHORIZED" ||
+    err.errorCode === "AUTHENTICATION_EXPIRED"
+  ) {
+    return true;
+  }
+  return isAuthExpiredMessage(err.message);
+}
+
 export function createExpertGatewayClient(
   options: {
     fetchImpl?: typeof fetch;
     now?: () => number;
     catalogTtlMs?: number;
+    ensureAccessToken?: () => Promise<string>;
+    refreshAccessToken?: () => Promise<string>;
   } = {},
 ): ExpertGatewayClient {
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
   const catalogTtlMs = options.catalogTtlMs ?? CATALOG_TTL_MS;
+  const ensureAccessToken = options.ensureAccessToken ?? ensureFreshAccessToken;
+  const refreshAccessToken =
+    options.refreshAccessToken ?? refreshStoredAccessToken;
 
   let disposed = false;
   let catalogCache: CacheEntry<ExpertCatalogItem[]> | null = null;
@@ -274,6 +297,16 @@ export function createExpertGatewayClient(
     }
   }
 
+  async function withAuthRetry<T>(op: () => Promise<T>): Promise<T> {
+    try {
+      return await op();
+    } catch (err) {
+      if (!isAuthExpiredGatewayError(err)) throw err;
+      await refreshAccessToken();
+      return await op();
+    }
+  }
+
   async function authorizedFetch(
     pathOrUrl: string,
     init: RequestInit & { idempotencyKey?: string } = {},
@@ -281,7 +314,7 @@ export function createExpertGatewayClient(
     assertNotDisposed();
     const base = resolveBaseUrl();
     const url = joinUrl(base, pathOrUrl);
-    const token = requireAccessToken();
+    const token = (await ensureAccessToken()) || requireAccessToken();
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${token}`);
     if (!headers.has("Content-Type") && init.body) {
@@ -312,7 +345,7 @@ export function createExpertGatewayClient(
     }
   }
 
-  async function jsonRpc(
+  async function jsonRpcOnce(
     path: string,
     method: string,
     params: Record<string, unknown> | undefined,
@@ -349,25 +382,38 @@ export function createExpertGatewayClient(
     return body.result;
   }
 
+  async function jsonRpc(
+    path: string,
+    method: string,
+    params: Record<string, unknown> | undefined,
+    options?: { idempotencyKey?: string },
+  ): Promise<unknown> {
+    return withAuthRetry(() => jsonRpcOnce(path, method, params, options));
+  }
+
   async function httpGetData<T>(path: string): Promise<T> {
-    const res = await authorizedFetch(path, { method: "GET" });
-    const body = await readJson(res);
-    if (!res.ok) {
-      throw parseApiError(res.status, body);
-    }
-    return unwrapApiData<T>(body);
+    return withAuthRetry(async () => {
+      const res = await authorizedFetch(path, { method: "GET" });
+      const body = await readJson(res);
+      if (!res.ok) {
+        throw parseApiError(res.status, body);
+      }
+      return unwrapApiData<T>(body);
+    });
   }
 
   async function httpPostData(path: string): Promise<unknown> {
-    const res = await authorizedFetch(path, { method: "POST", body: "{}" });
-    const body = await readJson(res);
-    if (!res.ok) {
-      throw parseApiError(res.status, body);
-    }
-    if (isRecord(body) && "data" in body) {
-      return unwrapApiData(body);
-    }
-    return body;
+    return withAuthRetry(async () => {
+      const res = await authorizedFetch(path, { method: "POST", body: "{}" });
+      const body = await readJson(res);
+      if (!res.ok) {
+        throw parseApiError(res.status, body);
+      }
+      if (isRecord(body) && "data" in body) {
+        return unwrapApiData(body);
+      }
+      return body;
+    });
   }
 
   const client: ExpertGatewayClient = {
@@ -440,18 +486,20 @@ export function createExpertGatewayClient(
     },
 
     async listArtifacts(taskId: string): Promise<ExpertArtifactDescriptor[]> {
-      const res = await authorizedFetch(
-        `/api/v1/hermes/tasks/${encodeURIComponent(taskId)}/artifacts`,
-        { method: "GET" },
-      );
-      const body = await readJson(res);
-      if (!res.ok) {
-        throw parseApiError(res.status, body);
-      }
-      if (isRecord(body) && Array.isArray(body.data)) {
-        return body.data as ExpertArtifactDescriptor[];
-      }
-      return unwrapApiData<ExpertArtifactDescriptor[]>(body);
+      return withAuthRetry(async () => {
+        const res = await authorizedFetch(
+          `/api/v1/hermes/tasks/${encodeURIComponent(taskId)}/artifacts`,
+          { method: "GET" },
+        );
+        const body = await readJson(res);
+        if (!res.ok) {
+          throw parseApiError(res.status, body);
+        }
+        if (isRecord(body) && Array.isArray(body.data)) {
+          return body.data as ExpertArtifactDescriptor[];
+        }
+        return unwrapApiData<ExpertArtifactDescriptor[]>(body);
+      });
     },
 
     getEventsToken(taskId: string): Promise<ExpertEventsToken> {
@@ -489,11 +537,18 @@ export function createExpertGatewayClient(
     },
 
     openAuthorizedGet(pathOrUrl, init = {}): Promise<Response> {
-      return authorizedFetch(pathOrUrl, {
-        method: "GET",
-        headers: init.headers,
-        signal: init.signal,
-        redirect: "error",
+      return withAuthRetry(async () => {
+        const res = await authorizedFetch(pathOrUrl, {
+          method: "GET",
+          headers: init.headers,
+          signal: init.signal,
+          redirect: "error",
+        });
+        if (res.status === 401) {
+          const body = await readJson(res);
+          throw parseApiError(res.status, body);
+        }
+        return res;
       });
     },
 

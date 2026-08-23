@@ -63,6 +63,18 @@ Artifact download guards surface `CROSS_ORIGIN_REJECTED` for cross-origin URL re
 
 `normalizeContinuationItems` preserves valid `expert-run` schemaVersion 1 entries and drops invalid schema versions while keeping unrelated kinds.
 
+## Catalog auth refresh retry
+
+JSON-RPC `Authentication expired` / `MCP_AUTH_REQUIRED` on catalog list refreshes the User JWT once and retries the same call with the new token.
+
+## Access token local expiry
+
+`ensureFreshAccessToken` refreshes when `expiresAt` is within the skew window, and does not refetch while the stored expiry is still valid.
+
+## Access token refresh failure
+
+A failed `refresh_token` exchange clears the stored session instead of keeping a dead access token.
+
 ## Minimum stage timeline
 
 `ExpertTimeline` exports a component tied to non-terminal phases and minimum display stages — no fabricated tool progress.

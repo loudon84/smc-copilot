@@ -14,6 +14,7 @@ import {
   readAuthEndpointConfig,
   writeAuthEndpointConfig,
 } from "./auth-endpoint-config-store";
+import { ensureFreshAccessToken, refreshStoredAccessToken } from "./ensure-access-token";
 import {
   clearStoredSession,
   hydrateTokenStore,
@@ -25,6 +26,11 @@ import { cleanupExpertArtifactTemps } from "../expert/expert-artifact-download";
 
 async function buildAuthState() {
   const endpointConfig = readAuthEndpointConfig();
+  try {
+    await ensureFreshAccessToken();
+  } catch {
+    /* missing session or refresh failed — session already cleared */
+  }
   const session = await readStoredSession();
   return toPublicState(session, endpointConfig);
 }
@@ -81,19 +87,11 @@ export function registerAuthIpc(): void {
     if (!endpointConfig) {
       return toPublicState(null, null);
     }
-    const session = await readStoredSession();
-    if (!session?.refreshToken) {
-      return toPublicState(session, endpointConfig);
-    }
     try {
-      const refreshed = await getAuthClient().refresh(
-        endpointConfig,
-        session.refreshToken,
-      );
-      await writeStoredSession(refreshed);
-      return toPublicState(refreshed, endpointConfig);
+      await refreshStoredAccessToken();
+      const session = await readStoredSession();
+      return toPublicState(session, endpointConfig);
     } catch {
-      await clearStoredSession();
       return toPublicState(null, endpointConfig);
     }
   });

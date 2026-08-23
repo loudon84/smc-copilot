@@ -10,7 +10,9 @@ Cross-process types live in [[src/shared/expert.ts]]: `ExpertRequest`, catalog/s
 
 [[src/main/expert/expert-gateway-client.ts]] is the trusted Main network owner for NoDeskClaw Expert HTTP.
 
-Base URL from [[src/main/auth/auth-endpoint-config-store.ts]] (not Hermes `getApiUrl`). JWT from [[src/main/auth/token-store.ts#getCachedAccessToken]]. Catalog/Skill JSON-RPC with TTL cache; exact skill call sends `X-Idempotency-Key` and reads `structuredContent`. HermesTask status/snapshot/result/cancel and artifact paths. JSON-RPC errors on HTTP 200 and REST 4xx surface as `ExpertGatewayError`.
+Base URL from [[src/main/auth/auth-endpoint-config-store.ts]] (not Hermes `getApiUrl`). JWT from [[src/main/auth/ensure-access-token.ts#ensureFreshAccessToken]].
+
+Refresh when `expiresAt` is due, and once more after backend `Authentication expired`. Catalog/Skill JSON-RPC with TTL cache; exact skill call sends `X-Idempotency-Key` and reads `structuredContent`. HermesTask status/snapshot/result/cancel and artifact paths. JSON-RPC errors on HTTP 200 and REST 4xx surface as `ExpertGatewayError`.
 
 ## Run service and SSE framing
 
