@@ -14,6 +14,7 @@ import {
 } from "../copilot-runtime-client/runtime-connection-manager";
 import { resolveServeBaseUrl } from "../copilot-runtime-client/runtime-mode";
 import { resolveStartupDecisionFromRuntime } from "./startup-decision";
+import { isSkipRuntimeConnectionGate } from "./skip-runtime-gate";
 import type { StartupDecision } from "../../shared/startup/startup-contract";
 
 const BOOTSTRAP_WAIT_MS = 15000;
@@ -76,6 +77,12 @@ class DesktopBootCoordinator {
   }
 
   async resolveStartupDecision(): Promise<StartupDecision> {
+    // Dev skip: do not block splash on :8765; still kick off background connect.
+    if (isSkipRuntimeConnectionGate()) {
+      void this.bootstrap();
+      return resolveStartupDecisionFromRuntime(getRuntimeConnectionState());
+    }
+
     let runtimeState = await this.runtime();
     // Boot may race Serve startup: if still transitional OR a stale Missing while
     // Runtime is actually up, do one fresh handshake before freezing the snapshot.

@@ -57,6 +57,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
     "dev": "node scripts/dev.cjs",
+    "dev:desktop": "node scripts/dev.cjs",
     "dev:fresh": "HERMES_HOME=$(mktemp -d -t hermes-fresh) electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "rebuild:native": "node scripts/rebuild-native-deps.cjs",

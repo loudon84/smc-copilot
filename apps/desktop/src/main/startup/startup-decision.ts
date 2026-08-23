@@ -10,6 +10,7 @@ import type {
   StartupDecision,
   StartupDecisionReason,
 } from "../../shared/startup/startup-contract";
+import { isSkipRuntimeConnectionGate } from "./skip-runtime-gate";
 
 function authRequired(): StartupDecision {
   return {
@@ -24,6 +25,33 @@ function bootstrapPending(): StartupDecision {
     nextScreen: "login",
     reason: "bootstrap-pending",
     runtimeState: null,
+  };
+}
+
+/**
+ * When SMC_DESKTOP_SKIP_RUNTIME=true, treat unreachable / transitional Runtime
+ * as degraded so local UI can open. PairingRequired stays pairing (Runtime is up).
+ * Chat/Task writes remain gated by readiness — this only skips the recovery screen.
+ */
+export function applySkipRuntimeConnectionGate(
+  runtime: RuntimeConnectionState,
+): RuntimeConnectionState {
+  if (!isSkipRuntimeConnectionGate()) return runtime;
+  if (
+    runtime.state === "Ready" ||
+    runtime.state === "RuntimeDegraded" ||
+    runtime.state === "PairingRequired"
+  ) {
+    return runtime;
+  }
+  return {
+    ...runtime,
+    state: "RuntimeDegraded",
+    lastError:
+      runtime.lastError ??
+      "Runtime connection skipped (SMC_DESKTOP_SKIP_RUNTIME=true). Start Runtime with npm run dev:runtime when needed.",
+    canRetry: true,
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -100,7 +128,7 @@ export async function resolveStartupDecisionFromRuntime(
     return bootstrapPending();
   }
 
-  return mapRuntimeToDecision(runtime);
+  return mapRuntimeToDecision(applySkipRuntimeConnectionGate(runtime));
 }
 
 /** @deprecated Prefer desktopBootCoordinator.resolveStartupDecision */

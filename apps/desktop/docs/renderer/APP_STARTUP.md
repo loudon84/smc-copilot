@@ -68,3 +68,14 @@ useStartupGate
 ```
 
 Desktop 仅连接 Copilot Runtime（默认 `http://127.0.0.1:8765`）。Legacy `~/.hermes/desktop.json` 的 remote/ssh 配置不参与启动路由。
+
+### 开发跳过 Runtime 门控
+
+`npm run dev` / `dev:desktop` 经 `scripts/dev.cjs` 默认设置 `SMC_DESKTOP_SKIP_RUNTIME=true`：
+
+- Auth + Bootstrap 仍先执行
+- `RuntimeMissing` / `Connecting` / `RuntimeStarting` / `Incompatible` 映射为 `RuntimeDegraded` 并进入 `main`（不卡 Recovery）
+- `PairingRequired` 仍走配对页
+- Chat / Task 等写操作仍受 readiness 门控
+
+恢复严格门控：`SMC_DESKTOP_SKIP_RUNTIME=false npm run dev`。

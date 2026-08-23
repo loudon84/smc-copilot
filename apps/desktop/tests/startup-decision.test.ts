@@ -54,6 +54,7 @@ function runtimeState(
 describe("resolveStartupDecisionFromRuntime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.SMC_DESKTOP_SKIP_RUNTIME;
     hydrateTokenStore.mockResolvedValue(mockSession);
     readStoredSession.mockResolvedValue(mockSession);
     readAuthEndpointConfig.mockReturnValue(mockEndpoint);
@@ -116,5 +117,24 @@ describe("resolveStartupDecisionFromRuntime", () => {
     const decision = await resolveStartupDecisionFromRuntime(runtimeState("RuntimeStarting"));
     expect(decision.nextScreen).toBe("runtime-recovery");
     expect(decision.reason).toBe("runtime-starting");
+  });
+
+  it("with SMC_DESKTOP_SKIP_RUNTIME maps RuntimeMissing to main as degraded", async () => {
+    process.env.SMC_DESKTOP_SKIP_RUNTIME = "true";
+    const { resolveStartupDecisionFromRuntime } =
+      await import("../src/main/startup/startup-decision");
+    const decision = await resolveStartupDecisionFromRuntime(runtimeState("RuntimeMissing"));
+    expect(decision.nextScreen).toBe("main");
+    expect(decision.reason).toBe("runtime-degraded");
+    expect(decision.runtimeState?.state).toBe("RuntimeDegraded");
+  });
+
+  it("with SMC_DESKTOP_SKIP_RUNTIME still routes PairingRequired to pairing", async () => {
+    process.env.SMC_DESKTOP_SKIP_RUNTIME = "true";
+    const { resolveStartupDecisionFromRuntime } =
+      await import("../src/main/startup/startup-decision");
+    const decision = await resolveStartupDecisionFromRuntime(runtimeState("PairingRequired"));
+    expect(decision.nextScreen).toBe("runtime-pairing");
+    expect(decision.reason).toBe("pairing-required");
   });
 });

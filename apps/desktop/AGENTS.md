@@ -190,7 +190,7 @@ LoginScreen
   → recheck → 可能进入 main / setup / welcome
 ```
 
-环境变量：`HERMES_USE_MOCK_AUTH`、`HERMES_USE_MOCK_USER_CONFIG`、`HERMES_USE_REMOTE_USER_CONFIG`（见 `docs/API_CONTRACTS.md`）。
+环境变量：`HERMES_USE_MOCK_AUTH`、`HERMES_USE_MOCK_USER_CONFIG`、`HERMES_USE_REMOTE_USER_CONFIG`、`SMC_DESKTOP_SKIP_RUNTIME`（dev 默认跳过 Runtime :8765 启动门控，见 `docs/renderer/APP_STARTUP.md`）。
 
 ### 聊天
 
