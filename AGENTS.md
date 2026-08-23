@@ -1,5 +1,14 @@
 # SMC Copilot Repository Routing
 
+For non-trivial feature or architecture changes:
+
+1. Ground requirements against current source.
+2. Produce PRD-DRAFT.
+3. Run independent PRD review.
+4. Planning requires PRD status APPROVED.
+5. Cursor implementation requires an approved `.plan.md`.
+6. Existing repository routing and subsystem `AGENTS.md` remain authoritative.
+
 - Desktop task:
   read `apps/desktop/AGENTS.md`
 

@@ -1,0 +1,11 @@
+---
+description: Enforce the SMC PRD, plan, implementation, and staged-review state machine.
+globs:
+alwaysApply: true
+---
+
+# Agent workflow governance
+
+Non-trivial change: PRD APPROVED → PLAN APPROVED → IMPLEMENT → review-staged → COMMIT.
+
+Never implement directly from PRD-DRAFT. One capability has one production owner. REPLACE requires REMOVE unless a bounded compatibility contract has a current consumer and removal condition. Historical buggy behavior belongs under tests/fixtures, never production.

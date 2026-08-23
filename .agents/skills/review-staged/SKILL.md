@@ -34,6 +34,8 @@ Do not review unstaged changes.
 
 ## 3. Verify implementation
 
+Read [`../../references/architecture-convergence.md`](../../references/architecture-convergence.md) and verify its checklist against the staged diff. This adds an architecture check only; the staged-diff, independent-review, PASS/BLOCK, and commit-gate contract below remains unchanged.
+
 Run project-required:
 
 - lint

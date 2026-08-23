@@ -21,7 +21,10 @@
     "integration:test": "nx run integration-e2e:test",
     "check:runtime-path-ownership": "node tools/agent-context/check-runtime-path-ownership.mjs",
     "check:release-tags": "node tools/release/verify-release-tags.mjs",
-    "verify:agent-context": "node tools/agent-context/verify-rules.mjs && node tools/agent-context/check-runtime-path-ownership.mjs"
+    "verify:agent-context": "node tools/agent-context/verify-rules.mjs && node tools/agent-context/check-runtime-path-ownership.mjs",
+    "agent-skills:validate": "python tools/agent-skills/validate_agent_skills.py",
+    "agent-skills:validate-prd": "python tools/agent-skills/validate_prd.py",
+    "agent-skills:validate-plan": "python tools/agent-skills/validate_plan.py"
   },
   "devDependencies": {
     "@nx/workspace": "21.2.2",

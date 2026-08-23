@@ -1,0 +1,51 @@
+name: agent-governance
+
+on:
+  pull_request:
+    paths:
+      - '.agents/**'
+      - '.cursor/**'
+      - '.codex/agents/**'
+      - 'tools/agent-skills/**'
+      - 'docs/engineering/**'
+      - '.github/workflows/agent-governance.yml'
+  push:
+    branches: [opsi/prd-2.0]
+    paths:
+      - '.agents/**'
+      - '.cursor/**'
+      - '.codex/agents/**'
+      - 'tools/agent-skills/**'
+      - 'docs/engineering/**'
+      - '.github/workflows/agent-governance.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Checkout pinned upstream skills
+        run: git clone --no-checkout https://github.com/addyosmani/agent-skills.git /tmp/agent-skills && git -C /tmp/agent-skills checkout df1edb2e05487d0aa6d93c747141e0aed1187f25
+      - name: Validate lock and generated mirror
+        run: |
+          python tools/agent-skills/sync_agent_skills.py --source-dir /tmp/agent-skills --check
+          python tools/agent-skills/validate_agent_skills.py
+      - name: Validate validator regressions
+        run: python -m unittest tools/agent-skills/tests/test_validators.py
+      - name: Validate changed PRDs and plans only
+        shell: bash
+        run: |
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then exit 0; fi
+          git diff --name-only "$BASE_SHA" HEAD | while read -r file; do
+            case "$file" in
+              docs/**/PRD-*.md) python tools/agent-skills/validate_prd.py "$file" ;;
+              .cursor/plans/*.plan.md) python tools/agent-skills/validate_plan.py "$file" ;;
+            esac
+          done
