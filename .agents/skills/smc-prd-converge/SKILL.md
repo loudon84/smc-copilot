@@ -1,7 +1,7 @@
 ---
 name: smc-prd-converge
 description: 将已经获得 PASS 的 SMC Copilot PRD 收敛为最终 APPROVED 文档；只做确定性清理与状态转换，不重新分析源码或架构。
-version: 2.2.0
+version: 2.3.0
 disable-model-invocation: true
 ---
 
@@ -83,6 +83,17 @@ approved_at: <current ISO-8601 timestamp>
 
 PRD Review 的 REVISE/BLOCKED 不写入 frontmatter；只有 Converge 写 `PASS`。
 
+## 文件名
+
+`status: APPROVED` 写入后，必须去掉文件名中的 `-DRAFT` 后缀，只保留一份最终文件：
+
+- `PRD-WORK-v3.0.1-foo-DRAFT.md` → `PRD-WORK-v3.0.1-foo.md`
+- 已跟踪文件用 `git mv`；未跟踪文件直接重命名
+- 禁止 `*-DRAFT.md` 与去后缀文件并存
+- 最终校验必须针对**新路径**运行
+
+未以 `-DRAFT.md` 结尾的路径不要改名。
+
 ## 最终校验
 
 执行：
@@ -94,6 +105,7 @@ python tools/agent-skills/validate_prd.py <prd> --require-approved
 Validator 负责确定性检查：
 
 - frontmatter 状态一致性；
+- APPROVED 文件名不得保留 `-DRAFT` 后缀；
 - required sections；
 - Change Classification；
 - REPLACE / Removal Matrix；
@@ -113,4 +125,4 @@ Validator 负责确定性检查：
 
 ## Exit
 
-`PASS Review → deterministic converge → APPROVED PRD → Plan`
+`PASS Review → deterministic converge → APPROVED PRD（文件名去掉 -DRAFT）→ Plan`

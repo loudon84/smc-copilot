@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 1. Read `AGENTS.md`, route to the affected subsystem, then read only that subsystem's `AGENTS.md`.
 2. Read the relevant source anchors, direct callers, contracts/ADRs only when their boundary is affected, and current tests. Do not scan the monorepo for completeness.
-3. Write a `PRD-DRAFT` using [`../../references/prd-contract.md`](../../references/prd-contract.md).
+3. Write a `PRD-DRAFT` as `*-DRAFT.md` using [`../../references/prd-contract.md`](../../references/prd-contract.md). Only `smc-prd-converge` may drop `-DRAFT` after APPROVED.
 4. Include `Current Capability Inventory` before proposing an implementation. Record capability, existing owner, entry point, and tests.
 5. Include `Target End-State Inventory`; every capability has exactly one production owner and allowed implementation count.
 6. Classify every change as KEEP, MODIFY, ADD, REPLACE, or REMOVE. REPLACE requires a removal matrix. Compatibility needs a real current consumer and bounded removal contract.

@@ -43,7 +43,7 @@ Plan 决定：
 python tools/agent-skills/validate_prd.py <prd> --require-approved
 ```
 
-只有 APPROVED + PASS 才继续。
+只有 APPROVED + PASS 才继续。若路径仍以 `-DRAFT.md` 结尾则停止。
 
 ## 不是第二次 PRD Review
 

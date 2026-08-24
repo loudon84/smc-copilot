@@ -762,6 +762,7 @@ Review Findings
 Human Decisions
         ↓
 PRD-APPROVED
+（文件名去掉 -DRAFT）
 ```
 
 必须删除：

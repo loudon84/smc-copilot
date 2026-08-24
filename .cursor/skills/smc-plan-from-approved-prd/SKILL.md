@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Plan From Approved PRD
 
-1. Validate the PRD with `python tools/agent-skills/validate_prd.py <prd>`; stop unless it is APPROVED.
+1. Validate the PRD with `python tools/agent-skills/validate_prd.py <prd> --require-approved`; stop unless it is APPROVED and the filename no longer ends with `-DRAFT.md`.
 2. Use `planning-and-task-breakdown` and the existing `plan-codegen-minimal.mdc`; read only source needed for the current slice.
 3. Add `## Approved PRD` with a repository-relative link and `## Change Matrix` with file/symbol, action, existing owner, and target state.
 4. Mirror every PRD REPLACE with a Plan REMOVE. Any new production file needs `## New File Justification` explaining why its existing owner cannot carry the capability.

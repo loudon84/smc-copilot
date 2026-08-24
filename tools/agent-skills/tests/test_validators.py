@@ -97,6 +97,14 @@ class ValidatorsTest(unittest.TestCase):
             result = self.run_script(PRD_VALIDATOR, path)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_approved_prd_cannot_keep_draft_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "PRD-test-DRAFT.md"
+            path.write_text(VALID_PRD, encoding="utf-8")
+            result = self.run_script(PRD_VALIDATOR, path)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("PRD_APPROVED_FILENAME_HAS_DRAFT", result.stderr)
+
     def test_approved_prd_requires_pass_and_approved_at(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "PRD-test.md"

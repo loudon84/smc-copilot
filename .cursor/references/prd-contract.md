@@ -12,3 +12,5 @@ PRD frontmatter 必须包含：`work_item_id`、`version`、`status`、`target_b
 - `## Acceptance Criteria`
 
 所有变更只能分类为 `KEEP`、`MODIFY`、`ADD`、`REPLACE`、`REMOVE`。出现 `REPLACE` 时，必须有 `## Replacement / Removal Matrix`，并列出对应 `REMOVE`。出现 compat、adapter、fallback、alias 或 legacy 时，必须有 `## Compatibility Contract`，写明 Current Consumer、Reason、Removal Condition 和 Removal Version。
+
+`APPROVED` 后文件名必须去掉 `-DRAFT` 后缀。Draft / Review 阶段使用 `*-DRAFT.md`。

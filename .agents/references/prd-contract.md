@@ -105,3 +105,5 @@ Converge 后的 `APPROVED` PRD 应删除过程性内容，例如：
 - 临时 alternatives / exploration notes
 
 最终文档只表达一个 Target Architecture。
+
+`APPROVED` 文件名不得保留 `-DRAFT` 后缀：`FOO-DRAFT.md` 必须重命名为 `FOO.md`。Draft / Review 阶段继续使用 `*-DRAFT.md`。

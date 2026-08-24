@@ -157,6 +157,11 @@ def validate_prd(path: Path, require_approved: bool = False) -> list[str]:
     if require_approved and fields.get("status") != "APPROVED":
         errors.append("PRD_NOT_APPROVED")
 
+    if fields.get("status") == "APPROVED" and path.name.endswith("-DRAFT.md"):
+        errors.append(
+            "PRD_APPROVED_FILENAME_HAS_DRAFT: APPROVED PRD filename must drop the -DRAFT suffix"
+        )
+
     for heading in REQUIRED_SECTIONS:
         if not section_exists(text, heading):
             errors.append(f"PRD_INVALID: missing section {heading}")

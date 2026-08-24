@@ -172,6 +172,7 @@ PRD 至少保持 `prd-contract.md` 要求：
 - Acceptance Criteria
 
 按需保留最小 Grounding Summary / Source Anchors。
+文件名必须为 `*-DRAFT.md`；只有 `smc-prd-converge` 在 APPROVED 后去掉 `-DRAFT`。
 
 ### revision
 做最小修订，并增加 `Grounding Closure Table`；不要重写已稳定章节。
