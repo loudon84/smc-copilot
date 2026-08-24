@@ -44,8 +44,8 @@ import { SLASH_COMMANDS, type SlashCommand } from "./slashCommands";
 import { reconcileSlashCatalog } from "./slash/commandCatalog";
 import { useRuntimeOptional } from "../../runtime/use-runtime";
 import {
+  ExpertContextControl,
   ExpertRunCard,
-  ExpertSelector,
   ensureExpertProjectionSubscription,
   getExpertProjectionsForSession,
   subscribeExpertProjections,
@@ -55,7 +55,9 @@ import {
 import "../../modules/expert/expert.css";
 import {
   createClientRequestId,
+  type ExpertGatewayStatus,
   type ExpertRequest,
+  type SelectedCallability,
 } from "../../../../shared/expert";
 import {
   DESKTOP_SLASH_COMMANDS,
@@ -271,7 +273,8 @@ function Chat({
   // Whether the worktree panel is visible (only applies when contextFolder is set)
   // Default false so the panel doesn't open automatically and interfere with scrolling
   const [worktreeVisible, setWorktreeVisible] = useState<boolean>(false);
-  const [sessionFilesVisible, setSessionFilesVisible] = useSessionFilesVisible();
+  const [sessionFilesVisible, setSessionFilesVisible] =
+    useSessionFilesVisible();
   const [promptNavigatorOpen, setPromptNavigatorOpen] =
     usePromptNavigatorOpen();
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -362,12 +365,17 @@ function Chat({
     skillName: null,
   });
   const [authGeneration, setAuthGeneration] = useState("user:unknown");
+  const [gatewayStatus, setGatewayStatus] =
+    useState<ExpertGatewayStatus>("unknown");
+  const [selectedCallability, setSelectedCallability] =
+    useState<SelectedCallability | null>(null);
   const [expertProjections, setExpertProjections] = useState(() =>
     getExpertProjectionsForSession(initialSessionId || ""),
   );
   const expertModeActive = Boolean(
     expertSelection.expertSlug && expertSelection.skillName,
   );
+  const expertSelected = expertSelection.expertSlug != null;
   const activeTurnRef = useRef<ActiveTurn | null>(null);
   const dashboardChatEnabled = dashboardChatEnabledForConnection(
     import.meta.env.VITE_HERMES_DESKTOP_DASHBOARD_CHAT,
@@ -378,7 +386,7 @@ function Chat({
 
   useEffect(() => {
     ensureExpertProjectionSubscription();
-    const sync = () => {
+    const sync = (): void => {
       setExpertProjections(
         getExpertProjectionsForSession(
           hermesSessionId || initialSessionId || "",
@@ -391,12 +399,16 @@ function Chat({
 
   useEffect(() => {
     let cancelled = false;
-    void window.desktopAuth.getState().then((state) => {
+    const applyAuth = (state: { user?: { id?: string } | null }): void => {
       if (cancelled) return;
       if (state.user?.id) setAuthGeneration(`user:${state.user.id}`);
-    });
+      else setAuthGeneration("user:unknown");
+    };
+    void window.desktopAuth.getState().then(applyAuth);
+    const unsubscribe = window.desktopAuth.onStateChanged(applyAuth);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -940,7 +952,8 @@ function Chat({
 
   const buildExpertRequest = useCallback(
     (prompt: string, attachmentRefs: string[] = []): ExpertRequest | null => {
-      if (!expertSelection.expertSlug || !expertSelection.skillName) return null;
+      if (!expertSelection.expertSlug || !expertSelection.skillName)
+        return null;
       const sessionId = hermesSessionId || initialSessionId || "";
       if (!sessionId) {
         toast.error("Start a session before invoking an expert.");
@@ -1023,19 +1036,16 @@ function Chat({
     });
   }, [isLoading, authGeneration, submitExpert]);
 
-  const handleRemoveQueued = useCallback(
-    (index: number) => {
-      const item = queueRef.current[index];
-      if (item?.expertRequest) {
-        void window.hermesAPI.expert.cancel({
-          clientRequestId: item.expertRequest.clientRequestId,
-        });
-      }
-      queueRef.current.splice(index, 1);
-      setQueuedMessages([...queueRef.current]);
-    },
-    [],
-  );
+  const handleRemoveQueued = useCallback((index: number) => {
+    const item = queueRef.current[index];
+    if (item?.expertRequest) {
+      void window.hermesAPI.expert.cancel({
+        clientRequestId: item.expertRequest.clientRequestId,
+      });
+    }
+    queueRef.current.splice(index, 1);
+    setQueuedMessages([...queueRef.current]);
+  }, []);
 
   const handleSubmitOrQueue = useCallback(
     (text: string, attachments: Attachment[]) => {
@@ -1048,6 +1058,12 @@ function Chat({
       }
       const bgQuestion = parseBackgroundCommand(text);
       if (bgQuestion !== null) {
+        if (expertSelection.expertSlug != null) {
+          toast.error(
+            "Background questions are not available while an expert is selected.",
+          );
+          return;
+        }
         if (bgQuestion)
           void handleBackgroundRef.current(bgQuestion, attachments);
         return;
@@ -1057,7 +1073,27 @@ function Chat({
         void handleSendRef.current(text, attachments, true);
         return;
       }
+      if (expertSelection.expertSlug != null && !expertSelection.skillName) {
+        toast.error("Select an expert skill before sending.");
+        return;
+      }
       if (expertModeActive) {
+        if (selectedCallability?.canSilentCall !== true) {
+          toast.error("Selected expert skill cannot be called silently.");
+          return;
+        }
+        if (gatewayStatus === "unavailable" || gatewayStatus === "error") {
+          toast.error("Expert Gateway unavailable.");
+          return;
+        }
+        if (gatewayStatus === "checking" || gatewayStatus === "unknown") {
+          toast.error("Expert Gateway is still checking.");
+          return;
+        }
+        if (gatewayStatus !== "ready") {
+          toast.error("Expert Gateway unavailable.");
+          return;
+        }
         const request = buildExpertRequest(text, []);
         if (!request) return;
         const expertBusy = expertProjections.some(
@@ -1086,9 +1122,13 @@ function Chat({
       buildExpertRequest,
       expertModeActive,
       expertProjections,
+      expertSelection.expertSlug,
+      expertSelection.skillName,
+      gatewayStatus,
       isLoading,
       runtimeReady,
       runtime?.error,
+      selectedCallability?.canSilentCall,
       submitExpert,
     ],
   );
@@ -1340,19 +1380,17 @@ function Chat({
             )}
             <div ref={bottomRef} />
           </div>
-          {!sessionFilesVisible &&
-            hermesSessionId &&
-            !filePreviewMaximized && (
-              <button
-                type="button"
-                className="session-files-show-button"
-                onClick={() => setSessionFilesVisible(true)}
-                title="Show session files"
-                aria-label="Show session files"
-              >
-                <PanelRightOpen size={16} />
-              </button>
-            )}
+          {!sessionFilesVisible && hermesSessionId && !filePreviewMaximized && (
+            <button
+              type="button"
+              className="session-files-show-button"
+              onClick={() => setSessionFilesVisible(true)}
+              title="Show session files"
+              aria-label="Show session files"
+            >
+              <PanelRightOpen size={16} />
+            </button>
+          )}
           <PromptNavigator
             items={promptNavigationItems}
             activePromptId={activePromptId}
@@ -1434,73 +1472,88 @@ function Chat({
           readiness={effectiveReadiness}
           slashCommands={slashMenuCommands}
           onSubmit={handleSubmitOrQueue}
-          onQuickAsk={actions.handleQuickAsk}
+          onQuickAsk={(text, attachments) => {
+            if (expertSelection.expertSlug != null) {
+              toast.error(
+                "Background questions are not available while an expert is selected.",
+              );
+              return;
+            }
+            return actions.handleQuickAsk(text, attachments);
+          }}
           onAbort={actions.handleAbort}
           onPreviewFile={(fileId) => handleOpenManagedPreview(fileId)}
           toolbarExtras={
             <>
-              <ExpertSelector
-                disabled={isLoading}
+              <ExpertContextControl
                 value={expertSelection}
                 onChange={setExpertSelection}
+                authGeneration={authGeneration}
+                active={active}
+                disabled={isLoading}
+                onGatewayStatusChange={setGatewayStatus}
+                onSelectedCallabilityChange={setSelectedCallability}
               />
               <div
                 className="chat-toolbar-local-controls"
                 style={{
                   display: "contents",
-                  opacity: expertModeActive ? 0.45 : 1,
-                  pointerEvents: expertModeActive ? "none" : "auto",
+                  opacity: expertSelected ? 0.45 : 1,
+                  pointerEvents: expertSelected ? "none" : "auto",
                 }}
               >
-              <ModelPicker
-                active={active}
-                currentModel={chatCurrentModel}
-                currentProvider={chatCurrentProvider}
-                currentBaseUrl={chatCurrentBaseUrl}
-                modelGroups={modelConfig.modelGroups}
-                displayModel={chatDisplayModel}
-                onOpen={modelConfig.reload}
-                onSelectModel={handleSelectModel}
-              />
-              <ReasoningEffortPicker
-                value={reasoningEffort}
-                onChange={setReasoningEffort}
-              />
-              <div className="chat-fast-wrapper">
-                <button
-                  type="button"
-                  className={`btn-ghost chat-fast-btn ${fastMode ? "chat-fast-active" : ""}`}
-                  onClick={toggleFastMode}
-                >
-                  <Zap size={14} />
-                </button>
-                <div
-                  className={`chat-fast-popover ${fastMode ? "chat-fast-active-popover" : ""}`}
-                >
-                  <div className="chat-fast-popover-head">
-                    <span className="chat-fast-popover-icon" aria-hidden="true">
-                      <Zap size={13} />
+                <ModelPicker
+                  active={active}
+                  currentModel={chatCurrentModel}
+                  currentProvider={chatCurrentProvider}
+                  currentBaseUrl={chatCurrentBaseUrl}
+                  modelGroups={modelConfig.modelGroups}
+                  displayModel={chatDisplayModel}
+                  onOpen={modelConfig.reload}
+                  onSelectModel={handleSelectModel}
+                />
+                <ReasoningEffortPicker
+                  value={reasoningEffort}
+                  onChange={setReasoningEffort}
+                />
+                <div className="chat-fast-wrapper">
+                  <button
+                    type="button"
+                    className={`btn-ghost chat-fast-btn ${fastMode ? "chat-fast-active" : ""}`}
+                    onClick={toggleFastMode}
+                  >
+                    <Zap size={14} />
+                  </button>
+                  <div
+                    className={`chat-fast-popover ${fastMode ? "chat-fast-active-popover" : ""}`}
+                  >
+                    <div className="chat-fast-popover-head">
+                      <span
+                        className="chat-fast-popover-icon"
+                        aria-hidden="true"
+                      >
+                        <Zap size={13} />
+                      </span>
+                      <strong>
+                        {fastMode ? t("chat.fastModeOn") : t("chat.fastMode")}
+                      </strong>
+                    </div>
+                    <span>
+                      {fastMode
+                        ? t("chat.fastModeActive")
+                        : t("chat.fastModeInactive")}
                     </span>
-                    <strong>
-                      {fastMode ? t("chat.fastModeOn") : t("chat.fastMode")}
-                    </strong>
                   </div>
-                  <span>
-                    {fastMode
-                      ? t("chat.fastModeActive")
-                      : t("chat.fastModeInactive")}
-                  </span>
                 </div>
-              </div>
-              <ContextFolderChip
-                contextFolder={contextFolder}
-                show
-                worktreeVisible={worktreeVisible}
-                onPickFolder={handlePickFolder}
-                onClearFolder={handleClearFolder}
-                onToggleWorktree={handleToggleWorktree}
-                onSelectRecentFolder={handleSelectRecentFolder}
-              />
+                <ContextFolderChip
+                  contextFolder={contextFolder}
+                  show
+                  worktreeVisible={worktreeVisible}
+                  onPickFolder={handlePickFolder}
+                  onClearFolder={handleClearFolder}
+                  onToggleWorktree={handleToggleWorktree}
+                  onSelectRecentFolder={handleSelectRecentFolder}
+                />
               </div>
               <button
                 type="button"

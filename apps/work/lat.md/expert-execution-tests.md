@@ -78,3 +78,20 @@ A failed `refresh_token` exchange clears the stored session instead of keeping a
 ## Minimum stage timeline
 
 `ExpertTimeline` exports a component tied to non-terminal phases and minimum display stages — no fabricated tool progress.
+
+## Consumer lock version pin
+
+`WORK_EXPERT_CONTRACT_VERSION` must match `contracts/work-expert/v1.0.2/consumer-lock.json`, and SHA256SUMS must list catalog/skill annotation schemas plus openapi.
+
+## Silent-call allowlist
+
+`canSilentCallExpertSkill` is true only for ready catalog, ready skill, `callEnabled === true`, `riskLevel === "low"`, and `approvalMode === "auto"`.
+
+## Context control active gate
+
+Inactive `ExpertContextControl` must not fetch health/catalog on mount; active instances load health and catalog.
+
+## Context control stale skills
+
+Delayed skills for Expert A must not overwrite Expert B after a fast A→B selection change.
+

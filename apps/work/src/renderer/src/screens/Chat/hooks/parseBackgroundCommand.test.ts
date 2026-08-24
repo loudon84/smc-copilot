@@ -25,4 +25,10 @@ describe("parseBackgroundCommand", () => {
     expect(parseBackgroundCommand("hello /btw")).toBeNull();
     expect(parseBackgroundCommand("")).toBeNull();
   });
+
+  it("documents that expert-selected /btw blocking is owned by Chat.tsx", () => {
+    // parseBackgroundCommand still returns the question; Chat.handleSubmitOrQueue
+    // and Chat onQuickAsk stop when expertSlug != null.
+    expect(parseBackgroundCommand("/btw still parsed")).toBe("still parsed");
+  });
 });

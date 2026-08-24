@@ -1,0 +1,9 @@
+{
+  "contractName": "WORK-EXPERT-CONTRACT",
+  "contractVersion": "1.0.2",
+  "providerRepository": "loudon84/nodeskclaw",
+  "tagName": "work-expert-contract-v1.0.2",
+  "tagTargetCommit": "ed408c354539eab3f4cabb119fbbc3df4b95efad",
+  "providerSha256sumsPath": "nodeskclaw-backend/contracts/work-expert/v1.0.2/SHA256SUMS",
+  "sha256sumsPath": "SHA256SUMS"
+}

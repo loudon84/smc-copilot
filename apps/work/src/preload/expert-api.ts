@@ -19,6 +19,9 @@ export function createExpertApi(): ExpertApi {
     listCatalog: () => ipcRenderer.invoke(EXPERT_IPC_CHANNELS.listCatalog),
     listSkills: (expertSlug) =>
       ipcRenderer.invoke(EXPERT_IPC_CHANNELS.listSkills, expertSlug),
+    getHealth: () => ipcRenderer.invoke(EXPERT_IPC_CHANNELS.getHealth),
+    refreshCatalog: () =>
+      ipcRenderer.invoke(EXPERT_IPC_CHANNELS.refreshCatalog),
     start: (input: ExpertStartInput) =>
       ipcRenderer.invoke(EXPERT_IPC_CHANNELS.start, input),
     cancel: (input: ExpertCancelInput) =>
@@ -37,7 +40,7 @@ export function createExpertApi(): ExpertApi {
       const listener = (
         _event: Electron.IpcRendererEvent,
         projection: ExpertRunProjection,
-      ) => {
+      ): void => {
         callback(projection);
       };
       ipcRenderer.on(EXPERT_IPC_CHANNELS.onProjectionChanged, listener);

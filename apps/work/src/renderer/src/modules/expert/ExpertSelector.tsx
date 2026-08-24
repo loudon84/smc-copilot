@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import type { JSX } from "react";
 import type {
   ExpertCatalogItem,
   ExpertSkillItem,
@@ -13,63 +13,36 @@ interface ExpertSelectorProps {
   disabled?: boolean;
   value: ExpertSelection;
   onChange: (value: ExpertSelection) => void;
+  catalog: ExpertCatalogItem[];
+  skills: ExpertSkillItem[];
+  skillsLoading?: boolean;
 }
 
+function catalogLabel(item: ExpertCatalogItem): string {
+  if (item.displayName && item.displayName.trim()) return item.displayName;
+  if (item.name.trim()) return item.name;
+  return item.slug;
+}
+
+function skillLabel(item: ExpertSkillItem): string {
+  if (item.displayName && item.displayName.trim()) return item.displayName;
+  return item.name;
+}
+
+/** Pure controlled Expert/Skill fields — no network. */
 export function ExpertSelector({
   disabled,
   value,
   onChange,
-}: ExpertSelectorProps) {
-  const [catalog, setCatalog] = useState<ExpertCatalogItem[]>([]);
-  const [skills, setSkills] = useState<ExpertSkillItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const loadCatalog = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const items = await window.hermesAPI.expert.listCatalog();
-      setCatalog(items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setCatalog([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
-
-  useEffect(() => {
-    if (!value.expertSlug) {
-      setSkills([]);
-      return;
-    }
-    let cancelled = false;
-    void window.hermesAPI.expert
-      .listSkills(value.expertSlug)
-      .then((items) => {
-        if (!cancelled) setSkills(items);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-          setSkills([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [value.expertSlug]);
-
+  catalog,
+  skills,
+  skillsLoading = false,
+}: ExpertSelectorProps): JSX.Element {
   return (
     <div className="expert-selector" data-testid="expert-selector">
       <select
         aria-label="Expert"
-        disabled={disabled || loading}
+        disabled={disabled}
         value={value.expertSlug ?? ""}
         onChange={(e) => {
           const slug = e.target.value || null;
@@ -78,36 +51,35 @@ export function ExpertSelector({
       >
         <option value="">Local Chat</option>
         {catalog.map((item) => (
-          <option key={item.slug} value={item.slug}>
-            {item.name}
+          <option
+            key={item.slug}
+            value={item.slug}
+            disabled={item.status !== "ready"}
+          >
+            {catalogLabel(item)}
           </option>
         ))}
       </select>
-      {value.expertSlug ? (
-        <select
-          aria-label="Skill"
-          disabled={disabled || skills.length === 0}
-          value={value.skillName ?? ""}
-          onChange={(e) => {
-            onChange({
-              expertSlug: value.expertSlug,
-              skillName: e.target.value || null,
-            });
-          }}
-        >
-          <option value="">Select skill</option>
-          {skills.map((skill) => (
-            <option key={skill.name} value={skill.name}>
-              {skill.name}
-            </option>
-          ))}
-        </select>
-      ) : null}
-      {error ? (
-        <span className="expert-selector-error" role="status">
-          {error}
-        </span>
-      ) : null}
+      <select
+        aria-label="Skill"
+        disabled={disabled || !value.expertSlug || skillsLoading}
+        value={value.skillName ?? ""}
+        onChange={(e) => {
+          onChange({
+            expertSlug: value.expertSlug,
+            skillName: e.target.value || null,
+          });
+        }}
+      >
+        <option value="">
+          {skillsLoading ? "Loading skills…" : "Select skill"}
+        </option>
+        {skills.map((skill) => (
+          <option key={skill.name} value={skill.name}>
+            {skillLabel(skill)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

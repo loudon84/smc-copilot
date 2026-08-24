@@ -2,29 +2,46 @@
  * Portal Auth IPC for apps/work (Login-only Phase 5).
  * Stripped of Portal view / MCP / GeneHub hooks from apps/desktop.
  */
-import { ipcMain } from "electron";
+import { ipcMain, type BrowserWindow } from "electron";
 import type {
   AuthEndpointConfig,
   LoginInput,
 } from "../../shared/auth/auth-contract";
-import { toPublicState } from "../../shared/auth/auth-contract";
+import {
+  AUTH_STATE_CHANGED_CHANNEL,
+  toPublicState,
+} from "../../shared/auth/auth-contract";
 import { getAuthClient } from "./auth-client";
 import {
   getDefaultAuthEndpointConfig,
   readAuthEndpointConfig,
   writeAuthEndpointConfig,
 } from "./auth-endpoint-config-store";
-import { ensureFreshAccessToken, refreshStoredAccessToken } from "./ensure-access-token";
+import {
+  ensureFreshAccessToken,
+  refreshStoredAccessToken,
+} from "./ensure-access-token";
 import {
   clearStoredSession,
   hydrateTokenStore,
   readStoredSession,
+  readStoredSessionSync,
+  subscribeStoredSessionChanges,
   writeStoredSession,
 } from "./token-store";
-import { disposeExpertSubsystem, restoreExpertSubsystemAfterAuth } from "../expert/expert-ipc";
+import {
+  disposeExpertSubsystem,
+  restoreExpertSubsystemAfterAuth,
+} from "../expert/expert-ipc";
 import { cleanupExpertArtifactTemps } from "../expert/expert-artifact-download";
 
-async function buildAuthState() {
+export type RegisterAuthIpcOptions = {
+  getMainWindow?: () => BrowserWindow | null;
+};
+
+let unsubscribeSessionChanges: (() => void) | null = null;
+
+async function buildAuthState(): Promise<ReturnType<typeof toPublicState>> {
   const endpointConfig = readAuthEndpointConfig();
   try {
     await ensureFreshAccessToken();
@@ -35,8 +52,23 @@ async function buildAuthState() {
   return toPublicState(session, endpointConfig);
 }
 
-export function registerAuthIpc(): void {
+function pushPublicAuthState(getMainWindow: () => BrowserWindow | null): void {
+  const win = getMainWindow();
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send(
+    AUTH_STATE_CHANGED_CHANNEL,
+    toPublicState(readStoredSessionSync(), readAuthEndpointConfig()),
+  );
+}
+
+export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
   void hydrateTokenStore();
+
+  const getMainWindow = options.getMainWindow ?? (() => null);
+  unsubscribeSessionChanges?.();
+  unsubscribeSessionChanges = subscribeStoredSessionChanges(() => {
+    pushPublicAuthState(getMainWindow);
+  });
 
   ipcMain.handle("auth:get-state", async () => buildAuthState());
 
@@ -95,4 +127,10 @@ export function registerAuthIpc(): void {
       return toPublicState(null, endpointConfig);
     }
   });
+}
+
+/** Test-only: drop session-change forwarder. */
+export function resetAuthIpcSessionForwarderForTests(): void {
+  unsubscribeSessionChanges?.();
+  unsubscribeSessionChanges = null;
 }

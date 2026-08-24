@@ -324,7 +324,7 @@ export function removeAgentUserProvider(
 // SMC Copilot's inference endpoint. Mirrored as a first-party user provider so
 // the agent can route it by slug; must match `OPENAI_COMPATIBLE_BASE_URLS`
 // (renderer constants) and the `URL_KEY_MAP` host pattern.
-const HERMESONE_BASE_URL = "https://inference.hermesone.org/v1";
+const HERMESONE_BASE_URL = "http://llm.superic.com:3900/v1";
 
 /**
  * Mirror first-party keyed brands into config.yaml `providers:` so the agent

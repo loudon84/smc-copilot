@@ -27,6 +27,12 @@ function mockGateway(
   return {
     listCatalog: vi.fn(),
     listSkills: vi.fn(),
+    getHealth: vi.fn().mockResolvedValue({
+      ok: true,
+      status: "ready",
+      gateway: {},
+      catalog: {},
+    }),
     callSkill: vi.fn().mockResolvedValue({
       committed: true,
       task_id: "task-1",
@@ -53,7 +59,8 @@ function mockGateway(
     getEventsToken: vi.fn(),
     cancelTask: vi.fn().mockResolvedValue({}),
     retryTask: vi.fn(),
-    buildArtifactDownloadPath: (id) => `/api/v1/hermes/artifacts/${id}/download`,
+    buildArtifactDownloadPath: (id) =>
+      `/api/v1/hermes/artifacts/${id}/download`,
     buildEventsPath: (id) => `/api/v1/hermes/tasks/${id}/events`,
     getBaseUrl: () => "http://expert.test:4510",
     getAccessToken: () => "token",
@@ -201,7 +208,9 @@ describe("expert-run-service", () => {
     // Exceed 10 minute poll budget.
     await vi.advanceTimersByTimeAsync(10 * 60_000 + 15_000);
     await vi.waitFor(() => {
-      expect(service.getProjection("req-1")?.errorCode).toBe("delivery-timeout");
+      expect(service.getProjection("req-1")?.errorCode).toBe(
+        "delivery-timeout",
+      );
     });
     service.dispose();
   });

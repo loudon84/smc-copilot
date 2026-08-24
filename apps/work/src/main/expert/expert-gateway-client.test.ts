@@ -29,6 +29,115 @@ vi.mock("../auth/ensure-access-token", () => ({
     /authentication expired|token expired|invalid authorization/i.test(message),
 }));
 
+function catalogTool(
+  overrides: {
+    name?: string;
+    slug?: string | null;
+    kind?: string;
+    status?: string;
+    publicSkillCount?: number;
+    callableSkillCount?: number;
+    omitSlug?: boolean;
+  } = {},
+) {
+  const annotations: Record<string, unknown> = {
+    kind: overrides.kind ?? "expert",
+    status: overrides.status ?? "ready",
+    publicSkillCount: overrides.publicSkillCount ?? 1,
+    callableSkillCount: overrides.callableSkillCount ?? 1,
+  };
+  if (!overrides.omitSlug) {
+    annotations.slug = overrides.slug === null ? null : (overrides.slug ?? "call-prep");
+  }
+  return {
+    name: overrides.name ?? "call-prep",
+    description: "Customer research expert",
+    annotations,
+  };
+}
+
+function skillTool(
+  overrides: {
+    name?: string;
+    status?: string;
+    callEnabled?: boolean | null;
+    riskLevel?: string;
+    approvalMode?: string;
+  } = {},
+) {
+  return {
+    name: overrides.name ?? "customer-profiling",
+    annotations: {
+      status: overrides.status ?? "ready",
+      callEnabled:
+        overrides.callEnabled === undefined ? true : overrides.callEnabled,
+      riskLevel: overrides.riskLevel ?? "low",
+      approvalMode: overrides.approvalMode ?? "auto",
+    },
+  };
+}
+
+function jsonRpcResult(tools: unknown[]) {
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: "1", result: { tools } }),
+    { status: 200 },
+  );
+}
+
+function healthOk(ok = true) {
+  return new Response(
+    JSON.stringify({
+      ok,
+      status: ok ? "ready" : "degraded",
+      gateway: { version: "1" },
+      catalog: { count: 1 },
+    }),
+    { status: 200 },
+  );
+}
+
+function acceptedCall() {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: "call-1",
+      result: {
+        content: [{ type: "text", text: "started" }],
+        structuredContent: {
+          committed: true,
+          task_id: "task-1",
+          status: "running",
+          event_stream: "/api/v1/hermes/tasks/task-1/events?token=x",
+          event_token_url: "/api/v1/hermes/tasks/task-1/events-token",
+          result_url: "/api/v1/hermes/tasks/task-1/result",
+          artifact_url: "/api/v1/hermes/tasks/task-1/artifacts",
+          wait_strategy: { type: "sse", fallback: "poll" },
+        },
+        isError: false,
+      },
+    }),
+    { status: 200 },
+  );
+}
+
+function isToolsCall(url: unknown): boolean {
+  return typeof url === "string" && url.includes("/mcp/") && !url.endsWith("/mcp");
+}
+
+function methodOf(init: RequestInit | undefined): string {
+  return (init?.method ?? "GET").toUpperCase();
+}
+
+function bodyMethod(init: RequestInit | undefined): string | null {
+  if (typeof init?.body !== "string") return null;
+  try {
+    const parsed = JSON.parse(init.body) as { method?: string };
+    return typeof parsed.method === "string" ? parsed.method : null;
+  } catch {
+    return null;
+  }
+}
+
 describe("expert-gateway-client", () => {
   afterEach(() => {
     resetExpertGatewayClientForTests();
@@ -38,24 +147,7 @@ describe("expert-gateway-client", () => {
   it("lists catalog tools and caches by TTL", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: "1",
-            result: {
-              tools: [
-                {
-                  name: "call-prep",
-                  description: "Customer research expert",
-                  annotations: { kind: "expert", slug: "call-prep" },
-                },
-              ],
-            },
-          }),
-          { status: 200 },
-        ),
-      );
+      .mockResolvedValueOnce(jsonRpcResult([catalogTool()]));
 
     let now = 1_000;
     const client = createExpertGatewayClient({
@@ -72,6 +164,10 @@ describe("expert-gateway-client", () => {
         description: "Customer research expert",
         slug: "call-prep",
         kind: "expert",
+        displayName: undefined,
+        status: "ready",
+        publicSkillCount: 1,
+        callableSkillCount: 1,
         inputSchema: undefined,
       },
     ]);
@@ -80,45 +176,103 @@ describe("expert-gateway-client", () => {
 
     now += 61_000;
     fetchImpl.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: "2",
-          result: { tools: [{ name: "other", annotations: { slug: "other" } }] },
+      jsonRpcResult([
+        catalogTool({
+          name: "other",
+          slug: "other",
         }),
-        { status: 200 },
-      ),
+      ]),
     );
     const third = await client.listCatalog();
     expect(third[0]?.slug).toBe("other");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  // @lat: [[expert-execution-tests#Skill exact call]]
-  it("reads structuredContent from accepted tools/call", async () => {
+  it("rejects catalog items missing slug or illegal annotations", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: "call-1",
-          result: {
-            content: [{ type: "text", text: "started" }],
-            structuredContent: {
-              committed: true,
-              task_id: "task-1",
-              status: "running",
-              event_stream: "/api/v1/hermes/tasks/task-1/events?token=x",
-              event_token_url: "/api/v1/hermes/tasks/task-1/events-token",
-              result_url: "/api/v1/hermes/tasks/task-1/result",
-              artifact_url: "/api/v1/hermes/tasks/task-1/artifacts",
-              wait_strategy: { type: "sse", fallback: "poll" },
-            },
-            isError: false,
-          },
+      jsonRpcResult([
+        catalogTool({ omitSlug: true }),
+        catalogTool({ slug: "bad-kind", kind: "agent" }),
+        catalogTool({
+          slug: "bad-count",
+          publicSkillCount: -1 as unknown as number,
         }),
-        { status: 200 },
-      ),
+        catalogTool({ slug: "ok" }),
+      ]),
     );
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const items = await client.listCatalog();
+    expect(items.map((item) => item.slug)).toEqual(["ok"]);
+  });
+
+  it("parses skill annotations including callEnabled false", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonRpcResult([
+        skillTool({ callEnabled: false, riskLevel: "high" }),
+        { name: "no-name-valid", annotations: {} },
+      ]),
+    );
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const skills = await client.listSkills("call-prep");
+    expect(skills).toHaveLength(2);
+    expect(skills[0]).toMatchObject({
+      name: "customer-profiling",
+      callEnabled: false,
+      riskLevel: "high",
+      approvalMode: "auto",
+    });
+  });
+
+  it("getHealth parses direct JSON and rejects invalid payload", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(healthOk(true))
+      .mockResolvedValueOnce(
+        new Response("not-json", { status: 200 }),
+      );
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(client.getHealth()).resolves.toMatchObject({
+      ok: true,
+      status: "ready",
+    });
+    await expect(client.getHealth()).rejects.toMatchObject({
+      name: "ExpertGatewayError",
+      status: 200,
+      errorCode: "INVALID_HEALTH_PAYLOAD",
+    } satisfies Partial<ExpertGatewayError>);
+  });
+
+  it("getHealth returns ok=false without throwing", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(healthOk(false));
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(client.getHealth()).resolves.toMatchObject({ ok: false });
+  });
+
+  // @lat: [[expert-execution-tests#Skill exact call]]
+  it("reads structuredContent from accepted tools/call after gates", async () => {
+    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+        return Promise.resolve(healthOk(true));
+      }
+      if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+        return Promise.resolve(jsonRpcResult([catalogTool()]));
+      }
+      if (bodyMethod(init) === "tools/list" && url.includes("/mcp/call-prep")) {
+        return Promise.resolve(jsonRpcResult([skillTool()]));
+      }
+      if (bodyMethod(init) === "tools/call") {
+        return Promise.resolve(acceptedCall());
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
 
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -130,30 +284,103 @@ describe("expert-gateway-client", () => {
       idempotencyKey: "idem-1",
     });
     expect(accepted.task_id).toBe("task-1");
-    expect(accepted.event_token_url).toContain("events-token");
-    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const call = fetchImpl.mock.calls.find(
+      ([url, init]) =>
+        bodyMethod(init as RequestInit) === "tools/call" && isToolsCall(url),
+    );
+    expect(call).toBeTruthy();
+    const [, init] = call as [string, RequestInit];
     expect((init.headers as Headers).get("X-Idempotency-Key")).toBe("idem-1");
     expect((init.headers as Headers).get("Authorization")).toBe(
       "Bearer test-access-token",
     );
   });
 
+  it("does not emit tools/call when health ok is false", async () => {
+    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+        return Promise.resolve(healthOk(false));
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(
+      client.callSkill({
+        expertSlug: "call-prep",
+        skillName: "customer-profiling",
+        prompt: "x",
+        idempotencyKey: "idem-x",
+      }),
+    ).rejects.toMatchObject({ errorCode: "GATEWAY_UNHEALTHY" });
+    expect(
+      fetchImpl.mock.calls.some(
+        ([, init]) => bodyMethod(init as RequestInit) === "tools/call",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not emit tools/call when skill is not silently callable", async () => {
+    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+        return Promise.resolve(healthOk(true));
+      }
+      if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+        return Promise.resolve(jsonRpcResult([catalogTool()]));
+      }
+      if (bodyMethod(init) === "tools/list" && url.includes("/mcp/call-prep")) {
+        return Promise.resolve(
+          jsonRpcResult([skillTool({ callEnabled: false })]),
+        );
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(
+      client.callSkill({
+        expertSlug: "call-prep",
+        skillName: "customer-profiling",
+        prompt: "x",
+        idempotencyKey: "idem-y",
+      }),
+    ).rejects.toMatchObject({ errorCode: "SILENT_CALL_DENIED" });
+    expect(
+      fetchImpl.mock.calls.some(
+        ([, init]) => bodyMethod(init as RequestInit) === "tools/call",
+      ),
+    ).toBe(false);
+  });
+
   // @lat: [[expert-execution-tests#JSON-RPC 200-with-error]]
   it("surfaces JSON-RPC application errors on HTTP 200", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: "err-1",
-          error: {
-            code: -32022,
-            message: "Permission denied",
-            data: { errorCode: "EXPERT_PERMISSION_DENIED" },
-          },
-        }),
-        { status: 200 },
-      ),
-    );
+    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+        return Promise.resolve(healthOk(true));
+      }
+      if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+        return Promise.resolve(jsonRpcResult([catalogTool()]));
+      }
+      if (bodyMethod(init) === "tools/list" && url.includes("/mcp/call-prep")) {
+        return Promise.resolve(jsonRpcResult([skillTool()]));
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: "err-1",
+            error: {
+              code: -32022,
+              message: "Permission denied",
+              data: { errorCode: "EXPERT_PERMISSION_DENIED" },
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    });
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -216,18 +443,7 @@ describe("expert-gateway-client", () => {
           { status: 200 },
         ),
       )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: "2",
-            result: {
-              tools: [{ name: "call-prep", annotations: { slug: "call-prep" } }],
-            },
-          }),
-          { status: 200 },
-        ),
-      );
+      .mockResolvedValueOnce(jsonRpcResult([catalogTool()]));
 
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -238,8 +454,10 @@ describe("expert-gateway-client", () => {
     expect(items[0]?.slug).toBe("call-prep");
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    const firstAuth = (fetchImpl.mock.calls[0]?.[1] as RequestInit).headers as Headers;
-    const secondAuth = (fetchImpl.mock.calls[1]?.[1] as RequestInit).headers as Headers;
+    const firstAuth = (fetchImpl.mock.calls[0]?.[1] as RequestInit)
+      .headers as Headers;
+    const secondAuth = (fetchImpl.mock.calls[1]?.[1] as RequestInit)
+      .headers as Headers;
     expect(firstAuth.get("Authorization")).toBe("Bearer expired-token");
     expect(secondAuth.get("Authorization")).toBe("Bearer fresh-token");
   });

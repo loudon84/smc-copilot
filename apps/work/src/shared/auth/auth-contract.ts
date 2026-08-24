@@ -64,12 +64,16 @@ export interface InternalAuthSession extends PublicAuthSession {
   refreshToken?: string;
 }
 
+/** Main → Renderer public auth state push (no tokens). */
+export const AUTH_STATE_CHANGED_CHANNEL = "auth:state-changed";
+
 export interface DesktopAuthAPI {
   getState(): Promise<DesktopAuthState>;
   saveEndpointConfig(config: AuthEndpointConfig): Promise<AuthEndpointConfig>;
   login(input: LoginInput): Promise<DesktopAuthState>;
   logout(): Promise<DesktopAuthState>;
   refresh(): Promise<DesktopAuthState>;
+  onStateChanged(listener: (state: DesktopAuthState) => void): () => void;
 }
 
 export function toPublicState(
@@ -93,7 +97,9 @@ export function toPublicState(
 }
 
 /** Maps legacy internal session shape to StoredAuthSession */
-export function internalToStored(session: InternalAuthSession): StoredAuthSession {
+export function internalToStored(
+  session: InternalAuthSession,
+): StoredAuthSession {
   return {
     accessToken: session.accessToken,
     refreshToken: session.refreshToken,
@@ -109,7 +115,9 @@ export function internalToStored(session: InternalAuthSession): StoredAuthSessio
 }
 
 /** @deprecated Use toPublicState */
-export function toPublicSession(session: InternalAuthSession): PublicAuthSession {
+export function toPublicSession(
+  session: InternalAuthSession,
+): PublicAuthSession {
   return {
     userId: session.userId,
     username: session.username,

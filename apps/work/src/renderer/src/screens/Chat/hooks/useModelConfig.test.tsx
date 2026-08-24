@@ -115,7 +115,7 @@ describe("useModelConfig", () => {
         name: "hermesone-swift",
         provider: "custom",
         model: "hermesone-swift",
-        baseUrl: "https://inference.hermesone.org/v1",
+        baseUrl: "http://llm.superic.com:3900/v1",
         createdAt: 1,
       },
     ];

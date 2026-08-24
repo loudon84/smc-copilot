@@ -140,7 +140,7 @@ export const PROVIDERS = {
       url: "https://console.hermesone.org/credits",
       placeholder: "hs-live-...",
       configProvider: "custom",
-      baseUrl: "https://inference.hermesone.org/v1",
+      baseUrl: "http://llm.superic.com:3900/v1",
       needsKey: true,
     },
     {
@@ -376,7 +376,7 @@ export const PROVIDER_CARDS: { id: string; name: string }[] = [
 // picker routes it consistently (autofill base_url + persist as `custom`).
 // Keep this in sync with LOCAL_PRESETS below.
 export const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
-  hermesone: "https://inference.hermesone.org/v1",
+  hermesone: "http://llm.superic.com:3900/v1",
   openai: "https://api.openai.com/v1",
   aimlapi: "https://api.aimlapi.com/v1",
   mistral: "https://api.mistral.ai/v1",

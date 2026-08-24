@@ -1,3 +1,4 @@
+import { useState, type JSX } from "react";
 import type { ExpertRunProjection } from "../../../../shared/expert";
 import {
   createClientRequestId,
@@ -16,7 +17,8 @@ export function ExpertRunCard({
   projection,
   authGeneration,
   onCancel,
-}: ExpertRunCardProps) {
+}: ExpertRunCardProps): JSX.Element {
+  const [retryError, setRetryError] = useState<string | null>(null);
   const terminal = isExpertTerminalPhase(projection.phase);
   const canRetry =
     projection.phase === "failed" ||
@@ -39,6 +41,7 @@ export function ExpertRunCard({
       {projection.errorMessage ? (
         <p role="alert">{projection.errorMessage}</p>
       ) : null}
+      {retryError ? <p role="alert">{retryError}</p> : null}
       {projection.resultSummary ? <p>{projection.resultSummary}</p> : null}
       {projection.resultContent ? (
         <pre className="expert-run-result">{projection.resultContent}</pre>
@@ -72,7 +75,9 @@ export function ExpertRunCard({
         {!terminal ? (
           <button
             type="button"
-            onClick={() => onCancel(projection.clientRequestId, projection.taskId)}
+            onClick={() =>
+              onCancel(projection.clientRequestId, projection.taskId)
+            }
           >
             Cancel
           </button>
@@ -81,6 +86,7 @@ export function ExpertRunCard({
           <button
             type="button"
             onClick={() => {
+              setRetryError(null);
               const nextRequest = {
                 kind: "expert" as const,
                 expertSlug: projection.expertSlug,
@@ -99,7 +105,9 @@ export function ExpertRunCard({
                 })
                 .then(upsertExpertProjection)
                 .catch((err) => {
-                  console.warn("[expert] retry failed", err);
+                  setRetryError(
+                    err instanceof Error ? err.message : String(err),
+                  );
                 });
             }}
           >

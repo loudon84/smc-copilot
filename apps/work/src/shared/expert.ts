@@ -1,12 +1,12 @@
 /**
  * Work Explicit Expert cross-process DTO owner.
- * Derived from WORK-EXPERT-CONTRACT v1.0.1 (OpenAPI / SSE / MCP / fixtures).
+ * Derived from WORK-EXPERT-CONTRACT v1.0.2 (OpenAPI / SSE / MCP / fixtures).
  * Do not invent fields from wiki prose — keep in sync with contract artifacts.
  */
 
 /** Contract identity pinned by consumer lock (tag + SHA + SHA256SUMS when available). */
 export const WORK_EXPERT_CONTRACT_NAME = "WORK-EXPERT-CONTRACT";
-export const WORK_EXPERT_CONTRACT_VERSION = "1.0.1";
+export const WORK_EXPERT_CONTRACT_VERSION = "1.0.2";
 
 /** Local Expert request lifecycle (not HermesTask status). */
 export type ExpertLocalPhase =
@@ -56,7 +56,11 @@ export type HermesTaskStatus =
   | string;
 
 /** Minimum UI stages when runtimeProgress=false. */
-export type ExpertDisplayStage = "preparing" | "running" | "finalizing" | string;
+export type ExpertDisplayStage =
+  | "preparing"
+  | "running"
+  | "finalizing"
+  | string;
 
 /** Immutable snapshot taken at submit time — never re-read live toolbar state. */
 export interface ExpertRequest {
@@ -78,13 +82,59 @@ export interface ExpertCatalogItem {
   description?: string;
   slug: string;
   kind?: string;
+  displayName?: string;
+  /** `ready` is callable; missing/unknown must not be treated as ready. */
+  status?: string;
+  publicSkillCount?: number;
+  callableSkillCount?: number;
   inputSchema?: Record<string, unknown>;
 }
 
 export interface ExpertSkillItem {
   name: string;
   description?: string;
+  displayName?: string;
+  status?: string;
+  callEnabled?: boolean;
+  riskLevel?: string | null;
+  approvalMode?: string | null;
   inputSchema?: Record<string, unknown>;
+}
+
+export type ExpertGatewayStatus =
+  | "checking"
+  | "ready"
+  | "error"
+  | "unavailable"
+  | "unknown";
+
+export interface ExpertHealthResponse {
+  ok: boolean;
+  status: string;
+  gateway: Record<string, unknown>;
+  catalog: Record<string, unknown>;
+}
+
+export interface SelectedCallability {
+  catalogStatus: string | null;
+  skillStatus: string | null;
+  callEnabled: boolean;
+  riskLevel: string | null;
+  approvalMode: string | null;
+  canSilentCall: boolean;
+}
+
+export function canSilentCallExpertSkill(
+  catalogItem: ExpertCatalogItem,
+  skillItem: ExpertSkillItem,
+): boolean {
+  return (
+    catalogItem.status === "ready" &&
+    skillItem.status === "ready" &&
+    skillItem.callEnabled === true &&
+    skillItem.riskLevel === "low" &&
+    skillItem.approvalMode === "auto"
+  );
 }
 
 export interface ExpertWaitStrategy {
@@ -301,6 +351,8 @@ export interface ExpertRunContinuationItem {
 export const EXPERT_IPC_CHANNELS = {
   listCatalog: "expert:list-catalog",
   listSkills: "expert:list-skills",
+  getHealth: "expert:get-health",
+  refreshCatalog: "expert:refresh-catalog",
   start: "expert:start",
   cancel: "expert:cancel",
   retry: "expert:retry",
@@ -339,10 +391,14 @@ export interface ExpertDownloadArtifactInput {
 export interface ExpertApi {
   listCatalog: () => Promise<ExpertCatalogItem[]>;
   listSkills: (expertSlug: string) => Promise<ExpertSkillItem[]>;
+  getHealth: () => Promise<ExpertHealthResponse>;
+  refreshCatalog: () => Promise<ExpertCatalogItem[]>;
   start: (input: ExpertStartInput) => Promise<ExpertRunProjection>;
   cancel: (input: ExpertCancelInput) => Promise<ExpertRunProjection | null>;
   retry: (input: ExpertRetryInput) => Promise<ExpertRunProjection>;
-  getProjection: (clientRequestId: string) => Promise<ExpertRunProjection | null>;
+  getProjection: (
+    clientRequestId: string,
+  ) => Promise<ExpertRunProjection | null>;
   listProjections: (sessionId: string) => Promise<ExpertRunProjection[]>;
   rehydrateSession: (sessionId: string) => Promise<ExpertRunProjection[]>;
   downloadArtifact: (

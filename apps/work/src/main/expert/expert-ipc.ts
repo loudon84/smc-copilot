@@ -13,13 +13,17 @@ import {
 } from "../../shared/expert";
 import { ensureFreshAccessToken } from "../auth/ensure-access-token";
 import { readStoredSessionSync } from "../auth/token-store";
-import { downloadExpertArtifact, cleanupExpertArtifactTemps } from "./expert-artifact-download";
+import {
+  downloadExpertArtifact,
+  cleanupExpertArtifactTemps,
+} from "./expert-artifact-download";
 import {
   rehydrateExpertContinuationsForSession,
   upsertExpertContinuationProjection,
 } from "./expert-continuation";
 import {
   getExpertGatewayClient,
+  ExpertGatewayError,
   resetExpertGatewayClientForTests,
 } from "./expert-gateway-client";
 import {
@@ -42,6 +46,19 @@ async function requireAuthSession(): Promise<{ userId: string }> {
   await ensureFreshAccessToken();
   const session = readStoredSessionSync();
   return { userId: session?.user?.id ?? "unknown" };
+}
+
+/** Preserve status/errorCode across Electron IPC structured clone. */
+function rethrowGatewayError(err: unknown): never {
+  if (err instanceof ExpertGatewayError) {
+    throw {
+      name: "ExpertGatewayError",
+      message: err.message,
+      status: err.status,
+      errorCode: err.errorCode,
+    };
+  }
+  throw err;
 }
 
 function validateRequest(value: unknown): ExpertRequest {
@@ -99,10 +116,7 @@ function attachProjectionForwarder(
   unsubscribeProjection = service.onProjectionChanged((projection) => {
     const win = getMainWindow();
     if (win && !win.isDestroyed()) {
-      win.webContents.send(
-        EXPERT_IPC_CHANNELS.onProjectionChanged,
-        projection,
-      );
+      win.webContents.send(EXPERT_IPC_CHANNELS.onProjectionChanged, projection);
     }
     const session = readStoredSessionSync();
     if (session?.user?.id) {
@@ -149,6 +163,24 @@ export function registerExpertIpc(options: {
     },
   );
 
+  ipcMain.handle(EXPERT_IPC_CHANNELS.getHealth, async (event) => {
+    assertSender(event);
+    await requireAuthSession();
+    try {
+      return await getExpertGatewayClient().getHealth();
+    } catch (err) {
+      rethrowGatewayError(err);
+    }
+  });
+
+  ipcMain.handle(EXPERT_IPC_CHANNELS.refreshCatalog, async (event) => {
+    assertSender(event);
+    await requireAuthSession();
+    const client = getExpertGatewayClient();
+    client.clearCache();
+    return client.listCatalog();
+  });
+
   ipcMain.handle(
     EXPERT_IPC_CHANNELS.start,
     async (event, input: ExpertStartInput) => {
@@ -185,7 +217,10 @@ export function registerExpertIpc(options: {
       }
       const request = validateRequest(input.request);
       assertAuthGeneration(request, auth.userId);
-      return getExpertRunService().retry(input.previousClientRequestId, request);
+      return getExpertRunService().retry(
+        input.previousClientRequestId,
+        request,
+      );
     },
   );
 

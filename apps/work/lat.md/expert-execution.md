@@ -4,7 +4,9 @@ Work runs Explicit Experts: pick Expert/Skill in Chat, submit, Main orchestrates
 
 ## Shared DTO owner
 
-Cross-process types live in [[src/shared/expert.ts]]: `ExpertRequest`, catalog/skill, HermesTask status/result, SSE events, artifacts, terminal phases. Fields follow v1.0.1 schemas; Renderer never sees JWT or backend URLs.
+Cross-process types live in [[src/shared/expert.ts]]: health, annotations, `canSilentCallExpertSkill`, and HermesTask DTOs for v1.0.2.
+
+Fields follow contract schemas; Renderer never sees JWT or backend URLs. Consumer lock: `contracts/work-expert/v1.0.2/`.
 
 ## Gateway client
 
@@ -12,7 +14,7 @@ Cross-process types live in [[src/shared/expert.ts]]: `ExpertRequest`, catalog/s
 
 Base URL from [[src/main/auth/auth-endpoint-config-store.ts]] (not Hermes `getApiUrl`). JWT from [[src/main/auth/ensure-access-token.ts#ensureFreshAccessToken]].
 
-Refresh when `expiresAt` is due, and once more after backend `Authentication expired`. Catalog/Skill JSON-RPC with TTL cache; exact skill call sends `X-Idempotency-Key` and reads `structuredContent`. HermesTask status/snapshot/result/cancel and artifact paths. JSON-RPC errors on HTTP 200 and REST 4xx surface as `ExpertGatewayError`.
+`getHealth` uses `openAuthorizedGet` with direct JSON parse (no `httpGetData`). Catalog/Skill parsers reject illegal annotations; production never falls back `slug = tool.name`. `callSkill` forces health + catalog ready + `canSilentCallExpertSkill` before `tools/call`.
 
 ## Run service and SSE framing
 
@@ -22,15 +24,21 @@ SSE framing reuses [[src/main/run-stream.ts#parseRunSseBlock]] with optional `id
 
 ## IPC and preload bridge
 
-[[src/main/expert/expert-ipc.ts]] registers narrow handlers; validates sender, session/profile, DTOs; artifact download accepts server `artifact_id` only.
+[[src/main/expert/expert-ipc.ts]] registers narrow handlers including `expert:get-health` and `expert:refresh-catalog`; validates sender, session/profile, DTOs; artifact download accepts server `artifact_id` only.
 
-[[src/preload/expert-api.ts]] exposes `window.hermesAPI.expert`. [[src/main/app/start.ts#startMainProcess]] registers Expert IPC; logout/`before-quit` call [[src/main/expert/expert-ipc.ts#disposeExpertSubsystem]].
+[[src/preload/expert-api.ts]] exposes `window.hermesAPI.expert`. [[src/main/app/start.ts#startMainProcess]] registers Expert IPC and `registerAuthIpc({ getMainWindow })`; logout/`before-quit` call [[src/main/expert/expert-ipc.ts#disposeExpertSubsystem]].
+
+## Auth state push
+
+[[src/main/auth/token-store.ts]] notifies after write/clear. [[src/main/auth/auth-ipc.ts]] forwards `DesktopAuthState` on `auth:state-changed`. [[src/preload/auth-api.ts]] `onStateChanged` returns unsubscribe.
 
 ## Renderer module and Chat integration
 
-[[src/renderer/src/modules/expert/index.ts]] exports Selector, RunCard, Timeline, and projection store. Minimum stages only — no tool-level progress when `runtimeProgress=false`.
+[[src/renderer/src/modules/expert/index.ts]] exports Control, Chip/Popover, fields-only Selector, RunCard, Timeline, and projection store.
 
-[[src/renderer/src/screens/Chat/Chat.tsx]] builds immutable `ExpertRequest` on submit, Slash-first routing, queued vs in-flight cancel, Expert mode disables local toolbar without forwarding remotely.
+Control owns health/catalog/skill/refresh/revision; Chat holds selection truth and UI send gates. Incomplete Expert Context never falls through to Local Chat.
+
+[[src/renderer/src/screens/Chat/Chat.tsx]] builds immutable `ExpertRequest` on submit, Slash-first routing, queued vs in-flight cancel, Expert selection disables local toolbar without forwarding remotely.
 
 ## Continuation and artifacts
 

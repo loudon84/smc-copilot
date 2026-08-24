@@ -141,7 +141,7 @@ describe("agent-config providers (config.yaml bridge)", () => {
     m.upsertAgentUserProvider("default", {
       name: "SMC Copilot",
       slug: "hermesone",
-      baseUrl: "https://inference.hermesone.org/v1",
+      baseUrl: "http://llm.superic.com:3900/v1",
       keyEnv: "HERMESONE_API_KEY",
     });
     const content = readConfig();
@@ -152,7 +152,7 @@ describe("agent-config providers (config.yaml bridge)", () => {
       {
         slug: "hermesone",
         name: "SMC Copilot",
-        baseUrl: "https://inference.hermesone.org/v1",
+        baseUrl: "http://llm.superic.com:3900/v1",
         keyEnv: "HERMESONE_API_KEY",
       },
     ]);
@@ -167,7 +167,7 @@ describe("agent-config providers (config.yaml bridge)", () => {
     const m = await mod();
     m.upsertAgentUserProvider("default", {
       name: "SMC Copilot",
-      baseUrl: "https://inference.hermesone.org/v1",
+      baseUrl: "http://llm.superic.com:3900/v1",
       keyEnv: "HERMESONE_API_KEY",
     });
     expect(readConfig()).toBe(before);

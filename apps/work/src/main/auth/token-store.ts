@@ -2,20 +2,50 @@ import { app, safeStorage } from "electron";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import type { StoredAuthSession } from "../../shared/auth/auth-contract";
-import { internalToStored, type InternalAuthSession } from "../../shared/auth/auth-contract";
+import {
+  internalToStored,
+  type InternalAuthSession,
+} from "../../shared/auth/auth-contract";
 
 const KEYTAR_SERVICE = "hermes-work-auth";
 const KEYTAR_ACCOUNT = "session";
 
-const AUTH_DIR = () => join(app.getPath("userData"), "auth");
-const SESSION_FILE = () => join(AUTH_DIR(), "session.enc");
+const AUTH_DIR = (): string => join(app.getPath("userData"), "auth");
+const SESSION_FILE = (): string => join(AUTH_DIR(), "session.enc");
 
 let memorySession: StoredAuthSession | null = null;
 let cachedAccessToken: string | null = null;
 
+type StoredSessionChangeListener = () => void;
+const storedSessionChangeListeners = new Set<StoredSessionChangeListener>();
+
+export function subscribeStoredSessionChanges(
+  listener: StoredSessionChangeListener,
+): () => void {
+  storedSessionChangeListeners.add(listener);
+  return () => {
+    storedSessionChangeListeners.delete(listener);
+  };
+}
+
+function notifyStoredSessionChanges(): void {
+  for (const listener of storedSessionChangeListeners) {
+    listener();
+  }
+}
+
+/** Test-only: clear Main-internal session-change subscribers. */
+export function resetStoredSessionChangeListenersForTests(): void {
+  storedSessionChangeListeners.clear();
+}
+
 type KeytarModule = {
   getPassword(service: string, account: string): Promise<string | null>;
-  setPassword(service: string, account: string, password: string): Promise<void>;
+  setPassword(
+    service: string,
+    account: string,
+    password: string,
+  ): Promise<void>;
   deletePassword(service: string, account: string): Promise<boolean>;
 };
 
@@ -24,7 +54,8 @@ async function loadKeytar(): Promise<KeytarModule | null> {
     // Optional native dependency — resolve at runtime without a hard package.json dep.
     const req = Function("return require")() as NodeRequire;
     const mod = req("keytar") as KeytarModule | { default: KeytarModule };
-    const keytar = "default" in mod && mod.default ? mod.default : (mod as KeytarModule);
+    const keytar =
+      "default" in mod && mod.default ? mod.default : (mod as KeytarModule);
     if (
       typeof keytar.getPassword !== "function" ||
       typeof keytar.setPassword !== "function" ||
@@ -110,8 +141,11 @@ export function readEncryptedSession(): InternalAuthSession | null {
   };
 }
 
-export async function writeStoredSession(session: StoredAuthSession): Promise<void> {
+export async function writeStoredSession(
+  session: StoredAuthSession,
+): Promise<void> {
   setMemoryCache(session);
+  notifyStoredSessionChanges();
   const payload = serialize(session);
 
   const keytar = await loadKeytar();
@@ -138,6 +172,7 @@ export async function writeStoredSession(session: StoredAuthSession): Promise<vo
 
 export async function clearStoredSession(): Promise<void> {
   setMemoryCache(null);
+  notifyStoredSessionChanges();
 
   const keytar = await loadKeytar();
   if (keytar) {

@@ -21,6 +21,7 @@ import type {
   ExpertArtifactDescriptor,
   ExpertCatalogItem,
   ExpertEventsToken,
+  ExpertHealthResponse,
   ExpertJsonRpcError,
   ExpertSkillItem,
   HermesTaskRead,
@@ -28,6 +29,7 @@ import type {
   HermesTaskSnapshot,
 } from "../../shared/expert";
 import {
+  canSilentCallExpertSkill,
   extractJsonRpcErrorCode,
   WORK_EXPERT_CONTRACT_VERSION,
 } from "../../shared/expert";
@@ -60,6 +62,7 @@ interface CacheEntry<T> {
 export interface ExpertGatewayClient {
   listCatalog(): Promise<ExpertCatalogItem[]>;
   listSkills(expertSlug: string): Promise<ExpertSkillItem[]>;
+  getHealth(): Promise<ExpertHealthResponse>;
   callSkill(input: {
     expertSlug: string;
     skillName: string;
@@ -170,20 +173,43 @@ function unwrapApiData<T>(body: unknown): T {
   return body.data as T;
 }
 
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 function parseCatalogTools(result: unknown): ExpertCatalogItem[] {
   if (!isRecord(result) || !Array.isArray(result.tools)) return [];
   const out: ExpertCatalogItem[] = [];
   for (const tool of result.tools) {
     if (!isRecord(tool) || typeof tool.name !== "string") continue;
     const annotations = isRecord(tool.annotations) ? tool.annotations : {};
-    const slug =
-      typeof annotations.slug === "string" ? annotations.slug : tool.name;
+    const kind = annotations.kind;
+    if (kind !== "expert" && kind !== "expert_team") continue;
+    const slug = annotations.slug;
+    if (typeof slug !== "string" || slug.trim() === "") continue;
+    if (
+      !isNonNegativeInteger(annotations.publicSkillCount) ||
+      !isNonNegativeInteger(annotations.callableSkillCount)
+    ) {
+      continue;
+    }
+    const displayName =
+      typeof annotations.displayName === "string" &&
+      annotations.displayName.trim() !== ""
+        ? annotations.displayName
+        : undefined;
+    const status =
+      typeof annotations.status === "string" ? annotations.status : undefined;
     out.push({
       name: tool.name,
       description:
         typeof tool.description === "string" ? tool.description : undefined,
       slug,
-      kind: typeof annotations.kind === "string" ? annotations.kind : undefined,
+      kind,
+      displayName,
+      status,
+      publicSkillCount: annotations.publicSkillCount,
+      callableSkillCount: annotations.callableSkillCount,
       inputSchema: isRecord(tool.inputSchema)
         ? (tool.inputSchema as Record<string, unknown>)
         : undefined,
@@ -196,17 +222,78 @@ function parseSkillTools(result: unknown): ExpertSkillItem[] {
   if (!isRecord(result) || !Array.isArray(result.tools)) return [];
   const out: ExpertSkillItem[] = [];
   for (const tool of result.tools) {
-    if (!isRecord(tool) || typeof tool.name !== "string") continue;
+    if (
+      !isRecord(tool) ||
+      typeof tool.name !== "string" ||
+      tool.name.trim() === ""
+    ) {
+      continue;
+    }
+    const annotations = isRecord(tool.annotations) ? tool.annotations : {};
+    const status =
+      typeof annotations.status === "string" ? annotations.status : undefined;
+    const callEnabled = annotations.callEnabled === true;
+    const riskLevel =
+      typeof annotations.riskLevel === "string" ? annotations.riskLevel : null;
+    const approvalMode =
+      typeof annotations.approvalMode === "string"
+        ? annotations.approvalMode
+        : null;
+    const displayName =
+      typeof annotations.displayName === "string" &&
+      annotations.displayName.trim() !== ""
+        ? annotations.displayName
+        : undefined;
     out.push({
       name: tool.name,
       description:
         typeof tool.description === "string" ? tool.description : undefined,
+      displayName,
+      status,
+      callEnabled,
+      riskLevel,
+      approvalMode,
       inputSchema: isRecord(tool.inputSchema)
         ? (tool.inputSchema as Record<string, unknown>)
         : undefined,
     });
   }
   return out;
+}
+
+async function parseHealthResponse(
+  res: Response,
+): Promise<ExpertHealthResponse> {
+  const text = await res.text();
+  let body: unknown;
+  try {
+    body = text ? (JSON.parse(text) as unknown) : null;
+  } catch {
+    throw new ExpertGatewayError("Invalid health JSON", {
+      status: res.status,
+      errorCode: "INVALID_HEALTH_PAYLOAD",
+      body: text,
+    });
+  }
+  if (
+    !isRecord(body) ||
+    typeof body.ok !== "boolean" ||
+    typeof body.status !== "string" ||
+    !isRecord(body.gateway) ||
+    !isRecord(body.catalog)
+  ) {
+    throw new ExpertGatewayError("Invalid health payload", {
+      status: res.status,
+      errorCode: "INVALID_HEALTH_PAYLOAD",
+      body,
+    });
+  }
+  return {
+    ok: body.ok,
+    status: body.status,
+    gateway: body.gateway as Record<string, unknown>,
+    catalog: body.catalog as Record<string, unknown>,
+  };
 }
 
 function parseAcceptedStructuredContent(
@@ -328,10 +415,13 @@ export function createExpertGatewayClient(
       () => controller.abort(),
       DEFAULT_FETCH_TIMEOUT_MS,
     );
-    const onExternalAbort = () => controller.abort();
+    const onExternalAbort = (): void => {
+      controller.abort();
+    };
     if (init.signal) {
       if (init.signal.aborted) controller.abort();
-      else init.signal.addEventListener("abort", onExternalAbort, { once: true });
+      else
+        init.signal.addEventListener("abort", onExternalAbort, { once: true });
     }
     try {
       return await fetchImpl(url, {
@@ -448,6 +538,16 @@ export function createExpertGatewayClient(
       return items;
     },
 
+    async getHealth(): Promise<ExpertHealthResponse> {
+      assertNotDisposed();
+      const res = await client.openAuthorizedGet("/api/v1/expert/health");
+      if (!res.ok) {
+        const body = await readJson(res);
+        throw parseApiError(res.status, body);
+      }
+      return parseHealthResponse(res);
+    },
+
     async callSkill(input): Promise<ExpertAcceptedStructuredContent> {
       assertNotDisposed();
       const expertSlug = input.expertSlug.trim();
@@ -457,6 +557,37 @@ export function createExpertGatewayClient(
           status: 400,
         });
       }
+
+      const health = await client.getHealth();
+      if (health.ok !== true) {
+        throw new ExpertGatewayError("Expert gateway is not healthy", {
+          status: 503,
+          errorCode: "GATEWAY_UNHEALTHY",
+          body: health,
+        });
+      }
+
+      const catalog = await client.listCatalog();
+      const catalogItem = catalog.find((item) => item.slug === expertSlug);
+      if (!catalogItem || catalogItem.status !== "ready") {
+        throw new ExpertGatewayError("Expert catalog item is not ready", {
+          status: 403,
+          errorCode: "CATALOG_NOT_READY",
+        });
+      }
+
+      const skills = await client.listSkills(expertSlug);
+      const skillItem = skills.find((item) => item.name === skillName);
+      if (
+        !skillItem ||
+        canSilentCallExpertSkill(catalogItem, skillItem) !== true
+      ) {
+        throw new ExpertGatewayError("Skill is not silently callable", {
+          status: 403,
+          errorCode: "SILENT_CALL_DENIED",
+        });
+      }
+
       const result = await jsonRpc(
         `/api/v1/expert/mcp/${encodeURIComponent(expertSlug)}`,
         "tools/call",

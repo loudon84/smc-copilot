@@ -72,7 +72,7 @@ export function startMainProcess(): void {
     openExternalUrl,
     requestQuit,
   });
-  registerAuthIpc();
+  registerAuthIpc({ getMainWindow: () => mainWindow });
   // Construct Expert singleton before registering its IPC surface.
   void getExpertRunService();
   registerExpertIpc({ getMainWindow: () => mainWindow });
@@ -146,7 +146,11 @@ export function startMainProcess(): void {
     // Ensure the menu bar stays visible after the template is installed
     // (Windows can still hide it if autoHide was previously true on a reused
     // BrowserWindow options path).
-    if (process.platform !== "darwin" && mainWindow && !mainWindow.isDestroyed()) {
+    if (
+      process.platform !== "darwin" &&
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
       mainWindow.setAutoHideMenuBar(false);
       mainWindow.setMenuBarVisibility(true);
     }

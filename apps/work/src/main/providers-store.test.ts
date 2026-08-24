@@ -231,7 +231,7 @@ describe("providers store", () => {
       "utf-8",
     );
     expect(config).toContain("hermesone:");
-    expect(config).toContain('base_url: "https://inference.hermesone.org/v1"');
+    expect(config).toContain('base_url: "http://llm.superic.com:3900/v1"');
     expect(config).toContain('key_env: "HERMESONE_API_KEY"');
   });
 
