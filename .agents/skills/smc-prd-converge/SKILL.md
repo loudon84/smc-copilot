@@ -1,17 +1,116 @@
 ---
 name: smc-prd-converge
-description: Converges an SMC Copilot PRD draft, independent review findings, and human decisions into one final approved PRD. Use only after PRD review.
+description: 将已经获得 PASS 的 SMC Copilot PRD 收敛为最终 APPROVED 文档；只做确定性清理与状态转换，不重新分析源码或架构。
+version: 2.2.0
 disable-model-invocation: true
 ---
 
 # SMC PRD Converge
 
-1. Apply accepted review findings and human decisions to the draft.
-2. Remove rejected alternatives, exploration notes, temporary hotfixes, and obsolete algorithms.
-3. Keep only final state, migration/removal method, and acceptance criteria.
-4. Recheck [`../../references/prd-contract.md`](../../references/prd-contract.md) and [`../../references/architecture-convergence.md`](../../references/architecture-convergence.md).
-5. Set `status: APPROVED`, `review_verdict: PASS`, and `approved_at` only after a PASS review and any required human decision.
+## 前置条件
+
+必须同时满足：
+
+1. 最新 `smc-prd-review` Verdict=`PASS`；
+2. 无 OPEN BLOCKER / MAJOR；
+3. 必须的人类决策已完成；
+4. 当前 PRD 为 `DRAFT` 或 `REVIEW_REQUIRED`；
+5. `python tools/agent-skills/validate_prd.py <prd>` 通过。
+
+否则停止，不设置 APPROVED。
+
+使用：
+
+- [`../../references/prd-contract.md`](../../references/prd-contract.md)
+- [`../../references/architecture-convergence.md`](../../references/architecture-convergence.md)
+
+## 只做确定性收敛
+
+删除：
+
+- Grounding Closure Table；
+- Review History / Required Revisions；
+- rejected alternatives；
+- exploration notes；
+- temporary workaround；
+- 已废弃算法；
+- “上一轮 / 本轮”等过程描述。
+
+保留：
+
+- Current Capability Inventory；
+- Target End-State Inventory；
+- Change Classification；
+- 必要 Replacement / Removal Matrix；
+- 必要 Compatibility Contract；
+- 最终 Behaviour / Boundary；
+- Acceptance Criteria；
+- 最小 Source Anchors。
+
+最终 PRD 只表达一个 Target Architecture。
+
+## 禁止重新推理
+
+禁止：
+
+- 重新扫描源码；
+- 新增 Architecture Finding；
+- 改 Production Owner；
+- 改 Change Classification；
+- 新增 implementation design；
+- 搜索 Provider 最新状态；
+- 再运行 Grounding / Review。
+
+若收敛时发现必须改变架构，停止并返回 Grounding。
+
+## 状态转换
+
+仅在前置条件成立后设置：
+
+```yaml
+status: APPROVED
+review_verdict: PASS
+approved_at: <current ISO-8601 timestamp>
+```
+
+保持：
+
+- `work_item_id`
+- `version`
+- `target_branch`
+
+除非用户明确要求版本升级。
+
+PRD Review 的 REVISE/BLOCKED 不写入 frontmatter；只有 Converge 写 `PASS`。
+
+## 最终校验
+
+执行：
+
+```bash
+python tools/agent-skills/validate_prd.py <prd> --require-approved
+```
+
+Validator 负责确定性检查：
+
+- frontmatter 状态一致性；
+- required sections；
+- Change Classification；
+- REPLACE / Removal Matrix；
+- 显式 Compatibility Contract 字段；
+- APPROVED 文档是否仍残留已知 process-only section。
+
+失败则不得交付 APPROVED。
+
+## 输出
+
+只输出：
+
+1. 最终 APPROVED PRD；
+2. `APPROVED → ready for smc-plan-from-approved-prd`
+
+不再次输出 Review 报告。
 
 ## Exit
 
-The PRD expresses one target architecture and is ready for planning. A `REVISE` or `BLOCKED` review cannot be converged to `APPROVED`.
+`PASS Review → deterministic converge → APPROVED PRD → Plan`

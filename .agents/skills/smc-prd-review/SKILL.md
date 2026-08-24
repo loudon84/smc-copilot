@@ -1,7 +1,7 @@
 ---
 name: smc-prd-review
-description: 独立审查经过 Grounding 的 SMC Copilot PRD-DRAFT，验证其当前状态、复用判断、Capability Owner、合同基线、替换关系、执行入口、测试和 Acceptance Criteria 是否真实、完整且可实施。
-version: 2.1.0
+description: 独立审查 SMC Copilot PRD 的架构正确性与收敛性。支持 initial 与 closure；closure 只验证上一轮 Finding，防止多轮无界 Review 和 Token 浪费。
+version: 3.1.0
 disable-model-invocation: true
 ---
 
@@ -9,578 +9,238 @@ disable-model-invocation: true
 
 ## 目标
 
-本 Skill 是 `smc-prd-grounding` 之后的独立 PRD 审查门禁。
+本 Skill 是 **PRD Architecture Gate**，不是 Implementation Plan Review、Code Review 或 Provider Release Audit。
 
-它不负责重新设计 PRD，也不负责修改 PRD。
+只审六个 Gate：
 
-核心目标是独立验证：
+1. Scope
+2. Existing Capability
+3. Production Ownership
+4. Change Classification
+5. API/IPC/Auth/Contract/Security Boundary
+6. Behaviour → Acceptance Criteria
 
-1. Grounding 对当前系统已有能力的判断是否正确；
-2. PRD 是否仍存在重复建设；
-3. ADD / MODIFY / REPLACE / REMOVE 是否分类正确；
-4. 一个 Capability 是否只有一个 Production Owner；
-5. 所有生产执行入口是否满足同一业务约束；
-6. 合同、状态、并发、安全和测试是否足以支撑目标行为；
-7. Behaviour Contract 与 Acceptance Criteria 是否一致；
-8. 是否存在阻止 PRD 进入 Converge 的外部证据或人工决策。
+Review 只读。使用 [`../../references/architecture-convergence.md`](../../references/architecture-convergence.md)。
 
----
+## Mode
 
-## 一、Review Independence
+| Mode | 场景 | 范围 |
+|---|---|---|
+| `initial` | 首次独立审查 | 一次性检查六个 Architecture Gates |
+| `closure` | 上一轮 `REVISE` 后 | 只验证上一轮 OPEN Finding + 修订 regression |
 
-Review 必须保持只读。
+默认：
+- 有上一轮 Review/Closure Table → `closure`
+- 否则 → `initial`
 
-不得：
+输出必须标记 mode。
 
-- 修改 PRD；
-- 替作者补写方案后再给 PASS；
-- 直接接受 PRD 中的 Current Capability Inventory 为事实；
-- 使用作者生成 PRD 时的私有推理作为证据。
+## Context Budget
 
-Reviewer 应独立读取：
+1. 读 PRD。
+2. 读根及受影响 subsystem `AGENTS.md`。
+3. 优先复用 PRD 的 Source Anchors。
+4. 只有某个 Gate 无法判断时才打开对应源码/test/contract。
+5. `closure` 默认只打开 OPEN Finding 的 Evidence。
+6. 禁止为了“独立”重新读取全部 Grounding 证据。
+7. 禁止扫描 monorepo。
 
-- PRD-DRAFT；
-- Repository `AGENTS.md`；
-- 受影响 subsystem `AGENTS.md`；
-- PRD 声明的关键 Source Anchors；
-- 相关直接 caller / entry point；
-- 受影响 contracts / ADRs；
-- 当前 tests。
+独立 = 独立判断，不等于重复 discovery。
 
-如果可以使用独立上下文 Reviewer，应优先使用。
+## PRD / Plan Boundary
 
-如果当前环境无法形成独立上下文，可以执行本 Skill，但不得宣称结果来自 fresh-context reviewer。
+以下可阻止 PRD：
 
----
+- duplicate/wrong Production Owner；
+- ADD/MODIFY/REPLACE 误判；
+- execution/trust boundary 可绕过；
+- 必需合同语义缺失；
+- 架构级 lifecycle/concurrency 缺口；
+- Behaviour 与 AC 关键冲突。
 
-## 二、Evidence Precedence
+以下通常属于 Plan，不能单独导致 REVISE：
 
-发生冲突时，证据优先级如下：
+- exact 私有函数；
+- fetch option；
+- React hook；
+- 内部 errorCode 名；
+- test file / mock；
+- DOM/framework API；
+- 非合同性调用顺序。
 
-1. 当前 checkout 的生产源码；
-2. 当前生产测试所证明的行为；
-3. 当前 Consumer 已锁定合同；
-4. 正式发布且可验证的目标合同；
-5. ADR / architecture reference；
-6. 当前 PRD；
-7. 历史 PRD、说明文档、评论和推断。
+若这些只是某种可行实现，写入 `Plan Notes`。
+只有它本身决定合同、安全、不变量、唯一 Owner 或可观察 Behaviour 时才升级 Finding。
 
-任何较低优先级材料不得覆盖较高优先级生产事实。
+## 六个 Architecture Gates
 
----
+### G1 Scope
+- 是否直接服务目标；
+- 是否无关扩张 framework/store/service/protocol；
+- 是否遗漏目标必需路径。
 
-## 三、External Contract Scope Boundary
+### G2 Existing Capability
+只抽查高风险声明：
+- False MISSING；
+- False KEEP；
+- duplicate Service/Store/Parser/Adapter/Lifecycle。
 
-### 3.1 Review 的职责
+不重做完整 Current Inventory。
 
-外部合同只用于验证当前 PRD **实际消费的接口和语义**，例如：
+### G3 Ownership
+- 一个 Capability 一个 Production Owner；
+- 新文件不形成第二 Owner；
+- projection 与 authoritative state 不混淆。
 
-- endpoint 是否存在；
-- request / response shape；
-- MCP / IPC / Event 字段；
-- identity；
-- 状态语义；
-- reject / fallback / permission 规则。
+### G4 Classification
+- EXISTS→KEEP
+- PARTIAL→MODIFY
+- 真 MISSING→ADD
+- Owner 转移→REPLACE+REMOVE
+- compatibility 有 removal contract。
 
-Reviewer **不是外部 Provider 的 Release Auditor**。
+### G5 Boundary
+只检查当前 PRD 涉及的 API/IPC/Auth/Contract/security 与 alternate entrypoint。
+需要证明最终 enforcement owner，不展开非必要施工调用图。
 
-除非当前 PRD 明确包含 Provider 发布、CI、部署、负载验收或合同发布流水线，否则不得把以下事项作为当前 Work PRD 的 `BLOCKED` 原因：
+### G6 Acceptance
+- 关键 Behaviour 有可验证 AC；
+- AC 与 Behaviour 一致；
+- AC 验证结果，不强制非必要私有实现。
 
-- Provider `main` 的发布流程状态；
-- Provider manifest 的生成时元数据；
-- `manifest.tagTargetCommit == null`；
-- Provider 内部 CI / release job；
-- Provider deploy 状态；
-- 与当前 PRD 功能无关的 `loadGate`、benchmark、release checklist；
-- Provider 是否把 peeled tag SHA 回写进自身 manifest。
+## External Contract Guard
 
-这些信息可以作为背景证据，但不得扩张为 SMC Copilot PRD 的治理门禁。
+Reviewer 不是 Provider Release Auditor。
 
-### 3.2 Contract 三层
+只验证本 PRD 实际依赖的 stable ref、endpoint、schema/field、identity、semantics。
 
-如果 PRD 涉及合同版本变化，区分：
+除非 PRD Scope 明确包含 Provider 发布，否则以下不得 BLOCKED：
 
-- `Current Consumer Contract`：当前 SMC Copilot 源码实际消费的版本；
-- `Target Contract`：本 PRD 实施后计划消费的明确版本；
-- `Provider Development Head`：Provider 当前 `main`，仅用于背景比较，不能自动替代 Target Contract。
+- Provider `main`；
+- manifest 生成元数据；
+- release CI / deploy；
+- benchmark / load gate；
+- manifest 是否回写 peeled SHA。
 
-不要求每次 Review 都寻找 `Latest Published Contract`。只有 PRD 自己声明“升级到最新版”时才验证最新版。
+Consumer 尚未实施 Target Contract 是待实施工作，不是 BLOCKED。
 
-### 3.3 Target Contract 是否可用于 Review
-
-Target Contract 视为可用于 Consumer PRD Review，只要满足：
-
-1. PRD 指定明确版本或不可变 ref；
-2. 该 tag / commit ref 可以实际解析；
-3. 本 PRD 依赖的合同产物可以从该 ref 读取；
-4. 合同语义足以定义本 PRD 的目标行为。
-
-**禁止使用 Provider manifest 中 `tagTargetCommit` 是否为 `null` 来判断 tag 是否存在。**
-
-如果 Release Contract 明确规定 tag SHA 通过：
-
-```bash
-git rev-parse <tag>^{commit}
-```
-
-等外部方式解析，则必须按该发布规则理解。不能要求 manifest 自包含打 tag 后的自身 commit SHA。
-
-### 3.4 Consumer 尚未升级不是 BLOCKED
-
-如果当前 Consumer 仍在旧合同，而本 PRD 的目标之一就是迁移到 Target Contract，那么：
-
-`Consumer 尚未锁定 Target Contract`
-
-属于 **待实施变更**，不是外部阻塞。
-
-Reviewer 应检查 PRD 是否把以下内容归入 `MODIFY` / Acceptance Criteria：
-
-- Consumer contract version；
-- consumer lock / immutable ref；
-- DTO / parser；
-- runtime validation；
-- 与新合同相关的调用约束。
-
-如果这些内容缺失：`REVISE`。
-
-不得仅因为“当前还没升级”判定 `BLOCKED`。
-
-### 3.5 只有什么情况下合同问题才是 BLOCKED
-
-仅当以下条件之一成立，并且无法通过修改当前 SMC Copilot PRD 本身解决时，才允许 `BLOCKED`：
-
-- Target Contract 的 tag / commit ref 无法解析；
-- 本 PRD 必需的 endpoint / field / semantics 在稳定合同中不存在；
-- 权威合同产物对同一语义互相冲突，无法确定 SOT；
-- Provider 尚未定义本 PRD 必需的行为，Consumer 无法安全实现；
-- 用户明确规定必须等 Provider 完成某个外部门禁后才能实施，且该门禁确实未完成。
-
-如果 Target Contract 已可解析，只是当前 PRD 没写清迁移、pin 或 parser 规则：`REVISE`。
-
-## 四、Current Capability Verification
-
-对 PRD 中所有重要 Capability 独立抽查其 Current Inventory。
-
-重点验证：
-
-- Existing Owner 是否真实；
-- Entry Point 是否完整；
-- 当前 Behaviour 是否与源码一致；
-- Existing Tests 是否真正覆盖该行为；
-- `EXISTS / PARTIAL / MISSING / CONFLICT` 判断是否正确。
-
-特别检查：
-
-### False MISSING
-
-PRD 声称能力不存在，但项目已有实现。
-
-结果通常意味着重复建设。
-
-### False EXISTS
-
-PRD 声称已有能力可以复用，但现有实现实际上不满足目标约束。
-
-### False MODIFY
-
-实际上已经改变 Production Owner，应分类为 REPLACE。
-
-### False ADD
-
-新增实现与当前 Owner 重复。
-
----
-
-## 五、Architecture Convergence
-
-使用：
-
-[`../../references/architecture-convergence.md`](../../references/architecture-convergence.md)
-
-至少检查：
-
-- 一个 Capability 只有一个 Production Owner；
-- REPLACE 有对应 REMOVE；
-- 无无限期 Legacy；
-- Compatibility 有真实 Consumer 和移除条件；
-- 历史 Bug 只存在于 tests / fixtures；
-- 无重复 parser；
-- 无重复 serializer；
-- 无重复 adapter；
-- 无重复 lifecycle owner；
-- 新生产文件有明确必要性。
-
----
-
-## 六、Execution Entry-Point Closure
-
-对于涉及：
-
-- authorization；
-- permission；
-- callEnabled；
-- approval；
-- availability；
-- routing；
-- validation；
-- retry；
-- destructive operation；
-- security gate；
-
-必须独立检查所有生产执行入口。
-
-不能只验证 Chat Submit 或主 Happy Path。
-
-例如：
-
-```text
-Submit
-Retry
-Resume
-Rehydrate
-Background operation
-Direct IPC/API entry
-```
-
-检查：
-
-1. 是否都经过同一个最终 enforcement owner；
-2. 是否存在绕过 UI gate 的第二调用路径；
-3. Retry 是否重新验证当前仍成立的业务约束；
-4. Server / Main 是否有必要的最终防线。
-
-如果 PRD 只封住一个入口而其他生产入口可绕过：
-
-`REVISE`。
-
----
-
-## 七、State / Invariant Review
-
-检查 PRD 是否把不同业务状态错误合并。
-
-重点检查：
-
-- health ≠ callable；
-- reachable ≠ authorized；
-- selected ≠ ready；
-- ready ≠ callEnabled；
-- callEnabled ≠ approval granted；
-- UI state ≠ backend authoritative state。
-
-每个影响行为的状态必须有：
-
-- 明确定义；
-- 唯一 Owner；
-- 明确消费者；
-- 明确对调用行为的影响。
-
-如果一个 enum 同时承担多个独立 Capability，并导致错误放行或错误展示：
-
-`REVISE`。
-
----
-
-## 八、Internal Consistency Review
-
-逐项检查 PRD 内部一致性。
-
-### Version
-
-- frontmatter；
-- 正文；
-- Source Anchors；
-- Contract section；
-- Acceptance Criteria。
-
-版本必须一致。
-
-### Enum / State
-
-同一业务状态不得在不同章节出现不同定义。
-
-### Numeric Contract
-
-例如：
-
-- breakpoint；
-- timeout；
-- retry count；
-- TTL；
-- queue limit；
-- concurrency。
-
-Behaviour 和 AC 必须一致。
-
-### Ownership
-
-Current Inventory、Target Inventory、Change Classification 中 Owner 必须一致。
-
-### Behaviour → Acceptance Criteria
-
-每个关键 Behaviour 必须有可验证 AC。
-
-AC 不得引入 Behaviour Contract 中没有定义的新要求。
-
----
-
-## 九、Test Architecture Review
-
-Review 不能只检查“有没有测试文件”。
-
-必须检查测试是否真正证明目标行为。
-
-例如：
-
-- 需要验证真实 IPC handler 时，不能只复制 validator helper；
-- 需要验证 parser reject 时，不能只测 TypeScript type；
-- 需要验证 routing 时，必须证明错误路径没有调用另一 backend；
-- 需要验证 concurrency 时，必须有 stale result / latest-wins case；
-- 需要验证 security boundary 时，必须从真实边界入口触发。
-
-历史 Bug 应转化为 regression fixture / test，而不是生产 fallback。
-
----
-
-## 十、Scope Review
-
-检查 PRD 是否存在：
-
-### Scope Expansion
-
-为了完成小功能而引入：
-
-- 新 framework；
-- 新 store；
-- 新 service；
-- 新 generic abstraction；
-- 新 protocol；
-- 新 cross-app dependency；
-
-但当前 Owner 已可承担。
-
-此类情况应优先 `REVISE`。
-
-### Scope Omission
-
-PRD 声称某生产路径 KEEP，但目标合同实际上要求它修改。
-
-此类情况同样 `REVISE`。
-
----
-
-## 十一、Finding 格式
-
-每个实质 Finding 必须包含：
-
-### Finding
-
-具体问题。
-
-### Evidence
-
-支持该判断的：
-
-- source；
-- test；
-- contract；
-- ADR；
-- PRD section。
-
-### Violated Rule / Invariant
-
-违反的合同、Owner 原则或业务不变量。
-
-### Impact
-
-如果不修改，会产生什么实际错误。
-
-### Required Correction
-
-说明 PRD 必须补充或调整什么。
-
-不要直接编写实现代码。
-
----
-
-## 十二、Verdict
-
-必须且只能返回：
-
-- `PASS`
-- `REVISE`
-- `BLOCKED`
-
-### BLOCKED
-
-仅用于同时满足以下三项的条件：
+外部问题只有同时满足才可 BLOCKED：
 
 1. 属于当前 PRD Scope；
-2. 真实阻止目标 Capability 实施；
-3. 无法通过修改当前 SMC Copilot PRD 本身解决。
+2. 真实阻止 Capability；
+3. PRD 自身无法修正。
 
-例如：
+## Severity 与 Verdict
 
-- 本 PRD 必需的外部合同语义尚不存在；
-- 必需的稳定 tag / commit ref 无法解析；
-- 两个权威来源冲突，无法确认 SOT；
-- 必需的人类产品 / 架构决策尚未完成。
+Finding Severity：
 
-以下情况本身不得判 `BLOCKED`：
+- `BLOCKER`：外部权威语义/SOT/人类架构决策缺失，PRD 自身无法解决。
+- `MAJOR`：PRD 可修正的架构错误。
+- `MINOR`：不影响架构正确性的表达/Anchor/次要遗漏。
+- `NOTE`：Plan 阶段工程提示。
 
-- Consumer 尚未实施 Target Contract；
-- Provider manifest 中 `tagTargetCommit == null`；
-- Provider 的 release / CI / deploy 元数据不完整，但 Target Contract 已可由稳定 ref 解析；
-- 与当前 PRD Capability 无关的 Provider load gate。
+Verdict：
 
-如果同时存在真正的 BLOCKED 和普通 PRD 缺陷，最终 Verdict 仍为 `BLOCKED`，并同时列出需要修订的 PRD 问题。
+- 有 BLOCKER → `BLOCKED`
+- 无 BLOCKER，有 MAJOR → `REVISE`
+- 只有 MINOR/NOTE 或无 Finding → `PASS`
 
-### REVISE
+MINOR、NOTE、Plan 级实现选择不得阻止 PASS。
 
-所有必要权威证据已经存在，但 PRD 本身存在可修正问题，例如：
+## Initial Review
 
-- 当前能力判断错误；
-- 重复建设；
-- ADD / REPLACE 分类错误；
-- Owner 重复；
-- 合同版本写错；
-- parser / runtime validation 缺失；
-- 执行入口未闭合；
-- 状态定义错误；
-- 测试不足；
-- Behaviour 与 AC 冲突。
+1. 一次性跑六个 Gate。
+2. 独立抽查关键 Owner/Boundary/ADD/REPLACE。
+3. 只读产生 Finding 所需证据。
+4. 一次性报告当前可识别的 BLOCKER/MAJOR。
+5. 不把问题留到后续轮次继续无界下钻。
 
-### PASS
+## Closure Review
 
-只有以下条件全部满足才能 PASS：
+以上一轮 Finding 为主键：
 
-- 无 BLOCKED 条件；
-- Current Capability 判断有证据；
-- 无重复 Production Owner；
-- 变更分类正确；
-- 所有 REPLACE 有 REMOVE；
-- 外部合同基线明确；
-- 执行入口闭合；
-- 状态和不变量清晰；
-- Test architecture 足够证明目标行为；
-- Behaviour 与 AC 一致；
-- 无未解决的实质 Finding。
+| Finding | Previous Severity | Closure Evidence | Status |
+|---|---|---|---|
 
-### Verdict Precedence
+Status：
 
-严格使用：
+`CLOSED | OPEN | NOT_REPRODUCED`
 
-```text
-BLOCKED > REVISE > PASS
-```
+只允许新增 BLOCKER/MAJOR，当：
 
-不得因为 PRD 同时存在可修订问题而把 BLOCKED 降级为 REVISE。
+1. 修复旧 Finding 直接引入 architecture regression；
+2. 出现上一轮不可获得的新权威证据；
+3. 同一根因的绕过路径只有在修订后才可观察。
 
----
+禁止因为本轮又多读源码而增加与修订无关的新 Finding。
 
-## 十三、输出格式
+上一轮所有 BLOCKER/MAJOR 均 CLOSED/NOT_REPRODUCED，且无修订 regression：
 
-输出必须按以下顺序。
+→ `PASS`
 
+## Evidence Quality
+
+每个 BLOCKER/MAJOR 必须有：
+
+- Finding
+- Severity
+- Evidence
+- Violated Rule / Invariant
+- Impact
+- Required Correction
+
+规则：
+
+- Evidence 指向具体 source/contract/PRD section；
+- “符号不一致”必须给出 `PRD identifier → Actual identifier` 的具体差异；
+- 无法复现的推测不能作为 MAJOR；
+- Required Correction 描述架构/行为，不写施工代码。
+
+## Test Boundary
+
+PRD Review 只验证测试策略是否能证明架构行为，例如真实 trust boundary、routing no-call、stale-result。
+
+具体 test file、mock/spy/fixture 写法交给 Plan。
+
+## 输出
+
+```markdown
 # PRD Review
 
+**Review Mode：initial | closure**
 **Verdict：PASS | REVISE | BLOCKED**
 
 ## Baseline
-
-- Project / Branch
-- Current Consumer Contract（仅涉及合同变化时）
-- Target Contract（仅涉及合同变化时）
-- Evidence limitations
-
 ## Blocking Findings
-
-仅列出导致 BLOCKED 的问题。
-
-无则写：
-
-`无。`
-
 ## Required Revisions
-
-列出导致 REVISE 的实质问题。
-
-无则写：
-
-`无。`
-
+## Minor Findings
+## Plan Notes
 ## Architecture Convergence
-
-逐项报告与本 PRD 有关的：
-
-- Capability Owner；
-- ADD / REPLACE；
-- REMOVE；
-- Compatibility；
-- duplicate implementation；
-- execution entry points；
-- test architecture。
-
+## Closure Table   # closure only
 ## Review Conclusion
+```
 
-只说明：
+下一步：
 
-- 为什么得到当前 Verdict；
-- 下一步是修改 PRD、补外部证据，还是可以进入 `smc-prd-converge`。
+- `PASS` → `smc-prd-converge`
+- `REVISE` → `smc-prd-grounding` mode=`revision`
+- `BLOCKED` → 等待真实外部证据/人类决策
 
----
+## 禁止
 
-## 十四、External Scope Guard
-
-当 Review 的 Required Correction 开始要求修改以下外部内容时：
-
-- Provider release pipeline；
-- Provider manifest；
-- Provider tag generation；
-- Provider CI；
-- Provider deployment；
-
-必须先检查这些内容是否属于当前 PRD Scope。
-
-如果不属于，停止扩张，不得形成 Blocking Finding。
-
-Review 应返回到当前 SMC Copilot Consumer 侧，判断真正需要修改的是：
-
-- Consumer version / lock；
-- parser / DTO；
-- execution guard；
-- test；
-- acceptance criteria。
-
-## 十五、禁止事项
-
-Review 禁止：
-
-- 审计与当前 PRD 无关的 Provider release / manifest / CI / deploy；
-- 把 `manifest.tagTargetCommit == null` 单独解释为 tag 未发布；
-- 把“Consumer 尚未实施 Target Contract”解释成外部 BLOCKED；
 - 修改 PRD；
-- 为作者补完方案后直接 PASS；
-- 信任 PRD 的 Current Inventory 而不验证；
-- 因 Provider `main` 更新而自动切换 Target Contract；
-- 用 historical PRD 覆盖当前源码；
-- 因为 lint / validator 通过就判 PASS；
-- 将 UI gate 当作所有执行路径的充分保护；
-- 把 reviewer 猜测当成事实；
-- 默认调用或要求 `doubt-driven-development`；
-- 默认要求 Gemini、Codex 或其他跨模型第二意见。
-
-跨模型审查只在用户明确要求时执行，它不是本 Skill 的 PASS 前置条件。
-
----
+- closure 重新 full review；
+- Plan 细节升级为 MAJOR；
+- Source Anchor 小问题阻止 PASS，除非导致 Owner/Boundary 错误；
+- 审计无关 Provider release/manifest/CI/deploy；
+- 默认 `doubt-driven-development`；
+- 默认跨模型二审；
+- 为“更保险”扩大源码读取；
+- 把猜测写成 Finding。
 
 ## Exit
 
-Review 完成时：
-
-- PRD 未被修改；
-- 每个实质 Finding 有证据；
-- Verdict 使用确定性优先级；
-- `PASS` 才允许进入 `smc-prd-converge`；
-- `REVISE` 返回 Grounding / PRD 修订；
-- `BLOCKED` 等待外部证据或人工决策，同时保留已发现的 PRD 修订项。
+1. Verdict 只由 BLOCKER/MAJOR 决定；
+2. initial 一次性覆盖 Architecture Gates；
+3. closure 单调关闭旧 Finding；
+4. MINOR/NOTE 不阻止 PASS；
+5. PASS 后不再继续 PRD architecture discovery。
