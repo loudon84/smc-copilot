@@ -137,6 +137,34 @@ export function canSilentCallExpertSkill(
   );
 }
 
+/** User-facing reasons when silent-call allowlist fails (fail-closed). */
+export function describeSilentCallDenial(
+  snap: SelectedCallability | null,
+): string {
+  const prefix = "Selected expert skill cannot be called silently";
+  if (!snap) return `${prefix}.`;
+  const reasons: string[] = [];
+  if (snap.catalogStatus !== "ready") {
+    reasons.push(`expert status is ${snap.catalogStatus ?? "missing"}`);
+  }
+  if (snap.skillStatus !== "ready") {
+    reasons.push(`skill status is ${snap.skillStatus ?? "missing"}`);
+  }
+  if (snap.callEnabled !== true) {
+    reasons.push("callEnabled is not true");
+  }
+  if (snap.riskLevel !== "low") {
+    reasons.push(`riskLevel is ${snap.riskLevel ?? "missing"} (need low)`);
+  }
+  if (snap.approvalMode !== "auto") {
+    reasons.push(
+      `approvalMode is ${snap.approvalMode ?? "missing"} (need auto)`,
+    );
+  }
+  if (reasons.length === 0) return `${prefix}.`;
+  return `${prefix}: ${reasons.join("; ")}.`;
+}
+
 export interface ExpertWaitStrategy {
   type: string;
   fallback?: string;
@@ -327,8 +355,62 @@ export interface ExpertRunProjection {
   errorMessage: string | null;
   resultSummary: string | null;
   resultContent: string | null;
+  /** Live assistant bubble text from SSE task.progress (running only). */
+  progressMessage: string | null;
   artifactIds: string[];
   updatedAt: string;
+}
+
+/** Stable ids for Expert → chat transcript bubbles (renderer + state.db markers). */
+export function expertTranscriptBubbleIds(clientRequestId: string): {
+  user: string;
+  assistant: string;
+} {
+  return {
+    user: `expert-run:${clientRequestId}:user`,
+    assistant: `expert-run:${clientRequestId}:assistant`,
+  };
+}
+
+/** Assistant bubble / messages.content body for an Expert projection. */
+export function buildExpertTranscriptAssistantContent(projection: {
+  phase: ExpertLocalPhase;
+  resultContent?: string | null;
+  resultSummary?: string | null;
+  errorMessage?: string | null;
+  errorCode?: string | null;
+  progressMessage?: string | null;
+}): string {
+  switch (projection.phase) {
+    case "succeeded": {
+      const body =
+        projection.resultContent?.trim() ||
+        projection.resultSummary?.trim() ||
+        "";
+      return body || "Expert completed with no content.";
+    }
+    case "failed": {
+      const detail =
+        projection.errorMessage?.trim() ||
+        (projection.errorCode ? `error ${projection.errorCode}` : "");
+      return detail ? `Expert failed: ${detail}` : "Expert failed.";
+    }
+    case "cancelled":
+      return "Expert run cancelled.";
+    case "expired":
+      return "Expert run expired.";
+    case "unauthorized":
+      return "Expert run unauthorized.";
+    case "queued":
+    case "starting":
+      return "专家正在分析…";
+    case "running":
+      return projection.progressMessage?.trim() || "专家正在分析…";
+    default: {
+      const _exhaustive: never = projection.phase;
+      return _exhaustive;
+    }
+  }
 }
 
 /** Restart projection member for session continuation (schemaVersion: 1). */
@@ -419,4 +501,108 @@ export function extractJsonRpcErrorCode(
   if (!error?.data || typeof error.data !== "object") return null;
   const data = error.data as ExpertJsonRpcErrorData;
   return typeof data.errorCode === "string" ? data.errorCode : null;
+}
+
+/** Payload that survives Electron IPC (only Error.message is reliable). */
+export interface ExpertIpcErrorPayload {
+  name: "ExpertGatewayError";
+  message: string;
+  status: number;
+  errorCode: string | null;
+}
+
+export function encodeExpertIpcError(payload: {
+  message: string;
+  status: number;
+  errorCode?: string | null;
+}): Error {
+  const body: ExpertIpcErrorPayload = {
+    name: "ExpertGatewayError",
+    message: payload.message,
+    status: payload.status,
+    errorCode: payload.errorCode ?? null,
+  };
+  const err = new Error(JSON.stringify(body));
+  err.name = "ExpertGatewayError";
+  return err;
+}
+
+function tryParseExpertIpcPayload(raw: string): ExpertIpcErrorPayload | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<ExpertIpcErrorPayload>;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.message === "string" &&
+      typeof parsed.status === "number"
+    ) {
+      return {
+        name: "ExpertGatewayError",
+        message: parsed.message,
+        status: parsed.status,
+        errorCode:
+          typeof parsed.errorCode === "string" ? parsed.errorCode : null,
+      };
+    }
+  } catch {
+    /* not JSON */
+  }
+  return null;
+}
+
+/**
+ * Decode Expert gateway errors after Electron IPC.
+ * Handles: direct payload object, Error with JSON message, and
+ * `Error invoking remote method '...': {json}`.
+ */
+export function decodeExpertIpcError(
+  err: unknown,
+): ExpertIpcErrorPayload | null {
+  if (typeof err === "object" && err !== null) {
+    const record = err as Record<string, unknown>;
+    if (
+      typeof record.status === "number" &&
+      typeof record.message === "string" &&
+      !String(record.message).startsWith("Error invoking remote method")
+    ) {
+      return {
+        name: "ExpertGatewayError",
+        message: record.message,
+        status: record.status,
+        errorCode:
+          typeof record.errorCode === "string" ? record.errorCode : null,
+      };
+    }
+    if (typeof record.message === "string") {
+      const msg = record.message;
+      const direct = tryParseExpertIpcPayload(msg);
+      if (direct) return direct;
+      const brace = msg.indexOf("{");
+      if (brace >= 0) {
+        const nested = tryParseExpertIpcPayload(msg.slice(brace));
+        if (nested) return nested;
+      }
+    }
+  }
+  return null;
+}
+
+export function formatExpertHealthUserMessage(
+  status: ExpertGatewayStatus,
+  payload: ExpertIpcErrorPayload | null,
+  fallback: unknown,
+): string {
+  if (status === "unavailable") return "Expert Gateway unavailable.";
+  if (status === "error") {
+    if (payload?.errorCode === "INVALID_HEALTH_PAYLOAD") {
+      return "Expert Gateway returned an invalid health payload.";
+    }
+    if (payload?.message?.trim()) return payload.message;
+    return "Expert Gateway error.";
+  }
+  if (payload?.message?.trim()) return payload.message;
+  if (fallback instanceof Error && fallback.message.trim()) {
+    return fallback.message;
+  }
+  return "Expert Gateway unavailable.";
 }

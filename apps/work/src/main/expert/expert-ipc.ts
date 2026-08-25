@@ -5,6 +5,7 @@
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import {
   EXPERT_IPC_CHANNELS,
+  encodeExpertIpcError,
   type ExpertCancelInput,
   type ExpertDownloadArtifactInput,
   type ExpertRequest,
@@ -26,6 +27,7 @@ import {
   ExpertGatewayError,
   resetExpertGatewayClientForTests,
 } from "./expert-gateway-client";
+import { materializeExpertSessionTranscript } from "./expert-session-materialize";
 import {
   getExpertRunService,
   resetExpertRunServiceForTests,
@@ -48,15 +50,17 @@ async function requireAuthSession(): Promise<{ userId: string }> {
   return { userId: session?.user?.id ?? "unknown" };
 }
 
-/** Preserve status/errorCode across Electron IPC structured clone. */
+/**
+ * Preserve status/errorCode across Electron IPC.
+ * Electron only reliably clones Error.message, so encode as JSON.
+ */
 function rethrowGatewayError(err: unknown): never {
   if (err instanceof ExpertGatewayError) {
-    throw {
-      name: "ExpertGatewayError",
+    throw encodeExpertIpcError({
       message: err.message,
       status: err.status,
       errorCode: err.errorCode,
-    };
+    });
   }
   throw err;
 }
@@ -114,6 +118,13 @@ function attachProjectionForwarder(
   unsubscribeProjection?.();
   const service = getExpertRunService();
   unsubscribeProjection = service.onProjectionChanged((projection) => {
+    // Materialize before notifying the renderer so sidebar sync / resume
+    // already see state.db rows when the UI reacts to task_id/progress.
+    try {
+      materializeExpertSessionTranscript(projection);
+    } catch (err) {
+      console.warn("[expert] session materialize failed", err);
+    }
     const win = getMainWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send(EXPERT_IPC_CHANNELS.onProjectionChanged, projection);

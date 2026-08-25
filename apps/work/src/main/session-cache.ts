@@ -41,6 +41,11 @@ interface CacheData {
   lastSync: number;
 }
 
+/** Short sidebar title from the first user message (ChatGPT/Claude style). */
+export function sessionTitleFromUserMessage(message: string): string {
+  return generateTitle(message);
+}
+
 // Generate a short, readable title from the first user message (like ChatGPT/Claude)
 function generateTitle(message: string): string {
   if (!message || !message.trim())
@@ -295,4 +300,28 @@ export function removeSessionFromCache(sessionId: string): void {
     cache.sessions = next;
     writeCache(cache);
   }
+}
+
+/**
+ * Upsert one row into the fast-path sessions.json cache so the sidebar can
+ * show a newly materialized Expert session before the next full DB sync.
+ */
+export function upsertCachedSession(session: CachedSession): void {
+  const cache = readCache();
+  const idx = cache.sessions.findIndex((s) => s.id === session.id);
+  if (idx >= 0) {
+    cache.sessions[idx] = {
+      ...cache.sessions[idx],
+      ...session,
+      contextFolder:
+        session.contextFolder ?? cache.sessions[idx].contextFolder ?? null,
+    };
+  } else {
+    cache.sessions.push({
+      ...session,
+      contextFolder: session.contextFolder ?? null,
+    });
+  }
+  cache.sessions.sort((a, b) => b.startedAt - a.startedAt);
+  writeCache(cache);
 }

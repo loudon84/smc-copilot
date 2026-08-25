@@ -95,3 +95,9 @@ Inactive `ExpertContextControl` must not fetch health/catalog on mount; active i
 
 Delayed skills for Expert A must not overwrite Expert B after a fast A→B selection change.
 
+## Terminal transcript materialize
+
+Once `task_id` exists, Expert runs materialize into Hermes `state.db` as user + assistant messages (idempotent).
+
+`task.progress` updates the assistant row live; terminal copy prefers result then summary. Duplicate prompt titles are disambiguated to satisfy Hermes `UNIQUE(sessions.title)`.
+

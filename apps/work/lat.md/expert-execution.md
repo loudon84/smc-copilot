@@ -46,6 +46,12 @@ Control owns health/catalog/skill/refresh/revision; Chat holds selection truth a
 
 [[src/main/expert/expert-artifact-download.ts]] downloads Main-only (same-origin JWT, size/MIME guards, temp + atomic commit) into File Platform. [[src/renderer/src/components/files/message/AgentOutputFileCard.tsx#AgentOutputFileCard]] shows local managed files only.
 
+## Terminal session materialize
+
+As soon as a run has `task_id`, [[src/main/expert/expert-session-materialize.ts#materializeExpertSessionTranscript]] upserts Hermes `state.db` session/messages and the sidebar cache.
+
+Assistant rows update on `task.progress` / terminal result. Titles pass [[src/main/expert/expert-session-materialize.ts#resolveUniqueSessionTitle]] because Hermes enforces `UNIQUE(sessions.title)`. Chat mirrors live bubbles and refreshes the sidebar.
+
 ## Test specifications
 
 See [[expert-execution-tests]] for `@lat`-mapped unit/component coverage.

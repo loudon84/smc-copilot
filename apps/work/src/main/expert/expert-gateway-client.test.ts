@@ -47,7 +47,8 @@ function catalogTool(
     callableSkillCount: overrides.callableSkillCount ?? 1,
   };
   if (!overrides.omitSlug) {
-    annotations.slug = overrides.slug === null ? null : (overrides.slug ?? "call-prep");
+    annotations.slug =
+      overrides.slug === null ? null : (overrides.slug ?? "call-prep");
   }
   return {
     name: overrides.name ?? "call-prep",
@@ -121,7 +122,9 @@ function acceptedCall() {
 }
 
 function isToolsCall(url: unknown): boolean {
-  return typeof url === "string" && url.includes("/mcp/") && !url.endsWith("/mcp");
+  return (
+    typeof url === "string" && url.includes("/mcp/") && !url.endsWith("/mcp")
+  );
 }
 
 function methodOf(init: RequestInit | undefined): string {
@@ -208,12 +211,14 @@ describe("expert-gateway-client", () => {
   });
 
   it("parses skill annotations including callEnabled false", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonRpcResult([
-        skillTool({ callEnabled: false, riskLevel: "high" }),
-        { name: "no-name-valid", annotations: {} },
-      ]),
-    );
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonRpcResult([
+          skillTool({ callEnabled: false, riskLevel: "high" }),
+          { name: "no-name-valid", annotations: {} },
+        ]),
+      );
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -231,9 +236,7 @@ describe("expert-gateway-client", () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(healthOk(true))
-      .mockResolvedValueOnce(
-        new Response("not-json", { status: 200 }),
-      );
+      .mockResolvedValueOnce(new Response("not-json", { status: 200 }));
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -256,23 +259,117 @@ describe("expert-gateway-client", () => {
     await expect(client.getHealth()).resolves.toMatchObject({ ok: false });
   });
 
+  it("accepts live 谢艺-latest catalog/skill payload for silent call", async () => {
+    const expertSlug = "市场调研客户跟进产品分析";
+    const encoded = encodeURIComponent(expertSlug);
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+          return Promise.resolve(healthOk(true));
+        }
+        if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+          return Promise.resolve(
+            jsonRpcResult([
+              {
+                name: expertSlug,
+                description: "谢艺-latest",
+                annotations: {
+                  kind: "expert",
+                  slug: expertSlug,
+                  displayName: "谢艺-latest",
+                  status: "ready",
+                  publicSkillCount: 1,
+                  callableSkillCount: 1,
+                },
+              },
+            ]),
+          );
+        }
+        if (
+          bodyMethod(init) === "tools/list" &&
+          url.includes(`/mcp/${encoded}`)
+        ) {
+          return Promise.resolve(
+            jsonRpcResult([
+              {
+                name: "customer-profiling",
+                description: "客户画像",
+                annotations: {
+                  kind: "expert_skill",
+                  slug: expertSlug,
+                  displayName: "customer-profiling",
+                  callEnabled: true,
+                  riskLevel: "low",
+                  approvalMode: "auto",
+                  status: "ready",
+                },
+              },
+            ]),
+          );
+        }
+        if (bodyMethod(init) === "tools/call") {
+          return Promise.resolve(acceptedCall());
+        }
+        return Promise.reject(new Error(`unexpected ${url}`));
+      });
+
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const catalog = await client.listCatalog();
+    const skills = await client.listSkills(expertSlug);
+    expect(catalog[0]).toMatchObject({
+      slug: expertSlug,
+      displayName: "谢艺-latest",
+      status: "ready",
+    });
+    expect(skills[0]).toMatchObject({
+      name: "customer-profiling",
+      callEnabled: true,
+      riskLevel: "low",
+      approvalMode: "auto",
+      status: "ready",
+    });
+    await expect(
+      client.callSkill({
+        expertSlug,
+        skillName: "customer-profiling",
+        prompt: "给华阳做客户画像",
+        idempotencyKey: "idem-xieyi",
+      }),
+    ).resolves.toMatchObject({ task_id: "task-1" });
+    expect(
+      fetchImpl.mock.calls.some(
+        ([url, init]) =>
+          bodyMethod(init as RequestInit) === "tools/call" &&
+          String(url).includes(`/mcp/${encoded}`),
+      ),
+    ).toBe(true);
+  });
+
   // @lat: [[expert-execution-tests#Skill exact call]]
   it("reads structuredContent from accepted tools/call after gates", async () => {
-    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
-        return Promise.resolve(healthOk(true));
-      }
-      if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
-        return Promise.resolve(jsonRpcResult([catalogTool()]));
-      }
-      if (bodyMethod(init) === "tools/list" && url.includes("/mcp/call-prep")) {
-        return Promise.resolve(jsonRpcResult([skillTool()]));
-      }
-      if (bodyMethod(init) === "tools/call") {
-        return Promise.resolve(acceptedCall());
-      }
-      return Promise.reject(new Error(`unexpected ${url}`));
-    });
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+          return Promise.resolve(healthOk(true));
+        }
+        if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+          return Promise.resolve(jsonRpcResult([catalogTool()]));
+        }
+        if (
+          bodyMethod(init) === "tools/list" &&
+          url.includes("/mcp/call-prep")
+        ) {
+          return Promise.resolve(jsonRpcResult([skillTool()]));
+        }
+        if (bodyMethod(init) === "tools/call") {
+          return Promise.resolve(acceptedCall());
+        }
+        return Promise.reject(new Error(`unexpected ${url}`));
+      });
 
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -297,12 +394,14 @@ describe("expert-gateway-client", () => {
   });
 
   it("does not emit tools/call when health ok is false", async () => {
-    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
-        return Promise.resolve(healthOk(false));
-      }
-      return Promise.reject(new Error(`unexpected ${url}`));
-    });
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+          return Promise.resolve(healthOk(false));
+        }
+        return Promise.reject(new Error(`unexpected ${url}`));
+      });
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -322,20 +421,25 @@ describe("expert-gateway-client", () => {
   });
 
   it("does not emit tools/call when skill is not silently callable", async () => {
-    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
-        return Promise.resolve(healthOk(true));
-      }
-      if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
-        return Promise.resolve(jsonRpcResult([catalogTool()]));
-      }
-      if (bodyMethod(init) === "tools/list" && url.includes("/mcp/call-prep")) {
-        return Promise.resolve(
-          jsonRpcResult([skillTool({ callEnabled: false })]),
-        );
-      }
-      return Promise.reject(new Error(`unexpected ${url}`));
-    });
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+          return Promise.resolve(healthOk(true));
+        }
+        if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+          return Promise.resolve(jsonRpcResult([catalogTool()]));
+        }
+        if (
+          bodyMethod(init) === "tools/list" &&
+          url.includes("/mcp/call-prep")
+        ) {
+          return Promise.resolve(
+            jsonRpcResult([skillTool({ callEnabled: false })]),
+          );
+        }
+        return Promise.reject(new Error(`unexpected ${url}`));
+      });
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -356,31 +460,36 @@ describe("expert-gateway-client", () => {
 
   // @lat: [[expert-execution-tests#JSON-RPC 200-with-error]]
   it("surfaces JSON-RPC application errors on HTTP 200", async () => {
-    const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (methodOf(init) === "GET" && url.includes("/expert/health")) {
-        return Promise.resolve(healthOk(true));
-      }
-      if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
-        return Promise.resolve(jsonRpcResult([catalogTool()]));
-      }
-      if (bodyMethod(init) === "tools/list" && url.includes("/mcp/call-prep")) {
-        return Promise.resolve(jsonRpcResult([skillTool()]));
-      }
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: "err-1",
-            error: {
-              code: -32022,
-              message: "Permission denied",
-              data: { errorCode: "EXPERT_PERMISSION_DENIED" },
-            },
-          }),
-          { status: 200 },
-        ),
-      );
-    });
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (methodOf(init) === "GET" && url.includes("/expert/health")) {
+          return Promise.resolve(healthOk(true));
+        }
+        if (bodyMethod(init) === "tools/list" && url.endsWith("/expert/mcp")) {
+          return Promise.resolve(jsonRpcResult([catalogTool()]));
+        }
+        if (
+          bodyMethod(init) === "tools/list" &&
+          url.includes("/mcp/call-prep")
+        ) {
+          return Promise.resolve(jsonRpcResult([skillTool()]));
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: "err-1",
+              error: {
+                code: -32022,
+                message: "Permission denied",
+                data: { errorCode: "EXPERT_PERMISSION_DENIED" },
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      });
     const client = createExpertGatewayClient({
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -460,5 +569,21 @@ describe("expert-gateway-client", () => {
       .headers as Headers;
     expect(firstAuth.get("Authorization")).toBe("Bearer expired-token");
     expect(secondAuth.get("Authorization")).toBe("Bearer fresh-token");
+  });
+
+  it("wraps undici fetch failed with URL and cause", async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(
+      Object.assign(new TypeError("fetch failed"), {
+        cause: new Error("connect ECONNREFUSED 192.168.102.247:4510"),
+      }),
+    );
+    const client = createExpertGatewayClient({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(client.getHealth()).rejects.toMatchObject({
+      name: "ExpertGatewayError",
+      errorCode: "FETCH_FAILED",
+      message: expect.stringContaining("192.168.102.247:4510"),
+    });
   });
 });

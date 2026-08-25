@@ -54,7 +54,11 @@ import {
 } from "../../modules/expert";
 import "../../modules/expert/expert.css";
 import {
+  buildExpertTranscriptAssistantContent,
   createClientRequestId,
+  describeSilentCallDenial,
+  expertTranscriptBubbleIds,
+  isExpertTerminalPhase,
   type ExpertGatewayStatus,
   type ExpertRequest,
   type SelectedCallability,
@@ -372,6 +376,8 @@ function Chat({
   const [expertProjections, setExpertProjections] = useState(() =>
     getExpertProjectionsForSession(initialSessionId || ""),
   );
+  /** Client request ids submitted from this Chat instance — live transcript only. */
+  const liveExpertTranscriptIdsRef = useRef(new Set<string>());
   const expertModeActive = Boolean(
     expertSelection.expertSlug && expertSelection.skillName,
   );
@@ -397,6 +403,82 @@ function Chat({
     return subscribeExpertProjections(sync);
   }, [hermesSessionId, initialSessionId]);
 
+  // When an Expert run has a taskId, mirror user/assistant bubbles into the
+  // live transcript (running progress → assistant body) and refresh sidebar.
+  // Only for requests started in this Chat instance — resumed sessions load
+  // the same rows from state.db via getSessionMessages (avoid duplicates).
+  useEffect(() => {
+    const tracked = expertProjections.filter(
+      (p) =>
+        p.taskId != null &&
+        liveExpertTranscriptIdsRef.current.has(p.clientRequestId),
+    );
+    if (tracked.length === 0) return;
+
+    setMessages((prev) => {
+      let next = prev;
+      for (const projection of tracked) {
+        const ids = expertTranscriptBubbleIds(projection.clientRequestId);
+        const assistantBody = buildExpertTranscriptAssistantContent(projection);
+        if (!assistantBody) continue;
+        const hasUser = next.some((m) => m.id === ids.user);
+        if (!hasUser) {
+          if (next === prev) next = [...prev];
+          next.push({
+            id: ids.user,
+            kind: "user",
+            role: "user",
+            content: projection.prompt,
+            timestamp: Date.now(),
+          });
+        }
+        const isFailure =
+          projection.phase === "failed" || projection.phase === "unauthorized";
+        const assistantIndex = next.findIndex((m) => m.id === ids.assistant);
+        if (assistantIndex >= 0) {
+          const existing = next[assistantIndex];
+          // Only bubble rows carry content; skip reasoning/tool variants.
+          if (existing.kind !== "user" && existing.kind !== "assistant") {
+            continue;
+          }
+          if (
+            existing.content !== assistantBody ||
+            existing.error !== (isFailure ? assistantBody : undefined)
+          ) {
+            if (next === prev) next = [...next];
+            next[assistantIndex] = {
+              ...existing,
+              content: assistantBody,
+              error: isFailure ? assistantBody : undefined,
+              pending: !isExpertTerminalPhase(projection.phase),
+              timestamp: Date.now(),
+            };
+          }
+        } else {
+          if (next === prev) next = [...next];
+          next.push({
+            id: ids.assistant,
+            kind: "assistant",
+            role: "agent",
+            content: assistantBody,
+            error: isFailure ? assistantBody : undefined,
+            pending: !isExpertTerminalPhase(projection.phase),
+            timestamp: Date.now(),
+          });
+        }
+      }
+      return next;
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("hermes-session-context-folder-changed", {
+        detail: {
+          sessionId: hermesSessionId || initialSessionId || "",
+        },
+      }),
+    );
+  }, [expertProjections, hermesSessionId, initialSessionId]);
+
   useEffect(() => {
     let cancelled = false;
     const applyAuth = (state: { user?: { id?: string } | null }): void => {
@@ -415,9 +497,14 @@ function Chat({
   useEffect(() => {
     const sessionId = hermesSessionId || initialSessionId;
     if (!sessionId || !window.hermesAPI.expert?.rehydrateSession) return;
-    void window.hermesAPI.expert.rehydrateSession(sessionId).then((items) => {
-      for (const item of items) upsertExpertProjection(item);
-    });
+    void window.hermesAPI.expert
+      .rehydrateSession(sessionId)
+      .then((items) => {
+        for (const item of items) upsertExpertProjection(item);
+      })
+      .catch(() => {
+        /* missing continuation table / empty new session */
+      });
   }, [hermesSessionId, initialSessionId]);
 
   useEffect(() => {
@@ -954,10 +1041,12 @@ function Chat({
     (prompt: string, attachmentRefs: string[] = []): ExpertRequest | null => {
       if (!expertSelection.expertSlug || !expertSelection.skillName)
         return null;
-      const sessionId = hermesSessionId || initialSessionId || "";
+      // Match local chat: new empty chats have no session until first send.
+      // Expert runs still need a stable sessionId for projection/continuation.
+      let sessionId = hermesSessionId || initialSessionId || "";
       if (!sessionId) {
-        toast.error("Start a session before invoking an expert.");
-        return null;
+        sessionId = `desk-${Date.now()}-${crypto.randomUUID()}`;
+        setHermesSessionId(sessionId);
       }
       return {
         kind: "expert",
@@ -989,6 +1078,7 @@ function Chat({
       }
       try {
         const projection = await window.hermesAPI.expert.start({ request });
+        liveExpertTranscriptIdsRef.current.add(request.clientRequestId);
         upsertExpertProjection(projection);
       } catch (err) {
         toast.error(
@@ -1079,7 +1169,7 @@ function Chat({
       }
       if (expertModeActive) {
         if (selectedCallability?.canSilentCall !== true) {
-          toast.error("Selected expert skill cannot be called silently.");
+          toast.error(describeSilentCallDenial(selectedCallability));
           return;
         }
         if (gatewayStatus === "unavailable" || gatewayStatus === "error") {
@@ -1128,7 +1218,7 @@ function Chat({
       isLoading,
       runtimeReady,
       runtime?.error,
-      selectedCallability?.canSilentCall,
+      selectedCallability,
       submitExpert,
     ],
   );
@@ -1445,16 +1535,21 @@ function Chat({
       </div>
 
       <div className="chat-input-area">
-        {expertProjections.length > 0 ? (
+        {expertProjections.filter((p) => p.taskId == null).length > 0 ? (
           <div className="expert-runs-panel">
-            {expertProjections.map((projection) => (
-              <ExpertRunCard
-                key={projection.clientRequestId}
-                projection={projection}
-                authGeneration={authGeneration}
-                onCancel={handleExpertCancel}
-              />
-            ))}
+            {expertProjections
+              .filter((p) => p.taskId == null)
+              .map((projection) => (
+                <ExpertRunCard
+                  key={projection.clientRequestId}
+                  projection={projection}
+                  authGeneration={authGeneration}
+                  onCancel={handleExpertCancel}
+                  onLiveTranscriptRequest={(clientRequestId) => {
+                    liveExpertTranscriptIdsRef.current.add(clientRequestId);
+                  }}
+                />
+              ))}
           </div>
         ) : null}
         <QueuedMessages

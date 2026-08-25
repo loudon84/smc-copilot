@@ -149,3 +149,26 @@
 .expert-runs-panel {
   padding: 0 12px;
 }
+
+.expert-run-card-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+.expert-run-card-compact .expert-run-card-status {
+  flex: 1;
+  min-width: 0;
+}
+
+.expert-run-card-compact button {
+  flex-shrink: 0;
+}
+
+.expert-run-card-error {
+  color: var(--danger, #c44);
+}

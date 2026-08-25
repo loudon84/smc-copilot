@@ -49,6 +49,10 @@ vi.mock("./expert-continuation", () => ({
   upsertExpertContinuationProjection: vi.fn(),
 }));
 
+vi.mock("./expert-session-materialize", () => ({
+  materializeExpertSessionTranscript: vi.fn(),
+}));
+
 vi.mock("./expert-artifact-download", () => ({
   downloadExpertArtifact: vi.fn(),
   cleanupExpertArtifactTemps: vi.fn(),
@@ -129,10 +133,20 @@ describe("registerExpertIpc health and refresh handlers", () => {
         errorCode: "INVALID_HEALTH_PAYLOAD",
       }),
     );
-    await expect(handler(validEvent())).rejects.toMatchObject({
-      name: "ExpertGatewayError",
-      status: 200,
-      errorCode: "INVALID_HEALTH_PAYLOAD",
+    await expect(handler(validEvent())).rejects.toSatisfy((err: unknown) => {
+      expect(err).toBeInstanceOf(Error);
+      const message = (err as Error).message;
+      const parsed = JSON.parse(message) as {
+        name: string;
+        status: number;
+        errorCode: string;
+      };
+      expect(parsed).toMatchObject({
+        name: "ExpertGatewayError",
+        status: 200,
+        errorCode: "INVALID_HEALTH_PAYLOAD",
+      });
+      return true;
     });
   });
 

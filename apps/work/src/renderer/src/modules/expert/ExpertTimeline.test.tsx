@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { isExpertTerminalPhase } from "../../../../shared/expert";
 import type { ExpertRunProjection } from "../../../../shared/expert";
-import { ExpertTimeline } from "./ExpertTimeline";
+import { ExpertRunCard } from "./ExpertRunCard";
 
-describe("ExpertTimeline", () => {
+describe("ExpertRunCard", () => {
   // @lat: [[expert-execution-tests#Minimum stage timeline]]
-  it("exports minimum-stage timeline component", () => {
+  it("is a compact pre-task status row (replaces timeline card)", () => {
     const projection: ExpertRunProjection = {
       clientRequestId: "req-1",
-      taskId: "task-1",
-      phase: "running",
-      displayStage: "running",
+      taskId: null,
+      phase: "starting",
+      displayStage: "preparing",
       expertSlug: "call-prep",
       skillName: "customer-profiling",
       prompt: "hello",
@@ -22,10 +21,11 @@ describe("ExpertTimeline", () => {
       errorMessage: null,
       resultSummary: null,
       resultContent: null,
+      progressMessage: null,
       artifactIds: [],
       updatedAt: "2026-01-01T00:00:00.000Z",
     };
-    expect(isExpertTerminalPhase(projection.phase)).toBe(false);
-    expect(ExpertTimeline).toBeTypeOf("function");
+    expect(ExpertRunCard).toBeTypeOf("function");
+    expect(projection.taskId).toBeNull();
   });
 });

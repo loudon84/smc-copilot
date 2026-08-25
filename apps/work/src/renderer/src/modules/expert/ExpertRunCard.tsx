@@ -1,120 +1,96 @@
 import { useState, type JSX } from "react";
 import type { ExpertRunProjection } from "../../../../shared/expert";
 import {
+  buildExpertTranscriptAssistantContent,
   createClientRequestId,
-  isExpertTerminalPhase,
 } from "../../../../shared/expert";
-import { ExpertTimeline } from "./ExpertTimeline";
 import { upsertExpertProjection } from "./store";
 
 interface ExpertRunCardProps {
   projection: ExpertRunProjection;
   authGeneration: string;
   onCancel: (clientRequestId: string, taskId: string | null) => void;
+  /** Register a live retry so Chat can mirror transcript bubbles. */
+  onLiveTranscriptRequest?: (clientRequestId: string) => void;
 }
 
+/**
+ * Compact pre-task status row (submit → waiting for task_id accept).
+ * Once the gateway returns task_id, Chat swaps to transcript bubbles and
+ * stops rendering this card.
+ */
 export function ExpertRunCard({
   projection,
   authGeneration,
   onCancel,
+  onLiveTranscriptRequest,
 }: ExpertRunCardProps): JSX.Element {
   const [retryError, setRetryError] = useState<string | null>(null);
-  const terminal = isExpertTerminalPhase(projection.phase);
-  const canRetry =
-    projection.phase === "failed" ||
-    projection.phase === "expired" ||
-    projection.errorCode === "delivery-timeout";
+  const failed =
+    projection.phase === "failed" || projection.phase === "unauthorized";
+  const canRetry = failed || projection.errorCode === "delivery-timeout";
 
   return (
-    <article
-      className="expert-run-card"
+    <div
+      className="expert-run-card expert-run-card-compact"
       data-testid="expert-run-card"
       data-phase={projection.phase}
+      role="status"
     >
-      <header>
-        <strong>
-          {projection.expertSlug} / {projection.skillName}
-        </strong>
-        <span>{projection.phase}</span>
-      </header>
-      <ExpertTimeline projection={projection} />
+      <span className="expert-run-card-status">
+        {buildExpertTranscriptAssistantContent(projection)}
+      </span>
       {projection.errorMessage ? (
-        <p role="alert">{projection.errorMessage}</p>
+        <span role="alert" className="expert-run-card-error">
+          {projection.errorMessage}
+        </span>
       ) : null}
-      {retryError ? <p role="alert">{retryError}</p> : null}
-      {projection.resultSummary ? <p>{projection.resultSummary}</p> : null}
-      {projection.resultContent ? (
-        <pre className="expert-run-result">{projection.resultContent}</pre>
+      {retryError ? (
+        <span role="alert" className="expert-run-card-error">
+          {retryError}
+        </span>
       ) : null}
-      {projection.artifactIds.length > 0 ? (
-        <ul className="expert-run-artifacts">
-          {projection.artifactIds.map((id) => (
-            <li key={id}>
-              <button
-                type="button"
-                onClick={() => {
-                  void window.hermesAPI.expert
-                    .downloadArtifact({
-                      taskId: projection.taskId ?? "",
-                      artifactId: id,
-                      sessionId: projection.sessionId,
-                      profileId: projection.profileId,
-                    })
-                    .catch((err) => {
-                      console.warn("[expert] artifact download failed", err);
-                    });
-                }}
-              >
-                Download artifact {id}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {!failed ? (
+        <button
+          type="button"
+          onClick={() =>
+            onCancel(projection.clientRequestId, projection.taskId)
+          }
+        >
+          Cancel
+        </button>
       ) : null}
-      <footer>
-        {!terminal ? (
-          <button
-            type="button"
-            onClick={() =>
-              onCancel(projection.clientRequestId, projection.taskId)
-            }
-          >
-            Cancel
-          </button>
-        ) : null}
-        {canRetry ? (
-          <button
-            type="button"
-            onClick={() => {
-              setRetryError(null);
-              const nextRequest = {
-                kind: "expert" as const,
-                expertSlug: projection.expertSlug,
-                skillName: projection.skillName,
-                prompt: projection.prompt,
-                attachmentRefs: [] as string[],
-                sessionId: projection.sessionId,
-                profileId: projection.profileId,
-                clientRequestId: createClientRequestId(),
-                authGeneration,
-              };
-              void window.hermesAPI.expert
-                .retry({
-                  previousClientRequestId: projection.clientRequestId,
-                  request: nextRequest,
-                })
-                .then(upsertExpertProjection)
-                .catch((err) => {
-                  setRetryError(
-                    err instanceof Error ? err.message : String(err),
-                  );
-                });
-            }}
-          >
-            Retry
-          </button>
-        ) : null}
-      </footer>
-    </article>
+      {canRetry ? (
+        <button
+          type="button"
+          onClick={() => {
+            setRetryError(null);
+            const nextRequest = {
+              kind: "expert" as const,
+              expertSlug: projection.expertSlug,
+              skillName: projection.skillName,
+              prompt: projection.prompt,
+              attachmentRefs: [] as string[],
+              sessionId: projection.sessionId,
+              profileId: projection.profileId,
+              clientRequestId: createClientRequestId(),
+              authGeneration,
+            };
+            onLiveTranscriptRequest?.(nextRequest.clientRequestId);
+            void window.hermesAPI.expert
+              .retry({
+                previousClientRequestId: projection.clientRequestId,
+                request: nextRequest,
+              })
+              .then(upsertExpertProjection)
+              .catch((err) => {
+                setRetryError(err instanceof Error ? err.message : String(err));
+              });
+          }}
+        >
+          Retry
+        </button>
+      ) : null}
+    </div>
   );
 }

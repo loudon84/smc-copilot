@@ -9,9 +9,8 @@ import {
   getCachedAccessToken,
   readStoredSessionSync,
 } from "../auth/token-store";
-import { getDbConnection } from "../db";
 import {
-  normalizeContinuationItems,
+  loadNormalizedContinuationItems,
   persistSessionContinuation,
 } from "../session-continuation-store";
 import { getExpertRunService } from "./expert-run-service";
@@ -19,19 +18,7 @@ import { getExpertRunService } from "./expert-run-service";
 function loadRawContinuationItems(
   sessionId: string,
 ): DesktopSessionContinuationItem[] {
-  const db = getDbConnection();
-  if (!db) return [];
-  const row = db
-    .prepare(
-      `SELECT prefix_json FROM desktop_session_continuations WHERE session_id = ?`,
-    )
-    .get(sessionId) as { prefix_json: string } | undefined;
-  if (!row?.prefix_json) return [];
-  try {
-    return normalizeContinuationItems(JSON.parse(row.prefix_json));
-  } catch {
-    return [];
-  }
+  return loadNormalizedContinuationItems(sessionId);
 }
 
 export function projectionToContinuationItem(
@@ -60,26 +47,30 @@ export function upsertExpertContinuationProjection(
   projection: ExpertRunProjection,
   authGeneration: string,
 ): void {
-  const item = projectionToContinuationItem(projection, authGeneration);
-  if (!item) return;
-  const current = loadRawContinuationItems(projection.sessionId);
-  const withoutSame = current.filter(
-    (entry) =>
-      !(
-        entry.kind === "expert-run" &&
-        entry.clientRequestId === projection.clientRequestId
-      ),
-  );
-  if (
-    isExpertTerminalPhase(projection.phase) &&
-    (projection.phase === "succeeded" ||
-      projection.phase === "cancelled" ||
-      projection.phase === "unauthorized")
-  ) {
-    persistSessionContinuation(projection.sessionId, withoutSame);
-    return;
+  try {
+    const item = projectionToContinuationItem(projection, authGeneration);
+    if (!item) return;
+    const current = loadRawContinuationItems(projection.sessionId);
+    const withoutSame = current.filter(
+      (entry) =>
+        !(
+          entry.kind === "expert-run" &&
+          entry.clientRequestId === projection.clientRequestId
+        ),
+    );
+    if (
+      isExpertTerminalPhase(projection.phase) &&
+      (projection.phase === "succeeded" ||
+        projection.phase === "cancelled" ||
+        projection.phase === "unauthorized")
+    ) {
+      persistSessionContinuation(projection.sessionId, withoutSame);
+      return;
+    }
+    persistSessionContinuation(projection.sessionId, [...withoutSame, item]);
+  } catch (err) {
+    console.warn("[expert] continuation upsert failed", err);
   }
-  persistSessionContinuation(projection.sessionId, [...withoutSame, item]);
 }
 
 export async function rehydrateExpertContinuationsForSession(
@@ -91,7 +82,12 @@ export async function rehydrateExpertContinuationsForSession(
     return [];
   }
   const authGeneration = `user:${session.user.id}`;
-  const items = loadRawContinuationItems(sessionId);
+  let items: DesktopSessionContinuationItem[] = [];
+  try {
+    items = loadRawContinuationItems(sessionId);
+  } catch {
+    return [];
+  }
   const service = getExpertRunService();
   const out: ExpertRunProjection[] = [];
   const kept: DesktopSessionContinuationItem[] = [];
@@ -101,7 +97,10 @@ export async function rehydrateExpertContinuationsForSession(
       kept.push(item);
       continue;
     }
-    if (item.authGeneration !== authGeneration || item.sessionId !== sessionId) {
+    if (
+      item.authGeneration !== authGeneration ||
+      item.sessionId !== sessionId
+    ) {
       continue;
     }
     const request: ExpertRequest = {

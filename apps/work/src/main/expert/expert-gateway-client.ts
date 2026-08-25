@@ -429,6 +429,30 @@ export function createExpertGatewayClient(
         headers,
         signal: controller.signal,
       });
+    } catch (err) {
+      if (err instanceof ExpertGatewayError) throw err;
+      const aborted =
+        (err instanceof Error && err.name === "AbortError") ||
+        (typeof DOMException !== "undefined" &&
+          err instanceof DOMException &&
+          err.name === "AbortError");
+      if (aborted) {
+        throw new ExpertGatewayError(
+          `Expert gateway request timed out or aborted (${url})`,
+          { status: 0, errorCode: "FETCH_ABORTED" },
+        );
+      }
+      const cause =
+        err instanceof Error && "cause" in err && err.cause instanceof Error
+          ? err.cause.message
+          : "";
+      const baseMsg = err instanceof Error ? err.message : String(err);
+      throw new ExpertGatewayError(
+        cause
+          ? `Expert gateway unreachable (${url}): ${cause}`
+          : `Expert gateway unreachable (${url}): ${baseMsg}`,
+        { status: 0, errorCode: "FETCH_FAILED" },
+      );
     } finally {
       clearTimeout(timeout);
       init.signal?.removeEventListener("abort", onExternalAbort);

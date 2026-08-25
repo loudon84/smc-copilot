@@ -28,11 +28,16 @@ const SSE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000] as const;
 const POLL_INTERVAL_MS = 15_000;
 const POLL_MAX_MS = 10 * 60_000;
 
-export type ExpertProjectionListener = (projection: ExpertRunProjection) => void;
+export type ExpertProjectionListener = (
+  projection: ExpertRunProjection,
+) => void;
 
 export interface ExpertRunService {
   start(request: ExpertRequest): Promise<ExpertRunProjection>;
-  cancel(clientRequestId: string, taskId?: string | null): Promise<ExpertRunProjection | null>;
+  cancel(
+    clientRequestId: string,
+    taskId?: string | null,
+  ): Promise<ExpertRunProjection | null>;
   retry(
     previousClientRequestId: string,
     request: ExpertRequest,
@@ -133,6 +138,7 @@ function createProjection(request: ExpertRequest): ExpertRunProjection {
     errorMessage: null,
     resultSummary: null,
     resultContent: null,
+    progressMessage: null,
     artifactIds: [],
     updatedAt: nowIso(),
   };
@@ -143,7 +149,10 @@ function parseTaskEvent(data: string): ExpertTaskEvent | null {
     const parsed = JSON.parse(data) as unknown;
     if (!isRecord(parsed)) return null;
     if (typeof parsed.task_id !== "string") return null;
-    if (typeof parsed.event_type !== "string" && typeof parsed.event !== "string") {
+    if (
+      typeof parsed.event_type !== "string" &&
+      typeof parsed.event !== "string"
+    ) {
       return null;
     }
     return parsed as ExpertTaskEvent;
@@ -214,6 +223,14 @@ export function createExpertRunService(
     run.projection = next;
     if (next.phase && isExpertTerminalPhase(next.phase)) {
       run.terminalConfirmed = true;
+      // Unblock a hanging SSE reader so companion poll / completion can finish cleanly.
+      if (!run.abort.signal.aborted) {
+        run.abort.abort();
+      }
+      if (run.pollTimer) {
+        clearTimeout(run.pollTimer);
+        run.pollTimer = null;
+      }
     }
     emit(next);
     return next;
@@ -221,10 +238,13 @@ export function createExpertRunService(
 
   function assertAccepting(): void {
     if (!accepting || disposed) {
-      throw new ExpertGatewayError("Expert run service is not accepting requests", {
-        status: 503,
-        errorCode: "DISPOSED",
-      });
+      throw new ExpertGatewayError(
+        "Expert run service is not accepting requests",
+        {
+          status: 503,
+          errorCode: "DISPOSED",
+        },
+      );
     }
   }
 
@@ -265,7 +285,11 @@ export function createExpertRunService(
     }
   }
 
-  function applyEvent(run: ActiveRun, event: ExpertTaskEvent, eventId: string | undefined): void {
+  function applyEvent(
+    run: ActiveRun,
+    event: ExpertTaskEvent,
+    eventId: string | undefined,
+  ): void {
     if (run.terminalConfirmed) return;
     const seq =
       typeof event.event_seq === "number" ? event.event_seq : Number.NaN;
@@ -287,22 +311,35 @@ export function createExpertRunService(
       patch.displayStage = "running";
     } else if (eventName === "task.progress" || eventName === "progress") {
       patch.phase = "running";
-      // runtimeProgress=false: only minimum stages, ignore fine-grained tool progress.
+      // runtimeProgress=false: only minimum stages; message drives the bubble.
       const stage =
-        "stage" in event && typeof event.stage === "string" ? event.stage : null;
+        "stage" in event && typeof event.stage === "string"
+          ? event.stage
+          : null;
       if (stage === "preparing" || stage === "finalizing") {
         patch.displayStage = stage;
       } else {
         patch.displayStage = "running";
+      }
+      const message =
+        "message" in event && typeof event.message === "string"
+          ? event.message.trim()
+          : "";
+      if (message) {
+        patch.progressMessage = message;
       }
     } else if (eventName === "task.completed" || eventName === "completed") {
       patch.phase = "succeeded";
       patch.displayStage = "finalizing";
       if ("result" in event && isRecord(event.result)) {
         patch.resultSummary =
-          typeof event.result.summary === "string" ? event.result.summary : null;
+          typeof event.result.summary === "string"
+            ? event.result.summary
+            : null;
         patch.resultContent =
-          typeof event.result.content === "string" ? event.result.content : null;
+          typeof event.result.content === "string"
+            ? event.result.content
+            : null;
       }
     } else if (eventName === "task.failed" || eventName === "failed") {
       patch.phase = "failed";
@@ -311,7 +348,10 @@ export function createExpertRunService(
         "message" in event && typeof event.message === "string"
           ? event.message
           : "Task failed";
-    } else if (eventName === "task.artifact_ready" || eventName === "artifact_ready") {
+    } else if (
+      eventName === "task.artifact_ready" ||
+      eventName === "artifact_ready"
+    ) {
       const artifactId =
         "artifact_id" in event && typeof event.artifact_id === "string"
           ? event.artifact_id
@@ -337,7 +377,8 @@ export function createExpertRunService(
       updateProjection(run, {
         phase: "failed",
         errorCode: "delivery-timeout",
-        errorMessage: "Event delivery timed out after reconnect and polling budget",
+        errorMessage:
+          "Event delivery timed out after reconnect and polling budget",
       });
       return;
     }
@@ -357,9 +398,17 @@ export function createExpertRunService(
         return;
       }
     }
+    if (run.terminalConfirmed || run.abort.signal.aborted) return;
     run.pollTimer = setTimeout(() => {
       void pollStatus(run);
     }, POLL_INTERVAL_MS);
+  }
+
+  /** Start bounded snapshot polling at most once per run. */
+  function ensureTerminalWatch(run: ActiveRun): void {
+    if (run.terminalConfirmed || run.abort.signal.aborted) return;
+    if (run.pollStartedAt != null || run.pollTimer != null) return;
+    void pollStatus(run);
   }
 
   function applySnapshot(run: ActiveRun, snapshot: HermesTaskSnapshot): void {
@@ -394,7 +443,9 @@ export function createExpertRunService(
         if (run.projection.lastEventId) {
           headers["Last-Event-ID"] = run.projection.lastEventId;
         }
-        const path = gateway.buildEventsPath(taskId);
+        // Prefer Accepted event_stream (may include sse token query).
+        const path =
+          run.accepted?.event_stream?.trim() || gateway.buildEventsPath(taskId);
         const res = await gateway.openAuthorizedGet(path, {
           headers,
           signal: run.abort.signal,
@@ -436,7 +487,7 @@ export function createExpertRunService(
       }
 
       if (run.reconnectAttempts >= SSE_RECONNECT_DELAYS_MS.length) {
-        void pollStatus(run);
+        ensureTerminalWatch(run);
         return;
       }
       const delay = SSE_RECONNECT_DELAYS_MS[run.reconnectAttempts] ?? 16_000;
@@ -469,6 +520,9 @@ export function createExpertRunService(
         phase: "running",
         displayStage: "running",
       });
+      // Companion terminal watch: silent/hanging SSE must not leave UI on running
+      // after the HermesTask has already completed on the gateway.
+      ensureTerminalWatch(run);
       void consumeSse(run);
     } catch (err) {
       if (err instanceof ExpertGatewayError) {
@@ -564,20 +618,26 @@ export function createExpertRunService(
       assertAccepting();
       const previous = runs.get(previousClientRequestId);
       if (!previous || !isExpertTerminalPhase(previous.projection.phase)) {
-        throw new ExpertGatewayError("Retry only allowed for terminal failures", {
-          status: 400,
-          errorCode: "RETRY_NOT_ALLOWED",
-        });
+        throw new ExpertGatewayError(
+          "Retry only allowed for terminal failures",
+          {
+            status: 400,
+            errorCode: "RETRY_NOT_ALLOWED",
+          },
+        );
       }
       if (
         previous.projection.phase !== "failed" &&
         previous.projection.phase !== "expired" &&
         previous.projection.errorCode !== "delivery-timeout"
       ) {
-        throw new ExpertGatewayError("Retry only allowed for terminal failures", {
-          status: 400,
-          errorCode: "RETRY_NOT_ALLOWED",
-        });
+        throw new ExpertGatewayError(
+          "Retry only allowed for terminal failures",
+          {
+            status: 400,
+            errorCode: "RETRY_NOT_ALLOWED",
+          },
+        );
       }
       if (request.clientRequestId === previousClientRequestId) {
         throw new ExpertGatewayError("Retry must use a new clientRequestId", {
@@ -700,7 +760,9 @@ export function getExpertRunService(): ExpertRunService {
   return singleton;
 }
 
-export function setExpertRunServiceForTests(service: ExpertRunService | null): void {
+export function setExpertRunServiceForTests(
+  service: ExpertRunService | null,
+): void {
   singleton = service;
 }
 
@@ -709,4 +771,9 @@ export function resetExpertRunServiceForTests(): void {
   singleton = null;
 }
 
-export { createClientRequestId, SSE_RECONNECT_DELAYS_MS, POLL_INTERVAL_MS, POLL_MAX_MS };
+export {
+  createClientRequestId,
+  SSE_RECONNECT_DELAYS_MS,
+  POLL_INTERVAL_MS,
+  POLL_MAX_MS,
+};

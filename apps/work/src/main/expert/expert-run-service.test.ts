@@ -173,14 +173,61 @@ describe("expert-run-service", () => {
     });
 
     await service.start(makeRequest());
-    // Exhaust reconnect delays then enter polling.
-    for (const delay of SSE_RECONNECT_DELAYS_MS) {
-      await vi.advanceTimersByTimeAsync(delay);
-    }
+    // Companion terminal watch polls immediately; second tick completes.
     await vi.advanceTimersByTimeAsync(15_000);
     await vi.waitFor(() => {
       expect(service.getProjection("req-1")?.phase).toBe("succeeded");
     });
+    service.dispose();
+  });
+
+  it("completes via companion poll when SSE hangs open without events", async () => {
+    vi.useFakeTimers();
+    const hangingStream = new ReadableStream<Uint8Array>({
+      pull() {
+        /* never enqueues or closes — silent SSE */
+      },
+    });
+    const gateway = mockGateway({
+      openAuthorizedGet: vi.fn().mockResolvedValue(
+        new Response(hangingStream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      ),
+      getSnapshot: vi
+        .fn()
+        .mockResolvedValueOnce({ status: "running", result: { ready: false } })
+        .mockResolvedValueOnce({
+          status: "completed",
+          result: {
+            ready: true,
+            summary: "from-poll",
+            result_content: "body",
+            content: "body",
+          },
+        }),
+      getResult: vi.fn().mockResolvedValue({
+        ready: true,
+        status: "completed",
+        result_summary: "from-poll",
+        result_content: "body",
+        content: "body",
+      }),
+    });
+    const service = createExpertRunService({
+      gateway,
+      sleep: async (ms, signal) => {
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+        await vi.advanceTimersByTimeAsync(ms);
+      },
+    });
+    await service.start(makeRequest());
+    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.waitFor(() => {
+      expect(service.getProjection("req-1")?.phase).toBe("succeeded");
+    });
+    expect(service.getProjection("req-1")?.resultSummary).toBe("from-poll");
     service.dispose();
   });
 

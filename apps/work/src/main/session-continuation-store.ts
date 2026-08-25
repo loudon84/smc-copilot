@@ -187,6 +187,27 @@ export function normalizeContinuationItems(
   return out;
 }
 
+/** Read continuation JSON for a session. Creates table if needed; never throws. */
+export function loadNormalizedContinuationItems(
+  sessionId: string,
+): DesktopSessionContinuationItem[] {
+  if (!sessionId.trim()) return [];
+  try {
+    const db = getDbConnection(false);
+    if (!db) return [];
+    // Same as persist: CREATE IF NOT EXISTS so first Expert run on a fresh
+    // state.db does not fail SSE projection updates with SQLITE_ERROR.
+    ensureTable(db);
+    const row = db
+      .prepare(`SELECT prefix_json FROM ${TABLE} WHERE session_id = ?`)
+      .get(sessionId) as StoredContinuationRow | undefined;
+    if (!row?.prefix_json) return [];
+    return normalizeContinuationItems(JSON.parse(row.prefix_json));
+  } catch {
+    return [];
+  }
+}
+
 export function persistSessionContinuation(
   sessionId: string,
   items: unknown,

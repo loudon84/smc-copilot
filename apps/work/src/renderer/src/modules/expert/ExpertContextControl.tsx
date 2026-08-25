@@ -6,7 +6,12 @@ import type {
   ExpertSkillItem,
   SelectedCallability,
 } from "../../../../shared/expert";
-import { canSilentCallExpertSkill } from "../../../../shared/expert";
+import {
+  canSilentCallExpertSkill,
+  decodeExpertIpcError,
+  describeSilentCallDenial,
+  formatExpertHealthUserMessage,
+} from "../../../../shared/expert";
 import { ExpertSelector, type ExpertSelection } from "./ExpertSelector";
 import { WorkContextChip, type WorkContextDensity } from "./WorkContextChip";
 import { WorkContextPopover } from "./WorkContextPopover";
@@ -39,26 +44,19 @@ function densityFromWidth(width: number): WorkContextDensity {
 }
 
 function mapHealthError(err: unknown): ExpertGatewayStatus {
-  const status =
-    typeof err === "object" &&
-    err !== null &&
-    "status" in err &&
-    typeof (err as { status: unknown }).status === "number"
-      ? (err as { status: number }).status
-      : null;
-  const errorCode =
-    typeof err === "object" &&
-    err !== null &&
-    "errorCode" in err &&
-    typeof (err as { errorCode: unknown }).errorCode === "string"
-      ? (err as { errorCode: string }).errorCode
-      : null;
+  const decoded = decodeExpertIpcError(err);
+  const status = decoded?.status ?? null;
+  const errorCode = decoded?.errorCode ?? null;
 
   if (errorCode === "INVALID_HEALTH_PAYLOAD") return "error";
   if (status === 403 || status === 404) return "error";
   if (status !== null && status >= 500) return "unavailable";
   if (status === 401) return "unavailable";
   return "unavailable";
+}
+
+function healthErrorMessage(err: unknown, status: ExpertGatewayStatus): string {
+  return formatExpertHealthUserMessage(status, decodeExpertIpcError(err), err);
 }
 
 function gatewayStatusLabel(status: ExpertGatewayStatus): string {
@@ -156,6 +154,30 @@ export function ExpertContextControl({
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
 
+  const loadSkills = useCallback(
+    async (expertSlug: string, revision: number) => {
+      setSkillsLoading(true);
+      try {
+        const items = await window.hermesAPI.expert.listSkills(expertSlug);
+        if (!mountedRef.current || revision !== revisionRef.current) return;
+        setSkills(items);
+        reconcileSelection(revision, catalogRef.current, items, {
+          expertSlug,
+          skillName: valueRef.current.skillName,
+        });
+      } catch (err) {
+        if (!mountedRef.current || revision !== revisionRef.current) return;
+        setSkills([]);
+        setError(healthErrorMessage(err, mapHealthError(err)));
+      } finally {
+        if (mountedRef.current && revision === revisionRef.current) {
+          setSkillsLoading(false);
+        }
+      }
+    },
+    [reconcileSelection],
+  );
+
   const loadHealthAndCatalog = useCallback(
     async (reason: "mount" | "refresh" | "auth" | "focus" | "activate") => {
       if (!mountedRef.current) return;
@@ -177,8 +199,9 @@ export function ExpertContextControl({
           health = await window.hermesAPI.expert.getHealth();
         } catch (err) {
           if (!mountedRef.current || revision !== revisionRef.current) return;
-          setStatus(mapHealthError(err));
-          setError(err instanceof Error ? err.message : String(err));
+          const mapped = mapHealthError(err);
+          setStatus(mapped);
+          setError(healthErrorMessage(err, mapped));
           return;
         }
         if (!mountedRef.current || revision !== revisionRef.current) return;
@@ -196,9 +219,17 @@ export function ExpertContextControl({
         setCatalog(items);
         setEmptyCatalog(items.length === 0);
         reconcileSelection(revision, items, null, valueRef.current);
+        // Refresh clears Main skill TTL; always re-project current Expert skills.
+        const selectedSlug = valueRef.current.expertSlug;
+        if (selectedSlug) {
+          void loadSkills(selectedSlug, revision);
+        } else if (reason === "refresh" || reason === "auth") {
+          setSkills([]);
+        }
       } catch (err) {
         if (!mountedRef.current || revision !== revisionRef.current) return;
-        setError(err instanceof Error ? err.message : String(err));
+        const mapped = mapHealthError(err);
+        setError(healthErrorMessage(err, mapped));
         setCatalog([]);
         setEmptyCatalog(true);
       } finally {
@@ -207,31 +238,7 @@ export function ExpertContextControl({
         }
       }
     },
-    [bumpRevision, reconcileSelection, setStatus],
-  );
-
-  const loadSkills = useCallback(
-    async (expertSlug: string, revision: number) => {
-      setSkillsLoading(true);
-      try {
-        const items = await window.hermesAPI.expert.listSkills(expertSlug);
-        if (!mountedRef.current || revision !== revisionRef.current) return;
-        setSkills(items);
-        reconcileSelection(revision, catalogRef.current, items, {
-          expertSlug,
-          skillName: valueRef.current.skillName,
-        });
-      } catch (err) {
-        if (!mountedRef.current || revision !== revisionRef.current) return;
-        setSkills([]);
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (mountedRef.current && revision === revisionRef.current) {
-          setSkillsLoading(false);
-        }
-      }
-    },
-    [reconcileSelection],
+    [bumpRevision, loadSkills, reconcileSelection, setStatus],
   );
 
   // Mount: revision 0→1 then first fetch when active.
@@ -358,6 +365,29 @@ export function ExpertContextControl({
     onChange(next);
   };
 
+  const silentCallHint = (() => {
+    if (!value.expertSlug || !value.skillName) return null;
+    if (!selectedExpert || !selectedSkill) {
+      return describeSilentCallDenial({
+        catalogStatus: selectedExpert?.status ?? null,
+        skillStatus: selectedSkill?.status ?? null,
+        callEnabled: selectedSkill?.callEnabled === true,
+        riskLevel: selectedSkill?.riskLevel ?? null,
+        approvalMode: selectedSkill?.approvalMode ?? null,
+        canSilentCall: false,
+      });
+    }
+    if (canSilentCallExpertSkill(selectedExpert, selectedSkill)) return null;
+    return describeSilentCallDenial({
+      catalogStatus: selectedExpert.status ?? null,
+      skillStatus: selectedSkill.status ?? null,
+      callEnabled: selectedSkill.callEnabled === true,
+      riskLevel: selectedSkill.riskLevel ?? null,
+      approvalMode: selectedSkill.approvalMode ?? null,
+      canSilentCall: false,
+    });
+  })();
+
   return (
     <div className="expert-context-control" ref={wrapRef}>
       <WorkContextChip
@@ -393,6 +423,11 @@ export function ExpertContextControl({
               skillsLoading={skillsLoading}
             />
           )}
+          {silentCallHint ? (
+            <p className="expert-selector-error" role="status">
+              {silentCallHint}
+            </p>
+          ) : null}
           {error ? (
             <p className="expert-selector-error" role="status">
               {error}
