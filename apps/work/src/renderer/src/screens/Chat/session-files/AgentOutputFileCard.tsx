@@ -40,8 +40,32 @@ export function AgentOutputFileCard({
 }: AgentOutputFileCardProps): React.JSX.Element {
   const [busy, setBusy] = useState<string | null>(null);
   const missing = file.status === "missing" || file.status === "deleted";
+  const isRemote = file.locality === "remote";
+  const availability =
+    file.availability === "forbidden"
+      ? "Forbidden"
+      : file.availability === "not-found"
+        ? "Not found"
+        : file.availability === "unavailable"
+          ? "Unavailable"
+          : null;
   const sizeLabel = formatFileSize(file.size);
-  const meta = [categoryLabel(file), sizeLabel].filter(Boolean).join(" · ");
+  const meta = [
+    categoryLabel(file),
+    sizeLabel,
+    isRemote ? "Remote" : null,
+    availability,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const canOpen = !missing && (file.canOpen ?? (!isRemote || file.hasManagedCopy));
+  const canReveal =
+    !missing && (file.canReveal ?? (!isRemote || file.hasManagedCopy));
+  const canPreview =
+    !missing &&
+    file.canPreview !== false &&
+    file.availability !== "forbidden" &&
+    file.availability !== "not-found";
 
   const run = async (key: string, fn: () => Promise<unknown>): Promise<void> => {
     if (busy) return;
@@ -66,12 +90,12 @@ export function AgentOutputFileCard({
         type="button"
         className="agent-output-managed-card-main"
         onClick={() => {
-          if (!missing) onPreview?.(file.id);
+          if (canPreview) onPreview?.(file.id);
         }}
-        disabled={missing}
+        disabled={!canPreview}
       >
         <span className="agent-output-managed-card-icon">
-          {missing ? (
+          {missing || availability ? (
             <FileWarning size={18} aria-hidden />
           ) : (
             <FileIcon category={file.category} name={file.name} size={18} />
@@ -85,7 +109,7 @@ export function AgentOutputFileCard({
         </span>
       </button>
       <div className="agent-output-managed-card-actions">
-        {onPreview && !missing && (
+        {onPreview && canPreview && (
           <button
             type="button"
             className="agent-output-managed-card-action"
@@ -97,7 +121,7 @@ export function AgentOutputFileCard({
             <Eye size={13} />
           </button>
         )}
-        {!missing && (
+        {!missing && file.availability !== "forbidden" && (
           <button
             type="button"
             className="agent-output-managed-card-action"
@@ -113,7 +137,7 @@ export function AgentOutputFileCard({
             <Download size={13} />
           </button>
         )}
-        {!missing && (
+        {canOpen && (
           <button
             type="button"
             className="agent-output-managed-card-action"
@@ -129,7 +153,7 @@ export function AgentOutputFileCard({
             <ExternalLink size={13} />
           </button>
         )}
-        {!missing && (
+        {canReveal && (
           <button
             type="button"
             className="agent-output-managed-card-action"

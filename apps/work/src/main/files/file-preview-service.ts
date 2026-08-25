@@ -4,7 +4,8 @@
  * before answering a preview request (PRD §26 perf constraints).
  */
 
-import { createReadStream, existsSync, statSync } from "fs";
+import { createReadStream, existsSync, readFileSync, renameSync, rmSync, statSync } from "fs";
+import { protocol } from "electron";
 import { pathToFileURL } from "url";
 import {
   makeFileError,
@@ -16,13 +17,28 @@ import {
   type PreviewType,
 } from "../../shared/files";
 import {
+  ExpertGatewayError,
+  getExpertGatewayClient,
+} from "../expert/expert-gateway-client";
+import {
   getManagedFile,
   getParsedDocument,
   normalizeProfileId,
+  upsertManagedFile,
 } from "./file-association-store";
+import { readDesktopFilesConfig } from "./file-config";
+import { FilePlatformError } from "./file-security";
+import {
+  invalidatePreviewCache,
+  resolvePreviewCachePath,
+  streamExpertArtifactBytes,
+} from "./expert-artifact-transfer";
+import { nowIso } from "./file-metadata";
 
 /** Text preview cap — larger files are truncated, never fully buffered. */
 export const PREVIEW_TEXT_LIMIT = 2 * 1024 * 1024;
+
+export const FILE_PREVIEW_SCHEME = "hermes-file-preview";
 
 const EXTENSION_TO_LANGUAGE: Record<string, string> = {
   ts: "typescript",
@@ -60,6 +76,9 @@ const EXTENSION_TO_LANGUAGE: Record<string, string> = {
   vue: "javascript",
   svelte: "javascript",
 };
+
+/** fileId → absolute preview cache path (Main only; never sent to Renderer). */
+const previewCacheByFileId = new Map<string, string>();
 
 function resolvedPath(file: ManagedFile): string | undefined {
   return file.managedPath || file.originalPath;
@@ -133,7 +152,7 @@ function unsupported(
     type: "unsupported",
     title,
     mime,
-    canOpenExternal: true,
+    canOpenExternal: false,
     canSaveAs: true,
     canCopyText: false,
     canAddToContext: false,
@@ -163,9 +182,274 @@ function previewTypeForCategory(category: ManagedFileCategory): PreviewType {
   }
 }
 
+function previewSchemeUrl(fileId: string): string {
+  return `${FILE_PREVIEW_SCHEME}://${encodeURIComponent(fileId)}`;
+}
+
+function markAvailability(
+  file: ManagedFile,
+  availability: NonNullable<ManagedFile["availability"]>,
+): void {
+  upsertManagedFile({
+    ...file,
+    availability,
+    updatedAt: nowIso(),
+  });
+  if (availability === "forbidden" && file.provider && file.remoteArtifactId) {
+    invalidatePreviewCache({
+      profile: file.profileId,
+      provider: file.provider,
+      remoteArtifactId: file.remoteArtifactId,
+      contentHash: file.contentHash,
+    });
+    previewCacheByFileId.delete(file.id);
+  }
+}
+
+function mapRemotePreviewError(
+  err: unknown,
+  file: ManagedFile,
+): { error: FileError } {
+  if (err instanceof ExpertGatewayError) {
+    if (err.status === 403) {
+      markAvailability(file, "forbidden");
+      return {
+        error: makeFileError("FILE_REMOTE_FORBIDDEN", err.message, {
+          detail: err.errorCode ?? undefined,
+        }),
+      };
+    }
+    if (err.status === 404) {
+      markAvailability(file, "not-found");
+      return {
+        error: makeFileError("FILE_REMOTE_NOT_FOUND", err.message, {
+          detail: err.errorCode ?? undefined,
+        }),
+      };
+    }
+    markAvailability(file, "unavailable");
+    return {
+      error: makeFileError("FILE_REMOTE_UNAVAILABLE", err.message, {
+        retryable: true,
+        detail: err.errorCode ?? undefined,
+      }),
+    };
+  }
+  if (err instanceof FilePlatformError) {
+    if (err.fileError.code === "FILE_REMOTE_FORBIDDEN") {
+      markAvailability(file, "forbidden");
+    } else if (err.fileError.code === "FILE_REMOTE_NOT_FOUND") {
+      markAvailability(file, "not-found");
+    } else if (
+      err.fileError.code === "FILE_REMOTE_UNAVAILABLE" ||
+      err.fileError.code === "FILE_TOO_LARGE" ||
+      err.fileError.code === "FILE_INTEGRITY_MISMATCH"
+    ) {
+      markAvailability(file, "unavailable");
+    }
+    return { error: err.fileError };
+  }
+  return {
+    error: makeFileError(
+      "FILE_REMOTE_UNAVAILABLE",
+      err instanceof Error ? err.message : "Remote preview failed",
+      { retryable: true },
+    ),
+  };
+}
+
+async function getRemotePreviewDescriptor(
+  profileId: string,
+  file: ManagedFile,
+  options?: FilePreviewOptions,
+): Promise<FilePreviewDescriptor | { error: FileError }> {
+  if (file.availability === "forbidden") {
+    return {
+      error: makeFileError(
+        "FILE_REMOTE_FORBIDDEN",
+        "Artifact is forbidden",
+      ),
+    };
+  }
+  if (file.availability === "not-found") {
+    return {
+      error: makeFileError("FILE_REMOTE_NOT_FOUND", "Artifact was not found"),
+    };
+  }
+  if (file.canPreview === false) {
+    return unsupported(
+      file.id,
+      file.name,
+      file.mime,
+      "Preview is not supported for this artifact",
+    );
+  }
+
+  const config = readDesktopFilesConfig(
+    profileId === "default" ? undefined : profileId,
+  );
+  const type = previewTypeForCategory(file.category);
+  const artifactId = file.remoteArtifactId;
+  if (!artifactId || !file.provider) {
+    return {
+      error: makeFileError("FILE_NOT_FOUND", "Remote artifact identity missing"),
+    };
+  }
+
+  const textTypes: PreviewType[] = ["text", "markdown", "code", "html"];
+  const useProviderPreview =
+    file.providerPreviewSupported === true && textTypes.includes(type);
+
+  if (useProviderPreview) {
+    try {
+      const gateway = getExpertGatewayClient();
+      const preview = await gateway.getArtifactPreview(artifactId);
+      const limit = Math.max(1, options?.limit ?? PREVIEW_TEXT_LIMIT);
+      const offset = Math.max(0, options?.offset ?? 0);
+      const full = preview.content;
+      const slice = full.slice(offset, offset + limit);
+      const truncated =
+        preview.truncated === true || offset + limit < full.length;
+      if (file.availability !== "available") {
+        markAvailability(file, "available");
+      }
+      return {
+        fileId: file.id,
+        type,
+        title: file.name,
+        mime: file.mime,
+        content: slice,
+        truncated,
+        offset,
+        nextOffset: truncated ? offset + slice.length : undefined,
+        totalBytes: full.length,
+        encoding: preview.encoding || "utf-8",
+        language:
+          type === "code"
+            ? EXTENSION_TO_LANGUAGE[file.extension] || undefined
+            : undefined,
+        canOpenExternal: false,
+        canSaveAs: true,
+        canCopyText: true,
+        canAddToContext: true,
+        canRetryParse: false,
+      };
+    } catch (err) {
+      return mapRemotePreviewError(err, file);
+    }
+  }
+
+  // Binary/rich client preview via authorized Download → preview cache.
+  if (type !== "image" && type !== "pdf") {
+    return unsupported(
+      file.id,
+      file.name,
+      file.mime,
+      "Preview is not available for this remote artifact type",
+    );
+  }
+
+  const cachePath = resolvePreviewCachePath({
+    profile: profileId,
+    provider: file.provider,
+    remoteArtifactId: artifactId,
+    contentHash: file.contentHash,
+  });
+
+  const allowOffline = config.preview.allowOfflineCachedCopy === true;
+  if (existsSync(cachePath)) {
+    if (!allowOffline) {
+      // Still allow using cache only after a successful network check is not
+      // required when we just wrote it in this session — but PRD: offline denied
+      // by default. Prefer re-fetch; if network fails and allowOffline false, error.
+    } else {
+      previewCacheByFileId.set(file.id, cachePath);
+      return {
+        fileId: file.id,
+        type,
+        title: file.name,
+        mime: file.mime,
+        localUrl: previewSchemeUrl(file.id),
+        canOpenExternal: false,
+        canSaveAs: true,
+        canCopyText: false,
+        canAddToContext: true,
+        canRetryParse: false,
+        cachedCopy: true,
+      };
+    }
+  }
+
+  try {
+    const maxBytes = Math.max(1, config.preview.maxPreviewMb) * 1024 * 1024;
+    const transferred = await streamExpertArtifactBytes({
+      artifactId,
+      expectedSha256: file.contentHash,
+      profile: profileId === "default" ? undefined : profileId,
+      maxBytes,
+    });
+    try {
+      if (existsSync(cachePath)) rmSync(cachePath, { force: true });
+      renameSync(transferred.path, cachePath);
+    } catch {
+      // Fall back to temp path if rename fails.
+      previewCacheByFileId.set(file.id, transferred.path);
+      if (file.availability !== "available") {
+        markAvailability(file, "available");
+      }
+      return {
+        fileId: file.id,
+        type,
+        title: file.name,
+        mime: file.mime,
+        localUrl: previewSchemeUrl(file.id),
+        canOpenExternal: false,
+        canSaveAs: true,
+        canCopyText: false,
+        canAddToContext: true,
+        canRetryParse: false,
+      };
+    }
+    previewCacheByFileId.set(file.id, cachePath);
+    if (file.availability !== "available") {
+      markAvailability(file, "available");
+    }
+    return {
+      fileId: file.id,
+      type,
+      title: file.name,
+      mime: file.mime,
+      localUrl: previewSchemeUrl(file.id),
+      canOpenExternal: false,
+      canSaveAs: true,
+      canCopyText: false,
+      canAddToContext: true,
+      canRetryParse: false,
+    };
+  } catch (err) {
+    if (existsSync(cachePath) && allowOffline) {
+      previewCacheByFileId.set(file.id, cachePath);
+      return {
+        fileId: file.id,
+        type,
+        title: file.name,
+        mime: file.mime,
+        localUrl: previewSchemeUrl(file.id),
+        canOpenExternal: false,
+        canSaveAs: true,
+        canCopyText: false,
+        canAddToContext: true,
+        canRetryParse: false,
+        cachedCopy: true,
+      };
+    }
+    return mapRemotePreviewError(err, file);
+  }
+}
+
 /**
  * Build the preview descriptor for a managed file. Renderer-safe — never
- * includes absolute paths beyond a `file://` localUrl for image/pdf types.
+ * includes absolute paths for remote resources (uses hermes-file-preview://).
  */
 // @lat: [[file-platform#File preview]]
 export async function getPreviewDescriptor(
@@ -177,6 +461,10 @@ export async function getPreviewDescriptor(
   const file = getManagedFile(profileId, fileId);
   if (!file) {
     return { error: makeFileError("FILE_NOT_FOUND", "Managed file not found") };
+  }
+
+  if (file.locality === "remote") {
+    return getRemotePreviewDescriptor(profileId, file, options);
   }
 
   const path = resolvedPath(file);
@@ -263,7 +551,9 @@ export async function getPreviewDescriptor(
         totalBytes,
         encoding: "utf-8",
         language:
-          type === "code" ? EXTENSION_TO_LANGUAGE[file.extension] || undefined : undefined,
+          type === "code"
+            ? EXTENSION_TO_LANGUAGE[file.extension] || undefined
+            : undefined,
         canOpenExternal: true,
         canSaveAs: true,
         canCopyText: true,
@@ -272,9 +562,13 @@ export async function getPreviewDescriptor(
       };
     } catch (err) {
       return {
-        error: makeFileError("FILE_READ_FAILED", "Failed to read file for preview", {
-          detail: err instanceof Error ? err.message : String(err),
-        }),
+        error: makeFileError(
+          "FILE_READ_FAILED",
+          "Failed to read file for preview",
+          {
+            detail: err instanceof Error ? err.message : String(err),
+          },
+        ),
       };
     }
   }
@@ -285,4 +579,49 @@ export async function getPreviewDescriptor(
     file.mime,
     `Preview is not available for ${file.category} files`,
   );
+}
+
+/** Call before `app.whenReady()` so hermes-file-preview:// is privileged. */
+export function registerFilePreviewSchemePrivileged(): void {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: FILE_PREVIEW_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+        stream: true,
+      },
+    },
+  ]);
+}
+
+/** Register protocol handler after app ready — serves preview cache by fileId. */
+export function registerFilePreviewProtocolHandler(): void {
+  protocol.handle(FILE_PREVIEW_SCHEME, (request) => {
+    try {
+      const url = new URL(request.url);
+      const fileId = decodeURIComponent(url.hostname || url.pathname.replace(/^\//, ""));
+      const path = previewCacheByFileId.get(fileId);
+      if (!path || !existsSync(path)) {
+        return new Response("Not found", { status: 404 });
+      }
+      const buf = readFileSync(path);
+      const lower = path.toLowerCase();
+      let mime = "application/octet-stream";
+      if (lower.endsWith(".pdf")) mime = "application/pdf";
+      else if (lower.endsWith(".png")) mime = "image/png";
+      else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+        mime = "image/jpeg";
+      } else if (lower.endsWith(".webp")) mime = "image/webp";
+      else if (lower.endsWith(".gif")) mime = "image/gif";
+      return new Response(buf, {
+        status: 200,
+        headers: { "Content-Type": mime },
+      });
+    } catch {
+      return new Response("Bad request", { status: 400 });
+    }
+  });
 }

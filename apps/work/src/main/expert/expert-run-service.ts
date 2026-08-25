@@ -23,6 +23,7 @@ import {
   ExpertGatewayError,
   type ExpertGatewayClient,
 } from "./expert-gateway-client";
+import { upsertExpertRemoteArtifact } from "../files/upsert-expert-remote-artifact";
 
 const SSE_RECONNECT_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000] as const;
 const POLL_INTERVAL_MS = 15_000;
@@ -50,6 +51,10 @@ export interface ExpertRunService {
     lastEventId: string | null;
     phase: ExpertLocalPhase;
   }): Promise<ExpertRunProjection>;
+  /** Re-run artifact metadata discovery after a prior error (or idle). */
+  retryArtifactDiscovery(
+    clientRequestId: string,
+  ): Promise<ExpertRunProjection | null>;
   onProjectionChanged(listener: ExpertProjectionListener): () => void;
   /** Idempotent dispose: stop new requests → abort SSE/polling → clear cache. */
   dispose(): void;
@@ -63,6 +68,10 @@ interface ActiveRun {
   seenEventIds: Set<string>;
   highestEventSeq: number;
   terminalConfirmed: boolean;
+  /** True after first successful/failed getResult pass for this terminal. */
+  resultResolved: boolean;
+  /** True after artifact discovery has been scheduled at least once. */
+  discoveryStarted: boolean;
   reconnectAttempts: number;
   pollStartedAt: number | null;
   pollTimer: ReturnType<typeof setTimeout> | null;
@@ -139,7 +148,9 @@ function createProjection(request: ExpertRequest): ExpertRunProjection {
     resultSummary: null,
     resultContent: null,
     progressMessage: null,
-    artifactIds: [],
+    artifactDiscovery: "idle",
+    artifactDiscoveryError: null,
+    artifactFileIds: [],
     updatedAt: nowIso(),
   };
 }
@@ -248,40 +259,117 @@ export function createExpertRunService(
     }
   }
 
+  async function discoverArtifacts(
+    run: ActiveRun,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    const taskId = run.projection.taskId;
+    if (!taskId) return;
+    if (!options.force && run.projection.artifactDiscovery === "loading") {
+      return;
+    }
+    if (
+      !options.force &&
+      run.discoveryStarted &&
+      run.projection.artifactDiscovery === "ready"
+    ) {
+      return;
+    }
+
+    run.discoveryStarted = true;
+    updateProjection(run, {
+      artifactDiscovery: "loading",
+      artifactDiscoveryError: null,
+    });
+
+    try {
+      const artifacts = await gateway.listArtifacts(taskId);
+      const fileIds: string[] = [];
+      for (const meta of artifacts) {
+        const result = upsertExpertRemoteArtifact({
+          meta,
+          taskId,
+          sessionId: run.request.sessionId,
+          profileId: run.request.profileId,
+          clientRequestId: run.request.clientRequestId,
+        });
+        if (result.fileId) fileIds.push(result.fileId);
+      }
+      updateProjection(run, {
+        artifactDiscovery: "ready",
+        artifactDiscoveryError: null,
+        artifactFileIds: fileIds,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Artifact discovery failed";
+      updateProjection(run, {
+        artifactDiscovery: "error",
+        artifactDiscoveryError: message,
+      });
+    }
+  }
+
   async function confirmTerminal(
     run: ActiveRun,
     preferred?: HermesTaskResult | null,
   ): Promise<void> {
-    if (run.terminalConfirmed) return;
+    // Terminal phase may already be set (SSE completed). Still resolve
+    // authoritative result once + start async artifact discovery.
     const taskId = run.projection.taskId;
     if (!taskId) return;
-    try {
-      const result = preferred ?? (await gateway.getResult(taskId));
-      const phase = mapRemoteStatusToPhase(result.status ?? "completed");
-      updateProjection(run, {
-        phase: result.ready && phase === "running" ? "succeeded" : phase,
-        resultSummary: result.result_summary ?? result.summary ?? null,
-        resultContent: result.result_content ?? result.content ?? null,
-        displayStage: "finalizing",
-      });
+
+    if (!run.resultResolved) {
       try {
-        const artifacts = await gateway.listArtifacts(taskId);
-        updateProjection(run, {
-          artifactIds: artifacts.map((a) => a.id),
-        });
-      } catch {
-        /* artifact list is best-effort after completion */
+        // Prefer SSE/snapshot payload already applied to the projection so the
+        // user-visible result is not overwritten by a later getResult race.
+        const hasInlineResult =
+          run.projection.resultSummary != null ||
+          run.projection.resultContent != null;
+        if (preferred) {
+          const phase = mapRemoteStatusToPhase(preferred.status ?? "completed");
+          updateProjection(run, {
+            phase:
+              preferred.ready && phase === "running" ? "succeeded" : phase,
+            resultSummary:
+              preferred.result_summary ?? preferred.summary ?? null,
+            resultContent:
+              preferred.result_content ?? preferred.content ?? null,
+            displayStage: "finalizing",
+          });
+          run.resultResolved = true;
+        } else if (hasInlineResult) {
+          run.resultResolved = true;
+        } else {
+          const result = await gateway.getResult(taskId);
+          const phase = mapRemoteStatusToPhase(result.status ?? "completed");
+          updateProjection(run, {
+            phase: result.ready && phase === "running" ? "succeeded" : phase,
+            resultSummary: result.result_summary ?? result.summary ?? null,
+            resultContent: result.result_content ?? result.content ?? null,
+            displayStage: "finalizing",
+          });
+          run.resultResolved = true;
+        }
+      } catch (err) {
+        if (err instanceof ExpertGatewayError && err.status === 403) {
+          updateProjection(run, {
+            phase: "unauthorized",
+            errorCode: err.errorCode,
+            errorMessage: err.message,
+          });
+          run.resultResolved = true;
+          return;
+        }
+        throw err;
       }
-    } catch (err) {
-      if (err instanceof ExpertGatewayError && err.status === 403) {
-        updateProjection(run, {
-          phase: "unauthorized",
-          errorCode: err.errorCode,
-          errorMessage: err.message,
-        });
-        return;
-      }
-      throw err;
+    }
+
+    // Discovery is best-effort and never mutates task phase on failure.
+    if (run.projection.phase === "succeeded") {
+      void discoverArtifacts(run).catch((err) => {
+        console.warn("[expert-run] artifact discovery failed", err);
+      });
     }
   }
 
@@ -352,13 +440,8 @@ export function createExpertRunService(
       eventName === "task.artifact_ready" ||
       eventName === "artifact_ready"
     ) {
-      const artifactId =
-        "artifact_id" in event && typeof event.artifact_id === "string"
-          ? event.artifact_id
-          : null;
-      if (artifactId && !run.projection.artifactIds.includes(artifactId)) {
-        patch.artifactIds = [...run.projection.artifactIds, artifactId];
-      }
+      // Metadata discovery runs after authoritative completion; do not treat
+      // artifact_ready ids as UI/domain truth.
     }
 
     updateProjection(run, patch);
@@ -558,6 +641,8 @@ export function createExpertRunService(
         seenEventIds: new Set(),
         highestEventSeq: -1,
         terminalConfirmed: false,
+        resultResolved: false,
+        discoveryStarted: false,
         reconnectAttempts: 0,
         pollStartedAt: null,
         pollTimer: null,
@@ -676,6 +761,8 @@ export function createExpertRunService(
         seenEventIds: new Set(),
         highestEventSeq: -1,
         terminalConfirmed: isExpertTerminalPhase(input.phase),
+        resultResolved: isExpertTerminalPhase(input.phase),
+        discoveryStarted: false,
         reconnectAttempts: 0,
         pollStartedAt: null,
         pollTimer: null,
@@ -718,6 +805,20 @@ export function createExpertRunService(
           });
         }
       }
+      return run.projection;
+    },
+
+    async retryArtifactDiscovery(
+      clientRequestId: string,
+    ): Promise<ExpertRunProjection | null> {
+      const run = runs.get(clientRequestId);
+      if (!run) return null;
+      if (!run.projection.taskId) return run.projection;
+      if (!isExpertTerminalPhase(run.projection.phase)) {
+        return run.projection;
+      }
+      run.discoveryStarted = false;
+      await discoverArtifacts(run, { force: true });
       return run.projection;
     },
 

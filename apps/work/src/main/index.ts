@@ -3,6 +3,9 @@ import { applyGpuPreferences, installGpuCrashGuard } from "./gpu-fallback";
 import { startMainProcess } from "./app/start";
 import { loadDotEnvForDev } from "./load-env";
 import { registerArtifactSchemePrivileged } from "./artifact-protocol";
+import {
+  registerFilePreviewSchemePrivileged,
+} from "./files/file-preview-service";
 import { applyIdentityMigration } from "./migration/identity-migration";
 
 // Dev only: make process.env reflect the project `.env` so runtime env reads
@@ -14,8 +17,9 @@ applyIdentityMigration(app);
 applyGpuPreferences();
 installGpuCrashGuard();
 
-// Must run before app ready so hermes-artifact:// is privileged.
+// Must run before app ready so custom schemes are privileged.
 registerArtifactSchemePrivileged();
+registerFilePreviewSchemePrivileged();
 
 if (process.env.ENABLE_CDP === "1") {
   app.commandLine.appendSwitch(

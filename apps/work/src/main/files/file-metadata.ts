@@ -43,8 +43,12 @@ export function toManagedFileView(
   extra?: {
     associationRole?: ManagedFileView["associationRole"];
     ordinal?: number;
+    messageId?: string;
+    taskId?: string;
   },
 ): ManagedFileView {
+  const isRemote = file.locality === "remote";
+  const hasManagedCopy = !!file.managedPath;
   return {
     id: file.id,
     name: file.name,
@@ -61,10 +65,21 @@ export function toManagedFileView(
     updatedAt: file.updatedAt,
     errorCode: file.errorCode,
     errorMessage: file.errorMessage,
-    displayPath: file.managedPath || file.originalPath,
-    hasManagedCopy: !!file.managedPath,
+    displayPath: isRemote ? undefined : file.managedPath || file.originalPath,
+    hasManagedCopy,
     associationRole: extra?.associationRole,
     ordinal: extra?.ordinal,
+    locality: file.locality ?? "local",
+    provider: file.provider,
+    remoteArtifactId: file.remoteArtifactId,
+    remoteTaskId: file.remoteTaskId,
+    availability: file.availability,
+    providerPreviewSupported: file.providerPreviewSupported,
+    canPreview: file.canPreview,
+    canOpen: !isRemote || hasManagedCopy,
+    canReveal: !isRemote || hasManagedCopy,
+    messageId: extra?.messageId,
+    taskId: extra?.taskId ?? file.remoteTaskId,
   };
 }
 

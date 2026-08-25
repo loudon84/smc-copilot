@@ -155,6 +155,18 @@ function readPreview(
       readRaw("desktop.files.preview.external_network", profile),
       defaults.externalNetwork,
     ),
+    allowOfflineCachedCopy: parseBool(
+      readRaw("desktop.files.preview.allow_offline_cached_copy", profile),
+      defaults.allowOfflineCachedCopy,
+    ),
+    maxPreviewMb: parseNumber(
+      readRaw("desktop.files.preview.max_preview_mb", profile),
+      defaults.maxPreviewMb,
+    ),
+    maxTransferMb: parseNumber(
+      readRaw("desktop.files.preview.max_transfer_mb", profile),
+      defaults.maxTransferMb,
+    ),
   };
 }
 

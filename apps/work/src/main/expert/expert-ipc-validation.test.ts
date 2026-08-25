@@ -1,37 +1,34 @@
 import { describe, expect, it } from "vitest";
 
-function validateExpertDownloadInput(value: unknown): void {
+/**
+ * Policy guard: File Platform / Gateway must never accept Renderer-supplied
+ * download/preview URLs. Paths are built same-origin from artifact id only.
+ */
+function rejectClientArtifactUrls(value: unknown): void {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Invalid download input");
+    throw new Error("Invalid transfer input");
   }
   const record = value as Record<string, unknown>;
-  if ("downloadUrl" in record || "url" in record) {
+  if ("downloadUrl" in record || "url" in record || "previewUrl" in record) {
     throw new Error("Client-supplied artifact URLs are not allowed");
-  }
-  if (typeof record.taskId !== "string" || typeof record.artifactId !== "string") {
-    throw new Error("taskId and artifactId are required");
   }
 }
 
-describe("expert ipc validation", () => {
+describe("expert remote transfer validation", () => {
   // @lat: [[expert-execution-tests#Rejects client artifact URLs]]
   it("rejects client-supplied download URLs in artifact payloads", () => {
     expect(() =>
-      validateExpertDownloadInput({
-        taskId: "task-1",
+      rejectClientArtifactUrls({
         artifactId: "a1",
-        sessionId: "s1",
         downloadUrl: "http://evil.test/x",
       }),
     ).toThrow(/not allowed/);
-  });
-
-  // @lat: [[expert-execution-tests#Requires artifact identifiers]]
-  it("requires artifact_id fields without URLs", () => {
     expect(() =>
-      validateExpertDownloadInput({
-        sessionId: "s1",
+      rejectClientArtifactUrls({
+        artifactId: "a1",
+        url: "http://evil.test/x",
       }),
-    ).toThrow(/taskId and artifactId/);
+    ).toThrow(/not allowed/);
+    expect(() => rejectClientArtifactUrls({ artifactId: "a1" })).not.toThrow();
   });
 });

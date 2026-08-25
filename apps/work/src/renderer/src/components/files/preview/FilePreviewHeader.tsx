@@ -55,6 +55,14 @@ export function FilePreviewHeader({
         <span className="file-preview-filename" title={title}>
           {title}
         </span>
+        {descriptor?.cachedCopy ? (
+          <span
+            className="file-preview-type-badge"
+            title="Cached copy — not current Provider state"
+          >
+            Cached copy
+          </span>
+        ) : null}
       </div>
       <div className="file-preview-actions">
         {!messageMode && (

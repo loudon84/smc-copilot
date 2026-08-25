@@ -53,14 +53,10 @@ vi.mock("./expert-session-materialize", () => ({
   materializeExpertSessionTranscript: vi.fn(),
 }));
 
-vi.mock("./expert-artifact-download", () => ({
-  downloadExpertArtifact: vi.fn(),
-  cleanupExpertArtifactTemps: vi.fn(),
-}));
-
 vi.mock("./expert-run-service", () => ({
   getExpertRunService: () => ({
     onProjectionChanged: () => () => undefined,
+    retryArtifactDiscovery: vi.fn(),
   }),
   resetExpertRunServiceForTests: vi.fn(),
 }));

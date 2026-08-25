@@ -19,6 +19,7 @@ import type {
   ExpertAcceptedStructuredContent,
   ExpertApiErrorBody,
   ExpertArtifactDescriptor,
+  ExpertArtifactPreviewData,
   ExpertCatalogItem,
   ExpertEventsToken,
   ExpertHealthResponse,
@@ -73,11 +74,14 @@ export interface ExpertGatewayClient {
   getSnapshot(taskId: string): Promise<HermesTaskSnapshot>;
   getResult(taskId: string): Promise<HermesTaskResult>;
   listArtifacts(taskId: string): Promise<ExpertArtifactDescriptor[]>;
+  getArtifactPreview(artifactId: string): Promise<ExpertArtifactPreviewData>;
   getEventsToken(taskId: string): Promise<ExpertEventsToken>;
   cancelTask(taskId: string): Promise<unknown>;
   retryTask(taskId: string): Promise<unknown>;
   /** Build same-origin artifact download URL from artifact_id only. */
   buildArtifactDownloadPath(artifactId: string): string;
+  /** Build same-origin artifact preview URL from artifact_id only. */
+  buildArtifactPreviewPath(artifactId: string): string;
   /** Build same-origin events SSE URL path (relative). */
   buildEventsPath(taskId: string): string;
   getBaseUrl(): string;
@@ -92,6 +96,14 @@ export interface ExpertGatewayClient {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function artifactPreviewPath(artifactId: string): string {
+  return `/api/v1/hermes/artifacts/${encodeURIComponent(artifactId)}/preview`;
+}
+
+function artifactDownloadPath(artifactId: string): string {
+  return `/api/v1/hermes/artifacts/${encodeURIComponent(artifactId)}/download`;
 }
 
 function resolveBaseUrl(): string {
@@ -657,6 +669,35 @@ export function createExpertGatewayClient(
       });
     },
 
+    async getArtifactPreview(
+      artifactId: string,
+    ): Promise<ExpertArtifactPreviewData> {
+      return withAuthRetry(async () => {
+        const res = await authorizedFetch(artifactPreviewPath(artifactId), {
+          method: "GET",
+        });
+        const body = await readJson(res);
+        if (!res.ok) {
+          throw parseApiError(res.status, body);
+        }
+        const data = isRecord(body) && "data" in body ? body.data : body;
+        if (!isRecord(data) || typeof data.content !== "string") {
+          throw new ExpertGatewayError("Invalid artifact preview payload", {
+            status: res.status || 500,
+            errorCode: "INVALID_PREVIEW_PAYLOAD",
+            body,
+          });
+        }
+        return {
+          content: data.content,
+          content_type:
+            typeof data.content_type === "string" ? data.content_type : null,
+          truncated: data.truncated === true,
+          encoding: typeof data.encoding === "string" ? data.encoding : null,
+        };
+      });
+    },
+
     getEventsToken(taskId: string): Promise<ExpertEventsToken> {
       return httpGetData(
         `/api/v1/hermes/tasks/${encodeURIComponent(taskId)}/events-token`,
@@ -676,7 +717,11 @@ export function createExpertGatewayClient(
     },
 
     buildArtifactDownloadPath(artifactId: string): string {
-      return `/api/v1/hermes/artifacts/${encodeURIComponent(artifactId)}/download`;
+      return artifactDownloadPath(artifactId);
+    },
+
+    buildArtifactPreviewPath(artifactId: string): string {
+      return artifactPreviewPath(artifactId);
     },
 
     buildEventsPath(taskId: string): string {

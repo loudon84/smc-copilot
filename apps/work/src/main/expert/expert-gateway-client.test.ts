@@ -571,6 +571,15 @@ describe("expert-gateway-client", () => {
     expect(secondAuth.get("Authorization")).toBe("Bearer fresh-token");
   });
 
+  // @lat: [[expert-execution-tests#Cross-origin rejection]]
+  it("ExpertGatewayError carries cross-origin rejection code", () => {
+    const err = new ExpertGatewayError("Cross-origin URL rejected", {
+      status: 400,
+      errorCode: "CROSS_ORIGIN_REJECTED",
+    });
+    expect(err.errorCode).toBe("CROSS_ORIGIN_REJECTED");
+  });
+
   it("wraps undici fetch failed with URL and cause", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(
       Object.assign(new TypeError("fetch failed"), {

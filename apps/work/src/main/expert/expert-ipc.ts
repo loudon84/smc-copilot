@@ -7,17 +7,13 @@ import {
   EXPERT_IPC_CHANNELS,
   encodeExpertIpcError,
   type ExpertCancelInput,
-  type ExpertDownloadArtifactInput,
   type ExpertRequest,
+  type ExpertRetryArtifactDiscoveryInput,
   type ExpertRetryInput,
   type ExpertStartInput,
 } from "../../shared/expert";
 import { ensureFreshAccessToken } from "../auth/ensure-access-token";
 import { readStoredSessionSync } from "../auth/token-store";
-import {
-  downloadExpertArtifact,
-  cleanupExpertArtifactTemps,
-} from "./expert-artifact-download";
 import {
   rehydrateExpertContinuationsForSession,
   upsertExpertContinuationProjection,
@@ -266,29 +262,20 @@ export function registerExpertIpc(options: {
   );
 
   ipcMain.handle(
-    EXPERT_IPC_CHANNELS.downloadArtifact,
-    async (event, input: ExpertDownloadArtifactInput) => {
+    EXPERT_IPC_CHANNELS.retryArtifactDiscovery,
+    async (event, input: ExpertRetryArtifactDiscoveryInput) => {
       assertSender(event);
       await requireAuthSession();
       if (
         !input ||
-        typeof input.artifactId !== "string" ||
-        typeof input.taskId !== "string"
+        typeof input.clientRequestId !== "string" ||
+        !input.clientRequestId.trim()
       ) {
-        throw new Error("taskId and artifactId are required");
+        throw new Error("clientRequestId is required");
       }
-      if (typeof input.sessionId !== "string" || !input.sessionId.trim()) {
-        throw new Error("sessionId is required");
-      }
-      if (isRecord(input) && ("downloadUrl" in input || "url" in input)) {
-        throw new Error("Client-supplied artifact URLs are not allowed");
-      }
-      return downloadExpertArtifact({
-        taskId: input.taskId,
-        artifactId: input.artifactId,
-        sessionId: input.sessionId,
-        profileId: input.profileId,
-      });
+      return getExpertRunService().retryArtifactDiscovery(
+        input.clientRequestId.trim(),
+      );
     },
   );
 }
@@ -297,7 +284,6 @@ export function registerExpertIpc(options: {
 export function disposeExpertSubsystem(): void {
   unsubscribeProjection?.();
   unsubscribeProjection = null;
-  cleanupExpertArtifactTemps();
   resetExpertRunServiceForTests();
   resetExpertGatewayClientForTests();
 }

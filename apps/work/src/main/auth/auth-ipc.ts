@@ -33,7 +33,7 @@ import {
   disposeExpertSubsystem,
   restoreExpertSubsystemAfterAuth,
 } from "../expert/expert-ipc";
-import { cleanupExpertArtifactTemps } from "../expert/expert-artifact-download";
+import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
 
 export type RegisterAuthIpcOptions = {
   getMainWindow?: () => BrowserWindow | null;
@@ -106,8 +106,13 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
         /* ignore remote logout errors */
       }
     }
-    // Same idempotent Expert dispose path as before-quit.
-    cleanupExpertArtifactTemps();
+    // Same idempotent Expert dispose path as before-quit; File Platform
+    // cleans temp/preview caches that replaced Expert artifact temps.
+    try {
+      runFilesCleanupBestEffort();
+    } catch {
+      // Best-effort — never block logout.
+    }
     disposeExpertSubsystem();
     const endpoint = readAuthEndpointConfig();
     await clearStoredSession();

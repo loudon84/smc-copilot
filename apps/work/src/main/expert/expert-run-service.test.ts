@@ -6,6 +6,14 @@ import {
 } from "./expert-run-service";
 import type { ExpertGatewayClient } from "./expert-gateway-client";
 
+const upsertExpertRemoteArtifact = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ fileId: "file-1", skipped: false }),
+);
+
+vi.mock("../files/upsert-expert-remote-artifact", () => ({
+  upsertExpertRemoteArtifact,
+}));
+
 function makeRequest(overrides: Partial<ExpertRequest> = {}): ExpertRequest {
   return {
     kind: "expert",
@@ -56,11 +64,14 @@ function mockGateway(
       content: "full",
     }),
     listArtifacts: vi.fn().mockResolvedValue([]),
+    getArtifactPreview: vi.fn().mockResolvedValue({ content: "" }),
     getEventsToken: vi.fn(),
     cancelTask: vi.fn().mockResolvedValue({}),
     retryTask: vi.fn(),
     buildArtifactDownloadPath: (id) =>
       `/api/v1/hermes/artifacts/${id}/download`,
+    buildArtifactPreviewPath: (id) =>
+      `/api/v1/hermes/artifacts/${id}/preview`,
     buildEventsPath: (id) => `/api/v1/hermes/tasks/${id}/events`,
     getBaseUrl: () => "http://expert.test:4510",
     getAccessToken: () => "token",
@@ -325,5 +336,120 @@ describe("expert-run-service", () => {
     expect(retried.clientRequestId).toBe("fail-2");
     service.dispose();
     void gateway;
+  });
+
+  it("shows succeeded result before artifacts resolve and discovers asynchronously", async () => {
+    // @lat: [[expert-execution-tests#Async artifact discovery after completion]]
+    let resolveArtifacts!: (
+      value: Array<{
+        id: string;
+        org_id: string;
+        file_name: string;
+        content_type?: string;
+      }>,
+    ) => void;
+    const artifactsPromise = new Promise<
+      Array<{
+        id: string;
+        org_id: string;
+        file_name: string;
+        content_type?: string;
+      }>
+    >((resolve) => {
+      resolveArtifacts = resolve;
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'id: 1\ndata: {"event":"task.completed","task_id":"task-1","event_type":"completed","event_seq":1,"result":{"summary":"ok","content":"body"}}\n\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+
+    const listArtifacts = vi.fn().mockReturnValue(artifactsPromise);
+    const gateway = mockGateway({
+      openAuthorizedGet: vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      ),
+      listArtifacts,
+    });
+
+    upsertExpertRemoteArtifact.mockReturnValue({
+      fileId: "file-art-1",
+      skipped: false,
+    });
+
+    const service = createExpertRunService({ gateway });
+    await service.start(makeRequest());
+    await vi.waitFor(() => {
+      expect(service.getProjection("req-1")?.phase).toBe("succeeded");
+    });
+    expect(service.getProjection("req-1")?.resultContent).toBe("body");
+    await vi.waitFor(() => {
+      expect(service.getProjection("req-1")?.artifactDiscovery).toBe("loading");
+    });
+
+    resolveArtifacts([
+      {
+        id: "art-1",
+        org_id: "org",
+        file_name: "report.md",
+        content_type: "text/markdown",
+      },
+    ]);
+    await vi.waitFor(() => {
+      expect(service.getProjection("req-1")?.artifactDiscovery).toBe("ready");
+    });
+    expect(service.getProjection("req-1")?.phase).toBe("succeeded");
+    expect(service.getProjection("req-1")?.artifactFileIds).toEqual([
+      "file-art-1",
+    ]);
+    expect(upsertExpertRemoteArtifact).toHaveBeenCalled();
+    service.dispose();
+  });
+
+  it("keeps succeeded phase when listArtifacts fails", async () => {
+    // @lat: [[expert-execution-tests#Artifact discovery metadata failure]]
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'id: 1\ndata: {"event":"task.completed","task_id":"task-1","event_type":"completed","event_seq":1,"result":{"summary":"ok","content":"body"}}\n\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+    const gateway = mockGateway({
+      openAuthorizedGet: vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      ),
+      listArtifacts: vi.fn().mockRejectedValue(new Error("artifacts down")),
+    });
+    const service = createExpertRunService({ gateway });
+    await service.start(makeRequest());
+    await vi.waitFor(() => {
+      expect(service.getProjection("req-1")?.phase).toBe("succeeded");
+    });
+    await vi.waitFor(() => {
+      expect(service.getProjection("req-1")?.artifactDiscovery).toBe("error");
+    });
+    expect(service.getProjection("req-1")?.phase).toBe("succeeded");
+    expect(service.getProjection("req-1")?.artifactDiscoveryError).toMatch(
+      /artifacts down/,
+    );
+    service.dispose();
   });
 });

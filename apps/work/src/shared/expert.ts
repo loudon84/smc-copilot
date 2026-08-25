@@ -250,10 +250,20 @@ export interface ExpertArtifactDescriptor {
   artifact_type?: string | null;
   size_bytes?: number | null;
   sha256?: string | null;
+  /** Provider Preview capability; absent → false under v1.0.2. */
+  preview_supported?: boolean | null;
   /** Nullable locator — must NOT be trusted for navigation; use artifact_id + configured base URL. */
   preview_url?: string | null;
   download_url?: string | null;
   [key: string]: unknown;
+}
+
+/** Provider Preview JSON (string content) — Main only. */
+export interface ExpertArtifactPreviewData {
+  content: string;
+  content_type?: string | null;
+  truncated?: boolean;
+  encoding?: string | null;
 }
 
 export interface HermesTaskSnapshot {
@@ -338,6 +348,13 @@ export type ExpertTaskEvent =
   | ExpertTaskArtifactReadyEvent
   | ExpertTaskEventBase;
 
+/** Independent of task phase — discovery never flips a completed task to failed. */
+export type ExpertArtifactDiscoveryState =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "error";
+
 /** UI projection only — HermesTask remains authoritative truth. */
 export interface ExpertRunProjection {
   clientRequestId: string;
@@ -357,7 +374,11 @@ export interface ExpertRunProjection {
   resultContent: string | null;
   /** Live assistant bubble text from SSE task.progress (running only). */
   progressMessage: string | null;
-  artifactIds: string[];
+  /** Async artifact metadata discovery state (independent of phase). */
+  artifactDiscovery: ExpertArtifactDiscoveryState;
+  artifactDiscoveryError: string | null;
+  /** Renderer-safe File Platform resource ids after successful discovery. */
+  artifactFileIds: string[];
   updatedAt: string;
 }
 
@@ -441,7 +462,7 @@ export const EXPERT_IPC_CHANNELS = {
   getProjection: "expert:get-projection",
   listProjections: "expert:list-projections",
   rehydrateSession: "expert:rehydrate-session",
-  downloadArtifact: "expert:download-artifact",
+  retryArtifactDiscovery: "expert:retry-artifact-discovery",
   onProjectionChanged: "expert:projection-changed",
 } as const;
 
@@ -463,11 +484,8 @@ export interface ExpertRetryInput {
   request: ExpertRequest;
 }
 
-export interface ExpertDownloadArtifactInput {
-  taskId: string;
-  artifactId: string;
-  sessionId: string;
-  profileId?: string;
+export interface ExpertRetryArtifactDiscoveryInput {
+  clientRequestId: string;
 }
 
 export interface ExpertApi {
@@ -483,9 +501,9 @@ export interface ExpertApi {
   ) => Promise<ExpertRunProjection | null>;
   listProjections: (sessionId: string) => Promise<ExpertRunProjection[]>;
   rehydrateSession: (sessionId: string) => Promise<ExpertRunProjection[]>;
-  downloadArtifact: (
-    input: ExpertDownloadArtifactInput,
-  ) => Promise<{ fileId: string }>;
+  retryArtifactDiscovery: (
+    input: ExpertRetryArtifactDiscoveryInput,
+  ) => Promise<ExpertRunProjection | null>;
   onProjectionChanged: (
     callback: (projection: ExpertRunProjection) => void,
   ) => () => void;

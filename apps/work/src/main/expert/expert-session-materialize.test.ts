@@ -204,7 +204,9 @@ function projection(
     resultSummary: "summary",
     resultContent: "full result",
     progressMessage: null,
-    artifactIds: [],
+      artifactDiscovery: "idle",
+      artifactDiscoveryError: null,
+      artifactFileIds: [],
     updatedAt: new Date().toISOString(),
     ...overrides,
   };

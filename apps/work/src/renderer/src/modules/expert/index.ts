@@ -8,6 +8,7 @@ export type { ExpertContextControlProps } from "./ExpertContextControl";
 export { WorkContextChip } from "./WorkContextChip";
 export { WorkContextPopover } from "./WorkContextPopover";
 export { ExpertRunCard } from "./ExpertRunCard";
+export { ExpertArtifactCards } from "./ExpertArtifactCards";
 export {
   clearExpertProjections,
   ensureExpertProjectionSubscription,

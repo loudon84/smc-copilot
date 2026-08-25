@@ -30,6 +30,8 @@ Per-profile layout lives at `profileHome/desktop/files/{objects,parsed,previews,
 
 [[src/main/files/file-association-store.ts]] owns `managed_files`, `file_associations`, `parsed_documents`, `file_chunks` (+ FTS5 when available) in `file-index.db`, not `state.db`. Reference counting uses [[src/main/files/file-association-store.ts#countAssociations]].
 
+Remote rows use unique `(profile, provider, remote_artifact_id)`; local hash uniqueness does not apply to remote. Session associations are idempotent on `(profile, session, file, role)`.
+
 ## Attachment adapter
 
 [[src/main/files/attachment-adapter.ts#toManagedFile]] / [[src/main/files/attachment-adapter.ts#toHermesAttachment]] bridge legacy [[src/shared/attachments.ts#Attachment]]. Remote mode never emits local `path-ref`; unsupported remote files raise `FILE_REMOTE_UNSUPPORTED`.
@@ -50,11 +52,13 @@ Agent paths register only under profile home or the session context folder via [
 
 [[src/main/files/file-preview-service.ts#getPreviewDescriptor]] builds Renderer-safe [[src/shared/files/file-preview.ts#FilePreviewDescriptor]]s with capped streamed reads — never buffering an entire large file in Main.
 
+For Expert remote resources (`locality: remote`), Main uses Gateway Provider Preview JSON or authorized download into a Main-only preview cache served as `hermes-file-preview://{fileId}` — Renderer never receives absolute cache paths, JWT, or Provider URLs. Offline cached copy is off by default.
+
 Text/code/markdown/html previews accept optional `offset`/`limit` ([[src/shared/files/file-preview.ts#FilePreviewOptions]]); when truncated, the panel can request the next range via `nextOffset` ("Load more").
 
 ## File operations
 
-[[src/main/files/file-operation-service.ts]] provides OS open / reveal-in-folder / Save As for managed files via Electron `shell` and dialogs, keeping absolute paths in Main only.
+[[src/main/files/file-operation-service.ts]] / [[src/main/files/file-service.ts#fileService]] provide OS open / reveal-in-folder / Save As. Remote Download streams via [[src/main/files/expert-artifact-transfer.ts#streamExpertArtifactBytes]] (partial + sha256 + atomic rename). Materialize for context uses [[src/main/files/materialize-remote-expert-artifact.ts#materializeRemoteExpertArtifact]] on the same `fileId`. Open/Reveal require a local managed copy.
 
 ## AgentOutputService
 

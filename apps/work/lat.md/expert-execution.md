@@ -24,9 +24,9 @@ SSE framing reuses [[src/main/run-stream.ts#parseRunSseBlock]] with optional `id
 
 ## IPC and preload bridge
 
-[[src/main/expert/expert-ipc.ts]] registers narrow handlers including `expert:get-health` and `expert:refresh-catalog`; validates sender, session/profile, DTOs; artifact download accepts server `artifact_id` only.
+[[src/main/expert/expert-ipc.ts]] registers narrow handlers including `expert:get-health`, `expert:refresh-catalog`, and `expert:retry-artifact-discovery`; validates sender, session/profile, DTOs. Expert download IPC is removed — transfer goes through File Platform.
 
-[[src/preload/expert-api.ts]] exposes `window.hermesAPI.expert`. [[src/main/app/start.ts#startMainProcess]] registers Expert IPC and `registerAuthIpc({ getMainWindow })`; logout/`before-quit` call [[src/main/expert/expert-ipc.ts#disposeExpertSubsystem]].
+[[src/preload/expert-api.ts]] exposes `window.hermesAPI.expert`. [[src/main/app/start.ts#startMainProcess]] registers Expert IPC and `registerAuthIpc({ getMainWindow })`; logout/`before-quit` dispose Expert and run File Platform cleanup (`runFilesCleanupBestEffort`).
 
 ## Auth state push
 
@@ -44,7 +44,7 @@ Control owns health/catalog/skill/refresh/revision; Chat holds selection truth a
 
 [[src/shared/session-continuation.ts]] adds versioned `expert-run` (`schemaVersion: 1`). [[src/main/session-continuation-store.ts#normalizeContinuationItems]] whitelists the kind. [[src/main/expert/expert-continuation.ts]] rehydrates with auth re-check.
 
-[[src/main/expert/expert-artifact-download.ts]] downloads Main-only (same-origin JWT, size/MIME guards, temp + atomic commit) into File Platform. [[src/renderer/src/components/files/message/AgentOutputFileCard.tsx#AgentOutputFileCard]] shows local managed files only.
+After authoritative task completion, [[src/main/expert/expert-run-service.ts]] runs async artifact discovery (`listArtifacts`) and upserts remote File Platform resources via [[src/main/files/upsert-expert-remote-artifact.ts#upsertExpertRemoteArtifact]]. Durable metadata lives in `file-index.db`; Chat uses [[src/renderer/src/modules/expert/ExpertArtifactCards.tsx#ExpertArtifactCards]] and Session Files Agent output for the same `ManagedFileView`. Preview/Download/Materialize go through File Platform (`files.getPreview` / `saveAs` / internal materialize), never Expert download IPC.
 
 ## Terminal session materialize
 

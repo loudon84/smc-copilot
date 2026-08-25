@@ -35,6 +35,7 @@ export {
   upsertManagedFile,
   getManagedFile,
   findByHash,
+  findByRemoteIdentity,
   listBySession,
   listByMessage,
   insertAssociation,
@@ -52,7 +53,7 @@ export {
 
 export { toManagedFile, toHermesAttachment } from "./attachment-adapter";
 
-export { getPreviewDescriptor, PREVIEW_TEXT_LIMIT } from "./file-preview-service";
+export { getPreviewDescriptor, PREVIEW_TEXT_LIMIT, registerFilePreviewSchemePrivileged, registerFilePreviewProtocolHandler, FILE_PREVIEW_SCHEME } from "./file-preview-service";
 
 export {
   openExternal as openFileExternal,
@@ -105,6 +106,18 @@ export {
   resolveUniqueFileName,
   sanitizeSessionDirSegment,
 } from "./agent-output/generated-file-name";
+
+export {
+  computeRemoteCanPreview,
+  upsertExpertRemoteArtifact,
+} from "./upsert-expert-remote-artifact";
+
+export { materializeRemoteExpertArtifact } from "./materialize-remote-expert-artifact";
+export {
+  streamExpertArtifactBytes,
+  invalidatePreviewCache,
+  resolvePreviewCachePath,
+} from "./expert-artifact-transfer";
 
 export {
   emitFileDomainEvent,

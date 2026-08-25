@@ -49,15 +49,19 @@ Retry after terminal failure requires a new `clientRequestId`; reusing the faile
 
 ## Rejects client artifact URLs
 
-IPC/download validation rejects payloads that include client-supplied `downloadUrl` or `url` fields.
+File Platform remote transfer never accepts Renderer-supplied `downloadUrl` / `url`; Gateway builds same-origin paths from artifact id only.
 
-## Requires artifact identifiers
+## Async artifact discovery after completion
 
-Artifact download input must include `taskId` and `artifactId` without optional URL fields.
+Task phase becomes `succeeded` with result content before `listArtifacts` resolves; discovery loading/ready/error is independent and never flips phase to failed.
+
+## Artifact discovery metadata failure
+
+When `listArtifacts` throws, projection keeps `succeeded` and exposes `artifactDiscovery=error` with a retry path via `retryArtifactDiscovery`.
 
 ## Cross-origin rejection
 
-Artifact download guards surface `CROSS_ORIGIN_REJECTED` for cross-origin URL rejection via `ExpertGatewayError`.
+Gateway `openAuthorizedGet` / joinUrl surfaces `CROSS_ORIGIN_REJECTED` for cross-origin URL rejection via `ExpertGatewayError`.
 
 ## Continuation normalize whitelist
 

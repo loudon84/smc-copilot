@@ -53,6 +53,8 @@ export interface FilePreviewDescriptor {
   canAddToContext: boolean;
   canRetryParse: boolean;
   unsupportedReason?: string;
+  /** True when UI must label the body as a Cached copy (not current Provider state). */
+  cachedCopy?: boolean;
 }
 
 export type { MessageDocumentPreviewInput };

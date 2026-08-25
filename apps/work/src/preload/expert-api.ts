@@ -8,7 +8,7 @@ import {
   EXPERT_IPC_CHANNELS,
   type ExpertApi,
   type ExpertCancelInput,
-  type ExpertDownloadArtifactInput,
+  type ExpertRetryArtifactDiscoveryInput,
   type ExpertRetryInput,
   type ExpertRunProjection,
   type ExpertStartInput,
@@ -34,8 +34,8 @@ export function createExpertApi(): ExpertApi {
       ipcRenderer.invoke(EXPERT_IPC_CHANNELS.listProjections, sessionId),
     rehydrateSession: (sessionId) =>
       ipcRenderer.invoke(EXPERT_IPC_CHANNELS.rehydrateSession, sessionId),
-    downloadArtifact: (input: ExpertDownloadArtifactInput) =>
-      ipcRenderer.invoke(EXPERT_IPC_CHANNELS.downloadArtifact, input),
+    retryArtifactDiscovery: (input: ExpertRetryArtifactDiscoveryInput) =>
+      ipcRenderer.invoke(EXPERT_IPC_CHANNELS.retryArtifactDiscovery, input),
     onProjectionChanged: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,

@@ -4,9 +4,9 @@ Core ManagedFile domain concepts for the File Platform: identity, associations, 
 
 ## ManagedFile
 
-A [[src/shared/files/managed-file.ts#ManagedFile]] is metadata about a user or agent file — name, mime, category, hash, optional original/managed paths — separate from the bytes on disk. Content-hash dedup means many associations can share one physical object.
+A [[src/shared/files/managed-file.ts#ManagedFile]] is metadata about a user or agent file — name, mime, category, hash, optional paths — separate from on-disk bytes.
 
-Message reports become ManagedFiles with `source: "agent-output"` via [[src/shared/files/message-document.ts#CreateFileFromMessageInput]] without changing the Assistant Message itself.
+Local content-hash dedup lets many associations share one physical object. Remote Expert artifacts use `(provider, remoteArtifactId)` identity and are never collapsed by hash alone. They set `locality: "remote"` with availability and Main-normalized `canPreview`. Message reports become ManagedFiles with `source: "agent-output"` via [[src/shared/files/message-document.ts#CreateFileFromMessageInput]] without changing the Assistant Message itself.
 
 ## FileAssociation
 

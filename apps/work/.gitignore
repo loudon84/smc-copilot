@@ -8,6 +8,18 @@ node_modules/
 dist/
 out/
 
+# Accidental `tsc -b` / composite emit beside sources.
+# Typecheck must use `tsc --noEmit`; runtime build writes to out/dist only.
+src/**/*.js
+src/**/*.d.ts
+!src/main/env.d.ts
+!src/main/ws.d.ts
+!src/preload/index.d.ts
+!src/renderer/src/env.d.ts
+!src/renderer/src/screens/Office/office3d/troika-three-text.d.ts
+electron.vite.config.js
+electron.vite.config.d.ts
+
 # TypeScript incremental build info
 *.tsbuildinfo
 

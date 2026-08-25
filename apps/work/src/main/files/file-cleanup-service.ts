@@ -93,6 +93,40 @@ export function cleanupTempFiles(profile?: string): CleanupResult {
   return { deletedFiles: deletedPaths.length, deletedPaths };
 }
 
+/**
+ * Clear remote preview-cache files under `previews/` older than temp retention.
+ * Never deletes managed objects or remote DB references.
+ */
+export function cleanupPreviewCache(profile?: string): CleanupResult {
+  const config = readDesktopFilesConfig(profile);
+  const cutoff = hoursCutoffMs(config.cleanup.tempRetentionHours);
+  const { previews } = ensureFilesLayout(profile);
+  const deletedPaths: string[] = [];
+
+  let entries: string[] = [];
+  try {
+    entries = readdirSync(previews);
+  } catch {
+    return { deletedFiles: 0, deletedPaths: [] };
+  }
+
+  for (const name of entries) {
+    if (!name.startsWith("remote_")) continue;
+    const full = join(previews, name);
+    try {
+      const st = statSync(full);
+      if (!st.isFile()) continue;
+      if (st.mtimeMs > cutoff) continue;
+      unlinkSync(full);
+      deletedPaths.push(full);
+    } catch {
+      // Best-effort.
+    }
+  }
+
+  return { deletedFiles: deletedPaths.length, deletedPaths };
+}
+
 /** Run orphan + temp cleanup for a profile (or default). Ignores errors. */
 export function runFilesCleanupBestEffort(profile?: string): void {
   try {
@@ -102,6 +136,11 @@ export function runFilesCleanupBestEffort(profile?: string): void {
   }
   try {
     cleanupTempFiles(profile);
+  } catch {
+    // ignore
+  }
+  try {
+    cleanupPreviewCache(profile);
   } catch {
     // ignore
   }

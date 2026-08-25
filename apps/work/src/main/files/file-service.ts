@@ -57,12 +57,15 @@ import { searchSessionChunks } from "./file-index-service";
 import {
   cleanupOrphanFiles,
   cleanupTempFiles,
+  cleanupPreviewCache,
 } from "./file-cleanup-service";
 import { getSessionContextFolder } from "../session-context-folder-store";
 import { profileHome } from "../utils";
 import { importOnePath, stageClipboardImport } from "./file-import-service";
 import { nowIso, toManagedFileView } from "./file-metadata";
 import { createFromMessage as createAgentOutputFromMessage } from "./agent-output/agent-output-service";
+import { materializeRemoteExpertArtifact } from "./materialize-remote-expert-artifact";
+import { streamExpertArtifactBytes } from "./expert-artifact-transfer";
 
 function profileOrDefault(profile?: string): string {
   return normalizeProfileId(profile);
@@ -84,11 +87,58 @@ function resolveManagedFilePath(
   }
   const path = file.managedPath || file.originalPath;
   if (!path || !existsSync(path)) {
+    if (file.locality === "remote") {
+      throw FilePlatformError.fromCode(
+        "FILE_REMOTE_UNSUPPORTED",
+        "Remote artifact has no local backing yet",
+        { detail: "not-materialized" },
+      );
+    }
     throw FilePlatformError.fromCode("FILE_NOT_FOUND", "File is missing from disk", {
       detail: "missing-on-disk",
     });
   }
   return { file, path };
+}
+
+async function saveRemoteArtifactAs(
+  profile: string | undefined,
+  file: ManagedFile,
+): Promise<string | null> {
+  if (!file.remoteArtifactId) {
+    throw FilePlatformError.fromCode(
+      "FILE_NOT_FOUND",
+      "Remote artifact identity missing",
+    );
+  }
+  if (file.availability === "forbidden") {
+    throw FilePlatformError.fromCode(
+      "FILE_REMOTE_FORBIDDEN",
+      "Artifact is forbidden",
+    );
+  }
+  if (file.availability === "not-found") {
+    throw FilePlatformError.fromCode(
+      "FILE_REMOTE_NOT_FOUND",
+      "Artifact was not found",
+    );
+  }
+
+  const win = BrowserWindow.getFocusedWindow();
+  const dialogOpts = { defaultPath: file.name };
+  const result = win
+    ? await dialog.showSaveDialog(win, dialogOpts)
+    : await dialog.showSaveDialog(dialogOpts);
+  if (result.canceled || !result.filePath) return null;
+
+  const destination = result.filePath;
+  await streamExpertArtifactBytes({
+    artifactId: file.remoteArtifactId,
+    expectedSha256: file.contentHash,
+    profile: profileOrDefault(profile) === "default" ? undefined : profile,
+    destinationPath: destination,
+  });
+  return destination;
 }
 
 // @lat: [[file-platform#FileService]]
@@ -176,6 +226,8 @@ export const fileService: HermesFilesAPI = {
       toManagedFileView(row, {
         associationRole: row.association.role,
         ordinal: row.association.ordinal,
+        messageId: row.association.messageId,
+        taskId: row.association.taskId,
       }),
     );
   },
@@ -300,6 +352,23 @@ export const fileService: HermesFilesAPI = {
     if (!file) {
       throw FilePlatformError.fromCode("FILE_NOT_FOUND", "Managed file not found");
     }
+
+    // Materialize remote bytes before context association when needed.
+    if (file.locality === "remote") {
+      const materialized = await materializeRemoteExpertArtifact(
+        input.profile,
+        input.fileId,
+      );
+      try {
+        await parseFile(
+          profileId === "default" ? undefined : profileId,
+          materialized.id,
+        );
+      } catch {
+        // Parsing failure is reported via file status; keep context association.
+      }
+    }
+
     const existing = findAssociation({
       profileId,
       fileId: input.fileId,
@@ -373,7 +442,19 @@ export const fileService: HermesFilesAPI = {
   },
 
   async saveAs(profile: string | undefined, fileId: string): Promise<string | null> {
-    const { file, path } = resolveManagedFilePath(profile, fileId);
+    const profileId = profileOrDefault(profile);
+    const file = getManagedFile(profileId, fileId);
+    if (!file) {
+      throw FilePlatformError.fromCode("FILE_NOT_FOUND", "Managed file not found");
+    }
+    if (file.locality === "remote") {
+      // Prefer existing backing when present (copy), else stream authorized bytes.
+      if (file.managedPath && existsSync(file.managedPath)) {
+        return saveFileAs(file.managedPath, file.name);
+      }
+      return saveRemoteArtifactAs(profile, file);
+    }
+    const { path } = resolveManagedFilePath(profile, fileId);
     return saveFileAs(path, file.name);
   },
 
@@ -393,9 +474,10 @@ export const fileService: HermesFilesAPI = {
   async cleanup(profile?: string) {
     const orphans = cleanupOrphanFiles(profile);
     const temps = cleanupTempFiles(profile);
+    const previews = cleanupPreviewCache(profile);
     return {
       orphansRemoved: orphans.deletedFiles,
-      tempsRemoved: temps.deletedFiles,
+      tempsRemoved: temps.deletedFiles + previews.deletedFiles,
     };
   },
 

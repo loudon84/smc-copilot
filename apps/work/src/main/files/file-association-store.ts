@@ -60,9 +60,6 @@ function migrateSchema(db: DbHandle): void {
       updated_at TEXT NOT NULL
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_profile_hash
-      ON managed_files(profile_id, content_hash);
-
     CREATE TABLE IF NOT EXISTS file_associations (
       id TEXT PRIMARY KEY,
       file_id TEXT NOT NULL,
@@ -111,6 +108,11 @@ function migrateSchema(db: DbHandle): void {
     );
   `);
 
+  ensureManagedFileRemoteColumns(db);
+  migrateLocalHashIndex(db);
+  ensureRemoteIdentityIndex(db);
+  ensureAssociationIdempotencyIndex(db);
+
   try {
     db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS file_chunks_fts
@@ -124,6 +126,64 @@ function migrateSchema(db: DbHandle): void {
   } catch {
     // FTS5 unavailable — searchChunks falls back to LIKE.
   }
+}
+
+function tableColumns(db: DbHandle, table: string): Set<string> {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  return new Set(rows.map((r) => r.name));
+}
+
+function ensureManagedFileRemoteColumns(db: DbHandle): void {
+  const cols = tableColumns(db, "managed_files");
+  const additions: Array<[string, string]> = [
+    ["locality", "TEXT"],
+    ["provider", "TEXT"],
+    ["remote_artifact_id", "TEXT"],
+    ["remote_task_id", "TEXT"],
+    ["availability", "TEXT"],
+    ["provider_preview_supported", "INTEGER"],
+    ["can_preview", "INTEGER"],
+  ];
+  for (const [name, type] of additions) {
+    if (!cols.has(name)) {
+      db.exec(`ALTER TABLE managed_files ADD COLUMN ${name} ${type}`);
+    }
+  }
+}
+
+function migrateLocalHashIndex(db: DbHandle): void {
+  // Drop legacy unique hash index (applied to all rows) and recreate local-only.
+  try {
+    db.exec(`DROP INDEX IF EXISTS idx_managed_files_profile_hash`);
+  } catch {
+    // ignore
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_profile_hash_local
+      ON managed_files(profile_id, content_hash)
+      WHERE content_hash IS NOT NULL
+        AND (locality IS NULL OR locality = 'local')
+  `);
+}
+
+function ensureRemoteIdentityIndex(db: DbHandle): void {
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_remote_identity
+      ON managed_files(profile_id, provider, remote_artifact_id)
+      WHERE locality = 'remote'
+        AND provider IS NOT NULL
+        AND remote_artifact_id IS NOT NULL
+  `);
+}
+
+function ensureAssociationIdempotencyIndex(db: DbHandle): void {
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_file_associations_session_file_role
+      ON file_associations(profile_id, session_id, file_id, role)
+      WHERE session_id IS NOT NULL
+  `);
 }
 
 export function openFileIndexDb(profile?: string): DbHandle {
@@ -151,6 +211,25 @@ export function closeFileIndexDb(profile?: string): void {
 }
 
 function rowToManagedFile(row: Record<string, unknown>): ManagedFile {
+  const localityRaw =
+    row.locality != null ? String(row.locality) : undefined;
+  const locality =
+    localityRaw === "remote" || localityRaw === "local"
+      ? localityRaw
+      : undefined;
+  const providerRaw =
+    row.provider != null ? String(row.provider) : undefined;
+  const provider = providerRaw === "expert" ? "expert" : undefined;
+  const availabilityRaw =
+    row.availability != null ? String(row.availability) : undefined;
+  const availability =
+    availabilityRaw === "available" ||
+    availabilityRaw === "forbidden" ||
+    availabilityRaw === "not-found" ||
+    availabilityRaw === "unavailable"
+      ? availabilityRaw
+      : undefined;
+
   return {
     id: String(row.id),
     profileId: String(row.profile_id),
@@ -172,6 +251,21 @@ function rowToManagedFile(row: Record<string, unknown>): ManagedFile {
     errorCode: row.error_code != null ? String(row.error_code) : undefined,
     errorMessage:
       row.error_message != null ? String(row.error_message) : undefined,
+    locality,
+    provider,
+    remoteArtifactId:
+      row.remote_artifact_id != null
+        ? String(row.remote_artifact_id)
+        : undefined,
+    remoteTaskId:
+      row.remote_task_id != null ? String(row.remote_task_id) : undefined,
+    availability,
+    providerPreviewSupported:
+      row.provider_preview_supported != null
+        ? Number(row.provider_preview_supported) === 1
+        : undefined,
+    canPreview:
+      row.can_preview != null ? Number(row.can_preview) === 1 : undefined,
   };
 }
 
@@ -192,15 +286,20 @@ function rowToAssociation(row: Record<string, unknown>): FileAssociation {
 export function upsertManagedFile(file: ManagedFile): void {
   const profileId = normalizeProfileId(file.profileId);
   const db = openFileIndexDb(profileId === "default" ? undefined : profileId);
+  const locality = file.locality ?? "local";
   db.prepare(
     `INSERT INTO managed_files (
       id, profile_id, name, extension, mime, category, source, status, size,
       original_path, managed_path, content_hash, parser_id, parse_version,
-      error_code, error_message, created_at, updated_at
+      error_code, error_message, created_at, updated_at,
+      locality, provider, remote_artifact_id, remote_task_id, availability,
+      provider_preview_supported, can_preview
     ) VALUES (
       @id, @profile_id, @name, @extension, @mime, @category, @source, @status, @size,
       @original_path, @managed_path, @content_hash, @parser_id, @parse_version,
-      @error_code, @error_message, @created_at, @updated_at
+      @error_code, @error_message, @created_at, @updated_at,
+      @locality, @provider, @remote_artifact_id, @remote_task_id, @availability,
+      @provider_preview_supported, @can_preview
     )
     ON CONFLICT(id) DO UPDATE SET
       profile_id = excluded.profile_id,
@@ -218,7 +317,14 @@ export function upsertManagedFile(file: ManagedFile): void {
       parse_version = excluded.parse_version,
       error_code = excluded.error_code,
       error_message = excluded.error_message,
-      updated_at = excluded.updated_at`,
+      updated_at = excluded.updated_at,
+      locality = excluded.locality,
+      provider = excluded.provider,
+      remote_artifact_id = excluded.remote_artifact_id,
+      remote_task_id = excluded.remote_task_id,
+      availability = excluded.availability,
+      provider_preview_supported = excluded.provider_preview_supported,
+      can_preview = excluded.can_preview`,
   ).run({
     id: file.id,
     profile_id: profileId,
@@ -238,6 +344,19 @@ export function upsertManagedFile(file: ManagedFile): void {
     error_message: file.errorMessage ?? null,
     created_at: file.createdAt,
     updated_at: file.updatedAt,
+    locality,
+    provider: file.provider ?? null,
+    remote_artifact_id: file.remoteArtifactId ?? null,
+    remote_task_id: file.remoteTaskId ?? null,
+    availability: file.availability ?? null,
+    provider_preview_supported:
+      file.providerPreviewSupported == null
+        ? null
+        : file.providerPreviewSupported
+          ? 1
+          : 0,
+    can_preview:
+      file.canPreview == null ? null : file.canPreview ? 1 : 0,
   });
 }
 
@@ -266,9 +385,33 @@ export function findByHash(
     .prepare(
       `SELECT * FROM managed_files
        WHERE profile_id = ? AND content_hash = ?
+         AND (locality IS NULL OR locality = 'local')
        LIMIT 1`,
     )
     .get(pid, hash) as Record<string, unknown> | undefined;
+  return row ? rowToManagedFile(row) : null;
+}
+
+/** Look up a remote Expert (or other) artifact by provider identity. */
+export function findByRemoteIdentity(opts: {
+  profileId: string;
+  provider: NonNullable<ManagedFile["provider"]>;
+  remoteArtifactId: string;
+}): ManagedFile | null {
+  const pid = normalizeProfileId(opts.profileId);
+  const artifactId = opts.remoteArtifactId.trim();
+  if (!artifactId) return null;
+  const db = openFileIndexDb(pid === "default" ? undefined : pid);
+  const row = db
+    .prepare(
+      `SELECT * FROM managed_files
+       WHERE profile_id = ?
+         AND locality = 'remote'
+         AND provider = ?
+         AND remote_artifact_id = ?
+       LIMIT 1`,
+    )
+    .get(pid, opts.provider, artifactId) as Record<string, unknown> | undefined;
   return row ? rowToManagedFile(row) : null;
 }
 
@@ -317,6 +460,15 @@ export function listBySession(
 
 export function insertAssociation(assoc: FileAssociation): void {
   const profileId = normalizeProfileId(assoc.profileId);
+  if (assoc.sessionId) {
+    const existing = findAssociation({
+      profileId,
+      fileId: assoc.fileId,
+      sessionId: assoc.sessionId,
+      role: assoc.role,
+    });
+    if (existing) return;
+  }
   const db = openFileIndexDb(profileId === "default" ? undefined : profileId);
   db.prepare(
     `INSERT INTO file_associations (

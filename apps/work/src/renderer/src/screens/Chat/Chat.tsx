@@ -46,6 +46,7 @@ import { useRuntimeOptional } from "../../runtime/use-runtime";
 import {
   ExpertContextControl,
   ExpertRunCard,
+  ExpertArtifactCards,
   ensureExpertProjectionSubscription,
   getExpertProjectionsForSession,
   subscribeExpertProjections,
@@ -53,6 +54,7 @@ import {
   type ExpertSelection,
 } from "../../modules/expert";
 import "../../modules/expert/expert.css";
+import "../../modules/expert/expert-artifacts.css";
 import {
   buildExpertTranscriptAssistantContent,
   createClientRequestId,
@@ -478,6 +480,14 @@ function Chat({
       }),
     );
   }, [expertProjections, hermesSessionId, initialSessionId]);
+
+  useEffect(() => {
+    const ready = expertProjections.some(
+      (p) =>
+        p.artifactDiscovery === "ready" && p.artifactFileIds.length > 0,
+    );
+    if (ready) setSessionFilesRefreshKey((k) => k + 1);
+  }, [expertProjections]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1468,6 +1478,22 @@ function Chat({
                 sessionId={hermesSessionId}
               />
             )}
+            {expertProjections
+              .filter(
+                (p) =>
+                  p.phase === "succeeded" &&
+                  (p.artifactDiscovery !== "idle" ||
+                    p.artifactFileIds.length > 0),
+              )
+              .map((projection) => (
+                <ExpertArtifactCards
+                  key={`artifacts-${projection.clientRequestId}`}
+                  projection={projection}
+                  profile={profile}
+                  sessionId={hermesSessionId}
+                  onPreview={(fileId) => handleOpenManagedPreview(fileId)}
+                />
+              ))}
             <div ref={bottomRef} />
           </div>
           {!sessionFilesVisible && hermesSessionId && !filePreviewMaximized && (

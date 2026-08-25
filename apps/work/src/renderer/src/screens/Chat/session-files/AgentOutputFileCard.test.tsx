@@ -44,7 +44,7 @@ describe("AgentOutputFileCard", () => {
     expect(onPreview).toHaveBeenCalledWith("file-1");
   });
 
-  it("wires save / open / reveal actions", async () => {
+  it("wires save / open / reveal actions for local files", async () => {
     const saveAs = vi.fn().mockResolvedValue("/tmp/out.md");
     const openExternal = vi.fn().mockResolvedValue(undefined);
     const revealInFolder = vi.fn().mockResolvedValue(undefined);
@@ -73,4 +73,24 @@ describe("AgentOutputFileCard", () => {
       expect(revealInFolder).toHaveBeenCalledWith("default", "file-1"),
     );
   });
+
+  it("hides Open / Reveal for remote files without managed copy", () => {
+    render(
+      <AgentOutputFileCard
+        file={sampleFile({
+          locality: "remote",
+          hasManagedCopy: false,
+          canOpen: false,
+          canReveal: false,
+          canPreview: true,
+          availability: "available",
+        })}
+        profile="default"
+      />,
+    );
+    expect(screen.queryByLabelText(/Open /)).toBeNull();
+    expect(screen.queryByLabelText(/Reveal /)).toBeNull();
+    expect(screen.getByLabelText(/Save /)).toBeTruthy();
+  });
 });
+

@@ -23,13 +23,13 @@ import {
   registerExpertIpc,
 } from "../expert/expert-ipc";
 import { getExpertRunService } from "../expert/expert-run-service";
-import { cleanupExpertArtifactTemps } from "../expert/expert-artifact-download";
 import { setGatewayPromptParent } from "../gatewayPrompt";
 import { showChatContextMenu } from "./context-menu";
 import { buildMenu } from "./menu";
 import { createAppTray, type AppTray } from "./tray";
 import { setupUpdater } from "./updater";
 import { registerArtifactProtocolHandler } from "../artifact-protocol";
+import { registerFilePreviewProtocolHandler } from "../files/file-preview-service";
 import { logWorkStartupIdentity } from "../build-info";
 import { readControlOwnerSnapshot } from "../hermes/control-owner";
 
@@ -84,6 +84,7 @@ export function startMainProcess(): void {
     logWorkStartupIdentity(readControlOwnerSnapshot().owner);
 
     registerArtifactProtocolHandler();
+    registerFilePreviewProtocolHandler();
 
     app.on("browser-window-created", (_, window) => {
       optimizer.watchWindowShortcuts(window);
@@ -200,9 +201,14 @@ export function startMainProcess(): void {
     stopHealthPolling();
     for (const abort of activeRuns.values()) abort();
     activeRuns.clear();
-    // Expert: stop new requests → abort SSE/polling → cancel downloads → clear cache → dispose
-    cleanupExpertArtifactTemps();
+    // Expert: stop new requests → abort SSE/polling → dispose
     disposeExpertSubsystem();
+    // File Platform temp/preview retention (covers former Expert artifact temps).
+    try {
+      runFilesCleanupBestEffort();
+    } catch {
+      // Best-effort — never block quit.
+    }
     cleanupTempMediaFiles();
     stopAllDashboards();
     // Kill the SSH tunnel process on quit — otherwise the `ssh -N -L` child is

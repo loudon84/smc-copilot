@@ -57,6 +57,12 @@ export interface DesktopFilesPreviewConfig {
   artifact: boolean;
   pdf: boolean;
   externalNetwork: boolean;
+  /** Default false — offline cached Expert preview denied. */
+  allowOfflineCachedCopy: boolean;
+  /** Independent preview byte cap (MB). */
+  maxPreviewMb: number;
+  /** Independent transfer/download/materialize byte cap (MB). */
+  maxTransferMb: number;
 }
 
 export interface DesktopFilesCleanupConfig {
@@ -106,6 +112,9 @@ export const DEFAULT_DESKTOP_FILES_CONFIG: DesktopFilesConfig = {
     artifact: true,
     pdf: true,
     externalNetwork: false,
+    allowOfflineCachedCopy: false,
+    maxPreviewMb: 20,
+    maxTransferMb: 50,
   },
   cleanup: {
     orphanRetentionDays: 30,

@@ -81,8 +81,8 @@ vi.mock("../expert/expert-ipc", () => ({
   restoreExpertSubsystemAfterAuth: vi.fn(),
 }));
 
-vi.mock("../expert/expert-artifact-download", () => ({
-  cleanupExpertArtifactTemps: vi.fn(),
+vi.mock("../files/file-cleanup-service", () => ({
+  runFilesCleanupBestEffort: vi.fn(),
 }));
 
 import {
