@@ -102,7 +102,13 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
                 "runtimeProfileVersion": int(managed_payload["profileVersion"]),
                 "runtimeProfile": "smc-managed",
                 "runtimeProfileDigest": str(managed_payload["profileDigest"]),
-                "environment": {"path": {"policy": "immutable"}},
+                "environment": {
+                    "path": {
+                        "policy": "installer-managed",
+                        "owner": "windows-installer",
+                        "entries": [r"D:\Programs\SMC\Hermes\bin"],
+                    }
+                },
             }
         )
         + "\n",

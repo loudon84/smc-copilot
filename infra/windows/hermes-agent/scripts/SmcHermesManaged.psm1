@@ -182,18 +182,22 @@ function Set-SmcHermesEnvironment {
     [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $HermesHome, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $agentRoot, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $nodeRoot, "Machine")
+    [System.Environment]::SetEnvironmentVariable("HERMES_INSTALL_ROOT", $ProgramRoot, "Machine")
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $agentRoot
     $env:HERMES_NODE_ROOT = $nodeRoot
+    $env:HERMES_INSTALL_ROOT = $ProgramRoot
 }
 
 function Remove-SmcHermesEnvironment {
     [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $null, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $null, "Machine")
     [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $null, "Machine")
+    [System.Environment]::SetEnvironmentVariable("HERMES_INSTALL_ROOT", $null, "Machine")
     Remove-Item Env:HERMES_HOME -ErrorAction SilentlyContinue
     Remove-Item Env:HERMES_AGENT_ROOT -ErrorAction SilentlyContinue
     Remove-Item Env:HERMES_NODE_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:HERMES_INSTALL_ROOT -ErrorAction SilentlyContinue
 }
 
 function Test-SmcAclHasModify {
@@ -361,6 +365,8 @@ function Initialize-SmcHermesManagedHome {
     $prevAgentRootProc    = $env:HERMES_AGENT_ROOT
     $prevNodeRoot         = [System.Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
     $prevNodeRootProc     = $env:HERMES_NODE_ROOT
+    $prevInstallRoot      = [System.Environment]::GetEnvironmentVariable("HERMES_INSTALL_ROOT", "Machine")
+    $prevInstallRootProc  = $env:HERMES_INSTALL_ROOT
 
     $envSet = $false
     try {
@@ -382,13 +388,15 @@ function Initialize-SmcHermesManagedHome {
         $envSet = $true
     } catch {
         if ($envSet) {
-            # best-effort rollback — Installer-owned Hermes variables only (PATH immutable)
+            # best-effort rollback — Installer-owned Hermes variables only (PATH remains MSI-owned)
             [System.Environment]::SetEnvironmentVariable("HERMES_HOME", $prevHermesHome, "Machine")
             [System.Environment]::SetEnvironmentVariable("HERMES_AGENT_ROOT", $prevAgentRoot, "Machine")
             [System.Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $prevNodeRoot, "Machine")
+            [System.Environment]::SetEnvironmentVariable("HERMES_INSTALL_ROOT", $prevInstallRoot, "Machine")
             $env:HERMES_HOME = $prevHermesHomeProc
             $env:HERMES_AGENT_ROOT = $prevAgentRootProc
             $env:HERMES_NODE_ROOT = $prevNodeRootProc
+            $env:HERMES_INSTALL_ROOT = $prevInstallRootProc
         }
         throw
     }

@@ -5,7 +5,7 @@
   "smcRevision": "smc.1",
   "platform": "windows",
   "architecture": "amd64",
-  "sha256": "b5f35f476d8e83b15d990609f05916566d3e4752645319b82f3b15c07894f637",
+  "sha256": "39aadb7e23127fbf07e43beaa31e60d2fba4a5eeeb520cb0adab8520a1e8c60f",
   "buildId": "build-smoke-fixture",
   "signerKeyId": "TEST-ONLY-ed25519",
   "sourceRevision": "smoke",
@@ -14,7 +14,7 @@
     {
       "path": "bin/hermes.exe",
       "size": 108387,
-      "sha256": "894d9d9fcf5f34fd1f316606a41769c834a90d84299735cbd356290e23ca4953"
+      "sha256": "dd4408049afbb47cf8247217da98347fd28d0723346581212af6f8a9471d44ed"
     },
     {
       "path": "config/managed.defaults.yaml",
@@ -58,8 +58,8 @@
     },
     {
       "path": "runtime/runtime-build.json",
-      "size": 478,
-      "sha256": "b1eeab68271d4ddd5383d437ccce9fad55d98cfc8deeea65e92296a7f226c85b"
+      "size": 563,
+      "sha256": "a0e04faa12e09e6de989666d6914b3969e3af14361b0f0916baf1dd2239874b7"
     },
     {
       "path": "runtime/windows-runtime.json",
@@ -78,13 +78,13 @@
     },
     {
       "path": "scripts/managed_config_apply.py",
-      "size": 11703,
-      "sha256": "8d9bf576fbb5e908a0124b632ab14c05f9dbf684cc82170cc9d3ca5b17b0ae30"
+      "size": 13465,
+      "sha256": "54b7f5682d832ec6674ad8ba728a1a4d11aa88c908bce7bf4ca061cb00a22716"
     },
     {
       "path": "scripts/SmcHermesManaged.psm1",
-      "size": 61972,
-      "sha256": "9dbdbd4a5c73bfcd6490dfc96f8ed70a67a89649e08b2248d6323a5a61aa2ece"
+      "size": 63576,
+      "sha256": "1a9bd2dfafc332ca75b7b042829000402ebde8ee7ede20b770e2ede9e66aa2fe"
     },
     {
       "path": "uninstall/README.txt",

@@ -357,6 +357,30 @@ def _install_wheels(wheels: list[Path], site_packages: Path) -> None:
             zf.extractall(site_packages)
 
 
+SMC_INSTALL_METHOD_STAMP = b"smc-managed\n"
+
+
+def _install_method_code_root(site_packages: Path) -> Path:
+    """Return the directory that owns installed hermes_cli (the code-scoped stamp root)."""
+    direct = site_packages / "hermes_cli"
+    if direct.is_dir():
+        return site_packages
+    nested = [path for path in site_packages.glob("*/hermes_cli") if path.is_dir()]
+    if len(nested) == 1:
+        return nested[0].parent
+    raise ValueError("installed hermes_cli code root missing")
+
+
+def stamp_smc_managed_install_method(site_packages: Path) -> Path:
+    """Write the code-scoped stamp next to installed hermes_cli and verify bytes."""
+    code_root = _install_method_code_root(site_packages)
+    stamp = code_root / ".install_method"
+    stamp.write_bytes(SMC_INSTALL_METHOD_STAMP)
+    if stamp.read_bytes() != SMC_INSTALL_METHOD_STAMP:
+        raise ValueError("install-method stamp mismatch")
+    return stamp
+
+
 def _load_distlib_launcher() -> bytes:
     try:
         import pip._vendor.distlib as distlib_mod
@@ -494,6 +518,7 @@ def build_windows_runtime(
     _enable_python_site(python_root)
     site_packages = python_root / "Lib" / "site-packages"
     _install_wheels(_collect_wheels(bundle_root), site_packages)
+    stamp_smc_managed_install_method(site_packages)
     _install_windows_console_hook(site_packages)
     _overlay_safe_sqlite(python_root, sqlite_zip)
 
@@ -565,6 +590,12 @@ def build_windows_runtime(
         raise ValueError("Windows console VT hook missing")
     if not (site_packages / WINDOWS_VT_PTH_NAME).is_file():
         raise ValueError("Windows console VT hook missing")
+    stamp = site_packages / ".install_method"
+    if not stamp.is_file():
+        nested = list(site_packages.glob("*/.install_method"))
+        stamp = nested[0] if nested else stamp
+    if not stamp.is_file() or stamp.read_bytes() != SMC_INSTALL_METHOD_STAMP:
+        raise ValueError("install-method stamp missing")
     if not (node_root / "hermes-agent").is_dir():
         raise ValueError("node/hermes-agent workspace missing")
     return dest

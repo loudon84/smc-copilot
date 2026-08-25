@@ -28,6 +28,8 @@ Describe "SmcHermesManaged machine home" {
         $script:PrevAgentProcess = $env:HERMES_AGENT_ROOT
         $script:PrevNodeMachine = [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine")
         $script:PrevNodeProcess = $env:HERMES_NODE_ROOT
+        $script:PrevInstallMachine = [Environment]::GetEnvironmentVariable("HERMES_INSTALL_ROOT", "Machine")
+        $script:PrevInstallProcess = $env:HERMES_INSTALL_ROOT
         $script:PrevMachineTemp = [Environment]::GetEnvironmentVariable("TEMP", "Machine")
         $script:PrevMachineTmp = [Environment]::GetEnvironmentVariable("TMP", "Machine")
         $script:PrevMachineHome = [Environment]::GetEnvironmentVariable("HOME", "Machine")
@@ -54,6 +56,9 @@ Describe "SmcHermesManaged machine home" {
         if ($null -ne $script:PrevNodeProcess) {
             $env:HERMES_NODE_ROOT = $script:PrevNodeProcess
         }
+        if ($null -ne $script:PrevInstallProcess) {
+            $env:HERMES_INSTALL_ROOT = $script:PrevInstallProcess
+        }
         try {
             [Environment]::SetEnvironmentVariable("HERMES_HOME", $script:PrevMachine, "Machine")
         } catch {}
@@ -62,6 +67,9 @@ Describe "SmcHermesManaged machine home" {
         } catch {}
         try {
             [Environment]::SetEnvironmentVariable("HERMES_NODE_ROOT", $script:PrevNodeMachine, "Machine")
+        } catch {}
+        try {
+            [Environment]::SetEnvironmentVariable("HERMES_INSTALL_ROOT", $script:PrevInstallMachine, "Machine")
         } catch {}
         # Never restore/write Machine or User PATH in unit tests (FR-215-21)
         $machineAfter = [Environment]::GetEnvironmentVariable("PATH", "Machine")
@@ -185,6 +193,10 @@ Describe "SmcHermesManaged machine home" {
         $env:HERMES_NODE_ROOT | Should Be $expectedNodeRoot
         [Environment]::GetEnvironmentVariable("HERMES_NODE_ROOT", "Machine") | Should Be $expectedNodeRoot
 
+        $expectedInstallRoot = $script:Layout.ProgramRoot
+        $env:HERMES_INSTALL_ROOT | Should Be $expectedInstallRoot
+        [Environment]::GetEnvironmentVariable("HERMES_INSTALL_ROOT", "Machine") | Should Be $expectedInstallRoot
+
         # Machine TEMP/TMP/HOME/USERPROFILE must remain untouched
         [Environment]::GetEnvironmentVariable("TEMP", "Machine") | Should Be $script:PrevMachineTemp
         [Environment]::GetEnvironmentVariable("TMP", "Machine") | Should Be $script:PrevMachineTmp
@@ -192,7 +204,7 @@ Describe "SmcHermesManaged machine home" {
         [Environment]::GetEnvironmentVariable("USERPROFILE", "Machine") | Should Be $script:PrevMachineUserProfile
         $env:USERPROFILE | Should Be $script:PrevProcessUserProfile
 
-        # Machine/User PATH must be bit-for-bit unchanged (PATH immutability)
+        # Machine/User PATH must be bit-for-bit unchanged within PowerShell lifecycle
         $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
         [string]::Equals([string]$script:MachinePathBeforeSuite, [string]$machinePath, [StringComparison]::Ordinal) | Should Be $true
@@ -225,11 +237,14 @@ Describe "SmcHermesManaged machine home" {
         $beforeMachine = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $beforeUser = [Environment]::GetEnvironmentVariable("PATH", "User")
         Set-SmcHermesEnvironment -ProgramRoot $script:Layout.ProgramRoot -HermesHome $script:Layout.HermesHome
+        $env:HERMES_INSTALL_ROOT | Should Be $script:Layout.ProgramRoot
+        [Environment]::GetEnvironmentVariable("HERMES_INSTALL_ROOT", "Machine") | Should Be $script:Layout.ProgramRoot
         $afterSetMachine = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $afterSetUser = [Environment]::GetEnvironmentVariable("PATH", "User")
         [string]::Equals([string]$beforeMachine, [string]$afterSetMachine, [StringComparison]::Ordinal) | Should Be $true
         [string]::Equals([string]$beforeUser, [string]$afterSetUser, [StringComparison]::Ordinal) | Should Be $true
         Remove-SmcHermesEnvironment
+        [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable("HERMES_INSTALL_ROOT", "Machine")) | Should Be $true
         $afterRemoveMachine = [Environment]::GetEnvironmentVariable("PATH", "Machine")
         $afterRemoveUser = [Environment]::GetEnvironmentVariable("PATH", "User")
         [string]::Equals([string]$beforeMachine, [string]$afterRemoveMachine, [StringComparison]::Ordinal) | Should Be $true

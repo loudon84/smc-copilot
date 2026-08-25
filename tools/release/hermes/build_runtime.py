@@ -47,6 +47,7 @@ from tools.release.hermes.managed_config import (  # noqa: E402
     compile_managed_defaults,
     render_managed_defaults_yaml,
 )
+from tools.release.hermes.path_policy_gate import path_policy_payload  # noqa: E402
 from tools.release.hermes.release_v2 import build_hermes_release_v2  # noqa: E402
 from tools.release.hermes.release_version import resolve_release_version  # noqa: E402
 from tools.release.hermes.runtime_profile import (  # noqa: E402
@@ -114,11 +115,7 @@ def write_runtime_build(
         },
         "buildId": build_id,
         "liveEligible": bool(source.get("liveEligible")),
-        "environment": {
-            "path": {
-                "policy": "immutable",
-            },
-        },
+        "environment": path_policy_payload(),
     }
     dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload

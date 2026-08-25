@@ -542,6 +542,9 @@ def test_windows_runtime_builder(tmp_path: Path):
     assert "just_fix_windows_console" in hook
     assert pth.strip() == "import smc_windows_vt"
     assert not (tree / "python" / "sitecustomize.py").exists()
+    stamps = list(site.glob(".install_method")) + list(site.glob("*/.install_method"))
+    assert stamps, "expected code-scoped .install_method stamp"
+    assert stamps[0].read_bytes() == b"smc-managed\n"
     # v2.1.1: runtime metadata v2 with sqlite/node versions
     meta = json.loads((tree / "runtime" / "windows-runtime.json").read_text(encoding="utf-8"))
     assert meta["schema"] == "smc.hermes.windows-runtime.v2"

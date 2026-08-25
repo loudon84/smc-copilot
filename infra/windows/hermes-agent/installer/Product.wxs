@@ -42,6 +42,28 @@
       <Component Id="ManagedConfigApply" Directory="ScriptsFolder" Guid="*">
         <File Id="ManagedConfigApply" Source="$(var.StagingDir)\scripts\managed_config_apply.py" KeyPath="yes" />
       </Component>
+      <!-- Sole durable Machine PATH owner: canonical D:\Programs\SMC\Hermes\bin.
+           Action=set + Part=first + Permanent=no + System=yes enrolls, converges,
+           and removes that token on rollback/uninstall. Bounded canonical forms
+           (case-insensitive, one optional trailing backslash) are MSI Environment-table
+           semantics; PowerShell lifecycle code must not write PATH. -->
+      <Component Id="cmpHermesMachinePath" Directory="INSTALLFOLDER" Guid="e7f8a9b0-c1d2-4e3f-8a90-1b2c3d4e5f60">
+        <RegistryValue
+          Root="HKLM"
+          Key="Software\SMC\Hermes"
+          Name="MachinePathOwned"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+        <Environment
+          Id="envHermesBinPath"
+          Name="PATH"
+          Value="D:\Programs\SMC\Hermes\bin"
+          Permanent="no"
+          Part="first"
+          Action="set"
+          System="yes" />
+      </Component>
     </ComponentGroup>
 
     <Feature Id="Main" Title="SMC Hermes Agent" Level="1">

@@ -86,6 +86,10 @@ def capture_hermes_installer(src: Path, dest: Path) -> dict[str, Any]:
     copied["authenticodeStatus"] = authenticode_status(dest / src.name)
     parts = src.name.replace("_windows-amd64.exe", "").split("_", 1)
     copied["version"] = parts[1] if len(parts) == 2 else src.stem
+    msi_src = src.with_suffix(".msi")
+    if msi_src.is_file():
+        capture_file(msi_src, dest / msi_src.name)
+        copied["msiSha256"] = sha256_file(dest / msi_src.name)
     return copied
 
 

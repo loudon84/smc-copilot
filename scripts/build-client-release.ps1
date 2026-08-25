@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("preflight", "work", "hermes", "runtime", "opsi-stage", "opsi-package", "assemble", "verify", "all")]
+    [ValidateSet("preflight", "work", "hermes", "hermes-installer", "runtime", "opsi-stage", "opsi-package", "assemble", "verify", "all")]
     [string]$Stage = "all",
     [string]$HermesRepo = "",
     [string]$OpsiClientInstaller = "",

@@ -102,6 +102,8 @@ Describe "Hermes installer core" {
         $spec.LauncherScript | Should Match "managed_runtime_context"
         $spec.LauncherScript | Should Match "API_SERVER_ENABLED"
         $spec.LauncherScript | Should Match "API_SERVER_KEY"
+        $spec.LauncherScript | Should Match ([regex]::Escape("`$env:HERMES_INSTALL_ROOT = '$($script:Layout.ProgramRoot)'"))
+        $spec.LauncherScript | Should Match "hermesInstallRoot"
         $spec.LauncherScript | Should Match ([regex]::Escape("`$env:PATH"))
         $spec.ManagedPath | Should Be (@($script:Layout.BinPath, $script:Layout.ScriptsPath, $script:Layout.NodeRoot) -join ";")
         $spec.LauncherScript | Should Match ([regex]::Escape($spec.ManagedPath))
@@ -240,6 +242,31 @@ Describe "Hermes installer core" {
             "/hermes-home", $script:Layout.HermesHome
         )
         $code | Should Be 0
+    }
+
+    It "MSI owns the sole approved Machine PATH Environment component" {
+        $product = Get-Content -LiteralPath (Join-Path $script:Root "installer\Product.wxs") -Raw
+        $product | Should Match 'Id="cmpHermesMachinePath"'
+        $product | Should Match 'Id="envHermesBinPath"'
+        $product | Should Match 'Name="PATH"'
+        $product | Should Match 'Value="D:\\Programs\\SMC\\Hermes\\bin"'
+        $product | Should Match 'System="yes"'
+        $product | Should Match 'Permanent="no"'
+        $product | Should Match 'Part="first"'
+        $product | Should Match 'Action="set"'
+        # Fixture-level canonical equivalence set (case / trailing slash) for MSI handoff.
+        $canonical = @(
+            "D:\Programs\SMC\Hermes\bin",
+            "d:\programs\smc\hermes\bin",
+            "D:\Programs\SMC\Hermes\bin\"
+        )
+        foreach ($token in $canonical) {
+            $norm = $token.TrimEnd("\")
+            [string]::Equals($norm, "D:\Programs\SMC\Hermes\bin", [StringComparison]::OrdinalIgnoreCase) | Should Be $true
+        }
+        $core = Get-Content -LiteralPath (Join-Path $script:Root "installer\InstallerCore.psm1") -Raw
+        $core | Should Match 'environment\.path\.policy=installer-managed'
+        $core | Should Not Match 'environment\.path\.policy=immutable'
     }
 
     It "uses fixed WindowsPowerShell path and rejects managed/.NET installer hosts" {

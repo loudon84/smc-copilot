@@ -94,4 +94,6 @@ def build_client_release_manifest(
             "version": hermes_installer.get("version", ""),
             "authenticodeStatus": hermes_installer.get("authenticodeStatus", ""),
         }
+        if hermes_installer.get("msiSha256"):
+            payload["hermesInstaller"]["msiSha256"] = hermes_installer["msiSha256"]
     return payload

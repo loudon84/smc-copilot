@@ -319,6 +319,7 @@ function Get-SmcHermesGatewayTaskSpec {
     $contextJson = (@{
             event = "managed_runtime_context"
             hermesHome = $HermesHome
+            hermesInstallRoot = $ProgramRoot
             workspaceRoot = $workspaceRoot
             tempRoot = $tempRoot
             terminalCwd = $workspaceRoot
@@ -328,6 +329,7 @@ function Get-SmcHermesGatewayTaskSpec {
         "`$env:HERMES_HOME = '$HermesHome'",
         "`$env:HERMES_AGENT_ROOT = '$agentRoot'",
         "`$env:HERMES_NODE_ROOT = '$nodeRoot'",
+        "`$env:HERMES_INSTALL_ROOT = '$ProgramRoot'",
         "`$env:TERMINAL_CWD = '$workspaceRoot'",
         "`$env:TEMP = '$tempRoot'",
         "`$env:TMP = '$tempRoot'",
@@ -384,6 +386,7 @@ function Set-SmcHermesGatewayTask {
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $spec.AgentRoot
     $env:HERMES_NODE_ROOT = $spec.NodeRoot
+    $env:HERMES_INSTALL_ROOT = $ProgramRoot
 }
 
 function Get-SmcHermesGatewayTaskContractFailure {
@@ -671,6 +674,7 @@ function Get-SmcHermesReadinessFailure {
     $env:HERMES_HOME = $HermesHome
     $env:HERMES_AGENT_ROOT = $layout.AgentRoot
     $env:HERMES_NODE_ROOT = $layout.NodeRoot
+    $env:HERMES_INSTALL_ROOT = $ProgramRoot
 
     # Certification must never run with skip/test-root flags (FR-216-24).
     $certMode = [Environment]::GetEnvironmentVariable("SMC_HERMES_INSTALLER_CERTIFICATION", "Process")
@@ -827,7 +831,7 @@ function Write-SmcEnvironmentPathGateLog {
         [Parameter(Mandatory = $true)][bool]$MachineUnchanged,
         [Parameter(Mandatory = $true)][bool]$UserUnchanged
     )
-    Write-Host ("environment.path.policy=immutable")
+    Write-Host ("environment.path.policy=installer-managed")
     Write-Host ("machinePath.before.sha256=" + [string]$Before.machinePathSha256)
     Write-Host ("machinePath.after.sha256=" + [string]$After.machinePathSha256)
     Write-Host ("machinePath.unchanged=" + ($(if ($MachineUnchanged) { "true" } else { "false" })))

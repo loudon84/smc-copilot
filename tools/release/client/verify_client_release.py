@@ -101,6 +101,7 @@ def verify_hermes_installer_release(
     release_zip = _first(hermes_dir, "hermes-windows-amd64.zip")
     release_manifest = _first(hermes_dir, "release-manifest.json")
     installer = _first(installer_dir, "smc-hermes-agent_*_windows-amd64.exe")
+    msi = _first(installer_dir, "smc-hermes-agent_*_windows-amd64.msi")
     if (root / "opsi").is_dir() and list((root / "opsi").glob("*.opsi")):
         raise ValueError("Hermes installer release must not include .opsi product")
     if sha256_file(release_zip) != manifest["hermes"]["artifactSha256"]:
@@ -113,6 +114,13 @@ def verify_hermes_installer_release(
         pe_header = fh.read(2)
     if pe_header != b"MZ":
         raise ValueError("Hermes installer is not a PE executable (ZIP rename forbidden)")
+    with msi.open("rb") as fh:
+        msi_header = fh.read(2)
+    if msi_header != b"\xd0\xcf":
+        raise ValueError("Hermes installer MSI is invalid")
+    expected_msi = manifest["hermesInstaller"].get("msiSha256")
+    if expected_msi and sha256_file(msi) != expected_msi:
+        raise ValueError("Hermes installer MSI hash mismatch")
     signer = str(json.loads(release_manifest.read_text(encoding="utf-8")).get("signerKeyId") or "")
     if manifest.get("liveEligible") and signer.startswith("TEST-ONLY"):
         raise ValueError("TEST-ONLY signer cannot be liveEligible")
@@ -142,8 +150,9 @@ def verify_hermes_installer_release(
             build_member = json.loads(zf.read(names["runtime/runtime-build.json"]))
         elif "runtime-build.json" in names:
             build_member = json.loads(zf.read(names["runtime-build.json"]))
-        if build_member is not None:
-            assert_path_policy_metadata(build_member)
+        if build_member is None:
+            raise ValueError("runtime-build.json missing from Hermes release archive")
+        assert_path_policy_metadata(build_member)
     return manifest
 
 
