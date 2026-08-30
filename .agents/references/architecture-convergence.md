@@ -1,49 +1,38 @@
 # Architecture Convergence Checklist
 
-这是 PRD、Plan、staged review 共用的**最小架构不变量**。各阶段只检查属于自己的层级，不重复做上一阶段工作。
+This is the shared minimum invariant set for Architecture, PRD, Plan, Review and Delivery. Each stage checks only its own layer.
 
-## Core Invariants
+## Architecture Invariant
 
-- [ ] 一个 Capability 只有一个 Production Owner。
-- [ ] 每个 REPLACE 都有对应 REMOVE 和明确 removal condition。
-- [ ] 没有无期限 Legacy。
-- [ ] Compat / adapter / fallback / alias 有真实 Current Consumer、Reason、Removal Condition、Removal Version。
-- [ ] 历史 Bug 只保存在 tests / fixtures / golden evidence。
-- [ ] 没有 duplicate parser、serializer、adapter 或 lifecycle owner。
-- [ ] 新增生产文件不会形成第二 Production Owner。
+- [ ] One Capability has one Production Owner.
+- [ ] A new component/file does not silently create a second owner.
+- [ ] Alternatives and rejected options are explicit before approval.
+- [ ] Dependencies, cascading effects, failure modes and kill criteria are explicit where material.
 
-## PRD Gate
+## PRD Invariant
 
-PRD / Review 负责确认：
+- [ ] Existing capability is classified as KEEP/MODIFY/ADD/REPLACE/REMOVE.
+- [ ] REPLACE has a corresponding REMOVE/removal condition.
+- [ ] Contract/security/trust-boundary behavior is explicit where relevant.
+- [ ] Acceptance Criteria prove observable behavior, not arbitrary private implementation.
+- [ ] `source_revision` and `grounded_commit` make the grounding evidence reusable.
 
-- Capability 与 Scope；
-- Existing / Target Owner；
-- KEEP / MODIFY / ADD / REPLACE / REMOVE；
-- API / IPC / Auth / Contract / Security Boundary；
-- 关键 Behaviour 与 Acceptance Criteria。
+## Plan Invariant
 
-PRD Gate 默认不决定 exact 私有函数、hook、fetch option、test file、mock 或其它施工技术。
+- [ ] Exact file/symbol targets are grounded from the approved PRD.
+- [ ] Ponytail minimality selects reuse/stdlib/native/installed dependency/modify existing before minimal new implementation.
+- [ ] One production `path#symbol` has exactly one Todo WRITE_OWNER.
+- [ ] Integration hotspots have one file-level writer.
+- [ ] Dependencies form an acyclic graph and parallel claims match real read/write hazards.
 
-## Plan Gate
+## Delivery Invariant
 
-Plan 继承 APPROVED PRD，不重新决定架构。
+- [ ] One Roadmap Item maps to at most one active Stage PRD.
+- [ ] Implementation uses `commit_policy=post_review` in governed flow.
+- [ ] Review and verification complete before implementation commit.
+- [ ] Roadmap `DONE` has a real implementation commit and verification evidence.
+- [ ] Roadmap status update is committed separately; it does not self-reference its own commit SHA.
 
-Plan 负责确认：
+## Return-Upstream Rule
 
-- exact file / symbol；
-- 最小调用链；
-- 当前实施 slice；
-- 新增生产文件的必要性；
-- REPLACE 对应 REMOVE 未丢失；
-- 没有因实现方便新增平行 Owner。
-
-## Staged Review Gate
-
-代码 Review 验证：
-
-- 实际 diff 与 APPROVED PRD / Plan 一致；
-- 没有未计划的 Owner 转移或 scope expansion；
-- removal 已真实发生；
-- 必要测试证明目标行为。
-
-任何阶段发现必须改变上游架构决定时，应返回对应上游阶段，而不是在当前阶段静默改写。
+If a stage discovers that an upstream architectural decision must change, stop and return to that upstream artifact. Never silently repair an Architecture/PRD decision inside Plan or code.
