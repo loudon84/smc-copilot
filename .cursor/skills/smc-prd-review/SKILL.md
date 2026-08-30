@@ -1,21 +1,44 @@
 ---
 name: smc-prd-review
-description: Independently reviews an SMC Copilot PRD draft for architecture, ownership, replacement, and governance defects. Use before approving a non-trivial PRD.
+description: Stage PRD Architecture Gate。initial 一次性审 Scope/Existing Capability/Production Ownership/Classification/Boundary/Behaviour->AC；closure 只关闭旧 Finding。复用 source_revision + grounded_commit，禁止以独立审查为名重复 discovery。
+version: 4.0.0
 disable-model-invocation: true
 ---
 
 # SMC PRD Review
 
-This skill is read-only. Use a fresh-context reviewer and [`../../references/architecture-convergence.md`](../../references/architecture-convergence.md).
+## Modes
 
-Input: PRD-DRAFT, current-state inventory, relevant source anchors, contracts, and ADRs. Do not provide the author’s private reasoning.
+- `initial`: 一次性跑六 Gate。
+- `closure`: 只检查上一轮 OPEN BLOCKER/MAJOR + revision regression。
 
-Check existing capability, ownership, ADD versus REPLACE, removal completeness, compatibility lifetime, parallel implementations, test architecture, new-file necessity, scope expansion, boundaries, and operational verification.
+## Evidence Reuse
 
-Return exactly one verdict:
+先看 PRD `source_revision`, `grounded_commit`, `Evidence Baseline`, Source Anchors。
 
-- `PASS` — ready to converge and approve.
-- `REVISE` — correctable PRD issue.
-- `BLOCKED` — missing evidence or an unresolved decision.
+如果源码/Source Revision 未变化，不重新 full Grounding。独立 = 独立判断，不是重复扫描。
 
-Use `doubt-driven-development` for adversarial questioning; do not edit the PRD.
+## Six Gates
+
+G1 Scope
+G2 Existing Capability / duplicate owner
+G3 Production Ownership
+G4 KEEP/MODIFY/ADD/REPLACE/REMOVE
+G5 API/IPC/Auth/Contract/Security Boundary
+G6 Behaviour -> Acceptance Criteria
+
+Architecture/Plan 分层：exact private file/symbol、hook、fetch option、mock/test file、Todo ownership 不得作为 PRD MAJOR，除非它本身改变 contract/security/唯一 Owner/observable Behaviour。
+
+## Severity / Verdict
+
+- BLOCKER -> BLOCKED
+- MAJOR -> REVISE
+- only MINOR/NOTE -> PASS
+
+## Output
+
+Review 不修改 PRD。PASS -> `smc-prd-converge`; REVISE -> `smc-prd-grounding revision`。
+
+## Artifact Commit Gate
+
+Review 产出 finding 文档或备注时，PRD 仍处于 `REVIEW_REQUIRED`：**禁止 git commit**。待 `smc-prd-converge` 将 status 置为 `APPROVED` 后再按 converge 闸门提交。
