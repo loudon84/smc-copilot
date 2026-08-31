@@ -10,7 +10,7 @@ import {
 } from "../auth/authorized-backend-transport";
 import { readStoredSessionSync } from "../auth/token-store";
 import { hasSkillRunConsumerLock } from "./skill-run-consumer-lock";
-import { parseSkillCatalogTools } from "./skill-run-contract-parser";
+import { mapPublicSkillCatalogTools } from "./skill-run-contract-parser";
 import type {
   SkillCatalogResponse,
   SkillRunArtifactDescriptor,
@@ -104,6 +104,57 @@ export function createSkillRunGatewayClient(
     }
   }
 
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  async function jsonRpc(
+    method: string,
+    params: Record<string, unknown>,
+    options?: { idempotencyKey?: string },
+  ): Promise<{ status: number; result: unknown }> {
+    const res = await transport.authorizedFetch("/api/v1/mcp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      idempotencyKey: options?.idempotencyKey,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: `${method}-${Date.now()}`,
+        method,
+        params,
+      }),
+    });
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      body = null;
+    }
+    if (!res.ok) {
+      const errBody = isRecord(body) ? body : {};
+      const message =
+        (typeof errBody.message === "string" && errBody.message) ||
+        (typeof errBody.error === "string" && errBody.error) ||
+        `MCP ${method} failed with status ${res.status}`;
+      const errorCode =
+        typeof errBody.error_code === "string"
+          ? errBody.error_code
+          : res.status === 409
+            ? "IDEMPOTENCY_CONFLICT"
+            : "START_FAILED";
+      throw new SkillRunGatewayError(message, res.status, errorCode);
+    }
+    if (isRecord(body) && isRecord(body.error)) {
+      const rpcMessage =
+        typeof body.error.message === "string"
+          ? body.error.message
+          : `JSON-RPC ${method} error`;
+      throw new SkillRunGatewayError(rpcMessage, 200, "JSONRPC_ERROR");
+    }
+    const result = isRecord(body) && "result" in body ? body.result : body;
+    return { status: res.status, result };
+  }
+
   return {
     async listCatalog(): Promise<SkillCatalogResponse> {
       assertNotDisposed();
@@ -122,51 +173,21 @@ export function createSkillRunGatewayClient(
       }
 
       try {
-        const res = await transport.authorizedFetch("/api/v1/mcp/tools", {
-          method: "GET",
-        });
-        if (!res.ok) {
-          if (res.status === 401 || res.status === 403) {
-            const unauthorized: SkillCatalogResponse = {
-              status: "unauthorized",
-              tools: [],
-            };
-            cachedCatalogByScope.set(scopeKey, unauthorized);
-            return unauthorized;
-          }
-          const unavailable: SkillCatalogResponse = {
-            status: "backend-unavailable",
-            tools: [],
-          };
-          cachedCatalogByScope.set(scopeKey, unavailable);
-          return unavailable;
-        }
-        const data = (await res.json()) as {
-          tools?: unknown;
-          result?: { tools?: unknown };
-        };
-        const rawTools = Array.isArray(data.tools)
-          ? data.tools
-          : Array.isArray(data.result?.tools)
-            ? data.result.tools
-            : undefined;
-        const parsed = parseSkillCatalogTools(rawTools);
-        if (parsed.status === "contract-unsupported") {
-          const unsupported: SkillCatalogResponse = {
-            status: "contract-unsupported",
-            tools: [],
-            reason: parsed.reason,
-          };
-          cachedCatalogByScope.set(scopeKey, unsupported);
-          return unsupported;
-        }
-        const ready: SkillCatalogResponse = {
-          status: "ready",
-          tools: parsed.tools,
-        };
+        const { result } = await jsonRpc("tools/list", {});
+        const toolsRaw = isRecord(result) && Array.isArray(result.tools) ? result.tools : [];
+        const tools = mapPublicSkillCatalogTools(toolsRaw);
+        const ready: SkillCatalogResponse = { status: "ready", tools };
         cachedCatalogByScope.set(scopeKey, ready);
         return ready;
-      } catch {
+      } catch (err) {
+        if (err instanceof SkillRunGatewayError && (err.status === 401 || err.status === 403)) {
+          const unauthorized: SkillCatalogResponse = {
+            status: "unauthorized",
+            tools: [],
+          };
+          cachedCatalogByScope.set(scopeKey, unauthorized);
+          return unauthorized;
+        }
         const unavailable: SkillCatalogResponse = {
           status: "backend-unavailable",
           tools: [],
@@ -184,45 +205,29 @@ export function createSkillRunGatewayClient(
       assertNotDisposed();
       assertLock();
 
-      const res = await transport.authorizedFetch("/api/v1/mcp/tools/call", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Idempotency-Key": input.idempotencyKey,
-        },
-        body: JSON.stringify({
+      const { result } = await jsonRpc(
+        "tools/call",
+        {
           name: input.toolName,
           arguments: { prompt: input.prompt },
-        }),
-      });
+        },
+        { idempotencyKey: input.idempotencyKey },
+      );
 
-      if (!res.ok) {
-        let errCode = "START_FAILED";
-        let errMsg = `Start failed with status ${res.status}`;
-        try {
-          const body = (await res.json()) as { error?: string; message?: string };
-          errMsg = body.message || body.error || errMsg;
-        } catch {
-          // ignore
-        }
-        throw new SkillRunGatewayError(errMsg, res.status, errCode);
-      }
-
-      const data = (await res.json()) as {
-        run_id?: string;
-        runId?: string;
-        status?: string;
-        event_stream_url?: string;
-      };
-      const runId = data.run_id || data.runId;
+      const data = isRecord(result) ? result : {};
+      const runId =
+        (typeof data.run_id === "string" && data.run_id) ||
+        (typeof data.runId === "string" && data.runId) ||
+        "";
       if (!runId) {
         throw new SkillRunGatewayError("Invalid backend response: missing run_id", 502);
       }
 
       return {
         runId,
-        status: data.status || "starting",
-        eventStreamUrl: data.event_stream_url,
+        status: typeof data.status === "string" ? data.status : "starting",
+        eventStreamUrl:
+          typeof data.event_stream_url === "string" ? data.event_stream_url : undefined,
       };
     },
 

@@ -104,80 +104,34 @@ export function bindPromptFirstTool(
   return { ok: true, tool };
 }
 
-export type ParseSkillCatalogResult =
-  | { status: "ready"; tools: SkillCatalogToolItem[] }
-  | { status: "contract-unsupported"; tools: []; reason: string };
-
-function catalogCallability(
-  interactionMode: unknown,
-): SkillCatalogToolItem["callability"] {
-  if (interactionMode === "form") return "unsupported";
-  if (interactionMode === "chat" || interactionMode == null) return "callable";
-  return "disabled";
-}
-
-/**
- * Main-side Catalog sanitizer. Missing capabilityKind is fail-closed
- * (contract-unsupported), not a guessed Skill/Connector filter.
- */
-export function parseSkillCatalogTools(rawTools: unknown): ParseSkillCatalogResult {
-  if (!Array.isArray(rawTools)) {
-    return {
-      status: "contract-unsupported",
-      tools: [],
-      reason: "Catalog tools array is missing from the provider response.",
-    };
-  }
-  if (rawTools.length === 0) {
-    return { status: "ready", tools: [] };
-  }
-
-  const missingDiscriminator = rawTools.some((item) => {
-    if (!isRecord(item)) return true;
-    return item.capabilityKind !== "skill" && item.capabilityKind !== "connector";
-  });
-  if (missingDiscriminator) {
-    return {
-      status: "contract-unsupported",
-      tools: [],
-      reason:
-        "Catalog items lack a stable Skill discriminator (capabilityKind).",
-    };
-  }
-
-  const tools: SkillCatalogToolItem[] = [];
-  for (const item of rawTools) {
-    if (!isRecord(item) || item.capabilityKind !== "skill") continue;
-    const toolName =
-      typeof item.name === "string"
-        ? item.name.trim()
-        : typeof item.toolName === "string"
-          ? item.toolName.trim()
-          : "";
-    if (!toolName) continue;
+export function mapPublicSkillCatalogTools(rawTools: unknown): SkillCatalogToolItem[] {
+  if (!Array.isArray(rawTools)) return [];
+  const out: SkillCatalogToolItem[] = [];
+  for (const raw of rawTools) {
+    if (!isRecord(raw) || typeof raw.name !== "string" || !raw.name.trim()) {
+      continue;
+    }
+    if (raw.capabilityKind !== "skill") {
+      continue;
+    }
+    const toolName = raw.name.trim();
     const title =
-      typeof item.title === "string" && item.title.trim()
-        ? item.title.trim()
+      typeof raw.title === "string" && raw.title.trim()
+        ? raw.title.trim()
         : toolName;
-    const description =
-      typeof item.description === "string" ? item.description : undefined;
-    const category =
-      typeof item.category === "string"
-        ? item.category
-        : isRecord(item.annotations) && typeof item.annotations.category === "string"
-          ? item.annotations.category
-          : undefined;
-    const inputSchema = isRecord(item.inputSchema) ? item.inputSchema : undefined;
-    tools.push({
+    const interactionMode = raw.interactionMode;
+    const callability: SkillCatalogToolItem["callability"] =
+      interactionMode === "form" ? "unsupported" : "callable";
+    out.push({
       toolName,
       title,
-      description,
-      category,
-      callability: catalogCallability(item.interactionMode),
-      inputSchema,
+      description: typeof raw.description === "string" ? raw.description : undefined,
+      category: typeof raw.category === "string" ? raw.category : undefined,
+      callability,
+      inputSchema: isRecord(raw.inputSchema) ? raw.inputSchema : undefined,
     });
   }
-  return { status: "ready", tools };
+  return out;
 }
 
 export interface ParsedSkillRunEvent {
@@ -226,10 +180,25 @@ export function parseSkillRunEvent(
   eventType: string,
   payload: Record<string, unknown>,
 ): ParsedSkillRunEvent {
-  const eventId = typeof payload.id === "string" ? payload.id : undefined;
-  const eventSeq = typeof payload.seq === "number" ? payload.seq : undefined;
+  const inner = isRecord(payload.payload) ? payload.payload : payload;
+  const eventId =
+    typeof payload.event_id === "string"
+      ? payload.event_id
+      : typeof payload.id === "string"
+        ? payload.id
+        : undefined;
+  const eventSeq =
+    typeof payload.event_seq === "number"
+      ? payload.event_seq
+      : typeof payload.seq === "number"
+        ? payload.seq
+        : undefined;
+  const wireType =
+    typeof payload.event_type === "string" ? payload.event_type : eventType;
 
-  switch (eventType) {
+  switch (wireType) {
+    case "run.created":
+    case "run.progress":
     case "run.started":
     case "run_started":
       return {
@@ -237,6 +206,12 @@ export function parseSkillRunEvent(
         eventSeq,
         phase: "running",
         displayStage: "Executing skill...",
+        text:
+          typeof inner.message === "string"
+            ? inner.message
+            : typeof inner.text === "string"
+              ? inner.text
+              : undefined,
       };
 
     case "run.waiting_approval":
@@ -248,9 +223,10 @@ export function parseSkillRunEvent(
         displayStage: "Waiting for approval...",
       };
 
+    case "run.completed":
     case "run.succeeded":
     case "run_completed": {
-      const artifactsRaw = payload.artifacts;
+      const artifactsRaw = inner.artifacts ?? payload.artifacts;
       const artifacts: SkillRunArtifactDescriptor[] = [];
       if (Array.isArray(artifactsRaw)) {
         for (const item of artifactsRaw) {
@@ -265,11 +241,17 @@ export function parseSkillRunEvent(
         }
       }
       const text =
-        typeof payload.result_text === "string"
-          ? payload.result_text
-          : typeof payload.text === "string"
-          ? payload.text
-          : undefined;
+        typeof inner.text === "string"
+          ? inner.text
+          : typeof inner.result_text === "string"
+            ? inner.result_text
+            : typeof inner.message === "string"
+              ? inner.message
+              : typeof payload.result_text === "string"
+                ? payload.result_text
+                : typeof payload.text === "string"
+                  ? payload.text
+                  : undefined;
 
       return {
         eventId,
@@ -281,6 +263,28 @@ export function parseSkillRunEvent(
       };
     }
 
+    case "assistant.message":
+      return {
+        eventId,
+        eventSeq,
+        phase: "running",
+        text: typeof inner.text === "string" ? inner.text : undefined,
+      };
+
+    case "artifact.persisted": {
+      const artifactId = typeof inner.id === "string" ? inner.id : undefined;
+      const fileName =
+        typeof inner.file_name === "string" ? inner.file_name : undefined;
+      return {
+        eventId,
+        eventSeq,
+        artifacts:
+          artifactId && fileName
+            ? [{ id: artifactId, file_name: fileName }]
+            : undefined,
+      };
+    }
+
     case "run.failed":
     case "run_failed":
       return {
@@ -289,15 +293,21 @@ export function parseSkillRunEvent(
         phase: "failed",
         displayStage: "Skill execution failed",
         errorCode:
-          typeof payload.error_code === "string"
-            ? payload.error_code
-            : "RUN_FAILED",
+          typeof inner.error_code === "string"
+            ? inner.error_code
+            : typeof payload.error_code === "string"
+              ? payload.error_code
+              : "RUN_FAILED",
         errorMessage:
-          typeof payload.error_message === "string"
-            ? payload.error_message
-            : typeof payload.message === "string"
-            ? payload.message
-            : "Skill run failed",
+          typeof inner.error_message === "string"
+            ? inner.error_message
+            : typeof inner.message === "string"
+              ? inner.message
+              : typeof payload.error_message === "string"
+                ? payload.error_message
+                : typeof payload.message === "string"
+                  ? payload.message
+                  : "Skill run failed",
       };
 
     case "run.cancelled":
@@ -309,8 +319,15 @@ export function parseSkillRunEvent(
         displayStage: "Skill execution cancelled",
       };
 
+    case "run.timed_out":
+      return {
+        eventId,
+        eventSeq,
+        phase: "expired",
+        displayStage: "Skill execution failed",
+      };
+
     default:
-      // Unknown event type: fail-soft, advance cursor only
       return {
         eventId,
         eventSeq,

@@ -127,7 +127,8 @@
   transition: all 0.15s ease;
 }
 
-.skill-card:hover:not(:disabled) {
+.skill-card:hover:not(:disabled),
+.skill-card.highlighted:not(:disabled) {
   background: var(--bg-hover, rgba(255, 255, 255, 0.08));
   border-color: var(--accent, #6366f1);
   transform: translateY(-1px);

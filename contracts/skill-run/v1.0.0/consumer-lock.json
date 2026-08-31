@@ -1,0 +1,9 @@
+{
+  "contractName": "SKILL-RUN-CONTRACT",
+  "contractVersion": "1.0.0",
+  "providerRepository": "loudon84/nodeskclaw",
+  "tagName": "skill-run-contract-v1.0.0",
+  "tagTargetCommit": "3e345519bcfa606553893234b59fb607ee57ac8a",
+  "providerSha256sumsPath": "nodeskclaw-backend/contracts/skill-run/v1.0.0/SHA256SUMS",
+  "sha256sumsPath": "SHA256SUMS"
+}

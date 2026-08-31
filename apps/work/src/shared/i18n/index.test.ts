@@ -45,6 +45,16 @@ describe("shared i18n", () => {
     );
   });
 
+  it("falls back to English when zh-CN omits newer skillRun keys", () => {
+    // @lat: [[i18n-tests#Missing non-source keys fall back to English]]
+    expect(t("skillRun.parametersRequired", "zh-CN")).toBe(
+      t("skillRun.parametersRequired", "en"),
+    );
+    expect(t("skillRun.startDisabledFeatureMode", "zh-CN")).toBe(
+      t("skillRun.startDisabledFeatureMode", "en"),
+    );
+  });
+
   it("preserves interpolation placeholders in es", () => {
     expect(t("common.updateAvailable", "es", { version: "1.2.3" })).toBe(
       "Actualizar a v1.2.3",
@@ -62,6 +72,12 @@ describe("shared i18n", () => {
     expect(t("skillRun.runPending", "zh-CN")).toBe("正在提交技能请求...");
     expect(t("skillRun.startDisabledNoLock", "zh-CN")).toBe(
       "缺少契约锁定文件，技能执行已被安全禁用。",
+    );
+    expect(t("skillRun.parametersRequired", "en")).toBe(
+      "This skill requires additional parameters that are not supported yet.",
+    );
+    expect(t("skillRun.startDisabledFeatureMode", "en")).toBe(
+      "Skill Run start is disabled unless feature mode is skill-first.",
     );
   });
 });

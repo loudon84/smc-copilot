@@ -12,9 +12,12 @@ import {
   type SkillRunFeatureMode,
   type SkillRunProjection,
   type SkillRunRetryArtifactDiscoveryInput,
+  type SkillRunSessionModeSnapshot,
   type SkillRunStartInput,
   type SkillRunStartResult,
 } from "../../shared/skill-run";
+import { ensureFreshAccessToken } from "../auth/ensure-access-token";
+import { readStoredSessionSync } from "../auth/token-store";
 import {
   createSkillRunService,
   SkillRunService,
@@ -25,18 +28,92 @@ import {
 } from "./skill-run-continuation";
 import { materializeSkillRunSessionTranscript } from "./skill-run-session-materialize";
 import { upsertSkillRunRemoteArtifact } from "../files/upsert-skill-run-remote-artifact";
+import {
+  getSkillRunSessionMode,
+  setSkillRunSessionMode,
+} from "./skill-run-session-mode-store";
+
+const MAX_PROMPT_LENGTH = 32_000;
+const MAX_TOOL_NAME_LENGTH = 256;
+const MAX_CLIENT_REQUEST_ID_LENGTH = 128;
+const MAX_SESSION_ID_LENGTH = 256;
+const MAX_PROFILE_ID_LENGTH = 128;
 
 let activeService: SkillRunService | null = null;
 let projectionUnsubscribe: (() => void) | null = null;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+async function requireAuthSession(): Promise<{ userId: string }> {
+  await ensureFreshAccessToken();
+  const session = readStoredSessionSync();
+  return { userId: session?.user?.id ?? "unknown" };
+}
+
+function assertAuthGeneration(
+  authGeneration: string | undefined,
+  userId: string,
+): void {
+  if (!authGeneration || userId === "unknown") return;
+  const expected = [`user:${userId}`, userId];
+  if (!expected.includes(authGeneration)) {
+    throw new Error("Auth generation mismatch");
+  }
+}
+
+function validateStartInput(value: unknown): SkillRunStartInput {
+  if (!isRecord(value)) throw new Error("Invalid SkillRunStartInput");
+  const requiredStrings = [
+    "toolName",
+    "prompt",
+    "clientRequestId",
+    "sessionId",
+    "profileId",
+    "authGeneration",
+  ] as const;
+  for (const key of requiredStrings) {
+    if (typeof value[key] !== "string" || !String(value[key]).trim()) {
+      throw new Error(`Invalid SkillRunStartInput.${key}`);
+    }
+  }
+  const toolName = String(value.toolName).trim();
+  const prompt = String(value.prompt);
+  const clientRequestId = String(value.clientRequestId).trim();
+  const sessionId = String(value.sessionId).trim();
+  const profileId = String(value.profileId).trim();
+  const authGeneration = String(value.authGeneration).trim();
+
+  if (toolName.length > MAX_TOOL_NAME_LENGTH) {
+    throw new Error("Invalid SkillRunStartInput.toolName");
+  }
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    throw new Error("Invalid SkillRunStartInput.prompt");
+  }
+  if (clientRequestId.length > MAX_CLIENT_REQUEST_ID_LENGTH) {
+    throw new Error("Invalid SkillRunStartInput.clientRequestId");
+  }
+  if (sessionId.length > MAX_SESSION_ID_LENGTH) {
+    throw new Error("Invalid SkillRunStartInput.sessionId");
+  }
+  if (profileId.length > MAX_PROFILE_ID_LENGTH) {
+    throw new Error("Invalid SkillRunStartInput.profileId");
+  }
+
+  return {
+    toolName,
+    prompt,
+    clientRequestId,
+    sessionId,
+    profileId,
+    authGeneration,
+  };
+}
+
 function broadcastProjection(projection: SkillRunProjection): void {
-  // 1. Continuation persistence
   upsertSkillRunContinuationProjection(projection);
-
-  // 2. Materialize transcript bubble on terminal/result
   materializeSkillRunSessionTranscript(projection);
-
-  // 3. Forward to all renderer windows
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send(
@@ -50,6 +127,7 @@ function broadcastProjection(projection: SkillRunProjection): void {
 export function getSkillRunService(): SkillRunService {
   if (!activeService) {
     activeService = createSkillRunService({
+      onPersistContinuation: upsertSkillRunContinuationProjection,
       onUpsertArtifact: async (input) => {
         upsertSkillRunRemoteArtifact(input);
       },
@@ -84,6 +162,7 @@ export function registerSkillRunIpc(): () => void {
     event: IpcMainInvokeEvent,
   ): Promise<SkillCatalogResponse> => {
     assertSender(event);
+    await requireAuthSession();
     const service = getSkillRunService();
     return service.listCatalog();
   };
@@ -92,6 +171,7 @@ export function registerSkillRunIpc(): () => void {
     event: IpcMainInvokeEvent,
   ): Promise<SkillCatalogResponse> => {
     assertSender(event);
+    await requireAuthSession();
     const service = getSkillRunService();
     return service.refreshCatalog();
   };
@@ -101,18 +181,9 @@ export function registerSkillRunIpc(): () => void {
     input: unknown,
   ): Promise<SkillRunStartResult> => {
     assertSender(event);
-    if (!input || typeof input !== "object") {
-      throw new Error("Invalid SkillRunStartInput");
-    }
-    const raw = input as Record<string, unknown>;
-    const sanitized: SkillRunStartInput = {
-      toolName: String(raw.toolName || ""),
-      prompt: String(raw.prompt || ""),
-      clientRequestId: String(raw.clientRequestId || ""),
-      sessionId: String(raw.sessionId || ""),
-      profileId: String(raw.profileId || ""),
-      authGeneration: raw.authGeneration ? String(raw.authGeneration) : undefined,
-    };
+    const { userId } = await requireAuthSession();
+    const sanitized = validateStartInput(input);
+    assertAuthGeneration(sanitized.authGeneration, userId);
     const service = getSkillRunService();
     return service.start(sanitized);
   };
@@ -122,14 +193,16 @@ export function registerSkillRunIpc(): () => void {
     input: unknown,
   ): Promise<SkillRunCancelResult> => {
     assertSender(event);
-    if (!input || typeof input !== "object") {
+    await requireAuthSession();
+    if (!isRecord(input)) {
       throw new Error("Invalid SkillRunCancelInput");
     }
-    const raw = input as Record<string, unknown>;
-    const sanitized: SkillRunCancelInput = {
-      clientRequestId: String(raw.clientRequestId || ""),
-      sessionId: String(raw.sessionId || ""),
-    };
+    const clientRequestId = String(input.clientRequestId || "").trim();
+    const sessionId = String(input.sessionId || "").trim();
+    if (!clientRequestId || !sessionId) {
+      throw new Error("Invalid SkillRunCancelInput");
+    }
+    const sanitized: SkillRunCancelInput = { clientRequestId, sessionId };
     const service = getSkillRunService();
     return service.cancel(sanitized);
   };
@@ -165,7 +238,10 @@ export function registerSkillRunIpc(): () => void {
     sessionId: unknown,
   ): Promise<SkillRunProjection[]> => {
     assertSender(event);
-    return rehydrateSkillRunContinuationsForSession(String(sessionId || ""));
+    await requireAuthSession();
+    const trimmed = String(sessionId || "").trim();
+    if (!trimmed) return [];
+    return rehydrateSkillRunContinuationsForSession(trimmed);
   };
 
   const retryArtifactDiscoveryHandler = async (
@@ -173,16 +249,55 @@ export function registerSkillRunIpc(): () => void {
     input: unknown,
   ): Promise<SkillRunProjection | null> => {
     assertSender(event);
-    if (!input || typeof input !== "object") {
+    await requireAuthSession();
+    if (!isRecord(input)) {
       throw new Error("Invalid SkillRunRetryArtifactDiscoveryInput");
     }
-    const raw = input as Record<string, unknown>;
+    const clientRequestId = String(input.clientRequestId || "").trim();
+    const sessionId = String(input.sessionId || "").trim();
+    if (!clientRequestId || !sessionId) {
+      throw new Error("Invalid SkillRunRetryArtifactDiscoveryInput");
+    }
     const sanitized: SkillRunRetryArtifactDiscoveryInput = {
-      clientRequestId: String(raw.clientRequestId || ""),
-      sessionId: String(raw.sessionId || ""),
+      clientRequestId,
+      sessionId,
     };
     const service = getSkillRunService();
     return service.retryArtifactDiscovery(sanitized);
+  };
+
+  const getSessionModeHandler = async (
+    event: IpcMainInvokeEvent,
+    sessionId: unknown,
+  ): Promise<SkillRunSessionModeSnapshot | null> => {
+    assertSender(event);
+    const trimmed = String(sessionId || "").trim();
+    if (!trimmed) return null;
+    return getSkillRunSessionMode(trimmed);
+  };
+
+  const setSessionModeHandler = async (
+    event: IpcMainInvokeEvent,
+    input: unknown,
+  ): Promise<void> => {
+    assertSender(event);
+    if (!isRecord(input)) throw new Error("Invalid session mode input");
+    const sessionId = String(input.sessionId || "").trim();
+    const toolName = String(input.toolName || "").trim();
+    const toolTitle = String(input.toolTitle || "").trim();
+    const updatedAt = String(input.updatedAt || "").trim();
+    if (!sessionId || !toolName || !toolTitle || !updatedAt) {
+      throw new Error("Invalid session mode input");
+    }
+    if (input.executionMode !== "skill-run") {
+      throw new Error("Invalid session mode executionMode");
+    }
+    setSkillRunSessionMode(sessionId, {
+      executionMode: "skill-run",
+      toolName,
+      toolTitle,
+      updatedAt,
+    });
   };
 
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG, listHandler);
@@ -194,6 +309,8 @@ export function registerSkillRunIpc(): () => void {
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.LIST_PROJECTIONS, listProjectionsHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.REHYDRATE_SESSION, rehydrateSessionHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY, retryArtifactDiscoveryHandler);
+  ipcMain.handle(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE, getSessionModeHandler);
+  ipcMain.handle(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE, setSessionModeHandler);
 
   return () => {
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG);
@@ -205,5 +322,7 @@ export function registerSkillRunIpc(): () => void {
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.LIST_PROJECTIONS);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.REHYDRATE_SESSION);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY);
+    ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE);
+    ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE);
   };
 }

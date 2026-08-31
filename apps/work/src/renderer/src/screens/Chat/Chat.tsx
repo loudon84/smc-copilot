@@ -58,6 +58,7 @@ import {
   SkillSelectionBar,
   SkillRunStatusBar,
   getLatestSkillRunProjectionForSession,
+  getSkillRunCatalogState,
   initSkillRunRendererListener,
   subscribeSkillRunCatalog,
 } from "../../modules/skill-run";
@@ -66,6 +67,7 @@ import type {
   SkillRunProjection,
   SkillRunStartInput,
 } from "../../../../shared/skill-run";
+import { isSkillRunTerminalPhase } from "../../../../shared/skill-run";
 import type { ChatExecutionMode } from "../Layout/chatRuns";
 import "../../modules/expert/expert.css";
 import "../../modules/expert/expert-artifacts.css";
@@ -203,9 +205,19 @@ function Chat({
     initialMessages ?? [],
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
+  const isSkillRunMode = executionMode === "skill-run";
+  const skillRunBusy = useMemo(
+    () =>
+      activeSkillProjection != null &&
+      !isSkillRunTerminalPhase(activeSkillProjection.phase),
+    [activeSkillProjection],
+  );
+  const chatBusy = isLoading || skillRunBusy;
+
   useEffect(() => {
-    onLoadingChange?.(runId, isLoading);
-  }, [runId, isLoading, onLoadingChange]);
+    onLoadingChange?.(runId, chatBusy);
+  }, [runId, chatBusy, onLoadingChange]);
 
   // Play a notification sound when the agent finishes responding
   const prevLoadingRef = useRef(isLoading);
@@ -403,8 +415,27 @@ function Chat({
   /** Client request ids submitted from this Chat instance — live transcript only. */
   const liveExpertTranscriptIdsRef = useRef(new Set<string>());
   const [selectedSkill, setSelectedSkill] = useState<SkillCatalogToolItem | null>(null);
-  const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
-  const isSkillRunMode = executionMode === "skill-run";
+
+  useEffect(() => {
+    const sessionId = hermesSessionId || initialSessionId;
+    if (!sessionId || !isSkillRunMode || !window.hermesAPI.skillRun?.getSessionMode) {
+      return;
+    }
+    void window.hermesAPI.skillRun.getSessionMode(sessionId).then((mode) => {
+      if (!mode) return;
+      const catalog = getSkillRunCatalogState();
+      const tool = catalog.tools.find((entry) => entry.toolName === mode.toolName);
+      if (tool) {
+        setSelectedSkill(tool);
+        return;
+      }
+      setSelectedSkill({
+        toolName: mode.toolName,
+        title: mode.toolTitle,
+        callability: "callable",
+      });
+    });
+  }, [hermesSessionId, initialSessionId, isSkillRunMode]);
 
   useEffect(() => {
     initSkillRunRendererListener();
@@ -1176,7 +1207,12 @@ function Chat({
   );
 
   const submitSkill = useCallback(
-    async (request: { toolName: string; prompt: string; clientRequestId: string }) => {
+    async (request: {
+      toolName: string;
+      prompt: string;
+      clientRequestId: string;
+      toolTitle?: string;
+    }) => {
       try {
         let sessionId = hermesSessionId || initialSessionId || "";
         if (!sessionId) {
@@ -1194,17 +1230,27 @@ function Chat({
         const result = await window.hermesAPI.skillRun.start(input);
         if (!result.accepted) {
           toast.error(result.message || "Skill run rejected");
+          return;
         }
+        const title =
+          request.toolTitle || selectedSkill?.title || request.toolName;
+        await window.hermesAPI.skillRun.setSessionMode({
+          sessionId,
+          executionMode: "skill-run",
+          toolName: request.toolName,
+          toolTitle: title,
+          updatedAt: new Date().toISOString(),
+        });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Skill request failed");
       }
     },
-    [authGeneration, hermesSessionId, initialSessionId, profile],
+    [authGeneration, hermesSessionId, initialSessionId, profile, selectedSkill],
   );
 
   // Drain queued messages one at a time when the agent finishes.
   useEffect(() => {
-    if (isLoading) return;
+    if (chatBusy) return;
     const next = queueRef.current.shift();
     if (!next) return;
     setQueuedMessages([...queueRef.current]);
@@ -1226,7 +1272,7 @@ function Chat({
       queueRef.current.unshift(next);
       setQueuedMessages([...queueRef.current]);
     });
-  }, [isLoading, authGeneration, submitExpert, submitSkill]);
+  }, [chatBusy, authGeneration, submitExpert, submitSkill]);
 
   const handleRemoveQueued = useCallback((index: number) => {
     const item = queueRef.current[index];
@@ -1235,9 +1281,16 @@ function Chat({
         clientRequestId: item.expertRequest.clientRequestId,
       });
     }
+    if (item?.skillRequest) {
+      const sessionId = hermesSessionId || initialSessionId || "";
+      void window.hermesAPI.skillRun.cancel({
+        clientRequestId: item.skillRequest.clientRequestId,
+        sessionId,
+      });
+    }
     queueRef.current.splice(index, 1);
     setQueuedMessages([...queueRef.current]);
-  }, []);
+  }, [hermesSessionId, initialSessionId]);
 
   const handleSubmitOrQueue = useCallback(
     (text: string, attachments: Attachment[]) => {
@@ -1275,8 +1328,9 @@ function Chat({
           toolName: selectedSkill.toolName,
           prompt: text,
           clientRequestId,
+          toolTitle: selectedSkill.title,
         };
-        if (isLoading) {
+        if (chatBusy) {
           queueRef.current.push({ text, attachments: [], skillRequest: request });
           setQueuedMessages([...queueRef.current]);
           return;
@@ -1322,7 +1376,7 @@ function Chat({
         void submitExpert(request);
         return;
       }
-      if (isLoading) {
+      if (chatBusy) {
         queueRef.current.push({ text, attachments });
         setQueuedMessages([...queueRef.current]);
         return;
@@ -1331,16 +1385,20 @@ function Chat({
     },
     [
       buildExpertRequest,
+      chatBusy,
       expertModeActive,
       expertProjections,
       expertSelection.expertSlug,
       expertSelection.skillName,
       gatewayStatus,
-      isLoading,
+      isSkillRunMode,
       runtimeReady,
       runtime?.error,
       selectedCallability,
+      selectedSkill,
       submitExpert,
+      submitSkill,
+      t,
     ],
   );
 
@@ -1568,7 +1626,19 @@ function Chat({
           <div className="chat-messages-scroll" ref={containerRef}>
             {isSkillRunMode && !selectedSkill ? (
               <SkillCatalogPanel
-                onSelectSkill={(tool) => setSelectedSkill(tool)}
+                onSelectSkill={(tool) => {
+                  setSelectedSkill(tool);
+                  const sessionId = hermesSessionId || initialSessionId;
+                  if (sessionId) {
+                    void window.hermesAPI.skillRun.setSessionMode({
+                      sessionId,
+                      executionMode: "skill-run",
+                      toolName: tool.toolName,
+                      toolTitle: tool.title,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }
+                }}
               />
             ) : messages.length === 0 ? (
               <ChatEmptyState onSelectSuggestion={handleSuggestion} />
@@ -1716,7 +1786,7 @@ function Chat({
         />
         <ChatInput
           ref={chatInputRef}
-          isLoading={isLoading}
+          isLoading={chatBusy}
           hasSession={!!hermesSessionId}
           sessionId={hermesSessionId}
           remoteMode={remoteMode}

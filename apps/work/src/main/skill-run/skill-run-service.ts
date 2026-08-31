@@ -11,6 +11,7 @@ import {
   SkillRunGatewayError,
 } from "./skill-run-gateway-client";
 import {
+  bindPromptFirstTool,
   parseSkillRunEvent,
   parseSkillRunStatusToPhase,
 } from "./skill-run-contract-parser";
@@ -102,6 +103,8 @@ function defaultDisplayStage(phase: SkillRunLocalPhase): string {
 export interface CreateSkillRunServiceOptions {
   gatewayClient?: SkillRunGatewayClient;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  getFeatureMode?: () => SkillRunFeatureMode;
+  onPersistContinuation?: (projection: SkillRunProjection) => void;
   onUpsertArtifact?: (input: {
     meta: SkillRunArtifactDescriptor;
     runId: string;
@@ -115,6 +118,8 @@ export function createSkillRunService(
   options: CreateSkillRunServiceOptions = {},
 ): SkillRunService {
   const gateway = options.gatewayClient ?? createSkillRunGatewayClient();
+  const getMode = options.getFeatureMode ?? getSkillRunFeatureMode;
+  const persistContinuation = options.onPersistContinuation;
   const sleep =
     options.sleep ??
     ((ms, signal) =>
@@ -176,6 +181,32 @@ export function createSkillRunService(
 
     emit(next);
     return next;
+  }
+
+  function hasActiveNonTerminalRun(sessionId: string): boolean {
+    for (const run of runs.values()) {
+      if (
+        run.request.sessionId === sessionId &&
+        !run.terminalConfirmed &&
+        !isSkillRunTerminalPhase(run.projection.phase)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function rejectStart(
+    input: SkillRunStartInput,
+    errorCode: string,
+    message: string,
+  ): SkillRunStartResult {
+    return {
+      accepted: false,
+      errorCode,
+      message,
+      clientRequestId: input.clientRequestId,
+    };
   }
 
   async function discoverArtifacts(run: ActiveRun, runId: string): Promise<void> {
@@ -278,7 +309,7 @@ export function createSkillRunService(
 
           for (const part of parts) {
             const parsed = parseRunSseBlock(part);
-            if (!parsed.event && !parsed.data) continue;
+            if (!parsed || !parsed.data) continue;
 
             if (parsed.id && run.seenEventIds.has(parsed.id)) {
               continue;
@@ -289,14 +320,12 @@ export function createSkillRunService(
 
             let payload: Record<string, unknown> = {};
             try {
-              if (parsed.data) {
-                payload = JSON.parse(parsed.data) as Record<string, unknown>;
-              }
+              payload = JSON.parse(parsed.data) as Record<string, unknown>;
             } catch {
               payload = { text: parsed.data };
             }
 
-            const event = parseSkillRunEvent(parsed.event, payload);
+            const event = parseSkillRunEvent(parsed.eventType, payload);
             if (parsed.id) {
               event.eventId = parsed.id;
             }
@@ -354,26 +383,33 @@ export function createSkillRunService(
 
     async start(input: SkillRunStartInput): Promise<SkillRunStartResult> {
       if (disposed) {
-        return {
-          accepted: false,
-          errorCode: "SERVICE_DISPOSED",
-          message: "SkillRunService is disposed",
-          clientRequestId: input.clientRequestId,
-        };
+        return rejectStart(input, "SERVICE_DISPOSED", "SkillRunService is disposed");
       }
 
-      // Consumer lock gate check: If no lock is available, fail closed immediately
+      if (getMode() !== "skill-first") {
+        return rejectStart(
+          input,
+          "START_DISABLED_FEATURE_MODE",
+          "Skill Run start is disabled unless feature mode is skill-first.",
+        );
+      }
+
       if (!gateway.hasConsumerLock()) {
-        return {
-          accepted: false,
-          errorCode: "START_DISABLED_NO_LOCK",
-          message:
-            "Skill Run Consumer Contract lock is not available; execution is disabled.",
-          clientRequestId: input.clientRequestId,
-        };
+        return rejectStart(
+          input,
+          "START_DISABLED_NO_LOCK",
+          "Skill Run Consumer Contract lock is not available; execution is disabled.",
+        );
       }
 
-      // Memory idempotency check
+      if (hasActiveNonTerminalRun(input.sessionId)) {
+        return rejectStart(
+          input,
+          "RUN_ALREADY_ACTIVE",
+          "A skill run is already active for this session.",
+        );
+      }
+
       const existing = runs.get(input.clientRequestId);
       if (existing) {
         return {
@@ -382,11 +418,30 @@ export function createSkillRunService(
         };
       }
 
+      const catalog = await gateway.listCatalog();
+      if (catalog.status !== "ready") {
+        return rejectStart(
+          input,
+          "CATALOG_UNAVAILABLE",
+          "Skill catalog is not ready for execution.",
+        );
+      }
+
+      const bindResult = bindPromptFirstTool(
+        input.toolName,
+        input.prompt,
+        catalog.tools,
+      );
+      if (!bindResult.ok) {
+        return rejectStart(input, bindResult.errorCode, bindResult.message);
+      }
+
+      const validatedToolName = bindResult.tool.toolName;
       const createdAt = nowIso();
       const initialProjection: SkillRunProjection = {
         clientRequestId: input.clientRequestId,
         providerRunId: null,
-        toolName: input.toolName,
+        toolName: validatedToolName,
         promptSummary: input.prompt.slice(0, 120),
         sessionId: input.sessionId,
         profileId: input.profileId,
@@ -400,7 +455,7 @@ export function createSkillRunService(
       };
 
       const activeRun: ActiveRun = {
-        request: input,
+        request: { ...input, toolName: validatedToolName },
         projection: initialProjection,
         abort: new AbortController(),
         pollTimer: null,
@@ -409,14 +464,14 @@ export function createSkillRunService(
       };
 
       runs.set(input.clientRequestId, activeRun);
+      persistContinuation?.(initialProjection);
       emit(initialProjection);
 
-      // Asynchronous start flow
       void (async () => {
         try {
           updateProjection(activeRun, { phase: "starting" });
           const accepted = await gateway.callSkill({
-            toolName: input.toolName,
+            toolName: validatedToolName,
             prompt: input.prompt,
             idempotencyKey: input.clientRequestId,
           });

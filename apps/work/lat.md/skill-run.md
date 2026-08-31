@@ -2,19 +2,9 @@
 
 This document describes the Checkpoint C (P0 hardening) architecture for Skill Run integration in SMC Copilot Work.
 
-## M0 Consumer Lock
-
-Work pins SKILL-RUN-CONTRACT v1.2.0 the same way Expert pins v1.0.2: `contracts/skill-run/v1.2.0/consumer-lock.json` plus a verbatim `SHA256SUMS` copy. Schema files stay in the Provider repository; Work does not become a second contract SOT.
-
-`hasSkillRunConsumerLock()` is true only when the lock JSON matches `WORK_SKILL_RUN_CONTRACT_VERSION` and `SHA256SUMS` lists the P0 catalog/call/event/artifact/fixture entries. Production `tools/call` and `/api/v1/runs/*` remain gated on this reader. Feature mode still defaults to `expert-compat`, so new starts stay disabled until skill-first is enabled.
-
-Catalog list sanitizes Provider tools through `parseSkillCatalogTools`: items without `capabilityKind` yield `contract-unsupported`; `connector` items are dropped; only `skill` items become Renderer DTOs.
-
-Provider gaps that remain outside this lock (Public Run view still uses internal `RunRecord`, no separate Result/Artifact-list envelope, annotated git tag may still be unpublished) do not authorize Work to invent replacement schemas.
-
 ## Checkpoint C Scope & Boundaries
 
-Checkpoint C hardens feature-mode, prompt-first bind, single-active run, persist-before-call, IPC, session restore, and Catalog keyboard access.
+Checkpoint C hardens Skill Run start gates, prompt-first validation, single-active-run, persistence, IPC, session restore, and catalog keyboard access.
 
 1. **Feature mode gate**:
    - `SkillRunService.start` rejects new runs unless `getSkillRunFeatureMode()` is `skill-first`.
@@ -46,18 +36,20 @@ Checkpoint C hardens feature-mode, prompt-first bind, single-active run, persist
 7. **Catalog a11y**:
    - `SkillCatalogPanel` supports Arrow/Enter/Esc keyboard navigation and searches category text.
 
-## Still Out (unchanged from B)
+## M0 Consumer Lock (closed)
 
-These items stay out of the current Work lock slice and belong to later milestones or the Provider Owner.
+Work pins `SKILL-RUN-CONTRACT v1.0.0` at `contracts/skill-run/v1.0.0/` (`consumer-lock.json` + LF `SHA256SUMS`). `hasSkillRunConsumerLock()` requires both files. Gateway Catalog/start uses `POST /api/v1/mcp` JSON-RPC (`tools/list`, `tools/call`) with `X-Idempotency-Key`. Parser consumes PublicRunEvent types (`run.completed`, `event_id` / `event_seq`). Production start still requires feature mode `skill-first` (default remains `expert-compat`).
 
+## Still Out
+
+- Live backend Catalog → Run → Artifact E2E against a deployed Gateway
 - M5 production default skill-first, telemetry dashboard
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
 - v4.2 Expert entry removal
-- Provider-side Public Run view / Result envelope / annotated git tag publication (external Owner)
 
 ## Cross References
 
-Related architecture pages for Skill Run, Expert compatibility, and File Platform.
+Related architecture docs for Skill Run integration, Expert compatibility, and File Platform artifacts.
 
 - [[skill-run-integration]] — Approved target architecture and roadmap.
 - [[expert-execution]] — Expert compatibility client and lifecycle boundaries.

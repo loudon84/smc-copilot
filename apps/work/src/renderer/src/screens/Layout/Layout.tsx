@@ -611,8 +611,24 @@ function Layout(): React.JSX.Element {
         const items = (await window.hermesAPI.getSessionMessages(
           sessionId,
         )) as DbHistoryItem[];
-        const run = mintRun(activeProfile, dbItemsToChatMessages(items));
+        let executionMode: "local-chat" | "skill-run" = "local-chat";
+        let sessionTitle: string | undefined;
+        if (window.hermesAPI.skillRun?.getSessionMode) {
+          const mode = await window.hermesAPI.skillRun.getSessionMode(sessionId);
+          if (mode?.executionMode === "skill-run") {
+            executionMode = "skill-run";
+            sessionTitle = mode.toolTitle;
+          }
+        }
+        const run = mintRun(
+          activeProfile,
+          dbItemsToChatMessages(items),
+          executionMode,
+        );
         run.sessionId = sessionId;
+        if (sessionTitle) {
+          run.title = sessionTitle;
+        }
         setRuns(
           (prev) => openSessionRunTransition(prev, activeRunId, run).runs,
         );

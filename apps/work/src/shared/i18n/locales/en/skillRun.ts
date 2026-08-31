@@ -5,7 +5,7 @@ export default {
   categoryAll: "All",
   loading: "Loading skill catalog...",
   contractUnsupported: "Contract Unsupported",
-  contractUnsupportedNotice: "Skill Run Consumer Contract lock is not available.",
+  contractUnsupportedNotice: "Skill Run Consumer Contract lock is not available for Checkpoint A/B.",
   unauthorized: "Unauthorized",
   unauthorizedNotice: "Please login to access skills.",
   backendUnavailable: "Backend Unavailable",

@@ -59,8 +59,10 @@ describe("chat run profile transitions", () => {
       {
         runId: "run-00000000-0000-4000-8000-000000000001",
         profile: "alfie",
+        executionMode: "local-chat",
         sessionId: null,
         loading: false,
+        seed: undefined,
       },
     ]);
     randomUUID.mockRestore();
@@ -103,6 +105,24 @@ describe("chat run profile transitions", () => {
       seed: undefined,
     });
     randomUUID.mockRestore();
+  });
+
+  it("opens a saved session with skill-run execution mode preserved", () => {
+    const scratch = run("run-scratch", "test-writer", {
+      executionMode: "skill-run",
+    });
+    const saved = run("run-saved", "test-writer", {
+      executionMode: "skill-run",
+      sessionId: "session-saved",
+      title: "Calculator",
+    });
+
+    const next = openSessionRunTransition([scratch], "run-scratch", saved);
+
+    expect(next.activeRunId).toBe("run-saved");
+    expect(next.runs).toHaveLength(1);
+    expect(next.runs[0]?.executionMode).toBe("skill-run");
+    expect(next.runs[0]?.title).toBe("Calculator");
   });
 
   it("replaces the active same-profile scratch run when opening a session", () => {

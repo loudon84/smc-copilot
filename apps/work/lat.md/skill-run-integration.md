@@ -23,9 +23,9 @@ The architecture extends existing owners and adds one dedicated Main lifecycle o
 
 ## Provider contract gate
 
-Work pins SKILL-RUN-CONTRACT v1.2.0 with `consumer-lock.json` and `SHA256SUMS`. Catalog requires `capabilityKind`. `tools/call` also needs skill-first mode.
+Real Skill Run start stays disabled until Work locks an immutable tagged contract that is sufficient for deterministic parsing and security enforcement.
 
-Remaining Provider gaps (Public Run view still ships internal `RunRecord`, no separate Result/Artifact-list envelope, annotated git tag publication) stay with the Provider Owner. Work does not invent replacement schemas.
+The gate requires a Skill-only Catalog discriminator, Public Run view, Result and Artifact envelopes, event discriminated union, SSE auth/replay semantics, idempotency semantics, endpoint/error fixtures, and later Approval or Attachment contracts before those controls are enabled.
 
 ## Delivery sequence
 

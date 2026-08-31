@@ -634,6 +634,7 @@ export function t(
   lang: AppLocale = locale,
   options?: Record<string, unknown>,
 ): string {
+  // @lat: [[i18n#English-only authoring constraint]]
   const translated = readKey(resources[lang]?.translation, key);
   const fallback = readKey(resources[FALLBACK_LOCALE].translation, key);
   const base = translated ?? fallback ?? key;

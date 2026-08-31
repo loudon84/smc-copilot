@@ -5,7 +5,7 @@
  */
 
 export const WORK_SKILL_RUN_CONTRACT_NAME = "WORK-SKILL-RUN-CONTRACT";
-export const WORK_SKILL_RUN_CONTRACT_VERSION = "1.2.0";
+export const WORK_SKILL_RUN_CONTRACT_VERSION = "1.0.0";
 
 export type SkillRunFeatureMode =
   | "expert-compat"

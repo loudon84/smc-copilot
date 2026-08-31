@@ -1,5 +1,6 @@
 import type { AppLocale } from "./types";
 
+// @lat: [[i18n#Source and fallback locales]]
 export const SOURCE_LOCALE: AppLocale = "en";
 export const FALLBACK_LOCALE: AppLocale = "en";
 export const DEFAULT_ACTIVE_LOCALE: AppLocale = "en";
