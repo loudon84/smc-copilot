@@ -1,0 +1,17 @@
+---
+description: Work i18n — English source locale only during feature implementation
+globs: apps/work/**
+alwaysApply: false
+---
+
+# Work i18n source-locale-only
+
+During feature implementation, create or edit **only** `apps/work/src/shared/i18n/locales/en/**`.
+
+- Do not create, copy, or machine-translate `locales/zh-CN`, `locales/ja`, or any other non-English package in the same change.
+- Missing keys fall back to English via `FALLBACK_LOCALE` / `t()`.
+- Other languages are translated **later**, by an administrator, after English copy is inspected — in a separate change that does not edit `locales/en`.
+- New namespace: add `locales/en/<ns>.ts` and wire it in `index.ts`. Other locales may omit the namespace or alias the English module.
+- Tests must assert English text and English fallback, not a newly generated non-English string.
+
+See `apps/work/lat.md/i18n.md`. Guard: `npm run check:i18n-source-locale-only`.

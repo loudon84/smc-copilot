@@ -2,6 +2,7 @@
 
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
 - Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
+- i18n: add or change UI strings only in `src/shared/i18n/locales/en/**`. Do not create or edit other locale packages during feature work. Other languages are translated later by an administrator after English review. See [[i18n]].
 
 # Post-task checklist (REQUIRED — do not skip)
 

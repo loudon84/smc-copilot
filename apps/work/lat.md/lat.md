@@ -42,3 +42,5 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[expert-execution-tests]] — unit/component coverage for Gateway client, run lifecycle, IPC validation, continuation, SSE framing, and minimum-stage UI.
 - [[skill-run]] — Checkpoint B Skill Run architecture: lifecycle coordinator, SSE/poll, continuation, File Platform remote identity, and fail-closed M0 gate.
 - [[skill-run-integration]] — approved target architecture and gated roadmap for the Layout-level Skill mode, Main-owned Run lifecycle, and File Platform output path.
+- [[i18n]] — English source locale, fallback, and the ban on creating non-English locale packages during feature implementation.
+- [[i18n-tests]] — classifier and live git coverage for the English-only locale authoring constraint.

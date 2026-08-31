@@ -36,13 +36,30 @@ Checkpoint C hardens Skill Run start gates, prompt-first validation, single-acti
 7. **Catalog a11y**:
    - `SkillCatalogPanel` supports Arrow/Enter/Esc keyboard navigation and searches category text.
 
-## M0 Consumer Lock (closed)
+## M0 Provider Contract Bundle (pending re-acceptance)
 
-Work pins `SKILL-RUN-CONTRACT v1.0.0` at `contracts/skill-run/v1.0.0/` (`consumer-lock.json` + LF `SHA256SUMS`). `hasSkillRunConsumerLock()` requires both files. Gateway Catalog/start uses `POST /api/v1/mcp` JSON-RPC (`tools/list`, `tools/call`) with `X-Idempotency-Key`. Parser consumes PublicRunEvent types (`run.completed`, `event_id` / `event_seq`). Production start still requires feature mode `skill-first` (default remains `expert-compat`).
+Provider Owner must deliver a complete immutable Contract Bundle; the current lock and checksum list establish release identity only and do not close M0 alone.
+
+Work may consume only `contracts/skill-run/<version>/` Bundle contents: lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. Work never scans Provider source, branches, checkout, Agent routes, or databases to infer missing requirements. `hasSkillRunConsumerLock()` currently checks `consumer-lock.json` + LF `SHA256SUMS`; it must evolve to validate the full Bundle before production start. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`; production start also requires feature mode `skill-first` (default remains `expert-compat`).
+
+## Checkpoint B Live / Fixture E2E
+
+Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:skill-run-e2e` (or vitest with `--pool=threads --maxWorkers=1`).
+
+- **CI fixture (blocking):** `fetchImpl` HTTP replay through real `createSkillRunGatewayClient` + `createSkillRunService` covers Catalog → start → SSE/poll → result → artifacts → rehydrate (zero second `tools/call`), plus negatives: unauthorized catalog, unpublished tool, SSE reconnect + `Last-Event-ID`, idempotency key replay, cancel, artifact discovery failure keeping `succeeded`, unknown event fail-soft.
+- **Live (env-gated):** `describe.skipIf` unless `SMC_SKILL_RUN_E2E=1`. Required env (never commit secrets):
+  - `SMC_SKILL_RUN_E2E_BACKEND_URL`
+  - `SMC_SKILL_RUN_E2E_ACCESS_TOKEN`
+  - `SMC_SKILL_RUN_E2E_TOOL_NAME`
+  - `SMC_SKILL_RUN_E2E_PROMPT` (optional short prompt)
+- **AC-12 evidence grading:** fixture green proves same-process idempotency / restart without second `tools/call`. **Cross-end** “only one Provider Run” is **proven only when live suite actually runs**. If live is skipped → Completion = `IMPLEMENTED_NOT_PROVEN` for AC-12 cross-end; do not claim proven from fixture alone.
+- Evidence under `artifacts/work-v4.0.1-checkpoint-b-live-e2e/` must not contain JWT, absolute backend URLs, prompt全文, or artifact bytes.
 
 ## Still Out
 
-- Live backend Catalog → Run → Artifact E2E against a deployed Gateway
+The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
+
+- Live E2E remains optional until a deployed NoDeskClaw backend + published skill are available in CI
 - M5 production default skill-first, telemetry dashboard
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
 - v4.2 Expert entry removal
