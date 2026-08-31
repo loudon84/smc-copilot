@@ -115,4 +115,49 @@ describe("desktop session continuations", () => {
       "assistant",
     ]);
   });
+
+  it("normalizes and preserves skill-run continuation items", () => {
+    const items = normalizeContinuationItems([
+      {
+        kind: "skill-run",
+        schemaVersion: 1,
+        clientRequestId: "req-skill-99",
+        providerRunId: "run-remote-88",
+        toolName: "calc",
+        promptSummary: "add 1 2",
+        sessionId: "sess-1",
+        profileId: "default",
+        authGeneration: "user:123",
+        lastEventId: "ev-1",
+        phase: "running",
+        text: "partial progress",
+        updatedAt: "2026-08-30T12:00:00Z",
+      },
+      {
+        kind: "skill-run",
+        schemaVersion: 1,
+        clientRequestId: "req-pending-1",
+        providerRunId: null,
+        toolName: "search",
+        promptSummary: "query",
+        sessionId: "sess-1",
+        profileId: "default",
+        phase: "pending-submit",
+      },
+    ]);
+
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      kind: "skill-run",
+      clientRequestId: "req-skill-99",
+      providerRunId: "run-remote-88",
+      phase: "running",
+    });
+    expect(items[1]).toMatchObject({
+      kind: "skill-run",
+      clientRequestId: "req-pending-1",
+      providerRunId: null,
+      phase: "pending-submit",
+    });
+  });
 });

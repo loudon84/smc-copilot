@@ -56,4 +56,12 @@ describe("shared i18n", () => {
       "Aktualizacja v1.2.3",
     );
   });
+
+  it("translates skillRun keys in en and zh-CN", () => {
+    expect(t("skillRun.runPending", "en")).toBe("Submitting skill request...");
+    expect(t("skillRun.runPending", "zh-CN")).toBe("正在提交技能请求...");
+    expect(t("skillRun.startDisabledNoLock", "zh-CN")).toBe(
+      "缺少契约锁定文件，技能执行已被安全禁用。",
+    );
+  });
 });

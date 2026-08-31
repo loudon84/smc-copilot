@@ -14,6 +14,11 @@ import {
   refreshStoredAccessToken,
 } from "../auth/ensure-access-token";
 import { getCachedAccessToken } from "../auth/token-store";
+import {
+  AuthorizedBackendTransport,
+  AuthorizedBackendTransportError,
+  createAuthorizedBackendTransport,
+} from "../auth/authorized-backend-transport";
 import { normalizeBackendBaseUrl } from "../../shared/auth/auth-url";
 import type {
   ExpertAcceptedStructuredContent,
@@ -387,6 +392,13 @@ export function createExpertGatewayClient(
   let catalogCache: CacheEntry<ExpertCatalogItem[]> | null = null;
   const skillCache = new Map<string, CacheEntry<ExpertSkillItem[]>>();
 
+  const transport = createAuthorizedBackendTransport({
+    fetchImpl,
+    ensureAccessToken,
+    refreshAccessToken,
+    timeoutMs: DEFAULT_FETCH_TIMEOUT_MS,
+  });
+
   function assertNotDisposed(): void {
     if (disposed) {
       throw new ExpertGatewayError("Expert gateway disposed", {
@@ -411,63 +423,18 @@ export function createExpertGatewayClient(
     init: RequestInit & { idempotencyKey?: string } = {},
   ): Promise<Response> {
     assertNotDisposed();
-    const base = resolveBaseUrl();
-    const url = joinUrl(base, pathOrUrl);
-    const token = (await ensureAccessToken()) || requireAccessToken();
-    const headers = new Headers(init.headers);
-    headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.has("Content-Type") && init.body) {
-      headers.set("Content-Type", "application/json");
-    }
-    if (init.idempotencyKey) {
-      headers.set("X-Idempotency-Key", init.idempotencyKey);
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      DEFAULT_FETCH_TIMEOUT_MS,
-    );
-    const onExternalAbort = (): void => {
-      controller.abort();
-    };
-    if (init.signal) {
-      if (init.signal.aborted) controller.abort();
-      else
-        init.signal.addEventListener("abort", onExternalAbort, { once: true });
-    }
     try {
-      return await fetchImpl(url, {
-        ...init,
-        headers,
-        signal: controller.signal,
-      });
+      return await transport.authorizedFetch(pathOrUrl, init);
     } catch (err) {
       if (err instanceof ExpertGatewayError) throw err;
-      const aborted =
-        (err instanceof Error && err.name === "AbortError") ||
-        (typeof DOMException !== "undefined" &&
-          err instanceof DOMException &&
-          err.name === "AbortError");
-      if (aborted) {
-        throw new ExpertGatewayError(
-          `Expert gateway request timed out or aborted (${url})`,
-          { status: 0, errorCode: "FETCH_ABORTED" },
-        );
+      if (err instanceof AuthorizedBackendTransportError) {
+        throw new ExpertGatewayError(err.message, {
+          status: err.status,
+          errorCode: err.errorCode,
+          body: err.body,
+        });
       }
-      const cause =
-        err instanceof Error && "cause" in err && err.cause instanceof Error
-          ? err.cause.message
-          : "";
-      const baseMsg = err instanceof Error ? err.message : String(err);
-      throw new ExpertGatewayError(
-        cause
-          ? `Expert gateway unreachable (${url}): ${cause}`
-          : `Expert gateway unreachable (${url}): ${baseMsg}`,
-        { status: 0, errorCode: "FETCH_FAILED" },
-      );
-    } finally {
-      clearTimeout(timeout);
-      init.signal?.removeEventListener("abort", onExternalAbort);
+      throw err;
     }
   }
 

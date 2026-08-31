@@ -1,6 +1,7 @@
 export default {
   chat: "Chat",
   newChat: "New Chat",
+  useSkill: "Use Skill",
   sessions: "Sessions",
   discover: "Discover",
   agents: "Profiles",

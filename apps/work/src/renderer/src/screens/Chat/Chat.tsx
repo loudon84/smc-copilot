@@ -53,6 +53,20 @@ import {
   upsertExpertProjection,
   type ExpertSelection,
 } from "../../modules/expert";
+import {
+  SkillCatalogPanel,
+  SkillSelectionBar,
+  SkillRunStatusBar,
+  getLatestSkillRunProjectionForSession,
+  initSkillRunRendererListener,
+  subscribeSkillRunCatalog,
+} from "../../modules/skill-run";
+import type {
+  SkillCatalogToolItem,
+  SkillRunProjection,
+  SkillRunStartInput,
+} from "../../../../shared/skill-run";
+import type { ChatExecutionMode } from "../Layout/chatRuns";
 import "../../modules/expert/expert.css";
 import "../../modules/expert/expert-artifacts.css";
 import {
@@ -88,6 +102,12 @@ interface QueuedMessage {
   attachments: Attachment[];
   /** Immutable Expert snapshot when queued under Expert mode. */
   expertRequest?: ExpertRequest;
+  /** Immutable Skill snapshot when queued under Skill mode. */
+  skillRequest?: {
+    toolName: string;
+    prompt: string;
+    clientRequestId: string;
+  };
 }
 
 export type { ChatMessage } from "./types";
@@ -125,6 +145,7 @@ interface ChatProps {
   /** Stable id for this conversation/run. One <Chat> is mounted per run; all
    *  remain mounted (background sessions) and only the active one is shown. */
   runId: string;
+  executionMode?: ChatExecutionMode;
   /** Seed transcript when re-opening a session from history; empty for new chats. */
   initialMessages?: ChatMessage[];
   /** Gateway session id when resuming a known session; null for a new chat. */
@@ -153,6 +174,7 @@ interface ChatProps {
 
 function Chat({
   runId,
+  executionMode = "local-chat",
   initialMessages,
   initialSessionId,
   active = true,
@@ -380,8 +402,39 @@ function Chat({
   );
   /** Client request ids submitted from this Chat instance — live transcript only. */
   const liveExpertTranscriptIdsRef = useRef(new Set<string>());
+  const [selectedSkill, setSelectedSkill] = useState<SkillCatalogToolItem | null>(null);
+  const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
+  const isSkillRunMode = executionMode === "skill-run";
+
+  useEffect(() => {
+    initSkillRunRendererListener();
+    const sync = (): void => {
+      const sessionId = hermesSessionId || initialSessionId || "";
+      if (sessionId) {
+        setActiveSkillProjection(getLatestSkillRunProjectionForSession(sessionId));
+      }
+    };
+    sync();
+    return subscribeSkillRunCatalog(sync);
+  }, [hermesSessionId, initialSessionId]);
+
+  useEffect(() => {
+    const sessionId = hermesSessionId || initialSessionId;
+    if (!sessionId || !window.hermesAPI.skillRun?.rehydrateSession) return;
+    void window.hermesAPI.skillRun
+      .rehydrateSession(sessionId)
+      .then((projections) => {
+        if (projections && projections.length > 0) {
+          setActiveSkillProjection(projections[projections.length - 1]);
+        }
+      })
+      .catch(() => {
+        /* empty/new session */
+      });
+  }, [hermesSessionId, initialSessionId]);
+
   const expertModeActive = Boolean(
-    expertSelection.expertSlug && expertSelection.skillName,
+    !isSkillRunMode && expertSelection.expertSlug && expertSelection.skillName,
   );
   const expertSelected = expertSelection.expertSlug != null;
   const activeTurnRef = useRef<ActiveTurn | null>(null);
@@ -978,22 +1031,30 @@ function Chat({
 
   const slashMenuCommands = useMemo<SlashCommand[]>(
     () =>
-      slashCatalog.commands.map((command) => ({
-        name: `/${command.name}`,
-        description: command.description,
-        category:
-          command.target === "desktop"
-            ? "info"
-            : command.target === "model"
-              ? "tools"
-              : "agent",
-        local: command.target === "desktop",
-        takesArgs:
-          command.target === "agent" ||
-          command.target === "model" ||
-          Boolean(command.argsHint),
-      })),
-    [slashCatalog],
+      slashCatalog.commands
+        .filter((command) => {
+          if (isSkillRunMode) {
+            // Filter out model/expert configuration slash commands in skill-run mode
+            return command.name !== "model" && command.name !== "fast" && command.name !== "expert";
+          }
+          return true;
+        })
+        .map((command) => ({
+          name: `/${command.name}`,
+          description: command.description,
+          category:
+            command.target === "desktop"
+              ? "info"
+              : command.target === "model"
+                ? "tools"
+                : "agent",
+          local: command.target === "desktop",
+          takesArgs:
+            command.target === "agent" ||
+            command.target === "model" ||
+            Boolean(command.argsHint),
+        })),
+    [isSkillRunMode, slashCatalog],
   );
 
   // Defer a message onto the busy queue (used when a slash command resolves to
@@ -1114,12 +1175,43 @@ function Chat({
     [],
   );
 
+  const submitSkill = useCallback(
+    async (request: { toolName: string; prompt: string; clientRequestId: string }) => {
+      try {
+        let sessionId = hermesSessionId || initialSessionId || "";
+        if (!sessionId) {
+          sessionId = `skill-${Date.now()}-${crypto.randomUUID()}`;
+          setHermesSessionId(sessionId);
+        }
+        const input: SkillRunStartInput = {
+          toolName: request.toolName,
+          prompt: request.prompt,
+          clientRequestId: request.clientRequestId,
+          sessionId,
+          profileId: profile ?? "default",
+          authGeneration,
+        };
+        const result = await window.hermesAPI.skillRun.start(input);
+        if (!result.accepted) {
+          toast.error(result.message || "Skill run rejected");
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Skill request failed");
+      }
+    },
+    [authGeneration, hermesSessionId, initialSessionId, profile],
+  );
+
   // Drain queued messages one at a time when the agent finishes.
   useEffect(() => {
     if (isLoading) return;
     const next = queueRef.current.shift();
     if (!next) return;
     setQueuedMessages([...queueRef.current]);
+    if (next.skillRequest) {
+      void submitSkill(next.skillRequest);
+      return;
+    }
     if (next.expertRequest) {
       if (next.expertRequest.authGeneration !== authGeneration) {
         toast.error("Queued expert request expired after account change.");
@@ -1134,7 +1226,7 @@ function Chat({
       queueRef.current.unshift(next);
       setQueuedMessages([...queueRef.current]);
     });
-  }, [isLoading, authGeneration, submitExpert]);
+  }, [isLoading, authGeneration, submitExpert, submitSkill]);
 
   const handleRemoveQueued = useCallback((index: number) => {
     const item = queueRef.current[index];
@@ -1168,9 +1260,28 @@ function Chat({
           void handleBackgroundRef.current(bgQuestion, attachments);
         return;
       }
-      // Slash always wins over Expert execution.
+      // Slash always wins over Expert / Skill execution.
       if (text.startsWith("/")) {
         void handleSendRef.current(text, attachments, true);
+        return;
+      }
+      if (isSkillRunMode) {
+        if (!selectedSkill) {
+          toast.error(t("skillRun.selectSkillBeforeSending") || "Select a skill before sending.");
+          return;
+        }
+        const clientRequestId = createClientRequestId();
+        const request = {
+          toolName: selectedSkill.toolName,
+          prompt: text,
+          clientRequestId,
+        };
+        if (isLoading) {
+          queueRef.current.push({ text, attachments: [], skillRequest: request });
+          setQueuedMessages([...queueRef.current]);
+          return;
+        }
+        void submitSkill(request);
         return;
       }
       if (expertSelection.expertSlug != null && !expertSelection.skillName) {
@@ -1455,7 +1566,11 @@ function Chat({
       >
         <div className="chat-messages" ref={chatMessagesRef}>
           <div className="chat-messages-scroll" ref={containerRef}>
-            {messages.length === 0 ? (
+            {isSkillRunMode && !selectedSkill ? (
+              <SkillCatalogPanel
+                onSelectSkill={(tool) => setSelectedSkill(tool)}
+              />
+            ) : messages.length === 0 ? (
               <ChatEmptyState onSelectSuggestion={handleSuggestion} />
             ) : (
               <MessageList
@@ -1561,7 +1676,24 @@ function Chat({
       </div>
 
       <div className="chat-input-area">
-        {expertProjections.filter((p) => p.taskId == null).length > 0 ? (
+        {isSkillRunMode && activeSkillProjection && (
+          <SkillRunStatusBar
+            projection={activeSkillProjection}
+            onCancel={() => {
+              void window.hermesAPI.skillRun.cancel({
+                clientRequestId: activeSkillProjection.clientRequestId,
+                sessionId: activeSkillProjection.sessionId,
+              });
+            }}
+          />
+        )}
+        {isSkillRunMode && selectedSkill && (
+          <SkillSelectionBar
+            selection={selectedSkill}
+            onClear={() => setSelectedSkill(null)}
+          />
+        )}
+        {!isSkillRunMode && expertProjections.filter((p) => p.taskId == null).length > 0 ? (
           <div className="expert-runs-panel">
             {expertProjections
               .filter((p) => p.taskId == null)
@@ -1592,8 +1724,15 @@ function Chat({
           contextUsage={contextUsage}
           readiness={effectiveReadiness}
           slashCommands={slashMenuCommands}
+          attachmentsDisabled={isSkillRunMode}
           onSubmit={handleSubmitOrQueue}
           onQuickAsk={(text, attachments) => {
+            if (isSkillRunMode) {
+              toast.error(
+                "Background questions are not available in Skill mode.",
+              );
+              return;
+            }
             if (expertSelection.expertSlug != null) {
               toast.error(
                 "Background questions are not available while an expert is selected.",
@@ -1602,106 +1741,119 @@ function Chat({
             }
             return actions.handleQuickAsk(text, attachments);
           }}
-          onAbort={actions.handleAbort}
+          onAbort={
+            isSkillRunMode
+              ? () => {
+                  if (activeSkillProjection) {
+                    void window.hermesAPI.skillRun.cancel({
+                      clientRequestId: activeSkillProjection.clientRequestId,
+                      sessionId: activeSkillProjection.sessionId,
+                    });
+                  }
+                }
+              : actions.handleAbort
+          }
           onPreviewFile={(fileId) => handleOpenManagedPreview(fileId)}
           toolbarExtras={
-            <>
-              <ExpertContextControl
-                value={expertSelection}
-                onChange={setExpertSelection}
-                authGeneration={authGeneration}
-                active={active}
-                disabled={isLoading}
-                onGatewayStatusChange={setGatewayStatus}
-                onSelectedCallabilityChange={setSelectedCallability}
-              />
-              <div
-                className="chat-toolbar-local-controls"
-                style={{
-                  display: "contents",
-                  opacity: expertSelected ? 0.45 : 1,
-                  pointerEvents: expertSelected ? "none" : "auto",
-                }}
-              >
-                <ModelPicker
+            isSkillRunMode ? null : (
+              <>
+                <ExpertContextControl
+                  value={expertSelection}
+                  onChange={setExpertSelection}
+                  authGeneration={authGeneration}
                   active={active}
-                  currentModel={chatCurrentModel}
-                  currentProvider={chatCurrentProvider}
-                  currentBaseUrl={chatCurrentBaseUrl}
-                  modelGroups={modelConfig.modelGroups}
-                  displayModel={chatDisplayModel}
-                  onOpen={modelConfig.reload}
-                  onSelectModel={handleSelectModel}
+                  disabled={isLoading}
+                  onGatewayStatusChange={setGatewayStatus}
+                  onSelectedCallabilityChange={setSelectedCallability}
                 />
-                <ReasoningEffortPicker
-                  value={reasoningEffort}
-                  onChange={setReasoningEffort}
-                />
-                <div className="chat-fast-wrapper">
-                  <button
-                    type="button"
-                    className={`btn-ghost chat-fast-btn ${fastMode ? "chat-fast-active" : ""}`}
-                    onClick={toggleFastMode}
-                  >
-                    <Zap size={14} />
-                  </button>
-                  <div
-                    className={`chat-fast-popover ${fastMode ? "chat-fast-active-popover" : ""}`}
-                  >
-                    <div className="chat-fast-popover-head">
-                      <span
-                        className="chat-fast-popover-icon"
-                        aria-hidden="true"
-                      >
-                        <Zap size={13} />
+                <div
+                  className="chat-toolbar-local-controls"
+                  style={{
+                    display: "contents",
+                    opacity: expertSelected ? 0.45 : 1,
+                    pointerEvents: expertSelected ? "none" : "auto",
+                  }}
+                >
+                  <ModelPicker
+                    active={active}
+                    currentModel={chatCurrentModel}
+                    currentProvider={chatCurrentProvider}
+                    currentBaseUrl={chatCurrentBaseUrl}
+                    modelGroups={modelConfig.modelGroups}
+                    displayModel={chatDisplayModel}
+                    onOpen={modelConfig.reload}
+                    onSelectModel={handleSelectModel}
+                  />
+                  <ReasoningEffortPicker
+                    value={reasoningEffort}
+                    onChange={setReasoningEffort}
+                  />
+                  <div className="chat-fast-wrapper">
+                    <button
+                      type="button"
+                      className={`btn-ghost chat-fast-btn ${fastMode ? "chat-fast-active" : ""}`}
+                      onClick={toggleFastMode}
+                    >
+                      <Zap size={14} />
+                    </button>
+                    <div
+                      className={`chat-fast-popover ${fastMode ? "chat-fast-active-popover" : ""}`}
+                    >
+                      <div className="chat-fast-popover-head">
+                        <span
+                          className="chat-fast-popover-icon"
+                          aria-hidden="true"
+                        >
+                          <Zap size={13} />
+                        </span>
+                        <strong>
+                          {fastMode ? t("chat.fastModeOn") : t("chat.fastMode")}
+                        </strong>
+                      </div>
+                      <span>
+                        {fastMode
+                          ? t("chat.fastModeActive")
+                          : t("chat.fastModeInactive")}
                       </span>
-                      <strong>
-                        {fastMode ? t("chat.fastModeOn") : t("chat.fastMode")}
-                      </strong>
                     </div>
-                    <span>
-                      {fastMode
-                        ? t("chat.fastModeActive")
-                        : t("chat.fastModeInactive")}
-                    </span>
                   </div>
+                  <ContextFolderChip
+                    contextFolder={contextFolder}
+                    show
+                    worktreeVisible={worktreeVisible}
+                    onPickFolder={handlePickFolder}
+                    onClearFolder={handleClearFolder}
+                    onToggleWorktree={handleToggleWorktree}
+                    onSelectRecentFolder={handleSelectRecentFolder}
+                  />
                 </div>
-                <ContextFolderChip
-                  contextFolder={contextFolder}
-                  show
-                  worktreeVisible={worktreeVisible}
-                  onPickFolder={handlePickFolder}
-                  onClearFolder={handleClearFolder}
-                  onToggleWorktree={handleToggleWorktree}
-                  onSelectRecentFolder={handleSelectRecentFolder}
-                />
-              </div>
-              <button
-                type="button"
-                className={`btn-ghost chat-tool-btn ${webPreviewVisible ? "chat-tool-btn-active" : ""}`}
-                onClick={() => setWebPreviewVisible((v) => !v)}
-                title={
-                  webPreviewVisible ? "Hide web preview" : "Show web preview"
-                }
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 28,
-                  height: 28,
-                  padding: 0,
-                  borderRadius: 6,
-                  color: webPreviewVisible
-                    ? "var(--accent-text)"
-                    : "var(--text-secondary)",
-                  background: webPreviewVisible
-                    ? "color-mix(in srgb, var(--accent-text) 10%, transparent)"
-                    : "transparent",
-                }}
-              >
-                <Globe size={14} />
-              </button>
-            </>
+                <button
+                  type="button"
+                  className={`btn-ghost chat-tool-btn ${webPreviewVisible ? "chat-tool-btn-active" : ""}`}
+                  onClick={() => setWebPreviewVisible((v) => !v)}
+                  title={
+                    webPreviewVisible ? "Hide web preview" : "Show web preview"
+                  }
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 28,
+                    height: 28,
+                    padding: 0,
+                    borderRadius: 6,
+                    color: webPreviewVisible
+                      ? "var(--accent-text)"
+                      : "var(--text-secondary)",
+                    background: webPreviewVisible
+                      ? "color-mix(in srgb, var(--accent-text) 10%, transparent)"
+                      : "transparent",
+                  }}
+                >
+                  <Globe size={14} />
+                </button>
+              </>
+            )
           }
         />
       </div>

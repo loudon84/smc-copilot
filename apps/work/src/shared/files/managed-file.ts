@@ -47,7 +47,7 @@ export type FileTransportMode = "local" | "remote";
 /** Resource locality on the ManagedFile record (not Hermes attachment transport). */
 export type ManagedFileLocality = "local" | "remote";
 
-export type ManagedFileRemoteProvider = "expert";
+export type ManagedFileRemoteProvider = "expert" | "skill-run";
 
 export type ManagedFileAvailability =
   | "available"
@@ -80,6 +80,7 @@ export interface ManagedFile {
   provider?: ManagedFileRemoteProvider;
   remoteArtifactId?: string;
   remoteTaskId?: string;
+  remoteRunId?: string;
   availability?: ManagedFileAvailability;
   /** Provider preview_supported (default false when absent). */
   providerPreviewSupported?: boolean;

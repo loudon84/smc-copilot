@@ -172,6 +172,7 @@ export function resolvePreviewCachePath(input: {
   profile?: string;
   provider: string;
   remoteArtifactId: string;
+  remoteRunId?: string;
   contentHash?: string;
 }): string {
   const layout = ensureFilesLayout(
@@ -179,6 +180,7 @@ export function resolvePreviewCachePath(input: {
   );
   const key = [
     input.provider,
+    input.remoteRunId || "norun",
     input.remoteArtifactId,
     input.contentHash?.slice(0, 16) || "nohash",
   ].join("_");

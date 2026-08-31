@@ -4,6 +4,7 @@ This directory defines the high-level concepts, business logic, and architecture
 
 - [[runtime-connection]] — locate an existing Hermes Agent, ensure Gateway health, and enter Chat without embedded install or API-key setup gates.
 - [[chat-commands]] — how typed slash commands are routed through the gateway's `slash.exec`/`command.dispatch` pipeline instead of being sent as prompt text.
+- [[chat-runtime-contract]] — provider-neutral Chat event projection, turn-scoped terminal semantics, durable/transient delivery boundaries, and Artifact routing through File Platform.
 - [[chat-performance]] — how chat rendering stays responsive through contained transcript rows, batched textarea resizing, and fixed-row slash-command virtualization.
 - [[prompt-navigator]] — floating in-session user-prompt outline inside chat-messages for round jump and active-turn tracking.
 - [[prompt-navigator-tests]] — unit/component coverage for prompt extraction, navigator UI, jump/active-line, and open preference.
@@ -39,3 +40,5 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[file-config]] — `desktop.files.*` Main-only config and Local/Remote attachment transport rules.
 - [[expert-execution]] — Explicit Expert HermesTask runs: NoDeskClaw Gateway client, SSE lifecycle, narrow IPC, Chat integration, continuation, and Main-only artifact download.
 - [[expert-execution-tests]] — unit/component coverage for Gateway client, run lifecycle, IPC validation, continuation, SSE framing, and minimum-stage UI.
+- [[skill-run]] — Checkpoint B Skill Run architecture: lifecycle coordinator, SSE/poll, continuation, File Platform remote identity, and fail-closed M0 gate.
+- [[skill-run-integration]] — approved target architecture and gated roadmap for the Layout-level Skill mode, Main-owned Run lifecycle, and File Platform output path.

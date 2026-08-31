@@ -1,6 +1,7 @@
 export default {
   chat: "聊天",
   newChat: "新建聊天",
+  useSkill: "使用技能",
   sessions: "会话",
   projects: "项目",
   chats: "聊天",

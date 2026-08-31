@@ -79,6 +79,16 @@ describe("chat run profile transitions", () => {
     );
   });
 
+  it("handles executionMode filtering in isScratchRun", () => {
+    const localRun = run("local", "alfie", { executionMode: "local-chat" });
+    const skillRun = run("skill", "alfie", { executionMode: "skill-run" });
+
+    expect(isScratchRun(localRun, "local-chat")).toBe(true);
+    expect(isScratchRun(localRun, "skill-run")).toBe(false);
+    expect(isScratchRun(skillRun, "skill-run")).toBe(true);
+    expect(isScratchRun(skillRun, "local-chat")).toBe(false);
+  });
+
   it("mints runs under the requested profile", () => {
     const randomUUID = vi
       .spyOn(crypto, "randomUUID")
@@ -87,6 +97,7 @@ describe("chat run profile transitions", () => {
     expect(mintRun("alfie")).toEqual({
       runId: "run-00000000-0000-4000-8000-000000000002",
       profile: "alfie",
+      executionMode: "local-chat",
       sessionId: null,
       loading: false,
       seed: undefined,

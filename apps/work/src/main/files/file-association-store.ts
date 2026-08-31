@@ -142,6 +142,7 @@ function ensureManagedFileRemoteColumns(db: DbHandle): void {
     ["provider", "TEXT"],
     ["remote_artifact_id", "TEXT"],
     ["remote_task_id", "TEXT"],
+    ["remote_run_id", "TEXT"],
     ["availability", "TEXT"],
     ["provider_preview_supported", "INTEGER"],
     ["can_preview", "INTEGER"],
@@ -169,9 +170,14 @@ function migrateLocalHashIndex(db: DbHandle): void {
 }
 
 function ensureRemoteIdentityIndex(db: DbHandle): void {
+  try {
+    db.exec(`DROP INDEX IF EXISTS idx_managed_files_remote_identity`);
+  } catch {
+    // ignore
+  }
   db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_remote_identity
-      ON managed_files(profile_id, provider, remote_artifact_id)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_remote_identity_v2
+      ON managed_files(profile_id, provider, remote_run_id, remote_artifact_id)
       WHERE locality = 'remote'
         AND provider IS NOT NULL
         AND remote_artifact_id IS NOT NULL
@@ -219,7 +225,10 @@ function rowToManagedFile(row: Record<string, unknown>): ManagedFile {
       : undefined;
   const providerRaw =
     row.provider != null ? String(row.provider) : undefined;
-  const provider = providerRaw === "expert" ? "expert" : undefined;
+  const provider =
+    providerRaw === "expert" || providerRaw === "skill-run"
+      ? (providerRaw as ManagedFile["provider"])
+      : undefined;
   const availabilityRaw =
     row.availability != null ? String(row.availability) : undefined;
   const availability =
@@ -259,6 +268,8 @@ function rowToManagedFile(row: Record<string, unknown>): ManagedFile {
         : undefined,
     remoteTaskId:
       row.remote_task_id != null ? String(row.remote_task_id) : undefined,
+    remoteRunId:
+      row.remote_run_id != null ? String(row.remote_run_id) : undefined,
     availability,
     providerPreviewSupported:
       row.provider_preview_supported != null
@@ -292,13 +303,13 @@ export function upsertManagedFile(file: ManagedFile): void {
       id, profile_id, name, extension, mime, category, source, status, size,
       original_path, managed_path, content_hash, parser_id, parse_version,
       error_code, error_message, created_at, updated_at,
-      locality, provider, remote_artifact_id, remote_task_id, availability,
+      locality, provider, remote_artifact_id, remote_task_id, remote_run_id, availability,
       provider_preview_supported, can_preview
     ) VALUES (
       @id, @profile_id, @name, @extension, @mime, @category, @source, @status, @size,
       @original_path, @managed_path, @content_hash, @parser_id, @parse_version,
       @error_code, @error_message, @created_at, @updated_at,
-      @locality, @provider, @remote_artifact_id, @remote_task_id, @availability,
+      @locality, @provider, @remote_artifact_id, @remote_task_id, @remote_run_id, @availability,
       @provider_preview_supported, @can_preview
     )
     ON CONFLICT(id) DO UPDATE SET
@@ -322,6 +333,7 @@ export function upsertManagedFile(file: ManagedFile): void {
       provider = excluded.provider,
       remote_artifact_id = excluded.remote_artifact_id,
       remote_task_id = excluded.remote_task_id,
+      remote_run_id = excluded.remote_run_id,
       availability = excluded.availability,
       provider_preview_supported = excluded.provider_preview_supported,
       can_preview = excluded.can_preview`,
@@ -348,6 +360,7 @@ export function upsertManagedFile(file: ManagedFile): void {
     provider: file.provider ?? null,
     remote_artifact_id: file.remoteArtifactId ?? null,
     remote_task_id: file.remoteTaskId ?? null,
+    remote_run_id: file.remoteRunId ?? null,
     availability: file.availability ?? null,
     provider_preview_supported:
       file.providerPreviewSupported == null
@@ -392,16 +405,33 @@ export function findByHash(
   return row ? rowToManagedFile(row) : null;
 }
 
-/** Look up a remote Expert (or other) artifact by provider identity. */
+/** Look up a remote Expert or Skill Run artifact by provider identity. */
 export function findByRemoteIdentity(opts: {
   profileId: string;
   provider: NonNullable<ManagedFile["provider"]>;
   remoteArtifactId: string;
+  remoteRunId?: string;
 }): ManagedFile | null {
   const pid = normalizeProfileId(opts.profileId);
   const artifactId = opts.remoteArtifactId.trim();
   if (!artifactId) return null;
   const db = openFileIndexDb(pid === "default" ? undefined : pid);
+
+  if (opts.remoteRunId != null && opts.remoteRunId.trim() !== "") {
+    const row = db
+      .prepare(
+        `SELECT * FROM managed_files
+         WHERE profile_id = ?
+           AND locality = 'remote'
+           AND provider = ?
+           AND remote_run_id = ?
+           AND remote_artifact_id = ?
+         LIMIT 1`,
+      )
+      .get(pid, opts.provider, opts.remoteRunId.trim(), artifactId) as Record<string, unknown> | undefined;
+    return row ? rowToManagedFile(row) : null;
+  }
+
   const row = db
     .prepare(
       `SELECT * FROM managed_files

@@ -181,6 +181,62 @@ export function normalizeContinuationItems(
             ? item.updatedAt
             : new Date().toISOString(),
       });
+      continue;
+    }
+
+    if (kind === "skill-run") {
+      const schemaVersion = item.schemaVersion === 1 ? 1 : null;
+      const clientRequestId =
+        typeof item.clientRequestId === "string"
+          ? item.clientRequestId.trim()
+          : "";
+      const toolName =
+        typeof item.toolName === "string" ? item.toolName.trim() : "";
+      const sessionId =
+        typeof item.sessionId === "string" ? item.sessionId.trim() : "";
+      const profileId =
+        typeof item.profileId === "string" ? item.profileId.trim() : "";
+      const phase = typeof item.phase === "string" ? item.phase : "";
+      const providerRunId =
+        typeof item.providerRunId === "string" && item.providerRunId.trim()
+          ? item.providerRunId.trim()
+          : null;
+
+      if (
+        schemaVersion !== 1 ||
+        !clientRequestId ||
+        !toolName ||
+        !sessionId ||
+        !profileId ||
+        !phase
+      ) {
+        continue;
+      }
+
+      out.push({
+        kind: "skill-run",
+        schemaVersion: 1,
+        clientRequestId,
+        providerRunId,
+        toolName,
+        promptSummary:
+          typeof item.promptSummary === "string" ? item.promptSummary : "",
+        sessionId,
+        profileId,
+        authGeneration:
+          typeof item.authGeneration === "string"
+            ? item.authGeneration.trim()
+            : undefined,
+        lastEventId:
+          typeof item.lastEventId === "string" ? item.lastEventId : null,
+        phase: phase as any,
+        text: typeof item.text === "string" ? item.text : undefined,
+        updatedAt:
+          typeof item.updatedAt === "string"
+            ? item.updatedAt
+            : new Date().toISOString(),
+      });
+      continue;
     }
   }
 

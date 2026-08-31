@@ -157,4 +157,42 @@ describe("file-association-store remote identity", () => {
     expect(store.getManagedFile("default", "f1")?.size).toBe(99);
     expect(store.getManagedFile("default", "f1")?.name).toBe("updated.md");
   });
+
+  it("distinguishes remote artifacts across different skill runs with the same remote artifact id", async () => {
+    const store = await import("./file-association-store");
+    store.upsertManagedFile(
+      baseRemote({
+        id: "f-run-1",
+        provider: "skill-run",
+        remoteRunId: "run-100",
+        remoteArtifactId: "shared-art-id",
+        name: "output-run1.txt",
+      }),
+    );
+    store.upsertManagedFile(
+      baseRemote({
+        id: "f-run-2",
+        provider: "skill-run",
+        remoteRunId: "run-200",
+        remoteArtifactId: "shared-art-id",
+        name: "output-run2.txt",
+      }),
+    );
+
+    const f1 = store.findByRemoteIdentity({
+      profileId: "default",
+      provider: "skill-run",
+      remoteRunId: "run-100",
+      remoteArtifactId: "shared-art-id",
+    });
+    const f2 = store.findByRemoteIdentity({
+      profileId: "default",
+      provider: "skill-run",
+      remoteRunId: "run-200",
+      remoteArtifactId: "shared-art-id",
+    });
+
+    expect(f1?.id).toBe("f-run-1");
+    expect(f2?.id).toBe("f-run-2");
+  });
 });

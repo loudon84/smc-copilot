@@ -1282,6 +1282,9 @@ interface HermesAPI {
 
   // Explicit Expert
   expert: import("../shared/expert").ExpertApi;
+
+  // Skill Run
+  skillRun: import("../shared/skill-run").SkillRunApi;
 }
 
 declare global {

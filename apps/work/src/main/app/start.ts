@@ -22,6 +22,10 @@ import {
   disposeExpertSubsystem,
   registerExpertIpc,
 } from "../expert/expert-ipc";
+import {
+  disposeSkillRunSubsystem,
+  registerSkillRunIpc,
+} from "../skill-run/skill-run-ipc";
 import { getExpertRunService } from "../expert/expert-run-service";
 import { setGatewayPromptParent } from "../gatewayPrompt";
 import { showChatContextMenu } from "./context-menu";
@@ -76,6 +80,7 @@ export function startMainProcess(): void {
   // Construct Expert singleton before registering its IPC surface.
   void getExpertRunService();
   registerExpertIpc({ getMainWindow: () => mainWindow });
+  registerSkillRunIpc();
 
   setupUpdater({ getMainWindow: () => mainWindow });
 
@@ -203,6 +208,8 @@ export function startMainProcess(): void {
     activeRuns.clear();
     // Expert: stop new requests → abort SSE/polling → dispose
     disposeExpertSubsystem();
+    // Skill Run: stop and dispose
+    disposeSkillRunSubsystem();
     // File Platform temp/preview retention (covers former Expert artifact temps).
     try {
       runFilesCleanupBestEffort();

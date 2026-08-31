@@ -42,6 +42,7 @@ import {
 } from "../shared/app-update";
 import { createFilesApi } from "./files-api";
 import { createExpertApi } from "./expert-api";
+import { createSkillRunApi } from "./skill-run-api";
 import type { HermesFilesAPI } from "../shared/files";
 
 /**
@@ -1701,6 +1702,9 @@ const hermesAPI = {
 
   // Explicit Expert (WORK-EXPERT-CONTRACT v1.0.1)
   expert: createExpertApi(),
+
+  // Skill Run (WORK-SKILL-RUN-CONTRACT Checkpoint A)
+  skillRun: createSkillRunApi(),
 };
 
 if (process.contextIsolated) {

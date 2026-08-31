@@ -1,5 +1,7 @@
 import type { ChatMessage } from "../Chat/Chat";
 
+export type ChatExecutionMode = "local-chat" | "skill-run";
+
 /**
  * One concurrently-running (or open) conversation. Several runs coexist so the
  * user can background a session — or a whole agent/profile — and return to it
@@ -10,6 +12,8 @@ export interface ChatRun {
   runId: string;
   /** Immutable: the profile/agent this run was started under. */
   profile: string;
+  /** Execution mode: standard local chat vs skill run */
+  executionMode?: ChatExecutionMode;
   /** Gateway session id, known once the first turn reports it. */
   sessionId: string | null;
   /** True while the agent is generating for this run. */
@@ -20,19 +24,33 @@ export interface ChatRun {
   seed?: ChatMessage[];
 }
 
-/** A blank chat that can be reassigned to another profile without losing work. */
-export function isScratchRun(r: ChatRun): boolean {
-  return !r.sessionId && !r.loading && !r.title;
+/** A blank chat that can be reassigned to another profile/mode without losing work. */
+export function isScratchRun(
+  r: ChatRun,
+  mode?: ChatExecutionMode,
+): boolean {
+  const isBlank = !r.sessionId && !r.loading && !r.title;
+  if (!isBlank) return false;
+  if (mode !== undefined) {
+    const rMode = r.executionMode ?? "local-chat";
+    return rMode === mode;
+  }
+  return true;
 }
 
 /** Mint a fresh, empty run under the given profile. */
-export function mintRun(profile: string, seed?: ChatMessage[]): ChatRun {
+export function mintRun(
+  profile: string,
+  seed?: ChatMessage[],
+  executionMode?: ChatExecutionMode,
+): ChatRun {
   return {
     runId:
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? `run-${crypto.randomUUID()}`
         : `run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     profile,
+    executionMode: executionMode ?? "local-chat",
     sessionId: null,
     loading: false,
     seed,
@@ -65,19 +83,23 @@ export function selectProfileRunTransition(
     return { activeRunId, runs };
   }
 
-  if (isScratchRun(active)) {
+  const activeMode = active.executionMode ?? "local-chat";
+
+  if (isScratchRun(active, activeMode)) {
     return {
       activeRunId,
       runs: runs.map((r) => (r.runId === activeRunId ? { ...r, profile } : r)),
     };
   }
 
-  const scratch = runs.find((r) => r.profile === profile && isScratchRun(r));
+  const scratch = runs.find(
+    (r) => r.profile === profile && isScratchRun(r, activeMode),
+  );
   if (scratch) {
     return { activeRunId: scratch.runId, runs };
   }
 
-  const next = mintRun(profile);
+  const next = mintRun(profile, undefined, activeMode);
   return { activeRunId: next.runId, runs: [...runs, next] };
 }
 

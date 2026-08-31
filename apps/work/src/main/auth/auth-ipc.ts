@@ -33,6 +33,7 @@ import {
   disposeExpertSubsystem,
   restoreExpertSubsystemAfterAuth,
 } from "../expert/expert-ipc";
+import { disposeSkillRunSubsystem } from "../skill-run/skill-run-ipc";
 import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
 
 export type RegisterAuthIpcOptions = {
@@ -114,6 +115,7 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
       // Best-effort — never block logout.
     }
     disposeExpertSubsystem();
+    disposeSkillRunSubsystem();
     const endpoint = readAuthEndpointConfig();
     await clearStoredSession();
     return toPublicState(null, endpoint);

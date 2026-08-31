@@ -33,6 +33,7 @@ import {
   resolvePreviewCachePath,
   streamExpertArtifactBytes,
 } from "./expert-artifact-transfer";
+import { streamSkillRunArtifactBytes } from "./skill-run-artifact-transfer";
 import { nowIso } from "./file-metadata";
 
 /** Text preview cap — larger files are truncated, never fully buffered. */
@@ -353,6 +354,7 @@ async function getRemotePreviewDescriptor(
     profile: profileId,
     provider: file.provider,
     remoteArtifactId: artifactId,
+    remoteRunId: file.remoteRunId,
     contentHash: file.contentHash,
   });
 
@@ -382,12 +384,21 @@ async function getRemotePreviewDescriptor(
 
   try {
     const maxBytes = Math.max(1, config.preview.maxPreviewMb) * 1024 * 1024;
-    const transferred = await streamExpertArtifactBytes({
-      artifactId,
-      expectedSha256: file.contentHash,
-      profile: profileId === "default" ? undefined : profileId,
-      maxBytes,
-    });
+    const transferred =
+      file.provider === "skill-run"
+        ? await streamSkillRunArtifactBytes({
+            artifactId,
+            runId: file.remoteRunId,
+            expectedSha256: file.contentHash,
+            profile: profileId === "default" ? undefined : profileId,
+            maxBytes,
+          })
+        : await streamExpertArtifactBytes({
+            artifactId,
+            expectedSha256: file.contentHash,
+            profile: profileId === "default" ? undefined : profileId,
+            maxBytes,
+          });
     try {
       if (existsSync(cachePath)) rmSync(cachePath, { force: true });
       renameSync(transferred.path, cachePath);

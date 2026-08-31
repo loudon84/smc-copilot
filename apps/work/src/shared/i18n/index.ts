@@ -32,6 +32,7 @@ import installEn from "./locales/en/install";
 import constantsEn from "./locales/en/constants";
 import kanbanEn from "./locales/en/kanban";
 import diagnoseEn from "./locales/en/diagnose";
+import skillRunEn from "./locales/en/skillRun";
 import commonHe from "./locales/he/common";
 import navigationHe from "./locales/he/navigation";
 import discoverHe from "./locales/he/discover";
@@ -139,6 +140,7 @@ import memoryZh from "./locales/zh-CN/memory";
 import installZh from "./locales/zh-CN/install";
 import constantsZh from "./locales/zh-CN/constants";
 import kanbanZh from "./locales/zh-CN/kanban";
+import skillRunZh from "./locales/zh-CN/skillRun";
 import commonZhTw from "./locales/zh-TW/common";
 import navigationZhTw from "./locales/zh-TW/navigation";
 import welcomeZhTw from "./locales/zh-TW/welcome";
@@ -295,6 +297,7 @@ export const resources = {
       constants: constantsEn,
       kanban: kanbanEn,
       diagnose: diagnoseEn,
+      skillRun: skillRunEn,
     },
   },
   he: {
@@ -322,6 +325,7 @@ export const resources = {
       constants: constantsHe,
       kanban: kanbanHe,
       diagnose: diagnoseHe,
+      skillRun: skillRunEn,
     },
   },
   pl: {
@@ -347,6 +351,7 @@ export const resources = {
       install: installPl,
       constants: constantsPl,
       kanban: kanbanPl,
+      skillRun: skillRunEn,
     },
   },
   es: {
@@ -373,6 +378,7 @@ export const resources = {
       constants: constantsEs,
       kanban: kanbanEs,
       diagnose: diagnoseEs,
+      skillRun: skillRunEn,
     },
   },
   id: {
@@ -397,6 +403,7 @@ export const resources = {
       memory: memoryId,
       install: installId,
       constants: constantsId,
+      skillRun: skillRunEn,
     },
   },
   "zh-CN": {
@@ -422,6 +429,7 @@ export const resources = {
       install: installZh,
       constants: constantsZh,
       kanban: kanbanZh,
+      skillRun: skillRunZh,
     },
   },
   "zh-TW": {
@@ -447,6 +455,7 @@ export const resources = {
       install: installZhTw,
       constants: constantsZhTw,
       kanban: kanbanZhTw,
+      skillRun: skillRunEn,
     },
   },
   "pt-BR": {
@@ -471,6 +480,7 @@ export const resources = {
       memory: memoryPt,
       install: installPt,
       constants: constantsPt,
+      skillRun: skillRunEn,
     },
   },
   "pt-PT": {
@@ -497,6 +507,7 @@ export const resources = {
       constants: constantsPtPt,
       kanban: kanbanPtPt,
       diagnose: diagnosePtPt,
+      skillRun: skillRunEn,
     },
   },
   ja: {
@@ -521,6 +532,7 @@ export const resources = {
       memory: memoryJa,
       install: installJa,
       constants: constantsJa,
+      skillRun: skillRunEn,
     },
   },
   tr: {
@@ -548,6 +560,7 @@ export const resources = {
       constants: constantsTr,
       kanban: kanbanTr,
       diagnose: diagnoseTr,
+      skillRun: skillRunEn,
     },
   },
   ar: {
@@ -575,6 +588,7 @@ export const resources = {
       constants: constantsAr,
       kanban: kanbanAr,
       diagnose: diagnoseAr,
+      skillRun: skillRunEn,
     },
   },
 } satisfies Resource;

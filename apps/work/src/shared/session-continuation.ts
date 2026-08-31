@@ -1,5 +1,6 @@
 import type { Attachment } from "./attachments";
 import type { ExpertRunContinuationItem } from "./expert";
+import type { SkillRunContinuationItem } from "./skill-run";
 
 export type DesktopSessionContinuationItem =
   | {
@@ -30,11 +31,12 @@ export type DesktopSessionContinuationItem =
       content: string;
       attachments?: Attachment[];
     }
-  | ExpertRunContinuationItem;
+  | ExpertRunContinuationItem
+  | SkillRunContinuationItem;
 
 export interface DesktopSessionLocalError {
   error: string;
   userContent: string;
 }
 
-export type { ExpertRunContinuationItem };
+export type { ExpertRunContinuationItem, SkillRunContinuationItem };

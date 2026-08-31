@@ -70,6 +70,8 @@ interface ChatInputProps {
    * pickers) so they share the composer's single bordered container. */
   toolbarExtras?: React.ReactNode;
   slashCommands?: SlashCommand[];
+  /** Whether attachment upload is disabled (e.g. in skill-run mode). */
+  attachmentsDisabled?: boolean;
   /** Open managed-file preview for a composer attachment id. */
   onPreviewFile?: (fileId: string) => void;
   onSubmit: (text: string, attachments: Attachment[]) => void;
@@ -89,6 +91,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       readiness,
       toolbarExtras,
       slashCommands = SLASH_COMMANDS,
+      attachmentsDisabled = false,
       onPreviewFile,
       onSubmit,
       onQuickAsk,
@@ -338,6 +341,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           inputRef.current?.focus();
         },
         addFiles(files: File[] | FileList): Promise<AttachmentError[]> {
+          if (attachmentsDisabled) {
+            return Promise.resolve([
+              {
+                name: "attachments",
+                message:
+                  t("skillRun.attachmentsDisabled") ||
+                  "Attachments are disabled in Skill mode.",
+              },
+            ]);
+          }
           return ingestFiles(files);
         },
       }),
@@ -795,18 +808,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             autoFocus
           />
           <div className="chat-input-toolbar">
-            <button
-              className="chat-attach-btn"
-              onClick={() => {
-                void handleAttachClick();
-              }}
-              disabled={isLoading || filePicker.picking}
-              title={t("chat.attach")}
-              aria-label={t("chat.attach")}
-              type="button"
-            >
-              <Paperclip size={16} />
-            </button>
+            {!attachmentsDisabled && (
+              <button
+                className="chat-attach-btn"
+                onClick={() => {
+                  void handleAttachClick();
+                }}
+                disabled={isLoading || filePicker.picking}
+                title={t("chat.attach")}
+                aria-label={t("chat.attach")}
+                type="button"
+              >
+                <Paperclip size={16} />
+              </button>
+            )}
             {voice.supported && (
               <button
                 className={`chat-mic-btn${

@@ -46,6 +46,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Wand,
 } from "../../assets/icons";
 import type { LucideIcon } from "lucide-react";
 import { useI18n } from "../../components/useI18n";
@@ -374,11 +375,44 @@ function Layout(): React.JSX.Element {
     // current chat is already a blank scratch, reuse it instead of stacking
     // another empty tab.
     const active = runs.find((r) => r.runId === activeRunId);
-    if (active && !active.sessionId && !active.loading && !active.title) {
+    if (active && isScratchRun(active, "local-chat")) {
       goTo("chat");
       return;
     }
-    const run = mintRun(activeProfile);
+    const run = mintRun(activeProfile, undefined, "local-chat");
+    setRuns((prev) => [...prev, run]);
+    setActiveRunId(run.runId);
+    goTo("chat");
+  }, [runs, activeRunId, activeProfile, goTo]);
+
+  const handleUseSkill = useCallback(() => {
+    const active = runs.find((r) => r.runId === activeRunId);
+    if (active) {
+      if (active.executionMode === "skill-run" && isScratchRun(active, "skill-run")) {
+        goTo("chat");
+        return;
+      }
+      if (isScratchRun(active)) {
+        setRuns((prev) =>
+          prev.map((r) =>
+            r.runId === active.runId ? { ...r, executionMode: "skill-run" } : r,
+          ),
+        );
+        goTo("chat");
+        return;
+      }
+    }
+
+    const existingSkillScratch = runs.find(
+      (r) => r.profile === activeProfile && isScratchRun(r, "skill-run"),
+    );
+    if (existingSkillScratch) {
+      setActiveRunId(existingSkillScratch.runId);
+      goTo("chat");
+      return;
+    }
+
+    const run = mintRun(activeProfile, undefined, "skill-run");
     setRuns((prev) => [...prev, run]);
     setActiveRunId(run.runId);
     goTo("chat");
@@ -641,7 +675,7 @@ function Layout(): React.JSX.Element {
           <nav className="sidebar-nav sidebar-nav-pinned">
             <button
               className={`sidebar-nav-item sidebar-new-chat ${
-                view === "chat" && currentSessionId === null ? "active" : ""
+                view === "chat" && currentSessionId === null && (runs.find((r) => r.runId === activeRunId)?.executionMode ?? "local-chat") === "local-chat" ? "active" : ""
               }`}
               onClick={handleNewChat}
               title={t("navigation.newChat")}
@@ -650,6 +684,19 @@ function Layout(): React.JSX.Element {
               <Plus size={16} />
               <span className="sidebar-nav-label">
                 {t("navigation.newChat")}
+              </span>
+            </button>
+            <button
+              className={`sidebar-nav-item sidebar-use-skill ${
+                view === "chat" && currentSessionId === null && runs.find((r) => r.runId === activeRunId)?.executionMode === "skill-run" ? "active" : ""
+              }`}
+              onClick={handleUseSkill}
+              title={t("navigation.useSkill") || "Use Skill"}
+              aria-label={t("navigation.useSkill") || "Use Skill"}
+            >
+              <Wand size={16} />
+              <span className="sidebar-nav-label">
+                {t("navigation.useSkill") || "Use Skill"}
               </span>
             </button>
             {PINNED_NAV_ITEMS.map(({ view: v, icon: Icon, labelKey }) => {
@@ -806,6 +853,7 @@ function Layout(): React.JSX.Element {
               >
                 <Chat
                   runId={run.runId}
+                  executionMode={run.executionMode}
                   initialMessages={run.seed}
                   initialSessionId={run.sessionId}
                   active={run.runId === activeRunId}
