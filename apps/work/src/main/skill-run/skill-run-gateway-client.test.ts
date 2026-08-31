@@ -57,6 +57,52 @@ function createClient(fetchImpl: typeof fetch) {
   });
 }
 
+describe("skill-run-gateway-client lock and discriminator gates", () => {
+  it("returns contract-unsupported without fetch when consumer lock is absent", async () => {
+    const fetchImpl = vi.fn(async () => jsonRpcResult({ tools: [] }));
+    const client = createSkillRunGatewayClient({
+      hasConsumerLock: false,
+      getAuthScopeKey: () => "test-scope-no-lock",
+      transport: createAuthorizedBackendTransport({
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        ensureAccessToken: async () => "fresh-jwt-token",
+      }),
+    });
+
+    const catalog = await client.listCatalog();
+    expect(catalog.status).toBe("contract-unsupported");
+    expect(catalog.tools).toEqual([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+
+    await expect(
+      client.callSkill({
+        toolName: "writer.article",
+        prompt: "hello",
+        idempotencyKey: "request-1",
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "SkillRunGatewayError",
+        errorCode: "CONTRACT_UNSUPPORTED",
+      }),
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("returns contract-unsupported when tools lack capabilityKind", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonRpcResult({
+        tools: [{ name: "writer.article", title: "Writer" }],
+      }),
+    );
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    const catalog = await client.listCatalog();
+    expect(catalog.status).toBe("contract-unsupported");
+    expect(catalog.tools).toEqual([]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("skill-run-gateway-client contract wire", () => {
   it("lists catalog via POST /api/v1/mcp tools/list and keeps only capabilityKind=skill", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {

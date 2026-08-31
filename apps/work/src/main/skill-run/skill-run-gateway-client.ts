@@ -174,7 +174,24 @@ export function createSkillRunGatewayClient(
 
       try {
         const { result } = await jsonRpc("tools/list", {});
-        const toolsRaw = isRecord(result) && Array.isArray(result.tools) ? result.tools : [];
+        const toolsRaw =
+          isRecord(result) && Array.isArray(result.tools) ? result.tools : [];
+        for (const raw of toolsRaw) {
+          if (
+            !isRecord(raw) ||
+            typeof raw.capabilityKind !== "string" ||
+            !raw.capabilityKind.trim()
+          ) {
+            const unsupported: SkillCatalogResponse = {
+              status: "contract-unsupported",
+              tools: [],
+              reason:
+                "Skill Run Catalog tools are missing the capabilityKind discriminator.",
+            };
+            cachedCatalogByScope.set(scopeKey, unsupported);
+            return unsupported;
+          }
+        }
         const tools = mapPublicSkillCatalogTools(toolsRaw);
         const ready: SkillCatalogResponse = { status: "ready", tools };
         cachedCatalogByScope.set(scopeKey, ready);

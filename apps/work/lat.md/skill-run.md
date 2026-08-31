@@ -40,7 +40,7 @@ Checkpoint C hardens Skill Run start gates, prompt-first validation, single-acti
 
 Provider Owner must deliver a complete immutable Contract Bundle; the current lock and checksum list establish release identity only and do not close M0 alone.
 
-Work may consume only `contracts/skill-run/<version>/` Bundle contents: lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. Work never scans Provider source, branches, checkout, Agent routes, or databases to infer missing requirements. `hasSkillRunConsumerLock()` currently checks `consumer-lock.json` + LF `SHA256SUMS`; it must evolve to validate the full Bundle before production start. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`; production start also requires feature mode `skill-first` (default remains `expert-compat`).
+Work may consume only `contracts/skill-run/<version>/` Bundle contents: lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. Work never scans Provider source, branches, checkout, Agent routes, or databases to infer missing requirements. `hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require `consumer-lock.json`, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. Identity-only material (lock + SHA256SUMS without Bundle contents) returns false and Catalog/start stay `contract-unsupported`. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`; production start also requires feature mode `skill-first` (default remains `expert-compat`).
 
 ## Checkpoint B Live / Fixture E2E
 
