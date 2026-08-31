@@ -13,6 +13,7 @@ import {
   type SkillRunFeatureMode,
   type SkillRunProjection,
   type SkillRunRetryArtifactDiscoveryInput,
+  type SkillRunSessionModeSnapshot,
   type SkillRunStartInput,
   type SkillRunStartResult,
 } from "../shared/skill-run";
@@ -39,6 +40,12 @@ export function createSkillRunApi(): SkillRunApi {
       input: SkillRunRetryArtifactDiscoveryInput,
     ): Promise<SkillRunProjection | null> =>
       ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY, input),
+    getSessionMode: (sessionId: string) =>
+      ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE, sessionId),
+    setSessionMode: (
+      input: SkillRunSessionModeSnapshot & { sessionId: string },
+    ): Promise<void> =>
+      ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE, input),
     onProjectionChanged: (
       listener: (projection: SkillRunProjection) => void,
     ): (() => void) => {

@@ -5,7 +5,7 @@ export default {
   categoryAll: "All",
   loading: "Loading skill catalog...",
   contractUnsupported: "Contract Unsupported",
-  contractUnsupportedNotice: "Skill Run Consumer Contract lock is not available for Checkpoint A/B.",
+  contractUnsupportedNotice: "Skill Run Consumer Contract lock is not available.",
   unauthorized: "Unauthorized",
   unauthorizedNotice: "Please login to access skills.",
   backendUnavailable: "Backend Unavailable",
@@ -28,4 +28,8 @@ export default {
   resultReady: "Result ready",
   artifactRetry: "Retry artifact discovery",
   startDisabledNoLock: "Skill Run execution is disabled because no consumer lock is present.",
+  startDisabledFeatureMode: "Skill Run start is disabled unless feature mode is skill-first.",
+  parametersRequired: "This skill requires additional parameters that are not supported yet.",
+  unsupportedSchema: "This skill schema is not supported in prompt-first mode.",
+  runAlreadyActive: "A skill run is already active for this session.",
 };

@@ -5,7 +5,7 @@
  */
 
 export const WORK_SKILL_RUN_CONTRACT_NAME = "WORK-SKILL-RUN-CONTRACT";
-export const WORK_SKILL_RUN_CONTRACT_VERSION = "0.2.0-checkpoint-b";
+export const WORK_SKILL_RUN_CONTRACT_VERSION = "1.2.0";
 
 export type SkillRunFeatureMode =
   | "expert-compat"
@@ -144,6 +144,13 @@ export interface SkillRunRetryArtifactDiscoveryInput {
   sessionId: string;
 }
 
+export interface SkillRunSessionModeSnapshot {
+  executionMode: "skill-run";
+  toolName: string;
+  toolTitle: string;
+  updatedAt: string;
+}
+
 export const SKILL_RUN_IPC_CHANNELS = {
   LIST_CATALOG: "skill-run:list-catalog",
   REFRESH_CATALOG: "skill-run:refresh-catalog",
@@ -154,6 +161,8 @@ export const SKILL_RUN_IPC_CHANNELS = {
   LIST_PROJECTIONS: "skill-run:list-projections",
   REHYDRATE_SESSION: "skill-run:rehydrate-session",
   RETRY_ARTIFACT_DISCOVERY: "skill-run:retry-artifact-discovery",
+  GET_SESSION_MODE: "skill-run:get-session-mode",
+  SET_SESSION_MODE: "skill-run:set-session-mode",
   ON_PROJECTION_CHANGED: "skill-run:on-projection-changed",
 } as const;
 
@@ -167,5 +176,9 @@ export interface SkillRunApi {
   listProjections(sessionId: string): Promise<SkillRunProjection[]>;
   rehydrateSession(sessionId: string): Promise<SkillRunProjection[]>;
   retryArtifactDiscovery(input: SkillRunRetryArtifactDiscoveryInput): Promise<SkillRunProjection | null>;
+  getSessionMode(sessionId: string): Promise<SkillRunSessionModeSnapshot | null>;
+  setSessionMode(
+    input: SkillRunSessionModeSnapshot & { sessionId: string },
+  ): Promise<void>;
   onProjectionChanged(listener: (projection: SkillRunProjection) => void): () => void;
 }

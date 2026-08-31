@@ -8,10 +8,11 @@ import {
   AuthorizedBackendTransport,
   createAuthorizedBackendTransport,
 } from "../auth/authorized-backend-transport";
+import { readStoredSessionSync } from "../auth/token-store";
 import { hasSkillRunConsumerLock } from "./skill-run-consumer-lock";
+import { parseSkillCatalogTools } from "./skill-run-contract-parser";
 import type {
   SkillCatalogResponse,
-  SkillCatalogToolItem,
   SkillRunArtifactDescriptor,
 } from "../../shared/skill-run";
 
@@ -64,6 +65,7 @@ export interface SkillRunGatewayClient {
 export interface CreateSkillRunGatewayClientOptions {
   transport?: AuthorizedBackendTransport;
   hasConsumerLock?: boolean;
+  getAuthScopeKey?: () => string;
 }
 
 export function createSkillRunGatewayClient(
@@ -71,8 +73,20 @@ export function createSkillRunGatewayClient(
 ): SkillRunGatewayClient {
   const transport = options.transport ?? createAuthorizedBackendTransport();
   const lockGate = options.hasConsumerLock ?? hasSkillRunConsumerLock();
+  const resolveAuthScopeKey =
+    options.getAuthScopeKey ??
+    (() => {
+      try {
+        const base = transport.getBaseUrl();
+        const userId = readStoredSessionSync()?.user?.id ?? "anonymous";
+        return `${base}|user:${userId}`;
+      } catch {
+        const userId = readStoredSessionSync()?.user?.id ?? "anonymous";
+        return `unknown|user:${userId}`;
+      }
+    });
   let disposed = false;
-  let cachedCatalog: SkillCatalogResponse | null = null;
+  const cachedCatalogByScope = new Map<string, SkillCatalogResponse>();
 
   function assertNotDisposed(): void {
     if (disposed) {
@@ -93,15 +107,18 @@ export function createSkillRunGatewayClient(
   return {
     async listCatalog(): Promise<SkillCatalogResponse> {
       assertNotDisposed();
-      if (cachedCatalog) return cachedCatalog;
+      const scopeKey = resolveAuthScopeKey();
+      const cached = cachedCatalogByScope.get(scopeKey);
+      if (cached) return cached;
 
       if (!lockGate) {
-        cachedCatalog = {
+        const unsupported: SkillCatalogResponse = {
           status: "contract-unsupported",
           tools: [],
           reason: "Skill Run Consumer Contract lock is not available.",
         };
-        return cachedCatalog;
+        cachedCatalogByScope.set(scopeKey, unsupported);
+        return unsupported;
       }
 
       try {
@@ -110,16 +127,52 @@ export function createSkillRunGatewayClient(
         });
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) {
-            return { status: "unauthorized", tools: [] };
+            const unauthorized: SkillCatalogResponse = {
+              status: "unauthorized",
+              tools: [],
+            };
+            cachedCatalogByScope.set(scopeKey, unauthorized);
+            return unauthorized;
           }
-          return { status: "backend-unavailable", tools: [] };
+          const unavailable: SkillCatalogResponse = {
+            status: "backend-unavailable",
+            tools: [],
+          };
+          cachedCatalogByScope.set(scopeKey, unavailable);
+          return unavailable;
         }
-        const data = (await res.json()) as { tools?: SkillCatalogToolItem[] };
-        const tools = Array.isArray(data.tools) ? data.tools : [];
-        cachedCatalog = { status: "ready", tools };
-        return cachedCatalog;
+        const data = (await res.json()) as {
+          tools?: unknown;
+          result?: { tools?: unknown };
+        };
+        const rawTools = Array.isArray(data.tools)
+          ? data.tools
+          : Array.isArray(data.result?.tools)
+            ? data.result.tools
+            : undefined;
+        const parsed = parseSkillCatalogTools(rawTools);
+        if (parsed.status === "contract-unsupported") {
+          const unsupported: SkillCatalogResponse = {
+            status: "contract-unsupported",
+            tools: [],
+            reason: parsed.reason,
+          };
+          cachedCatalogByScope.set(scopeKey, unsupported);
+          return unsupported;
+        }
+        const ready: SkillCatalogResponse = {
+          status: "ready",
+          tools: parsed.tools,
+        };
+        cachedCatalogByScope.set(scopeKey, ready);
+        return ready;
       } catch {
-        return { status: "backend-unavailable", tools: [] };
+        const unavailable: SkillCatalogResponse = {
+          status: "backend-unavailable",
+          tools: [],
+        };
+        cachedCatalogByScope.set(scopeKey, unavailable);
+        return unavailable;
       }
     },
 
@@ -262,12 +315,12 @@ export function createSkillRunGatewayClient(
     },
 
     clearCache(): void {
-      cachedCatalog = null;
+      cachedCatalogByScope.clear();
     },
 
     dispose(): void {
       disposed = true;
-      cachedCatalog = null;
+      cachedCatalogByScope.clear();
     },
   };
 }

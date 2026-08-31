@@ -1,42 +1,64 @@
-# Skill Run Architecture & Boundaries (Checkpoint B)
+# Skill Run Architecture & Boundaries (Checkpoint C)
 
-This document describes the Checkpoint B (M3 Executable Run + M4 Result & Artifacts) architecture for Skill Run integration in SMC Copilot Work.
+This document describes the Checkpoint C (P0 hardening) architecture for Skill Run integration in SMC Copilot Work.
 
-## Checkpoint B Scope & Boundaries
+## M0 Consumer Lock
 
-1. **Shared Authorized Transport & Consumer Lock Gate**:
-   - `apps/work/src/main/auth/authorized-backend-transport.ts` provides the single shared implementation for JWT attachment, token refresh retry on 401/403, timeout handling, and same-origin validation.
-   - `skill-run-consumer-lock.ts` enforces the M0 Provider Contract gate: when `contracts/skill-run/*/consumer-lock.json` is missing, `hasSkillRunConsumerLock()` returns `false`. Production HTTP requests (`POST /api/v1/mcp/tools/call`, `/api/v1/runs/*`, SSE, artifact downloads) fail closed with `START_DISABLED_NO_LOCK` / `CONTRACT_UNSUPPORTED`. Zero external network requests are made in live environments without a pinned lock.
-   - The entire lifecycle is proven via unit tests with mock gateway/parser.
+Work pins SKILL-RUN-CONTRACT v1.2.0 the same way Expert pins v1.0.2: `contracts/skill-run/v1.2.0/consumer-lock.json` plus a verbatim `SHA256SUMS` copy. Schema files stay in the Provider repository; Work does not become a second contract SOT.
 
-2. **Skill Run Lifecycle Coordinator**:
-   - `SkillRunService` (`apps/work/src/main/skill-run/skill-run-service.ts`) is the single production owner for run lifecycle:
-     - `pending-submit` state initialization before network transmission;
-     - `clientRequestId` idempotency key to deduplicate starts across retries and restarts;
-     - Event stream consumption with `Last-Event-ID` tracking, event id deduplication, and poll fallback;
-     - Terminal state lock ensuring completed/cancelled runs cannot be downgraded by delayed SSE events;
-     - User cancellation through `hermesAPI.skillRun.cancel` which aborts SSE/polling and notifies the provider.
+`hasSkillRunConsumerLock()` is true only when the lock JSON matches `WORK_SKILL_RUN_CONTRACT_VERSION` and `SHA256SUMS` lists the P0 catalog/call/event/artifact/fixture entries. Production `tools/call` and `/api/v1/runs/*` remain gated on this reader. Feature mode still defaults to `expert-compat`, so new starts stay disabled until skill-first is enabled.
 
-3. **Session Continuation & Transcript Materialization**:
-   - `SkillRunContinuationItem` is integrated into `DesktopSessionContinuationItem` union with `schemaVersion: 1`.
-   - Normalization safely handles items with or without `providerRunId` (supporting `pending-submit`).
-   - On terminal status, assistant transcript bubbles are materialized to SQLite `state.db` messages without creating duplicate sessions.
-   - `rehydrateSession` reloads active projections upon app restart and reconnects SSE without re-issuing `tools/call`.
+Catalog list sanitizes Provider tools through `parseSkillCatalogTools`: items without `capabilityKind` yield `contract-unsupported`; `connector` items are dropped; only `skill` items become Renderer DTOs.
 
-4. **File Platform Remote Identity Migration**:
-   - `ManagedFileRemoteProvider` includes `"skill-run"`.
-   - `managed_files` table adds `remote_run_id` column, migrating the remote identity unique index to `(profile_id, provider, remote_run_id, remote_artifact_id)`.
-   - Remote artifacts sharing the same artifact id across different runs do not collide.
-   - `upsertSkillRunRemoteArtifact` registers metadata and associates files with the chat session as `assistant_attachment`.
-   - `skill-run-artifact-transfer.ts` streams artifact bytes with size and sha256 integrity checks.
-   - `file-preview-service.ts` and `file-service.ts` dispatch downloads and previews according to `file.provider`.
+Provider gaps that remain outside this lock (Public Run view still uses internal `RunRecord`, no separate Result/Artifact-list envelope, annotated git tag may still be unpublished) do not authorize Work to invent replacement schemas.
 
-5. **Renderer Presentation & Isolation**:
-   - `Chat.tsx` mounts `<SkillRunStatusBar />` to display active phase, waiting-approval, or error summary.
-   - User abort in skill mode invokes `hermesAPI.skillRun.cancel` instead of `abortChat`, isolating local chat execution.
-   - Renderer store (`modules/skill-run/store.ts`) caches projections received via IPC broadcast (`onProjectionChanged`).
+## Checkpoint C Scope & Boundaries
 
-6. **Cross References**:
-   - [[skill-run-integration]] — Approved target architecture and roadmap.
-   - [[expert-execution]] — Expert compatibility client and lifecycle boundaries.
-   - [[file-platform]] — Managed files and remote artifact transfer subsystem.
+Checkpoint C hardens feature-mode, prompt-first bind, single-active run, persist-before-call, IPC, session restore, and Catalog keyboard access.
+
+1. **Feature mode gate**:
+   - `SkillRunService.start` rejects new runs unless `getSkillRunFeatureMode()` is `skill-first`.
+   - `expert-compat` and `local-only` return `START_DISABLED_FEATURE_MODE` without issuing production HTTP.
+   - Existing readers/rehydration are not disposed when mode is not `skill-first`.
+
+2. **Prompt-first Main validation**:
+   - `bindPromptFirstTool` in `skill-run-contract-parser.ts` revalidates Catalog `toolName` and prompt-only schema on Main before `tools/call`.
+   - Extra required fields, `$ref`, or complex schema shapes fail closed with `PARAMETERS_REQUIRED` / `UNSUPPORTED_SCHEMA`.
+   - Renderer-submitted `toolName` is never trusted without Catalog confirmation.
+
+3. **Single active run per session**:
+   - `SkillRunService.start` rejects a second non-terminal run for the same `sessionId` with `RUN_ALREADY_ACTIVE`.
+   - `Chat.tsx` treats non-terminal skill projections as busy (`chatBusy`) for queue drain and submit gating.
+   - Queue dequeue uses the snapshot captured at enqueue time; remove-queued cancels skill runs via `hermesAPI.skillRun.cancel`.
+
+4. **Persist before `tools/call`**:
+   - `onPersistContinuation` writes `pending-submit` continuation before `gateway.callSkill`.
+   - IPC `broadcastProjection` continues to upsert on every projection change.
+
+5. **IPC validation & auth scope**:
+   - `skill-run-ipc.ts` mirrors Expert patterns: `requireAuthSession`, trimmed required fields, `authGeneration` aligned to `user:${id}`, length limits.
+   - Catalog cache in `skill-run-gateway-client.ts` is keyed by Main-computed auth scope (`origin|user:id`); `clearCache` on refresh/logout.
+
+6. **Session mode restore**:
+   - `skill-run-session-mode-store.ts` persists `{executionMode: skill-run, toolName, toolTitle}` per `session_id`.
+   - `Layout.handleResumeSession` restores `executionMode` and title; `Chat` restores selected skill display from mode store + catalog.
+
+7. **Catalog a11y**:
+   - `SkillCatalogPanel` supports Arrow/Enter/Esc keyboard navigation and searches category text.
+
+## Still Out (unchanged from B)
+
+These items stay out of the current Work lock slice and belong to later milestones or the Provider Owner.
+
+- M5 production default skill-first, telemetry dashboard
+- M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
+- v4.2 Expert entry removal
+- Provider-side Public Run view / Result envelope / annotated git tag publication (external Owner)
+
+## Cross References
+
+Related architecture pages for Skill Run, Expert compatibility, and File Platform.
+
+- [[skill-run-integration]] — Approved target architecture and roadmap.
+- [[expert-execution]] — Expert compatibility client and lifecycle boundaries.
+- [[file-platform]] — Managed files and remote artifact transfer subsystem.
