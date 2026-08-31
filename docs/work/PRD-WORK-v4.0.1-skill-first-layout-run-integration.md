@@ -4,13 +4,13 @@ version: v4.0.1
 status: APPROVED
 target_branch: work/prd-v4.0
 review_verdict: PASS
-approved_at: 2026-08-30T13:28:42.232+08:00
-grounding_mode: verify
-source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
-grounded_commit: c10ae2fdc9bd7d286d828836c80fcbc2debb6257
-source_commit: c10ae2fdc9bd7d286d828836c80fcbc2debb6257
-provider_commit: cdd23a22d36dcb26a9ada1dc2e0b8b5afff8065b
-provider_contract: SKILL-RUN-CONTRACT v1.0.0 candidate
+approved_at: 2026-08-31T20:21:00+08:00
+grounding_mode: revision
+source_revision: user-input:2026-08-31-provider-contract-delivery-boundary-v1
+grounded_commit: e72e5edc15af93e6e3a34cc4d6f9517fcd2b7931
+source_commit: e72e5edc15af93e6e3a34cc4d6f9517fcd2b7931
+provider_contract: Provider Owner Contract Bundle required
+provider_contract_delivery: external-immutable-bundle-only
 supersedes: WORK-SKILL-RUN-V4.0
 ---
 
@@ -24,20 +24,21 @@ supersedes: WORK-SKILL-RUN-V4.0
 |---|---|
 | Repository | `smc-copilot` |
 | Branch | `work/prd-v4.0` |
-| Checkout / `grounded_commit` | `c10ae2fdc9bd7d286d828836c80fcbc2debb6257` |
-| Grounding mode | `verify` |
+| Checkout / `grounded_commit` | `e72e5edc15af93e6e3a34cc4d6f9517fcd2b7931` |
+| Grounding mode | `revision` |
 | Affected subsystem | `apps/work` |
-| Architecture index | `apps/work/lat.md/expert-execution.md`; `apps/work/lat.md/file-platform.md` |
+| Architecture index | `apps/work/lat.md/expert-execution.md`; `apps/work/lat.md/file-platform.md`; `apps/work/lat.md/skill-run.md` |
 | Current Expert Consumer Contract | `contracts/work-expert/v1.0.2`（本 PRD 不修改） |
-| Provider commit | `cdd23a22d36dcb26a9ada1dc2e0b8b5afff8065b` |
-| Provider contract | SKILL-RUN-CONTRACT v1.0.0 candidate |
-| Source revision | `WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1` |
+| Provider delivery authority | NoDeskClaw Provider Owner |
+| Permitted Provider input | immutable, versioned Contract Bundle delivered to Work |
+| Current Work material | `contracts/skill-run/v1.0.0/consumer-lock.json` + `SHA256SUMS` (identity evidence only; not a complete Bundle) |
+| Source revision | `user-input:2026-08-31-provider-contract-delivery-boundary-v1` |
 
-Work 事实以 `grounded_commit` 为准。Provider 候选合同未带可验证 tag，生产实施仍须先关闭本文 Provider Contract Gate。
+Work 事实以 `grounded_commit` 为准。任何 Provider wire semantics、endpoint、schema、fixture 和 live-E2E prerequisite 都必须由 Provider Owner 以不可变 Contract Bundle 交付；Work 不读取、搜索或以任何方式把 NoDeskClaw 项目源码作为需求或 Grounding 输入。
 
 ## Problem and Outcome
 
-当前 Work 已有多 Chat Tab、Local Chat、Expert Context、Expert Task 生命周期、Session 持久化和 File Platform，但没有从 Layout 直接进入 Skill-first 调用的产品路径。NoDeskClaw 已把员工调用身份收敛为 `tool_name`，把执行事实收敛为 `run_id` 与 `/api/v1/runs/*`；Work 需要在不暴露 Agent/Runtime 路由、不建立第二套会话与文件平台的前提下消费这条新链路。
+当前 Work 已有 Layout「使用技能」入口、Chat Tab `executionMode`、Skill Catalog/Selection、Main `SkillRunService` 与 File Platform `skill-run` 远端身份。员工新调用的生产启用仍被不完整 Contract Bundle 挡住：现有 consumer lock 只核验 identity 文件存在，不能代表完整 Bundle。NoDeskClaw 已把员工调用身份收敛为 `tool_name`，把执行事实收敛为 `run_id` 与 `/api/v1/runs/*`；Work 继续在不暴露 Agent/Runtime 路由、不建立第二套会话与文件平台的前提下消费这条链路，且不得再 ADD 一套并行 Skill Run Owner。
 
 目标调用链为：
 
@@ -89,55 +90,65 @@ P1 包含：
 
 | Capability | Existing Production Owner | Current Behaviour | Evidence | Result |
 |---|---|---|---|---|
-| Layout 导航与多 Chat Tab | `Layout.tsx` + `chatRuns.ts` | `View` 切换大页面；每个 `ChatRun` 持有 renderer run id、profile、session、loading、title；所有 Chat 保持挂载 | `apps/work/src/renderer/src/screens/Layout/Layout.tsx#Layout`; `apps/work/src/renderer/src/screens/Layout/chatRuns.ts#ChatRun` | PARTIAL |
-| Chat 选择与提交路由 | `Chat.tsx` | 当前 Expert selection truth、Slash-first、Local/Expert 提交与队列均在 Chat；无 Skill Run mode | `apps/work/src/renderer/src/screens/Chat/Chat.tsx#Chat` | PARTIAL |
-| Composer | `ChatInput.tsx` | 统一输入、Slash、附件、模型与 Context Folder 控件；无 Skill mode capability policy | `apps/work/src/renderer/src/screens/Chat/ChatInput.tsx` | PARTIAL |
-| NoDeskClaw 授权网络 | Main Expert Gateway Client | 已有 Backend origin、JWT refresh、same-origin URL、JSON-RPC、错误清洗和 auth retry，但被 Expert 领域私有化 | `apps/work/src/main/expert/expert-gateway-client.ts#createExpertGatewayClient` | PARTIAL |
-| Expert Task 生命周期 | Main Expert Run Service | `task_id`、Expert SSE、poll、cancel、retry、materialization、Artifact discovery | `apps/work/src/main/expert/expert-run-service.ts#createExpertRunService` | EXISTS，合同不兼容 |
-| IPC / Preload | Expert IPC/API | 已有狭窄 Expert surface 和 sender/input 校验；无 Skill Run surface | `apps/work/src/main/expert/expert-ipc.ts`; `apps/work/src/preload/expert-api.ts#createExpertApi` | PARTIAL |
-| Session continuation | Session Continuation Store | 已支持 `expert-run` versioned item 与 rehydrate；无 `skill-run` item | `apps/work/src/shared/session-continuation.ts#DesktopSessionContinuationItem`; `apps/work/src/main/session-continuation-store.ts#normalizeContinuationItems` | PARTIAL |
-| Session transcript | Expert session materializer + existing Hermes Session store | Expert projection 可 upsert 普通 session/messages 与 sidebar cache | `apps/work/src/main/expert/expert-session-materialize.ts#materializeExpertSessionTranscript` | PARTIAL |
-| File Platform | Main File Platform | 统一 ManagedFile、Session association、remote preview/download/materialize；remote provider 只允许 `expert`，唯一键未包含 remote run identity | `apps/work/src/shared/files/managed-file.ts#ManagedFileRemoteProvider`; `apps/work/src/main/files/file-association-store.ts` | PARTIAL |
-| Local Chat / Runtime ChatRun | Existing Chat transport owners | 本地 Hermes Chat 与 Runtime event contract 正常工作 | `apps/work/src/main/run-stream.ts`; `apps/work/src/renderer/src/screens/Chat/Chat.tsx` | EXISTS |
+| Layout 导航与多 Chat Tab | Existing `Layout` / `ChatRun` owner | `View` 仍是大页面；`ChatRun.executionMode` 区分 `local-chat` 与 `skill-run`；「使用技能」对空白 scratch 原地切 mode，否则复用或创建 Skill Tab | `apps/work/src/renderer/src/screens/Layout/Layout.tsx#Layout`; `apps/work/src/renderer/src/screens/Layout/chatRuns.ts#ChatRun` | EXISTS |
+| Chat 选择与提交路由 | Existing `Chat.tsx` owner | 每个挂载 Chat 持有 Skill selection；Skill mode 经 `hermesAPI.skillRun.start` 提交；Slash-first 仍在 Chat | `apps/work/src/renderer/src/screens/Chat/Chat.tsx#Chat` | EXISTS |
+| Composer | Existing `ChatInput` owner | Skill mode 禁用附件并隐藏本地模型/Expert 入口 | `apps/work/src/renderer/src/screens/Chat/ChatInput.tsx` | EXISTS |
+| NoDeskClaw authorized transport | Main shared authorized transport | Expert 与 Skill Run 复用 origin、JWT refresh、same-origin、错误清洗；不拥有 lifecycle | `apps/work/src/main/auth/authorized-backend-transport.ts#createAuthorizedBackendTransport` | EXISTS |
+| Expert Task 生命周期 | Main Expert Run Service | `task_id`、Expert SSE、poll、cancel、retry、materialization 仍独立；与 Skill Run 合同不兼容 | `apps/work/src/main/expert/expert-run-service.ts#createExpertRunService` | EXISTS，合同不兼容 |
+| Expert IPC / Preload | Expert IPC/API | 狭窄 Expert surface 仍在，与 Skill Run surface 分离 | `apps/work/src/main/expert/expert-ipc.ts`; `apps/work/src/preload/expert-api.ts#createExpertApi` | EXISTS |
+| Skill Run lifecycle | Main `SkillRunService` | pending-submit、幂等、SSE/poll、cancel、result、rehydrate 已落地；start 另受 feature mode `skill-first` 约束（默认 `expert-compat`） | `apps/work/src/main/skill-run/skill-run-service.ts#createSkillRunService` | EXISTS |
+| Skill Catalog / call client | Main `SkillRunGatewayClient` | 已消费 MCP list/call 与 `/runs/*`；当前 lock Gate 在 identity-only 文件存在时放行真实 HTTP | `apps/work/src/main/skill-run/skill-run-gateway-client.ts#createSkillRunGatewayClient` | PARTIAL |
+| Work Contract Bundle / lock Gate | Existing Work Skill Run consumer-lock owner | `hasSkillRunConsumerLock()` 只检查 `consumer-lock.json` 与 `SHA256SUMS` 存在，不校验完整 Bundle manifest、schema、fixtures 或 checksum contents | `apps/work/src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunConsumerLock`; `contracts/skill-run/v1.0.0/consumer-lock.json`; `contracts/skill-run/v1.0.0/SHA256SUMS` | PARTIAL |
+| Skill Run IPC / Preload | Main Skill Run IPC + Preload API | `window.hermesAPI.skillRun` 已提供 list/start/cancel/rehydrate/subscribe；不暴露 raw URL/credential | `apps/work/src/main/skill-run/skill-run-ipc.ts`; `apps/work/src/preload/skill-run-api.ts` | EXISTS |
+| Renderer projection / Catalog UI | Renderer `modules/skill-run` presentation module | Catalog、Selection Bar 与 projection 展示已存在；selection truth 仍在 Chat | `apps/work/src/renderer/src/modules/skill-run` | EXISTS |
+| Provider event parsing | Main Skill Run contract adapter | 已有 parser；Skill/Connector discriminator 与完整 event/result schema 仍缺 Bundle，不得用私有推断补齐 | `apps/work/src/main/skill-run/skill-run-contract-parser.ts` | PARTIAL |
+| Session continuation | Existing Session / Continuation owner | 已支持 versioned `skill-run` item 与 rehydrate | `apps/work/src/shared/session-continuation.ts#DesktopSessionContinuationItem`; `apps/work/src/shared/skill-run.ts#SkillRunContinuationItem` | EXISTS |
+| Session transcript | Existing Skill Run session materializer + Hermes Session store | Skill Run projection 可 upsert 普通 session/messages | `apps/work/src/main/skill-run/skill-run-session-materialize.ts` | EXISTS |
+| File Platform | Main File Platform | `provider=skill-run` 与 Expert 共存；远端唯一索引含 `(profile, provider, remote_run_id, remote_artifact_id)` | `apps/work/src/shared/files/managed-file.ts#ManagedFileRemoteProvider`; `apps/work/src/main/files/file-association-store.ts`; `apps/work/src/main/files/upsert-skill-run-remote-artifact.ts` | EXISTS |
+| Local Chat / Runtime ChatRun | Existing Chat transport owners | 本地 Hermes Chat 与 Runtime event contract 正常工作；Skill mode 不复用 Runtime run contract | `apps/work/src/main/run-stream.ts`; `apps/work/src/renderer/src/screens/Chat/Chat.tsx` | EXISTS |
 | Local bundled Skills 管理 | `screens/Skills` | 管理本地 Hermes skills，不是员工 Skill Run Catalog | `apps/work/src/renderer/src/screens/Skills/Skills.tsx` | EXISTS |
-| Provider 员工 Catalog / Run | NoDeskClaw Backend + Agent | 候选合同已有 `tools/list`、Accepted `run_id`、Run/Event/Artifact schema 与 `/runs/*` 实现；公开消费语义仍不完整 | `nodeskclaw-backend/contracts/skill-run/v1.0.0/`; `nodeskclaw-backend/app/api/runs.py`; `nodeskclaw-agent/app/api/internal_runs.py` | PARTIAL external |
+| Provider Contract Delivery | NoDeskClaw Provider Owner | Provider 负责交付版本化、校验和可验证的 Consumer Contract Bundle；当前 Work 只有 identity lock 与 SHA256 清单，缺少本地可独立消费的 Bundle 内容 | `contracts/skill-run/v1.0.0/consumer-lock.json`; `contracts/skill-run/v1.0.0/SHA256SUMS` | PARTIAL external |
 
 ## Target End-State Inventory
 
 | Capability | Target Production Owner | Target Behaviour | Classification |
 |---|---|---|---|
-| Chat Tab 执行模式 | Existing `Layout` / `ChatRun` owner | 每个 Tab 显式区分 `local-chat` 与 `skill-run`；Layout 入口只改变或创建 Tab mode | MODIFY |
-| Skill selection truth | Existing `Chat.tsx` owner | 每个挂载 Chat 只有一个 `SkillSelection | null`；提交时冻结 request snapshot | MODIFY |
-| Skill Catalog UI | Renderer `modules/skill-run` presentation module | Skill-only Catalog、搜索、分类、状态与 Selection Bar；不拥有第二份 selection state | ADD |
-| Composer capability projection | Existing `ChatInput` owner | Skill mode 隐藏本地模型/Reasoning/Context Folder/Expert 控件；附件按合同 fail-closed | MODIFY |
-| NoDeskClaw authorized transport | Main shared authorized transport | Expert compatibility 与 Skill Run client 复用 origin、JWT refresh、same-origin、错误清洗；不拥有 lifecycle | MODIFY |
-| Skill Catalog / call client | Main `SkillRunGatewayClient` | 只消费锁定的 Skill Run contract；`tools/list`、`tools/call`、`/runs/*` | ADD |
-| Skill Run lifecycle | Main `SkillRunService` | pending-submit、幂等、SSE/poll、cancel、result、artifact discovery、rehydrate；唯一 Work lifecycle owner | ADD |
-| Skill Run IPC / Preload | Main Skill Run IPC + Preload API | Renderer-safe narrow commands与 Projection push；不暴露原始 URL/credential/event payload | ADD |
-| Renderer projection | Renderer skill-run projection store | Main projection 的只读 UI cache；不是 Provider Run SoT | ADD |
-| Provider event parsing | Main Skill Run contract adapter | 只接受合同枚举事件并生成 Renderer-safe activity projection；unknown fail-soft | ADD |
-| Run activity presentation | Renderer `modules/skill-run` | 只渲染 Work activity projection；MessageList 不理解 Provider DTO | ADD |
-| Session persistence | Existing Session / Continuation owner | 新增 versioned `skill-run` continuation 与 mode metadata；复用现有 session/messages/sidebar | MODIFY |
-| Skill Artifact | Existing File Platform owner | `skill-run` remote provider、run-scoped identity、授权预览/下载/Save As/Session Files | MODIFY |
+| Chat Tab 执行模式 | Existing `Layout` / `ChatRun` owner | 每个 Tab 显式区分 `local-chat` 与 `skill-run`；Layout 入口只改变或创建 Tab mode | KEEP |
+| Skill selection truth | Existing `Chat.tsx` owner | 每个挂载 Chat 只有一个 `SkillSelection | null`；提交时冻结 request snapshot | KEEP |
+| Skill Catalog UI | Renderer `modules/skill-run` presentation module | Skill-only Catalog、搜索、分类、状态与 Selection Bar；不拥有第二份 selection state | KEEP |
+| Composer capability projection | Existing `ChatInput` owner | Skill mode 隐藏本地模型/Reasoning/Context Folder/Expert 控件；附件按合同 fail-closed | KEEP |
+| NoDeskClaw authorized transport | Main shared authorized transport | Expert compatibility 与 Skill Run client 复用 origin、JWT refresh、same-origin、错误清洗；不拥有 lifecycle | KEEP |
+| Skill Catalog / call client | Existing Main `SkillRunGatewayClient` | 只消费已校验完整 Bundle 的 Skill Run contract；`tools/list`、`tools/call`、`/runs/*`；不完整 Bundle 时 `contract-unsupported`，不启用真实 Provider HTTP | MODIFY |
+| Skill Run lifecycle | Existing Main `SkillRunService` | pending-submit、幂等、SSE/poll、cancel、result、artifact discovery、rehydrate；唯一 Work lifecycle owner；不新增第二套 service | KEEP |
+| Skill Run IPC / Preload | Existing Main Skill Run IPC + Preload API | Renderer-safe narrow commands 与 Projection push；不暴露原始 URL/credential/event payload | KEEP |
+| Renderer projection | Existing Renderer skill-run projection store | Main projection 的只读 UI cache；不是 Provider Run SoT | KEEP |
+| Work Contract Bundle / lock Gate | Existing Work Skill Run consumer-lock owner | 完整 Bundle（manifest、SHA256 contents、schemas、fixtures）校验通过才视为 lock closed；identity-only 材料必须 fail-closed | MODIFY |
+| Provider event parsing | Existing Main Skill Run contract adapter | 只接受已校验 Bundle 枚举的事件并生成 Renderer-safe activity projection；unknown fail-soft；禁止为缺失 schema 写补偿 parser | MODIFY |
+| Run activity presentation | Renderer `modules/skill-run` | 只渲染 Work activity projection；MessageList 不理解 Provider DTO | KEEP |
+| Session persistence | Existing Session / Continuation owner | 已有 versioned `skill-run` continuation 与 mode metadata；复用现有 session/messages/sidebar | KEEP |
+| Skill Artifact | Existing File Platform owner | `skill-run` remote provider、run-scoped identity、授权预览/下载/Save As/Session Files | KEEP |
 | Expert execution | Existing Expert owners | 仅 compatibility mode 和旧在途任务；新 Skill 调用不 fallback 到 Expert | MODIFY |
 | Local Chat / Runtime ChatRun | Existing owners | 行为不变，Skill mode 不复用 Runtime run contract | KEEP |
 | Local bundled Skills | Existing `screens/Skills` owner | 行为与命名边界不变 | KEEP |
-| Provider Run SoT | NoDeskClaw Agent | Work 不可直达；Backend 只提供鉴权投影 | KEEP external |
+| Provider Contract Bundle | NoDeskClaw Provider Owner | 唯一 Provider 需求输入：发布 identity、manifest、schema、fixtures、endpoint matrix 与 checksums；Work 不读取 Provider implementation | ADD external |
+| Provider Run SoT | NoDeskClaw Agent | Work 不可直达；Backend 只提供由 Contract Bundle 定义的鉴权投影 | KEEP external |
 
 ## Change Classification
 
-| Capability | Classification | Decision |
-|---|---|---|
-| Layout 一级“使用技能”入口 | MODIFY | 在现有 Layout/ChatRun 导航 owner 中增加 execution mode transition，不增加新 View 页面 |
-| Chat Skill 选择与提交 | MODIFY | 在现有 Chat selection/submit owner 中加入 Skill path；保持 Slash-first 和单一 selection truth |
-| Skill Catalog presentation | ADD | 新模块只负责 Catalog/Selection/Projection 组件，不拥有网络与会话 truth |
-| Skill Run Main client/service/IPC | ADD | 新 wire contract 与 Expert Task 不兼容，必须独立 lifecycle owner |
-| Expert 私有 authorized transport | MODIFY | 抽取为 Main 内部共享 transport；Expert 和 Skill clients 不复制 auth/security 逻辑 |
-| 员工新 Skill 创建路径 | REPLACE | `expertSlug + skillName → task_id` 替换为 `tool_name → run_id`，无运行时自动 fallback |
-| Expert 新建员工 Skill 路径 | REMOVE | v4.2 migration gate 后删除默认入口；在此之前仅 compatibility |
-| Session / continuation | MODIFY | 新增 `skill-run` item 和 mode metadata，不新增平行 conversation database |
-| File Platform remote identity | MODIFY | provider 扩展为 `skill-run`，远端唯一性按 provider + remote run + artifact identity |
-| Local Chat、Runtime ChatRun、本地 Skills 管理 | KEEP | 保持现有 Owner 与行为 |
+| Change ID | Capability | Classification | Decision |
+|---|---|---|---|
+| | Layout 一级「使用技能」入口 | KEEP | 现有 Layout/ChatRun owner 已持 execution mode transition；不增加新 View，不新增第二 Owner |
+| | Chat Skill 选择与提交 | KEEP | 现有 Chat selection/submit owner 已含 Skill path；保持 Slash-first 和单一 selection truth |
+| | Skill Catalog presentation | KEEP | 现有 `modules/skill-run` 只负责 Catalog/Selection/Projection，不拥有网络与会话 truth |
+| | Skill Run lifecycle / IPC / projection | KEEP | `SkillRunService` 已是唯一 Work lifecycle owner；禁止再 ADD 并行 client/service/IPC |
+| | Shared authorized transport | KEEP | 已抽取为 Main 内部共享 transport；Expert 和 Skill clients 不复制 auth/security 逻辑 |
+| | Session / continuation / File Platform remote identity | KEEP | `skill-run` continuation 与 run-scoped remote identity 已落地；不新增平行 conversation/file database |
+| C01 | Work Contract Bundle / lock Gate | MODIFY | 现有 consumer-lock owner 把 identity-only 文件当作通过；必须校验完整 Bundle，否则 `contract-unsupported`，禁止生产 HTTP 与 live-E2E |
+| C02 | Skill Run Gateway / contract adapter | MODIFY | 现有 Gateway 与 parser 只消费已校验 Bundle；禁止补偿 parser，禁止在不完整 Bundle 下启用真实 Provider HTTP |
+| C03 | 员工新 Skill 创建路径 | REPLACE | `expertSlug + skillName → task_id` 替换为 `tool_name → run_id`，无运行时自动 fallback |
+| C04 | Expert 新建员工 Skill 路径 | REMOVE | v4.2 migration gate 后删除默认入口；在此之前仅 compatibility |
+| C05 | Provider Contract Bundle | ADD | Provider Owner 交付完整 Bundle（external）；Work 只在 `contracts/skill-run/<version>/` 校验与消费 |
+| | Local Chat、Runtime ChatRun、本地 Skills 管理 | KEEP | 保持现有 Owner 与行为 |
 
 ## Replacement / Removal Matrix
 
@@ -200,6 +211,23 @@ Renderer 的 `SkillSelection` 只包含展示与本地 callability 信息。Main
 
 P0 只自动绑定合同可证明为单一 string prompt 的 Tool。存在额外必填字段、远程 `$ref`、组合/递归 schema 或不支持类型时 fail-closed，进入 `parameters-required` 或 `unsupported-schema`，不猜字段。
 
+### Provider Contract Delivery Boundary
+
+NoDeskClaw Provider Owner is the sole owner for all Provider requirements. `apps/work` may consume only an immutable, versioned Contract Bundle delivered by that owner; it must never scan, read, search, reference, or use as a test/discovery input any Provider checkout, branch, implementation source, database, internal route, service, or Agent API.
+
+The Bundle must be imported at `contracts/skill-run/<version>/` and contain:
+
+1. `consumer-lock.json` with release/tag identity, peeled commit SHA, Bundle version, and Bundle checksum;
+2. `manifest.json` and `SHA256SUMS` that declare and verify every Bundle file;
+3. Catalog, call, Public Run, Result, Artifact list/download, and SSE event request/response schemas;
+4. endpoint method/path/header/status/error/retry matrix;
+5. idempotency scope/TTL/conflict/replay and SSE authentication/replay semantics;
+6. offline-replayable, redacted fixtures for success and safety/failure behavior.
+
+The Contract Bundle is a Provider Owner release output, not a Provider-source mirror and not a Work schema SOT. Work may validate and consume it, or validate its behavior against a Provider Owner supplied controlled live environment; the environment is not a discovery channel. Missing, incomplete, or checksum-invalid Bundles require `contract-unsupported` / fail-closed behavior. Work must not infer a schema, write a compensating private parser, or enable real Provider HTTP.
+
+The current `contracts/skill-run/v1.0.0/` has only release identity material (`consumer-lock.json` and `SHA256SUMS`), not the complete Bundle contents above. It does not independently close this PRD's Provider Contract Gate.
+
 ### Main process boundary
 
 Main 是 Work 侧网络与 lifecycle 的最终 Owner：
@@ -209,7 +237,7 @@ Main 是 Work 侧网络与 lifecycle 的最终 Owner：
 - `SkillRunService` 处理 durable pending-submit、幂等、Accepted、SSE/poll、cancel、result、artifact discovery、continuation 与 cleanup；
 - Main 从 auth store 计算 `backendOrigin + org + user + loginGeneration` scope，Renderer 不可自报 org/user/origin；
 - Catalog cache、pending-submit、projection、continuation、SSE 与 artifact 均按 auth scope 分区；logout、org/origin/generation/mode 变化立即失效；
-- Provider 返回 URL 仅可作为同源相对路径并通过 allowlist；优先根据 `run_id` / `artifact_id` 构造合同路径；
+- Provider paths, headers, status mappings, and retry rules come only from the verified Bundle endpoint matrix; returned URLs are permitted only as Bundle-allowed same-origin relative paths and must pass the allowlist;
 - Renderer 只接收用户可显示、长度受限且已清洗的错误。
 
 ### IPC and Preload contract
@@ -245,7 +273,7 @@ P0 只呈现合同稳定的 Run phase、连接状态、最终 Result 和 Artifac
 
 复用现有 Hermes Session/messages、sidebar cache 与 Session Continuation Store：
 
-- 新增 versioned `skill-run` continuation item；
+- 使用已有 versioned `skill-run` continuation item；
 - session metadata 可恢复 execution mode 与最后合法 Skill display snapshot；
 - accepted 后 upsert user/assistant transcript，后续 projection 更新同一 assistant row；
 - terminal continuation 可按 retention policy 清理，但历史 transcript 与 File association 保留；
@@ -259,7 +287,7 @@ Main 在合同化 Artifact list 后，把 descriptor upsert 为现有 ManagedFil
 
 ## Provider Contract Gate
 
-Work PRD 可以批准，但任何生产 implementation slice 在导入以下完整、带 tag、checksum 可验证的 Consumer Contract 前不得启用：
+Work PRD 可以批准，但任何 production implementation 或 live-E2E slice 在 Provider Owner 交付且 Work 校验完整 Contract Bundle 前不得启用。Gate 的唯一证据是本仓库 `contracts/skill-run/<version>/` 中的 Bundle；Provider source, branch, checkout, raw manifest path, or verbal confirmation are not evidence.
 
 1. Skill-only Catalog discriminator，或等价的稳定 endpoint 语义；当前 descriptor 无法区分 Skill 与 Public Connector；
 2. Public Run view，禁止把含 org/user/internal snapshot 的 Agent `RunRecord` 直接作为 Work DTO；
@@ -271,11 +299,11 @@ Work PRD 可以批准，但任何生产 implementation slice 在导入以下完�
 8. endpoint method/path/header/status/error/cache/retry contract；
 9. Attachment refs/upload contract（启用附件前）。
 
-当前本地 Provider 候选目录已有 manifest 与 checksum，但本地没有 `skill-run-contract-v1.0.0` tag；远端 tag 因当前 SSH 凭证不可访问而未能确认。ROADMAP Phase 0 必须由 Provider Owner 关闭该 Gate，Work 不以私有 parser 补偿。
+Provider Owner delivers the Bundle; the existing Work consumer-lock owner only validates release identity, checksums, schemas, and fixtures offline. It must not treat identity-only `consumer-lock.json` + `SHA256SUMS` as a closed Gate. The existing v1.0.0 lock/SHA256 material is insufficient to close this Gate. ROADMAP M0 must be re-accepted against the complete Bundle. Work must not compensate missing contract material with Provider-source inspection, private parser inference, or observation of a live environment.
 
 ## Security and Trust Boundary
 
-- Work 只连接 nodeskclaw-backend；Agent internal URL/token 不进入 Work；
+- Work only connects to the Provider public backend surface defined by the verified Contract Bundle; Agent internal URLs/tokens do not enter Work;
 - Renderer 不持有 JWT、Backend origin、SSE credential、download URL 或内部 routing；
 - Main handler 验证 sender、session/profile、auth generation、输入长度与 Tool schema；
 - Backend 是 Auth/RBAC/Policy/Approval 的最终 enforcement owner；Renderer guard 只提供 UX；
@@ -289,7 +317,7 @@ Work PRD 可以批准，但任何生产 implementation slice 在导入以下完�
 
 生产默认切换前必须满足：
 
-- Provider Contract Gate 完整关闭并由 Work checksum lock；
+- Provider Contract Gate is closed by a validated complete Bundle and Work checksum lock;
 - contract/main/ipc/renderer/e2e tests 通过；
 - Skill Run 成功率、reconnect、duplicate prevention、artifact failure 与 unauthorized 指标可观测；
 - Expert 与 Skill Run reader 可并存恢复各自任务；
@@ -298,7 +326,7 @@ Work PRD 可以批准，但任何生产 implementation slice 在导入以下完�
 
 ## Test Strategy
 
-- Contract tests：manifest/checksum、Catalog discriminator、Public Run、Result、Artifact、Event、Approval、SSE 与幂等 fixtures；
+- Contract tests run only against the Provider Owner Bundle's manifest/checksum, Catalog discriminator, Public Run, Result, Artifact, Event, Approval, SSE, and idempotency fixtures; Provider source and internal tests cannot substitute;
 - Main tests：auth scope cache、same-origin、refresh、pending-submit、replay、terminal monotonic、poll fallback、logout disposal；
 - IPC tests：sender/input validation、projection sanitization、无 credential/URL/raw payload 泄漏；
 - Renderer tests：Layout mode transition、单一 selection truth、Catalog states、queue snapshot、toolbar DOM removal、keyboard/a11y；
@@ -314,7 +342,7 @@ Work PRD 可以批准，但任何生产 implementation slice 在导入以下完�
 4. 未选择 Skill 时展示 Catalog 并禁用发送；选择后展示 Selection Bar；全部错误/空状态可恢复。
 5. Skill mode 不渲染本地模型、Reasoning、Fast Mode、Context Folder 或 Expert 控件；附件未合同化时明确禁用。
 6. Catalog 只显示合同可证明为 Skill 的项；缺少 discriminator 时显示 contract unsupported，而不是猜测过滤。
-7. Work 锁定带 tag/checksum 的完整 Skill Run Consumer Contract；旧 work-expert lock 不变。
+7. Work locks only the complete, tag/release-identified and checksummed Skill Run Contract Bundle delivered by Provider Owner; identity-only `consumer-lock.json` + `SHA256SUMS` is not a closed lock and must surface `contract-unsupported` for Catalog, production start, and live-E2E. The old work-expert lock remains unchanged and Provider source is never a Contract input.
 8. 新调用只使用 `tool_name` 与 `run_id`，不发送 Expert/Agent/Runtime/Profile/Workspace routing 字段。
 9. Provider `run_id`、Renderer `ChatRun.runId` 与 `clientRequestId` 在类型、持久化和日志中不可互换。
 10. Renderer 无法取得 JWT、Backend/Agent URL、raw Provider event、download token 或 absolute path。
@@ -333,7 +361,7 @@ Work PRD 可以批准，但任何生产 implementation slice 在导入以下完�
 
 ## Definition of Done
 
-1. Provider Contract Gate 与 Work Consumer Lock 就绪，无未验证 schema。
+1. Provider Owner Contract Bundle and Work Consumer Lock are present and content-validated; no schema is unverified and no Work implementation/test input comes from Provider source.
 2. Contract、Main、IPC、Renderer 与 Session 聚焦测试全部通过，无回归。
 3. 生产切换前通过完整 Checklist，历史任务可独立恢复且无 silent fallback。
 
@@ -346,29 +374,31 @@ Work PRD 可以批准，但任何生产 implementation slice 在导入以下完�
 - `apps/work/src/renderer/src/screens/Layout/chatRuns.ts#isScratchRun`
 - `apps/work/src/renderer/src/screens/Chat/Chat.tsx#Chat`
 - `apps/work/src/renderer/src/screens/Chat/ChatInput.tsx`
+- `apps/work/src/main/auth/authorized-backend-transport.ts#createAuthorizedBackendTransport`
 - `apps/work/src/main/expert/expert-gateway-client.ts#createExpertGatewayClient`
 - `apps/work/src/main/expert/expert-run-service.ts#createExpertRunService`
-- `apps/work/src/main/expert/expert-session-materialize.ts#materializeExpertSessionTranscript`
+- `apps/work/src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunConsumerLock`
+- `apps/work/src/main/skill-run/skill-run-gateway-client.ts#createSkillRunGatewayClient`
+- `apps/work/src/main/skill-run/skill-run-contract-parser.ts`
+- `apps/work/src/main/skill-run/skill-run-service.ts#createSkillRunService`
+- `apps/work/src/main/skill-run/skill-run-session-materialize.ts`
+- `apps/work/src/main/skill-run/skill-run-ipc.ts`
+- `apps/work/src/preload/skill-run-api.ts`
+- `apps/work/src/shared/skill-run.ts#SkillRunContinuationItem`
 - `apps/work/src/shared/session-continuation.ts#DesktopSessionContinuationItem`
 - `apps/work/src/main/session-continuation-store.ts#normalizeContinuationItems`
 - `apps/work/src/shared/files/managed-file.ts#ManagedFileRemoteProvider`
 - `apps/work/src/main/files/file-association-store.ts`
-- `apps/work/src/main/files/upsert-expert-remote-artifact.ts#upsertExpertRemoteArtifact`
+- `apps/work/src/main/files/upsert-skill-run-remote-artifact.ts`
 - `apps/work/src/main/app/start.ts#startMainProcess`
 - `apps/work/lat.md/expert-execution.md`
 - `apps/work/lat.md/file-platform.md`
+- `apps/work/lat.md/skill-run.md`
 
-### Contracts and provider
+### Contracts and Provider Owner delivery
 
 - `contracts/work-expert/v1.0.2/consumer-lock.json`
 - `docs/architecture/contract-flow.md`
-- `nodeskclaw-backend/contracts/skill-run/v1.0.0/manifest.json`
-- `nodeskclaw-backend/contracts/skill-run/v1.0.0/mcp/tools-list.response.schema.json`
-- `nodeskclaw-backend/contracts/skill-run/v1.0.0/mcp/tools-call.response.schema.json`
-- `nodeskclaw-backend/contracts/skill-run/v1.0.0/events/run-event.schema.json`
-- `nodeskclaw-backend/contracts/skill-run/v1.0.0/runs/run.schema.json`
-- `nodeskclaw-backend/contracts/skill-run/v1.0.0/runs/artifact-descriptor.schema.json`
-- `nodeskclaw-backend/app/api/runs.py`
-- `nodeskclaw-backend/app/services/hermes_skill/runtime_skill_run_service.py#RuntimeSkillRunService`
-- `nodeskclaw-agent/app/api/internal_runs.py#create_internal_run`
-- `nodeskclaw-agent/app/services/run_service.py#create_run`
+- `contracts/skill-run/v1.0.0/consumer-lock.json` (current identity-only material)
+- `contracts/skill-run/v1.0.0/SHA256SUMS` (current identity-only material)
+- Provider Owner delivered Contract Bundle at `contracts/skill-run/<version>/` (required before any production or live-E2E Provider integration)
