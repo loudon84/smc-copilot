@@ -1,7 +1,8 @@
-This directory defines the high-level concepts, business logic, and architecture of this project using markdown. It is managed by [lat.md](https://www.npmjs.com/package/lat.md) — a tool that anchors source code to these definitions. Install the `lat` command with `npm i -g lat.md` and run `lat --help`.
+This directory defines the high-level concepts, business logic, and architecture of SMC Copilot Work. It is managed by [lat.md](https://www.npmjs.com/package/lat.md), which anchors source code to these definitions.
 
-> **Copilot Desktop** is the company's internal desktop application infrastructure. It connects to a local **Hermes Agent** runtime for Chat and does not install or configure that agent.
+> **SMC Copilot Work** is an Electron application with privileged Main-process coordination, a narrow preload bridge, and an unprivileged React renderer. Its deployment-specific Hermes control owner remains outside the renderer boundary.
 
+- [[project-structure]] — the validated source, process, build, and test layout; use this as the starting point before following a feature-specific document.
 - [[runtime-connection]] — locate an existing Hermes Agent, ensure Gateway health, and enter Chat without embedded install or API-key setup gates.
 - [[chat-commands]] — how typed slash commands are routed through the gateway's `slash.exec`/`command.dispatch` pipeline instead of being sent as prompt text.
 - [[chat-runtime-contract]] — provider-neutral Chat event projection, turn-scoped terminal semantics, durable/transient delivery boundaries, and Artifact routing through File Platform.

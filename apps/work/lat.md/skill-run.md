@@ -36,11 +36,13 @@ Checkpoint C hardens Skill Run start gates, prompt-first validation, single-acti
 7. **Catalog a11y**:
    - `SkillCatalogPanel` supports Arrow/Enter/Esc keyboard navigation and searches category text.
 
-## M0 Provider Contract Bundle (pending re-acceptance)
+## M0 Provider Contract Bundle (v1.2.1 locked)
 
-Provider Owner must deliver a complete immutable Contract Bundle; the current lock and checksum list establish release identity only and do not close M0 alone.
+Work has imported the complete immutable `SKILL-RUN-CONTRACT` v1.2.1 Bundle and pins the published `skill-run-contract-v1.2.1` tag before allowing the consumer gate to open.
 
-Work may consume only `contracts/skill-run/<version>/` Bundle contents: lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. Work never scans Provider source, branches, checkout, Agent routes, or databases to infer missing requirements. `hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require `consumer-lock.json`, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. Identity-only material (lock + SHA256SUMS without Bundle contents) returns false and Catalog/start stay `contract-unsupported`. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`; production start also requires feature mode `skill-first` (default remains `expert-compat`).
+Work consumes only `contracts/skill-run/<version>/` Bundle contents: its consumer lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. `contracts/skill-run/v1.2.1/consumer-lock.json` pins tag target `10d38f2c97739c4a55df893d1dc954fc8896f1a7`; the Provider-owned files remain covered solely by its LF `SHA256SUMS`.
+
+`hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require a Work lock, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. The legacy v1.0.0 identity-only material remains a fail-closed regression case, while checksum-valid v1.2.1 returns true. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`; production start still additionally requires feature mode `skill-first` (the default remains `expert-compat`).
 
 ## Checkpoint B Live / Fixture E2E
 

@@ -174,8 +174,17 @@ export function createSkillRunGatewayClient(
 
       try {
         const { result } = await jsonRpc("tools/list", {});
-        const toolsRaw =
-          isRecord(result) && Array.isArray(result.tools) ? result.tools : [];
+        if (!isRecord(result) || !Array.isArray(result.tools)) {
+          const unsupported: SkillCatalogResponse = {
+            status: "contract-unsupported",
+            tools: [],
+            reason:
+              "Skill Run Catalog response is missing a tools array.",
+          };
+          cachedCatalogByScope.set(scopeKey, unsupported);
+          return unsupported;
+        }
+        const toolsRaw = result.tools;
         for (const raw of toolsRaw) {
           if (
             !isRecord(raw) ||

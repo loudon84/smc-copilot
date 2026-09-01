@@ -19,7 +19,14 @@ import {
   isCompleteSkillRunBundleDir,
 } from "./skill-run-consumer-lock";
 
-const LOCK_DIR = join(process.cwd(), "../../contracts/skill-run/v1.0.0");
+const IDENTITY_LOCK_DIR = join(
+  process.cwd(),
+  "../../contracts/skill-run/v1.0.0",
+);
+const COMPLETE_LOCK_DIR = join(
+  process.cwd(),
+  "../../contracts/skill-run/v1.2.1",
+);
 const EXPERT_LOCK = join(
   process.cwd(),
   "../../contracts/work-expert/v1.0.2/consumer-lock.json",
@@ -87,7 +94,7 @@ afterEach(() => {
 describe("SKILL-RUN-CONTRACT consumer lock", () => {
   it("keeps identity-only v1.0.0 material but does not treat it as a closed lock", () => {
     const lock = JSON.parse(
-      readFileSync(join(LOCK_DIR, "consumer-lock.json"), "utf8"),
+      readFileSync(join(IDENTITY_LOCK_DIR, "consumer-lock.json"), "utf8"),
     ) as {
       contractName: string;
       contractVersion: string;
@@ -96,7 +103,7 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
       providerSha256sumsPath: string;
       sha256sumsPath: string;
     };
-    const sumsBytes = readFileSync(join(LOCK_DIR, "SHA256SUMS"));
+    const sumsBytes = readFileSync(join(IDENTITY_LOCK_DIR, "SHA256SUMS"));
     const sums = sumsBytes.toString("utf8");
 
     expect(WORK_SKILL_RUN_CONTRACT_NAME).toBe("WORK-SKILL-RUN-CONTRACT");
@@ -124,8 +131,35 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(sums).toContain("capabilities/unsupported.schema.json");
     expect(sums).toContain("fixtures/idempotency-replay.json");
     expect(existsSync(EXPERT_LOCK)).toBe(true);
-    expect(isCompleteSkillRunBundleDir(LOCK_DIR)).toBe(false);
-    expect(hasSkillRunConsumerLock()).toBe(false);
+    expect(isCompleteSkillRunBundleDir(IDENTITY_LOCK_DIR)).toBe(false);
+  });
+
+  it("opens the gate for the checksum-valid v1.2.1 Provider Bundle", () => {
+    const lock = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR, "consumer-lock.json"), "utf8"),
+    ) as {
+      contractName: string;
+      contractVersion: string;
+      tagName: string;
+      tagTargetCommit: string;
+      providerSha256sumsPath: string;
+      sha256sumsPath: string;
+    };
+    const sumsBytes = readFileSync(join(COMPLETE_LOCK_DIR, "SHA256SUMS"));
+
+    expect(lock.contractName).toBe("SKILL-RUN-CONTRACT");
+    expect(lock.contractVersion).toBe("1.2.1");
+    expect(lock.tagName).toBe("skill-run-contract-v1.2.1");
+    expect(lock.tagTargetCommit).toBe(
+      "10d38f2c97739c4a55df893d1dc954fc8896f1a7",
+    );
+    expect(lock.providerSha256sumsPath).toBe(
+      "nodeskclaw-backend/contracts/skill-run/v1.2.1/SHA256SUMS",
+    );
+    expect(lock.sha256sumsPath).toBe("SHA256SUMS");
+    expect(sumsBytes.includes(0x0d)).toBe(false);
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR)).toBe(true);
+    expect(hasSkillRunConsumerLock()).toBe(true);
   });
 
   it("accepts a checksum-valid complete Bundle fixture", () => {
@@ -151,5 +185,28 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     writeCompleteFixture(missing);
     rmSync(join(missing, "manifest.json"), { force: true });
     expect(isCompleteSkillRunBundleDir(missing)).toBe(false);
+  });
+
+  it("rejects CRLF SHA256SUMS", () => {
+    const root = mkdtempSync(join(tmpdir(), "skill-run-bundle-crlf-"));
+    tempDirs.push(root);
+    writeCompleteFixture(root);
+    const sumsPath = join(root, "SHA256SUMS");
+    const lfSums = readFileSync(sumsPath, "utf8");
+    writeFileSync(sumsPath, lfSums.replace(/\n/g, "\r\n"), "utf8");
+    expect(isCompleteSkillRunBundleDir(root)).toBe(false);
+  });
+
+  it("rejects SHA256SUMS that omit a required P0 path", () => {
+    const root = mkdtempSync(join(tmpdir(), "skill-run-bundle-omit-"));
+    tempDirs.push(root);
+    writeCompleteFixture(root);
+    const sumsPath = join(root, "SHA256SUMS");
+    const filtered = readFileSync(sumsPath, "utf8")
+      .split("\n")
+      .filter((line) => !line.includes("manifest.json"))
+      .join("\n");
+    writeFileSync(sumsPath, filtered.endsWith("\n") ? filtered : `${filtered}\n`, "utf8");
+    expect(isCompleteSkillRunBundleDir(root)).toBe(false);
   });
 });

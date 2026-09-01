@@ -101,6 +101,15 @@ describe("skill-run-gateway-client lock and discriminator gates", () => {
     expect(catalog.tools).toEqual([]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it("returns contract-unsupported when tools/list omits the tools array", async () => {
+    const fetchImpl = vi.fn(async () => jsonRpcResult({}));
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    const catalog = await client.listCatalog();
+    expect(catalog.status).toBe("contract-unsupported");
+    expect(catalog.tools).toEqual([]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("skill-run-gateway-client contract wire", () => {
