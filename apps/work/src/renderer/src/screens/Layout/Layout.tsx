@@ -11,6 +11,7 @@ import {
   isScratchRun,
   openSessionRunTransition,
   selectProfileRunTransition,
+  selectSkillModeTransition,
   findRunBySession,
   cycleRunId,
   runIdAtOrdinal,
@@ -386,35 +387,9 @@ function Layout(): React.JSX.Element {
   }, [runs, activeRunId, activeProfile, goTo]);
 
   const handleUseSkill = useCallback(() => {
-    const active = runs.find((r) => r.runId === activeRunId);
-    if (active) {
-      if (active.executionMode === "skill-run" && isScratchRun(active, "skill-run")) {
-        goTo("chat");
-        return;
-      }
-      if (isScratchRun(active)) {
-        setRuns((prev) =>
-          prev.map((r) =>
-            r.runId === active.runId ? { ...r, executionMode: "skill-run" } : r,
-          ),
-        );
-        goTo("chat");
-        return;
-      }
-    }
-
-    const existingSkillScratch = runs.find(
-      (r) => r.profile === activeProfile && isScratchRun(r, "skill-run"),
-    );
-    if (existingSkillScratch) {
-      setActiveRunId(existingSkillScratch.runId);
-      goTo("chat");
-      return;
-    }
-
-    const run = mintRun(activeProfile, undefined, "skill-run");
-    setRuns((prev) => [...prev, run]);
-    setActiveRunId(run.runId);
+    const next = selectSkillModeTransition(runs, activeRunId, activeProfile);
+    setRuns(next.runs);
+    setActiveRunId(next.activeRunId);
     goTo("chat");
   }, [runs, activeRunId, activeProfile, goTo]);
 

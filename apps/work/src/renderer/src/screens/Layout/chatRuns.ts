@@ -163,6 +163,43 @@ export function findRunBySession(
   return runs.find((r) => r.sessionId === sessionId);
 }
 
+/**
+ * Apply Layout "使用技能" navigation: stay on skill scratch, convert blank scratch
+ * in-place, or reuse/mint a profile skill scratch without aborting other tabs.
+ */
+export function selectSkillModeTransition(
+  runs: ChatRun[],
+  activeRunId: string,
+  profile: string,
+): { activeRunId: string; runs: ChatRun[] } {
+  const active = runs.find((r) => r.runId === activeRunId);
+  if (active) {
+    if (active.executionMode === "skill-run" && isScratchRun(active, "skill-run")) {
+      return { activeRunId, runs };
+    }
+    if (isScratchRun(active)) {
+      return {
+        activeRunId,
+        runs: runs.map((r) =>
+          r.runId === active.runId
+            ? { ...r, executionMode: "skill-run" as const }
+            : r,
+        ),
+      };
+    }
+  }
+
+  const existingSkillScratch = runs.find(
+    (r) => r.profile === profile && isScratchRun(r, "skill-run"),
+  );
+  if (existingSkillScratch) {
+    return { activeRunId: existingSkillScratch.runId, runs };
+  }
+
+  const next = mintRun(profile, undefined, "skill-run");
+  return { activeRunId: next.runId, runs: [...runs, next] };
+}
+
 /** Session ids of every currently-loading run (for sidebar spinners). */
 export function loadingSessionIds(runs: ChatRun[]): Set<string> {
   const ids = new Set<string>();

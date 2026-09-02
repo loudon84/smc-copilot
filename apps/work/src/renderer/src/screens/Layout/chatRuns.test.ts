@@ -6,6 +6,7 @@ import {
   openSessionRunTransition,
   runIdAtOrdinal,
   selectProfileRunTransition,
+  selectSkillModeTransition,
   type ChatRun,
 } from "./chatRuns";
 
@@ -195,5 +196,61 @@ describe("chrome-style tab shortcuts", () => {
     expect(runIdAtOrdinal(three, 4)).toBeNull();
     expect(runIdAtOrdinal([], 1)).toBeNull();
     expect(runIdAtOrdinal([], 9)).toBeNull();
+  });
+});
+
+describe("skill mode tab transition", () => {
+  it("converts a blank scratch tab in place to skill-run mode", () => {
+    const runs = [run("run-a", "alfie", { executionMode: "local-chat" })];
+
+    const next = selectSkillModeTransition(runs, "run-a", "alfie");
+
+    expect(next.activeRunId).toBe("run-a");
+    expect(next.runs).toEqual([
+      { ...runs[0], executionMode: "skill-run" },
+    ]);
+    expect(next.runs[0]).not.toHaveProperty("selectedSkill");
+  });
+
+  it("stays on an existing skill scratch without mutating runs", () => {
+    const runs = [run("run-skill", "alfie", { executionMode: "skill-run" })];
+
+    const next = selectSkillModeTransition(runs, "run-skill", "alfie");
+
+    expect(next.activeRunId).toBe("run-skill");
+    expect(next.runs).toBe(runs);
+  });
+
+  it("does not mutate other loading tabs when minting a skill scratch", () => {
+    const randomUUID = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValue("00000000-0000-4000-8000-000000000003");
+    const runs = [
+      run("run-busy", "alfie", {
+        sessionId: "session-busy",
+        loading: true,
+      }),
+      run("run-kitt", "kitt", { sessionId: "session-kitt" }),
+    ];
+
+    const next = selectSkillModeTransition(runs, "run-busy", "alfie");
+
+    expect(next.activeRunId).toBe("run-00000000-0000-4000-8000-000000000003");
+    expect(next.runs[0]?.loading).toBe(true);
+    expect(next.runs[0]?.sessionId).toBe("session-busy");
+    expect(next.runs).toHaveLength(3);
+    randomUUID.mockRestore();
+  });
+
+  it("reuses an existing profile skill scratch instead of minting", () => {
+    const runs = [
+      run("run-active", "alfie", { sessionId: "session-active" }),
+      run("run-skill", "alfie", { executionMode: "skill-run" }),
+    ];
+
+    const next = selectSkillModeTransition(runs, "run-active", "alfie");
+
+    expect(next.activeRunId).toBe("run-skill");
+    expect(next.runs).toBe(runs);
   });
 });

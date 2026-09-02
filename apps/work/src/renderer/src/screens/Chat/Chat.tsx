@@ -143,6 +143,19 @@ function playFinishChime(): void {
   }
 }
 
+export function resolveRestoredSkillSelection(
+  mode: { toolName: string; toolTitle: string },
+  catalogTools: SkillCatalogToolItem[],
+): SkillCatalogToolItem {
+  const tool = catalogTools.find((entry) => entry.toolName === mode.toolName);
+  if (tool) return tool;
+  return {
+    toolName: mode.toolName,
+    title: mode.toolTitle,
+    callability: "callable",
+  };
+}
+
 interface ChatProps {
   /** Stable id for this conversation/run. One <Chat> is mounted per run; all
    *  remain mounted (background sessions) and only the active one is shown. */
@@ -424,16 +437,9 @@ function Chat({
     void window.hermesAPI.skillRun.getSessionMode(sessionId).then((mode) => {
       if (!mode) return;
       const catalog = getSkillRunCatalogState();
-      const tool = catalog.tools.find((entry) => entry.toolName === mode.toolName);
-      if (tool) {
-        setSelectedSkill(tool);
-        return;
-      }
-      setSelectedSkill({
-        toolName: mode.toolName,
-        title: mode.toolTitle,
-        callability: "callable",
-      });
+      setSelectedSkill(
+        resolveRestoredSkillSelection(mode, catalog.tools),
+      );
     });
   }, [hermesSessionId, initialSessionId, isSkillRunMode]);
 

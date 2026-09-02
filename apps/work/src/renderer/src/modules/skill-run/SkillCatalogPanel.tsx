@@ -209,15 +209,11 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
           </h2>
 
           <button
-
             className="skill-catalog-refresh-btn"
-
             type="button"
-
             onClick={() => void fetchSkillRunCatalog(true)}
-
             title={t("skillRun.refresh") || "Refresh"}
-
+            aria-label={t("skillRun.refresh") || "Refresh"}
           >
 
             <Refresh size={14} />
@@ -293,15 +289,11 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
             {categories.map((cat) => (
 
               <button
-
                 key={cat}
-
                 type="button"
-
                 className={`skill-category-pill ${selectedCategory === cat ? "active" : ""}`}
-
+                aria-pressed={selectedCategory === cat}
                 onClick={() => setSelectedCategory(cat)}
-
               >
 
                 {cat === "all" ? t("skillRun.categoryAll") || "All" : cat}

@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRef } from "react";
 
 // ChatInput pulls translations through useI18n (which requires the i18next
 // provider). Stub it so the component can render in isolation; the keys are
@@ -119,5 +120,36 @@ describe("ChatInput — slash command palette", () => {
     fireEvent.keyDown(textarea, { key: "ArrowUp" });
     expect(screen.getByText("command-999")).toBeTruthy();
     expect(screen.queryByText("command-0")).toBeNull();
+  });
+});
+
+describe("ChatInput — skill mode attachments", () => {
+  it("hides the attach control and rejects addFiles when attachments are disabled", async () => {
+    const ref = createRef<React.ComponentRef<typeof ChatInput>>();
+
+    render(
+      <ChatInput
+        ref={ref}
+        isLoading={false}
+        hasSession={true}
+        attachmentsDisabled={true}
+        onSubmit={vi.fn()}
+        onQuickAsk={vi.fn()}
+        onAbort={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "chat.attach" })).toBeNull();
+
+    const errors = await ref.current?.addFiles([
+      new File(["hello"], "note.txt", { type: "text/plain" }),
+    ]);
+
+    expect(errors).toEqual([
+      {
+        name: "attachments",
+        message: "skillRun.attachmentsDisabled",
+      },
+    ]);
   });
 });
