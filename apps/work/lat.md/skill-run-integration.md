@@ -40,6 +40,12 @@ The roadmap follows contract-first vertical slices so each checkpoint preserves 
 5. Add run-scoped remote Artifact identity through File Platform.
 6. Pilot, promote to production default, then plan P1 and Expert removal separately.
 
+## M2 safe selection boundary
+
+M2 may make Skill mode discoverable and selectable while Provider live replay is deferred, but selection is never execution authority.
+
+Layout owns only tab mode and navigation; the mounted Chat owns the single selected Skill and Composer projection; Catalog reaches the Renderer only through the Main-owned sanitized IPC DTO. A missing discriminator remains contract-unsupported, and default `expert-compat` prevents the selection path from issuing `tools/call`.
+
 ## Source documents
 
 The PRD is the architecture authority and the ROADMAP is the delivery-order authority.
