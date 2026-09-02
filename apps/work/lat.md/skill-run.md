@@ -56,12 +56,13 @@ Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:sk
   - `SMC_SKILL_RUN_E2E_PROMPT` (optional short prompt)
 - **AC-12 evidence grading:** fixture green proves same-process idempotency / restart without second `tools/call`. **Cross-end** “only one Provider Run” is **proven only when live suite actually runs**. If live is skipped → Completion = `IMPLEMENTED_NOT_PROVEN` for AC-12 cross-end; do not claim proven from fixture alone.
 - Evidence under `artifacts/work-v4.0.1-checkpoint-b-live-e2e/` must not contain JWT, absolute backend URLs, prompt全文, or artifact bytes.
+- The live suite is technically env-gated, but RM-01 completion requires a Provider-published prompt-first Skill plus manual successful live replay. A Catalog tool with optional object/array/ref schema is rejected as `UNSUPPORTED_SCHEMA` before `tools/call`; M1/M2 do not weaken that Main-side rule.
 
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
-- Live E2E remains optional until a deployed NoDeskClaw backend + published skill are available in CI
+- RM-01 live replay is deferred until Provider publishes a prompt-first verification Skill; it is mandatory before RM-04 real execution or production promotion
 - M5 production default skill-first, telemetry dashboard
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
 - v4.2 Expert entry removal

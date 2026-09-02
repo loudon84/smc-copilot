@@ -27,14 +27,16 @@ Real Skill Run start stays disabled until Work locks an immutable tagged contrac
 
 The gate requires a Skill-only Catalog discriminator, Public Run view, Result and Artifact envelopes, event discriminated union, SSE auth/replay semantics, idempotency semantics, endpoint/error fixtures, and later Approval or Attachment contracts before those controls are enabled.
 
+The v1.2.1 Bundle is locked, but RM-01 controlled live replay remains deferred pending a Provider-published prompt-first Skill and manual verification. That deferral permits only M1 dark Main/Preload foundation and M2 safe selection work; RM-04 real execution and production promotion remain blocked by RM-01.
+
 ## Delivery sequence
 
 The roadmap follows contract-first vertical slices so each checkpoint preserves the approved ownership model.
 
-1. Close and lock the Provider contract.
-2. Add the shared authorized transport and dark Main/IPC foundation.
-3. Add Layout mode, Catalog, selection, and Composer capability projection.
-4. Add start, recovery, cancel, queue, final Result, and durable continuation.
+1. Lock the Provider contract Bundle; complete controlled live replay before real execution.
+2. While that live verification is pending, add or validate only the shared authorized transport and dark Main/IPC foundation.
+3. Add Layout mode, Catalog, selection, and Composer capability projection without enabling real submission.
+4. After live replay passes, add start, recovery, cancel, queue, final Result, and durable continuation.
 5. Add run-scoped remote Artifact identity through File Platform.
 6. Pilot, promote to production default, then plan P1 and Expert removal separately.
 
@@ -44,4 +46,3 @@ The PRD is the architecture authority and the ROADMAP is the delivery-order auth
 
 - [Approved PRD](../../../docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md)
 - [Delivery ROADMAP](../../../docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md)
-
