@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-02T03:58:38.010320Z
+updated_at: 2026-09-02T07:17:23.483562Z
 implementation_plan_required: true
 ---
 
@@ -23,7 +23,7 @@ implementation_plan_required: true
 |---|---|---|---|---|---|---|---|---|
 | RM-01 | M0 Provider Contract Ready：Provider 更新后由人工完成受控 live 验证；Work 只消费不可变 Bundle。 | - | BACKLOG | tag/manifest/SHA256 与 P0 schemas、endpoint/error fixtures 全部通过；Public DTO 安全；同一 idempotency key 跨端只创建一个 Run；Provider/Work contract tests 通过。 | `docs/work/PRD-WORK-v4.0.1-M0-provider-contract-ready.md` | - | - | 2026-09-01 fixture checks passed (consumer/gateway 14/14; E2E 8/8). 2026-09-02 live Catalog found the configured tool but Work rejected its optional object field as `UNSUPPORTED_SCHEMA` before `tools/call`; pending a Provider-published prompt-first skill and manual live replay verification. |
 | RM-02 | M1 Work Contract and Main Foundation：不启用真实 `tools/call` 的 Main/Preload dark foundation 可用。 | - | DONE | auth scope、sanitized IPC、feature mode、Parser/Gateway/Service 与 focused tests 通过；默认保持 `expert-compat`，不得以本项启用真实 Skill Run start。 | docs/work/PRD-WORK-v4.0.1-M1-main-preload-dark-foundation.md | .cursor/plans/work-v4.0.1-m1-main-preload-dark-foundation.plan.md | e72e5edc15af93e6e3a34cc4d6f9517fcd2b7931 | apps/work/artifacts/rm-02-m1/ |
-| RM-03 | M2 Layout, Catalog, and Selection：现有 Chat 内的安全 Skill selection UX 可用。 | RM-02 | IN_PRD | Layout/Chat 单一 owner、Catalog discriminator、a11y、mode/selection persistence 和 Renderer tests 通过；真实 start 仍受 RM-01 gate 控制。 | `docs/work/PRD-WORK-v4.0.1-M2-layout-catalog-selection.md` | - | - | - |
+| RM-03 | M2 Layout, Catalog, and Selection：现有 Chat 内的安全 Skill selection UX 可用。 | RM-02 | DONE | Layout/Chat 单一 owner、Catalog discriminator、a11y、mode/selection persistence 和 Renderer tests 通过；真实 start 仍受 RM-01 gate 控制。 | docs/work/PRD-WORK-v4.0.1-M2-layout-catalog-selection.md | .cursor/plans/work-v4.0.1-m2-layout-catalog-selection.plan.md | f74bdf45 | apps/work/artifacts/rm-03-m2/ (V01-V05 PASS; typecheck:web has only pre-existing diagnostics outside M2) |
 | RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-01, RM-03 | BACKLOG | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与跨项目 E2E 通过。 | - | - | - | - |
 | RM-05 | M4 Result, Artifact, and Session Files：Result/Artifact 复用现有 File Platform 并完成 Checkpoint B。 | RM-04 | BACKLOG | run-scoped remote identity、Artifact safety、Session Files、真实 Catalog→Artifact→Restart 与负向 Checkpoint B 通过。 | - | - | - | - |
 | RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | BACKLOG | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | - | - | - | - |
