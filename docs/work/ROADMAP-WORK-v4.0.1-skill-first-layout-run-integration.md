@@ -1,16 +1,33 @@
 ---
 roadmap_id: WORK-SKILL-FIRST-LAYOUT-V4.0.1
-version: v1.0
-status: READY
-source_prd: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
+version: v2.0
+status: ACTIVE
+architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
+source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-created_at: 2026-08-30T12:51:27.371+08:00
+updated_at: 2026-09-01T16:55:00+08:00
 implementation_plan_required: true
 ---
 
 # ROADMAP — Work Skill-First Layout and Run Integration
 
 本路线图把 APPROVED v4.0.1 架构拆成可验证里程碑。它冻结依赖、Owner、退出条件与灰度顺序，不替代 Cursor implementation `.plan.md`；每个 Work 实施 Slice 开始前都必须使用 `smc-plan-from-approved-prd` 生成并批准独立计划。
+
+## Migration Provenance
+
+本 Roadmap 从旧的叙述式 milestone 文档迁移为可校验的 Item DAG。仓库尚无独立 Skill Run Architecture Decision，因此暂以已批准 PRD 的 Target Architecture 作为 provenance bridge；不得把此桥接解释为 M0–M4 已具备新治理所要求的一对一 Stage PRD、Plan、实现提交和验证证据。
+
+## Roadmap Items
+
+| Item ID | Outcome | Depends On | Status | Exit Criteria | PRD | Plan | Implementation Commit | Verification Evidence |
+|---|---|---|---|---|---|---|---|---|
+| RM-01 | M0 Provider Contract Ready：Provider 发布完整不可变 Bundle，Work 可离线验证并消费。 | - | BLOCKED | tag/manifest/SHA256 与 P0 schemas、endpoint/error fixtures 全部通过；Public DTO 安全；同一 idempotency key 跨端只创建一个 Run；Provider/Work contract tests 通过。 | `docs/work/PRD-WORK-v4.0.1-M0-provider-contract-ready.md` | - | - | 2026-09-01 fixture checks passed (consumer/gateway 14/14; E2E 8/8); live case skipped because `SMC_SKILL_RUN_E2E*` is unset, so cross-end idempotency remains unproven. |
+| RM-02 | M1 Work Contract and Main Foundation：受控 Main/Preload lifecycle foundation 可用。 | RM-01 | BACKLOG | auth scope、sanitized IPC、feature mode、Parser/Gateway/Service 与 focused tests 满足 M1 退出条件。 | - | - | - | - |
+| RM-03 | M2 Layout, Catalog, and Selection：现有 Chat 内的安全 Skill selection UX 可用。 | RM-02 | BACKLOG | Layout/Chat 单一 owner、Catalog discriminator、a11y、mode/selection persistence 和 Renderer tests 通过。 | - | - | - | - |
+| RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-03 | BACKLOG | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与跨项目 E2E 通过。 | - | - | - | - |
+| RM-05 | M4 Result, Artifact, and Session Files：Result/Artifact 复用现有 File Platform 并完成 Checkpoint B。 | RM-04 | BACKLOG | run-scoped remote identity、Artifact safety、Session Files、真实 Catalog→Artifact→Restart 与负向 Checkpoint B 通过。 | - | - | - | - |
+| RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | BACKLOG | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | - | - | - | - |
+| RM-07 | M6 Removal Readiness and P1：P1 contract capabilities 与独立 v4.2 Expert removal 准备。 | RM-06 | BACKLOG | M5 稳定 telemetry 后，每项拥有独立 Stage PRD；Expert removal 单独审查。 | - | - | - | - |
 
 ## Outcome
 
@@ -283,4 +300,3 @@ ROADMAP 完成需同时满足：
 - Expert 兼容 reader、Local Chat 和 Runtime ChatRun 无回归；
 - 没有 silent fallback、duplicate Run、raw credential/URL 泄漏或第二 Session/File owner；
 - P1 与 Expert Removal 留在独立 PRD/Plan，不混入 P0 收尾。
-

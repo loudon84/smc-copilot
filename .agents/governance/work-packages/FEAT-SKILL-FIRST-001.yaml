@@ -1,0 +1,47 @@
+work_package_id: WP-SKILL-FIRST-SMC-COPILOT
+feature_id: FEAT-SKILL-FIRST-001
+repository_id: REPO-SMC-COPILOT
+role: consumer
+status: IMPLEMENTING
+owner: TEAM-WORK-PLATFORM
+outcome: '在现有 Layout / Chat / Main / File Platform Owner 上增加 Skill-first 使用模式， 通过锁定的
+  SKILL-RUN-CONTRACT 消费 NoDeskClaw，不创建第二套 Chat/Session/File owner。
+
+  '
+global_change_ids:
+- XR-C01
+- XR-C02
+- XR-C03
+- XR-C04
+- XR-C05
+contract_inputs:
+- contract_id: SKILL-RUN-CONTRACT
+  version: 1.2.1
+  required_state: RELEASED
+contract_outputs: []
+dependencies:
+- DEP-001
+- DEP-002
+local_delivery:
+  roadmap: docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md
+  prd: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
+  plan: null
+acceptance:
+- Work consumes Backend only
+- Provider run_id never aliases local ChatRun id
+- No raw Provider URL/token crosses Renderer boundary
+- Cross-end duplicate Run prevention is verified
+evidence_required:
+- implementation_commit
+- verification_evidence
+- consumer_lock
+- cross_end_e2e
+evidence:
+  consumer_lock:
+    version: 1.2.1
+    tag: skill-run-contract-v1.2.1
+    commit: 10d38f2c97739c4a55df893d1dc954fc8896f1a7
+  implementation_commit: null
+  verification_evidence: null
+source_revision: SKILL-FIRST-PRD@4.0.1
+sync_state: MISSING_RECEIPT

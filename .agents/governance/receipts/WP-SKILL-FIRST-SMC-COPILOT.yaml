@@ -1,0 +1,48 @@
+receipt_version: '2'
+feature_id: FEAT-SKILL-FIRST-001
+work_package_id: WP-SKILL-FIRST-SMC-COPILOT
+repository_id: REPO-SMC-COPILOT
+source_revision: SKILL-FIRST-PRD@4.0.1
+status: IMPLEMENTING
+sync:
+  governance_kit_version: 1.2.1
+  central_commit: 16e33a69619d57b9ce83880f45a1726515bf80c2
+  kit:
+    version: 1.2.1
+    tag: DEV-governance-kit-v1.2.1
+    commit: 16e33a69619d57b9ce83880f45a1726515bf80c2
+    manifest_sha256: fef0c21dbda4926f2565b2843d51b25e6436d58204a58fbfdeeeb3e510dc8915
+  contract_pins:
+  - contract_id: SKILL-RUN-CONTRACT
+    version: 1.2.1
+    tag: skill-run-contract-v1.2.1
+    commit: 10d38f2c97739c4a55df893d1dc954fc8896f1a7
+delivery:
+  stage_prds:
+  - repository_id: REPO-SMC-COPILOT
+    path: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
+    commit: 457ab499c2fb76217dee40980ada401fd026d844
+    blob_sha: 86861b4b4462fbb3109502eb5c2b0d94a839c8be
+    sha256: 4954ec499fc90b6707ea4d2427a5a6451a5547115f7b676b00cca8cbbf3ac612
+    artifact_type: STAGE_PRD
+    artifact_id: PRD-WP-SKILL-FIRST-SMC-COPILOT
+    status: APPROVED
+    source_revision: SKILL-FIRST-PRD@4.0.1
+  issues: []
+  bugs: []
+  plans: []
+  pull_requests: []
+  commits: []
+  verification_reports: []
+acceptance:
+  manifest: null
+  report: null
+  status: NOT_DEFINED
+evidence:
+  consumer_lock:
+    version: 1.2.1
+    tag: skill-run-contract-v1.2.1
+    commit: 10d38f2c97739c4a55df893d1dc954fc8896f1a7
+  implementation_commit: null
+  verification_evidence: null
+reported_at: '2026-09-01T16:02:18.446777+00:00'
