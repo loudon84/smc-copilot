@@ -1,11 +1,13 @@
 /**
  * Skill Run Event & Snapshot Parser.
  * Maps wire events and run status to Work-safe projection updates.
- * Fails soft on unknown event types without corrupting terminal states.
+ * Owns Catalog normalize/classify and prompt-first binding (shared by Catalog + Start).
  */
 
 import type {
   SkillCatalogToolItem,
+  SkillInvocationMode,
+  SkillInvocationReasonCode,
   SkillRunArtifactDescriptor,
   SkillRunLocalPhase,
 } from "../../shared/skill-run";
@@ -13,42 +15,194 @@ import type {
 export type BindPromptFirstErrorCode =
   | "TOOL_NOT_FOUND"
   | "TOOL_NOT_CALLABLE"
-  | "PARAMETERS_REQUIRED"
-  | "UNSUPPORTED_SCHEMA";
+  | "SKILL_FORM_REQUIRED"
+  | "SKILL_PARAMETERS_REQUIRED"
+  | "SKILL_PROMPT_FIELD_MISSING"
+  | "SKILL_PROMPT_FIELD_INVALID"
+  | "SKILL_UNSUPPORTED_SCHEMA"
+  | "SKILL_CONTRACT_MISMATCH";
 
 export type BindPromptFirstResult =
-  | { ok: true; tool: SkillCatalogToolItem }
+  | {
+      ok: true;
+      tool: SkillCatalogToolItem;
+      promptField: string;
+      arguments: Record<string, unknown>;
+    }
   | { ok: false; errorCode: BindPromptFirstErrorCode; message: string };
+
+export interface SkillInvocationClassification {
+  invocationMode: SkillInvocationMode;
+  callability: SkillCatalogToolItem["callability"];
+  reasonCode?: SkillInvocationReasonCode;
+  promptField?: string | null;
+}
+
+/** Intermediate descriptor after wire normalize; classification applied next. */
+export interface NormalizedSkillToolDescriptor {
+  toolName: string;
+  title: string;
+  description?: string;
+  category?: string;
+  interactionMode: "chat" | "form";
+  promptField?: string | null;
+  supportsAttachments: boolean;
+  inputSchema?: Record<string, unknown>;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function schemaHasUnsupportedShape(schema: Record<string, unknown>): boolean {
-  if (typeof schema.$ref === "string" && schema.$ref.trim()) {
-    return true;
+function reasonToErrorCode(
+  reasonCode: SkillInvocationReasonCode | undefined,
+): BindPromptFirstErrorCode {
+  switch (reasonCode) {
+    case "FORM_REQUIRED":
+      return "SKILL_FORM_REQUIRED";
+    case "EXTRA_REQUIRED_PARAMETERS":
+      return "SKILL_PARAMETERS_REQUIRED";
+    case "PROMPT_FIELD_MISSING":
+      return "SKILL_PROMPT_FIELD_MISSING";
+    case "PROMPT_FIELD_INVALID":
+      return "SKILL_PROMPT_FIELD_INVALID";
+    case "CONTRACT_MISMATCH":
+      return "SKILL_CONTRACT_MISMATCH";
+    case "ROOT_SCHEMA_UNSUPPORTED":
+    case "COMPOSITE_SCHEMA_UNSUPPORTED":
+    default:
+      return "SKILL_UNSUPPORTED_SCHEMA";
   }
-  if (schema.type === "array") {
-    return true;
-  }
-  if (schema.oneOf || schema.anyOf || schema.allOf) {
-    return true;
-  }
-  const props = schema.properties;
-  if (!isRecord(props)) {
-    return false;
-  }
-  for (const [key, raw] of Object.entries(props)) {
-    if (key === "prompt") continue;
-    if (!isRecord(raw)) return true;
-    if (raw.$ref || raw.type === "object" || raw.type === "array") {
-      return true;
-    }
-  }
-  return false;
 }
 
-/** Main-side Catalog revalidation: prompt-first tools only; fail-closed on complex schema. */
+function classifyUnsupported(
+  reasonCode: SkillInvocationReasonCode,
+  invocationMode: SkillInvocationMode = "unsupported-schema",
+): SkillInvocationClassification {
+  return {
+    invocationMode,
+    callability: "unsupported",
+    reasonCode,
+  };
+}
+
+/**
+ * Parse one v1.2.1 Catalog descriptor. Non-skill capabilityKind or missing
+ * name/interactionMode returns null (filtered from Catalog projection).
+ */
+export function normalizeSkillToolDescriptor(
+  raw: unknown,
+): NormalizedSkillToolDescriptor | null {
+  if (!isRecord(raw) || typeof raw.name !== "string" || !raw.name.trim()) {
+    return null;
+  }
+  if (raw.capabilityKind !== "skill") {
+    return null;
+  }
+  if (raw.interactionMode !== "chat" && raw.interactionMode !== "form") {
+    return null;
+  }
+
+  const toolName = raw.name.trim();
+  const title =
+    typeof raw.title === "string" && raw.title.trim()
+      ? raw.title.trim()
+      : toolName;
+
+  let promptField: string | null | undefined;
+  if (raw.promptField === null) {
+    promptField = null;
+  } else if (typeof raw.promptField === "string") {
+    promptField = raw.promptField;
+  } else {
+    promptField = undefined;
+  }
+
+  return {
+    toolName,
+    title,
+    description: typeof raw.description === "string" ? raw.description : undefined,
+    category: typeof raw.category === "string" ? raw.category : undefined,
+    interactionMode: raw.interactionMode,
+    promptField,
+    supportsAttachments: raw.supportsAttachments === true,
+    inputSchema: isRecord(raw.inputSchema) ? raw.inputSchema : undefined,
+  };
+}
+
+/**
+ * Single invocation classification owner for Catalog projection and Main start.
+ * Optional complex properties do not disqualify prompt-first (PRD 5.4 / AC-04).
+ */
+export function classifySkillInvocation(
+  tool: Pick<
+    NormalizedSkillToolDescriptor,
+    "interactionMode" | "promptField" | "inputSchema"
+  >,
+): SkillInvocationClassification {
+  if (tool.interactionMode === "form") {
+    return classifyUnsupported("FORM_REQUIRED", "form-required");
+  }
+
+  const schema = tool.inputSchema;
+  if (schema) {
+    if (typeof schema.$ref === "string" && schema.$ref.trim()) {
+      return classifyUnsupported("ROOT_SCHEMA_UNSUPPORTED");
+    }
+    if (schema.type !== undefined && schema.type !== "object") {
+      return classifyUnsupported("ROOT_SCHEMA_UNSUPPORTED");
+    }
+    if (
+      schema.oneOf ||
+      schema.anyOf ||
+      schema.allOf ||
+      schema.if !== undefined ||
+      schema.then !== undefined ||
+      schema.else !== undefined ||
+      schema.dependentRequired !== undefined ||
+      schema.dependentSchemas !== undefined
+    ) {
+      return classifyUnsupported("COMPOSITE_SCHEMA_UNSUPPORTED");
+    }
+  }
+
+  const promptField =
+    typeof tool.promptField === "string" ? tool.promptField.trim() : "";
+  if (!promptField) {
+    return classifyUnsupported("PROMPT_FIELD_MISSING");
+  }
+
+  const props = schema && isRecord(schema.properties) ? schema.properties : null;
+  if (!props || !(promptField in props)) {
+    return classifyUnsupported("PROMPT_FIELD_MISSING");
+  }
+
+  const promptProp = props[promptField];
+  if (!isRecord(promptProp) || promptProp.type !== "string") {
+    return classifyUnsupported("PROMPT_FIELD_INVALID");
+  }
+
+  const required = Array.isArray(schema?.required)
+    ? schema.required.filter((field): field is string => typeof field === "string")
+    : [];
+  const extraRequired = required.filter((field) => field !== promptField);
+  if (extraRequired.length > 0) {
+    return {
+      invocationMode: "parameters-required",
+      callability: "unsupported",
+      reasonCode: "EXTRA_REQUIRED_PARAMETERS",
+      promptField,
+    };
+  }
+
+  return {
+    invocationMode: "prompt-first",
+    callability: "callable",
+    promptField,
+  };
+}
+
+/** Main-side Catalog revalidation: prompt-first tools only; fail-closed on non-bindable schemas. */
 export function bindPromptFirstTool(
   toolName: string,
   prompt: string,
@@ -64,71 +218,69 @@ export function bindPromptFirstTool(
       message: `Skill tool not found in current catalog: ${trimmedName}`,
     };
   }
-  if (tool.callability !== "callable") {
+
+  const classification = classifySkillInvocation(tool);
+  if (classification.invocationMode !== "prompt-first") {
     return {
       ok: false,
-      errorCode: "TOOL_NOT_CALLABLE",
-      message: `Skill tool is not callable: ${trimmedName}`,
+      errorCode: reasonToErrorCode(classification.reasonCode),
+      message:
+        classification.reasonCode === "EXTRA_REQUIRED_PARAMETERS"
+          ? "Additional required parameters are not supported"
+          : classification.reasonCode === "FORM_REQUIRED"
+            ? "Skill requires structured form input"
+            : classification.reasonCode === "PROMPT_FIELD_MISSING"
+              ? "Skill promptField is missing or invalid"
+              : classification.reasonCode === "PROMPT_FIELD_INVALID"
+                ? "Skill promptField must be a string property"
+                : "Skill tool schema is not prompt-first compatible",
     };
   }
 
-  const schema = tool.inputSchema;
-  if (schema && schemaHasUnsupportedShape(schema)) {
+  const promptField = classification.promptField;
+  if (typeof promptField !== "string" || !promptField.trim()) {
     return {
       ok: false,
-      errorCode: "UNSUPPORTED_SCHEMA",
-      message: "Skill tool schema is not prompt-first compatible",
-    };
-  }
-
-  const required = Array.isArray(schema?.required)
-    ? schema.required.filter((field): field is string => typeof field === "string")
-    : [];
-  const extraRequired = required.filter((field) => field !== "prompt");
-  if (extraRequired.length > 0) {
-    return {
-      ok: false,
-      errorCode: "PARAMETERS_REQUIRED",
-      message: `Additional required parameters are not supported: ${extraRequired.join(", ")}`,
+      errorCode: "SKILL_PROMPT_FIELD_MISSING",
+      message: "Skill promptField is missing or invalid",
     };
   }
 
   if (!trimmedPrompt) {
     return {
       ok: false,
-      errorCode: "PARAMETERS_REQUIRED",
+      errorCode: "SKILL_PARAMETERS_REQUIRED",
       message: "Prompt is required for this skill",
     };
   }
 
-  return { ok: true, tool };
+  return {
+    ok: true,
+    tool,
+    promptField,
+    arguments: { [promptField]: trimmedPrompt },
+  };
 }
 
 export function mapPublicSkillCatalogTools(rawTools: unknown): SkillCatalogToolItem[] {
   if (!Array.isArray(rawTools)) return [];
   const out: SkillCatalogToolItem[] = [];
   for (const raw of rawTools) {
-    if (!isRecord(raw) || typeof raw.name !== "string" || !raw.name.trim()) {
-      continue;
-    }
-    if (raw.capabilityKind !== "skill") {
-      continue;
-    }
-    const toolName = raw.name.trim();
-    const title =
-      typeof raw.title === "string" && raw.title.trim()
-        ? raw.title.trim()
-        : toolName;
-    const interactionMode = raw.interactionMode;
-    const callability: SkillCatalogToolItem["callability"] =
-      interactionMode === "form" ? "unsupported" : "callable";
+    const normalized = normalizeSkillToolDescriptor(raw);
+    if (!normalized) continue;
+    const classification = classifySkillInvocation(normalized);
     out.push({
-      toolName,
-      title,
-      description: typeof raw.description === "string" ? raw.description : undefined,
-      category: typeof raw.category === "string" ? raw.category : undefined,
-      callability,
-      inputSchema: isRecord(raw.inputSchema) ? raw.inputSchema : undefined,
+      toolName: normalized.toolName,
+      title: normalized.title,
+      description: normalized.description,
+      category: normalized.category,
+      interactionMode: normalized.interactionMode,
+      promptField: classification.promptField ?? normalized.promptField ?? null,
+      supportsAttachments: normalized.supportsAttachments,
+      callability: classification.callability,
+      invocationMode: classification.invocationMode,
+      reasonCode: classification.reasonCode,
+      inputSchema: normalized.inputSchema,
     });
   }
   return out;

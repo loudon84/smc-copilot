@@ -39,12 +39,33 @@ export function isSkillRunTerminalPhase(phase: SkillRunLocalPhase): phase is Ski
   );
 }
 
+export type SkillInvocationMode =
+  | "prompt-first"
+  | "parameters-required"
+  | "form-required"
+  | "unsupported-schema";
+
+export type SkillInvocationReasonCode =
+  | "FORM_REQUIRED"
+  | "PROMPT_FIELD_MISSING"
+  | "PROMPT_FIELD_INVALID"
+  | "EXTRA_REQUIRED_PARAMETERS"
+  | "ROOT_SCHEMA_UNSUPPORTED"
+  | "COMPOSITE_SCHEMA_UNSUPPORTED"
+  | "CONTRACT_MISMATCH";
+
 export interface SkillCatalogToolItem {
   toolName: string;
   title: string;
   description?: string;
   category?: string;
+  interactionMode: "chat" | "form";
+  promptField?: string | null;
+  supportsAttachments: boolean;
   callability: "callable" | "disabled" | "unsupported";
+  invocationMode: SkillInvocationMode;
+  reasonCode?: SkillInvocationReasonCode;
+  /** Read-only projection for display/debug; Renderer must not build Provider arguments from it. */
   inputSchema?: Record<string, unknown>;
 }
 

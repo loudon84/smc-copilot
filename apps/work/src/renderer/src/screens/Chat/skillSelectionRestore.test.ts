@@ -5,7 +5,11 @@ import { resolveRestoredSkillSelection } from "./Chat";
 const catalogTool: SkillCatalogToolItem = {
   toolName: "calculator",
   title: "Calculator",
+  interactionMode: "chat",
+  promptField: "prompt",
+  supportsAttachments: false,
   callability: "callable",
+  invocationMode: "prompt-first",
   category: "math",
 };
 
@@ -19,7 +23,7 @@ describe("resolveRestoredSkillSelection", () => {
     ).toBe(catalogTool);
   });
 
-  it("falls back to display metadata when the catalog entry is missing", () => {
+  it("falls back to unsupported display metadata when the catalog entry is missing", () => {
     expect(
       resolveRestoredSkillSelection(
         { toolName: "legacy-skill", toolTitle: "Legacy Skill" },
@@ -28,7 +32,11 @@ describe("resolveRestoredSkillSelection", () => {
     ).toEqual({
       toolName: "legacy-skill",
       title: "Legacy Skill",
-      callability: "callable",
+      interactionMode: "chat",
+      supportsAttachments: false,
+      callability: "unsupported",
+      invocationMode: "unsupported-schema",
+      reasonCode: "CONTRACT_MISMATCH",
     });
   });
 });

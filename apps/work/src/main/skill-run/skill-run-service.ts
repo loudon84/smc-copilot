@@ -63,6 +63,8 @@ export interface SkillRunService {
 interface ActiveRun {
   request: SkillRunStartInput;
   projection: SkillRunProjection;
+  promptField: string;
+  callArguments: Record<string, unknown>;
   abort: AbortController;
   pollTimer: NodeJS.Timeout | null;
   terminalConfirmed: boolean;
@@ -457,6 +459,8 @@ export function createSkillRunService(
       const activeRun: ActiveRun = {
         request: { ...input, toolName: validatedToolName },
         projection: initialProjection,
+        promptField: bindResult.promptField,
+        callArguments: bindResult.arguments,
         abort: new AbortController(),
         pollTimer: null,
         terminalConfirmed: false,
@@ -472,7 +476,7 @@ export function createSkillRunService(
           updateProjection(activeRun, { phase: "starting" });
           const accepted = await gateway.callSkill({
             toolName: validatedToolName,
-            prompt: input.prompt,
+            arguments: activeRun.callArguments,
             idempotencyKey: input.clientRequestId,
           });
 
@@ -609,6 +613,8 @@ export function createSkillRunService(
           authGeneration: item.authGeneration,
         },
         projection,
+        promptField: "prompt",
+        callArguments: {},
         abort: new AbortController(),
         pollTimer: null,
         terminalConfirmed: isTerminal,
@@ -636,7 +642,7 @@ export function createSkillRunService(
     },
 
     getFeatureMode(): SkillRunFeatureMode {
-      return getSkillRunFeatureMode();
+      return getMode();
     },
 
     subscribe(listener: SkillRunProjectionListener): () => void {

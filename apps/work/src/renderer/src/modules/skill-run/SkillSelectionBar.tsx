@@ -14,6 +14,7 @@ export const SkillSelectionBar: FC<SkillSelectionBarProps> = ({
   onClear,
 }) => {
   const { t } = useI18n();
+  const isPromptFirst = selection.invocationMode === "prompt-first";
 
   return (
     <div className="skill-selection-bar">
@@ -24,6 +25,12 @@ export const SkillSelectionBar: FC<SkillSelectionBarProps> = ({
         </span>
         <span className="skill-selection-bar-title">{selection.title}</span>
         <span className="skill-selection-bar-slug">({selection.toolName})</span>
+        {!isPromptFirst && (
+          <span className="skill-selection-bar-unavailable">
+            {t("skillRun.skillUnavailable") ||
+              "This skill cannot be executed in prompt-first mode."}
+          </span>
+        )}
       </div>
       <button
         type="button"

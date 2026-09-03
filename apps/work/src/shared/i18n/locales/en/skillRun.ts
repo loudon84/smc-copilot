@@ -32,4 +32,11 @@ export default {
   parametersRequired: "This skill requires additional parameters that are not supported yet.",
   unsupportedSchema: "This skill schema is not supported in prompt-first mode.",
   runAlreadyActive: "A skill run is already active for this session.",
+  reasonFormRequired: "Requires structured parameter input",
+  reasonParametersRequired: "Requires additional required parameters",
+  reasonPromptFieldMissing: "Prompt field is missing or invalid",
+  reasonPromptFieldInvalid: "Prompt field must be a string",
+  reasonUnsupportedSchema: "Current input schema is not supported",
+  reasonContractMismatch: "Skill is unavailable or out of sync with the catalog",
+  skillUnavailable: "This skill cannot be executed in prompt-first mode.",
 };

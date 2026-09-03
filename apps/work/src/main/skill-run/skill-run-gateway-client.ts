@@ -47,7 +47,7 @@ export interface SkillRunGatewayClient {
   listCatalog(): Promise<SkillCatalogResponse>;
   callSkill(input: {
     toolName: string;
-    prompt: string;
+    arguments: Record<string, unknown>;
     idempotencyKey: string;
   }): Promise<SkillRunStartAcceptedResponse>;
   getRunSnapshot(runId: string): Promise<SkillRunSnapshotResponse>;
@@ -225,7 +225,7 @@ export function createSkillRunGatewayClient(
 
     async callSkill(input: {
       toolName: string;
-      prompt: string;
+      arguments: Record<string, unknown>;
       idempotencyKey: string;
     }): Promise<SkillRunStartAcceptedResponse> {
       assertNotDisposed();
@@ -235,7 +235,7 @@ export function createSkillRunGatewayClient(
         "tools/call",
         {
           name: input.toolName,
-          arguments: { prompt: input.prompt },
+          arguments: input.arguments,
         },
         { idempotencyKey: input.idempotencyKey },
       );

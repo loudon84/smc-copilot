@@ -20,7 +20,11 @@ function trackService(service: SkillRunService): SkillRunService {
 const callableTool: SkillCatalogToolItem = {
   toolName: "calculator",
   title: "Calculator",
+  interactionMode: "chat",
+  promptField: "prompt",
+  supportsAttachments: false,
   callability: "callable",
+  invocationMode: "prompt-first",
   inputSchema: {
     type: "object",
     properties: { prompt: { type: "string" } },
@@ -87,7 +91,12 @@ describe("skill-run-service", () => {
 
   it("fails closed on start when feature mode is not skill-first", async () => {
     const gateway = createMockGateway();
-    const service = trackService(createSkillRunService({ gatewayClient: gateway }));
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        getFeatureMode: () => "expert-compat",
+      }),
+    );
     const result = await service.start({
       toolName: "calculator",
       prompt: "2+2",
@@ -123,7 +132,7 @@ describe("skill-run-service", () => {
     }
   });
 
-  it("rejects unsupported schema via bindPromptFirstTool", () => {
+  it("rejects extra required parameters via bindPromptFirstTool", () => {
     const result = bindPromptFirstTool(
       "complex",
       "hello",
@@ -131,7 +140,12 @@ describe("skill-run-service", () => {
         {
           toolName: "complex",
           title: "Complex",
-          callability: "callable",
+          interactionMode: "chat",
+          promptField: "prompt",
+          supportsAttachments: false,
+          callability: "unsupported",
+          invocationMode: "parameters-required",
+          reasonCode: "EXTRA_REQUIRED_PARAMETERS",
           inputSchema: {
             type: "object",
             properties: {
@@ -145,7 +159,93 @@ describe("skill-run-service", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.errorCode).toBe("PARAMETERS_REQUIRED");
+      expect(result.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
+    }
+  });
+
+  it("binds promptField=query into callSkill arguments", async () => {
+    const queryTool: SkillCatalogToolItem = {
+      toolName: "search.skill",
+      title: "Search",
+      interactionMode: "chat",
+      promptField: "query",
+      supportsAttachments: false,
+      callability: "callable",
+      invocationMode: "prompt-first",
+      inputSchema: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+      },
+    };
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [queryTool] }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+      }),
+    );
+    const result = await service.start({
+      toolName: "search.skill",
+      prompt: "find customers",
+      clientRequestId: "req-query",
+      sessionId: "session-query",
+      profileId: "default",
+    });
+    expect(result.accepted).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(gateway.callSkill).toHaveBeenCalledWith({
+      toolName: "search.skill",
+      arguments: { query: "find customers" },
+      idempotencyKey: "req-query",
+    });
+  });
+
+  it("rejects tampered toolName not in catalog", async () => {
+    const gateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+      }),
+    );
+    const result = await service.start({
+      toolName: "not.published",
+      prompt: "hello",
+      clientRequestId: "req-tamper",
+      sessionId: "session-tamper",
+      profileId: "default",
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("TOOL_NOT_FOUND");
+    }
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
+
+  it("rejects unpublished skill after selection via Main revalidation", async () => {
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [] }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+      }),
+    );
+    const result = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-unpub",
+      sessionId: "session-unpub",
+      profileId: "default",
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("TOOL_NOT_FOUND");
     }
   });
 
@@ -231,10 +331,11 @@ describe("skill-run-service", () => {
     expect(result.errorCode).toBe("NO_ACTIVE_RUN");
   });
 
-  it("returns expert-compat as default feature mode", () => {
+  it("returns feature mode from feature-mode store wiring", () => {
     const service = trackService(
       createSkillRunService({
         gatewayClient: createSkillRunGatewayClient({ hasConsumerLock: false }),
+        getFeatureMode: () => "expert-compat",
       }),
     );
     expect(service.getFeatureMode()).toBe("expert-compat");
@@ -267,7 +368,7 @@ describe("skill-run-service", () => {
     await new Promise((r) => setTimeout(r, 200));
     expect(mockGateway.callSkill).toHaveBeenCalledWith({
       toolName: "calculator",
-      prompt: "2+2",
+      arguments: { prompt: "2+2" },
       idempotencyKey: "req-calc-1",
     });
     const finalProjection = service.getProjection("req-calc-1");

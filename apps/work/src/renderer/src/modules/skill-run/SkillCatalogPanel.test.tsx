@@ -32,22 +32,45 @@ const callableTools: SkillCatalogResponse = {
     {
       toolName: "alpha",
       title: "Alpha Skill",
+      interactionMode: "chat",
+      promptField: "prompt",
+      supportsAttachments: false,
       callability: "callable",
+      invocationMode: "prompt-first",
       category: "general",
       description: "First skill",
     },
     {
       toolName: "beta",
       title: "Beta Skill",
+      interactionMode: "chat",
+      promptField: "prompt",
+      supportsAttachments: false,
       callability: "disabled",
+      invocationMode: "unsupported-schema",
+      reasonCode: "ROOT_SCHEMA_UNSUPPORTED",
       category: "math",
       description: "Disabled skill",
     },
     {
       toolName: "gamma",
       title: "Gamma Skill",
+      interactionMode: "chat",
+      promptField: "prompt",
+      supportsAttachments: false,
       callability: "callable",
+      invocationMode: "prompt-first",
       category: "math",
+    },
+    {
+      toolName: "form-skill",
+      title: "Form Skill",
+      interactionMode: "form",
+      supportsAttachments: false,
+      callability: "unsupported",
+      invocationMode: "form-required",
+      reasonCode: "FORM_REQUIRED",
+      category: "general",
     },
   ],
 };
@@ -132,7 +155,11 @@ describe("SkillCatalogPanel", () => {
         {
           toolName: "blocked",
           title: "Blocked Skill",
+          interactionMode: "chat",
+          supportsAttachments: false,
           callability: "disabled",
+          invocationMode: "unsupported-schema",
+          reasonCode: "ROOT_SCHEMA_UNSUPPORTED",
         },
       ],
     });
@@ -140,6 +167,14 @@ describe("SkillCatalogPanel", () => {
     const search = screen.getByRole("combobox");
 
     fireEvent.keyDown(search, { key: "Enter" });
+    expect(onSelectSkill).not.toHaveBeenCalled();
+  });
+
+  it("shows reason and blocks form-required selection", () => {
+    setSkillRunCatalogState(callableTools);
+    const onSelectSkill = renderPanel();
+    expect(screen.getByText("skillRun.reasonFormRequired")).toBeTruthy();
+    fireEvent.click(screen.getByText("Form Skill"));
     expect(onSelectSkill).not.toHaveBeenCalled();
   });
 
@@ -165,7 +200,7 @@ describe("SkillCatalogPanel", () => {
     fireEvent.click(within(listbox).getByText("Alpha Skill"));
 
     expect(onSelectSkill).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: "alpha" }),
+      expect.objectContaining({ toolName: "alpha", invocationMode: "prompt-first" }),
     );
   });
 });

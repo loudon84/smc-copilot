@@ -77,7 +77,7 @@ describe("skill-run-gateway-client lock and discriminator gates", () => {
     await expect(
       client.callSkill({
         toolName: "writer.article",
-        prompt: "hello",
+        arguments: { prompt: "hello" },
         idempotencyKey: "request-1",
       }),
     ).rejects.toEqual(
@@ -125,6 +125,7 @@ describe("skill-run-gateway-client contract wire", () => {
             description: "Generate an article",
             capabilityKind: "skill",
             interactionMode: "chat",
+            promptField: "prompt",
             category: "writing",
             inputSchema: {
               type: "object",
@@ -150,6 +151,9 @@ describe("skill-run-gateway-client contract wire", () => {
         toolName: "writer.article",
         title: "Writer",
         callability: "callable",
+        invocationMode: "prompt-first",
+        promptField: "prompt",
+        interactionMode: "chat",
       }),
     ]);
     expect(String(fetchImpl.mock.calls[0]?.[0])).toBe(
@@ -188,7 +192,7 @@ describe("skill-run-gateway-client contract wire", () => {
     const client = createClient(fetchImpl as unknown as typeof fetch);
     const input = {
       toolName: "writer.article",
-      prompt: "hello",
+      arguments: { prompt: "hello" },
       idempotencyKey: IDEMPOTENCY_REPLAY_FIXTURE.key,
     };
     const first = await client.callSkill(input);
@@ -212,7 +216,7 @@ describe("skill-run-gateway-client contract wire", () => {
     await expect(
       client.callSkill({
         toolName: "writer.article",
-        prompt: "other",
+        arguments: { prompt: "other" },
         idempotencyKey: IDEMPOTENCY_REPLAY_FIXTURE.key,
       }),
     ).rejects.toEqual(
@@ -228,10 +232,42 @@ describe("skill-run-gateway-client contract wire", () => {
 describe("skill-run contract parser", () => {
   it("drops non-skill catalog entries", () => {
     const tools = mapPublicSkillCatalogTools([
-      { name: "writer.article", title: "Writer", capabilityKind: "skill" },
+      {
+        name: "writer.article",
+        title: "Writer",
+        capabilityKind: "skill",
+        interactionMode: "chat",
+        promptField: "prompt",
+        inputSchema: {
+          type: "object",
+          properties: { prompt: { type: "string" } },
+          required: ["prompt"],
+        },
+      },
       { name: "slack.send", title: "Slack", capabilityKind: "connector" },
     ]);
     expect(tools.map((tool) => tool.toolName)).toEqual(["writer.article"]);
+  });
+
+  it("sends tools/call arguments keyed by promptField", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        method?: string;
+        params?: { name?: string; arguments?: Record<string, unknown> };
+      };
+      expect(body.method).toBe("tools/call");
+      expect(body.params?.name).toBe("search.skill");
+      expect(body.params?.arguments).toEqual({ query: "find customers" });
+      expect(headerValue(init, "X-Idempotency-Key")).toBe("req-query-field");
+      return jsonRpcResult({ run_id: "run-query-1" });
+    });
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    const accepted = await client.callSkill({
+      toolName: "search.skill",
+      arguments: { query: "find customers" },
+      idempotencyKey: "req-query-field",
+    });
+    expect(accepted.runId).toBe("run-query-1");
   });
 
   it("parses PublicRunEvent envelope run.completed", () => {

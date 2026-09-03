@@ -9,6 +9,7 @@ import { createAuthorizedBackendTransport } from "../auth/authorized-backend-tra
 import { createSkillRunGatewayClient } from "./skill-run-gateway-client";
 import {
   createSkillRunService,
+  type CreateSkillRunServiceOptions,
   type SkillRunService,
 } from "./skill-run-service";
 import type { SkillRunProjection } from "../../shared/skill-run";
@@ -50,11 +51,38 @@ const SKILL_TOOL = {
   description: "Generate an article",
   capabilityKind: "skill",
   interactionMode: "chat",
+  promptField: "prompt",
+  supportsAttachments: false,
   category: "writing",
   inputSchema: {
     type: "object",
     properties: { prompt: { type: "string" } },
     required: ["prompt"],
+  },
+};
+
+const UNSUPPORTED_SCHEMA_TOOL = {
+  name: "writer.ref",
+  title: "Writer Ref",
+  capabilityKind: "skill",
+  interactionMode: "chat",
+  promptField: "prompt",
+  inputSchema: { $ref: "#/definitions/Input" },
+};
+
+const EXTRA_REQUIRED_TOOL = {
+  name: "writer.extra",
+  title: "Writer Extra",
+  capabilityKind: "skill",
+  interactionMode: "chat",
+  promptField: "prompt",
+  inputSchema: {
+    type: "object",
+    properties: {
+      prompt: { type: "string" },
+      region: { type: "string" },
+    },
+    required: ["prompt", "region"],
   },
 };
 
@@ -186,7 +214,9 @@ type FixtureMode =
   | "reconnect"
   | "cancel"
   | "artifact-fail"
-  | "unknown-event";
+  | "unknown-event"
+  | "unsupported-schema"
+  | "extra-required";
 
 interface FixtureState {
   fetchImpl: ReturnType<typeof vi.fn>;
@@ -202,7 +232,11 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
   let catalogTools: unknown[] =
     mode === "unpublish"
       ? [CONNECTOR_TOOL]
-      : [SKILL_TOOL, CONNECTOR_TOOL];
+      : mode === "unsupported-schema"
+        ? [UNSUPPORTED_SCHEMA_TOOL, CONNECTOR_TOOL]
+        : mode === "extra-required"
+          ? [EXTRA_REQUIRED_TOOL, CONNECTOR_TOOL]
+          : [SKILL_TOOL, CONNECTOR_TOOL];
 
   const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     const urlStr = String(url);
@@ -217,12 +251,17 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
       }
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         method?: string;
-        params?: { name?: string };
+        params?: { name?: string; arguments?: Record<string, unknown> };
       };
       if (body.method === "tools/list") {
         return jsonRpcResult({ tools: catalogTools });
       }
       if (body.method === "tools/call") {
+        if (mode === "happy" || mode === "reconnect" || mode === "cancel" || mode === "artifact-fail" || mode === "unknown-event") {
+          expect(body.params?.arguments).toEqual(
+            expect.objectContaining({ prompt: expect.any(String) }),
+          );
+        }
         const key = headerValue(init, "X-Idempotency-Key") ?? "";
         const existing = acceptedByKey.get(key);
         if (existing) {
@@ -363,12 +402,10 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
 
 function createServiceFromFetch(
   fetchImpl: typeof fetch,
-  extras: {
-    onUpsertArtifact?: Parameters<typeof createSkillRunService>[0]["onUpsertArtifact"];
-    onPersistContinuation?: Parameters<
-      typeof createSkillRunService
-    >[0]["onPersistContinuation"];
-  } = {},
+  extras: Pick<
+    CreateSkillRunServiceOptions,
+    "onUpsertArtifact" | "onPersistContinuation"
+  > = {},
 ): SkillRunService {
   const gateway = createSkillRunGatewayClient({
     hasConsumerLock: true,
@@ -561,10 +598,58 @@ describe("skill-run e2e fixture", () => {
     });
     const replay = await gateway.callSkill({
       toolName: "writer.article",
-      prompt: "dup",
+      arguments: { prompt: "dup" },
       idempotencyKey: input.clientRequestId,
     });
     expect(replay.runId).toBe(`run-${input.clientRequestId}`);
+  });
+
+  it("negative: unsupported schema is rejected before tools/call", async () => {
+    const fixture = createFixtureFetch("unsupported-schema");
+    const service = createServiceFromFetch(
+      fixture.fetchImpl as unknown as typeof fetch,
+    );
+    const catalog = await service.listCatalog();
+    expect(catalog.status).toBe("ready");
+    const tool = catalog.tools.find((entry) => entry.toolName === "writer.ref");
+    expect(tool?.callability).toBe("unsupported");
+    expect(tool?.invocationMode).toBe("unsupported-schema");
+
+    const result = await service.start({
+      toolName: "writer.ref",
+      prompt: "hello",
+      clientRequestId: "e2e-unsupported",
+      sessionId: "session-unsupported",
+      profileId: "profile-1",
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("SKILL_UNSUPPORTED_SCHEMA");
+    }
+    expect(countToolsCall(fixture.fetchImpl)).toBe(0);
+  });
+
+  it("negative: extra required parameters are rejected before tools/call", async () => {
+    const fixture = createFixtureFetch("extra-required");
+    const service = createServiceFromFetch(
+      fixture.fetchImpl as unknown as typeof fetch,
+    );
+    const catalog = await service.listCatalog();
+    const tool = catalog.tools.find((entry) => entry.toolName === "writer.extra");
+    expect(tool?.invocationMode).toBe("parameters-required");
+
+    const result = await service.start({
+      toolName: "writer.extra",
+      prompt: "hello",
+      clientRequestId: "e2e-extra",
+      sessionId: "session-extra",
+      profileId: "profile-1",
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
+    }
+    expect(countToolsCall(fixture.fetchImpl)).toBe(0);
   });
 
   it("negative: cancel reaches cancelled without abortChat", async () => {

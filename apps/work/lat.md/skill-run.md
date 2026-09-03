@@ -12,9 +12,11 @@ Checkpoint C hardens Skill Run start gates, prompt-first validation, single-acti
    - Existing readers/rehydration are not disposed when mode is not `skill-first`.
 
 2. **Prompt-first Main validation**:
-   - `bindPromptFirstTool` in `skill-run-contract-parser.ts` revalidates Catalog `toolName` and prompt-only schema on Main before `tools/call`.
-   - Extra required fields, `$ref`, or complex schema shapes fail closed with `PARAMETERS_REQUIRED` / `UNSUPPORTED_SCHEMA`.
-   - Renderer-submitted `toolName` is never trusted without Catalog confirmation.
+   - `classifySkillInvocation` in `skill-run-contract-parser.ts` is the single Owner for Catalog callability and Start bindability (`prompt-first` | `parameters-required` | `form-required` | `unsupported-schema`).
+   - Catalog projection (`mapPublicSkillCatalogTools`) and `bindPromptFirstTool` both call that classifier; `catalog.callability === "callable"` implies bind success.
+   - Binding uses contract `promptField` (not a hardcoded `"prompt"`) to build `tools/call` arguments; optional object/array properties are ignored and do not disqualify prompt-first.
+   - Extra required fields, root `$ref`, non-object root, or composite schemas fail closed with `SKILL_*` error codes (`SKILL_PARAMETERS_REQUIRED`, `SKILL_UNSUPPORTED_SCHEMA`, etc.).
+   - Renderer-submitted `toolName` is never trusted without Catalog confirmation; Renderer never supplies `promptField` / `inputSchema` as execution truth.
 
 3. **Single active run per session**:
    - `SkillRunService.start` rejects a second non-terminal run for the same `sessionId` with `RUN_ALREADY_ACTIVE`.
@@ -56,7 +58,7 @@ Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:sk
   - `SMC_SKILL_RUN_E2E_PROMPT` (optional short prompt)
 - **AC-12 evidence grading:** fixture green proves same-process idempotency / restart without second `tools/call`. **Cross-end** “only one Provider Run” is **proven only when live suite actually runs**. If live is skipped → Completion = `IMPLEMENTED_NOT_PROVEN` for AC-12 cross-end; do not claim proven from fixture alone.
 - Evidence under `artifacts/work-v4.0.1-checkpoint-b-live-e2e/` must not contain JWT, absolute backend URLs, prompt全文, or artifact bytes.
-- The live suite is technically env-gated, but RM-01 completion requires a Provider-published prompt-first Skill plus manual successful live replay. A Catalog tool with optional object/array/ref schema is rejected as `UNSUPPORTED_SCHEMA` before `tools/call`; M1/M2 do not weaken that Main-side rule.
+- The live suite is technically env-gated, but RM-01 completion requires a Provider-published prompt-first Skill plus manual successful live replay. Optional object/array properties on a prompt-first schema are allowed and omitted from `tools/call` arguments; root `$ref` / composite schemas and extra required fields still fail closed before `tools/call`.
 
 ## Still Out
 

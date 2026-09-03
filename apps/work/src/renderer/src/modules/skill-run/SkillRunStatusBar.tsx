@@ -1,5 +1,5 @@
 import React, { useTransition } from "react";
-import { Loader2, AlertCircle, CheckCircle2, XCircle, StopCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, StopCircle } from "lucide-react";
 import type { SkillRunProjection } from "../../../../shared/skill-run";
 import { useTranslation } from "react-i18next";
 

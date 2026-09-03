@@ -173,6 +173,12 @@
   overflow: hidden;
 }
 
+.skill-card-reason {
+  font-size: 0.75rem;
+  color: #fbbf24;
+  margin: 0 0 8px 0;
+}
+
 .skill-card-name-slug {
   font-family: monospace;
   font-size: 0.6875rem;
@@ -243,6 +249,12 @@
   font-family: monospace;
   color: var(--text-muted, #64748b);
   font-size: 0.75rem;
+}
+
+.skill-selection-bar-unavailable {
+  font-size: 0.75rem;
+  color: #fbbf24;
+  margin-left: 8px;
 }
 
 .skill-selection-clear-btn {

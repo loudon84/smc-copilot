@@ -122,7 +122,7 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
     const tool = filteredTools[highlightedIndex];
 
-    if (tool && tool.callability === "callable") {
+    if (tool && tool.invocationMode === "prompt-first") {
 
       onSelectSkill(tool);
 
@@ -410,9 +410,24 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
             {filteredTools.map((tool, index) => {
 
-              const isCallable = tool.callability === "callable";
+              const isPromptFirst = tool.invocationMode === "prompt-first";
 
               const highlighted = index === highlightedIndex;
+
+              const reasonKey =
+                tool.reasonCode === "FORM_REQUIRED"
+                  ? "skillRun.reasonFormRequired"
+                  : tool.reasonCode === "EXTRA_REQUIRED_PARAMETERS"
+                    ? "skillRun.reasonParametersRequired"
+                    : tool.reasonCode === "PROMPT_FIELD_MISSING"
+                      ? "skillRun.reasonPromptFieldMissing"
+                      : tool.reasonCode === "PROMPT_FIELD_INVALID"
+                        ? "skillRun.reasonPromptFieldInvalid"
+                        : tool.reasonCode === "CONTRACT_MISMATCH"
+                          ? "skillRun.reasonContractMismatch"
+                          : tool.reasonCode
+                            ? "skillRun.reasonUnsupportedSchema"
+                            : null;
 
               return (
 
@@ -428,13 +443,17 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
                   aria-selected={highlighted}
 
-                  className={`skill-card ${isCallable ? "" : "disabled"} ${highlighted ? "highlighted" : ""}`}
+                  className={`skill-card ${isPromptFirst ? "" : "disabled"} ${highlighted ? "highlighted" : ""}`}
 
-                  disabled={!isCallable}
+                  disabled={!isPromptFirst}
 
                   onMouseEnter={() => setHighlightedIndex(index)}
 
-                  onClick={() => onSelectSkill(tool)}
+                  onClick={() => {
+
+                    if (isPromptFirst) onSelectSkill(tool);
+
+                  }}
 
                 >
 
@@ -453,6 +472,16 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
                   {tool.description && (
 
                     <p className="skill-card-desc">{tool.description}</p>
+
+                  )}
+
+                  {!isPromptFirst && reasonKey && (
+
+                    <p className="skill-card-reason">
+
+                      {t(reasonKey) || t("skillRun.skillUnavailable") || "Unavailable"}
+
+                    </p>
 
                   )}
 

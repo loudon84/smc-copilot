@@ -152,7 +152,11 @@ export function resolveRestoredSkillSelection(
   return {
     toolName: mode.toolName,
     title: mode.toolTitle,
-    callability: "callable",
+    interactionMode: "chat",
+    supportsAttachments: false,
+    callability: "unsupported",
+    invocationMode: "unsupported-schema",
+    reasonCode: "CONTRACT_MISMATCH",
   };
 }
 
@@ -442,6 +446,30 @@ function Chat({
       );
     });
   }, [hermesSessionId, initialSessionId, isSkillRunMode]);
+
+  useEffect(() => {
+    if (!isSkillRunMode || !selectedSkill) return;
+    return subscribeSkillRunCatalog(() => {
+      const catalog = getSkillRunCatalogState();
+      if (catalog.status !== "ready") return;
+      const resolved = catalog.tools.find(
+        (entry) => entry.toolName === selectedSkill.toolName,
+      );
+      if (resolved) {
+        setSelectedSkill(resolved);
+        return;
+      }
+      setSelectedSkill({
+        toolName: selectedSkill.toolName,
+        title: selectedSkill.title,
+        interactionMode: "chat",
+        supportsAttachments: false,
+        callability: "unsupported",
+        invocationMode: "unsupported-schema",
+        reasonCode: "CONTRACT_MISMATCH",
+      });
+    });
+  }, [isSkillRunMode, selectedSkill?.toolName, selectedSkill?.title]);
 
   useEffect(() => {
     initSkillRunRendererListener();
@@ -1327,6 +1355,13 @@ function Chat({
       if (isSkillRunMode) {
         if (!selectedSkill) {
           toast.error(t("skillRun.selectSkillBeforeSending") || "Select a skill before sending.");
+          return;
+        }
+        if (selectedSkill.invocationMode !== "prompt-first") {
+          toast.error(
+            t("skillRun.skillUnavailable") ||
+              "This skill cannot be executed in prompt-first mode.",
+          );
           return;
         }
         const clientRequestId = createClientRequestId();
