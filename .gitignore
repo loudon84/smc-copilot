@@ -47,3 +47,11 @@ artifacts/
 Thumbs.db
 .idea/
 *.swp
+
+# SMC governed delivery local state/evidence
+.smc/evidence/
+.smc/reviews/
+.smc/runs/
+.smc/skill-upgrade-backups/
+__pycache__/
+*.py[cod]

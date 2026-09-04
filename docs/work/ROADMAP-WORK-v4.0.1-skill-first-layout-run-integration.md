@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-02T07:17:23.483562Z
+updated_at: 2026-09-04T08:25:00.000000Z
 implementation_plan_required: true
 ---
 
@@ -21,10 +21,10 @@ implementation_plan_required: true
 
 | Item ID | Outcome | Depends On | Status | Exit Criteria | PRD | Plan | Implementation Commit | Verification Evidence |
 |---|---|---|---|---|---|---|---|---|
-| RM-01 | M0 Provider Contract Ready：Provider 更新后由人工完成受控 live 验证；Work 只消费不可变 Bundle。 | - | BACKLOG | tag/manifest/SHA256 与 P0 schemas、endpoint/error fixtures 全部通过；Public DTO 安全；同一 idempotency key 跨端只创建一个 Run；Provider/Work contract tests 通过。 | `docs/work/PRD-WORK-v4.0.1-M0-provider-contract-ready.md` | - | - | 2026-09-01 fixture checks passed (consumer/gateway 14/14; E2E 8/8). 2026-09-02 live Catalog found the configured tool but Work rejected its optional object field as `UNSUPPORTED_SCHEMA` before `tools/call`; pending a Provider-published prompt-first skill and manual live replay verification. |
+| RM-01 | M0 Provider Contract Ready：Provider 更新后由人工完成受控 live 验证；Work 只消费不可变 Bundle。 | - | BACKLOG | tag/manifest/SHA256 与 P0 schemas、endpoint/error fixtures 全部通过；Public DTO 安全；同一 idempotency key 跨端只创建一个 Run；Provider/Work contract tests 通过。 | `docs/work/PRD-WORK-v4.0.1-M0-provider-contract-ready.md` | - | - | Fixture PASS. 2026-09-04 product decision: skip remaining live AC-03/AC-04 for now; keep BACKLOG and re-verify during later stages. Do not mark DONE without that live replay. |
 | RM-02 | M1 Work Contract and Main Foundation：不启用真实 `tools/call` 的 Main/Preload dark foundation 可用。 | - | DONE | auth scope、sanitized IPC、feature mode、Parser/Gateway/Service 与 focused tests 通过；默认保持 `expert-compat`，不得以本项启用真实 Skill Run start。 | docs/work/PRD-WORK-v4.0.1-M1-main-preload-dark-foundation.md | .cursor/plans/work-v4.0.1-m1-main-preload-dark-foundation.plan.md | e72e5edc15af93e6e3a34cc4d6f9517fcd2b7931 | apps/work/artifacts/rm-02-m1/ |
 | RM-03 | M2 Layout, Catalog, and Selection：现有 Chat 内的安全 Skill selection UX 可用。 | RM-02 | DONE | Layout/Chat 单一 owner、Catalog discriminator、a11y、mode/selection persistence 和 Renderer tests 通过；真实 start 仍受 RM-01 gate 控制。 | docs/work/PRD-WORK-v4.0.1-M2-layout-catalog-selection.md | .cursor/plans/work-v4.0.1-m2-layout-catalog-selection.plan.md | f74bdf45 | apps/work/artifacts/rm-03-m2/ (V01-V05 PASS; typecheck:web has only pre-existing diagnostics outside M2) |
-| RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-01, RM-03 | BACKLOG | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与跨项目 E2E 通过。 | - | - | - | - |
+| RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-03 | IN_PRD | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与 focused/fixture E2E 通过。跨端 live 延后到 RM-01 重跑。 | docs/work/PRD-WORK-v4.0.1-M3-executable-run-and-recovery.md | - | - | - |
 | RM-05 | M4 Result, Artifact, and Session Files：Result/Artifact 复用现有 File Platform 并完成 Checkpoint B。 | RM-04 | BACKLOG | run-scoped remote identity、Artifact safety、Session Files、真实 Catalog→Artifact→Restart 与负向 Checkpoint B 通过。 | - | - | - | - |
 | RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | BACKLOG | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | - | - | - | - |
 | RM-07 | M6 Removal Readiness and P1：P1 contract capabilities 与独立 v4.2 Expert removal 准备。 | RM-06 | BACKLOG | M5 稳定 telemetry 后，每项拥有独立 Stage PRD；Expert removal 单独审查。 | - | - | - | - |
@@ -45,7 +45,7 @@ M0 Provider Contract Ready
   → M6 Expert Removal Readiness / P1 Enhancements
 ```
 
-M0 是生产集成硬 Gate。M0 进行时，Work 可并行完成不依赖 wire schema 的 Layout mode、UI states、shared transport extraction 和测试骨架，但不得启用真实 `tools/call`。
+M0 Bundle/fixture 仍是合同输入。2026-09-04 产品决定：RM-01 受控 live 保持 BACKLOG，不阻塞 M3 实施；live AC 在后续阶段重跑，不得把未重跑的 live 当作 RM-01 DONE。
 
 ## Milestone M0 — Provider Contract Ready
 
@@ -70,7 +70,7 @@ M0 是生产集成硬 Gate。M0 进行时，Work 可并行完成不依赖 wire s
 - 同一 idempotency key 的跨端测试只创建一个 Run；
 - Work 与 Provider contract tests 共同通过。
 
-**Stop condition:** 任一必需 schema 仍是开放 object/string 时，M1 可以继续暗构建，但 M3 不得接入生产 start。
+**Stop condition:** 任一必需 schema 仍是开放 object/string 时，生产默认不得切到 `skill-first`。M3 可在显式开发 mode 下实施可执行路径；RM-01 live 延后重跑，不能替代 fixture/focused 证据，也不能关闭 RM-01。
 
 ## Milestone M1 — Work Contract and Main Foundation
 
@@ -139,7 +139,7 @@ M0–M2 完成后进行第一次人工产品检查：用户可进入 Skill mode�
 
 **Owner:** Work Main SkillRunService；Provider Run 仍是远端事实源。
 
-**Dependencies:** M0 全部 P0 contract Gate；M1 foundation；M2 immutable selection snapshot。
+**Dependencies:** M1 foundation；M2 immutable selection snapshot。M0 live 按产品决定延后重跑，不作为本里程碑启动门。
 
 **Deliverables:**
 
@@ -165,8 +165,9 @@ M0–M2 完成后进行第一次人工产品检查：用户可进入 Skill mode�
 - Main lifecycle/idempotency/reconnect tests
 - Session continuation/materialization tests
 - Renderer projection/store tests
-- Cross-project start → SSE/poll → result E2E
+- Cross-project fixture start → SSE/poll → result E2E
 - `npm run guard && npm run typecheck && npm test`
+- 受控 live 同 key / Checkpoint B 全链路延后到 RM-01 重跑，不作为本里程碑 DONE 前提
 
 ## Milestone M4 — Result, Artifact, and Session Files
 
@@ -261,7 +262,7 @@ M3–M4 完成后，使用真实发布 Skill 验证 Catalog → Submit → Run �
 
 必须串行：
 
-- Contract lock 在真实 `tools/call` 前；
+- Contract Bundle lock 在生产默认 `skill-first` 前；显式开发 mode 下的 M3 可执行路径以 fixture 为准，live 延后重跑；
 - auth/sanitized IPC 在 Renderer projection subscription 前；
 - pending-submit/idempotency 在 retry/restart E2E 前；
 - run-scoped file identity migration在 Skill Artifact production upsert 前；

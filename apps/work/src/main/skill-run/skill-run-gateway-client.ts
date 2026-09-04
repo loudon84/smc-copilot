@@ -87,6 +87,19 @@ export function createSkillRunGatewayClient(
     });
   let disposed = false;
   const cachedCatalogByScope = new Map<string, SkillCatalogResponse>();
+  /** Per-provider-run route hints. Hermes Task tools/call returns task_id + hermes paths. */
+  const routesByRunId = new Map<
+    string,
+    {
+      kind: "skill-run" | "hermes-task";
+      eventPath: string;
+      eventTokenPath?: string;
+      snapshotPath: string;
+      resultPath: string;
+      artifactPath: string;
+      cancelPath: string;
+    }
+  >();
 
   function assertNotDisposed(): void {
     if (disposed) {
@@ -106,6 +119,103 @@ export function createSkillRunGatewayClient(
 
   function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function toApiPath(value: unknown, fallback: string): string {
+    if (typeof value !== "string" || !value.trim()) return fallback;
+    const trimmed = value.trim();
+    if (trimmed.startsWith("/")) return trimmed;
+    try {
+      const parsed = new URL(trimmed);
+      return `${parsed.pathname}${parsed.search}`;
+    } catch {
+      return fallback;
+    }
+  }
+
+  function defaultSkillRunRoutes(runId: string) {
+    const enc = encodeURIComponent(runId);
+    return {
+      kind: "skill-run" as const,
+      eventPath: `/api/v1/runs/${enc}/events`,
+      snapshotPath: `/api/v1/runs/${enc}`,
+      resultPath: `/api/v1/runs/${enc}`,
+      artifactPath: `/api/v1/runs/${enc}/artifacts`,
+      cancelPath: `/api/v1/runs/${enc}/cancel`,
+    };
+  }
+
+  function defaultHermesTaskRoutes(taskId: string) {
+    const enc = encodeURIComponent(taskId);
+    return {
+      kind: "hermes-task" as const,
+      eventPath: `/api/v1/hermes/tasks/${enc}/events`,
+      eventTokenPath: `/api/v1/hermes/tasks/${enc}/events-token`,
+      snapshotPath: `/api/v1/hermes/tasks/${enc}`,
+      resultPath: `/api/v1/hermes/tasks/${enc}/result`,
+      artifactPath: `/api/v1/hermes/tasks/${enc}/artifacts`,
+      cancelPath: `/api/v1/hermes/tasks/${enc}/cancel`,
+    };
+  }
+
+  function resolveRoutes(runId: string) {
+    return routesByRunId.get(runId) ?? defaultSkillRunRoutes(runId);
+  }
+
+  function normalizeArtifactList(body: unknown): SkillRunArtifactDescriptor[] {
+    const rawList = isRecord(body)
+      ? Array.isArray(body.artifacts)
+        ? body.artifacts
+        : Array.isArray(body.data)
+          ? body.data
+          : []
+      : [];
+    const out: SkillRunArtifactDescriptor[] = [];
+    for (const item of rawList) {
+      if (!isRecord(item) || typeof item.id !== "string") continue;
+      const fileName =
+        typeof item.file_name === "string"
+          ? item.file_name
+          : typeof item.title === "string"
+            ? item.title
+            : null;
+      if (!fileName) continue;
+      out.push({
+        id: item.id,
+        file_name: fileName,
+        size_bytes:
+          typeof item.size_bytes === "number" ? item.size_bytes : undefined,
+        mime_type:
+          typeof item.content_type === "string"
+            ? item.content_type
+            : typeof item.mime_type === "string"
+              ? item.mime_type
+              : undefined,
+        sha256: typeof item.sha256 === "string" ? item.sha256 : undefined,
+        preview_supported:
+          typeof item.preview_supported === "boolean"
+            ? item.preview_supported
+            : undefined,
+      });
+    }
+    return out;
+  }
+
+  function extractResultText(body: unknown): string | undefined {
+    if (!isRecord(body)) return undefined;
+    if (typeof body.result_text === "string") return body.result_text;
+    if (typeof body.text === "string") return body.text;
+    if (typeof body.content === "string") return body.content;
+    if (typeof body.summary === "string") return body.summary;
+    if (isRecord(body.result)) {
+      if (typeof body.result.content === "string") return body.result.content;
+      if (typeof body.result.summary === "string") return body.result.summary;
+      if (typeof body.result.text === "string") return body.result.text;
+    }
+    if (isRecord(body.data)) {
+      return extractResultText(body.data);
+    }
+    return undefined;
   }
 
   async function jsonRpc(
@@ -240,20 +350,109 @@ export function createSkillRunGatewayClient(
         { idempotencyKey: input.idempotencyKey },
       );
 
+      // v1.2.1 accepted result nests run identity under structuredContent
+      // (see contracts/skill-run/v1.2.1/fixtures/tools-call-accepted.json).
+      // Provider transitional path may return HermesTask task_id + hermes URLs;
+      // Skill Run owns lifecycle and maps that transport without calling Expert.
       const data = isRecord(result) ? result : {};
-      const runId =
+      const structured = isRecord(data.structuredContent)
+        ? data.structuredContent
+        : null;
+
+      if (process.env.SMC_SKILL_RUN_DEBUG === "1") {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[skill-run][callSkill] tools/call raw result:",
+          JSON.stringify(result, null, 2),
+        );
+        // eslint-disable-next-line no-debugger
+        debugger;
+      }
+
+      const skillRunId =
+        (structured && typeof structured.run_id === "string" && structured.run_id) ||
+        (structured && typeof structured.runId === "string" && structured.runId) ||
         (typeof data.run_id === "string" && data.run_id) ||
         (typeof data.runId === "string" && data.runId) ||
         "";
-      if (!runId) {
-        throw new SkillRunGatewayError("Invalid backend response: missing run_id", 502);
+      const hermesTaskId =
+        structured && typeof structured.task_id === "string"
+          ? structured.task_id.trim()
+          : "";
+
+      let runId = skillRunId;
+      let routes = runId ? defaultSkillRunRoutes(runId) : null;
+
+      if (!runId && hermesTaskId) {
+        runId = hermesTaskId;
+        const hermesDefaults = defaultHermesTaskRoutes(runId);
+        routes = {
+          kind: "hermes-task",
+          eventPath: toApiPath(
+            structured?.event_url ?? structured?.event_stream,
+            hermesDefaults.eventPath,
+          ),
+          eventTokenPath: toApiPath(
+            structured?.event_token_url,
+            hermesDefaults.eventTokenPath,
+          ),
+          snapshotPath: hermesDefaults.snapshotPath,
+          resultPath: toApiPath(structured?.result_url, hermesDefaults.resultPath),
+          artifactPath: toApiPath(
+            structured?.artifact_url,
+            hermesDefaults.artifactPath,
+          ),
+          cancelPath: hermesDefaults.cancelPath,
+        };
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[skill-run][callSkill] Provider returned HermesTask envelope; bridging transport under Skill Run owner",
+          { toolName: input.toolName, taskId: runId },
+        );
+      } else if (runId && structured) {
+        routes = {
+          ...defaultSkillRunRoutes(runId),
+          eventPath: toApiPath(
+            structured.event_stream ?? structured.event_stream_url,
+            defaultSkillRunRoutes(runId).eventPath,
+          ),
+          resultPath: toApiPath(
+            structured.result_url,
+            defaultSkillRunRoutes(runId).resultPath,
+          ),
+          artifactPath: toApiPath(
+            structured.artifact_url,
+            defaultSkillRunRoutes(runId).artifactPath,
+          ),
+        };
       }
+
+      if (!runId || !routes) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[skill-run][callSkill] missing run_id/task_id — inspect tools/call result shape:",
+          JSON.stringify(result, null, 2),
+        );
+        // eslint-disable-next-line no-debugger
+        debugger;
+        throw new SkillRunGatewayError(
+          "Invalid backend response: missing structuredContent.run_id (or transitional task_id)",
+          502,
+          "SKILL_UNSUPPORTED_SCHEMA",
+        );
+      }
+
+      routesByRunId.set(runId, routes);
+
+      const status =
+        (structured && typeof structured.status === "string" && structured.status) ||
+        (typeof data.status === "string" && data.status) ||
+        "starting";
 
       return {
         runId,
-        status: typeof data.status === "string" ? data.status : "starting",
-        eventStreamUrl:
-          typeof data.event_stream_url === "string" ? data.event_stream_url : undefined,
+        status,
+        eventStreamUrl: routes.eventPath,
       };
     },
 
@@ -261,7 +460,8 @@ export function createSkillRunGatewayClient(
       assertNotDisposed();
       assertLock();
 
-      const res = await transport.authorizedFetch(`/api/v1/runs/${encodeURIComponent(runId)}`, {
+      const routes = resolveRoutes(runId);
+      const res = await transport.authorizedFetch(routes.snapshotPath, {
         method: "GET",
       });
 
@@ -269,24 +469,56 @@ export function createSkillRunGatewayClient(
         throw new SkillRunGatewayError(`Get run snapshot failed: ${res.status}`, res.status);
       }
 
-      const data = (await res.json()) as {
-        id?: string;
-        run_id?: string;
-        status?: string;
-        result_text?: string;
-        text?: string;
-        error_code?: string;
-        error_message?: string;
-        artifacts?: SkillRunArtifactDescriptor[];
-      };
+      const body = (await res.json()) as unknown;
+      const data = isRecord(body)
+        ? isRecord(body.data)
+          ? { ...body, ...body.data }
+          : isRecord(body.task)
+            ? { ...body, ...body.task }
+            : body
+        : {};
+
+      let resultText = extractResultText(data);
+      const status =
+        (typeof data.status === "string" && data.status) ||
+        "running";
+      const normalizedStatus = status.toLowerCase();
+      if (
+        !resultText &&
+        routes.kind === "hermes-task" &&
+        (normalizedStatus === "succeeded" ||
+          normalizedStatus === "completed" ||
+          normalizedStatus === "success")
+      ) {
+        try {
+          const resultRes = await transport.authorizedFetch(routes.resultPath, {
+            method: "GET",
+          });
+          if (resultRes.ok) {
+            resultText = extractResultText(await resultRes.json());
+          }
+        } catch {
+          // keep snapshot-only view
+        }
+      }
 
       return {
-        runId: data.id || data.run_id || runId,
-        status: data.status || "running",
-        resultText: data.result_text || data.text,
-        errorCode: data.error_code,
-        errorMessage: data.error_message,
-        artifacts: data.artifacts,
+        runId:
+          (typeof data.id === "string" && data.id) ||
+          (typeof data.run_id === "string" && data.run_id) ||
+          (typeof data.task_id === "string" && data.task_id) ||
+          runId,
+        status,
+        resultText,
+        errorCode:
+          typeof data.error_code === "string" ? data.error_code : undefined,
+        errorMessage:
+          typeof data.error_message === "string"
+            ? data.error_message
+            : typeof data.message === "string"
+              ? data.message
+              : undefined,
+        artifacts: normalizeArtifactList(data),
       };
     },
 
@@ -294,7 +526,8 @@ export function createSkillRunGatewayClient(
       assertNotDisposed();
       assertLock();
 
-      const res = await transport.authorizedFetch(`/api/v1/runs/${encodeURIComponent(runId)}/cancel`, {
+      const routes = resolveRoutes(runId);
+      const res = await transport.authorizedFetch(routes.cancelPath, {
         method: "POST",
       });
 
@@ -307,7 +540,8 @@ export function createSkillRunGatewayClient(
       assertNotDisposed();
       assertLock();
 
-      const res = await transport.authorizedFetch(`/api/v1/runs/${encodeURIComponent(runId)}/artifacts`, {
+      const routes = resolveRoutes(runId);
+      const res = await transport.authorizedFetch(routes.artifactPath, {
         method: "GET",
       });
 
@@ -316,8 +550,7 @@ export function createSkillRunGatewayClient(
         throw new SkillRunGatewayError(`List artifacts failed: ${res.status}`, res.status);
       }
 
-      const data = (await res.json()) as { artifacts?: SkillRunArtifactDescriptor[] };
-      return Array.isArray(data.artifacts) ? data.artifacts : [];
+      return normalizeArtifactList(await res.json());
     },
 
     async openEventStream(
@@ -327,6 +560,30 @@ export function createSkillRunGatewayClient(
       assertNotDisposed();
       assertLock();
 
+      const routes = resolveRoutes(runId);
+      let eventPath = routes.eventPath;
+      if (routes.eventTokenPath) {
+        try {
+          const tokenRes = await transport.authorizedFetch(routes.eventTokenPath, {
+            method: "GET",
+            signal: options.signal,
+          });
+          if (tokenRes.ok) {
+            const tokenBody = (await tokenRes.json()) as unknown;
+            const tokenData = isRecord(tokenBody)
+              ? isRecord(tokenBody.data)
+                ? tokenBody.data
+                : tokenBody
+              : null;
+            if (tokenData && typeof tokenData.event_url === "string") {
+              eventPath = toApiPath(tokenData.event_url, eventPath);
+            }
+          }
+        } catch {
+          // Fall back to static eventPath when token exchange fails.
+        }
+      }
+
       const headers: Record<string, string> = {
         Accept: "text/event-stream",
       };
@@ -334,7 +591,7 @@ export function createSkillRunGatewayClient(
         headers["Last-Event-ID"] = options.lastEventId;
       }
 
-      return transport.authorizedFetch(`/api/v1/runs/${encodeURIComponent(runId)}/events`, {
+      return transport.authorizedFetch(eventPath, {
         method: "GET",
         headers,
         signal: options.signal,
@@ -347,11 +604,13 @@ export function createSkillRunGatewayClient(
 
     clearCache(): void {
       cachedCatalogByScope.clear();
+      routesByRunId.clear();
     },
 
     dispose(): void {
       disposed = true;
       cachedCatalogByScope.clear();
+      routesByRunId.clear();
     },
   };
 }

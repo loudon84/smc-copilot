@@ -58,13 +58,14 @@ Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:sk
   - `SMC_SKILL_RUN_E2E_PROMPT` (optional short prompt)
 - **AC-12 evidence grading:** fixture green proves same-process idempotency / restart without second `tools/call`. **Cross-end** “only one Provider Run” is **proven only when live suite actually runs**. If live is skipped → Completion = `IMPLEMENTED_NOT_PROVEN` for AC-12 cross-end; do not claim proven from fixture alone.
 - Evidence under `artifacts/work-v4.0.1-checkpoint-b-live-e2e/` must not contain JWT, absolute backend URLs, prompt全文, or artifact bytes.
-- The live suite is technically env-gated, but RM-01 completion requires a Provider-published prompt-first Skill plus manual successful live replay. Optional object/array properties on a prompt-first schema are allowed and omitted from `tools/call` arguments; root `$ref` / composite schemas and extra required fields still fail closed before `tools/call`.
+- The live suite remains env-gated. RM-01 live AC stay BACKLOG by product decision and will be re-run in a later stage; fixture green does not prove cross-end idempotency. Optional object/array properties on a prompt-first schema are allowed and omitted from `tools/call` arguments; root `$ref` / composite schemas and extra required fields still fail closed before `tools/call`.
+- M3 production Skill Run identity is Bundle `run_id` + `/api/v1/runs/*`. HermesTask `task_id` / `/api/v1/hermes/tasks/*` is not a Skill Run contract and must not become the Work lifecycle SoT.
 
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
-- RM-01 live replay is deferred until Provider publishes a prompt-first verification Skill; it is mandatory before RM-04 real execution or production promotion
+- RM-01 live replay remains BACKLOG and will be re-run later; it does not block M3 Stage PRD/implementation, and it does not authorize production-default `skill-first`
 - M5 production default skill-first, telemetry dashboard
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
 - v4.2 Expert entry removal

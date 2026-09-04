@@ -345,14 +345,23 @@ export function parseSkillRunEvent(
       : typeof payload.seq === "number"
         ? payload.seq
         : undefined;
-  const wireType =
-    typeof payload.event_type === "string" ? payload.event_type : eventType;
+  const wireTypeRaw =
+    typeof payload.event === "string"
+      ? payload.event
+      : typeof payload.event_type === "string"
+        ? payload.event_type
+        : eventType;
+  const wireType = wireTypeRaw.toLowerCase();
 
   switch (wireType) {
     case "run.created":
     case "run.progress":
     case "run.started":
     case "run_started":
+    case "task.started":
+    case "task.progress":
+    case "started":
+    case "progress":
       return {
         eventId,
         eventSeq,
@@ -363,7 +372,9 @@ export function parseSkillRunEvent(
             ? inner.message
             : typeof inner.text === "string"
               ? inner.text
-              : undefined,
+              : typeof payload.message === "string"
+                ? payload.message
+                : undefined,
       };
 
     case "run.waiting_approval":
@@ -377,7 +388,9 @@ export function parseSkillRunEvent(
 
     case "run.completed":
     case "run.succeeded":
-    case "run_completed": {
+    case "run_completed":
+    case "task.completed":
+    case "completed": {
       const artifactsRaw = inner.artifacts ?? payload.artifacts;
       const artifacts: SkillRunArtifactDescriptor[] = [];
       if (Array.isArray(artifactsRaw)) {
@@ -392,6 +405,11 @@ export function parseSkillRunEvent(
           }
         }
       }
+      const resultObj = isRecord(inner.result)
+        ? inner.result
+        : isRecord(payload.result)
+          ? payload.result
+          : null;
       const text =
         typeof inner.text === "string"
           ? inner.text
@@ -399,11 +417,15 @@ export function parseSkillRunEvent(
             ? inner.result_text
             : typeof inner.message === "string"
               ? inner.message
-              : typeof payload.result_text === "string"
-                ? payload.result_text
-                : typeof payload.text === "string"
-                  ? payload.text
-                  : undefined;
+              : resultObj && typeof resultObj.content === "string"
+                ? resultObj.content
+                : resultObj && typeof resultObj.summary === "string"
+                  ? resultObj.summary
+                  : typeof payload.result_text === "string"
+                    ? payload.result_text
+                    : typeof payload.text === "string"
+                      ? payload.text
+                      : undefined;
 
       return {
         eventId,
@@ -423,7 +445,9 @@ export function parseSkillRunEvent(
         text: typeof inner.text === "string" ? inner.text : undefined,
       };
 
-    case "artifact.persisted": {
+    case "artifact.persisted":
+    case "task.artifact_ready":
+    case "artifact_ready": {
       const artifactId = typeof inner.id === "string" ? inner.id : undefined;
       const fileName =
         typeof inner.file_name === "string" ? inner.file_name : undefined;
@@ -439,6 +463,8 @@ export function parseSkillRunEvent(
 
     case "run.failed":
     case "run_failed":
+    case "task.failed":
+    case "failed":
       return {
         eventId,
         eventSeq,
@@ -464,6 +490,9 @@ export function parseSkillRunEvent(
 
     case "run.cancelled":
     case "run_cancelled":
+    case "task.cancelled":
+    case "cancelled":
+    case "canceled":
       return {
         eventId,
         eventSeq,
@@ -472,6 +501,7 @@ export function parseSkillRunEvent(
       };
 
     case "run.timed_out":
+    case "task.timed_out":
       return {
         eventId,
         eventSeq,

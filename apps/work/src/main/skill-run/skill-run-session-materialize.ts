@@ -2,10 +2,14 @@
  * Materialize a Skill Run into Hermes state.db as a normal chat session:
  * - session row + user bubble once
  * - assistant bubble updated in place as result / status arrive
+ *
+ * Must use Hermes column names (started_at / timestamp / platform_message_id),
+ * not a synthetic created_at schema.
  */
 
 import type { SkillRunProjection } from "../../shared/skill-run";
 import { getDbConnection } from "../db";
+import { resolveUniqueSessionTitle } from "../expert/expert-session-materialize";
 import {
   sessionTitleFromUserMessage,
   upsertCachedSession,
@@ -51,6 +55,24 @@ export function skillRunTranscriptBubbleIds(clientRequestId: string): {
   };
 }
 
+function upsertSessionCacheRow(
+  sessionId: string,
+  title: string,
+  nowSec: number,
+  messageCount: number,
+  startedAt?: number,
+): void {
+  upsertCachedSession({
+    id: sessionId,
+    title,
+    startedAt: Math.floor(startedAt ?? nowSec),
+    source: SESSION_SOURCE,
+    messageCount,
+    model: "",
+    contextFolder: null,
+  });
+}
+
 export function materializeSkillRunSessionTranscript(
   projection: SkillRunProjection,
 ): MaterializeSkillRunSessionResult | null {
@@ -58,73 +80,126 @@ export function materializeSkillRunSessionTranscript(
     return null;
   }
 
-  const { sessionId } = projection;
-  const title = sessionTitleFromUserMessage(projection.promptSummary || projection.toolName);
-  const nowSec = Math.floor(Date.now() / 1000);
+  const sessionId = projection.sessionId?.trim();
+  if (!sessionId) return null;
 
+  const desiredTitle = sessionTitleFromUserMessage(
+    projection.promptSummary || projection.toolName,
+  );
+  const nowSec = Date.now() / 1000;
+  const ids = skillRunTranscriptBubbleIds(projection.clientRequestId);
+  const assistantContent = buildSkillRunTranscriptAssistantContent(projection);
+
+  const db = getDbConnection(false);
+  if (!db) {
+    upsertSessionCacheRow(sessionId, desiredTitle, nowSec, 2);
+    return { sessionId, title: desiredTitle, wroteMessages: false, cacheOnly: true };
+  }
+
+  let wroteMessages = false;
+  let title = desiredTitle;
   try {
-    const db = getDbConnection();
-    if (!db) {
-      upsertCachedSession({
-        id: sessionId,
+    const tx = db.transaction(() => {
+      const existingUser = db
+        .prepare(
+          `SELECT id FROM messages WHERE platform_message_id = ? LIMIT 1`,
+        )
+        .get(ids.user) as { id: number } | undefined;
+      const existingAssistant = db
+        .prepare(
+          `SELECT id FROM messages WHERE platform_message_id = ? LIMIT 1`,
+        )
+        .get(ids.assistant) as { id: number } | undefined;
+
+      title = resolveUniqueSessionTitle(db, sessionId, desiredTitle);
+
+      db.prepare(
+        `INSERT INTO sessions (
+           id, source, started_at, message_count, title,
+           last_activity_at, profile_name
+         ) VALUES (?, ?, ?, 0, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           title = COALESCE(NULLIF(sessions.title, ''), excluded.title),
+           last_activity_at = excluded.last_activity_at,
+           profile_name = COALESCE(sessions.profile_name, excluded.profile_name)`,
+      ).run(
+        sessionId,
+        SESSION_SOURCE,
+        nowSec,
         title,
-        startedAt: nowSec,
-        source: SESSION_SOURCE,
-        messageCount: 2,
-        model: "",
-        contextFolder: null,
-      });
-      return { sessionId, title, wroteMessages: false, cacheOnly: true };
-    }
+        nowSec,
+        projection.profileId || null,
+      );
 
-    const { user: userMsgId, assistant: assistantMsgId } =
-      skillRunTranscriptBubbleIds(projection.clientRequestId);
+      const sessionRow = db
+        .prepare(`SELECT id FROM sessions WHERE id = ? LIMIT 1`)
+        .get(sessionId) as { id: string } | undefined;
+      if (!sessionRow) {
+        throw new Error(`session row missing after upsert: ${sessionId}`);
+      }
 
-    const assistantContent = buildSkillRunTranscriptAssistantContent(projection);
-
-    db.transaction(() => {
-      // Ensure session exists
-      db.prepare(
-        `INSERT OR IGNORE INTO sessions (id, title, created_at, updated_at)
-         VALUES (?, ?, ?, ?)`,
-      ).run(sessionId, title, nowSec, nowSec);
-
-      // Ensure user bubble exists
-      db.prepare(
-        `INSERT OR IGNORE INTO messages (id, session_id, role, content, created_at)
-         VALUES (?, ?, 'user', ?, ?)`,
-      ).run(userMsgId, sessionId, projection.promptSummary, nowSec);
-
-      // Upsert assistant bubble
-      const existing = db
-        .prepare(`SELECT id FROM messages WHERE id = ?`)
-        .get(assistantMsgId);
-
-      if (existing) {
+      if (!existingUser) {
         db.prepare(
-          `UPDATE messages SET content = ?, created_at = ? WHERE id = ?`,
-        ).run(assistantContent, nowSec, assistantMsgId);
+          `INSERT INTO messages (
+             session_id, role, content, timestamp, platform_message_id, active
+           ) VALUES (?, 'user', ?, ?, ?, 1)`,
+        ).run(sessionId, projection.promptSummary, nowSec, ids.user);
+        wroteMessages = true;
+      }
+
+      if (!existingAssistant) {
+        db.prepare(
+          `INSERT INTO messages (
+             session_id, role, content, timestamp, platform_message_id, active
+           ) VALUES (?, 'assistant', ?, ?, ?, 1)`,
+        ).run(sessionId, assistantContent, nowSec + 0.001, ids.assistant);
+        wroteMessages = true;
       } else {
         db.prepare(
-          `INSERT INTO messages (id, session_id, role, content, created_at)
-           VALUES (?, ?, 'assistant', ?, ?)`,
-        ).run(assistantMsgId, sessionId, assistantContent, nowSec);
+          `UPDATE messages SET content = ?, timestamp = ? WHERE id = ?`,
+        ).run(assistantContent, nowSec + 0.001, existingAssistant.id);
       }
-    })();
 
-    upsertCachedSession({
-      id: sessionId,
-      title,
-      startedAt: nowSec,
-      source: SESSION_SOURCE,
-      messageCount: 2,
-      model: "",
-      contextFolder: null,
+      const countRow = db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM messages
+           WHERE session_id = ? AND active = 1`,
+        )
+        .get(sessionId) as { n: number };
+      db.prepare(
+        `UPDATE sessions SET message_count = ?, last_activity_at = ? WHERE id = ?`,
+      ).run(countRow.n, nowSec, sessionId);
     });
-
-    return { sessionId, title, wroteMessages: true };
+    tx();
   } catch (err) {
-    console.warn("[skill-run] materialize transcript error", err);
-    return null;
+    console.warn(
+      "[skill-run] materialize transcript error; falling back to cache",
+      err,
+    );
+    upsertSessionCacheRow(sessionId, desiredTitle, nowSec, 2);
+    return {
+      sessionId,
+      title: desiredTitle,
+      wroteMessages: false,
+      cacheOnly: true,
+    };
   }
+
+  const countRow = db
+    .prepare(
+      `SELECT message_count, started_at FROM sessions WHERE id = ? LIMIT 1`,
+    )
+    .get(sessionId) as
+    | { message_count: number; started_at: number }
+    | undefined;
+
+  upsertSessionCacheRow(
+    sessionId,
+    title,
+    nowSec,
+    countRow?.message_count ?? 2,
+    countRow?.started_at,
+  );
+
+  return { sessionId, title, wroteMessages };
 }

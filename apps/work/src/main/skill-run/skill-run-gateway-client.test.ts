@@ -270,6 +270,97 @@ describe("skill-run contract parser", () => {
     expect(accepted.runId).toBe("run-query-1");
   });
 
+  it("reads run_id from structuredContent (v1.2.1 accepted shape)", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonRpcResult({
+        content: [{ type: "text", text: "accepted" }],
+        structuredContent: {
+          committed: true,
+          run_id: "run-structured-1",
+          status: "QUEUED",
+          tool_name: "writer.article",
+          event_stream: "/api/v1/runs/run-structured-1/events",
+          result_url: "/api/v1/runs/run-structured-1/result",
+          artifact_url: "/api/v1/runs/run-structured-1/artifacts",
+          execution_mode: "async_event",
+          contract_version: "1.2.1",
+        },
+        isError: false,
+      }),
+    );
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    const accepted = await client.callSkill({
+      toolName: "writer.article",
+      arguments: { prompt: "hello" },
+      idempotencyKey: "req-structured",
+    });
+    expect(accepted.runId).toBe("run-structured-1");
+    expect(accepted.status).toBe("QUEUED");
+    expect(accepted.eventStreamUrl).toBe(
+      "/api/v1/runs/run-structured-1/events",
+    );
+  });
+
+  it("bridges HermesTask task_id envelope under Skill Run transport", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr = String(url);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (urlStr.includes("/api/v1/mcp") && method === "POST") {
+        return jsonRpcResult({
+          content: [{ type: "text", text: "queued" }],
+          structuredContent: {
+            tool_name: "hermes_xieyi__customer-profiling",
+            status: "queued",
+            task_id: "eaaab37a-1068-4123-9d8e-7880c407106a",
+            event_url:
+              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events",
+            event_token_url:
+              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events-token",
+            result_url:
+              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/result",
+            artifact_url:
+              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/artifacts",
+          },
+          isError: false,
+        });
+      }
+      if (urlStr.includes("/api/v1/hermes/tasks/") && urlStr.endsWith("/events-token")) {
+        return new Response(
+          JSON.stringify({
+            event_url:
+              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events?token=sse-1",
+            expires_in: 60,
+            expires_at: "2099-01-01T00:00:00.000Z",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (urlStr.includes("/api/v1/hermes/tasks/") && urlStr.includes("/events")) {
+        return new Response("", {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${urlStr}`);
+    });
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    const accepted = await client.callSkill({
+      toolName: "hermes_xieyi__customer-profiling",
+      arguments: { prompt: "hello" },
+      idempotencyKey: "req-hermes-task",
+    });
+    expect(accepted.runId).toBe("eaaab37a-1068-4123-9d8e-7880c407106a");
+    expect(accepted.eventStreamUrl).toBe(
+      "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events",
+    );
+
+    const sse = await client.openEventStream(accepted.runId);
+    expect(sse.ok).toBe(true);
+    expect(String(fetchImpl.mock.calls.at(-1)?.[0])).toContain(
+      "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events?token=sse-1",
+    );
+  });
+
   it("parses PublicRunEvent envelope run.completed", () => {
     const parsed = parseSkillRunEvent("run.completed", {
       event_id: "evt-1",
@@ -283,5 +374,15 @@ describe("skill-run contract parser", () => {
     expect(parsed.eventId).toBe("evt-1");
     expect(parsed.eventSeq).toBe(3);
     expect(parsed.text).toBe("done");
+  });
+
+  it("parses Hermes task.completed into succeeded projection", () => {
+    const parsed = parseSkillRunEvent("message", {
+      event: "task.completed",
+      event_seq: 4,
+      result: { summary: "ok", content: "profile ready" },
+    });
+    expect(parsed.phase).toBe("succeeded");
+    expect(parsed.text).toBe("profile ready");
   });
 });

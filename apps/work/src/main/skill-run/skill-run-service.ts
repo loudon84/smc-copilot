@@ -474,6 +474,17 @@ export function createSkillRunService(
       void (async () => {
         try {
           updateProjection(activeRun, { phase: "starting" });
+          if (process.env.SMC_SKILL_RUN_DEBUG === "1") {
+            // eslint-disable-next-line no-console
+            console.error("[skill-run][start] calling tools/call", {
+              toolName: validatedToolName,
+              promptField: activeRun.promptField,
+              arguments: activeRun.callArguments,
+              idempotencyKey: input.clientRequestId,
+            });
+            // eslint-disable-next-line no-debugger
+            debugger;
+          }
           const accepted = await gateway.callSkill({
             toolName: validatedToolName,
             arguments: activeRun.callArguments,
