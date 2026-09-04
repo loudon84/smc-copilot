@@ -286,6 +286,12 @@ export function createSkillRunService(
     let reconnectAttempts = 0;
     const maxAttempts = 3;
 
+    // Bounded poll runs while SSE is still open so a hung stream cannot block
+    // Bundle terminal status. Post-disconnect poll remains as fallback below.
+    if (!run.terminalConfirmed && !disposed) {
+      void pollStatus(run, runId);
+    }
+
     while (reconnectAttempts < maxAttempts && !run.terminalConfirmed && !disposed) {
       try {
         const res = await gateway.openEventStream(runId, {

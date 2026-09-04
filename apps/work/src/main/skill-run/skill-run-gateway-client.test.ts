@@ -178,13 +178,25 @@ describe("skill-run-gateway-client contract wire", () => {
       const existing = acceptedByKey.get(key ?? "");
       if (existing) {
         return jsonRpcResult(
-          { run_id: existing },
+          {
+            structuredContent: {
+              run_id: existing,
+              status: "QUEUED",
+              event_stream: `/api/v1/runs/${existing}/events`,
+            },
+          },
           IDEMPOTENCY_REPLAY_FIXTURE.replay.status,
         );
       }
       acceptedByKey.set(key ?? "", IDEMPOTENCY_REPLAY_FIXTURE.first.run_id);
       return jsonRpcResult(
-        { run_id: IDEMPOTENCY_REPLAY_FIXTURE.first.run_id },
+        {
+          structuredContent: {
+            run_id: IDEMPOTENCY_REPLAY_FIXTURE.first.run_id,
+            status: "QUEUED",
+            event_stream: `/api/v1/runs/${IDEMPOTENCY_REPLAY_FIXTURE.first.run_id}/events`,
+          },
+        },
         IDEMPOTENCY_REPLAY_FIXTURE.first.status,
       );
     });
@@ -259,7 +271,13 @@ describe("skill-run contract parser", () => {
       expect(body.params?.name).toBe("search.skill");
       expect(body.params?.arguments).toEqual({ query: "find customers" });
       expect(headerValue(init, "X-Idempotency-Key")).toBe("req-query-field");
-      return jsonRpcResult({ run_id: "run-query-1" });
+      return jsonRpcResult({
+        structuredContent: {
+          run_id: "run-query-1",
+          status: "QUEUED",
+          event_stream: "/api/v1/runs/run-query-1/events",
+        },
+      });
     });
     const client = createClient(fetchImpl as unknown as typeof fetch);
     const accepted = await client.callSkill({
@@ -271,23 +289,34 @@ describe("skill-run contract parser", () => {
   });
 
   it("reads run_id from structuredContent (v1.2.1 accepted shape)", async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonRpcResult({
-        content: [{ type: "text", text: "accepted" }],
-        structuredContent: {
-          committed: true,
-          run_id: "run-structured-1",
-          status: "QUEUED",
-          tool_name: "writer.article",
-          event_stream: "/api/v1/runs/run-structured-1/events",
-          result_url: "/api/v1/runs/run-structured-1/result",
-          artifact_url: "/api/v1/runs/run-structured-1/artifacts",
-          execution_mode: "async_event",
-          contract_version: "1.2.1",
-        },
-        isError: false,
-      }),
-    );
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const urlStr = String(url);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (urlStr.includes("/api/v1/mcp") && method === "POST") {
+        return jsonRpcResult({
+          content: [{ type: "text", text: "accepted" }],
+          structuredContent: {
+            committed: true,
+            run_id: "run-structured-1",
+            status: "QUEUED",
+            tool_name: "writer.article",
+            event_stream: "/api/v1/runs/run-structured-1/events",
+            result_url: "/api/v1/runs/run-structured-1/result",
+            artifact_url: "/api/v1/runs/run-structured-1/artifacts",
+            execution_mode: "async_event",
+            contract_version: "1.2.1",
+          },
+          isError: false,
+        });
+      }
+      if (urlStr.includes("/api/v1/runs/run-structured-1") && method === "GET") {
+        return new Response(
+          JSON.stringify({ run_id: "run-structured-1", status: "running" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${method} ${urlStr}`);
+    });
     const client = createClient(fetchImpl as unknown as typeof fetch);
     const accepted = await client.callSkill({
       toolName: "writer.article",
@@ -299,66 +328,43 @@ describe("skill-run contract parser", () => {
     expect(accepted.eventStreamUrl).toBe(
       "/api/v1/runs/run-structured-1/events",
     );
+    await client.getRunSnapshot(accepted.runId);
+    expect(String(fetchImpl.mock.calls.at(-1)?.[0])).toContain(
+      "/api/v1/runs/run-structured-1",
+    );
+    expect(String(fetchImpl.mock.calls.at(-1)?.[0])).not.toContain(
+      "/api/v1/hermes/tasks/",
+    );
   });
 
-  it("bridges HermesTask task_id envelope under Skill Run transport", async () => {
-    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-      const urlStr = String(url);
-      const method = (init?.method ?? "GET").toUpperCase();
-      if (urlStr.includes("/api/v1/mcp") && method === "POST") {
-        return jsonRpcResult({
-          content: [{ type: "text", text: "queued" }],
-          structuredContent: {
-            tool_name: "hermes_xieyi__customer-profiling",
-            status: "queued",
-            task_id: "eaaab37a-1068-4123-9d8e-7880c407106a",
-            event_url:
-              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events",
-            event_token_url:
-              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events-token",
-            result_url:
-              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/result",
-            artifact_url:
-              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/artifacts",
-          },
-          isError: false,
-        });
-      }
-      if (urlStr.includes("/api/v1/hermes/tasks/") && urlStr.endsWith("/events-token")) {
-        return new Response(
-          JSON.stringify({
-            event_url:
-              "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events?token=sse-1",
-            expires_in: 60,
-            expires_at: "2099-01-01T00:00:00.000Z",
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      if (urlStr.includes("/api/v1/hermes/tasks/") && urlStr.includes("/events")) {
-        return new Response("", {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        });
-      }
-      throw new Error(`Unexpected fetch: ${method} ${urlStr}`);
-    });
+  it("fails closed on task_id-only Hermes Task envelope", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonRpcResult({
+        content: [{ type: "text", text: "queued" }],
+        structuredContent: {
+          tool_name: "hermes_xieyi__customer-profiling",
+          status: "queued",
+          task_id: "eaaab37a-1068-4123-9d8e-7880c407106a",
+          event_url:
+            "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events",
+          result_url:
+            "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/result",
+        },
+        isError: false,
+      }),
+    );
     const client = createClient(fetchImpl as unknown as typeof fetch);
-    const accepted = await client.callSkill({
-      toolName: "hermes_xieyi__customer-profiling",
-      arguments: { prompt: "hello" },
-      idempotencyKey: "req-hermes-task",
+    await expect(
+      client.callSkill({
+        toolName: "hermes_xieyi__customer-profiling",
+        arguments: { prompt: "hello" },
+        idempotencyKey: "req-hermes-task",
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("missing structuredContent.run_id"),
+      status: 502,
     });
-    expect(accepted.runId).toBe("eaaab37a-1068-4123-9d8e-7880c407106a");
-    expect(accepted.eventStreamUrl).toBe(
-      "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events",
-    );
-
-    const sse = await client.openEventStream(accepted.runId);
-    expect(sse.ok).toBe(true);
-    expect(String(fetchImpl.mock.calls.at(-1)?.[0])).toContain(
-      "/api/v1/hermes/tasks/eaaab37a-1068-4123-9d8e-7880c407106a/events?token=sse-1",
-    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("parses PublicRunEvent envelope run.completed", () => {

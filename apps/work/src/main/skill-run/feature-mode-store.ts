@@ -9,7 +9,7 @@ const VALID_MODES: Set<SkillRunFeatureMode> = new Set([
   "local-only",
 ]);
 
-const DEFAULT_MODE: SkillRunFeatureMode = "skill-first";
+const DEFAULT_MODE: SkillRunFeatureMode = "expert-compat";
 
 function storePath(): string {
   try {

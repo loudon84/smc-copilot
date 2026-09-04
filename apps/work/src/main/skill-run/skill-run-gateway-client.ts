@@ -87,13 +87,12 @@ export function createSkillRunGatewayClient(
     });
   let disposed = false;
   const cachedCatalogByScope = new Map<string, SkillCatalogResponse>();
-  /** Per-provider-run route hints. Hermes Task tools/call returns task_id + hermes paths. */
+  /** Per-provider-run route hints derived from Bundle `/api/v1/runs/{run_id}/*` only. */
   const routesByRunId = new Map<
     string,
     {
-      kind: "skill-run" | "hermes-task";
+      kind: "skill-run";
       eventPath: string;
-      eventTokenPath?: string;
       snapshotPath: string;
       resultPath: string;
       artifactPath: string;
@@ -142,19 +141,6 @@ export function createSkillRunGatewayClient(
       resultPath: `/api/v1/runs/${enc}`,
       artifactPath: `/api/v1/runs/${enc}/artifacts`,
       cancelPath: `/api/v1/runs/${enc}/cancel`,
-    };
-  }
-
-  function defaultHermesTaskRoutes(taskId: string) {
-    const enc = encodeURIComponent(taskId);
-    return {
-      kind: "hermes-task" as const,
-      eventPath: `/api/v1/hermes/tasks/${enc}/events`,
-      eventTokenPath: `/api/v1/hermes/tasks/${enc}/events-token`,
-      snapshotPath: `/api/v1/hermes/tasks/${enc}`,
-      resultPath: `/api/v1/hermes/tasks/${enc}/result`,
-      artifactPath: `/api/v1/hermes/tasks/${enc}/artifacts`,
-      cancelPath: `/api/v1/hermes/tasks/${enc}/cancel`,
     };
   }
 
@@ -350,93 +336,47 @@ export function createSkillRunGatewayClient(
         { idempotencyKey: input.idempotencyKey },
       );
 
-      // v1.2.1 accepted result nests run identity under structuredContent
+      // v1.2.1 accepted identity is structuredContent.run_id only
       // (see contracts/skill-run/v1.2.1/fixtures/tools-call-accepted.json).
-      // Provider transitional path may return HermesTask task_id + hermes URLs;
-      // Skill Run owns lifecycle and maps that transport without calling Expert.
+      // Hermes Task task_id / hermes URLs are not Skill Run SoT.
       const data = isRecord(result) ? result : {};
       const structured = isRecord(data.structuredContent)
         ? data.structuredContent
         : null;
 
-      if (process.env.SMC_SKILL_RUN_DEBUG === "1") {
-        // eslint-disable-next-line no-console
-        console.error(
-          "[skill-run][callSkill] tools/call raw result:",
-          JSON.stringify(result, null, 2),
-        );
-        // eslint-disable-next-line no-debugger
-        debugger;
-      }
-
-      const skillRunId =
-        (structured && typeof structured.run_id === "string" && structured.run_id) ||
-        (structured && typeof structured.runId === "string" && structured.runId) ||
-        (typeof data.run_id === "string" && data.run_id) ||
-        (typeof data.runId === "string" && data.runId) ||
+      const runId =
+        (structured && typeof structured.run_id === "string" && structured.run_id.trim()) ||
         "";
-      const hermesTaskId =
-        structured && typeof structured.task_id === "string"
-          ? structured.task_id.trim()
-          : "";
 
-      let runId = skillRunId;
-      let routes = runId ? defaultSkillRunRoutes(runId) : null;
-
-      if (!runId && hermesTaskId) {
-        runId = hermesTaskId;
-        const hermesDefaults = defaultHermesTaskRoutes(runId);
-        routes = {
-          kind: "hermes-task",
-          eventPath: toApiPath(
-            structured?.event_url ?? structured?.event_stream,
-            hermesDefaults.eventPath,
-          ),
-          eventTokenPath: toApiPath(
-            structured?.event_token_url,
-            hermesDefaults.eventTokenPath,
-          ),
-          snapshotPath: hermesDefaults.snapshotPath,
-          resultPath: toApiPath(structured?.result_url, hermesDefaults.resultPath),
-          artifactPath: toApiPath(
-            structured?.artifact_url,
-            hermesDefaults.artifactPath,
-          ),
-          cancelPath: hermesDefaults.cancelPath,
-        };
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[skill-run][callSkill] Provider returned HermesTask envelope; bridging transport under Skill Run owner",
-          { toolName: input.toolName, taskId: runId },
+      if (!runId) {
+        throw new SkillRunGatewayError(
+          "Invalid backend response: missing structuredContent.run_id",
+          502,
+          "SKILL_UNSUPPORTED_SCHEMA",
         );
-      } else if (runId && structured) {
-        routes = {
-          ...defaultSkillRunRoutes(runId),
-          eventPath: toApiPath(
-            structured.event_stream ?? structured.event_stream_url,
-            defaultSkillRunRoutes(runId).eventPath,
-          ),
-          resultPath: toApiPath(
-            structured.result_url,
-            defaultSkillRunRoutes(runId).resultPath,
-          ),
-          artifactPath: toApiPath(
-            structured.artifact_url,
-            defaultSkillRunRoutes(runId).artifactPath,
-          ),
-        };
       }
 
-      if (!runId || !routes) {
-        // eslint-disable-next-line no-console
-        console.error(
-          "[skill-run][callSkill] missing run_id/task_id — inspect tools/call result shape:",
-          JSON.stringify(result, null, 2),
-        );
-        // eslint-disable-next-line no-debugger
-        debugger;
+      const defaults = defaultSkillRunRoutes(runId);
+      const routes = structured
+        ? {
+            ...defaults,
+            eventPath: toApiPath(
+              structured.event_stream ?? structured.event_stream_url,
+              defaults.eventPath,
+            ),
+            resultPath: toApiPath(structured.result_url, defaults.resultPath),
+            artifactPath: toApiPath(structured.artifact_url, defaults.artifactPath),
+          }
+        : defaults;
+
+      // Reject Hermes Task URL overrides even when run_id is present.
+      if (
+        routes.eventPath.includes("hermes/tasks/") ||
+        routes.resultPath.includes("hermes/tasks/") ||
+        routes.artifactPath.includes("hermes/tasks/")
+      ) {
         throw new SkillRunGatewayError(
-          "Invalid backend response: missing structuredContent.run_id (or transitional task_id)",
+          "Invalid backend response: Hermes Task URLs are not Skill Run transport",
           502,
           "SKILL_UNSUPPORTED_SCHEMA",
         );
@@ -473,43 +413,20 @@ export function createSkillRunGatewayClient(
       const data = isRecord(body)
         ? isRecord(body.data)
           ? { ...body, ...body.data }
-          : isRecord(body.task)
-            ? { ...body, ...body.task }
-            : body
+          : body
         : {};
 
-      let resultText = extractResultText(data);
       const status =
         (typeof data.status === "string" && data.status) ||
         "running";
-      const normalizedStatus = status.toLowerCase();
-      if (
-        !resultText &&
-        routes.kind === "hermes-task" &&
-        (normalizedStatus === "succeeded" ||
-          normalizedStatus === "completed" ||
-          normalizedStatus === "success")
-      ) {
-        try {
-          const resultRes = await transport.authorizedFetch(routes.resultPath, {
-            method: "GET",
-          });
-          if (resultRes.ok) {
-            resultText = extractResultText(await resultRes.json());
-          }
-        } catch {
-          // keep snapshot-only view
-        }
-      }
 
       return {
         runId:
           (typeof data.id === "string" && data.id) ||
           (typeof data.run_id === "string" && data.run_id) ||
-          (typeof data.task_id === "string" && data.task_id) ||
           runId,
         status,
-        resultText,
+        resultText: extractResultText(data),
         errorCode:
           typeof data.error_code === "string" ? data.error_code : undefined,
         errorMessage:
@@ -561,29 +478,6 @@ export function createSkillRunGatewayClient(
       assertLock();
 
       const routes = resolveRoutes(runId);
-      let eventPath = routes.eventPath;
-      if (routes.eventTokenPath) {
-        try {
-          const tokenRes = await transport.authorizedFetch(routes.eventTokenPath, {
-            method: "GET",
-            signal: options.signal,
-          });
-          if (tokenRes.ok) {
-            const tokenBody = (await tokenRes.json()) as unknown;
-            const tokenData = isRecord(tokenBody)
-              ? isRecord(tokenBody.data)
-                ? tokenBody.data
-                : tokenBody
-              : null;
-            if (tokenData && typeof tokenData.event_url === "string") {
-              eventPath = toApiPath(tokenData.event_url, eventPath);
-            }
-          }
-        } catch {
-          // Fall back to static eventPath when token exchange fails.
-        }
-      }
-
       const headers: Record<string, string> = {
         Accept: "text/event-stream",
       };
@@ -591,7 +485,7 @@ export function createSkillRunGatewayClient(
         headers["Last-Event-ID"] = options.lastEventId;
       }
 
-      return transport.authorizedFetch(eventPath, {
+      return transport.authorizedFetch(routes.eventPath, {
         method: "GET",
         headers,
         signal: options.signal,

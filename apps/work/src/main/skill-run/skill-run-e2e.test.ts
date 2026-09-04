@@ -216,7 +216,8 @@ type FixtureMode =
   | "artifact-fail"
   | "unknown-event"
   | "unsupported-schema"
-  | "extra-required";
+  | "extra-required"
+  | "hanging-sse";
 
 interface FixtureState {
   fetchImpl: ReturnType<typeof vi.fn>;
@@ -257,7 +258,14 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
         return jsonRpcResult({ tools: catalogTools });
       }
       if (body.method === "tools/call") {
-        if (mode === "happy" || mode === "reconnect" || mode === "cancel" || mode === "artifact-fail" || mode === "unknown-event") {
+        if (
+          mode === "happy" ||
+          mode === "reconnect" ||
+          mode === "cancel" ||
+          mode === "artifact-fail" ||
+          mode === "unknown-event" ||
+          mode === "hanging-sse"
+        ) {
           expect(body.params?.arguments).toEqual(
             expect.objectContaining({ prompt: expect.any(String) }),
           );
@@ -265,11 +273,23 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
         const key = headerValue(init, "X-Idempotency-Key") ?? "";
         const existing = acceptedByKey.get(key);
         if (existing) {
-          return jsonRpcResult({ run_id: existing, status: "starting" });
+          return jsonRpcResult({
+            structuredContent: {
+              run_id: existing,
+              status: "starting",
+              event_stream: `/api/v1/runs/${existing}/events`,
+            },
+          });
         }
         const runId = `run-${key || "anon"}`;
         acceptedByKey.set(key, runId);
-        return jsonRpcResult({ run_id: runId, status: "starting" });
+        return jsonRpcResult({
+          structuredContent: {
+            run_id: runId,
+            status: "starting",
+            event_stream: `/api/v1/runs/${runId}/events`,
+          },
+        });
       }
       return jsonRpcResult({ error: "unknown method" }, 400);
     }
@@ -279,7 +299,7 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
       const lastEventId = headerValue(init, "Last-Event-ID");
       if (lastEventId) lastEventIdsSeen.push(lastEventId);
 
-      if (mode === "cancel") {
+      if (mode === "cancel" || mode === "hanging-sse") {
         return hangingSseResponse(init?.signal ?? undefined);
       }
 
@@ -374,11 +394,23 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
     }
 
     if (urlStr.includes("/api/v1/runs/") && method === "GET") {
+      const match = /\/api\/v1\/runs\/([^/?]+)/.exec(urlStr);
+      const runId = match ? decodeURIComponent(match[1]) : "poll-run";
+      if (mode === "hanging-sse") {
+        return new Response(
+          JSON.stringify({
+            run_id: runId,
+            status: "succeeded",
+            result_text: "poll result",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // Concurrent poll must not steal SSE-driven fixtures; stay nonterminal.
       return new Response(
         JSON.stringify({
-          run_id: "poll-run",
-          status: "succeeded",
-          result_text: "poll result",
+          run_id: runId,
+          status: "running",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -724,6 +756,29 @@ describe("skill-run e2e fixture", () => {
     expect(
       projections.some((projection) => projection.text === "should not surface"),
     ).toBe(false);
+  });
+
+  it("negative: hanging SSE still reaches terminal via concurrent poll", async () => {
+    const fixture = createFixtureFetch("hanging-sse");
+    const service = createServiceFromFetch(
+      fixture.fetchImpl as unknown as typeof fetch,
+    );
+    const clientRequestId = "e2e-hanging-sse";
+    await service.start({
+      toolName: "writer.article",
+      prompt: "hang",
+      clientRequestId,
+      sessionId: "session-hang",
+      profileId: "profile-1",
+    });
+    const terminal = await waitForProjection(
+      service,
+      clientRequestId,
+      (projection) => projection.phase === "succeeded",
+      3000,
+    );
+    expect(terminal.phase).toBe("succeeded");
+    expect(terminal.text).toBe("poll result");
   });
 });
 

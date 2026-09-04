@@ -417,4 +417,55 @@ describe("skill-run-service", () => {
     expect(cancelRes.projection?.phase).toBe("cancelled");
     expect(mockGateway.cancelRun).toHaveBeenCalledWith("run-cancel-1");
   });
+
+  it("reaches Bundle terminal via poll while SSE remains open", async () => {
+    const mockGateway = createMockGateway({
+      callSkill: vi.fn().mockResolvedValue({ runId: "run-hang-1", status: "starting" }),
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-hang-1",
+        status: "succeeded",
+        resultText: "poll terminal",
+        artifacts: [],
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: () =>
+              new Promise<{ done: boolean; value?: Uint8Array }>(() => {
+                // Intentionally hang until the run is aborted/disposed.
+              }),
+          }),
+        },
+      }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    const startRes = await service.start({
+      toolName: "calculator",
+      prompt: "hang",
+      clientRequestId: "req-hang-1",
+      sessionId: "session-hang",
+      profileId: "default",
+    });
+    expect(startRes.accepted).toBe(true);
+
+    const started = Date.now();
+    let terminal = service.getProjection("req-hang-1");
+    while (
+      Date.now() - started < 2000 &&
+      (!terminal || !["succeeded", "failed", "cancelled"].includes(terminal.phase))
+    ) {
+      await new Promise((r) => setTimeout(r, 20));
+      terminal = service.getProjection("req-hang-1");
+    }
+    expect(terminal?.phase).toBe("succeeded");
+    expect(terminal?.text).toBe("poll terminal");
+    expect(mockGateway.getRunSnapshot).toHaveBeenCalled();
+    expect(mockGateway.openEventStream).toHaveBeenCalled();
+  });
 });

@@ -50,7 +50,7 @@ Work consumes only `contracts/skill-run/<version>/` Bundle contents: its consume
 
 Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:skill-run-e2e` (or vitest with `--pool=threads --maxWorkers=1`).
 
-- **CI fixture (blocking):** `fetchImpl` HTTP replay through real `createSkillRunGatewayClient` + `createSkillRunService` covers Catalog → start → SSE/poll → result → artifacts → rehydrate (zero second `tools/call`), plus negatives: unauthorized catalog, unpublished tool, SSE reconnect + `Last-Event-ID`, idempotency key replay, cancel, artifact discovery failure keeping `succeeded`, unknown event fail-soft.
+- **CI fixture (blocking):** `fetchImpl` HTTP replay through real `createSkillRunGatewayClient` + `createSkillRunService` covers Catalog → start → SSE/poll → result → artifacts → rehydrate (zero second `tools/call`), plus negatives: unauthorized catalog, unpublished tool, SSE reconnect + `Last-Event-ID`, idempotency key replay, cancel, hanging SSE with concurrent poll, artifact discovery failure keeping `succeeded`, unknown event fail-soft.
 - **Live (env-gated):** `describe.skipIf` unless `SMC_SKILL_RUN_E2E=1`. Required env (never commit secrets):
   - `SMC_SKILL_RUN_E2E_BACKEND_URL`
   - `SMC_SKILL_RUN_E2E_ACCESS_TOKEN`
@@ -59,7 +59,8 @@ Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:sk
 - **AC-12 evidence grading:** fixture green proves same-process idempotency / restart without second `tools/call`. **Cross-end** “only one Provider Run” is **proven only when live suite actually runs**. If live is skipped → Completion = `IMPLEMENTED_NOT_PROVEN` for AC-12 cross-end; do not claim proven from fixture alone.
 - Evidence under `artifacts/work-v4.0.1-checkpoint-b-live-e2e/` must not contain JWT, absolute backend URLs, prompt全文, or artifact bytes.
 - The live suite remains env-gated. RM-01 live AC stay BACKLOG by product decision and will be re-run in a later stage; fixture green does not prove cross-end idempotency. Optional object/array properties on a prompt-first schema are allowed and omitted from `tools/call` arguments; root `$ref` / composite schemas and extra required fields still fail closed before `tools/call`.
-- M3 production Skill Run identity is Bundle `run_id` + `/api/v1/runs/*`. HermesTask `task_id` / `/api/v1/hermes/tasks/*` is not a Skill Run contract and must not become the Work lifecycle SoT.
+- M3 production Skill Run identity is Bundle `structuredContent.run_id` + `/api/v1/runs/*`. HermesTask `task_id` / `/api/v1/hermes/tasks/*` is not a Skill Run contract and must not become the Work lifecycle SoT.
+- M3 `consumeSse` starts bounded `pollStatus` while the SSE body is still open so a hung nonterminal stream cannot block Bundle terminal status. Repository default feature mode remains `expert-compat` until M5.
 
 ## Still Out
 
