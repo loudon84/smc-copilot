@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-06T15:05:48.421008Z
+updated_at: 2026-09-06T15:30:00.604511Z
 implementation_plan_required: true
 ---
 
@@ -26,7 +26,7 @@ implementation_plan_required: true
 | RM-03 | M2 Layout, Catalog, and Selection：现有 Chat 内的安全 Skill selection UX 可用。 | RM-02 | DONE | Layout/Chat 单一 owner、Catalog discriminator、a11y、mode/selection persistence 和 Renderer tests 通过；真实 start 仍受 RM-01 gate 控制。 | docs/work/PRD-WORK-v4.0.1-M2-layout-catalog-selection.md | .cursor/plans/work-v4.0.1-m2-layout-catalog-selection.plan.md | f74bdf45 | apps/work/artifacts/rm-03-m2/ (V01-V05 PASS; typecheck:web has only pre-existing diagnostics outside M2) |
 | RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-03 | DONE | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与 focused/fixture E2E 通过。跨端 live 延后到 RM-01 重跑。 | docs/work/PRD-WORK-v4.0.1-M3-executable-run-and-recovery.md | .cursor/plans/work-v4.0.1-m3-executable-run-and-recovery.plan.md | fe87cc0e70e1fe71c2c184a5420a0b2b6a4fec20 | smc-evidence:RM-04@sha256:a930801252a62a82d90b4233fccfd3ab9d0bd4d398f4d0883e86ef7cc22dd7ae |
 | RM-05 | M4 Result, Artifact, and Session Files：Result/Artifact 复用现有 File Platform 并完成 Checkpoint B。 | RM-04 | DONE | run-scoped remote identity、Artifact safety、Session Files、真实 Catalog→Artifact→Restart 与负向 Checkpoint B 通过。 | docs/work/PRD-WORK-v4.0.1-M4-result-artifact-and-session-files.md | .cursor/plans/work-v4.0.1-m4-result-artifact-and-session-files.plan.md | 86485027e1693dc51550cc3d5b8ceb77ccee1df0 | smc-evidence:RM-05@sha256:88d1cc66e4ea79df8a7e5c5b3a8019737beaabc8fc1d786415880af3a90a7f7f |
-| RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | BACKLOG | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | - | - | - | - |
+| RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | DONE | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | docs/work/PRD-WORK-v4.0.1-M5-pilot-and-production-default.md | .cursor/plans/work-v4.0.1-m5-pilot-and-production-default.plan.md | 185418ffdc40693a98dcd7ed7162782ff3c7207d | external-artifact:artifacts/work-v4.0.1-m5-promotion/v01.txt |
 | RM-07 | M6 Removal Readiness and P1：P1 contract capabilities 与独立 v4.2 Expert removal 准备。 | RM-06 | BACKLOG | M5 稳定 telemetry 后，每项拥有独立 Stage PRD；Expert removal 单独审查。 | - | - | - | - |
 
 ## Outcome
