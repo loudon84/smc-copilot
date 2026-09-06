@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-06T14:28:06.532590Z
+updated_at: 2026-09-06T15:05:48.421008Z
 implementation_plan_required: true
 ---
 
@@ -21,7 +21,7 @@ implementation_plan_required: true
 
 | Item ID | Outcome | Depends On | Status | Exit Criteria | PRD | Plan | Implementation Commit | Verification Evidence |
 |---|---|---|---|---|---|---|---|---|
-| RM-01 | M0 Provider Contract Ready：Provider 更新后由人工完成受控 live 验证；Work 只消费不可变 Bundle。 | - | BACKLOG | tag/manifest/SHA256 与 P0 schemas、endpoint/error fixtures 全部通过；Public DTO 安全；同一 idempotency key 跨端只创建一个 Run；Provider/Work contract tests 通过。 | `docs/work/PRD-WORK-v4.0.1-M0-provider-contract-ready.md` | - | - | Fixture PASS. 2026-09-04 product decision: skip remaining live AC-03/AC-04 for now; keep BACKLOG and re-verify during later stages. Do not mark DONE without that live replay. |
+| RM-01 | M0 Provider Contract Ready：Provider 更新后由人工完成受控 live 验证；Work 只消费不可变 Bundle。 | - | DONE | tag/manifest/SHA256 与 P0 schemas、endpoint/error fixtures 全部通过；Public DTO 安全；同一 idempotency key 跨端只创建一个 Run；Provider/Work contract tests 通过。 | docs/work/PRD-WORK-v4.0.1-M0-provider-contract-ready.md | .cursor/plans/work-v4.0.1-m0-provider-contract-ready.plan.md | 9b905ffad4db2f0724bc0af0ef7a38b75b753f08 | external-artifact:artifacts/work-v4.0.1-rm-01-live-e2e/v01-live.txt |
 | RM-02 | M1 Work Contract and Main Foundation：不启用真实 `tools/call` 的 Main/Preload dark foundation 可用。 | - | DONE | auth scope、sanitized IPC、feature mode、Parser/Gateway/Service 与 focused tests 通过；默认保持 `expert-compat`，不得以本项启用真实 Skill Run start。 | docs/work/PRD-WORK-v4.0.1-M1-main-preload-dark-foundation.md | .cursor/plans/work-v4.0.1-m1-main-preload-dark-foundation.plan.md | e72e5edc15af93e6e3a34cc4d6f9517fcd2b7931 | apps/work/artifacts/rm-02-m1/ |
 | RM-03 | M2 Layout, Catalog, and Selection：现有 Chat 内的安全 Skill selection UX 可用。 | RM-02 | DONE | Layout/Chat 单一 owner、Catalog discriminator、a11y、mode/selection persistence 和 Renderer tests 通过；真实 start 仍受 RM-01 gate 控制。 | docs/work/PRD-WORK-v4.0.1-M2-layout-catalog-selection.md | .cursor/plans/work-v4.0.1-m2-layout-catalog-selection.plan.md | f74bdf45 | apps/work/artifacts/rm-03-m2/ (V01-V05 PASS; typecheck:web has only pre-existing diagnostics outside M2) |
 | RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-03 | DONE | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与 focused/fixture E2E 通过。跨端 live 延后到 RM-01 重跑。 | docs/work/PRD-WORK-v4.0.1-M3-executable-run-and-recovery.md | .cursor/plans/work-v4.0.1-m3-executable-run-and-recovery.plan.md | fe87cc0e70e1fe71c2c184a5420a0b2b6a4fec20 | smc-evidence:RM-04@sha256:a930801252a62a82d90b4233fccfd3ab9d0bd4d398f4d0883e86ef7cc22dd7ae |
@@ -45,7 +45,7 @@ M0 Provider Contract Ready
   → M6 Expert Removal Readiness / P1 Enhancements
 ```
 
-M0 Bundle/fixture 仍是合同输入。2026-09-04 产品决定：RM-01 受控 live 保持 BACKLOG，不阻塞 M3 实施；live AC 在后续阶段重跑，不得把未重跑的 live 当作 RM-01 DONE。
+M0 Bundle/fixture 仍是合同输入。2026-09-04 曾把 RM-01 受控 live 延后以免阻塞 M3；2026-09-06 已在受控 public backend 重跑 live AC-03/AC-04 并将 RM-01 标为 DONE。
 
 ## Milestone M0 — Provider Contract Ready
 
@@ -70,7 +70,7 @@ M0 Bundle/fixture 仍是合同输入。2026-09-04 产品决定：RM-01 受控 li
 - 同一 idempotency key 的跨端测试只创建一个 Run；
 - Work 与 Provider contract tests 共同通过。
 
-**Stop condition:** 任一必需 schema 仍是开放 object/string 时，生产默认不得切到 `skill-first`。M3 可在显式开发 mode 下实施可执行路径；RM-01 live 延后重跑，不能替代 fixture/focused 证据，也不能关闭 RM-01。
+**Stop condition:** 任一必需 schema 仍是开放 object/string 时，不得声称合同已关闭。RM-01 live AC-03/AC-04 已于 2026-09-06 在受控 public backend 通过。
 
 ## Milestone M1 — Work Contract and Main Foundation
 
