@@ -858,4 +858,52 @@ describe.skipIf(!LIVE_ENABLED)("skill-run e2e live", () => {
     await restarted.rehydrate(continuation);
     expect(countToolsCall(fetchSpy)).toBe(1);
   }, 180_000);
+
+  it("AC-03: two independent clients replay the same idempotency key to one run_id", async () => {
+    expect(process.env.SMC_SKILL_RUN_E2E_BACKEND_URL).toBeTruthy();
+    expect(process.env.SMC_SKILL_RUN_E2E_ACCESS_TOKEN).toBeTruthy();
+    expect(process.env.SMC_SKILL_RUN_E2E_TOOL_NAME).toBeTruthy();
+
+    const fetchSpy = vi.fn(globalThis.fetch.bind(globalThis));
+    const clientA = createServiceFromFetch(fetchSpy as unknown as typeof fetch);
+    const clientB = createServiceFromFetch(fetchSpy as unknown as typeof fetch);
+    const clientRequestId = `live-replay-${Date.now()}`;
+    const stamp = Date.now();
+
+    const startA = await clientA.start({
+      toolName: LIVE_TOOL,
+      prompt: LIVE_PROMPT,
+      clientRequestId,
+      sessionId: `live-session-a-${stamp}`,
+      profileId: "live-profile",
+    });
+    const startB = await clientB.start({
+      toolName: LIVE_TOOL,
+      prompt: LIVE_PROMPT,
+      clientRequestId,
+      sessionId: `live-session-b-${stamp}`,
+      profileId: "live-profile",
+    });
+    expect(startA.accepted).toBe(true);
+    expect(startB.accepted).toBe(true);
+
+    const [projectionA, projectionB] = await Promise.all([
+      waitForProjection(
+        clientA,
+        clientRequestId,
+        (projection) => Boolean(projection.providerRunId),
+        120_000,
+      ),
+      waitForProjection(
+        clientB,
+        clientRequestId,
+        (projection) => Boolean(projection.providerRunId),
+        120_000,
+      ),
+    ]);
+
+    expect(projectionA.providerRunId).toBeTruthy();
+    expect(projectionB.providerRunId).toBe(projectionA.providerRunId);
+    expect(countToolsCall(fetchSpy)).toBeGreaterThanOrEqual(2);
+  }, 180_000);
 });
