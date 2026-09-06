@@ -286,6 +286,63 @@ export function mapPublicSkillCatalogTools(rawTools: unknown): SkillCatalogToolI
   return out;
 }
 
+/** Map a v1.2.1 PublicArtifactDescriptor into the Work-internal artifact DTO. */
+export function mapPublicArtifactDescriptor(
+  item: unknown,
+): SkillRunArtifactDescriptor | null {
+  if (!isRecord(item)) return null;
+  const artifactId =
+    typeof item.artifact_id === "string" ? item.artifact_id.trim() : "";
+  const name = typeof item.name === "string" ? item.name.trim() : "";
+  const checksum =
+    typeof item.checksum_sha256 === "string" ? item.checksum_sha256.trim() : "";
+  const sizeBytes = item.size_bytes;
+  if (
+    !artifactId ||
+    !name ||
+    !checksum ||
+    typeof sizeBytes !== "number" ||
+    !Number.isInteger(sizeBytes)
+  ) {
+    return null;
+  }
+  const descriptor: SkillRunArtifactDescriptor = {
+    id: artifactId,
+    file_name: name,
+    size_bytes: sizeBytes,
+    sha256: checksum,
+  };
+  if (typeof item.content_type === "string") {
+    descriptor.mime_type = item.content_type;
+  }
+  if (typeof item.preview_supported === "boolean") {
+    descriptor.preview_supported = item.preview_supported;
+  }
+  return descriptor;
+}
+
+/** Consume PublicArtifactList `items[]` (or equivalent arrays) with Bundle required fields only. */
+export function mapPublicArtifactList(body: unknown): SkillRunArtifactDescriptor[] {
+  let rawList: unknown[] = [];
+  if (Array.isArray(body)) {
+    rawList = body;
+  } else if (isRecord(body)) {
+    if (Array.isArray(body.items)) {
+      rawList = body.items;
+    } else if (Array.isArray(body.artifacts)) {
+      rawList = body.artifacts;
+    } else if (Array.isArray(body.data)) {
+      rawList = body.data;
+    }
+  }
+  const out: SkillRunArtifactDescriptor[] = [];
+  for (const item of rawList) {
+    const mapped = mapPublicArtifactDescriptor(item);
+    if (mapped) out.push(mapped);
+  }
+  return out;
+}
+
 export interface ParsedSkillRunEvent {
   eventId?: string;
   eventSeq?: number;
@@ -391,20 +448,14 @@ export function parseSkillRunEvent(
     case "run_completed":
     case "task.completed":
     case "completed": {
-      const artifactsRaw = inner.artifacts ?? payload.artifacts;
-      const artifacts: SkillRunArtifactDescriptor[] = [];
-      if (Array.isArray(artifactsRaw)) {
-        for (const item of artifactsRaw) {
-          if (
-            item &&
-            typeof item === "object" &&
-            typeof (item as Record<string, unknown>).id === "string" &&
-            typeof (item as Record<string, unknown>).file_name === "string"
-          ) {
-            artifacts.push(item as SkillRunArtifactDescriptor);
-          }
-        }
-      }
+      const artifactsSource =
+        isRecord(inner) &&
+        (Array.isArray(inner.items) ||
+          Array.isArray(inner.artifacts) ||
+          Array.isArray(inner.data))
+          ? inner
+          : payload;
+      const artifacts = mapPublicArtifactList(artifactsSource);
       const resultObj = isRecord(inner.result)
         ? inner.result
         : isRecord(payload.result)
@@ -448,16 +499,11 @@ export function parseSkillRunEvent(
     case "artifact.persisted":
     case "task.artifact_ready":
     case "artifact_ready": {
-      const artifactId = typeof inner.id === "string" ? inner.id : undefined;
-      const fileName =
-        typeof inner.file_name === "string" ? inner.file_name : undefined;
+      const mapped = mapPublicArtifactDescriptor(inner);
       return {
         eventId,
         eventSeq,
-        artifacts:
-          artifactId && fileName
-            ? [{ id: artifactId, file_name: fileName }]
-            : undefined,
+        artifacts: mapped ? [mapped] : undefined,
       };
     }
 

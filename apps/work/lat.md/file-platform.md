@@ -30,7 +30,7 @@ Per-profile layout lives at `profileHome/desktop/files/{objects,parsed,previews,
 
 [[src/main/files/file-association-store.ts]] owns `managed_files`, `file_associations`, `parsed_documents`, `file_chunks` (+ FTS5 when available) in `file-index.db`, not `state.db`. Reference counting uses [[src/main/files/file-association-store.ts#countAssociations]].
 
-Remote rows use unique `(profile, provider, remote_artifact_id)`; local hash uniqueness does not apply to remote. Session associations are idempotent on `(profile, session, file, role)`.
+Remote Skill-run rows are unique on `(profile, remote_run_id, remote_artifact_id)` and require a non-null run id. Expert remote rows keep a partial unique on `(profile, remote_artifact_id)` so Skill indexes cannot swallow Expert identity; File Platform never stamps a fake `remoteRunId` onto Expert rows. Local hash uniqueness does not apply to remote. Session associations are idempotent on `(profile, session, file, role)`.
 
 ## Attachment adapter
 
@@ -58,7 +58,9 @@ Text/code/markdown/html previews accept optional `offset`/`limit` ([[src/shared/
 
 ## File operations
 
-[[src/main/files/file-operation-service.ts]] / [[src/main/files/file-service.ts#fileService]] provide OS open / reveal-in-folder / Save As. Remote Download streams via [[src/main/files/expert-artifact-transfer.ts#streamExpertArtifactBytes]] (partial + sha256 + atomic rename). Materialize for context uses [[src/main/files/materialize-remote-expert-artifact.ts#materializeRemoteExpertArtifact]] on the same `fileId`. Open/Reveal require a local managed copy.
+[[src/main/files/file-operation-service.ts]] / [[src/main/files/file-service.ts#fileService]] provide OS open / reveal-in-folder / Save As.
+
+Remote Download and materialize dispatch on `ManagedFile.provider`. Skill-run rows stream via [[src/main/files/skill-run-artifact-transfer.ts#streamSkillRunArtifactBytes]] (Bundle `/api/v1/runs/{run_id}/artifacts/{artifact_id}/download`, required `runId`, size cap, optional sha256, `.partial` + atomic rename). Expert rows keep [[src/main/files/expert-artifact-transfer.ts#streamExpertArtifactBytes]]. Shared materialize remains [[src/main/files/materialize-remote-expert-artifact.ts#materializeRemoteExpertArtifact]] on the same `fileId`. Preview already branches the same way in [[src/main/files/file-preview-service.ts#getPreviewDescriptor]]. Cache keys stay the ManagedFile `fileId`. Open/Reveal require a local managed copy.
 
 ## AgentOutputService
 

@@ -392,3 +392,55 @@ describe("skill-run contract parser", () => {
     expect(parsed.text).toBe("profile ready");
   });
 });
+
+describe("skill-run gateway artifact list adapter", () => {
+  const bundleList = {
+    run_id: "run-art-1",
+    items: [
+      {
+        artifact_id: "artifact-1",
+        name: "result.txt",
+        content_type: "text/plain",
+        size_bytes: 12,
+        checksum_sha256:
+          "4f85f7e7d5d1b8c7a898d0e51fc5de49536c870353302dacfe7d8e6c03e8ad7a",
+      },
+    ],
+  };
+
+  it("lists Bundle PublicArtifactList via /api/v1/runs/{run_id}/artifacts", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      expect(String(url)).toBe(
+        "http://nodeskclaw.test:4510/api/v1/runs/run-art-1/artifacts",
+      );
+      return new Response(JSON.stringify(bundleList), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    const listed = await client.listRunArtifacts("run-art-1");
+    expect(listed).toEqual([
+      {
+        id: "artifact-1",
+        file_name: "result.txt",
+        size_bytes: 12,
+        sha256: bundleList.items[0].checksum_sha256,
+        mime_type: "text/plain",
+      },
+    ]);
+  });
+
+  it("yields an empty list for private-only id/file_name envelopes", async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          artifacts: [{ id: "art-1", file_name: "out.txt" }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    await expect(client.listRunArtifacts("run-private")).resolves.toEqual([]);
+  });
+});

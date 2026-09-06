@@ -7,8 +7,11 @@ import { describe, expect, it } from "vitest";
 import {
   bindPromptFirstTool,
   classifySkillInvocation,
+  mapPublicArtifactDescriptor,
+  mapPublicArtifactList,
   mapPublicSkillCatalogTools,
   normalizeSkillToolDescriptor,
+  parseSkillRunEvent,
 } from "./skill-run-contract-parser";
 import type { SkillCatalogToolItem } from "../../shared/skill-run";
 
@@ -344,5 +347,96 @@ describe("mapPublicSkillCatalogTools + bind invariant", () => {
     if (!bind.ok) {
       expect(bind.errorCode).toBe("TOOL_NOT_FOUND");
     }
+  });
+});
+
+const BUNDLE_ARTIFACT = {
+  artifact_id: "artifact-1",
+  name: "result.txt",
+  content_type: "text/plain",
+  size_bytes: 12,
+  checksum_sha256:
+    "4f85f7e7d5d1b8c7a898d0e51fc5de49536c870353302dacfe7d8e6c03e8ad7a",
+};
+
+describe("mapPublicArtifactList Bundle v1.2.1", () => {
+  it("maps items[] artifact_id/name/checksum_sha256 into internal descriptors", () => {
+    const mapped = mapPublicArtifactList({
+      run_id: "run-1",
+      items: [BUNDLE_ARTIFACT],
+    });
+    expect(mapped).toEqual([
+      {
+        id: "artifact-1",
+        file_name: "result.txt",
+        size_bytes: 12,
+        sha256: BUNDLE_ARTIFACT.checksum_sha256,
+        mime_type: "text/plain",
+      },
+    ]);
+  });
+
+  it("skips items missing checksum_sha256 instead of inventing a hash", () => {
+    expect(
+      mapPublicArtifactDescriptor({
+        artifact_id: "artifact-1",
+        name: "result.txt",
+        content_type: "text/plain",
+        size_bytes: 12,
+      }),
+    ).toBeNull();
+    expect(
+      mapPublicArtifactList({
+        run_id: "run-1",
+        items: [
+          {
+            artifact_id: "artifact-1",
+            name: "result.txt",
+            size_bytes: 12,
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not accept private-only id/file_name envelopes", () => {
+    expect(
+      mapPublicArtifactList({
+        artifacts: [{ id: "art-1", file_name: "out.txt", preview_supported: true }],
+      }),
+    ).toEqual([]);
+  });
+
+  it("maps run.completed event-carried Bundle artifacts", () => {
+    const parsed = parseSkillRunEvent("run.completed", {
+      event_id: "evt-1",
+      run_id: "run-1",
+      event_type: "run.completed",
+      event_seq: 3,
+      payload: {
+        text: "done",
+        items: [BUNDLE_ARTIFACT],
+      },
+    });
+    expect(parsed.artifacts).toEqual([
+      expect.objectContaining({
+        id: "artifact-1",
+        file_name: "result.txt",
+        sha256: BUNDLE_ARTIFACT.checksum_sha256,
+      }),
+    ]);
+  });
+
+  it("drops private-only artifacts from run.completed events", () => {
+    const parsed = parseSkillRunEvent("run.completed", {
+      event_id: "evt-1",
+      event_type: "run.completed",
+      event_seq: 1,
+      payload: {
+        text: "done",
+        artifacts: [{ id: "art-1", file_name: "out.txt" }],
+      },
+    });
+    expect(parsed.artifacts).toBeUndefined();
   });
 });

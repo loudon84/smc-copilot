@@ -9,7 +9,6 @@ import {
   renameSync,
   rmSync,
 } from "fs";
-import { join } from "path";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import {
@@ -20,7 +19,6 @@ import { readDesktopFilesConfig } from "./file-config";
 import { FilePlatformError } from "./file-security";
 import {
   allocateTempPath,
-  ensureFilesLayout,
   hashFileStream,
 } from "./file-store";
 
@@ -58,24 +56,25 @@ export async function streamSkillRunArtifactBytes(
     throw FilePlatformError.fromCode("FILE_NOT_FOUND", "Missing artifactId");
   }
 
+  const runId = input.runId?.trim() ?? "";
+  if (!runId) {
+    throw FilePlatformError.fromCode("FILE_NOT_FOUND", "Missing runId");
+  }
+
   const transport = createAuthorizedBackendTransport();
   const cfg = readDesktopFilesConfig();
   const cap = input.maxBytes ?? cfg.preview.maxTransferMb * 1024 * 1024;
+  const profileArg =
+    input.profile && input.profile !== "default" ? input.profile : undefined;
   const finalPath =
     input.destinationPath ??
-    allocateTempPath({
-      profile: input.profile,
-      extension: "bin",
-      prefix: "skill_art_",
-    });
+    allocateTempPath(`skill-${artifactId}.bin`, profileArg);
   const partialPath = `${finalPath}.partial`;
 
   cleanupPath(partialPath);
 
   try {
-    const url = input.runId
-      ? `/api/v1/runs/${encodeURIComponent(input.runId)}/artifacts/${encodeURIComponent(artifactId)}/download`
-      : `/api/v1/artifacts/${encodeURIComponent(artifactId)}/download`;
+    const url = `/api/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}/download`;
 
     const res = await transport.authorizedFetch(url, {
       method: "GET",

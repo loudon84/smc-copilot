@@ -62,6 +62,16 @@ Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:sk
 - M3 production Skill Run identity is Bundle `structuredContent.run_id` + `/api/v1/runs/*`. HermesTask `task_id` / `/api/v1/hermes/tasks/*` is not a Skill Run contract and must not become the Work lifecycle SoT.
 - M3 `consumeSse` starts bounded `pollStatus` while the SSE body is still open so a hung nonterminal stream cannot block Bundle terminal status. Repository default feature mode remains `expert-compat` until M5.
 
+## M4 Result artifacts and Session Files
+
+Work consumes Bundle `PublicArtifactList` through [[src/main/skill-run/skill-run-contract-parser.ts#mapPublicArtifactList]] and upserts Session `agent-output` on the assistant bubble.
+
+Private `id`/`file_name` envelopes are skipped. Required Bundle fields are `artifact_id` / `name` / `size_bytes` / `checksum_sha256`. Upsert keys Skill files by `(provider=skill-run, remoteRunId, remoteArtifactId)` with message id `skill-run:{clientRequestId}:assistant`.
+
+Discovery failure keeps Run phase `succeeded` and records a sanitized retryable error on [[src/shared/skill-run.ts#SkillRunProjection]]. [[src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx#SkillRunStatusBar]] exposes retry via existing `hermesAPI.skillRun.retryArtifactDiscovery` and `skillRun.artifactRetry`; it does not own Session Files and does not copy Expert artifact cards. Retry re-enters `listRunArtifacts` and never issues a second `tools/call`.
+
+Live Checkpoint B (Catalog → Submit → Run → Result → Artifact Preview/Save As → Restart, plus the fixture negatives) remains the Roadmap `DONE` bar for RM-05. Fixture and focused tests prove implementation; env-gated live stay skipped unless `SMC_SKILL_RUN_E2E=1`. RM-01 live AC stay BACKLOG.
+
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.

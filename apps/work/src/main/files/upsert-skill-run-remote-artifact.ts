@@ -18,6 +18,7 @@ import {
 import { resolveFileCategory, resolveMime } from "./file-category";
 import { nowIso } from "./file-metadata";
 import { sanitizeGeneratedFileName } from "./agent-output/generated-file-name";
+import { skillRunTranscriptBubbleIds } from "../skill-run/skill-run-session-materialize";
 
 function extensionFromName(name: string): string {
   return extname(name).replace(/^\./, "").toLowerCase() || "bin";
@@ -78,6 +79,10 @@ export function upsertSkillRunRemoteArtifact(
   if (!isValidArtifactMeta(input.meta)) {
     return null;
   }
+  const runId = input.runId.trim();
+  if (!runId) {
+    return null;
+  }
 
   const profileId = normalizeProfileId(input.profileId);
   const remoteArtifactId = input.meta.id.trim();
@@ -92,11 +97,18 @@ export function upsertSkillRunRemoteArtifact(
     providerPreviewSupported,
     category,
   });
+  const contentHash =
+    typeof input.meta.sha256 === "string" && input.meta.sha256.trim()
+      ? input.meta.sha256.trim().toLowerCase()
+      : undefined;
+  const assistantMessageId = input.clientRequestId?.trim()
+    ? skillRunTranscriptBubbleIds(input.clientRequestId.trim()).assistant
+    : undefined;
 
   const existing = findByRemoteIdentity({
     profileId,
     provider: "skill-run",
-    remoteRunId: input.runId,
+    remoteRunId: runId,
     remoteArtifactId,
   });
 
@@ -118,10 +130,11 @@ export function upsertSkillRunRemoteArtifact(
     locality: "remote",
     provider: "skill-run",
     remoteArtifactId,
-    remoteRunId: input.runId,
+    remoteRunId: runId,
     availability: "available",
     providerPreviewSupported,
     canPreview,
+    contentHash: contentHash ?? existing?.contentHash,
   };
 
   upsertManagedFile(file);
@@ -131,7 +144,7 @@ export function upsertSkillRunRemoteArtifact(
         profileId,
         fileId,
         sessionId: input.sessionId,
-        role: "assistant_attachment",
+        role: "agent-output",
       })
     : null;
 
@@ -140,7 +153,8 @@ export function upsertSkillRunRemoteArtifact(
     fileId,
     profileId,
     sessionId: input.sessionId || undefined,
-    role: "assistant_attachment",
+    messageId: assistantMessageId,
+    role: "agent-output",
     ordinal: 0,
     createdAt: now,
   };

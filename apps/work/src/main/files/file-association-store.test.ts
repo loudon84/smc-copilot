@@ -195,4 +195,45 @@ describe("file-association-store remote identity", () => {
     expect(f1?.id).toBe("f-run-1");
     expect(f2?.id).toBe("f-run-2");
   });
+
+  it("does not collapse skill-run rows when lookup omits remoteRunId", async () => {
+    const store = await import("./file-association-store");
+    store.upsertManagedFile(
+      baseRemote({
+        id: "f-skill",
+        provider: "skill-run",
+        remoteRunId: "run-100",
+        remoteArtifactId: "shared-art-id",
+        name: "skill-out.txt",
+      }),
+    );
+    store.upsertManagedFile(
+      baseRemote({
+        id: "f-expert",
+        provider: "expert",
+        remoteArtifactId: "shared-art-id",
+        name: "expert-out.txt",
+        remoteTaskId: "task-keep",
+      }),
+    );
+
+    expect(
+      store.findByRemoteIdentity({
+        profileId: "default",
+        provider: "skill-run",
+        remoteArtifactId: "shared-art-id",
+      }),
+    ).toBeNull();
+    expect(
+      store.findByRemoteIdentity({
+        profileId: "default",
+        provider: "expert",
+        remoteArtifactId: "shared-art-id",
+        remoteRunId: "run-100",
+      })?.id,
+    ).toBe("f-expert");
+    expect(
+      store.getManagedFile("default", "f-expert")?.remoteTaskId,
+    ).toBe("task-keep");
+  });
 });

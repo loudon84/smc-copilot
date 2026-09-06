@@ -1,5 +1,5 @@
 import React, { useTransition } from "react";
-import { Loader2, CheckCircle2, XCircle, StopCircle } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, StopCircle, RotateCcw } from "lucide-react";
 import type { SkillRunProjection } from "../../../../shared/skill-run";
 import { useTranslation } from "react-i18next";
 
@@ -22,9 +22,21 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
     projection.phase === "expired" ||
     projection.phase === "unauthorized";
 
+  const showArtifactRetry =
+    projection.phase === "succeeded" && projection.artifactDiscoveryError === true;
+
   const handleCancel = () => {
     startTransition(() => {
       onCancel?.();
+    });
+  };
+
+  const handleRetryDiscovery = () => {
+    startTransition(() => {
+      void window.hermesAPI.skillRun.retryArtifactDiscovery({
+        clientRequestId: projection.clientRequestId,
+        sessionId: projection.sessionId,
+      });
     });
   };
 
@@ -51,10 +63,24 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
               {projection.errorMessage}
             </span>
           )}
+          {projection.artifactDiscoveryMessage && (
+            <span className="text-xs text-destructive truncate">
+              {projection.artifactDiscoveryMessage}
+            </span>
+          )}
         </div>
       </div>
 
-      {!isTerminal && onCancel && (
+      {showArtifactRetry ? (
+        <button
+          type="button"
+          onClick={handleRetryDiscovery}
+          className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span>{t("skillRun.artifactRetry", "Retry artifact discovery")}</span>
+        </button>
+      ) : !isTerminal && onCancel ? (
         <button
           type="button"
           onClick={handleCancel}
@@ -63,7 +89,7 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
           <StopCircle className="w-3.5 h-3.5" />
           <span>{t("skillRun.cancelSkillRun", "Cancel")}</span>
         </button>
-      )}
+      ) : null}
     </div>
   );
 };

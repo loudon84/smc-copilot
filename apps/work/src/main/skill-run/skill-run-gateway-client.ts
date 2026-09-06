@@ -10,7 +10,10 @@ import {
 } from "../auth/authorized-backend-transport";
 import { readStoredSessionSync } from "../auth/token-store";
 import { hasSkillRunConsumerLock } from "./skill-run-consumer-lock";
-import { mapPublicSkillCatalogTools } from "./skill-run-contract-parser";
+import {
+  mapPublicArtifactList,
+  mapPublicSkillCatalogTools,
+} from "./skill-run-contract-parser";
 import type {
   SkillCatalogResponse,
   SkillRunArtifactDescriptor,
@@ -149,42 +152,7 @@ export function createSkillRunGatewayClient(
   }
 
   function normalizeArtifactList(body: unknown): SkillRunArtifactDescriptor[] {
-    const rawList = isRecord(body)
-      ? Array.isArray(body.artifacts)
-        ? body.artifacts
-        : Array.isArray(body.data)
-          ? body.data
-          : []
-      : [];
-    const out: SkillRunArtifactDescriptor[] = [];
-    for (const item of rawList) {
-      if (!isRecord(item) || typeof item.id !== "string") continue;
-      const fileName =
-        typeof item.file_name === "string"
-          ? item.file_name
-          : typeof item.title === "string"
-            ? item.title
-            : null;
-      if (!fileName) continue;
-      out.push({
-        id: item.id,
-        file_name: fileName,
-        size_bytes:
-          typeof item.size_bytes === "number" ? item.size_bytes : undefined,
-        mime_type:
-          typeof item.content_type === "string"
-            ? item.content_type
-            : typeof item.mime_type === "string"
-              ? item.mime_type
-              : undefined,
-        sha256: typeof item.sha256 === "string" ? item.sha256 : undefined,
-        preview_supported:
-          typeof item.preview_supported === "boolean"
-            ? item.preview_supported
-            : undefined,
-      });
-    }
-    return out;
+    return mapPublicArtifactList(body);
   }
 
   function extractResultText(body: unknown): string | undefined {

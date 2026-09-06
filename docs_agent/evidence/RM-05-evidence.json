@@ -1,0 +1,114 @@
+{
+  "ambient_fingerprint": "sha256:6d8cf60f9343c4d408d91088255af8f1269844299fd23e726975fca9b1c1dabb",
+  "blocking_verifications": [
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-gateway-client.test.ts src/main/skill-run/skill-run-contract-parser.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131041.412351Z-V01.log",
+      "raw_log_sha256": "sha256:40730d03dd628a95f7f641a8bfa41b2bc49fd1f37bbb41f55e7f16330b6b947f",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:10:41.412351Z",
+      "verification_id": "V01"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/files/file-association-store.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131108.258682Z-V02.log",
+      "raw_log_sha256": "sha256:edb087e7043d2631b9a46a541ca9cfe6a9608ee63fcf13e338e16050af1fa930",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:11:08.258682Z",
+      "verification_id": "V02"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/files/skill-run-artifact-transfer.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131130.960970Z-V03.log",
+      "raw_log_sha256": "sha256:e9aa4c705348a36f5dc9cc0dc911f4a5e11139145175eed284d538cc72a329a9",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:11:30.960970Z",
+      "verification_id": "V03"
+    },
+    {
+      "command": "python -c 'from pathlib import Path; import sys; s=Path('\"'\"'apps/work/src/main/files/file-service.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); m=Path('\"'\"'apps/work/src/main/files/materialize-remote-expert-artifact.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); p=Path('\"'\"'apps/work/src/main/files/file-preview-service.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'streamSkillRunArtifactBytes'\"'\"' in s and '\"'\"'streamExpertArtifactBytes'\"'\"' in s and '\"'\"'streamSkillRunArtifactBytes'\"'\"' in m and '\"'\"'provider === \"skill-run\"'\"'\"' in p); sys.exit(0 if ok else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131151.352458Z-V04.log",
+      "raw_log_sha256": "sha256:355bbb177538c212dc50d90db9c95c942ede642339cb02ed48127dbd91abb888",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:11:51.352458Z",
+      "verification_id": "V04"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/files/upsert-skill-run-remote-artifact.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131158.969566Z-V05.log",
+      "raw_log_sha256": "sha256:934ff0817d5001468f78eb8406f7e2ac4771b9a323cd7f6ed2698f650d0e035a",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:11:58.969566Z",
+      "verification_id": "V05"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131220.583922Z-V06.log",
+      "raw_log_sha256": "sha256:527fe5b3ae074bf4f3832803a95f48230f31684f8153ad7f6ef3a18387c288af",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:12:20.583922Z",
+      "verification_id": "V06"
+    },
+    {
+      "command": "python -c 'import os,subprocess,sys; os.environ.pop('\"'\"'SMC_SKILL_RUN_E2E'\"'\"', None); sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run test:skill-run-e2e'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131250.685347Z-V07.log",
+      "raw_log_sha256": "sha256:69b6eb7874238d44201acb9ebfcdd6489eda6e385b0117af10e711ae74e66b15",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:12:50.685347Z",
+      "verification_id": "V07"
+    },
+    {
+      "command": "python -c 'from pathlib import Path; import sys; g=Path('\"'\"'apps/work/src/main/files/skill-run-artifact-transfer.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); i=Path('\"'\"'apps/work/src/shared/skill-run.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); c=Path('\"'\"'apps/work/src/renderer/src/screens/Chat/Chat.tsx'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); f=Path('\"'\"'apps/work/src/main/skill-run/feature-mode-store.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); r=Path('\"'\"'docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); e=Path('\"'\"'apps/work/src/main/skill-run/skill-run-e2e.test.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); v=Path('\"'\"'apps/work/src/main/files/file-metadata.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'/api/v1/artifacts/'\"'\"' not in g and '\"'\"'skill-run:download'\"'\"' not in i and '\"'\"'ExpertArtifactCards'\"'\"' in c and '\"'\"'SkillArtifactCards'\"'\"' not in c and '\"'\"'expert-compat'\"'\"' in f and '\"'\"'RM-05'\"'\"' in r and '\"'\"'BACKLOG'\"'\"' in r and '\"'\"'LIVE_ENABLED'\"'\"' in e and '\"'\"'displayPath: isRemote ? undefined'\"'\"' in v); sys.exit(0 if ok else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-05/logs/20260906T131319.037276Z-V08.log",
+      "raw_log_sha256": "sha256:bf28aacf92399fcbfd70a69179db29172f47858f4ac09a71944b6190dbe6dbc3",
+      "result": "PASS",
+      "timestamp": "2026-09-06T13:13:19.037276Z",
+      "verification_id": "V08"
+    }
+  ],
+  "completion_audit": {
+    "changed": 5,
+    "deferred": 0,
+    "done": 5,
+    "scope_drift": 0,
+    "timestamp": "2026-09-06T13:09:15.317091Z",
+    "total_items": 5,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-06T13:16:34.335543Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:88d1cc66e4ea79df8a7e5c5b3a8019737beaabc8fc1d786415880af3a90a7f7f",
+    "timestamp": "2026-09-06T13:09:16.868653Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:764f06b6db0da50d17f4762eaa5aa18d017aaf4cf4eb90040f1f842e0801f1f9",
+  "plan": ".cursor/plans/work-v4.0.1-m4-result-artifact-and-session-files.plan.md",
+  "plan_id": "RM-05",
+  "plan_review": {
+    "plan_sha256": "sha256:1cf1ff32ca427e2a6ef0bba9a40e1ec46ddeaf9d2948b976012e5bc291669a06",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-06T11:00:55.701306Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v2",
+  "scope_fingerprint": "sha256:88d1cc66e4ea79df8a7e5c5b3a8019737beaabc8fc1d786415880af3a90a7f7f",
+  "workspace_base_commit": "2820d5f8d69a77289b5f6741e10a095fb1a4e85f"
+}

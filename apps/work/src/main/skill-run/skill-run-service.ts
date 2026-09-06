@@ -233,10 +233,16 @@ export function createSkillRunService(
       updateProjection(run, {
         phase: "succeeded",
         artifacts: artifacts.length > 0 ? artifacts : undefined,
+        artifactDiscoveryError: false,
+        artifactDiscoveryMessage: undefined,
       });
     } catch {
       // Artifact discovery failure does not fail a succeeded run
-      updateProjection(run, { phase: "succeeded" });
+      updateProjection(run, {
+        phase: "succeeded",
+        artifactDiscoveryError: true,
+        artifactDiscoveryMessage: "Failed to discover output artifacts",
+      });
     }
   }
 
@@ -651,7 +657,11 @@ export function createSkillRunService(
       input: SkillRunRetryArtifactDiscoveryInput,
     ): Promise<SkillRunProjection | null> {
       const active = runs.get(input.clientRequestId);
-      if (!active || !active.projection.providerRunId) {
+      if (
+        !active ||
+        !active.projection.providerRunId ||
+        active.request.sessionId !== input.sessionId
+      ) {
         return null;
       }
       await discoverArtifacts(active, active.projection.providerRunId);

@@ -11,6 +11,7 @@ import {
   upsertManagedFile,
 } from "./file-association-store";
 import { streamExpertArtifactBytes } from "./expert-artifact-transfer";
+import { streamSkillRunArtifactBytes } from "./skill-run-artifact-transfer";
 import { nowIso } from "./file-metadata";
 import { storeManagedCopy } from "./file-store";
 import { FilePlatformError } from "./file-security";
@@ -50,11 +51,19 @@ export async function materializeRemoteExpertArtifact(
   }
 
   const profileArg = profileId === "default" ? undefined : profileId;
-  const transferred = await streamExpertArtifactBytes({
-    artifactId: file.remoteArtifactId,
-    expectedSha256: file.contentHash,
-    profile: profileArg,
-  });
+  const transferred =
+    file.provider === "skill-run"
+      ? await streamSkillRunArtifactBytes({
+          artifactId: file.remoteArtifactId,
+          runId: file.remoteRunId,
+          expectedSha256: file.contentHash,
+          profile: profileArg,
+        })
+      : await streamExpertArtifactBytes({
+          artifactId: file.remoteArtifactId,
+          expectedSha256: file.contentHash,
+          profile: profileArg,
+        });
 
   try {
     const managedPath = await storeManagedCopy(

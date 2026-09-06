@@ -107,6 +107,10 @@ export interface SkillRunProjection {
   errorCode?: string;
   errorMessage?: string;
   artifacts?: SkillRunArtifactDescriptor[];
+  /** True when artifact list failed after a succeeded run; retryable via existing IPC. */
+  artifactDiscoveryError?: boolean;
+  /** Renderer-safe discovery error text; never URLs, paths, or bytes. */
+  artifactDiscoveryMessage?: string;
   createdAt: string;
   updatedAt: string;
 }

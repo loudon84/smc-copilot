@@ -175,11 +175,24 @@ function ensureRemoteIdentityIndex(db: DbHandle): void {
   } catch {
     // ignore
   }
+  try {
+    db.exec(`DROP INDEX IF EXISTS idx_managed_files_remote_identity_v2`);
+  } catch {
+    // ignore
+  }
   db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_remote_identity_v2
-      ON managed_files(profile_id, provider, remote_run_id, remote_artifact_id)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_remote_identity_skill_run
+      ON managed_files(profile_id, remote_run_id, remote_artifact_id)
       WHERE locality = 'remote'
-        AND provider IS NOT NULL
+        AND provider = 'skill-run'
+        AND remote_run_id IS NOT NULL
+        AND remote_artifact_id IS NOT NULL
+  `);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_files_remote_identity_expert
+      ON managed_files(profile_id, remote_artifact_id)
+      WHERE locality = 'remote'
+        AND provider = 'expert'
         AND remote_artifact_id IS NOT NULL
   `);
 }
@@ -417,18 +430,20 @@ export function findByRemoteIdentity(opts: {
   if (!artifactId) return null;
   const db = openFileIndexDb(pid === "default" ? undefined : pid);
 
-  if (opts.remoteRunId != null && opts.remoteRunId.trim() !== "") {
+  if (opts.provider === "skill-run") {
+    const runId = opts.remoteRunId?.trim() ?? "";
+    if (!runId) return null;
     const row = db
       .prepare(
         `SELECT * FROM managed_files
          WHERE profile_id = ?
            AND locality = 'remote'
-           AND provider = ?
+           AND provider = 'skill-run'
            AND remote_run_id = ?
            AND remote_artifact_id = ?
          LIMIT 1`,
       )
-      .get(pid, opts.provider, opts.remoteRunId.trim(), artifactId) as Record<string, unknown> | undefined;
+      .get(pid, runId, artifactId) as Record<string, unknown> | undefined;
     return row ? rowToManagedFile(row) : null;
   }
 

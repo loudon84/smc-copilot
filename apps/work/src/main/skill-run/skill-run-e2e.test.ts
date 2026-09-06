@@ -366,7 +366,16 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
             event_seq: 1,
             payload: {
               text: "fixture result text",
-              artifacts: [{ id: "art-1", file_name: "out.txt" }],
+              items: [
+                {
+                  artifact_id: "art-1",
+                  name: "out.txt",
+                  content_type: "text/plain",
+                  size_bytes: 12,
+                  checksum_sha256:
+                    "4f85f7e7d5d1b8c7a898d0e51fc5de49536c870353302dacfe7d8e6c03e8ad7a",
+                },
+              ],
             },
           },
           "evt-1",
@@ -381,9 +390,21 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
           headers: { "Content-Type": "application/json" },
         });
       }
+      const match = /\/api\/v1\/runs\/([^/?]+)\/artifacts/.exec(urlStr);
+      const runId = match ? decodeURIComponent(match[1]) : "run-unknown";
       return new Response(
         JSON.stringify({
-          artifacts: [{ id: "art-1", file_name: "out.txt", preview_supported: true }],
+          run_id: runId,
+          items: [
+            {
+              artifact_id: "art-1",
+              name: "out.txt",
+              content_type: "text/plain",
+              size_bytes: 12,
+              checksum_sha256:
+                "4f85f7e7d5d1b8c7a898d0e51fc5de49536c870353302dacfe7d8e6c03e8ad7a",
+            },
+          ],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
