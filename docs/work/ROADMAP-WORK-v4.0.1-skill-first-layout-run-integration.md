@@ -1,11 +1,11 @@
 ---
 roadmap_id: WORK-SKILL-FIRST-LAYOUT-V4.0.1
-version: v2.1
+version: v2.2
 status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-06T15:30:00.604511Z
+updated_at: 2026-09-06T23:50:00+08:00
 implementation_plan_required: true
 ---
 
@@ -27,7 +27,12 @@ implementation_plan_required: true
 | RM-04 | M3 Executable Run and Recovery：幂等执行、SSE/poll、cancel 与 restart recovery 可证明。 | RM-03 | DONE | pending-submit、run identity、terminal monotonic、cancel、queue snapshot、rehydrate 与 focused/fixture E2E 通过。跨端 live 延后到 RM-01 重跑。 | docs/work/PRD-WORK-v4.0.1-M3-executable-run-and-recovery.md | .cursor/plans/work-v4.0.1-m3-executable-run-and-recovery.plan.md | fe87cc0e70e1fe71c2c184a5420a0b2b6a4fec20 | smc-evidence:RM-04@sha256:a930801252a62a82d90b4233fccfd3ab9d0bd4d398f4d0883e86ef7cc22dd7ae |
 | RM-05 | M4 Result, Artifact, and Session Files：Result/Artifact 复用现有 File Platform 并完成 Checkpoint B。 | RM-04 | DONE | run-scoped remote identity、Artifact safety、Session Files、真实 Catalog→Artifact→Restart 与负向 Checkpoint B 通过。 | docs/work/PRD-WORK-v4.0.1-M4-result-artifact-and-session-files.md | .cursor/plans/work-v4.0.1-m4-result-artifact-and-session-files.plan.md | 86485027e1693dc51550cc3d5b8ceb77ccee1df0 | smc-evidence:RM-05@sha256:88d1cc66e4ea79df8a7e5c5b3a8019737beaabc8fc1d786415880af3a90a7f7f |
 | RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | DONE | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | docs/work/PRD-WORK-v4.0.1-M5-pilot-and-production-default.md | .cursor/plans/work-v4.0.1-m5-pilot-and-production-default.plan.md | 185418ffdc40693a98dcd7ed7162782ff3c7207d | external-artifact:artifacts/work-v4.0.1-m5-promotion/v01.txt |
-| RM-07 | M6 Removal Readiness and P1：P1 contract capabilities 与独立 v4.2 Expert removal 准备。 | RM-06 | BACKLOG | M5 稳定 telemetry 后，每项拥有独立 Stage PRD；Expert removal 单独审查。 | - | - | - | - |
+| RM-07 | M6a v4.2 Expert 默认创建入口 Removal：skill-first / local-only 下新员工 Skill 调用不得经 Expert start；Expert reader 与回滚入口保留。 | RM-06 | IN_PRD | Composer 默认 Expert 入口移除；Main `expert.start` 在非 `expert-compat` 下 fail-closed；既有 Expert Task 可恢复；无 silent fallback；Expert 合同与 Skill Run 合同均不改。 | docs/work/PRD-WORK-v4.0.1-M6-expert-default-entry-removal.md | - | - | - |
+| RM-08 | M6b P1 合同化 Run Activity：把 v1.2.1 已枚举的 reasoning / tool / clarify / approval.requested 映射为 sanitized activity。 | RM-06 | IN_PRD | 仅映射 Bundle 已枚举事件；unknown fail-soft；不复用 Local Chat ClarifyCard；无 Approval decision IPC。 | docs/work/PRD-WORK-v4.0.1-M6-skill-run-activity-adapter.md | - | - | - |
+| RM-09 | M6c P1 Approval decision：可操作批准/拒绝卡片。 | RM-08 | BACKLOG | 新 Bundle 将 `approval` 从 `unsupported` 提升，并给出 decision endpoint / 幂等语义后，才允许独立 Stage PRD。 | - | - | - | - |
+| RM-10 | M6d P1 受限 JSON Schema 参数表单。 | RM-06 | BACKLOG | 独立 Stage PRD；只覆盖 P0 已 fail-closed 的 `parameters-required` / `form-required` 子集；不猜 schema。 | - | - | - | - |
+| RM-11 | M6e P1 Attachment refs / upload 与 File Platform 接入。 | RM-06 | BACKLOG | 新 Bundle 将 `attachments` 从 `unsupported` 提升并给出 refs/upload 合同后，才允许独立 Stage PRD。 | - | - | - | - |
+| RM-12 | M6f P1 收藏、最近使用与组织推荐。 | RM-07 | BACKLOG | 独立 Stage PRD；不得新增第二 Catalog owner 或绕过 Main Catalog cache。 | - | - | - | - |
 
 ## Outcome
 
@@ -42,7 +47,8 @@ M0 Provider Contract Ready
   → M3 Executable Run + Recovery
   → M4 Result + Artifact + Session Files
   → M5 Pilot + Production Default
-  → M6 Expert Removal Readiness / P1 Enhancements
+  → M6a Expert default-entry Removal（RM-07）
+  → M6b–M6f 各 P1 独立 Item（RM-08–RM-12；Approval / Attachment 仍等新 Bundle）
 ```
 
 M0 Bundle/fixture 仍是合同输入。2026-09-04 曾把 RM-01 受控 live 延后以免阻塞 M3；2026-09-06 已在受控 public backend 重跑 live AC-03/AC-04 并将 RM-01 标为 DONE。
@@ -233,22 +239,39 @@ M3–M4 完成后，使用真实发布 Skill 验证 Catalog → Submit → Run �
 - Main reader 继续跟踪已创建 Run 到终态；
 - 不把失败 Run 重新提交为 ExpertTask。
 
-## Milestone M6 — Removal Readiness and P1
+## Milestone M6 — Expert Removal and Independent P1 Items
 
-**Owner:** 按 capability 分别由 Work Expert、Skill Run、Renderer 与 Provider contract owners 负责。
+M5 已关闭。v1.2.1 Bundle 把 `approval` 与 `attachments` 标为 `unsupported`，且 endpoint matrix 没有 Approval decision 或 Attachment upload。因此 M6 不得再作为单一 Roadmap Item；P1 与 Expert removal 必须分 Item、分 Stage PRD。
 
-**Dependencies:** M5 稳定运行和真实 telemetry。
+**RM-07 / M6a — v4.2 Expert 默认创建入口 Removal**
 
-可独立规划的后续项：
+**Owner:** Work Expert owners（IPC/start gate）+ existing Chat Composer owner（入口可见性与提交路由）。Skill Run 与 Local Chat 不接收 Expert 新提交。
 
-1. Approval descriptor/decision contract 与交互卡片；
-2. reasoning/tool/clarify/streaming delta 的 contract-versioned activity adapter；
-3. 受限 JSON Schema 参数表单；
-4. Attachment refs/upload 与 File Platform 接入；
-5. 收藏、最近使用与组织推荐；
-6. v4.2 Expert 默认创建入口 Removal PRD。
+**Dependencies:** RM-06 DONE。Compatibility Contract：新提交默认 Skill Run、无 silent fallback、旧 Expert Task 可由独立 reader 恢复。
 
-每项必须独立 Grounding；不得借 P1 把 Runtime routing、raw Provider payload 或第二 Session/File owner 引入 Renderer。
+**Deliverables:**
+
+- `skill-first` 与 `local-only` 下从 local-chat Composer 移除 Expert 默认创建入口（`ExpertContextControl` 不再作为新员工 Skill 调用入口）；
+- Chat 不得在上述 mode 对新建 prompt 调用 `expert.start`；
+- Main `expert.start` 在非 `expert-compat` 下 fail-closed，防止 Renderer 绕过；
+- Expert cancel / rehydrate / list / 历史 session / File Platform Expert rows 保留；
+- 已有 ExpertRunCard 的 retry 作为 compatibility 保留，不是默认入口；
+- `expert-compat` 回滚后 Composer Expert 入口与 `expert.start` 恢复；
+- 回滚手册写清「删除默认入口」与「回滚恢复入口」的差异。
+
+**Exit criteria:** 见 Item 表 RM-07。
+
+**RM-08 / M6b — P1 合同化 Run Activity**
+
+**Owner:** 现有 Main Skill Run contract parser + SkillRunService projection；Renderer `modules/skill-run` 只展示 sanitized activity。
+
+**Dependencies:** RM-06 DONE。v1.2.1 已枚举 `reasoning.summary`、`tool.call`、`clarify.requested`、`approval.requested`。
+
+**Deliverables:** 把上述事件从 `rawUnknown` 提升为 Work activity projection；unknown 仍 fail-soft；`approval.requested` / `clarify.requested` 只读；不复用 Local Chat `ClarifyCard` 或 `clarify-respond` IPC；不增加 Approval decision。
+
+**RM-09–RM-12** 各自独立 Grounding。RM-09 / RM-11 在新 Bundle 关闭 `unsupported` 并补齐 endpoint 前不得开实施 Plan。
+
+不得借 P1 把 Runtime routing、raw Provider payload 或第二 Session/File owner 引入 Renderer。
 
 ## Parallelization
 
@@ -267,7 +290,8 @@ M3–M4 完成后，使用真实发布 Skill 验证 Catalog → Submit → Run �
 - pending-submit/idempotency 在 retry/restart E2E 前；
 - run-scoped file identity migration在 Skill Artifact production upsert 前；
 - Checkpoint B 在 production default 前；
-- v4.2 Removal PRD 在 Expert 默认入口删除前。
+- v4.2 Removal PRD（RM-07）在 Expert 默认入口删除前；
+- Approval decision（RM-09）与 Attachment（RM-11）在新 Bundle 关闭 `unsupported` 前。
 
 ## Risks and Mitigations
 
@@ -296,8 +320,9 @@ M3–M4 完成后，使用真实发布 Skill 验证 Catalog → Submit → Run �
 ROADMAP 完成需同时满足：
 
 - M0–M5 全部退出条件通过；
-- APPROVED PRD 的所有 P0 Acceptance Criteria 有自动化或明确人工证据；
+- RM-07–RM-12 各有独立 Stage PRD，不得把 P1 与 Expert removal 混进同一 Item；
+- APPROVED 架构 PRD 的所有 P0 Acceptance Criteria 有自动化或明确人工证据；
 - Skill-first 成为生产默认但可安全回滚；
 - Expert 兼容 reader、Local Chat 和 Runtime ChatRun 无回归；
 - 没有 silent fallback、duplicate Run、raw credential/URL 泄漏或第二 Session/File owner；
-- P1 与 Expert Removal 留在独立 PRD/Plan，不混入 P0 收尾。
+- P1 与 Expert Removal 各留在独立 Item / PRD / Plan（RM-07–RM-12），不混入 P0 收尾。
