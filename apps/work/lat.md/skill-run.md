@@ -44,7 +44,7 @@ Work has imported the complete immutable `SKILL-RUN-CONTRACT` v1.2.1 Bundle and 
 
 Work consumes only `contracts/skill-run/<version>/` Bundle contents: its consumer lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. `contracts/skill-run/v1.2.1/consumer-lock.json` pins tag target `10d38f2c97739c4a55df893d1dc954fc8896f1a7`; the Provider-owned files remain covered solely by its LF `SHA256SUMS`.
 
-`hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require a Work lock, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. The legacy v1.0.0 identity-only material remains a fail-closed regression case, while checksum-valid v1.2.1 returns true. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`; production start still additionally requires feature mode `skill-first` (the default remains `expert-compat`).
+`hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require a Work lock, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. The legacy v1.0.0 identity-only material remains a fail-closed regression case, while checksum-valid v1.2.1 returns true. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`. Production default feature mode is `skill-first`; `SMC_WORK_SKILL_RUN_MODE` or `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run readers.
 
 ## Checkpoint B Live / Fixture E2E
 
@@ -58,9 +58,9 @@ Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:sk
   - `SMC_SKILL_RUN_E2E_PROMPT` (optional short prompt)
 - **AC-12 evidence grading:** fixture green proves same-process idempotency / restart without second `tools/call`. **Cross-end** “only one Provider Run” is **proven only when live suite actually runs**. If live is skipped → Completion = `IMPLEMENTED_NOT_PROVEN` for AC-12 cross-end; do not claim proven from fixture alone.
 - Evidence under `artifacts/work-v4.0.1-checkpoint-b-live-e2e/` must not contain JWT, absolute backend URLs, prompt全文, or artifact bytes.
-- The live suite remains env-gated. RM-01 live AC stay BACKLOG by product decision and will be re-run in a later stage; fixture green does not prove cross-end idempotency. Optional object/array properties on a prompt-first schema are allowed and omitted from `tools/call` arguments; root `$ref` / composite schemas and extra required fields still fail closed before `tools/call`.
+- The live suite remains env-gated. Fixture green does not prove cross-end idempotency; RM-01 AC-03 requires two independent live clients to replay the same `X-Idempotency-Key` and receive one Provider `run_id`. Optional object/array properties on a prompt-first schema are allowed and omitted from `tools/call` arguments; root `$ref` / composite schemas and extra required fields still fail closed before `tools/call`.
 - M3 production Skill Run identity is Bundle `structuredContent.run_id` + `/api/v1/runs/*`. HermesTask `task_id` / `/api/v1/hermes/tasks/*` is not a Skill Run contract and must not become the Work lifecycle SoT.
-- M3 `consumeSse` starts bounded `pollStatus` while the SSE body is still open so a hung nonterminal stream cannot block Bundle terminal status. Repository default feature mode remains `expert-compat` until M5.
+- M3 `consumeSse` starts bounded `pollStatus` while the SSE body is still open so a hung nonterminal stream cannot block Bundle terminal status. Repository default feature mode is `skill-first`; rollback modes still reject `start` with `START_DISABLED_FEATURE_MODE` and never silently fall back to Expert.
 
 ## M4 Result artifacts and Session Files
 
@@ -70,14 +70,13 @@ Private `id`/`file_name` envelopes are skipped. Required Bundle fields are `arti
 
 Discovery failure keeps Run phase `succeeded` and records a sanitized retryable error on [[src/shared/skill-run.ts#SkillRunProjection]]. [[src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx#SkillRunStatusBar]] exposes retry via existing `hermesAPI.skillRun.retryArtifactDiscovery` and `skillRun.artifactRetry`; it does not own Session Files and does not copy Expert artifact cards. Retry re-enters `listRunArtifacts` and never issues a second `tools/call`.
 
-Live Checkpoint B (Catalog → Submit → Run → Result → Artifact Preview/Save As → Restart, plus the fixture negatives) remains the Roadmap `DONE` bar for RM-05. Fixture and focused tests prove implementation; env-gated live stay skipped unless `SMC_SKILL_RUN_E2E=1`. RM-01 live AC stay BACKLOG.
+Live Checkpoint B (Catalog → Submit → Run → Result → Artifact Preview/Save As → Restart, plus the fixture negatives) remains the Roadmap `DONE` bar for RM-05. Fixture and focused tests prove implementation; env-gated live stay skipped unless `SMC_SKILL_RUN_E2E=1`. RM-01 live same-key replay (AC-03) and Catalog→rehydrate (AC-04) are env-gated in the same suite.
 
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
-- RM-01 live replay remains BACKLOG and will be re-run later; it does not block M3 Stage PRD/implementation, and it does not authorize production-default `skill-first`
-- M5 production default skill-first, telemetry dashboard
+- M5 structured telemetry dashboard, formal multi-ring pilot, and release-notes promotion package
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
 - v4.2 Expert entry removal
 

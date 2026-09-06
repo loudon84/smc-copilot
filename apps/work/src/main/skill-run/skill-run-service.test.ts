@@ -111,6 +111,28 @@ describe("skill-run-service", () => {
     expect(gateway.callSkill).not.toHaveBeenCalled();
   });
 
+  it("fails closed on start when feature mode is local-only and does not fall back to Expert", async () => {
+    const gateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        getFeatureMode: () => "local-only",
+      }),
+    );
+    const result = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-local-only",
+      sessionId: "session-abc",
+      profileId: "profile-xyz",
+    });
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("START_DISABLED_FEATURE_MODE");
+    }
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
+
   it("fails closed on start when no consumer lock exists with START_DISABLED_NO_LOCK", async () => {
     const service = trackService(
       createSkillRunService({

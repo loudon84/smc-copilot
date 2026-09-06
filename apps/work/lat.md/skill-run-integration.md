@@ -27,7 +27,7 @@ Real Skill Run start stays disabled until Work locks an immutable tagged contrac
 
 The gate requires a Skill-only Catalog discriminator, Public Run view, Result and Artifact envelopes, event discriminated union, SSE auth/replay semantics, idempotency semantics, endpoint/error fixtures, and later Approval or Attachment contracts before those controls are enabled.
 
-The v1.2.1 Bundle is locked. RM-01 controlled live replay stays BACKLOG by product decision and will be re-run in a later stage; it does not block M3 executable-path authoring. Production default `skill-first` remains an M5 gate.
+The v1.2.1 Bundle is locked. Production default feature mode is `skill-first`. `expert-compat` and `local-only` remain explicit rollback modes for new submits; Skill failure never silently falls back to Expert. RM-01 live same-key replay stays env-gated in the Skill Run E2E suite.
 
 ## Delivery sequence
 
@@ -44,7 +44,7 @@ The roadmap follows contract-first vertical slices so each checkpoint preserves 
 
 M2 may make Skill mode discoverable and selectable while Provider live replay is deferred, but selection is never execution authority.
 
-Layout owns only tab mode and navigation; the mounted Chat owns the single selected Skill and Composer projection; Catalog reaches the Renderer only through the Main-owned sanitized IPC DTO. A missing discriminator remains contract-unsupported, and default `expert-compat` prevents the selection path from issuing `tools/call`.
+Layout owns only tab mode and navigation; the mounted Chat owns the single selected Skill and Composer projection; Catalog reaches the Renderer only through the Main-owned sanitized IPC DTO. A missing discriminator remains contract-unsupported. Rollback modes `expert-compat` and `local-only` still prevent the selection path from issuing `tools/call`; the repository default is `skill-first`.
 
 ## Source documents
 
