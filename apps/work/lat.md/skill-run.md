@@ -72,11 +72,17 @@ Discovery failure keeps Run phase `succeeded` and records a sanitized retryable 
 
 Live Checkpoint B (Catalog → Submit → Run → Result → Artifact Preview/Save As → Restart, plus the fixture negatives) remains the Roadmap `DONE` bar for RM-05. Fixture and focused tests prove implementation; env-gated live stay skipped unless `SMC_SKILL_RUN_E2E=1`. RM-01 live same-key replay (AC-03) and Catalog→rehydrate (AC-04) are env-gated in the same suite.
 
+## M5 production default and telemetry
+
+Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run or Expert readers.
+
+[[src/main/skill-run/skill-run-telemetry.ts#recordSkillRunTelemetry]] appends allow-listed JSONL events to `userData/logs/skill-run-telemetry.jsonl`: `catalog`, `start`, `accepted`, `reconnect`, `terminal`, `duplicate-prevented`, `artifact`. Events may include feature mode, outcome, errorCode, phase, reconnectAttempt, artifactItemCount, and a SHA-256 prefix of `clientRequestId`. They must never include prompt, tool arguments, JWT, Authorization, backend origin, Result body, download token, absolute path, or Artifact bytes. Telemetry write failures must not change start/cancel/rehydrate. Renderer has no telemetry IPC. There is no hosted metrics dashboard in Work.
+
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
-- M5 structured telemetry dashboard, formal multi-ring pilot, and release-notes promotion package
+- Hosted telemetry dashboard / metrics UI
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
 - v4.2 Expert entry removal
 

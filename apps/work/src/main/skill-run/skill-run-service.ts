@@ -17,6 +17,11 @@ import {
 } from "./skill-run-contract-parser";
 import { getSkillRunFeatureMode } from "./feature-mode-store";
 import {
+  fingerprintRequestId,
+  recordSkillRunTelemetry,
+  type SkillRunTelemetryEvent,
+} from "./skill-run-telemetry";
+import {
   isSkillRunTerminalPhase,
   type SkillCatalogResponse,
   type SkillRunArtifactDescriptor,
@@ -114,6 +119,7 @@ export interface CreateSkillRunServiceOptions {
     profileId?: string;
     clientRequestId: string;
   }) => Promise<void>;
+  recordTelemetry?: (event: SkillRunTelemetryEvent) => void;
 }
 
 export function createSkillRunService(
@@ -122,6 +128,7 @@ export function createSkillRunService(
   const gateway = options.gatewayClient ?? createSkillRunGatewayClient();
   const getMode = options.getFeatureMode ?? getSkillRunFeatureMode;
   const persistContinuation = options.onPersistContinuation;
+  const recordTelemetry = options.recordTelemetry ?? recordSkillRunTelemetry;
   const sleep =
     options.sleep ??
     ((ms, signal) =>
@@ -198,11 +205,45 @@ export function createSkillRunService(
     return false;
   }
 
+  function emitTelemetry(
+    event: Omit<SkillRunTelemetryEvent, "at"> & { at?: string },
+  ): void {
+    try {
+      recordTelemetry({
+        at: event.at ?? nowIso(),
+        event: event.event,
+        featureMode: event.featureMode ?? getMode(),
+        outcome: event.outcome,
+        errorCode: event.errorCode,
+        phase: event.phase,
+        reconnectAttempt: event.reconnectAttempt,
+        artifactItemCount: event.artifactItemCount,
+        requestFingerprint: event.requestFingerprint,
+      });
+    } catch {
+      // telemetry must never throw
+    }
+  }
+
   function rejectStart(
     input: SkillRunStartInput,
     errorCode: string,
     message: string,
   ): SkillRunStartResult {
+    emitTelemetry({
+      event: "start",
+      outcome: "error",
+      errorCode,
+      requestFingerprint: fingerprintRequestId(input.clientRequestId),
+    });
+    if (errorCode === "RUN_ALREADY_ACTIVE") {
+      emitTelemetry({
+        event: "duplicate-prevented",
+        outcome: "ok",
+        errorCode,
+        requestFingerprint: fingerprintRequestId(input.clientRequestId),
+      });
+    }
     return {
       accepted: false,
       errorCode,
@@ -236,12 +277,24 @@ export function createSkillRunService(
         artifactDiscoveryError: false,
         artifactDiscoveryMessage: undefined,
       });
+      emitTelemetry({
+        event: "artifact",
+        outcome: "ok",
+        artifactItemCount: artifacts.length,
+        requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
+      });
     } catch {
       // Artifact discovery failure does not fail a succeeded run
       updateProjection(run, {
         phase: "succeeded",
         artifactDiscoveryError: true,
         artifactDiscoveryMessage: "Failed to discover output artifacts",
+      });
+      emitTelemetry({
+        event: "artifact",
+        outcome: "error",
+        errorCode: "ARTIFACT_DISCOVERY_FAILED",
+        requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
       });
     }
   }
@@ -259,6 +312,12 @@ export function createSkillRunService(
           text: snap.resultText,
           artifacts: snap.artifacts,
         });
+        emitTelemetry({
+          event: "terminal",
+          outcome: "ok",
+          phase: "succeeded",
+          requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
+        });
         await discoverArtifacts(run, runId);
       } else if (isSkillRunTerminalPhase(phase)) {
         run.terminalConfirmed = true;
@@ -267,6 +326,13 @@ export function createSkillRunService(
           phase,
           errorCode: snap.errorCode,
           errorMessage: snap.errorMessage,
+        });
+        emitTelemetry({
+          event: "terminal",
+          outcome: phase === "cancelled" ? "ok" : "error",
+          phase,
+          errorCode: snap.errorCode,
+          requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
         });
       } else {
         updateProjection(run, {
@@ -360,6 +426,14 @@ export function createSkillRunService(
 
               if (event.phase === "succeeded") {
                 run.terminalConfirmed = true;
+                emitTelemetry({
+                  event: "terminal",
+                  outcome: "ok",
+                  phase: "succeeded",
+                  requestFingerprint: fingerprintRequestId(
+                    run.request.clientRequestId,
+                  ),
+                });
                 await discoverArtifacts(run, runId);
                 return;
               }
@@ -369,6 +443,12 @@ export function createSkillRunService(
       } catch (err) {
         if (run.terminalConfirmed || disposed) return;
         reconnectAttempts++;
+        emitTelemetry({
+          event: "reconnect",
+          outcome: "ok",
+          reconnectAttempt: reconnectAttempts,
+          requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
+        });
         if (reconnectAttempts < maxAttempts) {
           try {
             await sleep(1000 * reconnectAttempts, run.abort.signal);
@@ -387,12 +467,24 @@ export function createSkillRunService(
 
   return {
     async listCatalog(): Promise<SkillCatalogResponse> {
-      return gateway.listCatalog();
+      const catalog = await gateway.listCatalog();
+      emitTelemetry({
+        event: "catalog",
+        outcome: catalog.status === "ready" ? "ok" : "error",
+        errorCode: catalog.status === "ready" ? undefined : catalog.status,
+      });
+      return catalog;
     },
 
     async refreshCatalog(): Promise<SkillCatalogResponse> {
       gateway.clearCache();
-      return gateway.listCatalog();
+      const catalog = await gateway.listCatalog();
+      emitTelemetry({
+        event: "catalog",
+        outcome: catalog.status === "ready" ? "ok" : "error",
+        errorCode: catalog.status === "ready" ? undefined : catalog.status,
+      });
+      return catalog;
     },
 
     async start(input: SkillRunStartInput): Promise<SkillRunStartResult> {
@@ -426,6 +518,16 @@ export function createSkillRunService(
 
       const existing = runs.get(input.clientRequestId);
       if (existing) {
+        emitTelemetry({
+          event: "start",
+          outcome: "ok",
+          requestFingerprint: fingerprintRequestId(input.clientRequestId),
+        });
+        emitTelemetry({
+          event: "duplicate-prevented",
+          outcome: "ok",
+          requestFingerprint: fingerprintRequestId(input.clientRequestId),
+        });
         return {
           accepted: true,
           projection: existing.projection,
@@ -433,6 +535,11 @@ export function createSkillRunService(
       }
 
       const catalog = await gateway.listCatalog();
+      emitTelemetry({
+        event: "catalog",
+        outcome: catalog.status === "ready" ? "ok" : "error",
+        errorCode: catalog.status === "ready" ? undefined : catalog.status,
+      });
       if (catalog.status !== "ready") {
         return rejectStart(
           input,
@@ -482,6 +589,11 @@ export function createSkillRunService(
       runs.set(input.clientRequestId, activeRun);
       persistContinuation?.(initialProjection);
       emit(initialProjection);
+      emitTelemetry({
+        event: "start",
+        outcome: "ok",
+        requestFingerprint: fingerprintRequestId(input.clientRequestId),
+      });
 
       void (async () => {
         try {
@@ -491,11 +603,8 @@ export function createSkillRunService(
             console.error("[skill-run][start] calling tools/call", {
               toolName: validatedToolName,
               promptField: activeRun.promptField,
-              arguments: activeRun.callArguments,
-              idempotencyKey: input.clientRequestId,
+              requestFingerprint: fingerprintRequestId(input.clientRequestId),
             });
-            // eslint-disable-next-line no-debugger
-            debugger;
           }
           const accepted = await gateway.callSkill({
             toolName: validatedToolName,
@@ -506,6 +615,11 @@ export function createSkillRunService(
           updateProjection(activeRun, {
             providerRunId: accepted.runId,
             phase: "running",
+          });
+          emitTelemetry({
+            event: "accepted",
+            outcome: "ok",
+            requestFingerprint: fingerprintRequestId(input.clientRequestId),
           });
 
           void consumeSse(activeRun, accepted.runId);
@@ -525,6 +639,13 @@ export function createSkillRunService(
             phase: "failed",
             errorCode,
             errorMessage: message,
+          });
+          emitTelemetry({
+            event: "terminal",
+            outcome: "error",
+            phase: "failed",
+            errorCode,
+            requestFingerprint: fingerprintRequestId(input.clientRequestId),
           });
         }
       })();
@@ -561,6 +682,12 @@ export function createSkillRunService(
       const updated = updateProjection(active, {
         phase: "cancelled",
         displayStage: "Skill execution cancelled by user",
+      });
+      emitTelemetry({
+        event: "terminal",
+        outcome: "ok",
+        phase: "cancelled",
+        requestFingerprint: fingerprintRequestId(input.clientRequestId),
       });
 
       if (active.projection.providerRunId) {

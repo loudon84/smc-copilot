@@ -490,4 +490,98 @@ describe("skill-run-service", () => {
     expect(mockGateway.getRunSnapshot).toHaveBeenCalled();
     expect(mockGateway.openEventStream).toHaveBeenCalled();
   });
+
+  it("records catalog, start, accepted, terminal, and artifact telemetry without secrets", async () => {
+    const events: Array<{ event: string }> = [];
+    const mockGateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+        recordTelemetry: (event) => {
+          events.push(event);
+        },
+      }),
+    );
+    await service.listCatalog();
+    await service.start({
+      toolName: "calculator",
+      prompt: "secret prompt body",
+      clientRequestId: "req-telemetry-1",
+      sessionId: "session-telemetry",
+      profileId: "default",
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    const names = events.map((event) => event.event);
+    expect(names).toContain("catalog");
+    expect(names).toContain("start");
+    expect(names).toContain("accepted");
+    expect(names).toContain("terminal");
+    expect(names).toContain("artifact");
+    expect(JSON.stringify(events)).not.toContain("secret prompt body");
+  });
+
+  it("keeps start accepted when telemetry throws", async () => {
+    const mockGateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+        recordTelemetry: () => {
+          throw new Error("telemetry write failed");
+        },
+      }),
+    );
+    const result = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-telemetry-throw",
+      sessionId: "session-telemetry-throw",
+      profileId: "default",
+    });
+    expect(result.accepted).toBe(true);
+    expect(mockGateway.callSkill).toHaveBeenCalled();
+  });
+
+  it("records duplicate-prevented when a second non-terminal start hits the same session", async () => {
+    const events: Array<{ event: string }> = [];
+    const mockGateway = createMockGateway({
+      callSkill: vi.fn().mockResolvedValue({ runId: "run-dup-1", status: "starting" }),
+      getRunSnapshot: vi.fn().mockResolvedValue({ status: "running" }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: () =>
+              new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined),
+          }),
+        },
+      }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+        recordTelemetry: (event) => {
+          events.push(event);
+        },
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "first",
+      clientRequestId: "req-dup-a",
+      sessionId: "session-dup",
+      profileId: "default",
+    });
+    const second = await service.start({
+      toolName: "calculator",
+      prompt: "second",
+      clientRequestId: "req-dup-b",
+      sessionId: "session-dup",
+      profileId: "default",
+    });
+    expect(second.accepted).toBe(false);
+    expect(events.some((event) => event.event === "duplicate-prevented")).toBe(true);
+  });
 });
