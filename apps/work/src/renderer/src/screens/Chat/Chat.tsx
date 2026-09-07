@@ -64,11 +64,16 @@ import {
 } from "../../modules/skill-run";
 import type {
   SkillCatalogToolItem,
+  SkillRunFeatureMode,
   SkillRunProjection,
   SkillRunStartInput,
 } from "../../../../shared/skill-run";
 import { isSkillRunTerminalPhase } from "../../../../shared/skill-run";
 import type { ChatExecutionMode } from "../Layout/chatRuns";
+import {
+  shouldMountExpertDefaultEntry,
+  shouldSubmitNewExpertStart,
+} from "./expertDefaultEntry";
 import "../../modules/expert/expert.css";
 import "../../modules/expert/expert-artifacts.css";
 import {
@@ -224,6 +229,32 @@ function Chat({
   const [isLoading, setIsLoading] = useState(false);
   const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
   const isSkillRunMode = executionMode === "skill-run";
+  const [featureMode, setFeatureMode] = useState<SkillRunFeatureMode | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const getFeatureMode = window.hermesAPI?.skillRun?.getFeatureMode;
+    if (typeof getFeatureMode !== "function") {
+      setFeatureMode(null);
+      return;
+    }
+    void getFeatureMode()
+      .then((result) => {
+        if (!cancelled) {
+          setFeatureMode(result?.mode ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFeatureMode(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const skillRunBusy = useMemo(
     () =>
       activeSkillProjection != null &&
@@ -1293,6 +1324,17 @@ function Chat({
       return;
     }
     if (next.expertRequest) {
+      if (
+        !shouldSubmitNewExpertStart({
+          featureMode,
+          hasLeftoverExpertSelection: true,
+        })
+      ) {
+        toast.error(
+          "Expert start is disabled unless feature mode is expert-compat.",
+        );
+        return;
+      }
       if (next.expertRequest.authGeneration !== authGeneration) {
         toast.error("Queued expert request expired after account change.");
         return;
@@ -1306,7 +1348,7 @@ function Chat({
       queueRef.current.unshift(next);
       setQueuedMessages([...queueRef.current]);
     });
-  }, [chatBusy, authGeneration, submitExpert, submitSkill]);
+  }, [chatBusy, authGeneration, featureMode, submitExpert, submitSkill]);
 
   const handleRemoveQueued = useCallback((index: number) => {
     const item = queueRef.current[index];
@@ -1379,11 +1421,29 @@ function Chat({
         void submitSkill(request);
         return;
       }
+      if (
+        expertSelection.expertSlug != null &&
+        !shouldSubmitNewExpertStart({
+          featureMode,
+          hasLeftoverExpertSelection: true,
+        })
+      ) {
+        toast.error(
+          "Expert start is disabled unless feature mode is expert-compat.",
+        );
+        return;
+      }
       if (expertSelection.expertSlug != null && !expertSelection.skillName) {
         toast.error("Select an expert skill before sending.");
         return;
       }
-      if (expertModeActive) {
+      if (
+        expertModeActive &&
+        shouldSubmitNewExpertStart({
+          featureMode,
+          hasLeftoverExpertSelection: true,
+        })
+      ) {
         if (selectedCallability?.canSilentCall !== true) {
           toast.error(describeSilentCallDenial(selectedCallability));
           return;
@@ -1429,6 +1489,7 @@ function Chat({
       chatBusy,
       expertModeActive,
       expertProjections,
+      featureMode,
       expertSelection.expertSlug,
       expertSelection.skillName,
       gatewayStatus,
@@ -1868,15 +1929,20 @@ function Chat({
           toolbarExtras={
             isSkillRunMode ? null : (
               <>
-                <ExpertContextControl
-                  value={expertSelection}
-                  onChange={setExpertSelection}
-                  authGeneration={authGeneration}
-                  active={active}
-                  disabled={isLoading}
-                  onGatewayStatusChange={setGatewayStatus}
-                  onSelectedCallabilityChange={setSelectedCallability}
-                />
+                {shouldMountExpertDefaultEntry({
+                  isSkillRunMode,
+                  featureMode,
+                }) ? (
+                  <ExpertContextControl
+                    value={expertSelection}
+                    onChange={setExpertSelection}
+                    authGeneration={authGeneration}
+                    active={active}
+                    disabled={isLoading}
+                    onGatewayStatusChange={setGatewayStatus}
+                    onSelectedCallabilityChange={setSelectedCallability}
+                  />
+                ) : null}
                 <div
                   className="chat-toolbar-local-controls"
                   style={{

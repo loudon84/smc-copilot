@@ -24,7 +24,9 @@ SSE framing reuses [[src/main/run-stream.ts#parseRunSseBlock]] with optional `id
 
 ## IPC and preload bridge
 
-[[src/main/expert/expert-ipc.ts]] registers narrow handlers including `expert:get-health`, `expert:refresh-catalog`, and `expert:retry-artifact-discovery`; validates sender, session/profile, DTOs. Expert download IPC is removed — transfer goes through File Platform.
+[[src/main/expert/expert-ipc.ts]] registers narrow handlers including `expert:get-health`, `expert:refresh-catalog`, and `expert:retry-artifact-discovery`; validates sender, session/profile, DTOs.
+
+New `expert.start` is allowed only when feature mode is `expert-compat`; `skill-first` and `local-only` throw `EXPERT_START_DISABLED_FEATURE_MODE` before Expert HTTP. `expert.retry`, cancel, and rehydrate stay ungated for existing projections. Expert download IPC is removed — transfer goes through File Platform.
 
 [[src/preload/expert-api.ts]] exposes `window.hermesAPI.expert`. [[src/main/app/start.ts#startMainProcess]] registers Expert IPC and `registerAuthIpc({ getMainWindow })`; logout/`before-quit` dispose Expert and run File Platform cleanup (`runFilesCleanupBestEffort`).
 
@@ -37,6 +39,8 @@ SSE framing reuses [[src/main/run-stream.ts#parseRunSseBlock]] with optional `id
 [[src/renderer/src/modules/expert/index.ts]] exports Control, Chip/Popover, fields-only Selector, RunCard, Timeline, and projection store.
 
 Control owns health/catalog/skill/refresh/revision; Chat holds selection truth and UI send gates. Incomplete Expert Context never falls through to Local Chat.
+
+Production `skill-first` and `local-only` hide Composer [[src/renderer/src/modules/expert/ExpertContextControl.tsx]]. Chat reads existing `skillRun.getFeatureMode` as a display copy; IPC failure fail-closes to hide the default entry. [[src/renderer/src/screens/Chat/expertDefaultEntry.ts#shouldMountExpertDefaultEntry]] and [[src/renderer/src/screens/Chat/expertDefaultEntry.ts#shouldSubmitNewExpertStart]] keep new `expert.start` off unless mode is `expert-compat`, including leftover `expertSelection`. `expert-compat` remounts the same control and restores start. `ExpertRunCard` retry remains `expert.retry`, not a no-projection `expert.start`.
 
 [[src/renderer/src/screens/Chat/Chat.tsx]] builds immutable `ExpertRequest` on submit, Slash-first routing, queued vs in-flight cancel, Expert selection disables local toolbar without forwarding remotely.
 

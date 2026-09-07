@@ -1,0 +1,104 @@
+{
+  "ambient_fingerprint": "sha256:b0230c36f6ff1cd1dcbdff0a8043a873084c2d07a410152dbd7f2bc4346fb19a",
+  "blocking_verifications": [
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/expert/expert-ipc-registration.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010254.297667Z-V01.log",
+      "raw_log_sha256": "sha256:2c3b42adc7426009dacc05bdfd434d50da29914fe0d9ce144713b5f898da9fc5",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:02:54.297667Z",
+      "verification_id": "V01"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Chat/expertDefaultEntry.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010302.793383Z-V02.log",
+      "raw_log_sha256": "sha256:b0e8eed0a75d24688a14ed4bf8e20d24f14cadfc766e72e14209f48b40f76d91",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:03:02.793383Z",
+      "verification_id": "V02"
+    },
+    {
+      "command": "python -c 'from pathlib import Path; import sys; p=Path('\"'\"'apps/work/src/renderer/src/screens/Chat/Chat.tsx'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'shouldMountExpertDefaultEntry'\"'\"' in p and '\"'\"'shouldSubmitNewExpertStart'\"'\"' in p and '\"'\"'getFeatureMode'\"'\"' in p and '\"'\"'expert.start'\"'\"' in p); sys.exit(0 if ok else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010310.414590Z-V03.log",
+      "raw_log_sha256": "sha256:9d279fa5de6c6f402c8155e29ecf9702fb47e3c9fae2083fec09a34a52c99a1b",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:03:10.414590Z",
+      "verification_id": "V03"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/expert/expert-run-service.test.ts src/renderer/src/modules/expert/ExpertTimeline.test.tsx --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010313.675140Z-V04.log",
+      "raw_log_sha256": "sha256:33696f79e50111fca42964aa305e92be57333d2f4cc2c15a507d1b493b607709",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:03:13.675140Z",
+      "verification_id": "V04"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts src/renderer/src/screens/Layout/chatRuns.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010323.338755Z-V05.log",
+      "raw_log_sha256": "sha256:a28f48f05ad624b0dd256acbecdbebc88b8a0a8fc24cf432ee3c33b424a6499f",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:03:23.338755Z",
+      "verification_id": "V05"
+    },
+    {
+      "command": "python -c 'from pathlib import Path; import sys; r=Path('\"'\"'docs/work/SKILL-RUN-M5-ROLLBACK.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'Expert'\"'\"' in r and '\"'\"'skill-first'\"'\"' in r and '\"'\"'expert-compat'\"'\"' in r and '\"'\"'local-only'\"'\"' in r and '\"'\"'默认'\"'\"' in r); sys.exit(0 if ok else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010333.003810Z-V06.log",
+      "raw_log_sha256": "sha256:e148c3eba1f5c9fc457761c9aa596d2a83c09dadf6b2b3300bb78fe0ad662178",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:03:33.003810Z",
+      "verification_id": "V06"
+    },
+    {
+      "command": "python -c 'from pathlib import Path; import sys; r=Path('\"'\"'docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); lat=Path('\"'\"'apps/work/lat.md/skill-run.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); p=chr(124); row=next(x for x in r.splitlines() if x.startswith(p+'\"'\"' RM-07 '\"'\"')); ok=(row.split(p)[4].strip()!='\"'\"'DONE'\"'\"' and '\"'\"'RM-08'\"'\"' in r and '\"'\"'Approval'\"'\"' in lat); sys.exit(0 if ok else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-07/logs/20260907T010336.215375Z-V07.log",
+      "raw_log_sha256": "sha256:1a1322b98d926dab5c5e2d44cf9ac6648afdaa839f639ec7969b18c9c98adfda",
+      "result": "PASS",
+      "timestamp": "2026-09-07T01:03:36.215375Z",
+      "verification_id": "V07"
+    }
+  ],
+  "completion_audit": {
+    "changed": 4,
+    "deferred": 0,
+    "done": 6,
+    "scope_drift": 0,
+    "timestamp": "2026-09-07T01:01:36.238371Z",
+    "total_items": 6,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-07T01:05:04.241574Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:d32d05822c0d025f2a37aaaa87e8abf3367b50b9c6eba68760b8f6d121920bd0",
+    "timestamp": "2026-09-07T01:01:50.345088Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:93fe089979f5d4b90d32f092890802cf8ef7c7268b041b581202f2ee084f5ce5",
+  "plan": ".cursor/plans/work-v4.0.1-m6-expert-default-entry-removal.plan.md",
+  "plan_id": "RM-07",
+  "plan_review": {
+    "plan_sha256": "sha256:ad751c69b442c157b003cf7e18aad174b44dd11b20dccc15bc5dcb92b77ecbd0",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-07T00:48:20.429406Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v2",
+  "scope_fingerprint": "sha256:d32d05822c0d025f2a37aaaa87e8abf3367b50b9c6eba68760b8f6d121920bd0",
+  "workspace_base_commit": "0450c44e1d5545ff5646d7c58e05b43f123c5869"
+}

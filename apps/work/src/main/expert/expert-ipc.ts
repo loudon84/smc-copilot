@@ -12,8 +12,10 @@ import {
   type ExpertRetryInput,
   type ExpertStartInput,
 } from "../../shared/expert";
+import type { SkillRunFeatureMode } from "../../shared/skill-run";
 import { ensureFreshAccessToken } from "../auth/ensure-access-token";
 import { readStoredSessionSync } from "../auth/token-store";
+import { getSkillRunFeatureMode } from "../skill-run/feature-mode-store";
 import {
   rehydrateExpertContinuationsForSession,
   upsertExpertContinuationProjection,
@@ -149,7 +151,9 @@ export function restoreExpertSubsystemAfterAuth(): void {
 
 export function registerExpertIpc(options: {
   getMainWindow: () => BrowserWindow | null;
+  getFeatureMode?: () => SkillRunFeatureMode;
 }): void {
+  const getFeatureMode = options.getFeatureMode ?? getSkillRunFeatureMode;
   attachProjectionForwarder(options.getMainWindow);
 
   ipcMain.handle(EXPERT_IPC_CHANNELS.listCatalog, async (event) => {
@@ -195,6 +199,14 @@ export function registerExpertIpc(options: {
       const auth = await requireAuthSession();
       const request = validateRequest(input?.request);
       assertAuthGeneration(request, auth.userId);
+      if (getFeatureMode() !== "expert-compat") {
+        throw encodeExpertIpcError({
+          message:
+            "Expert start is disabled unless feature mode is expert-compat.",
+          status: 403,
+          errorCode: "EXPERT_START_DISABLED_FEATURE_MODE",
+        });
+      }
       return getExpertRunService().start(request);
     },
   );

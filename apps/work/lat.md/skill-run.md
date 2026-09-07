@@ -84,7 +84,6 @@ The following capabilities remain intentionally outside the current Work slice a
 
 - Hosted telemetry dashboard / metrics UI
 - M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
-- v4.2 Expert entry removal
 
 ## Cross References
 
