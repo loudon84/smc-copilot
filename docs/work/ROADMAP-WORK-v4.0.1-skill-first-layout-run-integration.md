@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-07T03:36:52.609151Z
+updated_at: 2026-09-07T04:48:41.123784Z
 implementation_plan_required: true
 ---
 
@@ -30,7 +30,7 @@ implementation_plan_required: true
 | RM-07 | M6a v4.2 Expert 默认创建入口 Removal：skill-first / local-only 下新员工 Skill 调用不得经 Expert start；Expert reader 与回滚入口保留。 | RM-06 | DONE | Composer 默认 Expert 入口移除；Main `expert.start` 在非 `expert-compat` 下 fail-closed；既有 Expert Task 可恢复；无 silent fallback；Expert 合同与 Skill Run 合同均不改。 | docs/work/PRD-WORK-v4.0.1-M6-expert-default-entry-removal.md | .cursor/plans/work-v4.0.1-m6-expert-default-entry-removal.plan.md | b4d013e607ca0062bd00bccf77bc51c1fbff975e | smc-evidence:RM-07@sha256:d32d05822c0d025f2a37aaaa87e8abf3367b50b9c6eba68760b8f6d121920bd0 |
 | RM-08 | M6b P1 合同化 Run Activity：把 v1.2.1 已枚举的 reasoning / tool / clarify / approval.requested 映射为 sanitized activity。 | RM-06 | DONE | 仅映射 Bundle 已枚举事件；unknown fail-soft；不复用 Local Chat ClarifyCard；无 Approval decision IPC。 | docs/work/PRD-WORK-v4.0.1-M6-skill-run-activity-adapter.md | .cursor/plans/work-v4.0.1-m6-skill-run-activity-adapter.plan.md | 27e19da7999e03d25e82e5b4fe01948381235d83 | smc-evidence:RM-08@sha256:3538984a3d9f0cef375fcf559e413f4ce27e4ddeeb745823086cd1dc1d54f549 |
 | RM-09 | M6c P1 Approval decision：可操作批准/拒绝卡片。 | RM-08 | BACKLOG | 新 Bundle 将 `approval` 从 `unsupported` 提升，并给出 decision endpoint / 幂等语义后，才允许独立 Stage PRD。 | - | - | - | - |
-| RM-10 | M6d P1 受限 JSON Schema 参数表单。 | RM-06 | BACKLOG | 独立 Stage PRD；只覆盖 P0 已 fail-closed 的 `parameters-required` / `form-required` 子集；不猜 schema。 | - | - | - | - |
+| RM-10 | M6d P1 受限 JSON Schema 参数表单。 | RM-06 | DONE | 独立 Stage PRD；只覆盖 P0 已 fail-closed 的 `parameters-required` / `form-required` 子集；不猜 schema。 | docs/work/PRD-WORK-v4.0.1-M6-limited-parameter-form.md | .cursor/plans/work-v4.0.1-m6-limited-parameter-form.plan.md | 2de7877b92eaa8ef2edc5996f2fa2779663b5b50 | smc-evidence:RM-10@sha256:8f8547957524b647965f49713015f672eb952ba19959ffb773402e130cd2b869 |
 | RM-11 | M6e P1 Attachment refs / upload 与 File Platform 接入。 | RM-06 | BACKLOG | 新 Bundle 将 `attachments` 从 `unsupported` 提升并给出 refs/upload 合同后，才允许独立 Stage PRD。 | - | - | - | - |
 | RM-12 | M6f P1 收藏、最近使用与组织推荐。 | RM-07 | BACKLOG | 独立 Stage PRD；不得新增第二 Catalog owner 或绕过 Main Catalog cache。 | - | - | - | - |
 
