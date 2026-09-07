@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-07T04:48:41.123784Z
+updated_at: 2026-09-07T04:58:11.962078Z
 implementation_plan_required: true
 ---
 
@@ -32,7 +32,7 @@ implementation_plan_required: true
 | RM-09 | M6c P1 Approval decision：可操作批准/拒绝卡片。 | RM-08 | BACKLOG | 新 Bundle 将 `approval` 从 `unsupported` 提升，并给出 decision endpoint / 幂等语义后，才允许独立 Stage PRD。 | - | - | - | - |
 | RM-10 | M6d P1 受限 JSON Schema 参数表单。 | RM-06 | DONE | 独立 Stage PRD；只覆盖 P0 已 fail-closed 的 `parameters-required` / `form-required` 子集；不猜 schema。 | docs/work/PRD-WORK-v4.0.1-M6-limited-parameter-form.md | .cursor/plans/work-v4.0.1-m6-limited-parameter-form.plan.md | 2de7877b92eaa8ef2edc5996f2fa2779663b5b50 | smc-evidence:RM-10@sha256:8f8547957524b647965f49713015f672eb952ba19959ffb773402e130cd2b869 |
 | RM-11 | M6e P1 Attachment refs / upload 与 File Platform 接入。 | RM-06 | BACKLOG | 新 Bundle 将 `attachments` 从 `unsupported` 提升并给出 refs/upload 合同后，才允许独立 Stage PRD。 | - | - | - | - |
-| RM-12 | M6f P1 收藏、最近使用与组织推荐。 | RM-07 | BACKLOG | 独立 Stage PRD；不得新增第二 Catalog owner 或绕过 Main Catalog cache。 | - | - | - | - |
+| RM-12 | M6f P1 收藏、最近使用与组织推荐。 | RM-07 | IN_PRD | 独立 Stage PRD；不得新增第二 Catalog owner 或绕过 Main Catalog cache。 | docs/work/PRD-WORK-v4.0.1-M6-catalog-favorites-recent.md | - | - | - |
 
 ## Outcome
 
