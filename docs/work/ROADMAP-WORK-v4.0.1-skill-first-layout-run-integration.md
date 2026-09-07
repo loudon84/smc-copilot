@@ -5,7 +5,7 @@ status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-07T01:09:16.509241Z
+updated_at: 2026-09-07T03:36:52.609151Z
 implementation_plan_required: true
 ---
 
@@ -28,7 +28,7 @@ implementation_plan_required: true
 | RM-05 | M4 Result, Artifact, and Session Files：Result/Artifact 复用现有 File Platform 并完成 Checkpoint B。 | RM-04 | DONE | run-scoped remote identity、Artifact safety、Session Files、真实 Catalog→Artifact→Restart 与负向 Checkpoint B 通过。 | docs/work/PRD-WORK-v4.0.1-M4-result-artifact-and-session-files.md | .cursor/plans/work-v4.0.1-m4-result-artifact-and-session-files.plan.md | 86485027e1693dc51550cc3d5b8ceb77ccee1df0 | smc-evidence:RM-05@sha256:88d1cc66e4ea79df8a7e5c5b3a8019737beaabc8fc1d786415880af3a90a7f7f |
 | RM-06 | M5 Pilot and Production Default：受控灰度后，默认新提交使用 Skill Run。 | RM-05 | DONE | telemetry、promotion gates、pilot 验收、rollback、Expert/Local regression、no silent fallback 与 production evidence 完整。 | docs/work/PRD-WORK-v4.0.1-M5-pilot-and-production-default.md | .cursor/plans/work-v4.0.1-m5-pilot-and-production-default.plan.md | 185418ffdc40693a98dcd7ed7162782ff3c7207d | external-artifact:artifacts/work-v4.0.1-m5-promotion/v01.txt |
 | RM-07 | M6a v4.2 Expert 默认创建入口 Removal：skill-first / local-only 下新员工 Skill 调用不得经 Expert start；Expert reader 与回滚入口保留。 | RM-06 | DONE | Composer 默认 Expert 入口移除；Main `expert.start` 在非 `expert-compat` 下 fail-closed；既有 Expert Task 可恢复；无 silent fallback；Expert 合同与 Skill Run 合同均不改。 | docs/work/PRD-WORK-v4.0.1-M6-expert-default-entry-removal.md | .cursor/plans/work-v4.0.1-m6-expert-default-entry-removal.plan.md | b4d013e607ca0062bd00bccf77bc51c1fbff975e | smc-evidence:RM-07@sha256:d32d05822c0d025f2a37aaaa87e8abf3367b50b9c6eba68760b8f6d121920bd0 |
-| RM-08 | M6b P1 合同化 Run Activity：把 v1.2.1 已枚举的 reasoning / tool / clarify / approval.requested 映射为 sanitized activity。 | RM-06 | IN_PRD | 仅映射 Bundle 已枚举事件；unknown fail-soft；不复用 Local Chat ClarifyCard；无 Approval decision IPC。 | docs/work/PRD-WORK-v4.0.1-M6-skill-run-activity-adapter.md | - | - | - |
+| RM-08 | M6b P1 合同化 Run Activity：把 v1.2.1 已枚举的 reasoning / tool / clarify / approval.requested 映射为 sanitized activity。 | RM-06 | DONE | 仅映射 Bundle 已枚举事件；unknown fail-soft；不复用 Local Chat ClarifyCard；无 Approval decision IPC。 | docs/work/PRD-WORK-v4.0.1-M6-skill-run-activity-adapter.md | .cursor/plans/work-v4.0.1-m6-skill-run-activity-adapter.plan.md | 27e19da7999e03d25e82e5b4fe01948381235d83 | smc-evidence:RM-08@sha256:3538984a3d9f0cef375fcf559e413f4ce27e4ddeeb745823086cd1dc1d54f549 |
 | RM-09 | M6c P1 Approval decision：可操作批准/拒绝卡片。 | RM-08 | BACKLOG | 新 Bundle 将 `approval` 从 `unsupported` 提升，并给出 decision endpoint / 幂等语义后，才允许独立 Stage PRD。 | - | - | - | - |
 | RM-10 | M6d P1 受限 JSON Schema 参数表单。 | RM-06 | BACKLOG | 独立 Stage PRD；只覆盖 P0 已 fail-closed 的 `parameters-required` / `form-required` 子集；不猜 schema。 | - | - | - | - |
 | RM-11 | M6e P1 Attachment refs / upload 与 File Platform 接入。 | RM-06 | BACKLOG | 新 Bundle 将 `attachments` 从 `unsupported` 提升并给出 refs/upload 合同后，才允许独立 Stage PRD。 | - | - | - | - |
