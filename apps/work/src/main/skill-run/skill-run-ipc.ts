@@ -38,6 +38,7 @@ const MAX_TOOL_NAME_LENGTH = 256;
 const MAX_CLIENT_REQUEST_ID_LENGTH = 128;
 const MAX_SESSION_ID_LENGTH = 256;
 const MAX_PROFILE_ID_LENGTH = 128;
+const EXTRA_PARAMETERS_MAX = 8;
 
 let activeService: SkillRunService | null = null;
 let projectionUnsubscribe: (() => void) | null = null;
@@ -101,6 +102,31 @@ function validateStartInput(value: unknown): SkillRunStartInput {
     throw new Error("Invalid SkillRunStartInput.profileId");
   }
 
+  let extraParameters: Record<string, string> | undefined;
+  if (value.extraParameters !== undefined) {
+    if (!isRecord(value.extraParameters)) {
+      throw new Error("Invalid SkillRunStartInput.extraParameters");
+    }
+    const keys = Object.keys(value.extraParameters);
+    if (keys.length > EXTRA_PARAMETERS_MAX) {
+      throw new Error("Invalid SkillRunStartInput.extraParameters");
+    }
+    extraParameters = {};
+    for (const key of keys) {
+      const trimmedKey = key.trim();
+      const rawValue = value.extraParameters[key];
+      if (
+        !trimmedKey ||
+        trimmedKey.length > MAX_TOOL_NAME_LENGTH ||
+        typeof rawValue !== "string" ||
+        rawValue.length > MAX_PROMPT_LENGTH
+      ) {
+        throw new Error("Invalid SkillRunStartInput.extraParameters");
+      }
+      extraParameters[trimmedKey] = rawValue;
+    }
+  }
+
   return {
     toolName,
     prompt,
@@ -108,6 +134,7 @@ function validateStartInput(value: unknown): SkillRunStartInput {
     sessionId,
     profileId,
     authGeneration,
+    ...(extraParameters ? { extraParameters } : {}),
   };
 }
 

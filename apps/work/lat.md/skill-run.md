@@ -80,6 +80,14 @@ Work maps v1.2.1 enumerated `reasoning.summary`, `tool.call`, `clarify.requested
 
 `tool.call` copies only `tool_name` / `call_id` / `status`. `clarify.requested` shows the question and string options only; Skill Run does not call Hermes `clarify-respond` or reuse Local Chat `ClarifyCard`. `approval.requested` may set phase `waiting-approval` and shows the summary without allow/deny controls. Unknown and unmapped control events stay `rawUnknown` and are not textified into transcript or activity.
 
+## M6d Limited parameter form
+
+Work lifts a fail-closed subset of extra required string fields into callable `limited-parameter-form`.
+
+[[src/main/skill-run/skill-run-contract-parser.ts#classifySkillInvocation]] is still the single classify/bind owner. Chat / form tools with 1–8 extra required `type === "string"` properties besides `promptField` become callable. Main projects `extraStringFields` and re-binds whitelist keys on existing `skillRun.start`. `$ref`, composite schemas, non-string extras, more than eight extras, and `form` tools with no extra required fields stay unsupported. Renderer must not walk `inputSchema` to build `tools/call` arguments.
+
+[[src/renderer/src/modules/skill-run/SkillCatalogPanel.tsx#SkillCatalogPanel]] selects `callability === "callable"`. [[src/renderer/src/modules/skill-run/SkillSelectionBar.tsx#SkillSelectionBar]] collects the projected extra strings. Chat queues an immutable extra-parameter snapshot.
+
 ## M5 production default and telemetry
 
 Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run or Expert readers.
@@ -92,7 +100,7 @@ The following capabilities remain intentionally outside the current Work slice a
 
 - Hosted telemetry dashboard / metrics UI
 - Approval decision IPC / allow-deny cards
-- JSON Schema forms
+- Unrestricted JSON Schema / `$ref` / non-string parameter widgets
 - Attachment upload
 
 ## Cross References

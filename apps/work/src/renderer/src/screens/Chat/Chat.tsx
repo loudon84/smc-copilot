@@ -114,6 +114,37 @@ interface QueuedMessage {
     toolName: string;
     prompt: string;
     clientRequestId: string;
+    extraParameters?: Record<string, string>;
+  };
+}
+
+export function isSkillRunCallable(
+  tool: Pick<SkillCatalogToolItem, "callability">,
+): boolean {
+  return tool.callability === "callable";
+}
+
+export function buildSkillRunQueueRequest(input: {
+  toolName: string;
+  prompt: string;
+  clientRequestId: string;
+  toolTitle?: string;
+  extraParameters?: Record<string, string>;
+}): {
+  toolName: string;
+  prompt: string;
+  clientRequestId: string;
+  toolTitle?: string;
+  extraParameters?: Record<string, string>;
+} {
+  return {
+    toolName: input.toolName,
+    prompt: input.prompt,
+    clientRequestId: input.clientRequestId,
+    toolTitle: input.toolTitle,
+    extraParameters: input.extraParameters
+      ? { ...input.extraParameters }
+      : undefined,
   };
 }
 
@@ -463,6 +494,13 @@ function Chat({
   /** Client request ids submitted from this Chat instance — live transcript only. */
   const liveExpertTranscriptIdsRef = useRef(new Set<string>());
   const [selectedSkill, setSelectedSkill] = useState<SkillCatalogToolItem | null>(null);
+  const [extraParameterValues, setExtraParameterValues] = useState<
+    Record<string, string>
+  >({});
+
+  useEffect(() => {
+    setExtraParameterValues({});
+  }, [selectedSkill?.toolName]);
 
   useEffect(() => {
     const sessionId = hermesSessionId || initialSessionId;
@@ -1277,6 +1315,7 @@ function Chat({
       prompt: string;
       clientRequestId: string;
       toolTitle?: string;
+      extraParameters?: Record<string, string>;
     }) => {
       try {
         let sessionId = hermesSessionId || initialSessionId || "";
@@ -1291,6 +1330,7 @@ function Chat({
           sessionId,
           profileId: profile ?? "default",
           authGeneration,
+          extraParameters: request.extraParameters,
         };
         const result = await window.hermesAPI.skillRun.start(input);
         if (!result.accepted) {
@@ -1399,20 +1439,41 @@ function Chat({
           toast.error(t("skillRun.selectSkillBeforeSending") || "Select a skill before sending.");
           return;
         }
-        if (selectedSkill.invocationMode !== "prompt-first") {
+        if (!isSkillRunCallable(selectedSkill)) {
           toast.error(
             t("skillRun.skillUnavailable") ||
               "This skill cannot be executed in prompt-first mode.",
           );
           return;
         }
+        const extraFields = selectedSkill.extraStringFields ?? [];
+        const extraParameters =
+          extraFields.length > 0
+            ? Object.fromEntries(
+                extraFields.map((field) => [
+                  field.name,
+                  (extraParameterValues[field.name] ?? "").trim(),
+                ]),
+              )
+            : undefined;
+        if (
+          extraParameters &&
+          extraFields.some((field) => !extraParameters[field.name])
+        ) {
+          toast.error(
+            t("skillRun.extraParametersRequired") ||
+              "Fill the required skill parameters before sending.",
+          );
+          return;
+        }
         const clientRequestId = createClientRequestId();
-        const request = {
+        const request = buildSkillRunQueueRequest({
           toolName: selectedSkill.toolName,
           prompt: text,
           clientRequestId,
           toolTitle: selectedSkill.title,
-        };
+          extraParameters,
+        });
         if (chatBusy) {
           queueRef.current.push({ text, attachments: [], skillRequest: request });
           setQueuedMessages([...queueRef.current]);
@@ -1498,6 +1559,7 @@ function Chat({
       runtime?.error,
       selectedCallability,
       selectedSkill,
+      extraParameterValues,
       submitExpert,
       submitSkill,
       t,
@@ -1862,6 +1924,8 @@ function Chat({
         {isSkillRunMode && selectedSkill && (
           <SkillSelectionBar
             selection={selectedSkill}
+            extraParameterValues={extraParameterValues}
+            onExtraParametersChange={setExtraParameterValues}
             onClear={() => setSelectedSkill(null)}
           />
         )}

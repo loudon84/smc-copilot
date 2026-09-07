@@ -1,0 +1,114 @@
+{
+  "ambient_fingerprint": "sha256:289ae221d500bc2c004f6c6402d8458adbc2a21679766e8d5e370077b524d545",
+  "blocking_verifications": [
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-contract-parser.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044321.587759Z-V01.log",
+      "raw_log_sha256": "sha256:892501d1a82a999f60b5af1dd4fbafe1bc79d0f5119505311aca2db32d519a43",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:43:21.587759Z",
+      "verification_id": "V01"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-ipc.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044326.042218Z-V02.log",
+      "raw_log_sha256": "sha256:53d4918dfda303217c7169cec098e908b0a70fb012426e25c40c77002fd5b227",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:43:26.042218Z",
+      "verification_id": "V02"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044331.023548Z-V03.log",
+      "raw_log_sha256": "sha256:a92e14dd9b97405cf64b283efb050720fe71e47bb44497310273b22eb9e8963d",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:43:31.023548Z",
+      "verification_id": "V03"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; cmds=['\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/modules/skill-run/SkillCatalogPanel.test.tsx --pool=threads --maxWorkers=1'\"'\"','\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/modules/skill-run/SkillSelectionBar.test.tsx --pool=threads --maxWorkers=1'\"'\"']; sys.exit(0 if all(subprocess.call(c,shell=True)==0 for c in cmds) else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044337.033818Z-V04.log",
+      "raw_log_sha256": "sha256:0adb2161a94d934cf726a6cb1e3423cd4199b9c1ac0be27df8f5b889c5314296",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:43:37.033818Z",
+      "verification_id": "V04"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Chat/skillSelectionRestore.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044348.430601Z-V05.log",
+      "raw_log_sha256": "sha256:e86a2ba4c403115341154c451c1a24e1d19e2a0f4e31d0ce9e4280c8009e4bfa",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:43:48.430601Z",
+      "verification_id": "V05"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Chat/skillSelectionRestore.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044401.301676Z-V06.log",
+      "raw_log_sha256": "sha256:36d7ce9404f6ee7184d6bca2c2752fbdf98e7c26518a825dbaf181470d08a293",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:44:01.301676Z",
+      "verification_id": "V06"
+    },
+    {
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/expert/expert-run-service.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044411.894395Z-V07.log",
+      "raw_log_sha256": "sha256:2428c6778c2e7272587957e9b6c7f3fdd39d57ad06bf8052fa7638751a400add",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:44:11.894395Z",
+      "verification_id": "V07"
+    },
+    {
+      "command": "python -c 'from pathlib import Path; import sys; r=Path('\"'\"'docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); lat=Path('\"'\"'apps/work/lat.md/skill-run.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ch=Path('\"'\"'apps/work/src/shared/skill-run.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); p=chr(124); row=next(x for x in r.splitlines() if x.startswith(p+'\"'\"' RM-10 '\"'\"')); keys='\"'\"'LIST_CATALOG REFRESH_CATALOG START CANCEL GET_FEATURE_MODE GET_PROJECTION LIST_PROJECTIONS REHYDRATE_SESSION RETRY_ARTIFACT_DISCOVERY GET_SESSION_MODE SET_SESSION_MODE ON_PROJECTION_CHANGED'\"'\"'.split(); ok=(row.split(p)[4].strip()!='\"'\"'DONE'\"'\"' and '\"'\"'limited-parameter-form'\"'\"' in lat and '\"'\"'Approval'\"'\"' in lat and '\"'\"'Attachment'\"'\"' in lat and all(k in ch for k in keys) and '\"'\"'skill-run:form'\"'\"' not in ch); sys.exit(0 if ok else 1)'",
+      "exit_code": 0,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-10/logs/20260907T044417.504915Z-V08.log",
+      "raw_log_sha256": "sha256:5e27373150f0e73ef9a97f9ecfe042b75e083c77a31f11f9d35f2878feb06b07",
+      "result": "PASS",
+      "timestamp": "2026-09-07T04:44:17.504915Z",
+      "verification_id": "V08"
+    }
+  ],
+  "completion_audit": {
+    "changed": 16,
+    "deferred": 0,
+    "done": 7,
+    "scope_drift": 0,
+    "timestamp": "2026-09-07T04:43:07.150330Z",
+    "total_items": 7,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-07T04:45:21.309987Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:8f8547957524b647965f49713015f672eb952ba19959ffb773402e130cd2b869",
+    "timestamp": "2026-09-07T04:43:07.581420Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:297c12d68983f0a35ba08bdb193cbfaebfe86f2548fddf75acececdcf81e1684",
+  "plan": ".cursor/plans/work-v4.0.1-m6-limited-parameter-form.plan.md",
+  "plan_id": "RM-10",
+  "plan_review": {
+    "plan_sha256": "sha256:c61040ec203368e99c1dcfe72f231739e78232194e594e3aa8a1019b114fed9f",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-07T04:23:42.346475Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v2",
+  "scope_fingerprint": "sha256:8f8547957524b647965f49713015f672eb952ba19959ffb773402e130cd2b869",
+  "workspace_base_commit": "c58fe7c4c0fdf965674395c68bfcec9b83f09873"
+}

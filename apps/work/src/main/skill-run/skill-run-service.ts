@@ -590,6 +590,7 @@ export function createSkillRunService(
         input.toolName,
         input.prompt,
         catalog.tools,
+        input.extraParameters,
       );
       if (!bindResult.ok) {
         return rejectStart(input, bindResult.errorCode, bindResult.message);

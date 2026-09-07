@@ -41,9 +41,15 @@ export function isSkillRunTerminalPhase(phase: SkillRunLocalPhase): phase is Ski
 
 export type SkillInvocationMode =
   | "prompt-first"
+  | "limited-parameter-form"
   | "parameters-required"
   | "form-required"
   | "unsupported-schema";
+
+export interface SkillRunExtraStringField {
+  name: string;
+  title?: string;
+}
 
 export type SkillInvocationReasonCode =
   | "FORM_REQUIRED"
@@ -65,6 +71,8 @@ export interface SkillCatalogToolItem {
   callability: "callable" | "disabled" | "unsupported";
   invocationMode: SkillInvocationMode;
   reasonCode?: SkillInvocationReasonCode;
+  /** Main-projected extra required string fields. Renderer must not invent keys from inputSchema. */
+  extraStringFields?: SkillRunExtraStringField[];
   /** Read-only projection for display/debug; Renderer must not build Provider arguments from it. */
   inputSchema?: Record<string, unknown>;
 }
@@ -161,6 +169,7 @@ export interface SkillRunStartInput {
   sessionId: string;
   profileId: string;
   authGeneration?: string;
+  extraParameters?: Record<string, string>;
 }
 
 export type SkillRunStartResult =

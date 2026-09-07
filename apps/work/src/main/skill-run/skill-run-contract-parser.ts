@@ -9,6 +9,7 @@ import type {
   SkillInvocationMode,
   SkillInvocationReasonCode,
   SkillRunArtifactDescriptor,
+  SkillRunExtraStringField,
   SkillRunLocalPhase,
 } from "../../shared/skill-run";
 
@@ -36,6 +37,7 @@ export interface SkillInvocationClassification {
   callability: SkillCatalogToolItem["callability"];
   reasonCode?: SkillInvocationReasonCode;
   promptField?: string | null;
+  extraStringFields?: SkillRunExtraStringField[];
 }
 
 /** Intermediate descriptor after wire normalize; classification applied next. */
@@ -52,6 +54,7 @@ export interface NormalizedSkillToolDescriptor {
 
 const ACTIVITY_STRING_MAX = 512;
 const CLARIFY_OPTIONS_MAX = 8;
+const EXTRA_STRING_FIELDS_MAX = 8;
 
 type ParsedToolCallStatus = "started" | "completed" | "failed";
 
@@ -173,9 +176,36 @@ export function normalizeSkillToolDescriptor(
   };
 }
 
+function isPureStringProperty(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && value.type === "string" && !(typeof value.$ref === "string" && value.$ref.trim());
+}
+
+function extraStringFieldsForRequired(
+  properties: Record<string, unknown>,
+  extraRequired: string[],
+): SkillRunExtraStringField[] | null {
+  if (extraRequired.length === 0 || extraRequired.length > EXTRA_STRING_FIELDS_MAX) {
+    return null;
+  }
+  const fields: SkillRunExtraStringField[] = [];
+  for (const name of extraRequired) {
+    const prop = properties[name];
+    if (!isPureStringProperty(prop)) {
+      return null;
+    }
+    const title =
+      typeof prop.title === "string" && prop.title.trim()
+        ? prop.title.trim()
+        : undefined;
+    fields.push(title ? { name, title } : { name });
+  }
+  return fields;
+}
+
 /**
  * Single invocation classification owner for Catalog projection and Main start.
  * Optional complex properties do not disqualify prompt-first (PRD 5.4 / AC-04).
+ * Extra required string scalars (1–8) are limited-parameter-form; form without extras stays form-required.
  */
 export function classifySkillInvocation(
   tool: Pick<
@@ -183,10 +213,6 @@ export function classifySkillInvocation(
     "interactionMode" | "promptField" | "inputSchema"
   >,
 ): SkillInvocationClassification {
-  if (tool.interactionMode === "form") {
-    return classifyUnsupported("FORM_REQUIRED", "form-required");
-  }
-
   const schema = tool.inputSchema;
   if (schema) {
     if (typeof schema.$ref === "string" && schema.$ref.trim()) {
@@ -221,7 +247,7 @@ export function classifySkillInvocation(
   }
 
   const promptProp = props[promptField];
-  if (!isRecord(promptProp) || promptProp.type !== "string") {
+  if (!isPureStringProperty(promptProp)) {
     return classifyUnsupported("PROMPT_FIELD_INVALID");
   }
 
@@ -229,27 +255,44 @@ export function classifySkillInvocation(
     ? schema.required.filter((field): field is string => typeof field === "string")
     : [];
   const extraRequired = required.filter((field) => field !== promptField);
-  if (extraRequired.length > 0) {
+  if (extraRequired.length === 0) {
+    if (tool.interactionMode === "form") {
+      return classifyUnsupported("FORM_REQUIRED", "form-required");
+    }
     return {
-      invocationMode: "parameters-required",
-      callability: "unsupported",
-      reasonCode: "EXTRA_REQUIRED_PARAMETERS",
+      invocationMode: "prompt-first",
+      callability: "callable",
       promptField,
     };
   }
 
+  const extraStringFields = extraStringFieldsForRequired(props, extraRequired);
+  if (extraStringFields) {
+    return {
+      invocationMode: "limited-parameter-form",
+      callability: "callable",
+      promptField,
+      extraStringFields,
+    };
+  }
+
+  if (tool.interactionMode === "form") {
+    return classifyUnsupported("FORM_REQUIRED", "form-required");
+  }
   return {
-    invocationMode: "prompt-first",
-    callability: "callable",
+    invocationMode: "parameters-required",
+    callability: "unsupported",
+    reasonCode: "EXTRA_REQUIRED_PARAMETERS",
     promptField,
   };
 }
 
-/** Main-side Catalog revalidation: prompt-first tools only; fail-closed on non-bindable schemas. */
+/** Main-side Catalog revalidation: prompt-first and limited-parameter-form only; fail-closed on non-bindable schemas. */
 export function bindPromptFirstTool(
   toolName: string,
   prompt: string,
   catalog: SkillCatalogToolItem[],
+  extraParameters?: Record<string, string>,
 ): BindPromptFirstResult {
   const trimmedName = toolName.trim();
   const trimmedPrompt = prompt.trim();
@@ -263,7 +306,40 @@ export function bindPromptFirstTool(
   }
 
   const classification = classifySkillInvocation(tool);
-  if (classification.invocationMode !== "prompt-first") {
+  const extras = extraParameters ?? {};
+  const extraKeys = Object.keys(extras);
+
+  if (classification.invocationMode === "prompt-first") {
+    if (extraKeys.length > 0) {
+      return {
+        ok: false,
+        errorCode: "SKILL_PARAMETERS_REQUIRED",
+        message: "Unexpected extra parameters for prompt-first skill",
+      };
+    }
+  } else if (classification.invocationMode === "limited-parameter-form") {
+    const allowed = classification.extraStringFields ?? [];
+    const allowedNames = new Set(allowed.map((field) => field.name));
+    for (const key of extraKeys) {
+      if (!allowedNames.has(key)) {
+        return {
+          ok: false,
+          errorCode: "SKILL_PARAMETERS_REQUIRED",
+          message: "Unknown extra parameter is not allowed",
+        };
+      }
+    }
+    for (const field of allowed) {
+      const value = extras[field.name];
+      if (typeof value !== "string" || !value.trim()) {
+        return {
+          ok: false,
+          errorCode: "SKILL_PARAMETERS_REQUIRED",
+          message: "Additional required parameters are not supported",
+        };
+      }
+    }
+  } else {
     return {
       ok: false,
       errorCode: reasonToErrorCode(classification.reasonCode),
@@ -297,11 +373,20 @@ export function bindPromptFirstTool(
     };
   }
 
+  const argumentsPayload: Record<string, unknown> = {
+    [promptField]: trimmedPrompt,
+  };
+  if (classification.invocationMode === "limited-parameter-form") {
+    for (const field of classification.extraStringFields ?? []) {
+      argumentsPayload[field.name] = extras[field.name].trim();
+    }
+  }
+
   return {
     ok: true,
     tool,
     promptField,
-    arguments: { [promptField]: trimmedPrompt },
+    arguments: argumentsPayload,
   };
 }
 
@@ -323,6 +408,7 @@ export function mapPublicSkillCatalogTools(rawTools: unknown): SkillCatalogToolI
       callability: classification.callability,
       invocationMode: classification.invocationMode,
       reasonCode: classification.reasonCode,
+      extraStringFields: classification.extraStringFields,
       inputSchema: normalized.inputSchema,
     });
   }

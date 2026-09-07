@@ -160,34 +160,36 @@ describe("skill-run-service", () => {
     }
   });
 
-  it("rejects extra required parameters via bindPromptFirstTool", () => {
-    const result = bindPromptFirstTool(
-      "complex",
-      "hello",
-      [
-        {
-          toolName: "complex",
-          title: "Complex",
-          interactionMode: "chat",
-          promptField: "prompt",
-          supportsAttachments: false,
-          callability: "unsupported",
-          invocationMode: "parameters-required",
-          reasonCode: "EXTRA_REQUIRED_PARAMETERS",
-          inputSchema: {
-            type: "object",
-            properties: {
-              prompt: { type: "string" },
-              region: { type: "string" },
-            },
-            required: ["prompt", "region"],
-          },
+  it("binds extra required strings when extraParameters are supplied", () => {
+    const catalogTool = {
+      toolName: "complex",
+      title: "Complex",
+      interactionMode: "chat" as const,
+      promptField: "prompt",
+      supportsAttachments: false,
+      callability: "callable" as const,
+      invocationMode: "limited-parameter-form" as const,
+      extraStringFields: [{ name: "region" }],
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          region: { type: "string" },
         },
-      ],
-    );
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
+        required: ["prompt", "region"],
+      },
+    };
+    const missing = bindPromptFirstTool("complex", "hello", [catalogTool]);
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) {
+      expect(missing.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
+    }
+    const result = bindPromptFirstTool("complex", "hello", [catalogTool], {
+      region: "cn",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.arguments).toEqual({ prompt: "hello", region: "cn" });
     }
   });
 
@@ -229,6 +231,71 @@ describe("skill-run-service", () => {
       toolName: "search.skill",
       arguments: { query: "find customers" },
       idempotencyKey: "req-query",
+    });
+  });
+
+  it("binds extra required strings into callSkill arguments", async () => {
+    const extraTool: SkillCatalogToolItem = {
+      toolName: "writer.extra",
+      title: "Writer Extra",
+      interactionMode: "chat",
+      promptField: "prompt",
+      supportsAttachments: false,
+      callability: "callable",
+      invocationMode: "limited-parameter-form",
+      extraStringFields: [{ name: "region" }],
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          region: { type: "string" },
+        },
+        required: ["prompt", "region"],
+      },
+    };
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [extraTool] }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+      }),
+    );
+    const missing = await service.start({
+      toolName: "writer.extra",
+      prompt: "hello",
+      clientRequestId: "req-extra-missing",
+      sessionId: "session-extra",
+      profileId: "default",
+    });
+    expect(missing.accepted).toBe(false);
+    const unknown = await service.start({
+      toolName: "writer.extra",
+      prompt: "hello",
+      clientRequestId: "req-extra-unknown",
+      sessionId: "session-extra",
+      profileId: "default",
+      extraParameters: { region: "cn", forged: "nope" },
+    });
+    expect(unknown.accepted).toBe(false);
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+
+    const result = await service.start({
+      toolName: "writer.extra",
+      prompt: "hello",
+      clientRequestId: "req-extra-ok",
+      sessionId: "session-extra-ok",
+      profileId: "default",
+      extraParameters: { region: "cn" },
+    });
+    expect(result.accepted).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(gateway.callSkill).toHaveBeenCalledWith({
+      toolName: "writer.extra",
+      arguments: { prompt: "hello", region: "cn" },
+      idempotencyKey: "req-extra-ok",
     });
   });
 

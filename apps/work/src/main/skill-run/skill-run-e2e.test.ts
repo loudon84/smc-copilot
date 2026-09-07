@@ -682,25 +682,26 @@ describe("skill-run e2e fixture", () => {
     expect(countToolsCall(fixture.fetchImpl)).toBe(0);
   });
 
-  it("negative: extra required parameters are rejected before tools/call", async () => {
+  it("negative: extra required strings classify as limited-parameter-form and still reject start without extras", async () => {
     const fixture = createFixtureFetch("extra-required");
     const service = createServiceFromFetch(
       fixture.fetchImpl as unknown as typeof fetch,
     );
     const catalog = await service.listCatalog();
     const tool = catalog.tools.find((entry) => entry.toolName === "writer.extra");
-    expect(tool?.invocationMode).toBe("parameters-required");
+    expect(tool?.invocationMode).toBe("limited-parameter-form");
+    expect(tool?.callability).toBe("callable");
 
-    const result = await service.start({
+    const missing = await service.start({
       toolName: "writer.extra",
       prompt: "hello",
       clientRequestId: "e2e-extra",
       sessionId: "session-extra",
       profileId: "profile-1",
     });
-    expect(result.accepted).toBe(false);
-    if (!result.accepted) {
-      expect(result.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
+    expect(missing.accepted).toBe(false);
+    if (!missing.accepted) {
+      expect(missing.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
     }
     expect(countToolsCall(fixture.fetchImpl)).toBe(0);
   });

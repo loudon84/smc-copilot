@@ -1,10 +1,13 @@
+// @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkillCatalogResponse } from "../../../../shared/skill-run";
 
 vi.mock("../../components/useI18n", () => ({
@@ -25,6 +28,10 @@ vi.mock("./store", async (importOriginal) => {
 
 import { SkillCatalogPanel } from "./SkillCatalogPanel";
 import { setSkillRunCatalogState } from "./store";
+
+afterEach(() => {
+  cleanup();
+});
 
 const callableTools: SkillCatalogResponse = {
   status: "ready",
@@ -70,6 +77,17 @@ const callableTools: SkillCatalogResponse = {
       callability: "unsupported",
       invocationMode: "form-required",
       reasonCode: "FORM_REQUIRED",
+      category: "general",
+    },
+    {
+      toolName: "limited-form",
+      title: "Limited Form",
+      interactionMode: "chat",
+      promptField: "prompt",
+      supportsAttachments: false,
+      callability: "callable",
+      invocationMode: "limited-parameter-form",
+      extraStringFields: [{ name: "region", title: "Region" }],
       category: "general",
     },
   ],
@@ -201,6 +219,18 @@ describe("SkillCatalogPanel", () => {
 
     expect(onSelectSkill).toHaveBeenCalledWith(
       expect.objectContaining({ toolName: "alpha", invocationMode: "prompt-first" }),
+    );
+  });
+
+  it("selects limited-parameter-form skills from the listbox", () => {
+    setSkillRunCatalogState(callableTools);
+    const onSelectSkill = renderPanel();
+    fireEvent.click(screen.getByText("Limited Form"));
+    expect(onSelectSkill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: "limited-form",
+        invocationMode: "limited-parameter-form",
+      }),
     );
   });
 });

@@ -122,7 +122,7 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
     const tool = filteredTools[highlightedIndex];
 
-    if (tool && tool.invocationMode === "prompt-first") {
+    if (tool && tool.callability === "callable") {
 
       onSelectSkill(tool);
 
@@ -410,7 +410,7 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
             {filteredTools.map((tool, index) => {
 
-              const isPromptFirst = tool.invocationMode === "prompt-first";
+              const isCallable = tool.callability === "callable";
 
               const highlighted = index === highlightedIndex;
 
@@ -443,15 +443,15 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
                   aria-selected={highlighted}
 
-                  className={`skill-card ${isPromptFirst ? "" : "disabled"} ${highlighted ? "highlighted" : ""}`}
+                  className={`skill-card ${isCallable ? "" : "disabled"} ${highlighted ? "highlighted" : ""}`}
 
-                  disabled={!isPromptFirst}
+                  disabled={!isCallable}
 
                   onMouseEnter={() => setHighlightedIndex(index)}
 
                   onClick={() => {
 
-                    if (isPromptFirst) onSelectSkill(tool);
+                    if (isCallable) onSelectSkill(tool);
 
                   }}
 
@@ -475,7 +475,7 @@ export const SkillCatalogPanel: FC<SkillCatalogPanelProps> = ({
 
                   )}
 
-                  {!isPromptFirst && reasonKey && (
+                  {!isCallable && reasonKey && (
 
                     <p className="skill-card-reason">
 

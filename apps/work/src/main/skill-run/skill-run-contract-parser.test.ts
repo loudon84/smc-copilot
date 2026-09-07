@@ -134,9 +134,68 @@ describe("classifySkillInvocation matrix", () => {
     expect(result.invocationMode).toBe("prompt-first");
   });
 
-  it("marks extra required as parameters-required", () => {
+  it("classifies extra required strings as limited-parameter-form", () => {
     const result = classifySkillInvocation({
       interactionMode: "chat",
+      promptField: "prompt",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          region: { type: "string", title: "Region" },
+        },
+        required: ["prompt", "region"],
+      },
+    });
+    expect(result.invocationMode).toBe("limited-parameter-form");
+    expect(result.callability).toBe("callable");
+    expect(result.extraStringFields).toEqual([
+      { name: "region", title: "Region" },
+    ]);
+  });
+
+  it("marks extra required object as parameters-required", () => {
+    const result = classifySkillInvocation({
+      interactionMode: "chat",
+      promptField: "prompt",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          options: { type: "object" },
+        },
+        required: ["prompt", "options"],
+      },
+    });
+    expect(result.invocationMode).toBe("parameters-required");
+    expect(result.reasonCode).toBe("EXTRA_REQUIRED_PARAMETERS");
+    expect(result.callability).toBe("unsupported");
+  });
+
+  it("rejects more than eight extra required strings", () => {
+    const extraNames = Array.from({ length: 9 }, (_, index) => `field${index}`);
+    const properties: Record<string, unknown> = {
+      prompt: { type: "string" },
+    };
+    for (const name of extraNames) {
+      properties[name] = { type: "string" };
+    }
+    const result = classifySkillInvocation({
+      interactionMode: "chat",
+      promptField: "prompt",
+      inputSchema: {
+        type: "object",
+        properties,
+        required: ["prompt", ...extraNames],
+      },
+    });
+    expect(result.invocationMode).toBe("parameters-required");
+    expect(result.callability).toBe("unsupported");
+  });
+
+  it("classifies form plus extra required strings as limited-parameter-form", () => {
+    const result = classifySkillInvocation({
+      interactionMode: "form",
       promptField: "prompt",
       inputSchema: {
         type: "object",
@@ -147,9 +206,9 @@ describe("classifySkillInvocation matrix", () => {
         required: ["prompt", "region"],
       },
     });
-    expect(result.invocationMode).toBe("parameters-required");
-    expect(result.reasonCode).toBe("EXTRA_REQUIRED_PARAMETERS");
-    expect(result.callability).toBe("unsupported");
+    expect(result.invocationMode).toBe("limited-parameter-form");
+    expect(result.callability).toBe("callable");
+    expect(result.extraStringFields).toEqual([{ name: "region" }]);
   });
 
   it("marks form as form-required", () => {
@@ -296,13 +355,58 @@ describe("mapPublicSkillCatalogTools + bind invariant", () => {
     const callable = tools.filter((t) => t.callability === "callable");
     expect(callable.length).toBeGreaterThan(0);
     for (const tool of callable) {
-      const bind = bindPromptFirstTool(tool.toolName, "hello", tools);
+      const extras = Object.fromEntries(
+        (tool.extraStringFields ?? []).map((field) => [field.name, "value"]),
+      );
+      const bind = bindPromptFirstTool(tool.toolName, "hello", tools, extras);
       expect(bind.ok).toBe(true);
       if (bind.ok) {
         expect(bind.promptField).toBeTruthy();
         expect(bind.arguments[bind.promptField]).toBe("hello");
       }
     }
+  });
+
+  it("binds extra required strings and rejects unknown extra keys", () => {
+    const tools = mapPublicSkillCatalogTools([
+      baseDescriptor({
+        name: "extra.required",
+        inputSchema: {
+          type: "object",
+          properties: {
+            prompt: { type: "string" },
+            region: { type: "string" },
+          },
+          required: ["prompt", "region"],
+        },
+      }),
+    ]);
+    expect(tools[0]?.invocationMode).toBe("limited-parameter-form");
+    const ok = bindPromptFirstTool("extra.required", "hello", tools, {
+      region: "cn",
+    });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.arguments).toEqual({ prompt: "hello", region: "cn" });
+    }
+    const unknown = bindPromptFirstTool("extra.required", "hello", tools, {
+      region: "cn",
+      forged: "nope",
+    });
+    expect(unknown.ok).toBe(false);
+    if (!unknown.ok) {
+      expect(unknown.errorCode).toBe("SKILL_PARAMETERS_REQUIRED");
+    }
+    const missing = bindPromptFirstTool("extra.required", "hello", tools);
+    expect(missing.ok).toBe(false);
+  });
+
+  it("rejects extra keys on prompt-first bind", () => {
+    const tools = mapPublicSkillCatalogTools([baseDescriptor()]);
+    const bind = bindPromptFirstTool("writer.article", "hello", tools, {
+      region: "cn",
+    });
+    expect(bind.ok).toBe(false);
   });
 
   it("binds query promptField into arguments", () => {

@@ -38,5 +38,6 @@ export default {
   reasonPromptFieldInvalid: "Prompt field must be a string",
   reasonUnsupportedSchema: "Current input schema is not supported",
   reasonContractMismatch: "Skill is unavailable or out of sync with the catalog",
+  extraParametersRequired: "Fill the required skill parameters before sending.",
   skillUnavailable: "This skill cannot be executed in prompt-first mode.",
 };

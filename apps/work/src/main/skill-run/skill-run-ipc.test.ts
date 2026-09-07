@@ -95,7 +95,7 @@ function validEvent(): { sender: { isDestroyed: () => boolean } } {
   };
 }
 
-function validStartInput(overrides: Record<string, string> = {}) {
+function validStartInput(overrides: Record<string, unknown> = {}) {
   return {
     toolName: "calculator",
     prompt: "2+2",
@@ -153,6 +153,37 @@ describe("registerSkillRunIpc", () => {
     const serialized = JSON.stringify(startMock.mock.calls[0]);
     expect(serialized).not.toMatch(/eyJ/);
     expect(serialized).not.toMatch(/https?:\/\//);
+  });
+
+  it("start forwards bounded extraParameters and rejects illegal maps", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.START)!;
+    startMock.mockResolvedValueOnce({
+      accepted: true,
+      projection: { clientRequestId: "req-1", phase: "pending-submit" },
+    });
+    await expect(
+      handler(
+        validEvent(),
+        validStartInput({ extraParameters: { region: "cn" } }),
+      ),
+    ).resolves.toMatchObject({ accepted: true });
+    expect(startMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extraParameters: { region: "cn" },
+      }),
+    );
+
+    await expect(
+      handler(validEvent(), validStartInput({ extraParameters: { region: 1 } })),
+    ).rejects.toThrow(/Invalid SkillRunStartInput\.extraParameters/);
+
+    const nine: Record<string, string> = {};
+    for (let i = 0; i < 9; i += 1) {
+      nine[`k${i}`] = "v";
+    }
+    await expect(
+      handler(validEvent(), validStartInput({ extraParameters: nine })),
+    ).rejects.toThrow(/Invalid SkillRunStartInput\.extraParameters/);
   });
 
   it("list-catalog requires auth session", async () => {
