@@ -79,4 +79,65 @@ describe("SkillRunStatusBar", () => {
     const source = readFileSync(sourcePath, "utf8");
     expect(source).not.toContain("ExpertArtifactCards");
   });
+
+  it("renders read-only activity kinds under the compact phase row", () => {
+    render(
+      <SkillRunStatusBar
+        projection={projection({
+          phase: "waiting-approval",
+          displayStage: "Waiting for approval...",
+          activities: [
+            {
+              eventId: "evt-4",
+              kind: "reasoning.summary",
+              summary: "checked docs",
+            },
+            {
+              eventId: "evt-2",
+              kind: "tool.call",
+              toolName: "search",
+              callId: "call-1",
+              status: "started",
+            },
+            {
+              eventId: "evt-5",
+              kind: "clarify.requested",
+              question: "which file?",
+              options: ["a", "b"],
+            },
+            {
+              eventId: "evt-6",
+              kind: "approval.requested",
+              approvalId: "appr-1",
+              summary: "delete file",
+            },
+          ],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("writer.article: Waiting for approval...")).toBeTruthy();
+    expect(screen.getByText("Reasoning: checked docs")).toBeTruthy();
+    expect(screen.getByText("Tool search (started)")).toBeTruthy();
+    expect(screen.getByText("Clarification: which file?")).toBeTruthy();
+    expect(screen.getByText("a")).toBeTruthy();
+    expect(screen.getByText("b")).toBeTruthy();
+    expect(screen.getByText("Approval requested: delete file")).toBeTruthy();
+    expect(screen.getByText("Cancel")).toBeTruthy();
+    expect(screen.queryByText("Approve")).toBeNull();
+    expect(screen.queryByText("Deny")).toBeNull();
+    expect(screen.queryByText("Skip")).toBeNull();
+    expect(screen.queryByText("Respond")).toBeNull();
+    expect(screen.queryByText("Send")).toBeNull();
+    expect(screen.queryByRole("button", { name: /approve|deny|skip|respond|send/i })).toBeNull();
+
+    const relative = "src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx";
+    const sourcePath = existsSync(join(process.cwd(), relative))
+      ? join(process.cwd(), relative)
+      : join(process.cwd(), "apps/work", relative);
+    const source = readFileSync(sourcePath, "utf8");
+    expect(source).not.toContain("ClarifyCard");
+    expect(source).not.toContain("clarify-respond");
+    expect(source).not.toContain("respondClarify");
+  });
 });

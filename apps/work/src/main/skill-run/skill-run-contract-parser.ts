@@ -50,8 +50,51 @@ export interface NormalizedSkillToolDescriptor {
   inputSchema?: Record<string, unknown>;
 }
 
+const ACTIVITY_STRING_MAX = 512;
+const CLARIFY_OPTIONS_MAX = 8;
+
+type ParsedToolCallStatus = "started" | "completed" | "failed";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function clipDisplayString(
+  value: unknown,
+  max = ACTIVITY_STRING_MAX,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+function isToolCallStatus(value: unknown): value is ParsedToolCallStatus {
+  return (
+    value === "started" || value === "completed" || value === "failed"
+  );
+}
+
+function sanitizeClarifyOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const entry of value) {
+    if (out.length >= CLARIFY_OPTIONS_MAX) break;
+    const label = clipDisplayString(entry);
+    if (label) out.push(label);
+  }
+  return out;
+}
+
+function unknownEvent(
+  eventId: string | undefined,
+  eventSeq: number | undefined,
+): ParsedSkillRunEvent {
+  return {
+    eventId,
+    eventSeq,
+    rawUnknown: true,
+  };
 }
 
 function reasonToErrorCode(
@@ -343,6 +386,24 @@ export function mapPublicArtifactList(body: unknown): SkillRunArtifactDescriptor
   return out;
 }
 
+export type ParsedSkillRunActivityKind =
+  | "reasoning.summary"
+  | "tool.call"
+  | "clarify.requested"
+  | "approval.requested";
+
+/** Work-owned sanitized activity; not a Provider event clone. Extra keys including arguments are never copied. */
+export interface ParsedSkillRunActivity {
+  kind: ParsedSkillRunActivityKind;
+  summary?: string;
+  toolName?: string;
+  callId?: string;
+  status?: ParsedToolCallStatus;
+  question?: string;
+  options?: string[];
+  approvalId?: string;
+}
+
 export interface ParsedSkillRunEvent {
   eventId?: string;
   eventSeq?: number;
@@ -352,6 +413,7 @@ export interface ParsedSkillRunEvent {
   errorCode?: string;
   errorMessage?: string;
   artifacts?: SkillRunArtifactDescriptor[];
+  activity?: ParsedSkillRunActivity;
   rawUnknown?: boolean;
 }
 
@@ -555,11 +617,73 @@ export function parseSkillRunEvent(
         displayStage: "Skill execution failed",
       };
 
-    default:
+    case "reasoning.summary": {
+      const summary = clipDisplayString(inner.summary);
+      if (!summary) {
+        return unknownEvent(eventId, eventSeq);
+      }
       return {
         eventId,
         eventSeq,
-        rawUnknown: true,
+        activity: { kind: "reasoning.summary", summary },
       };
+    }
+
+    case "tool.call": {
+      const toolName = clipDisplayString(inner.tool_name);
+      const callId = clipDisplayString(inner.call_id);
+      if (!toolName || !callId || !isToolCallStatus(inner.status)) {
+        return unknownEvent(eventId, eventSeq);
+      }
+      return {
+        eventId,
+        eventSeq,
+        activity: {
+          kind: "tool.call",
+          toolName,
+          callId,
+          status: inner.status,
+        },
+      };
+    }
+
+    case "clarify.requested": {
+      const question = clipDisplayString(inner.question);
+      if (!question) {
+        return unknownEvent(eventId, eventSeq);
+      }
+      const options = sanitizeClarifyOptions(inner.options);
+      return {
+        eventId,
+        eventSeq,
+        activity: {
+          kind: "clarify.requested",
+          question,
+          ...(options.length > 0 ? { options } : {}),
+        },
+      };
+    }
+
+    case "approval.requested": {
+      const approvalId = clipDisplayString(inner.approval_id);
+      const summary = clipDisplayString(inner.summary);
+      if (!approvalId || !summary) {
+        return unknownEvent(eventId, eventSeq);
+      }
+      return {
+        eventId,
+        eventSeq,
+        phase: "waiting-approval",
+        displayStage: "Waiting for approval...",
+        activity: {
+          kind: "approval.requested",
+          approvalId,
+          summary,
+        },
+      };
+    }
+
+    default:
+      return unknownEvent(eventId, eventSeq);
   }
 }

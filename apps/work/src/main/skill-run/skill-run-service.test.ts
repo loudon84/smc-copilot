@@ -1,8 +1,14 @@
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSkillRunGatewayClient, SkillRunGatewayClient } from "./skill-run-gateway-client";
 import { bindPromptFirstTool } from "./skill-run-contract-parser";
 import { createSkillRunService, type SkillRunService } from "./skill-run-service";
-import type { SkillCatalogToolItem, SkillRunProjection } from "../../shared/skill-run";
+import {
+  SKILL_RUN_IPC_CHANNELS,
+  type SkillCatalogToolItem,
+  type SkillRunProjection,
+} from "../../shared/skill-run";
 
 const services: SkillRunService[] = [];
 
@@ -584,4 +590,388 @@ describe("skill-run-service", () => {
     expect(second.accepted).toBe(false);
     expect(events.some((event) => event.event === "duplicate-prevented")).toBe(true);
   });
+
+  it("projects sanitized activity from the four Bundle event types over SSE", async () => {
+    const fixtures = [
+      loadBundleFixture("run-event-reasoning-summary.json"),
+      loadBundleFixture("run-event-tool-call.json"),
+      loadBundleFixture("run-event-clarify-requested.json"),
+      loadBundleFixture("run-event-approval-requested.json"),
+    ];
+    const completed = {
+      event_id: "evt-done",
+      event_type: "run.completed",
+      event_seq: 99,
+      payload: { text: "done" },
+    };
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            ...fixtures.map((fixture) => ({
+              eventType: String(fixture.event_type),
+              id: String(fixture.event_id),
+              data: fixture,
+            })),
+            {
+              eventType: "run.completed",
+              id: "evt-done",
+              data: completed,
+            },
+          ]),
+        ]),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    const startRes = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-activity-1",
+      sessionId: "session-activity",
+      profileId: "default",
+    });
+    expect(startRes.accepted).toBe(true);
+
+    const terminal = await waitForProjection(
+      service,
+      "req-activity-1",
+      (p) => p.phase === "succeeded" && (p.activities?.length ?? 0) === 4,
+    );
+    expect(terminal?.phase).toBe("succeeded");
+    expect(terminal?.activities?.map((item) => item.kind)).toEqual([
+      "reasoning.summary",
+      "tool.call",
+      "clarify.requested",
+      "approval.requested",
+    ]);
+    expect(terminal?.activities?.[1]).toEqual({
+      eventId: "evt-2",
+      kind: "tool.call",
+      toolName: "search",
+      callId: "call-1",
+      status: "started",
+    });
+    expect(JSON.stringify(terminal?.activities)).not.toContain("arguments");
+    expect(Object.keys(SKILL_RUN_IPC_CHANNELS)).toEqual(
+      expect.arrayContaining([
+        "START",
+        "CANCEL",
+        "ON_PROJECTION_CHANGED",
+      ]),
+    );
+    expect(Object.values(SKILL_RUN_IPC_CHANNELS)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("activity")]),
+    );
+  });
+
+  it("sets waiting-approval from approval.requested and does not rewind a succeeded run", async () => {
+    const approval = loadBundleFixture("run-event-approval-requested.json");
+    let approvalReads = 0;
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => {
+              approvalReads += 1;
+              if (approvalReads === 1) {
+                return {
+                  done: false,
+                  value: encodeSseEvents([
+                    {
+                      eventType: "approval.requested",
+                      id: String(approval.event_id),
+                      data: approval,
+                    },
+                  ]),
+                };
+              }
+              return new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined);
+            },
+          }),
+        },
+      }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "approve",
+      clientRequestId: "req-approval-wait",
+      sessionId: "session-approval-wait",
+      profileId: "default",
+    });
+    const waiting = await waitForProjection(
+      service,
+      "req-approval-wait",
+      (p) => p.phase === "waiting-approval",
+    );
+    expect(waiting?.phase).toBe("waiting-approval");
+    expect(waiting?.activities?.[0]).toMatchObject({
+      kind: "approval.requested",
+      approvalId: "appr-1",
+      summary: "delete file",
+    });
+
+    let serviceRewind: SkillRunService | undefined;
+    let reads = 0;
+    const rewindGateway = createMockGateway({
+      callSkill: vi.fn().mockResolvedValue({ runId: "run-rewind", status: "starting" }),
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-rewind",
+        status: "succeeded",
+        resultText: "already done",
+        artifacts: [],
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => {
+              reads += 1;
+              if (reads === 1) {
+                const started = Date.now();
+                while (Date.now() - started < 2000) {
+                  const current = serviceRewind?.getProjection("req-rewind");
+                  if (current?.phase === "succeeded") break;
+                  await new Promise((r) => setTimeout(r, 10));
+                }
+                return {
+                  done: false,
+                  value: encodeSseEvents([
+                    {
+                      eventType: "approval.requested",
+                      id: "evt-late-approval",
+                      data: {
+                        ...approval,
+                        event_id: "evt-late-approval",
+                      },
+                    },
+                  ]),
+                };
+              }
+              return { done: true, value: undefined };
+            },
+          }),
+        },
+      }),
+    });
+    serviceRewind = trackService(
+      createSkillRunService({
+        gatewayClient: rewindGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await serviceRewind.start({
+      toolName: "calculator",
+      prompt: "rewind",
+      clientRequestId: "req-rewind",
+      sessionId: "session-rewind",
+      profileId: "default",
+    });
+    const succeeded = await waitForProjection(
+      serviceRewind,
+      "req-rewind",
+      (p) => p.phase === "succeeded",
+    );
+    expect(succeeded?.phase).toBe("succeeded");
+    await new Promise((r) => setTimeout(r, 80));
+    expect(serviceRewind.getProjection("req-rewind")?.phase).toBe("succeeded");
+    expect(serviceRewind.getProjection("req-rewind")?.displayStage).not.toBe(
+      "Waiting for approval...",
+    );
+  });
+
+  it("dedupes activity by event_id", async () => {
+    const fixture = loadBundleFixture("run-event-reasoning-summary.json");
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "reasoning.summary",
+              id: "sse-dup-a",
+              data: fixture,
+            },
+            {
+              eventType: "reasoning.summary",
+              id: "sse-dup-b",
+              data: fixture,
+            },
+            {
+              eventType: "run.completed",
+              id: "evt-dup-done",
+              data: {
+                event_id: "evt-dup-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "done" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "dedupe",
+      clientRequestId: "req-dedupe",
+      sessionId: "session-dedupe",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-dedupe",
+      (p) => p.phase === "succeeded" && (p.activities?.length ?? 0) > 0,
+    );
+    expect(terminal?.activities).toHaveLength(1);
+    expect(terminal?.activities?.[0]?.eventId).toBe("evt-4");
+  });
+
+  it("caps the activity list at 32", async () => {
+    const reasoningEvents = Array.from({ length: 33 }, (_, index) => {
+      const seq = index + 1;
+      return {
+        event_id: `evt-bound-${seq}`,
+        run_id: "run-1",
+        event_type: "reasoning.summary",
+        event_seq: seq,
+        timestamp: "2026-08-31T00:00:00Z",
+        payload: { summary: `step ${seq}` },
+      };
+    });
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            ...reasoningEvents.map((fixture) => ({
+              eventType: "reasoning.summary",
+              id: String(fixture.event_id),
+              data: fixture,
+            })),
+            {
+              eventType: "run.completed",
+              id: "evt-bound-done",
+              data: {
+                event_id: "evt-bound-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "done" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "bound",
+      clientRequestId: "req-bound",
+      sessionId: "session-bound",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-bound",
+      (p) => p.phase === "succeeded" && (p.activities?.length ?? 0) > 0,
+    );
+    expect(terminal?.activities).toHaveLength(32);
+    expect(terminal?.activities?.[0]?.eventId).toBe("evt-bound-2");
+    expect(terminal?.activities?.[31]?.eventId).toBe("evt-bound-33");
+    expect(
+      terminal?.activities?.some((item) => item.eventId === "evt-bound-1"),
+    ).toBe(false);
+  });
 });
+
+function loadBundleFixture(name: string): Record<string, unknown> {
+  const relative = join("contracts", "skill-run", "v1.2.1", "fixtures", name);
+  const fromCwd = join(process.cwd(), relative);
+  const fromWork = join(process.cwd(), "..", "..", relative);
+  const path = existsSync(fromCwd) ? fromCwd : fromWork;
+  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+}
+
+function encodeSseEvents(
+  events: Array<{
+    eventType: string;
+    id: string;
+    data: Record<string, unknown>;
+  }>,
+): Uint8Array {
+  const body = events
+    .map(
+      (event) =>
+        `event: ${event.eventType}\nid: ${event.id}\ndata: ${JSON.stringify(event.data)}\n\n`,
+    )
+    .join("");
+  return new TextEncoder().encode(body);
+}
+
+function sseBodyFromChunks(chunks: Uint8Array[]) {
+  let index = 0;
+  return {
+    ok: true,
+    body: {
+      getReader: () => ({
+        read: async () => {
+          if (index >= chunks.length) return { done: true, value: undefined };
+          return { done: false, value: chunks[index++] };
+        },
+      }),
+    },
+  };
+}
+
+async function waitForProjection(
+  service: SkillRunService,
+  clientRequestId: string,
+  predicate: (projection: SkillRunProjection) => boolean,
+  timeoutMs = 2000,
+): Promise<SkillRunProjection | null> {
+  const started = Date.now();
+  let current = service.getProjection(clientRequestId);
+  while (Date.now() - started < timeoutMs) {
+    if (current && predicate(current)) return current;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    current = service.getProjection(clientRequestId);
+  }
+  return current;
+}

@@ -24,6 +24,7 @@ import {
 import {
   isSkillRunTerminalPhase,
   type SkillCatalogResponse,
+  type SkillRunActivityItem,
   type SkillRunArtifactDescriptor,
   type SkillRunCancelInput,
   type SkillRunCancelResult,
@@ -34,6 +35,23 @@ import {
   type SkillRunStartInput,
   type SkillRunStartResult,
 } from "../../shared/skill-run";
+
+const ACTIVITY_LIST_CAP = 32;
+
+function appendSanitizedActivity(
+  existing: SkillRunActivityItem[] | undefined,
+  item: SkillRunActivityItem,
+): SkillRunActivityItem[] {
+  const current = existing ?? [];
+  if (current.some((entry) => entry.eventId === item.eventId)) {
+    return current;
+  }
+  const next = [...current, item];
+  if (next.length <= ACTIVITY_LIST_CAP) {
+    return next;
+  }
+  return next.slice(next.length - ACTIVITY_LIST_CAP);
+}
 
 export type SkillRunProjectionListener = (projection: SkillRunProjection) => void;
 
@@ -406,6 +424,10 @@ export function createSkillRunService(
             }
 
             const event = parseSkillRunEvent(parsed.eventType, payload);
+            const activityEventId =
+              typeof payload.event_id === "string" && payload.event_id.trim()
+                ? payload.event_id.trim()
+                : event.eventId;
             if (parsed.id) {
               event.eventId = parsed.id;
             }
@@ -421,6 +443,22 @@ export function createSkillRunService(
               if (event.errorCode) patch.errorCode = event.errorCode;
               if (event.errorMessage) patch.errorMessage = event.errorMessage;
               if (event.artifacts) patch.artifacts = event.artifacts;
+              if (event.activity && activityEventId && !run.terminalConfirmed) {
+                patch.activities = appendSanitizedActivity(
+                  run.projection.activities,
+                  {
+                    eventId: activityEventId,
+                    kind: event.activity.kind,
+                    summary: event.activity.summary,
+                    toolName: event.activity.toolName,
+                    callId: event.activity.callId,
+                    status: event.activity.status,
+                    question: event.activity.question,
+                    options: event.activity.options,
+                    approvalId: event.activity.approvalId,
+                  },
+                );
+              }
 
               updateProjection(run, patch);
 

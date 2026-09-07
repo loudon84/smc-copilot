@@ -1,11 +1,31 @@
 import React, { useTransition } from "react";
 import { Loader2, CheckCircle2, XCircle, StopCircle, RotateCcw } from "lucide-react";
-import type { SkillRunProjection } from "../../../../shared/skill-run";
+import type { SkillRunActivityItem, SkillRunProjection } from "../../../../shared/skill-run";
 import { useTranslation } from "react-i18next";
 
 interface SkillRunStatusBarProps {
   projection: SkillRunProjection;
   onCancel?: () => void;
+}
+
+function activityCopy(
+  item: SkillRunActivityItem,
+  t: (key: string, fallback: string) => string,
+): string {
+  switch (item.kind) {
+    case "reasoning.summary":
+      return `${t("skillRun.activityReasoning", "Reasoning")}: ${item.summary ?? ""}`;
+    case "tool.call":
+      return `${t("skillRun.activityTool", "Tool")} ${item.toolName ?? ""} (${item.status ?? ""})`;
+    case "clarify.requested":
+      return `${t("skillRun.activityClarify", "Clarification")}: ${item.question ?? ""}`;
+    case "approval.requested":
+      return `${t("skillRun.activityApproval", "Approval requested")}: ${item.summary ?? ""}`;
+    default: {
+      const exhaustive: never = item.kind;
+      return exhaustive;
+    }
+  }
 }
 
 export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
@@ -40,55 +60,79 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
     });
   };
 
+  const activities = projection.activities ?? [];
+
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex items-center justify-between gap-3 px-4 py-2 border rounded-lg bg-muted/40 text-sm my-2"
-    >
-      <div className="flex items-center gap-2 min-w-0">
-        {!isTerminal ? (
-          <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
-        ) : projection.phase === "succeeded" ? (
-          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-        ) : (
-          <XCircle className="w-4 h-4 text-destructive shrink-0" />
-        )}
-        <div className="flex flex-col min-w-0">
-          <span className="font-medium truncate">
-            {projection.toolName}: {projection.displayStage || projection.phase}
-          </span>
-          {projection.errorMessage && (
-            <span className="text-xs text-destructive truncate">
-              {projection.errorMessage}
-            </span>
+    <div className="my-2">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center justify-between gap-3 px-4 py-2 border rounded-lg bg-muted/40 text-sm"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {!isTerminal ? (
+            <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+          ) : projection.phase === "succeeded" ? (
+            <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+          ) : (
+            <XCircle className="w-4 h-4 text-destructive shrink-0" />
           )}
-          {projection.artifactDiscoveryMessage && (
-            <span className="text-xs text-destructive truncate">
-              {projection.artifactDiscoveryMessage}
+          <div className="flex flex-col min-w-0">
+            <span className="font-medium truncate">
+              {projection.toolName}: {projection.displayStage || projection.phase}
             </span>
-          )}
+            {projection.errorMessage && (
+              <span className="text-xs text-destructive truncate">
+                {projection.errorMessage}
+              </span>
+            )}
+            {projection.artifactDiscoveryMessage && (
+              <span className="text-xs text-destructive truncate">
+                {projection.artifactDiscoveryMessage}
+              </span>
+            )}
+          </div>
         </div>
+
+        {showArtifactRetry ? (
+          <button
+            type="button"
+            onClick={handleRetryDiscovery}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>{t("skillRun.artifactRetry", "Retry artifact discovery")}</span>
+          </button>
+        ) : !isTerminal && onCancel ? (
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+          >
+            <StopCircle className="w-3.5 h-3.5" />
+            <span>{t("skillRun.cancelSkillRun", "Cancel")}</span>
+          </button>
+        ) : null}
       </div>
 
-      {showArtifactRetry ? (
-        <button
-          type="button"
-          onClick={handleRetryDiscovery}
-          className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+      {activities.length > 0 ? (
+        <ul
+          aria-label={t("skillRun.activityList", "Skill run activity")}
+          className="mt-1 space-y-1 px-4 py-2 border rounded-lg bg-muted/20 text-xs text-muted-foreground"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>{t("skillRun.artifactRetry", "Retry artifact discovery")}</span>
-        </button>
-      ) : !isTerminal && onCancel ? (
-        <button
-          type="button"
-          onClick={handleCancel}
-          className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
-        >
-          <StopCircle className="w-3.5 h-3.5" />
-          <span>{t("skillRun.cancelSkillRun", "Cancel")}</span>
-        </button>
+          {activities.map((item) => (
+            <li key={item.eventId} className="min-w-0">
+              <span className="block truncate">{activityCopy(item, t)}</span>
+              {item.kind === "clarify.requested" && item.options && item.options.length > 0 ? (
+                <ul className="mt-1 ml-3 list-disc">
+                  {item.options.map((option, index) => (
+                    <li key={`${item.eventId}-opt-${index}`}>{option}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );

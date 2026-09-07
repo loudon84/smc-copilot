@@ -72,6 +72,14 @@ Discovery failure keeps Run phase `succeeded` and records a sanitized retryable 
 
 Live Checkpoint B (Catalog → Submit → Run → Result → Artifact Preview/Save As → Restart, plus the fixture negatives) remains the Roadmap `DONE` bar for RM-05. Fixture and focused tests prove implementation; env-gated live stay skipped unless `SMC_SKILL_RUN_E2E=1`. RM-01 live same-key replay (AC-03) and Catalog→rehydrate (AC-04) are env-gated in the same suite.
 
+## M6b Skill Run activity mapping
+
+Work maps v1.2.1 enumerated `reasoning.summary`, `tool.call`, `clarify.requested`, and `approval.requested` events into sanitized Skill Run activity.
+
+[[src/main/skill-run/skill-run-contract-parser.ts#parseSkillRunEvent]] produces Work-owned [[src/shared/skill-run.ts#SkillRunActivityItem]] items on [[src/shared/skill-run.ts#SkillRunProjection]]. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] appends a bounded list (cap 32, deduped by contract `event_id`) over the existing projection subscribe path. [[src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx#SkillRunStatusBar]] renders those items as read-only text under the compact phase row.
+
+`tool.call` copies only `tool_name` / `call_id` / `status`. `clarify.requested` shows the question and string options only; Skill Run does not call Hermes `clarify-respond` or reuse Local Chat `ClarifyCard`. `approval.requested` may set phase `waiting-approval` and shows the summary without allow/deny controls. Unknown and unmapped control events stay `rawUnknown` and are not textified into transcript or activity.
+
 ## M5 production default and telemetry
 
 Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run or Expert readers.
@@ -83,7 +91,9 @@ Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
 - Hosted telemetry dashboard / metrics UI
-- M6 P1: Approval decisions, rich events, JSON Schema forms, attachment upload
+- Approval decision IPC / allow-deny cards
+- JSON Schema forms
+- Attachment upload
 
 ## Cross References
 

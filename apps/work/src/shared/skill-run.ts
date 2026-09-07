@@ -91,6 +91,27 @@ export interface SkillRunArtifactDescriptor {
   preview_supported?: boolean;
 }
 
+export type SkillRunActivityKind =
+  | "reasoning.summary"
+  | "tool.call"
+  | "clarify.requested"
+  | "approval.requested";
+
+export type SkillRunToolCallStatus = "started" | "completed" | "failed";
+
+/** Work-owned sanitized activity item. Not a Provider event object. */
+export interface SkillRunActivityItem {
+  eventId: string;
+  kind: SkillRunActivityKind;
+  summary?: string;
+  toolName?: string;
+  callId?: string;
+  status?: SkillRunToolCallStatus;
+  question?: string;
+  options?: string[];
+  approvalId?: string;
+}
+
 export interface SkillRunProjection {
   clientRequestId: string;
   providerRunId: string | null;
@@ -107,6 +128,8 @@ export interface SkillRunProjection {
   errorCode?: string;
   errorMessage?: string;
   artifacts?: SkillRunArtifactDescriptor[];
+  /** Bounded sanitized activity; omitted when empty. Not persisted on continuation. */
+  activities?: SkillRunActivityItem[];
   /** True when artifact list failed after a succeeded run; retryable via existing IPC. */
   artifactDiscoveryError?: boolean;
   /** Renderer-safe discovery error text; never URLs, paths, or bytes. */
