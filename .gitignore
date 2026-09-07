@@ -53,5 +53,6 @@ Thumbs.db
 .smc/reviews/
 .smc/runs/
 .smc/skill-upgrade-backups/
+.smc/
 __pycache__/
 *.py[cod]
