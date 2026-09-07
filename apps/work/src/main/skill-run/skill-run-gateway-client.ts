@@ -61,6 +61,7 @@ export interface SkillRunGatewayClient {
     options?: { lastEventId?: string; signal?: AbortSignal },
   ): Promise<Response>;
   hasConsumerLock(): boolean;
+  getAuthScopeKey?(): string;
   clearCache(): void;
   dispose(): void;
 }
@@ -462,6 +463,10 @@ export function createSkillRunGatewayClient(
 
     hasConsumerLock(): boolean {
       return lockGate;
+    },
+
+    getAuthScopeKey(): string {
+      return resolveAuthScopeKey();
     },
 
     clearCache(): void {

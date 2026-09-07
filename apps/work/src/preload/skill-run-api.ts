@@ -14,6 +14,7 @@ import {
   type SkillRunProjection,
   type SkillRunRetryArtifactDiscoveryInput,
   type SkillRunSessionModeSnapshot,
+  type SkillRunSetCatalogFavoriteInput,
   type SkillRunStartInput,
   type SkillRunStartResult,
 } from "../shared/skill-run";
@@ -24,6 +25,10 @@ export function createSkillRunApi(): SkillRunApi {
       ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG),
     refreshCatalog: (): Promise<SkillCatalogResponse> =>
       ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.REFRESH_CATALOG),
+    setCatalogFavorite: (
+      input: SkillRunSetCatalogFavoriteInput,
+    ): Promise<SkillCatalogResponse> =>
+      ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.SET_CATALOG_FAVORITE, input),
     start: (input: SkillRunStartInput): Promise<SkillRunStartResult> =>
       ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.START, input),
     cancel: (input: SkillRunCancelInput): Promise<SkillRunCancelResult> =>

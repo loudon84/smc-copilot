@@ -73,6 +73,10 @@ export interface SkillCatalogToolItem {
   reasonCode?: SkillInvocationReasonCode;
   /** Main-projected extra required string fields. Renderer must not invent keys from inputSchema. */
   extraStringFields?: SkillRunExtraStringField[];
+  /** True when the current auth-scope favorite set contains this Catalog toolName. */
+  favorited?: boolean;
+  /** 1-based rank in the current auth-scope recent list; omitted when not recent. */
+  recentRank?: number;
   /** Read-only projection for display/debug; Renderer must not build Provider arguments from it. */
   inputSchema?: Record<string, unknown>;
 }
@@ -220,12 +224,19 @@ export const SKILL_RUN_IPC_CHANNELS = {
   RETRY_ARTIFACT_DISCOVERY: "skill-run:retry-artifact-discovery",
   GET_SESSION_MODE: "skill-run:get-session-mode",
   SET_SESSION_MODE: "skill-run:set-session-mode",
+  SET_CATALOG_FAVORITE: "skill-run:set-catalog-favorite",
   ON_PROJECTION_CHANGED: "skill-run:on-projection-changed",
 } as const;
+
+export interface SkillRunSetCatalogFavoriteInput {
+  toolName: string;
+  favorited: boolean;
+}
 
 export interface SkillRunApi {
   listCatalog(): Promise<SkillCatalogResponse>;
   refreshCatalog(): Promise<SkillCatalogResponse>;
+  setCatalogFavorite(input: SkillRunSetCatalogFavoriteInput): Promise<SkillCatalogResponse>;
   start(input: SkillRunStartInput): Promise<SkillRunStartResult>;
   cancel(input: SkillRunCancelInput): Promise<SkillRunCancelResult>;
   getFeatureMode(): Promise<{ mode: SkillRunFeatureMode }>;

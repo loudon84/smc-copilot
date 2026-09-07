@@ -12,6 +12,7 @@ const {
   startMock,
   listCatalogMock,
   clearCacheMock,
+  setFavoriteMock,
 } = vi.hoisted(() => ({
   ensureFreshAccessToken: vi.fn(async () => "token"),
   readStoredSessionSync: vi.fn(() => ({
@@ -22,6 +23,7 @@ const {
   startMock: vi.fn(),
   listCatalogMock: vi.fn(),
   clearCacheMock: vi.fn(),
+  setFavoriteMock: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
@@ -74,6 +76,7 @@ vi.mock("./skill-run-service", () => ({
       clearCacheMock();
       return listCatalogMock();
     },
+    setCatalogFavorite: setFavoriteMock,
     start: startMock,
     cancel: vi.fn(),
     getFeatureMode: () => "expert-compat",
@@ -201,5 +204,49 @@ describe("registerSkillRunIpc", () => {
     });
     expect(clearCacheMock).toHaveBeenCalledTimes(1);
     expect(listCatalogMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("set-catalog-favorite validates input and does not refresh for unknown names", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.SET_CATALOG_FAVORITE)!;
+    await expect(handler(validEvent(), {})).rejects.toThrow(
+      /Invalid SkillRunSetCatalogFavoriteInput/,
+    );
+    await expect(
+      handler(validEvent(), { toolName: "ghost", favorited: "yes" }),
+    ).rejects.toThrow(/Invalid SkillRunSetCatalogFavoriteInput\.favorited/);
+    await expect(
+      handler(validEvent(), { toolName: "a".repeat(257), favorited: true }),
+    ).rejects.toThrow(/Invalid SkillRunSetCatalogFavoriteInput\.toolName/);
+
+    setFavoriteMock.mockRejectedValueOnce(new Error("FAVORITE_UNKNOWN_TOOL"));
+    await expect(
+      handler(validEvent(), { toolName: "ghost", favorited: true }),
+    ).rejects.toThrow(/FAVORITE_UNKNOWN_TOOL/);
+    expect(setFavoriteMock).toHaveBeenCalledWith({
+      toolName: "ghost",
+      favorited: true,
+    });
+    expect(clearCacheMock).not.toHaveBeenCalled();
+
+    setFavoriteMock.mockResolvedValueOnce({
+      status: "ready",
+      tools: [{ toolName: "calculator", favorited: true }],
+    });
+    await expect(
+      handler(validEvent(), { toolName: "calculator", favorited: true }),
+    ).resolves.toMatchObject({ status: "ready" });
+
+    expect(Object.keys(SKILL_RUN_IPC_CHANNELS)).toEqual(
+      expect.arrayContaining(["SET_CATALOG_FAVORITE"]),
+    );
+    expect(SKILL_RUN_IPC_CHANNELS.SET_CATALOG_FAVORITE).toBe(
+      "skill-run:set-catalog-favorite",
+    );
+    expect(Object.keys(SKILL_RUN_IPC_CHANNELS)).not.toEqual(
+      expect.arrayContaining(["LIST_RECOMMENDED"]),
+    );
+    expect(Object.values(SKILL_RUN_IPC_CHANNELS)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("recommend")]),
+    );
   });
 });

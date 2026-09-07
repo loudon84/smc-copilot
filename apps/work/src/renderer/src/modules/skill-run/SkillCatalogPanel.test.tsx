@@ -233,4 +233,60 @@ describe("SkillCatalogPanel", () => {
       }),
     );
   });
+
+  it("groups overlayed favorites and recents without inventing cards or a Recommended heading", () => {
+    setSkillRunCatalogState({
+      status: "ready",
+      tools: [
+        {
+          toolName: "alpha",
+          title: "Alpha Skill",
+          interactionMode: "chat",
+          promptField: "prompt",
+          supportsAttachments: false,
+          callability: "callable",
+          invocationMode: "prompt-first",
+          favorited: true,
+          recentRank: 2,
+        },
+        {
+          toolName: "gamma",
+          title: "Gamma Skill",
+          interactionMode: "chat",
+          promptField: "prompt",
+          supportsAttachments: false,
+          callability: "callable",
+          invocationMode: "prompt-first",
+          recentRank: 1,
+        },
+      ],
+    });
+    const onSelectSkill = renderPanel();
+    expect(screen.getByText("skillRun.favoritesGroup")).toBeTruthy();
+    expect(screen.getByText("skillRun.recentGroup")).toBeTruthy();
+    expect(screen.queryByText(/Recommend/i)).toBeNull();
+    expect(screen.queryByText("ghost")).toBeNull();
+    fireEvent.click(screen.getByText("Alpha Skill"));
+    expect(onSelectSkill).toHaveBeenCalledWith(
+      expect.objectContaining({ toolName: "alpha" }),
+    );
+
+    const search = screen.getByRole("combobox");
+    fireEvent.change(search, { target: { value: "gamma" } });
+    expect(screen.getByText("Gamma Skill")).toBeTruthy();
+    expect(screen.queryByText("Alpha Skill")).toBeNull();
+    expect(screen.queryByText("skillRun.favoritesGroup")).toBeNull();
+  });
+
+  it("does not show ghost favorite cards when the catalog is not ready", () => {
+    setSkillRunCatalogState({
+      status: "contract-unsupported",
+      tools: [],
+      reason: "lock missing",
+    });
+    renderPanel();
+    expect(screen.queryByText("skillRun.favoritesGroup")).toBeNull();
+    expect(screen.queryByText("skillRun.recentGroup")).toBeNull();
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
 });

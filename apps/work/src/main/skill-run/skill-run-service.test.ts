@@ -1,7 +1,12 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSkillRunGatewayClient, SkillRunGatewayClient } from "./skill-run-gateway-client";
+import {
+  FAVORITE_UNKNOWN_TOOL,
+  createSkillRunCatalogPreferenceStore,
+} from "./skill-run-catalog-preference-store";
 import { bindPromptFirstTool } from "./skill-run-contract-parser";
 import { createSkillRunService, type SkillRunService } from "./skill-run-service";
 import {
@@ -75,6 +80,7 @@ function createMockGateway(
       },
     }),
     hasConsumerLock: () => true,
+    getAuthScopeKey: vi.fn(() => "test-scope"),
     clearCache: vi.fn(),
     dispose: vi.fn(),
     ...overrides,
@@ -985,6 +991,97 @@ describe("skill-run-service", () => {
     expect(
       terminal?.activities?.some((item) => item.eventId === "evt-bound-1"),
     ).toBe(false);
+  });
+
+  it("overlays favorite flags from the preference store without clearing the Gateway cache", async () => {
+    const file = join(tmpdir(), `skill-run-pref-overlay-${Date.now()}.json`);
+    const store = createSkillRunCatalogPreferenceStore({ getPath: () => file });
+    const mockGateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        catalogPreferenceStore: store,
+        ...skillFirstOptions,
+      }),
+    );
+    const before = await service.listCatalog();
+    expect(before.tools[0]?.favorited).toBe(false);
+    const updated = await service.setCatalogFavorite({
+      toolName: "calculator",
+      favorited: true,
+    });
+    expect(updated.tools[0]?.favorited).toBe(true);
+    expect(mockGateway.clearCache).not.toHaveBeenCalled();
+    expect(mockGateway.listCatalog).toHaveBeenCalledTimes(2);
+
+    await expect(
+      service.setCatalogFavorite({ toolName: "ghost", favorited: true }),
+    ).rejects.toMatchObject({ errorCode: FAVORITE_UNKNOWN_TOOL });
+    expect(mockGateway.clearCache).not.toHaveBeenCalled();
+    if (existsSync(file)) rmSync(file);
+  });
+
+  it("records recent only on accepted start and keeps non-ready catalogs empty", async () => {
+    const file = join(tmpdir(), `skill-run-pref-recent-${Date.now()}.json`);
+    const store = createSkillRunCatalogPreferenceStore({ getPath: () => file });
+    const mockGateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        catalogPreferenceStore: store,
+        ...skillFirstOptions,
+      }),
+    );
+    const rejected = await service.start({
+      toolName: "not.published",
+      prompt: "hello",
+      clientRequestId: "req-recent-reject",
+      sessionId: "session-recent-reject",
+      profileId: "default",
+    });
+    expect(rejected.accepted).toBe(false);
+    const afterReject = await service.listCatalog();
+    expect(afterReject.tools[0]?.recentRank).toBeUndefined();
+
+    const accepted = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-recent-ok",
+      sessionId: "session-recent-ok",
+      profileId: "default",
+    });
+    expect(accepted.accepted).toBe(true);
+    const afterAccept = await service.listCatalog();
+    expect(afterAccept.tools[0]?.recentRank).toBe(1);
+
+    const replay = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-recent-ok",
+      sessionId: "session-recent-ok",
+      profileId: "default",
+    });
+    expect(replay.accepted).toBe(true);
+    const afterReplay = await service.listCatalog();
+    expect(afterReplay.tools[0]?.recentRank).toBe(1);
+
+    const unsupportedGateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({
+        status: "contract-unsupported",
+        tools: [],
+      }),
+    });
+    const unsupported = trackService(
+      createSkillRunService({
+        gatewayClient: unsupportedGateway,
+        catalogPreferenceStore: store,
+        ...skillFirstOptions,
+      }),
+    );
+    const catalog = await unsupported.listCatalog();
+    expect(catalog.status).toBe("contract-unsupported");
+    expect(catalog.tools).toEqual([]);
+    if (existsSync(file)) rmSync(file);
   });
 });
 

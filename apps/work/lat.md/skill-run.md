@@ -88,6 +88,12 @@ Work lifts a fail-closed subset of extra required string fields into callable `l
 
 [[src/renderer/src/modules/skill-run/SkillCatalogPanel.tsx#SkillCatalogPanel]] selects `callability === "callable"`. [[src/renderer/src/modules/skill-run/SkillSelectionBar.tsx#SkillSelectionBar]] collects the projected extra strings. Chat queues an immutable extra-parameter snapshot.
 
+## M6f Catalog favorites and recent use
+
+Work overlays local **Favorites** and **Recent** on the existing Main Catalog. Identity is Skill Run `toolName`. Display members are preference names intersected with current Catalog `tools`.
+
+Main persists names in `userData/skill-run-catalog-preferences.json`, partitioned with the Gateway Catalog cache key. Favorites cap at 50 and reject new names. Recent cap at 20 and records only Work `skillRun.start` `{ accepted: true }`. Renderer `modules/skill-run` groups those flags on [[src/renderer/src/modules/skill-run/SkillCatalogPanel.tsx#SkillCatalogPanel]]; Chat remains the selection owner. There is no second `tools/list`, no org-recommendation HTTP, and no telemetry JSONL replay.
+
 ## M5 production default and telemetry
 
 Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run or Expert readers.
@@ -102,6 +108,7 @@ The following capabilities remain intentionally outside the current Work slice a
 - Approval decision IPC / allow-deny cards
 - Unrestricted JSON Schema / `$ref` / non-string parameter widgets
 - Attachment upload
+- Org recommendation / curated catalog API
 
 ## Cross References
 

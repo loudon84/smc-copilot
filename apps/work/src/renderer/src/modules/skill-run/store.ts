@@ -85,6 +85,28 @@ export async function fetchSkillRunCatalog(
   }
 }
 
+export async function setSkillRunCatalogFavorite(
+  toolName: string,
+  favorited: boolean,
+): Promise<SkillCatalogResponse> {
+  if (
+    typeof window === "undefined" ||
+    !window.hermesAPI?.skillRun?.setCatalogFavorite
+  ) {
+    return catalogState;
+  }
+  try {
+    const res = await window.hermesAPI.skillRun.setCatalogFavorite({
+      toolName,
+      favorited,
+    });
+    setSkillRunCatalogState(res);
+    return res;
+  } catch {
+    return catalogState;
+  }
+}
+
 export function subscribeSkillRunCatalog(listener: Listener): () => void {
   listeners.add(listener);
   return () => {

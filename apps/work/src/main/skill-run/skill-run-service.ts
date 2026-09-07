@@ -17,6 +17,10 @@ import {
 } from "./skill-run-contract-parser";
 import { getSkillRunFeatureMode } from "./feature-mode-store";
 import {
+  createSkillRunCatalogPreferenceStore,
+  type SkillRunCatalogPreferenceStore,
+} from "./skill-run-catalog-preference-store";
+import {
   fingerprintRequestId,
   recordSkillRunTelemetry,
   type SkillRunTelemetryEvent,
@@ -32,6 +36,7 @@ import {
   type SkillRunLocalPhase,
   type SkillRunProjection,
   type SkillRunRetryArtifactDiscoveryInput,
+  type SkillRunSetCatalogFavoriteInput,
   type SkillRunStartInput,
   type SkillRunStartResult,
 } from "../../shared/skill-run";
@@ -58,6 +63,7 @@ export type SkillRunProjectionListener = (projection: SkillRunProjection) => voi
 export interface SkillRunService {
   listCatalog(): Promise<SkillCatalogResponse>;
   refreshCatalog(): Promise<SkillCatalogResponse>;
+  setCatalogFavorite(input: SkillRunSetCatalogFavoriteInput): Promise<SkillCatalogResponse>;
   start(input: SkillRunStartInput): Promise<SkillRunStartResult>;
   cancel(input: SkillRunCancelInput): Promise<SkillRunCancelResult>;
   getProjection(clientRequestId: string): SkillRunProjection | null;
@@ -127,6 +133,7 @@ function defaultDisplayStage(phase: SkillRunLocalPhase): string {
 
 export interface CreateSkillRunServiceOptions {
   gatewayClient?: SkillRunGatewayClient;
+  catalogPreferenceStore?: SkillRunCatalogPreferenceStore;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   getFeatureMode?: () => SkillRunFeatureMode;
   onPersistContinuation?: (projection: SkillRunProjection) => void;
@@ -144,6 +151,8 @@ export function createSkillRunService(
   options: CreateSkillRunServiceOptions = {},
 ): SkillRunService {
   const gateway = options.gatewayClient ?? createSkillRunGatewayClient();
+  const preferences =
+    options.catalogPreferenceStore ?? createSkillRunCatalogPreferenceStore();
   const getMode = options.getFeatureMode ?? getSkillRunFeatureMode;
   const persistContinuation = options.onPersistContinuation;
   const recordTelemetry = options.recordTelemetry ?? recordSkillRunTelemetry;
@@ -503,6 +512,18 @@ export function createSkillRunService(
     }
   }
 
+  function currentScopeKey(): string {
+    return gateway.getAuthScopeKey?.() ?? "unknown|user:anonymous";
+  }
+
+  function overlayedCatalog(catalog: SkillCatalogResponse): SkillCatalogResponse {
+    return preferences.overlayCatalog(currentScopeKey(), catalog);
+  }
+
+  function recordAcceptedRecent(toolName: string): void {
+    preferences.recordRecent(currentScopeKey(), toolName);
+  }
+
   return {
     async listCatalog(): Promise<SkillCatalogResponse> {
       const catalog = await gateway.listCatalog();
@@ -511,7 +532,7 @@ export function createSkillRunService(
         outcome: catalog.status === "ready" ? "ok" : "error",
         errorCode: catalog.status === "ready" ? undefined : catalog.status,
       });
-      return catalog;
+      return overlayedCatalog(catalog);
     },
 
     async refreshCatalog(): Promise<SkillCatalogResponse> {
@@ -522,7 +543,28 @@ export function createSkillRunService(
         outcome: catalog.status === "ready" ? "ok" : "error",
         errorCode: catalog.status === "ready" ? undefined : catalog.status,
       });
-      return catalog;
+      return overlayedCatalog(catalog);
+    },
+
+    async setCatalogFavorite(
+      input: SkillRunSetCatalogFavoriteInput,
+    ): Promise<SkillCatalogResponse> {
+      const catalog = await gateway.listCatalog();
+      emitTelemetry({
+        event: "catalog",
+        outcome: catalog.status === "ready" ? "ok" : "error",
+        errorCode: catalog.status === "ready" ? undefined : catalog.status,
+      });
+      const names = new Set(
+        catalog.status === "ready" ? catalog.tools.map((tool) => tool.toolName) : [],
+      );
+      preferences.setFavorite(
+        currentScopeKey(),
+        input.toolName,
+        input.favorited,
+        names,
+      );
+      return overlayedCatalog(catalog);
     },
 
     async start(input: SkillRunStartInput): Promise<SkillRunStartResult> {
@@ -566,6 +608,7 @@ export function createSkillRunService(
           outcome: "ok",
           requestFingerprint: fingerprintRequestId(input.clientRequestId),
         });
+        recordAcceptedRecent(existing.projection.toolName);
         return {
           accepted: true,
           projection: existing.projection,
@@ -689,6 +732,7 @@ export function createSkillRunService(
         }
       })();
 
+      recordAcceptedRecent(validatedToolName);
       return {
         accepted: true,
         projection: initialProjection,

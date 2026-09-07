@@ -13,6 +13,7 @@ import {
   type SkillRunProjection,
   type SkillRunRetryArtifactDiscoveryInput,
   type SkillRunSessionModeSnapshot,
+  type SkillRunSetCatalogFavoriteInput,
   type SkillRunStartInput,
   type SkillRunStartResult,
 } from "../../shared/skill-run";
@@ -138,6 +139,21 @@ function validateStartInput(value: unknown): SkillRunStartInput {
   };
 }
 
+function validateSetCatalogFavoriteInput(value: unknown): SkillRunSetCatalogFavoriteInput {
+  if (!isRecord(value)) throw new Error("Invalid SkillRunSetCatalogFavoriteInput");
+  if (typeof value.toolName !== "string" || !String(value.toolName).trim()) {
+    throw new Error("Invalid SkillRunSetCatalogFavoriteInput.toolName");
+  }
+  const toolName = String(value.toolName).trim();
+  if (toolName.length > MAX_TOOL_NAME_LENGTH) {
+    throw new Error("Invalid SkillRunSetCatalogFavoriteInput.toolName");
+  }
+  if (typeof value.favorited !== "boolean") {
+    throw new Error("Invalid SkillRunSetCatalogFavoriteInput.favorited");
+  }
+  return { toolName, favorited: value.favorited };
+}
+
 function broadcastProjection(projection: SkillRunProjection): void {
   upsertSkillRunContinuationProjection(projection);
   materializeSkillRunSessionTranscript(projection);
@@ -201,6 +217,17 @@ export function registerSkillRunIpc(): () => void {
     await requireAuthSession();
     const service = getSkillRunService();
     return service.refreshCatalog();
+  };
+
+  const setCatalogFavoriteHandler = async (
+    event: IpcMainInvokeEvent,
+    input: unknown,
+  ): Promise<SkillCatalogResponse> => {
+    assertSender(event);
+    await requireAuthSession();
+    const sanitized = validateSetCatalogFavoriteInput(input);
+    const service = getSkillRunService();
+    return service.setCatalogFavorite(sanitized);
   };
 
   const startHandler = async (
@@ -329,6 +356,7 @@ export function registerSkillRunIpc(): () => void {
 
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG, listHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.REFRESH_CATALOG, refreshHandler);
+  ipcMain.handle(SKILL_RUN_IPC_CHANNELS.SET_CATALOG_FAVORITE, setCatalogFavoriteHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.START, startHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.CANCEL, cancelHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.GET_FEATURE_MODE, getFeatureModeHandler);
@@ -342,6 +370,7 @@ export function registerSkillRunIpc(): () => void {
   return () => {
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.REFRESH_CATALOG);
+    ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.SET_CATALOG_FAVORITE);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.START);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.CANCEL);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.GET_FEATURE_MODE);

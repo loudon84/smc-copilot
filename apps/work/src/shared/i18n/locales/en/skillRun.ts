@@ -16,6 +16,11 @@ export default {
   selectSkillBeforeSending: "Select a skill before sending.",
   attachmentsDisabled: "Attachments are disabled in Skill mode.",
   refresh: "Refresh",
+  favoritesGroup: "Favorites",
+  recentGroup: "Recent",
+  favoriteAdd: "Add to favorites",
+  favoriteRemove: "Remove from favorites",
+  favoriteLimitReached: "Favorite limit reached",
 
   // Run lifecycle and status bar keys
   runPending: "Submitting skill request...",
