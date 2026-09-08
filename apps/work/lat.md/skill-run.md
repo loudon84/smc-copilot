@@ -44,13 +44,19 @@ Work has imported the complete immutable `SKILL-RUN-CONTRACT` v1.2.1 Bundle and 
 
 Work consumes only `contracts/skill-run/<version>/` Bundle contents: its consumer lock, manifest, checksums, schemas, endpoint matrix, idempotency/SSE semantics, and redacted fixtures. `contracts/skill-run/v1.2.1/consumer-lock.json` pins tag target `10d38f2c97739c4a55df893d1dc954fc8896f1a7`; the Provider-owned files remain covered solely by its LF `SHA256SUMS`.
 
-`hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require a Work lock, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. The legacy v1.0.0 identity-only material remains a fail-closed regression case, while checksum-valid v1.2.1 or v1.3.0 returns true. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`. Production default feature mode is `skill-first`; `SMC_WORK_SKILL_RUN_MODE` or `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run readers.
+`hasSkillRunConsumerLock()` / `isCompleteSkillRunBundleDir()` require a Work lock, LF `SHA256SUMS` with matching digests for every listed file, `manifest.json`, and the P0 schema/matrix/fixture paths. The legacy v1.0.0 identity-only material remains a fail-closed regression case, while checksum-valid v1.2.1, v1.3.0, or v1.4.0 returns true. Gateway Catalog/start uses Bundle-defined JSON-RPC and `X-Idempotency-Key`. Production default feature mode is `skill-first`; `SMC_WORK_SKILL_RUN_MODE` or `userData/skill-run-feature-mode.json` can roll new submits back to `expert-compat` or `local-only` without stopping existing Skill Run readers.
 
 ## M0 v1.3.0 Approval decision bundle
 
 Work has also imported immutable `SKILL-RUN-CONTRACT` v1.3.0. Tag `skill-run-contract-v1.3.0` pins `26e1cb5aa2aebbb4bdc1a8e1c65617aaa6b6c948`.
 
 `contracts/skill-run/v1.3.0/consumer-lock.json` records that pin. Provider files stay under LF `SHA256SUMS`. Manifest sets `approval` / `approvalDecision` to `supported` and keeps `attachments` / `approvalExpiry` `unsupported`. Canonical decision path is `POST /api/v1/runs/{run_id}/approvals/{approval_id}/decision` with `X-Idempotency-Key`. Deny terminal follows the Bundle (`COMPLETED` on Hermes REAL_PROCESS live, `FAILED` on local no-binding); Work must not rewrite deny as `CANCELLED`. This import does not implement RM-09 IPC/UI and does not enable Attachment upload.
+
+## M0 v1.4.0 Attachment bundle
+
+Work has also imported immutable `SKILL-RUN-CONTRACT` v1.4.0. Tag `skill-run-contract-v1.4.0` pins `5d0e538fa68655f0084850d5378398f622ed90ba`.
+
+`contracts/skill-run/v1.4.0/consumer-lock.json` records that pin. Provider files stay under LF `SHA256SUMS`. Manifest sets `attachments` to `supported` and keeps `approvalExpiry` `unsupported`. Public upload is `POST /api/v1/attachments` (multipart). Binding is `params.client_context.attachment_refs` only. Accepted `structuredContent` may echo opaque `attachment_refs`. P0 `REQUIRED_BUNDLE_PATHS` stays unchanged so v1.2.1 can still open Catalog/start. This import does not implement RM-11 upload IPC/UI, does not call upload HTTP, and does not add a second File Platform owner.
 
 ## Checkpoint B Live / Fixture E2E
 

@@ -28,6 +28,7 @@ function contractsSkillRunDir(version: string): string {
 const IDENTITY_LOCK_DIR = contractsSkillRunDir("v1.0.0");
 const COMPLETE_LOCK_DIR = contractsSkillRunDir("v1.2.1");
 const COMPLETE_LOCK_DIR_V130 = contractsSkillRunDir("v1.3.0");
+const COMPLETE_LOCK_DIR_V140 = contractsSkillRunDir("v1.4.0");
 const EXPERT_LOCK = (() => {
   const fromWork = join(
     process.cwd(),
@@ -213,6 +214,53 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(hasSkillRunApprovalDecisionBundle()).toBe(true);
   });
 
+  it("opens the gate for the checksum-valid v1.4.0 Provider Bundle", () => {
+    const lock = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR_V140, "consumer-lock.json"), "utf8"),
+    ) as {
+      contractName: string;
+      contractVersion: string;
+      tagName: string;
+      tagTargetCommit: string;
+      providerSha256sumsPath: string;
+      sha256sumsPath: string;
+    };
+    const sumsBytes = readFileSync(join(COMPLETE_LOCK_DIR_V140, "SHA256SUMS"));
+    const sums = sumsBytes.toString("utf8");
+    const manifest = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR_V140, "manifest.json"), "utf8"),
+    ) as {
+      capabilities?: Record<string, unknown>;
+    };
+    const unsupported = JSON.parse(
+      readFileSync(
+        join(COMPLETE_LOCK_DIR_V140, "capabilities/unsupported.schema.json"),
+        "utf8",
+      ),
+    ) as { properties?: Record<string, unknown> };
+
+    expect(lock.contractName).toBe("SKILL-RUN-CONTRACT");
+    expect(lock.contractVersion).toBe("1.4.0");
+    expect(lock.tagName).toBe("skill-run-contract-v1.4.0");
+    expect(lock.tagTargetCommit).toBe(
+      "5d0e538fa68655f0084850d5378398f622ed90ba",
+    );
+    expect(lock.providerSha256sumsPath).toBe(
+      "nodeskclaw-backend/contracts/skill-run/v1.4.0/SHA256SUMS",
+    );
+    expect(lock.sha256sumsPath).toBe("SHA256SUMS");
+    expect(sumsBytes.includes(0x0d)).toBe(false);
+    expect(sums).toContain("runs/attachment-upload.response.schema.json");
+    expect(sums).toContain("runs/attachment-error.schema.json");
+    expect(sums).toContain("fixtures/tools-call-attachment-binding.json");
+    expect(manifest.capabilities?.attachments).toBe("supported");
+    expect(manifest.capabilities?.approvalDecision).toBe("supported");
+    expect(manifest.capabilities?.approvalExpiry).toBe("unsupported");
+    expect(unsupported.properties).toHaveProperty("attachments");
+    expect(unsupported.properties).not.toHaveProperty("approval");
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V140)).toBe(true);
+  });
+
   it("keeps P0 required paths free of approval-decision schemas", () => {
     const sourcePath = join(
       process.cwd(),
@@ -226,8 +274,11 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
         );
     expect(source).not.toContain("approval-decision.request.schema.json");
     expect(source).not.toContain("approval-decision.response.schema.json");
+    expect(source).not.toContain("attachment-upload.response.schema.json");
+    expect(source).not.toContain("attachment-error.schema.json");
     expect(isCompleteSkillRunBundleDir(IDENTITY_LOCK_DIR)).toBe(false);
     expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR)).toBe(true);
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V140)).toBe(true);
     expect(hasSkillRunApprovalDecisionBundle()).toBe(
       isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V130),
     );
