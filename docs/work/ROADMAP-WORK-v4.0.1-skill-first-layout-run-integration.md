@@ -1,11 +1,11 @@
 ---
 roadmap_id: WORK-SKILL-FIRST-LAYOUT-V4.0.1
-version: v2.3
+version: v2.4
 status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
-target_branch: work/prd-v4.0
-updated_at: 2026-09-08T11:28:42.949552Z
+target_branch: work/prd-v4.1
+updated_at: 2026-09-08T13:25:40.539525Z
 implementation_plan_required: true
 ---
 
@@ -18,6 +18,8 @@ implementation_plan_required: true
 本 Roadmap 从旧的叙述式 milestone 文档迁移为可校验的 Item DAG。仓库尚无覆盖整份 Skill Run 的独立 Architecture Decision，因此 frontmatter `architecture_decision` 仍以已批准父 PRD 的 Target Architecture 作为 provenance bridge；不得把此桥接解释为 M0–M4 已具备新治理所要求的一对一 Stage PRD、Plan、实现提交和验证证据。
 
 RM-13 / RM-14 是 named increment `AD-WORK-v4.0.1-STREAMING-DELTA`（`docs/work/AD-WORK-v4.0.1-streaming-delta.md`）。不得把 Roadmap `architecture_decision` 改到该 AD；对应 Stage PRD 的 `source_revision` 必须包含 `AD-WORK-v4.0.1-STREAMING-DELTA@1.0.1`。
+
+RM-15 是 named increment `AD-WORK-v4.0.1-SKILL-RUN-TRANSCRIPT-LIVE-SYNC`（`docs/work/AD-WORK-v4.0.1-skill-run-transcript-live-sync.md`）。不得把 Roadmap `architecture_decision` 改到该 AD；对应 Stage PRD 必须继承该 Decision 的 Existing Session-owned sidecar、single Chat、sanitized Main boundary 和 no-streaming-delta 约束。
 
 ## Roadmap Items
 
@@ -37,6 +39,7 @@ RM-13 / RM-14 是 named increment `AD-WORK-v4.0.1-STREAMING-DELTA`（`docs/work/
 | RM-12 | M6f P1 收藏、最近使用与组织推荐。 | RM-07 | DONE | 独立 Stage PRD；不得新增第二 Catalog owner 或绕过 Main Catalog cache。 | docs/work/PRD-WORK-v4.0.1-M6-catalog-favorites-recent.md | .cursor/plans/work-v4.0.1-m6-catalog-favorites-recent.plan.md | 801059b2b9d9fcfafc18c7d327e561e1bdcc2090 | smc-evidence:RM-12@sha256:6af35a8367b3f883bfc09d20e9015a655ffe8503d6e466a66273e4f960d63b5e |
 | RM-13 | M6g P1 Streaming delta 合同进口：进口已枚举 streaming/token delta 的不可变 Skill Run Bundle 并完成 consumer-lock。架构出处：AD-WORK-v4.0.1-STREAMING-DELTA。Depends On RM-11 仅为 v1.4.0 合同基线，不是附件功能依赖。 | RM-11 | BACKLOG | 仓外 Provider tag 可解析；完整 Bundle checksum 通过；event union 含独立 delta type + payload schema + fixture；consumer-lock 完成；不映射 UI；不回归附件、approvalExpiry、download-by-ref。Provider tag 前保持 BACKLOG，不得 Grounding Stage PRD。 | - | - | - | - |
 | RM-14 | M6h P1 Streaming delta 映射：将已进口的枚举 delta 映射为现有 parser/projection/`modules/skill-run` 上已清洗的已枚举 payload 字段。架构出处：AD-WORK-v4.0.1-STREAMING-DELTA。 | RM-13 | BACKLOG | 仅映射已枚举类型与已发布 payload 字段；unknown fail-soft；无新 Owner；无 raw event 到 Renderer；不得把未枚举增量文本当合同；不得与 approvalExpiry、download-by-ref、clarify respond 合并。RM-13 DONE 前不得 READY。 | - | - | - | - |
+| RM-15 | M6i Skill Run Transcript & Session Live-Sync Closure：将现有 sanitized Projection 接入唯一 Chat transcript，由 Existing Session Owner 保存完整 Skill execution audit，并在 session cache 变化后实时刷新 Sidebar。架构出处：AD-WORK-v4.0.1-SKILL-RUN-TRANSCRIPT-LIVE-SYNC。 | RM-04, RM-05, RM-08, RM-09 | READY | Submit 后立即显示完整 Prompt 与单一 Skill Card；live activity/result/error 原位更新；Session reopen/restart 恢复完整且去重的多 Run timeline；Sidebar 无需 focus/定时器即可更新；Live 仍 bounded 32、durable history 完整；无第二 Chat/Session/File Owner、无 raw Provider data、无 streaming delta。 | - | - | - | - |
 
 ## Outcome
 
