@@ -24,12 +24,21 @@ import { readStoredSessionSync } from "../auth/token-store";
 import {
   createSkillRunService,
   SkillRunService,
+  type SkillRunDurableActivityRecord,
+  type SkillRunDurableRunSnapshot,
 } from "./skill-run-service";
 import {
   rehydrateSkillRunContinuationsForSession,
   upsertSkillRunContinuationProjection,
 } from "./skill-run-continuation";
-import { materializeSkillRunSessionTranscript } from "./skill-run-session-materialize";
+import {
+  materializeSkillRunSessionTranscript,
+  shouldMaterializeSkillRunSession,
+} from "./skill-run-session-materialize";
+import {
+  appendSkillRunTranscriptActivity,
+  upsertSkillRunTranscriptRun,
+} from "./skill-run-transcript-store";
 import { upsertSkillRunRemoteArtifact } from "../files/upsert-skill-run-remote-artifact";
 import {
   getSkillRunSessionMode,
@@ -201,9 +210,50 @@ function validateSetCatalogFavoriteInput(value: unknown): SkillRunSetCatalogFavo
   return { toolName, favorited: value.favorited };
 }
 
+function durableSnapshotToProjection(
+  snapshot: SkillRunDurableRunSnapshot,
+): SkillRunProjection {
+  return {
+    clientRequestId: snapshot.clientRequestId,
+    providerRunId: snapshot.providerRunId,
+    toolName: snapshot.toolName,
+    promptSummary: "",
+    sessionId: snapshot.sessionId,
+    profileId: snapshot.profileId,
+    phase: snapshot.phase,
+    displayStage: snapshot.displayStage,
+    lastEventId: snapshot.lastEventId,
+    eventSeq: snapshot.eventSeq,
+    text: snapshot.text,
+    errorCode: snapshot.errorCode,
+    errorMessage: snapshot.errorMessage,
+    artifacts: snapshot.artifacts,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
+  };
+}
+
+function persistSanitizedRun(snapshot: SkillRunDurableRunSnapshot): void {
+  const projection = durableSnapshotToProjection(snapshot);
+  if (!shouldMaterializeSkillRunSession(projection)) {
+    return;
+  }
+  materializeSkillRunSessionTranscript(projection, snapshot.prompt);
+  upsertSkillRunTranscriptRun(snapshot);
+}
+
+function persistSanitizedActivity(
+  record: SkillRunDurableActivityRecord,
+): void {
+  try {
+    appendSkillRunTranscriptActivity(record);
+  } catch {
+    appendSkillRunTranscriptActivity(record);
+  }
+}
+
 function broadcastProjection(projection: SkillRunProjection): void {
   upsertSkillRunContinuationProjection(projection);
-  materializeSkillRunSessionTranscript(projection);
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       win.webContents.send(
@@ -221,6 +271,8 @@ export function getSkillRunService(): SkillRunService {
       onUpsertArtifact: async (input) => {
         upsertSkillRunRemoteArtifact(input);
       },
+      onPersistSanitizedRun: persistSanitizedRun,
+      onPersistSanitizedActivity: persistSanitizedActivity,
     });
     projectionUnsubscribe = activeService.subscribe(broadcastProjection);
   }

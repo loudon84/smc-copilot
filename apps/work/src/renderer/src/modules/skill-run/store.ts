@@ -42,18 +42,27 @@ export function getSkillRunProjection(
   return projectionsByReq.get(clientRequestId) ?? null;
 }
 
+export function listSkillRunProjectionsForSession(
+  sessionId: string,
+): SkillRunProjection[] {
+  return Array.from(projectionsByReq.values())
+    .filter((projection) => projection.sessionId === sessionId)
+    .sort((a, b) => {
+      if (a.createdAt !== b.createdAt) {
+        return a.createdAt.localeCompare(b.createdAt);
+      }
+      return a.clientRequestId.localeCompare(b.clientRequestId);
+    });
+}
+
 export function getLatestSkillRunProjectionForSession(
   sessionId: string,
 ): SkillRunProjection | null {
-  let latest: SkillRunProjection | null = null;
-  for (const proj of projectionsByReq.values()) {
-    if (proj.sessionId === sessionId) {
-      if (!latest || proj.updatedAt > latest.updatedAt) {
-        latest = proj;
-      }
-    }
-  }
-  return latest;
+  const ordered = listSkillRunProjectionsForSession(sessionId);
+  if (ordered.length === 0) return null;
+  return ordered.reduce((latest, projection) =>
+    projection.updatedAt > latest.updatedAt ? projection : latest,
+  );
 }
 
 export function upsertSkillRunProjection(projection: SkillRunProjection): void {
@@ -115,6 +124,14 @@ export function subscribeSkillRunCatalog(listener: Listener): () => void {
 }
 
 let ipcListening = false;
+
+export function resetSkillRunStoreForTests(): void {
+  catalogState = { status: "loading", tools: [] };
+  projectionsByReq.clear();
+  listeners.clear();
+  ipcListening = false;
+}
+
 export function initSkillRunRendererListener(): () => void {
   if (ipcListening || typeof window === "undefined" || !window.hermesAPI?.skillRun) {
     return () => undefined;

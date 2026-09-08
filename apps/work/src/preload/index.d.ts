@@ -41,6 +41,7 @@ import type {
 } from "../shared/runtime/runtime-contract";
 import type { ControlOwnerSnapshot } from "../shared/runtime/control-owner";
 import type { AppUpdateState } from "../shared/app-update";
+import type { SessionCacheChangedEvent } from "../shared/session-cache-events";
 
 interface ElectronAPI {
   process: {
@@ -801,6 +802,9 @@ interface HermesAPI {
       contextFolder: string | null;
     }>
   >;
+  onSessionCacheChanged: (
+    callback: (event: SessionCacheChangedEvent) => void,
+  ) => () => void;
   updateSessionTitle: (sessionId: string, title: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<void>;
   deleteSessions: (

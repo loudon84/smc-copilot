@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../../components/useI18n";
+import { isSessionCacheChangedEvent } from "../../../../shared/session-cache-events";
 import {
   ChevronDown,
   ChevronRight,
@@ -405,6 +406,35 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
       );
     };
   }, [open, refresh]);
+
+  // Cache-mutation hint: reread sessions.json only. Full DB sync stays on
+  // the initial/focus/timer path and must not run per Skill update.
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window.hermesAPI?.onSessionCacheChanged !== "function") return;
+    let cancelled = false;
+    const unsubscribe = window.hermesAPI.onSessionCacheChanged((event) => {
+      if (cancelled || !isSessionCacheChangedEvent(event)) return;
+      void (async () => {
+        try {
+          const loadedLimit = Math.max(
+            RECENT_SESSIONS_PAGE_SIZE,
+            sessionsRef.current.length,
+          );
+          const listed = await window.hermesAPI.listCachedSessions(
+            loadedLimit + 1,
+          );
+          if (!cancelled) applyLoadedWindow(listed);
+        } catch {
+          // keep the current list; the next focus/timer sync can recover
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [open, activeProfile, applyLoadedWindow]);
 
   useEffect(() => {
     if (!open) return;

@@ -272,3 +272,48 @@
   color: var(--text-primary, #ffffff);
   background: rgba(255, 255, 255, 0.1);
 }
+
+.skill-run-transcript-card {
+  margin: 8px 12px 8px 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  background: var(--bg-input, rgba(255, 255, 255, 0.04));
+}
+
+.skill-run-transcript-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.skill-run-transcript-card-title {
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+}
+
+.skill-run-transcript-card-stage,
+.skill-run-transcript-activity,
+.skill-run-transcript-incomplete {
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.skill-run-transcript-result {
+  white-space: pre-wrap;
+  margin: 8px 0 0;
+  font-size: 0.875rem;
+  color: var(--text-primary, #ffffff);
+}
+
+.skill-run-transcript-error,
+.skill-run-transcript-incomplete {
+  color: #f87171;
+}
+
+.skill-run-transcript-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

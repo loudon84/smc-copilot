@@ -1,6 +1,12 @@
 import Database from "better-sqlite3";
 import type { Attachment } from "../shared/attachments";
 import { isImageMime } from "../shared/attachments";
+import type {
+  SkillRunActivityItem,
+  SkillRunContinuationItem,
+  SkillRunLocalPhase,
+} from "../shared/skill-run";
+import { isSkillRunTerminalPhase } from "../shared/skill-run";
 import { clearStagedAttachments } from "./attachment-staging";
 import { removeSessionFromCache } from "./session-cache";
 import { getDbConnection } from "./db";
@@ -14,12 +20,20 @@ import {
 import { loadManagedMessageAttachments } from "./files/load-managed-message-attachments";
 import {
   deleteSessionContinuationForSession,
+  loadNormalizedContinuationItems,
   loadSessionContinuationItems,
   loadSessionLocalErrors,
   mergeSessionLocalErrors,
 } from "./session-continuation-store";
 import { deleteSessionContextFolderForSession } from "./session-context-folder-store";
 import { deleteSessionModelOverrideForSession } from "./session-model-override-store";
+import {
+  deleteSkillRunTranscriptForSession,
+  listSkillRunTranscriptForSession,
+  type SkillRunTranscriptRunRow,
+  type SkillRunTranscriptSessionBatch,
+} from "./skill-run/skill-run-transcript-store";
+import { skillRunTranscriptBubbleIds } from "./skill-run/skill-run-session-materialize";
 
 // Sentinel prefix used by hermes-agent's hermes_state.py to mark
 // JSON-encoded multimodal content in the messages.content column.
@@ -61,6 +75,7 @@ export type HistoryItem =
       content: string;
       timestamp: number;
       attachments?: Attachment[];
+      platformMessageId?: string;
     }
   | {
       kind: "assistant";
@@ -69,6 +84,7 @@ export type HistoryItem =
       timestamp: number;
       error?: string;
       attachments?: Attachment[];
+      platformMessageId?: string;
     }
   | {
       kind: "reasoning";
@@ -94,6 +110,21 @@ export type HistoryItem =
       content: string;
       timestamp: number;
       attachments?: Attachment[];
+    }
+  | {
+      kind: "skill_run";
+      id: number;
+      clientRequestId: string;
+      providerRunId?: string | null;
+      toolName: string;
+      phase: SkillRunLocalPhase;
+      displayStage: string;
+      activities: SkillRunActivityItem[];
+      resultText?: string;
+      errorCode?: string;
+      errorMessage?: string;
+      timestamp: number;
+      auditComplete?: boolean;
     };
 
 interface DecodedContent {
@@ -546,6 +577,7 @@ export interface RawMessageRow {
   reasoning: string | null;
   reasoning_content: string | null;
   reasoning_details: string | null;
+  platform_message_id?: string | null;
 }
 
 /**
@@ -567,6 +599,9 @@ export function expandRowsToHistory(rows: RawMessageRow[]): HistoryItem[] {
         timestamp: r.timestamp,
         ...(decoded.attachments.length > 0
           ? { attachments: decoded.attachments }
+          : {}),
+        ...(r.platform_message_id
+          ? { platformMessageId: r.platform_message_id }
           : {}),
       });
       continue;
@@ -592,6 +627,9 @@ export function expandRowsToHistory(rows: RawMessageRow[]): HistoryItem[] {
           timestamp: r.timestamp,
           ...(decoded.attachments.length > 0
             ? { attachments: decoded.attachments }
+            : {}),
+          ...(r.platform_message_id
+            ? { platformMessageId: r.platform_message_id }
             : {}),
         });
       }
@@ -673,21 +711,154 @@ export function mergeStoredPromptImageAttachments(
   });
 }
 
+const SKILL_RUN_HISTORY_ID_BASE = -700_000_000;
+
+function isoToEpochSeconds(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed / 1000 : 0;
+}
+
+function skillRunHistoryId(clientRequestId: string): number {
+  let hash = 0;
+  for (let i = 0; i < clientRequestId.length; i += 1) {
+    hash = (hash * 31 + clientRequestId.charCodeAt(i)) | 0;
+  }
+  return SKILL_RUN_HISTORY_ID_BASE - Math.abs(hash % 99_999_999);
+}
+
+function toSkillRunHistoryItem(
+  run: SkillRunTranscriptRunRow,
+  activities: SkillRunActivityItem[],
+): Extract<HistoryItem, { kind: "skill_run" }> {
+  return {
+    kind: "skill_run",
+    id: skillRunHistoryId(run.clientRequestId),
+    clientRequestId: run.clientRequestId,
+    providerRunId: run.providerRunId,
+    toolName: run.toolName,
+    phase: run.phase,
+    displayStage: run.displayStage,
+    activities,
+    resultText: run.text,
+    errorCode: run.errorCode,
+    errorMessage: run.errorMessage,
+    timestamp: isoToEpochSeconds(run.createdAt) || isoToEpochSeconds(run.updatedAt),
+    auditComplete: run.auditComplete,
+  };
+}
+
+function continuationRunToHistoryItem(
+  item: SkillRunContinuationItem,
+): Extract<HistoryItem, { kind: "skill_run" }> {
+  return {
+    kind: "skill_run",
+    id: skillRunHistoryId(item.clientRequestId),
+    clientRequestId: item.clientRequestId,
+    providerRunId: item.providerRunId,
+    toolName: item.toolName,
+    phase: item.phase,
+    displayStage: item.phase,
+    activities: [],
+    resultText: item.text,
+    timestamp: isoToEpochSeconds(item.updatedAt),
+    auditComplete: false,
+  };
+}
+
+function historySortKey(item: HistoryItem): [number, number, string] {
+  const timestamp = item.timestamp;
+  if (item.kind === "skill_run") {
+    return [timestamp, 1, item.clientRequestId];
+  }
+  if (item.kind === "user") {
+    return [timestamp, 0, item.platformMessageId ?? String(item.id)];
+  }
+  return [timestamp, 2, String(item.id)];
+}
+
+/** Merge sidecar Skill runs with messages/overlays/continuation. Pure for tests. */
+export function mergeSkillRunTranscriptIntoHistory(
+  items: HistoryItem[],
+  batch: SkillRunTranscriptSessionBatch,
+  continuationRuns: SkillRunContinuationItem[] = [],
+  continuationPrefix: HistoryItem[] = [],
+): HistoryItem[] {
+  const runsByRequest = new Map(
+    batch.runs.map((run) => [run.clientRequestId, run] as const),
+  );
+  const activitiesByRequest = new Map<string, SkillRunActivityItem[]>();
+  for (const activity of batch.activities) {
+    const list = activitiesByRequest.get(activity.clientRequestId) ?? [];
+    list.push(activity);
+    activitiesByRequest.set(activity.clientRequestId, list);
+  }
+
+  const fallbackAssistantIds = new Set(
+    batch.runs.map(
+      (run) => skillRunTranscriptBubbleIds(run.clientRequestId).assistant,
+    ),
+  );
+  const kept = items.filter((item) => {
+    if (item.kind !== "assistant" || !item.platformMessageId) return true;
+    return !fallbackAssistantIds.has(item.platformMessageId);
+  });
+
+  const skillItems: HistoryItem[] = batch.runs.map((run) =>
+    toSkillRunHistoryItem(run, activitiesByRequest.get(run.clientRequestId) ?? []),
+  );
+
+  for (const continuation of continuationRuns) {
+    if (runsByRequest.has(continuation.clientRequestId)) continue;
+    if (isSkillRunTerminalPhase(continuation.phase)) continue;
+    skillItems.push(continuationRunToHistoryItem(continuation));
+  }
+
+  const merged = [...continuationPrefix, ...kept, ...skillItems];
+  return merged.sort((a, b) => {
+    const ka = historySortKey(a);
+    const kb = historySortKey(b);
+    if (ka[0] !== kb[0]) return ka[0] - kb[0];
+    if (ka[1] !== kb[1]) return ka[1] - kb[1];
+    return ka[2].localeCompare(kb[2]);
+  });
+}
+
+function loadSessionMessageRows(
+  db: Database.Database,
+  sessionId: string,
+): RawMessageRow[] {
+  try {
+    return db
+      .prepare(
+        `SELECT id, role, content, timestamp,
+                tool_call_id, tool_calls, tool_name,
+                reasoning, reasoning_content, reasoning_details,
+                platform_message_id
+         FROM messages
+         WHERE session_id = ? AND role IN ('user', 'assistant', 'tool')
+         ORDER BY timestamp, id`,
+      )
+      .all(sessionId) as RawMessageRow[];
+  } catch {
+    return db
+      .prepare(
+        `SELECT id, role, content, timestamp,
+                tool_call_id, tool_calls, tool_name,
+                reasoning, reasoning_content, reasoning_details
+         FROM messages
+         WHERE session_id = ? AND role IN ('user', 'assistant', 'tool')
+         ORDER BY timestamp, id`,
+      )
+      .all(sessionId) as RawMessageRow[];
+  }
+}
+
 export function getSessionMessages(sessionId: string): HistoryItem[] {
   const db = getDb();
   if (!db) return [];
 
-  const rows = db
-    .prepare(
-      `SELECT id, role, content, timestamp,
-              tool_call_id, tool_calls, tool_name,
-              reasoning, reasoning_content, reasoning_details
-       FROM messages
-       WHERE session_id = ? AND role IN ('user', 'assistant', 'tool')
-       ORDER BY timestamp, id`,
-    )
-    .all(sessionId) as RawMessageRow[];
-
+  const rows = loadSessionMessageRows(db, sessionId);
   const items = expandRowsToHistory(rows);
   const canonical = mergeStoredPromptImageAttachments(
     items,
@@ -713,7 +884,17 @@ export function applySessionLocalOverlays(
     canonical,
     loadSessionLocalErrors(db, sessionId),
   );
-  return [...loadSessionContinuationItems(db, sessionId), ...withLocalErrors];
+  const continuationPrefix = loadSessionContinuationItems(db, sessionId);
+  const continuationRuns = loadNormalizedContinuationItems(sessionId).filter(
+    (item): item is SkillRunContinuationItem => item.kind === "skill-run",
+  );
+  const sidecar = listSkillRunTranscriptForSession(sessionId);
+  return mergeSkillRunTranscriptIntoHistory(
+    withLocalErrors,
+    sidecar,
+    continuationRuns,
+    continuationPrefix,
+  );
 }
 
 export interface DeleteSessionsResult {
@@ -752,9 +933,10 @@ function hasParentSessionColumn(db: Database.Database): boolean {
   return sessionsHasParentColumn;
 }
 
-function deleteSessionRows(db: Database.Database, sessionId: string): number {
+export function deleteSessionRows(db: Database.Database, sessionId: string): number {
   deletePromptImageAttachmentsForSession(db, sessionId);
   deleteSessionContinuationForSession(db, sessionId);
+  deleteSkillRunTranscriptForSession(db, sessionId);
   // Unlink any child sessions first. better-sqlite3 enables
   // PRAGMA foreign_keys=ON by default, so deleting a parent while a child
   // still references it via parent_session_id throws "FOREIGN KEY constraint

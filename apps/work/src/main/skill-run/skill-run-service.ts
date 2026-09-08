@@ -33,6 +33,7 @@ import {
   isSkillRunTerminalPhase,
   type SkillCatalogResponse,
   type SkillRunActivityItem,
+  type SkillRunActivityKind,
   type SkillRunArtifactDescriptor,
   type SkillRunCancelInput,
   type SkillRunCancelResult,
@@ -45,6 +46,7 @@ import {
   type SkillRunSetCatalogFavoriteInput,
   type SkillRunStartInput,
   type SkillRunStartResult,
+  type SkillRunToolCallStatus,
 } from "../../shared/skill-run";
 
 const ACTIVITY_LIST_CAP = 32;
@@ -126,6 +128,51 @@ function appendSanitizedActivity(
   return next.slice(next.length - ACTIVITY_LIST_CAP);
 }
 
+/** Main-only durable run snapshot. Never sent to Renderer / Preload / telemetry. */
+export interface SkillRunDurableRunSnapshot {
+  clientRequestId: string;
+  sessionId: string;
+  profileId: string;
+  toolName: string;
+  prompt: string;
+  providerRunId: string | null;
+  phase: SkillRunLocalPhase;
+  displayStage: string;
+  lastEventId: string | null;
+  eventSeq: number;
+  text?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  artifacts?: SkillRunArtifactDescriptor[];
+  createdAt: string;
+  updatedAt: string;
+  auditComplete: boolean;
+}
+
+/** Main-only durable activity record. Never sent to Renderer / Preload / telemetry. */
+export interface SkillRunDurableActivityRecord {
+  clientRequestId: string;
+  sessionId: string;
+  eventId: string;
+  kind: SkillRunActivityKind;
+  ordinal: number;
+  summary?: string;
+  toolName?: string;
+  callId?: string;
+  status?: SkillRunToolCallStatus;
+  question?: string;
+  options?: string[];
+  approvalId?: string;
+}
+
+export type SkillRunDurableRunWriter = (
+  snapshot: SkillRunDurableRunSnapshot,
+) => void | Promise<void>;
+
+export type SkillRunDurableActivityWriter = (
+  record: SkillRunDurableActivityRecord,
+) => void | Promise<void>;
+
 export type SkillRunProjectionListener = (projection: SkillRunProjection) => void;
 
 export interface SkillRunService {
@@ -168,6 +215,9 @@ interface ActiveRun {
   terminalConfirmed: boolean;
   seenEventIds: Set<string>;
   approvalDecisionKeys: Map<string, string>;
+  nextDurableOrdinal: number;
+  persistedActivityEventIds: Set<string>;
+  persistenceGap: boolean;
 }
 
 function nowIso(): string {
@@ -217,6 +267,8 @@ export interface CreateSkillRunServiceOptions {
   recordTelemetry?: (event: SkillRunTelemetryEvent) => void;
   getManagedFile?: (profileId: string, fileId: string) => ManagedFile | null;
   readManagedFileBytes?: (managedPath: string) => Promise<Uint8Array>;
+  onPersistSanitizedRun?: SkillRunDurableRunWriter;
+  onPersistSanitizedActivity?: SkillRunDurableActivityWriter;
 }
 
 export function createSkillRunService(
@@ -227,6 +279,8 @@ export function createSkillRunService(
     options.catalogPreferenceStore ?? createSkillRunCatalogPreferenceStore();
   const getMode = options.getFeatureMode ?? getSkillRunFeatureMode;
   const persistContinuation = options.onPersistContinuation;
+  const persistSanitizedRun = options.onPersistSanitizedRun;
+  const persistSanitizedActivity = options.onPersistSanitizedActivity;
   const recordTelemetry = options.recordTelemetry ?? recordSkillRunTelemetry;
   const resolveManagedFile = options.getManagedFile ?? lookupManagedFile;
   const readManagedBytes =
@@ -292,7 +346,90 @@ export function createSkillRunService(
     }
 
     emit(next);
+    persistRunSnapshot(run);
     return next;
+  }
+
+  function persistRunSnapshot(run: ActiveRun): void {
+    if (!persistSanitizedRun) {
+      return;
+    }
+    const snapshot: SkillRunDurableRunSnapshot = {
+      clientRequestId: run.request.clientRequestId,
+      sessionId: run.request.sessionId,
+      profileId: run.request.profileId,
+      toolName: run.projection.toolName,
+      prompt: run.request.prompt,
+      providerRunId: run.projection.providerRunId,
+      phase: run.projection.phase,
+      displayStage: run.projection.displayStage,
+      lastEventId: run.projection.lastEventId,
+      eventSeq: run.projection.eventSeq,
+      text: run.projection.text,
+      errorCode: run.projection.errorCode,
+      errorMessage: run.projection.errorMessage,
+      artifacts: run.projection.artifacts,
+      createdAt: run.projection.createdAt,
+      updatedAt: run.projection.updatedAt,
+      auditComplete: !run.persistenceGap,
+    };
+    try {
+      const result = persistSanitizedRun(snapshot);
+      if (result && typeof result.then === "function") {
+        void result.catch(() => {
+          markPersistenceGap(run, "run", run.request.clientRequestId);
+        });
+      }
+    } catch {
+      markPersistenceGap(run, "run", run.request.clientRequestId);
+    }
+  }
+
+  function markPersistenceGap(
+    run: ActiveRun,
+    kind: "run" | "activity",
+    id: string,
+  ): void {
+    run.persistenceGap = true;
+    console.warn("[skill-run] durable persist failed", {
+      clientRequestId: run.request.clientRequestId,
+      kind,
+      id,
+      outcome: "error",
+    });
+  }
+
+  async function persistActivityBeforeCap(
+    run: ActiveRun,
+    item: SkillRunActivityItem,
+  ): Promise<SkillRunActivityItem[] | undefined> {
+    if (run.persistedActivityEventIds.has(item.eventId)) {
+      return undefined;
+    }
+    run.persistedActivityEventIds.add(item.eventId);
+    run.nextDurableOrdinal += 1;
+    const record: SkillRunDurableActivityRecord = {
+      clientRequestId: run.request.clientRequestId,
+      sessionId: run.request.sessionId,
+      eventId: item.eventId,
+      kind: item.kind,
+      ordinal: run.nextDurableOrdinal,
+      summary: item.summary,
+      toolName: item.toolName,
+      callId: item.callId,
+      status: item.status,
+      question: item.question,
+      options: item.options,
+      approvalId: item.approvalId,
+    };
+    if (persistSanitizedActivity) {
+      try {
+        await persistSanitizedActivity(record);
+      } catch {
+        markPersistenceGap(run, "activity", item.eventId);
+      }
+    }
+    return appendSanitizedActivity(run.projection.activities, item);
   }
 
   function hasActiveNonTerminalRun(sessionId: string): boolean {
@@ -529,20 +666,20 @@ export function createSkillRunService(
               if (event.errorMessage) patch.errorMessage = event.errorMessage;
               if (event.artifacts) patch.artifacts = event.artifacts;
               if (event.activity && activityEventId && !run.terminalConfirmed) {
-                patch.activities = appendSanitizedActivity(
-                  run.projection.activities,
-                  {
-                    eventId: activityEventId,
-                    kind: event.activity.kind,
-                    summary: event.activity.summary,
-                    toolName: event.activity.toolName,
-                    callId: event.activity.callId,
-                    status: event.activity.status,
-                    question: event.activity.question,
-                    options: event.activity.options,
-                    approvalId: event.activity.approvalId,
-                  },
-                );
+                const persisted = await persistActivityBeforeCap(run, {
+                  eventId: activityEventId,
+                  kind: event.activity.kind,
+                  summary: event.activity.summary,
+                  toolName: event.activity.toolName,
+                  callId: event.activity.callId,
+                  status: event.activity.status,
+                  question: event.activity.question,
+                  options: event.activity.options,
+                  approvalId: event.activity.approvalId,
+                });
+                if (persisted) {
+                  patch.activities = persisted;
+                }
               }
 
               updateProjection(run, patch);
@@ -787,11 +924,15 @@ export function createSkillRunService(
         terminalConfirmed: false,
         seenEventIds: new Set(),
         approvalDecisionKeys: new Map(),
+        nextDurableOrdinal: 0,
+        persistedActivityEventIds: new Set(),
+        persistenceGap: false,
       };
 
       runs.set(input.clientRequestId, activeRun);
       persistContinuation?.(initialProjection);
       emit(initialProjection);
+      persistRunSnapshot(activeRun);
       emitTelemetry({
         event: "start",
         outcome: "ok",
@@ -1074,6 +1215,9 @@ export function createSkillRunService(
         terminalConfirmed: isTerminal,
         seenEventIds: new Set(),
         approvalDecisionKeys: new Map(),
+        nextDurableOrdinal: 0,
+        persistedActivityEventIds: new Set(),
+        persistenceGap: false,
       };
 
       runs.set(item.clientRequestId, activeRun);

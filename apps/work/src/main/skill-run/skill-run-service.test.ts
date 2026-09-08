@@ -1451,6 +1451,219 @@ describe("skill-run-service", () => {
     ).toBe(false);
   });
 
+  it("persists every sanitized activity before the live cap and keeps Prompt off Projection", async () => {
+    const longPrompt = `durable-prompt-${"x".repeat(160)}`;
+    const reasoningEvents = Array.from({ length: 100 }, (_, index) => {
+      const seq = index + 1;
+      return {
+        event_id: `evt-persist-${seq}`,
+        run_id: "run-1",
+        event_type: "reasoning.summary",
+        event_seq: seq,
+        timestamp: "2026-08-31T00:00:00Z",
+        payload: { summary: `step ${seq}` },
+      };
+    });
+    const persisted: Array<{ eventId: string; ordinal: number; prompt?: string }> = [];
+    const runSnapshots: Array<{ prompt: string; auditComplete: boolean; phase: string }> = [];
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "not.a.real.event",
+              id: "sse-raw-skip",
+              data: {
+                event_id: "evt-raw-skip",
+                event_type: "not.a.real.event",
+                event_seq: 0,
+                payload: { secret: "nope", arguments: { x: 1 } },
+              },
+            },
+            ...reasoningEvents.map((fixture) => ({
+              eventType: "reasoning.summary",
+              id: String(fixture.event_id),
+              data: fixture,
+            })),
+            {
+              eventType: "run.completed",
+              id: "evt-persist-done",
+              data: {
+                event_id: "evt-persist-done",
+                event_type: "run.completed",
+                event_seq: 200,
+                payload: { text: "done" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+        onPersistSanitizedActivity: (record) => {
+          persisted.push({ eventId: record.eventId, ordinal: record.ordinal });
+        },
+        onPersistSanitizedRun: (snapshot) => {
+          runSnapshots.push({
+            prompt: snapshot.prompt,
+            auditComplete: snapshot.auditComplete,
+            phase: snapshot.phase,
+          });
+        },
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: longPrompt,
+      clientRequestId: "req-persist-100",
+      sessionId: "session-persist-100",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-persist-100",
+      (p) => p.phase === "succeeded" && (p.activities?.length ?? 0) === 32,
+    );
+    expect(persisted).toHaveLength(100);
+    expect(persisted[0]).toEqual({ eventId: "evt-persist-1", ordinal: 1 });
+    expect(persisted[99]).toEqual({ eventId: "evt-persist-100", ordinal: 100 });
+    expect(persisted.some((item) => item.eventId === "evt-raw-skip")).toBe(false);
+    expect(terminal?.activities).toHaveLength(32);
+    expect(JSON.stringify(terminal)).not.toContain("x".repeat(160));
+    expect(runSnapshots.some((row) => row.prompt === longPrompt)).toBe(true);
+    expect(runSnapshots.some((row) => row.phase === "succeeded")).toBe(true);
+  });
+
+  it("keeps Provider phase when the durable activity writer throws and marks later snapshots incomplete", async () => {
+    const fixture = loadBundleFixture("run-event-reasoning-summary.json");
+    const runSnapshots: Array<{ auditComplete: boolean; phase: string }> = [];
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "reasoning.summary",
+              id: "sse-writer-fail",
+              data: fixture,
+            },
+            {
+              eventType: "run.completed",
+              id: "evt-writer-fail-done",
+              data: {
+                event_id: "evt-writer-fail-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "done" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+        onPersistSanitizedActivity: () => {
+          throw new Error("disk full");
+        },
+        onPersistSanitizedRun: (snapshot) => {
+          runSnapshots.push({
+            auditComplete: snapshot.auditComplete,
+            phase: snapshot.phase,
+          });
+        },
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "writer-fail",
+      clientRequestId: "req-writer-fail",
+      sessionId: "session-writer-fail",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-writer-fail",
+      (p) => p.phase === "succeeded",
+    );
+    expect(terminal?.phase).toBe("succeeded");
+    expect(terminal?.activities).toHaveLength(1);
+    expect(
+      runSnapshots.some((row) => row.phase === "succeeded" && row.auditComplete === false),
+    ).toBe(true);
+  });
+
+  it("does not persist duplicate activity event ids", async () => {
+    const fixture = loadBundleFixture("run-event-reasoning-summary.json");
+    const persisted: string[] = [];
+    const mockGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream: vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "reasoning.summary",
+              id: "sse-dup-a",
+              data: fixture,
+            },
+            {
+              eventType: "reasoning.summary",
+              id: "sse-dup-b",
+              data: fixture,
+            },
+            {
+              eventType: "run.completed",
+              id: "evt-dup-persist-done",
+              data: {
+                event_id: "evt-dup-persist-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "done" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+        onPersistSanitizedActivity: (record) => {
+          persisted.push(record.eventId);
+        },
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "dedupe-persist",
+      clientRequestId: "req-dedupe-persist",
+      sessionId: "session-dedupe-persist",
+      profileId: "default",
+    });
+    await waitForProjection(
+      service,
+      "req-dedupe-persist",
+      (p) => p.phase === "succeeded" && (p.activities?.length ?? 0) > 0,
+    );
+    expect(persisted).toEqual(["evt-4"]);
+  });
+
   it("overlays favorite flags from the preference store without clearing the Gateway cache", async () => {
     const file = join(tmpdir(), `skill-run-pref-overlay-${Date.now()}.json`);
     const store = createSkillRunCatalogPreferenceStore({ getPath: () => file });

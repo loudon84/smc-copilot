@@ -126,6 +126,22 @@ Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and 
 
 [[src/main/skill-run/skill-run-telemetry.ts#recordSkillRunTelemetry]] appends allow-listed JSONL events to `userData/logs/skill-run-telemetry.jsonl`: `catalog`, `start`, `accepted`, `reconnect`, `terminal`, `duplicate-prevented`, `artifact`. Events may include feature mode, outcome, errorCode, phase, reconnectAttempt, artifactItemCount, and a SHA-256 prefix of `clientRequestId`. They must never include prompt, tool arguments, JWT, Authorization, backend origin, Result body, download token, absolute path, or Artifact bytes. Telemetry write failures must not change start/cancel/rehydrate. Renderer has no telemetry IPC. There is no hosted metrics dashboard in Work.
 
+## M6i Skill transcript and Session live-sync
+
+M6i makes Skill execution a first-class Chat turn with an optimistic pending card, bounded live Projection, and Session-owned complete sanitized activity on reopen.
+
+Renderer live IPC still sends a bounded SkillRunProjection (cap 32, `eventId` dedupe). Main durable path persists complete sanitized activity before that cap, plus the exact Prompt, in a Session-owned same-DB sidecar. History reopen uses the existing `getSessionMessages()` path: one batched sidecar read replaces the matching assistant fallback by `clientRequestId`, never by Prompt text.
+
+[[src/renderer/src/screens/Chat/Chat.tsx#Chat]] inserts the full user Prompt and one pending Skill Card before awaiting Main `skillRun.start`. Reject or throw patches that same card; toast stays supplemental. [[src/renderer/src/modules/skill-run/store.ts#listSkillRunProjectionsForSession]] returns every Session projection in createdAt/request order. [[src/renderer/src/modules/skill-run/skill-run-transcript.ts#applySkillRunProjectionsToMessages]] and [[src/renderer/src/modules/skill-run/SkillRunTranscriptCard.tsx#SkillRunTranscriptCard]] upsert live and history onto one request-keyed card. Approval still calls existing `skillRun.decideApproval`; Clarify is read-only; Artifacts use existing File Platform preview callbacks.
+
+Sidebar live-sync is cache-only: a sanitized `{sessionId, reason}` event triggers `listCachedSessions` plus the loaded window, not `syncSessionCache()`. There is no second history IPC channel.
+
+Streaming token/activity delta remains RM-13 / RM-14 BACKLOG. This Plan does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
+
+Sidebar live-sync is cache-only: a sanitized `{sessionId, reason}` event triggers `listCachedSessions` plus the loaded window, not `syncSessionCache()`. There is no second history IPC channel.
+
+Streaming token/activity delta remains RM-13 / RM-14 BACKLOG. This Plan does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
+
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
@@ -137,6 +153,7 @@ The following capabilities remain intentionally outside the current Work slice a
 - Local Chat / Hermes `MessageRow` approve-deny as Skill Run decision
 - Unrestricted JSON Schema / `$ref` / non-string parameter widgets
 - Org recommendation / curated catalog API
+- Streaming / token delta (RM-13 / RM-14)
 
 ## Cross References
 

@@ -15,6 +15,8 @@ vi.mock("../session-cache", () => ({
   upsertCachedSession: vi.fn(),
 }));
 
+import { upsertCachedSession } from "../session-cache";
+
 type SessionRow = {
   id: string;
   title: string;
@@ -234,5 +236,52 @@ describe("skill-run-session-materialize", () => {
         projection({ phase: "succeeded", text: "profile ready" }),
       ),
     ).toBe("profile ready");
+  });
+
+  it("writes the exact Prompt and title, and does not duplicate the user row", () => {
+    mockDb = new FakeDb();
+    const exactPrompt = `${"请完整分析客户画像并给出可执行建议。".repeat(8)}`;
+    expect(exactPrompt.length).toBeGreaterThan(120);
+    materializeSkillRunSessionTranscript(projection(), exactPrompt);
+    materializeSkillRunSessionTranscript(
+      projection({ phase: "succeeded", text: "done" }),
+      exactPrompt,
+    );
+    const user = mockDb.messages.find((m) => m.role === "user");
+    expect(user?.content).toBe(exactPrompt);
+    expect(user?.platform_message_id).toBe("skill-run:req-1:user");
+    expect(mockDb.sessions.get("skill-session-1")?.title).toBe(
+      exactPrompt.slice(0, 40),
+    );
+    expect(mockDb.messages.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("keeps promptSummary fallback when no exact Prompt is provided", () => {
+    mockDb = new FakeDb();
+    materializeSkillRunSessionTranscript(projection());
+    expect(mockDb.messages[0]?.content).toBe("请分析客户画像");
+  });
+
+  it("falls back to cache when DB is missing or throws", () => {
+    vi.mocked(upsertCachedSession).mockClear();
+    mockDb = null;
+    const missing = materializeSkillRunSessionTranscript(
+      projection(),
+      "cache-only prompt",
+    );
+    expect(missing).toMatchObject({ cacheOnly: true, wroteMessages: false });
+    expect(upsertCachedSession).toHaveBeenCalled();
+
+    mockDb = new FakeDb();
+    mockDb.transaction = () => {
+      throw new Error("disk locked");
+    };
+    vi.mocked(upsertCachedSession).mockClear();
+    const failed = materializeSkillRunSessionTranscript(
+      projection(),
+      "db-failure prompt",
+    );
+    expect(failed).toMatchObject({ cacheOnly: true, wroteMessages: false });
+    expect(upsertCachedSession).toHaveBeenCalled();
   });
 });

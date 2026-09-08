@@ -14,6 +14,12 @@ const {
   clearCacheMock,
   setFavoriteMock,
   decideApprovalMock,
+  materializeMock,
+  upsertRunMock,
+  appendActivityMock,
+  continuationMock,
+  windows,
+  persist,
 } = vi.hoisted(() => ({
   ensureFreshAccessToken: vi.fn(async () => "token"),
   readStoredSessionSync: vi.fn(() => ({
@@ -26,11 +32,26 @@ const {
   clearCacheMock: vi.fn(),
   setFavoriteMock: vi.fn(),
   decideApprovalMock: vi.fn(),
+  materializeMock: vi.fn(),
+  upsertRunMock: vi.fn(),
+  appendActivityMock: vi.fn(),
+  continuationMock: vi.fn(),
+  windows: {
+    list: [] as Array<{
+      isDestroyed: () => boolean;
+      webContents: { send: ReturnType<typeof vi.fn> };
+    }>,
+  },
+  persist: {
+    run: undefined as ((snapshot: unknown) => void) | undefined,
+    activity: undefined as ((record: unknown) => void) | undefined,
+    listener: undefined as ((projection: unknown) => void) | undefined,
+  },
 }));
 
 vi.mock("electron", () => ({
   BrowserWindow: {
-    getAllWindows: () => [],
+    getAllWindows: () => windows.list,
   },
   ipcMain: {
     handle: (
@@ -55,11 +76,21 @@ vi.mock("../auth/token-store", () => ({
 
 vi.mock("./skill-run-continuation", () => ({
   rehydrateSkillRunContinuationsForSession: vi.fn(async () => []),
-  upsertSkillRunContinuationProjection: vi.fn(),
+  upsertSkillRunContinuationProjection: continuationMock,
 }));
 
 vi.mock("./skill-run-session-materialize", () => ({
-  materializeSkillRunSessionTranscript: vi.fn(),
+  materializeSkillRunSessionTranscript: materializeMock,
+  shouldMaterializeSkillRunSession: (projection: {
+    providerRunId: string | null;
+    phase: string;
+  }) =>
+    projection.providerRunId != null && projection.phase !== "pending-submit",
+}));
+
+vi.mock("./skill-run-transcript-store", () => ({
+  upsertSkillRunTranscriptRun: upsertRunMock,
+  appendSkillRunTranscriptActivity: appendActivityMock,
 }));
 
 vi.mock("../files/upsert-skill-run-remote-artifact", () => ({
@@ -72,26 +103,41 @@ vi.mock("./skill-run-session-mode-store", () => ({
 }));
 
 vi.mock("./skill-run-service", () => ({
-  createSkillRunService: () => ({
-    listCatalog: listCatalogMock,
-    refreshCatalog: async () => {
-      clearCacheMock();
-      return listCatalogMock();
-    },
-    setCatalogFavorite: setFavoriteMock,
-    start: startMock,
-    cancel: vi.fn(),
-    decideApproval: decideApprovalMock,
-    getFeatureMode: () => "expert-compat",
-    getProjection: vi.fn(),
-    listProjections: vi.fn(),
-    retryArtifactDiscovery: vi.fn(),
-    subscribe: () => () => undefined,
-    dispose: vi.fn(),
-  }),
+  createSkillRunService: (options: {
+    onPersistSanitizedRun?: (snapshot: unknown) => void;
+    onPersistSanitizedActivity?: (record: unknown) => void;
+  }) => {
+    persist.run = options.onPersistSanitizedRun;
+    persist.activity = options.onPersistSanitizedActivity;
+    return {
+      listCatalog: listCatalogMock,
+      refreshCatalog: async () => {
+        clearCacheMock();
+        return listCatalogMock();
+      },
+      setCatalogFavorite: setFavoriteMock,
+      start: startMock,
+      cancel: vi.fn(),
+      decideApproval: decideApprovalMock,
+      getFeatureMode: () => "expert-compat",
+      getProjection: vi.fn(),
+      listProjections: vi.fn(),
+      retryArtifactDiscovery: vi.fn(),
+      subscribe: (listener: (projection: unknown) => void) => {
+        persist.listener = listener;
+        return () => {
+          persist.listener = undefined;
+        };
+      },
+      dispose: vi.fn(),
+    };
+  },
 }));
 
-import { registerSkillRunIpc } from "./skill-run-ipc";
+import {
+  registerSkillRunIpc,
+  resetSkillRunServiceForTests,
+} from "./skill-run-ipc";
 
 function validEvent(): { sender: { isDestroyed: () => boolean } } {
   return {
@@ -116,10 +162,16 @@ function validStartInput(overrides: Record<string, unknown> = {}) {
 describe("registerSkillRunIpc", () => {
   beforeEach(() => {
     handlers.clear();
+    windows.list = [];
+    persist.run = undefined;
+    persist.activity = undefined;
+    persist.listener = undefined;
+    resetSkillRunServiceForTests();
     registerSkillRunIpc();
   });
 
   afterEach(() => {
+    resetSkillRunServiceForTests();
     vi.clearAllMocks();
   });
 
@@ -339,5 +391,140 @@ describe("registerSkillRunIpc", () => {
         }),
       ),
     ).rejects.toThrow(/Invalid SkillRunStartInput\.fileIds/);
+  });
+
+  it("wires persist callbacks in materialize-then-upsert order and skips pending-submit", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.START)!;
+    startMock.mockResolvedValueOnce({
+      accepted: true,
+      projection: { clientRequestId: "req-1", phase: "pending-submit" },
+    });
+    await handler(validEvent(), validStartInput());
+    expect(persist.run).toEqual(expect.any(Function));
+    expect(persist.activity).toEqual(expect.any(Function));
+
+    persist.run?.({
+      clientRequestId: "req-1",
+      sessionId: "session-1",
+      profileId: "default",
+      toolName: "calculator",
+      prompt: "pending only",
+      providerRunId: null,
+      phase: "pending-submit",
+      displayStage: "Submitting...",
+      lastEventId: null,
+      eventSeq: 0,
+      createdAt: "t0",
+      updatedAt: "t0",
+      auditComplete: true,
+    });
+    expect(materializeMock).not.toHaveBeenCalled();
+    expect(upsertRunMock).not.toHaveBeenCalled();
+
+    const exactPrompt = `Please analyze this customer in full detail. ${"x".repeat(130)}`;
+    persist.run?.({
+      clientRequestId: "req-1",
+      sessionId: "session-1",
+      profileId: "default",
+      toolName: "calculator",
+      prompt: exactPrompt,
+      providerRunId: "task-1",
+      phase: "running",
+      displayStage: "Executing skill...",
+      lastEventId: "evt-1",
+      eventSeq: 1,
+      createdAt: "t0",
+      updatedAt: "t1",
+      auditComplete: true,
+    });
+    expect(materializeMock).toHaveBeenCalledTimes(1);
+    expect(materializeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientRequestId: "req-1",
+        providerRunId: "task-1",
+        phase: "running",
+      }),
+      exactPrompt,
+    );
+    expect(JSON.stringify(materializeMock.mock.calls[0]?.[0])).not.toMatch(
+      /Please analyze this customer in full detail/,
+    );
+    expect(upsertRunMock).toHaveBeenCalledTimes(1);
+    expect(materializeMock.mock.invocationCallOrder[0]).toBeLessThan(
+      upsertRunMock.mock.invocationCallOrder[0]!,
+    );
+
+    persist.activity?.({
+      clientRequestId: "req-1",
+      sessionId: "session-1",
+      eventId: "evt-1",
+      kind: "reasoning.summary",
+      ordinal: 0,
+    });
+    expect(appendActivityMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("broadcasts a bounded projection without rematerializing or exposing Prompt", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.START)!;
+    startMock.mockResolvedValueOnce({
+      accepted: true,
+      projection: { clientRequestId: "req-1", phase: "pending-submit" },
+    });
+    await handler(validEvent(), validStartInput());
+    const send = vi.fn();
+    windows.list = [{ isDestroyed: () => false, webContents: { send } }];
+    const projection = {
+      clientRequestId: "req-1",
+      providerRunId: "task-1",
+      toolName: "calculator",
+      promptSummary: "2+2",
+      sessionId: "session-1",
+      profileId: "default",
+      phase: "running",
+      displayStage: "Executing skill...",
+      lastEventId: "evt-1",
+      eventSeq: 1,
+      createdAt: "t0",
+      updatedAt: "t1",
+    };
+    persist.listener?.(projection);
+    expect(materializeMock).not.toHaveBeenCalled();
+    expect(continuationMock).toHaveBeenCalledWith(projection);
+    expect(send).toHaveBeenCalledWith(
+      SKILL_RUN_IPC_CHANNELS.ON_PROJECTION_CHANGED,
+      projection,
+    );
+    expect(JSON.stringify(send.mock.calls[0])).not.toMatch(/"prompt"/);
+  });
+
+  it("does not swallow sidecar persistence failures", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.START)!;
+    startMock.mockResolvedValueOnce({
+      accepted: true,
+      projection: { clientRequestId: "req-1", phase: "pending-submit" },
+    });
+    await expect(handler(validEvent(), validStartInput())).resolves.toMatchObject(
+      { accepted: true },
+    );
+    upsertRunMock.mockImplementationOnce(() => {
+      throw new Error("SKILL_RUN_TRANSCRIPT_UNAVAILABLE");
+    });
+    expect(() =>
+      persist.run?.({
+        clientRequestId: "req-1",
+        sessionId: "session-1",
+        profileId: "default",
+        toolName: "calculator",
+        prompt: "keep going",
+        providerRunId: "task-1",
+        phase: "running",
+        displayStage: "Executing skill...",
+        lastEventId: null,
+        eventSeq: 1,
+        createdAt: "t0",
+        updatedAt: "t1",
+        auditComplete: true,
+      }),
+    ).toThrow(/UNAVAILABLE/);
   });
 });

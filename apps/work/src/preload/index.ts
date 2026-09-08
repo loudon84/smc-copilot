@@ -36,6 +36,11 @@ import type {
 } from "../shared/runtime/runtime-contract";
 import type { ControlOwnerSnapshot } from "../shared/runtime/control-owner";
 import {
+  isSessionCacheChangedEvent,
+  SESSION_CACHE_CHANGED_CHANNEL,
+  type SessionCacheChangedEvent,
+} from "../shared/session-cache-events";
+import {
   APP_UPDATE_CHANNELS,
   isAppUpdateState,
   type AppUpdateState,
@@ -1091,6 +1096,21 @@ const hermesAPI = {
       contextFolder: string | null;
     }>
   > => ipcRenderer.invoke("sync-session-cache"),
+
+  onSessionCacheChanged: (
+    callback: (event: SessionCacheChangedEvent) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: unknown,
+    ): void => {
+      if (!isSessionCacheChangedEvent(payload)) return;
+      callback(payload);
+    };
+    ipcRenderer.on(SESSION_CACHE_CHANGED_CHANNEL, handler);
+    return () =>
+      ipcRenderer.removeListener(SESSION_CACHE_CHANGED_CHANNEL, handler);
+  },
 
   updateSessionTitle: (sessionId: string, title: string): Promise<void> =>
     ipcRenderer.invoke("update-session-title", sessionId, title),

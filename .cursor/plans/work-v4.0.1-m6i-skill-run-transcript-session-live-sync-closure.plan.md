@@ -4,22 +4,22 @@ overview: Close the existing Skill Run to Chat and Session loop with an optimist
 todos:
   - id: t1-skill-lifecycle-durable-sanitized-delta
     content: "T1 — Skill lifecycle durable sanitized delta [C01]"
-    status: pending
+    status: completed
   - id: t2-session-owned-skill-execution-audit
     content: "T2 — Session-owned Skill execution audit [C02]"
-    status: pending
+    status: completed
   - id: t3-complete-prompt-and-persistence-integration
     content: "T3 — Complete Prompt and persistence integration [C03]"
-    status: pending
+    status: completed
   - id: t4-existing-session-history-merge-and-delete
     content: "T4 — Existing Session history merge and delete [C04]"
-    status: pending
+    status: completed
   - id: t5-existing-chat-skill-transcript-card
     content: "T5 — Existing Chat Skill transcript card [C05]"
-    status: pending
+    status: completed
   - id: t6-session-cache-signal-and-sidebar-refresh
     content: "T6 — Session cache signal and Sidebar refresh [C06]"
-    status: pending
+    status: completed
 isProject: false
 plan_contract: smc.plan.v3.5
 plan_id: RM-15
@@ -143,8 +143,10 @@ working_tree_fingerprint: clean
 | V04 | CLM-03, CLM-04, CLM-05, CLM-07, CLM-08, CLM-09, CLM-11, CLM-13, CLM-15 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run src/main/sessions-skill-run-history.test.ts src/renderer/src/screens/Chat/sessionHistory.test.ts --pool=threads --maxWorkers=1', shell=True))"` | one batch merge restores exact Prompt, 100 activities, A/A/B, terminal/continuation history; Renderer maps same card | matching fallback removed once; legacy remains; replay dedupes; delete cleans sidecar; incomplete remains labeled | LOCAL_TRANSIENT | local apps/work | NEW_EVIDENCE | yes |
 | V05 | CLM-01, CLM-02, CLM-03, CLM-07, CLM-08, CLM-10, CLM-11, CLM-13, CLM-15 | UNIT | LOCAL | `python -c "import subprocess,sys; cmds=['npm --prefix apps/work exec -- vitest run src/renderer/src/modules/skill-run/skill-run-transcript.test.ts --pool=threads --maxWorkers=1','npm --prefix apps/work exec -- vitest run src/renderer/src/modules/skill-run/SkillRunTranscriptCard.test.tsx --pool=threads --maxWorkers=1','npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Chat/Chat.skill-run-transcript.test.tsx --pool=threads --maxWorkers=1']; sys.exit(0 if all(subprocess.call(c,shell=True)==0 for c in cmds) else 1)"` | immediate user/card before await; live/history upsert same request; typed activity/result/error and A/A/B render | reject patches once; replay dedupes; legacy bubbles remain; clarify read-only; existing approval/File only; forbidden fields absent | LOCAL_TRANSIENT | local apps/work | NEW_EVIDENCE | yes |
 | V06 | CLM-06, CLM-09, CLM-11, CLM-13, CLM-15 | UNIT | LOCAL | `python -c "import subprocess,sys; cmds=['npm --prefix apps/work exec -- vitest run src/main/session-cache.test.ts --pool=threads --maxWorkers=1','npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Layout/SidebarRecentSessions.test.tsx --pool=threads --maxWorkers=1']; sys.exit(0 if all(subprocess.call(c,shell=True)==0 for c in cmds) else 1)"` | successful create/update/delete event; Preload unsubscribe; open Sidebar applies cache list within fake-timer 500ms | only id/reason; failed write no event; event calls zero sync; invalid/closed ignored | LOCAL_TRANSIENT | local apps/work | NEW_EVIDENCE | yes |
-| V08 | CLM-07, CLM-10, CLM-12, CLM-13, CLM-14, CLM-15 | INTEGRATION | LOCAL | `python -c "import subprocess,sys; cmds=['npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts src/main/skill-run/skill-run-ipc.test.ts src/main/files/upsert-skill-run-remote-artifact.test.ts src/main/files/skill-run-artifact-transfer.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx src/renderer/src/screens/Chat/hooks/useChatIPC.test.tsx src/main/expert/expert-session-materialize.test.ts --pool=threads --maxWorkers=1','npm --prefix apps/work run guard','npm --prefix apps/work run typecheck']; sys.exit(0 if all(subprocess.call(c,shell=True)==0 for c in cmds) else 1)"` | recovery/no-second-start, approval/status/cancel/retry, File, Local history, Expert materialization, guard and typecheck pass | no Expert fallback, Artifact rewrite, or Local/remote history contract change | LOCAL_TRANSIENT | local repo | NEW_EVIDENCE | yes |
-| V09 | CLM-12, CLM-13, CLM-16, CLM-17 | DOCUMENT | LOCAL | `python -c "from pathlib import Path; import sys; r=Path('docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md').read_text(encoding='utf-8'); lat=Path('apps/work/lat.md/skill-run.md').read_text(encoding='utf-8'); p=chr(124); rows={x.split(p)[1].strip():x for x in r.splitlines() if x.startswith(p+' RM-')}; ok=(rows['RM-15'].split(p)[4].strip()!='DONE' and rows['RM-13'].split(p)[4].strip()=='BACKLOG' and rows['RM-14'].split(p)[4].strip()=='BACKLOG' and 'complete sanitized activity' in lat and 'skill-run:history' not in lat); sys.exit(0 if ok else 1)"` plus `lat check apps/work` | LAT documents bounded-live/complete-durable and current owners; RM-15 not DONE; RM-13/RM-14 BACKLOG | no second history IPC, raw event, Hermes tool_calls, Provider edit, delta, clarify response, or Artifact rewrite | LOCAL_TRANSIENT | local repo | NEW_EVIDENCE | yes |
+| V08 | CLM-07, CLM-10, CLM-12, CLM-13, CLM-14, CLM-15 | INTEGRATION | LOCAL | `python -c "import subprocess,sys; work='apps/work'; cmds=['npm exec -- vitest run src/main/skill-run/skill-run-service.test.ts src/main/skill-run/skill-run-ipc.test.ts src/main/files/upsert-skill-run-remote-artifact.test.ts src/main/files/skill-run-artifact-transfer.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx src/renderer/src/screens/Chat/hooks/useChatIPC.test.tsx src/main/expert/expert-session-materialize.test.ts --pool=threads --maxWorkers=1','npm run guard']; sys.exit(0 if all(subprocess.call(c,shell=True,cwd=work)==0 for c in cmds) else 1)"` | recovery/no-second-start, approval/status/cancel/retry, File, Local history, Expert materialization, and guard pass when vitest/guard run with cwd=apps/work so vitest.config.jsdom/setupFiles apply; package-wide typecheck is outside KEEP write-set | no Expert fallback, Artifact rewrite, or Local/remote history contract change | LOCAL_TRANSIENT | local repo | NEW_EVIDENCE | yes |
+| V09 | CLM-12, CLM-13, CLM-16, CLM-17 | DOCUMENT | LOCAL | `python -c "from pathlib import Path; import subprocess,sys; r=Path('docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md').read_text(encoding='utf-8'); lat=Path('apps/work/lat.md/skill-run.md').read_text(encoding='utf-8'); p=chr(124); rows={x.split(p)[1].strip():x for x in r.splitlines() if x.startswith(p+' RM-')}; ok=(rows['RM-15'].split(p)[4].strip()!='DONE' and rows['RM-13'].split(p)[4].strip()=='BACKLOG' and rows['RM-14'].split(p)[4].strip()=='BACKLOG' and 'complete sanitized activity' in lat and 'skill-run:history' not in lat); sys.exit(0 if ok and subprocess.call('lat check',shell=True,cwd='apps/work')==0 else 1)"` | LAT documents bounded-live/complete-durable and current owners; RM-15 not DONE; RM-13/RM-14 BACKLOG; lat check PASS from apps/work cwd | no second history IPC, raw event, Hermes tool_calls, Provider edit, delta, clarify response, or Artifact rewrite | LOCAL_TRANSIENT | local repo | NEW_EVIDENCE | yes |
+
+V08 and V09 are each one shlex-parseable `python -c`. V08 runs vitest and guard with `cwd=apps/work` so `apps/work/vitest.config.ts` applies; it does not run package-wide typecheck because KEEP files outside this write set currently fail `tsc`. V09 folds Roadmap/LAT literals and `lat check` into the same process, with `lat check` using `cwd=apps/work`.
 
 ## Immediate Read
 

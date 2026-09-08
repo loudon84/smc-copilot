@@ -6,24 +6,68 @@ import {
 } from "./chatMessages";
 import { isLossyChunkCopy } from "./lossyText";
 import type { ActiveTurn, ChatMessage, ChatBubbleMessage } from "./types";
+import {
+  isSkillRunTerminalPhase,
+  type SkillRunActivityItem,
+  type SkillRunLocalPhase,
+} from "../../../../shared/skill-run";
 
 /**
  * Shape of one row from the main process's `getSessionMessages` IPC.
  * Mirrors `src/main/sessions.ts:HistoryItem` (kept loose here so the
  * renderer doesn't have to import main-process types).
  */
-export interface DbHistoryItem {
-  kind: "user" | "assistant" | "reasoning" | "tool_call" | "tool_result";
-  id: number;
-  content?: string;
-  error?: string;
-  text?: string;
-  callId?: string;
-  name?: string;
-  args?: string;
-  timestamp?: number;
-  attachments?: Attachment[];
-}
+export type DbHistoryItem =
+  | {
+      kind: "user";
+      id: number;
+      content?: string;
+      timestamp?: number;
+      attachments?: Attachment[];
+    }
+  | {
+      kind: "assistant";
+      id: number;
+      content?: string;
+      error?: string;
+      timestamp?: number;
+      attachments?: Attachment[];
+    }
+  | {
+      kind: "reasoning";
+      id: number;
+      text?: string;
+    }
+  | {
+      kind: "tool_call";
+      id: number;
+      callId?: string;
+      name?: string;
+      args?: string;
+    }
+  | {
+      kind: "tool_result";
+      id: number;
+      callId?: string;
+      name?: string;
+      content?: string;
+      attachments?: Attachment[];
+    }
+  | {
+      kind: "skill_run";
+      id: number;
+      clientRequestId: string;
+      providerRunId?: string | null;
+      toolName: string;
+      phase: SkillRunLocalPhase;
+      displayStage: string;
+      activities: SkillRunActivityItem[];
+      resultText?: string;
+      errorCode?: string;
+      errorMessage?: string;
+      timestamp?: number;
+      auditComplete?: boolean;
+    };
 
 /**
  * Convert a stream of `getSessionMessages` rows into renderer-ready
@@ -99,8 +143,31 @@ export function dbItemsToChatMessages(
               ? { attachments: it.attachments }
               : {}),
           };
-        default:
+        case "skill_run":
+          return {
+            id: `skill-run:${it.clientRequestId}`,
+            kind: "skill_run",
+            role: "agent",
+            clientRequestId: it.clientRequestId,
+            providerRunId: it.providerRunId,
+            toolName: it.toolName,
+            phase: it.phase,
+            displayStage: it.displayStage,
+            activities: it.activities,
+            resultText: it.resultText,
+            errorCode: it.errorCode,
+            errorMessage: it.errorMessage,
+            pending: !isSkillRunTerminalPhase(it.phase),
+            ...(typeof it.timestamp === "number"
+              ? { timestamp: it.timestamp }
+              : {}),
+            auditComplete: it.auditComplete,
+          };
+        default: {
+          const _exhaustive: never = it;
+          void _exhaustive;
           return null;
+        }
       }
     })
     .filter((m): m is ChatMessage => m !== null);
@@ -236,8 +303,17 @@ function reconciliationKey(m: ChatMessage): string | null {
         return `tool_call:${m.callId || m.id}`;
       case "tool_result":
         return `tool_result:${m.callId || m.id}`;
-      default:
+      case "skill_run":
+        return `skill_run:${m.clientRequestId}`;
+      case "clarify":
+      case "user":
+      case "assistant":
         return null;
+      default: {
+        const _exhaustive: never = m;
+        void _exhaustive;
+        return null;
+      }
     }
   }
   const bubble = m as ChatBubbleMessage;

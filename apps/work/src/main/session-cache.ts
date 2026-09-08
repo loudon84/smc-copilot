@@ -11,6 +11,12 @@ import { t } from "../shared/i18n";
 import { getAppLocale } from "./locale";
 import { getDbConnection } from "./db";
 import { getSessionContextFolders } from "./session-context-folder-store";
+import {
+  isSessionCacheChangedEvent,
+  type SessionCacheChangedEvent,
+  type SessionCacheChangedListener,
+  type SessionCacheChangedReason,
+} from "../shared/session-cache-events";
 
 /**
  * The session cache lives alongside its own profile's data so profiles
@@ -97,11 +103,44 @@ function readCache(): CacheData {
   }
 }
 
-function writeCache(data: CacheData): void {
+const sessionCacheChangedListeners = new Set<SessionCacheChangedListener>();
+
+/** Subscribe in-process (Main) listeners — IPC broadcasts from register.ts. */
+export function subscribeSessionCacheChanged(
+  listener: SessionCacheChangedListener,
+): () => void {
+  sessionCacheChangedListeners.add(listener);
+  return () => {
+    sessionCacheChangedListeners.delete(listener);
+  };
+}
+
+/** Test-only: drop Main-internal cache-change subscribers. */
+export function resetSessionCacheChangedListenersForTests(): void {
+  sessionCacheChangedListeners.clear();
+}
+
+function emitSessionCacheChanged(
+  sessionId: string,
+  reason: SessionCacheChangedReason,
+): void {
+  const event: SessionCacheChangedEvent = { sessionId, reason };
+  if (!isSessionCacheChangedEvent(event)) return;
+  for (const listener of sessionCacheChangedListeners) {
+    try {
+      listener(event);
+    } catch (err) {
+      console.warn("[session-cache] listener failed:", err);
+    }
+  }
+}
+
+function writeCache(data: CacheData): boolean {
   try {
     safeWriteFile(cacheFilePath(), JSON.stringify(data));
+    return true;
   } catch {
-    // non-fatal
+    return false;
   }
 }
 
@@ -269,7 +308,9 @@ export function updateSessionTitle(sessionId: string, title: string): void {
   const idx = cache.sessions.findIndex((s) => s.id === sessionId);
   if (idx >= 0) {
     cache.sessions[idx].title = title;
-    writeCache(cache);
+    if (writeCache(cache)) {
+      emitSessionCacheChanged(sessionId, "updated");
+    }
   }
   // Also persist in state.db so the rename survives cache rebuilds
   try {
@@ -298,7 +339,9 @@ export function removeSessionFromCache(sessionId: string): void {
   const next = cache.sessions.filter((s) => s.id !== sessionId);
   if (next.length !== cache.sessions.length) {
     cache.sessions = next;
-    writeCache(cache);
+    if (writeCache(cache)) {
+      emitSessionCacheChanged(sessionId, "deleted");
+    }
   }
 }
 
@@ -309,6 +352,7 @@ export function removeSessionFromCache(sessionId: string): void {
 export function upsertCachedSession(session: CachedSession): void {
   const cache = readCache();
   const idx = cache.sessions.findIndex((s) => s.id === session.id);
+  const reason: SessionCacheChangedReason = idx >= 0 ? "updated" : "created";
   if (idx >= 0) {
     cache.sessions[idx] = {
       ...cache.sessions[idx],
@@ -323,5 +367,7 @@ export function upsertCachedSession(session: CachedSession): void {
     });
   }
   cache.sessions.sort((a, b) => b.startedAt - a.startedAt);
-  writeCache(cache);
+  if (writeCache(cache)) {
+    emitSessionCacheChanged(session.id, reason);
+  }
 }

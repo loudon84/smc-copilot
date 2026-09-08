@@ -3,6 +3,7 @@ import { HermesAvatar, MessageRow } from "./MessageRow";
 import type { AgentAvatarInfo } from "./MessageRow";
 import { ReasoningRow, ToolActivityGroup } from "./HistoryRow";
 import { ClarifyCard } from "./ClarifyCard";
+import { SkillRunTranscriptCard } from "../../modules/skill-run/SkillRunTranscriptCard";
 import { getPromptAnchorId } from "./prompt-navigator/promptNavigatorUtils";
 import type { MessageDocumentPreviewInput } from "../../../../shared/files";
 import type {
@@ -153,6 +154,18 @@ export const MessageList = memo(function MessageList({
           active={isLoading && i === visibleMessages.length - 1}
           showAvatar={showAvatar}
           agent={agentAvatar}
+        />,
+      );
+      continue;
+    }
+
+    if (k === "skill_run") {
+      rows.push(
+        <SkillRunTranscriptCard
+          key={msg.id}
+          msg={msg as Extract<ChatMessage, { kind: "skill_run" }>}
+          sessionId={sessionId}
+          onPreviewFile={onPreviewFile}
         />,
       );
       continue;

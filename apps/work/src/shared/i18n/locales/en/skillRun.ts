@@ -47,4 +47,10 @@ export default {
   reasonContractMismatch: "Skill is unavailable or out of sync with the catalog",
   extraParametersRequired: "Fill the required skill parameters before sending.",
   skillUnavailable: "This skill cannot be executed in prompt-first mode.",
+  activityReasoning: "Reasoning",
+  activityTool: "Tool",
+  activityClarify: "Clarification",
+  activityApproval: "Approval requested",
+  transcriptIncomplete: "Skill timeline is incomplete.",
+  transcriptPending: "Submitting skill request...",
 };

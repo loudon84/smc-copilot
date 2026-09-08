@@ -75,6 +75,7 @@ function upsertSessionCacheRow(
 
 export function materializeSkillRunSessionTranscript(
   projection: SkillRunProjection,
+  exactPrompt?: string,
 ): MaterializeSkillRunSessionResult | null {
   if (!shouldMaterializeSkillRunSession(projection)) {
     return null;
@@ -83,9 +84,13 @@ export function materializeSkillRunSessionTranscript(
   const sessionId = projection.sessionId?.trim();
   if (!sessionId) return null;
 
-  const desiredTitle = sessionTitleFromUserMessage(
-    projection.promptSummary || projection.toolName,
-  );
+  const prompt =
+    typeof exactPrompt === "string" && exactPrompt.length > 0
+      ? exactPrompt
+      : undefined;
+  const titleSource = prompt ?? (projection.promptSummary || projection.toolName);
+  const userContent = prompt ?? projection.promptSummary;
+  const desiredTitle = sessionTitleFromUserMessage(titleSource);
   const nowSec = Date.now() / 1000;
   const ids = skillRunTranscriptBubbleIds(projection.clientRequestId);
   const assistantContent = buildSkillRunTranscriptAssistantContent(projection);
@@ -143,7 +148,7 @@ export function materializeSkillRunSessionTranscript(
           `INSERT INTO messages (
              session_id, role, content, timestamp, platform_message_id, active
            ) VALUES (?, 'user', ?, ?, ?, 1)`,
-        ).run(sessionId, projection.promptSummary, nowSec, ids.user);
+        ).run(sessionId, userContent, nowSec, ids.user);
         wroteMessages = true;
       }
 

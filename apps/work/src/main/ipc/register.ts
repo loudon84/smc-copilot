@@ -209,7 +209,9 @@ import {
   syncSessionCache,
   listCachedSessions,
   updateSessionTitle,
+  subscribeSessionCacheChanged,
 } from "../session-cache";
+import { SESSION_CACHE_CHANGED_CHANNEL } from "../../shared/session-cache-events";
 import {
   remoteDeleteSession,
   remoteDeleteSessions,
@@ -663,6 +665,8 @@ function resolveLibraryModelEntry(
   const target = norm(baseUrl);
   return matches.find((m) => norm(m.baseUrl) === target) ?? matches[0];
 }
+
+let unsubscribeSessionCacheChanged: (() => void) | null = null;
 
 export function registerIpcHandlers(context: IpcContext): void {
   const {
@@ -2431,6 +2435,18 @@ export function registerIpcHandlers(context: IpcContext): void {
       return updateSessionTitle(sessionId, title);
     },
   );
+
+  unsubscribeSessionCacheChanged?.();
+  unsubscribeSessionCacheChanged = subscribeSessionCacheChanged((event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue;
+      try {
+        win.webContents.send(SESSION_CACHE_CHANGED_CHANNEL, event);
+      } catch {
+        // Window may be closing mid-send.
+      }
+    }
+  });
 
   // Session search
   ipcMain.handle("search-sessions", (_event, query: string, limit?: number) => {

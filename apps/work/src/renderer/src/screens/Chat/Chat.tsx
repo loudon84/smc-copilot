@@ -62,6 +62,13 @@ import {
   initSkillRunRendererListener,
   subscribeSkillRunCatalog,
 } from "../../modules/skill-run";
+import { listSkillRunProjectionsForSession } from "../../modules/skill-run/store";
+import {
+  applySkillRunProjectionsToMessages,
+  createOptimisticSkillRunTurn,
+  rejectSkillRunCard,
+} from "../../modules/skill-run/skill-run-transcript";
+import "../../modules/skill-run/skill-run.css";
 import type {
   SkillCatalogToolItem,
   SkillRunFeatureMode,
@@ -555,7 +562,13 @@ function Chat({
     const sync = (): void => {
       const sessionId = hermesSessionId || initialSessionId || "";
       if (sessionId) {
-        setActiveSkillProjection(getLatestSkillRunProjectionForSession(sessionId));
+        const projections = listSkillRunProjectionsForSession(sessionId);
+        setActiveSkillProjection(
+          getLatestSkillRunProjectionForSession(sessionId),
+        );
+        setMessages((prev) =>
+          applySkillRunProjectionsToMessages(prev, projections),
+        );
       }
     };
     sync();
@@ -1328,6 +1341,24 @@ function Chat({
       extraParameters?: Record<string, string>;
       fileIds?: string[];
     }) => {
+      const optimistic = createOptimisticSkillRunTurn({
+        prompt: request.prompt,
+        clientRequestId: request.clientRequestId,
+        toolName: request.toolName,
+      });
+      setMessages((prev) => {
+        if (
+          prev.some(
+            (message) =>
+              "kind" in message &&
+              message.kind === "skill_run" &&
+              message.clientRequestId === request.clientRequestId,
+          )
+        ) {
+          return prev;
+        }
+        return [...prev, ...optimistic];
+      });
       try {
         let sessionId = hermesSessionId || initialSessionId || "";
         if (!sessionId) {
@@ -1346,6 +1377,13 @@ function Chat({
         };
         const result = await window.hermesAPI.skillRun.start(input);
         if (!result.accepted) {
+          setMessages((prev) =>
+            rejectSkillRunCard(
+              prev,
+              request.clientRequestId,
+              result.message || "Skill run rejected",
+            ),
+          );
           toast.error(result.message || "Skill run rejected");
           return;
         }
@@ -1359,7 +1397,11 @@ function Chat({
           updatedAt: new Date().toISOString(),
         });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Skill request failed");
+        const message = err instanceof Error ? err.message : "Skill request failed";
+        setMessages((prev) =>
+          rejectSkillRunCard(prev, request.clientRequestId, message),
+        );
+        toast.error(message);
       }
     },
     [authGeneration, hermesSessionId, initialSessionId, profile, selectedSkill],
