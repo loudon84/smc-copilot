@@ -178,6 +178,12 @@ def payload_sha256(payload: dict) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def _evidence_fingerprint(schema: str, payload: dict) -> str | None:
+    if schema in {"smc.evidence.manifest.v2", "smc.evidence.manifest.v3"}:
+        return payload.get("scope_fingerprint")
+    return payload.get("wtree_fingerprint")
+
+
 def validate_manifest_bytes(data: bytes, pid: str, expected_fp: str, expected_plan: str) -> list[str]:
     errors: list[str] = []
     try:
@@ -189,7 +195,7 @@ def validate_manifest_bytes(data: bytes, pid: str, expected_fp: str, expected_pl
         errors.append("ROADMAP_EVIDENCE_MANIFEST_SCHEMA_INVALID")
     if manifest.get("plan_id") != pid:
         errors.append(f"ROADMAP_EVIDENCE_MANIFEST_PLAN_ID_MISMATCH: expected={pid} actual={manifest.get('plan_id')}")
-    manifest_fp = manifest.get("scope_fingerprint") if schema == "smc.evidence.manifest.v2" else manifest.get("wtree_fingerprint")
+    manifest_fp = _evidence_fingerprint(schema, manifest)
     if manifest_fp != expected_fp:
         errors.append("ROADMAP_EVIDENCE_MANIFEST_FINGERPRINT_MISMATCH")
     if str(manifest.get("plan", "")).replace("\\", "/") != expected_plan:
@@ -200,7 +206,7 @@ def validate_manifest_bytes(data: bytes, pid: str, expected_fp: str, expected_pl
     if stored != payload_sha256(check):
         errors.append("ROADMAP_EVIDENCE_MANIFEST_DIGEST_INVALID")
     impl = manifest.get("implementation_review") or {}
-    impl_fp = impl.get("scope_fingerprint") if schema == "smc.evidence.manifest.v2" else impl.get("wtree_fingerprint")
+    impl_fp = _evidence_fingerprint(schema, impl)
     if impl.get("verdict") != "PASS" or impl_fp != expected_fp:
         errors.append("ROADMAP_EVIDENCE_MANIFEST_IMPLEMENTATION_REVIEW_INVALID")
     audit = manifest.get("completion_audit") or {}
