@@ -1,11 +1,11 @@
 ---
 roadmap_id: WORK-SKILL-FIRST-LAYOUT-V4.0.1
-version: v2.2
+version: v2.3
 status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.0
-updated_at: 2026-09-08T10:16:14.333958Z
+updated_at: 2026-09-08T11:28:42.949552Z
 implementation_plan_required: true
 ---
 
@@ -15,7 +15,9 @@ implementation_plan_required: true
 
 ## Migration Provenance
 
-本 Roadmap 从旧的叙述式 milestone 文档迁移为可校验的 Item DAG。仓库尚无独立 Skill Run Architecture Decision，因此暂以已批准 PRD 的 Target Architecture 作为 provenance bridge；不得把此桥接解释为 M0–M4 已具备新治理所要求的一对一 Stage PRD、Plan、实现提交和验证证据。
+本 Roadmap 从旧的叙述式 milestone 文档迁移为可校验的 Item DAG。仓库尚无覆盖整份 Skill Run 的独立 Architecture Decision，因此 frontmatter `architecture_decision` 仍以已批准父 PRD 的 Target Architecture 作为 provenance bridge；不得把此桥接解释为 M0–M4 已具备新治理所要求的一对一 Stage PRD、Plan、实现提交和验证证据。
+
+RM-13 / RM-14 是 named increment `AD-WORK-v4.0.1-STREAMING-DELTA`（`docs/work/AD-WORK-v4.0.1-streaming-delta.md`）。不得把 Roadmap `architecture_decision` 改到该 AD；对应 Stage PRD 的 `source_revision` 必须包含 `AD-WORK-v4.0.1-STREAMING-DELTA@1.0.1`。
 
 ## Roadmap Items
 
@@ -33,6 +35,8 @@ implementation_plan_required: true
 | RM-10 | M6d P1 受限 JSON Schema 参数表单。 | RM-06 | DONE | 独立 Stage PRD；只覆盖 P0 已 fail-closed 的 `parameters-required` / `form-required` 子集；不猜 schema。 | docs/work/PRD-WORK-v4.0.1-M6-limited-parameter-form.md | .cursor/plans/work-v4.0.1-m6-limited-parameter-form.plan.md | 2de7877b92eaa8ef2edc5996f2fa2779663b5b50 | smc-evidence:RM-10@sha256:8f8547957524b647965f49713015f672eb952ba19959ffb773402e130cd2b869 |
 | RM-11 | M6e P1 Attachment refs / upload 与 File Platform 接入。 | RM-06 | DONE | Provider v1.4.0 已关闭 Attachment refs/upload 合同；独立 Stage PRD 后实施 File Platform 接入。`approvalExpiry` 仍 `unsupported`。 | docs/work/PRD-WORK-v4.0.1-M6-attachment-refs-upload.md | .cursor/plans/work-v4.0.1-m6-attachment-refs-upload.plan.md | c404294fad10abed7add90a1fd32ceb6afd51dda | smc-evidence:RM-11@sha256:f04b9caa3d7b43bb7ebee5a510c14b624ce3db3833d28d1c2eaf4a2e4456b72c |
 | RM-12 | M6f P1 收藏、最近使用与组织推荐。 | RM-07 | DONE | 独立 Stage PRD；不得新增第二 Catalog owner 或绕过 Main Catalog cache。 | docs/work/PRD-WORK-v4.0.1-M6-catalog-favorites-recent.md | .cursor/plans/work-v4.0.1-m6-catalog-favorites-recent.plan.md | 801059b2b9d9fcfafc18c7d327e561e1bdcc2090 | smc-evidence:RM-12@sha256:6af35a8367b3f883bfc09d20e9015a655ffe8503d6e466a66273e4f960d63b5e |
+| RM-13 | M6g P1 Streaming delta 合同进口：进口已枚举 streaming/token delta 的不可变 Skill Run Bundle 并完成 consumer-lock。架构出处：AD-WORK-v4.0.1-STREAMING-DELTA。Depends On RM-11 仅为 v1.4.0 合同基线，不是附件功能依赖。 | RM-11 | BACKLOG | 仓外 Provider tag 可解析；完整 Bundle checksum 通过；event union 含独立 delta type + payload schema + fixture；consumer-lock 完成；不映射 UI；不回归附件、approvalExpiry、download-by-ref。Provider tag 前保持 BACKLOG，不得 Grounding Stage PRD。 | - | - | - | - |
+| RM-14 | M6h P1 Streaming delta 映射：将已进口的枚举 delta 映射为现有 parser/projection/`modules/skill-run` 上已清洗的已枚举 payload 字段。架构出处：AD-WORK-v4.0.1-STREAMING-DELTA。 | RM-13 | BACKLOG | 仅映射已枚举类型与已发布 payload 字段；unknown fail-soft；无新 Owner；无 raw event 到 Renderer；不得把未枚举增量文本当合同；不得与 approvalExpiry、download-by-ref、clarify respond 合并。RM-13 DONE 前不得 READY。 | - | - | - | - |
 
 ## Outcome
 
@@ -48,7 +52,9 @@ M0 Provider Contract Ready
   → M4 Result + Artifact + Session Files
   → M5 Pilot + Production Default
   → M6a Expert default-entry Removal（RM-07）
-  → M6b–M6f 各 P1 独立 Item（RM-08–RM-12；Approval / Attachment 仍等新 Bundle）
+  → M6b–M6f 各 P1 独立 Item（RM-08–RM-12）
+  → M6g Streaming delta 合同进口（RM-13 BACKLOG；仓外 Provider 枚举 Bundle 前不得 READY）
+  → M6h Streaming delta 映射（RM-14 BACKLOG；依赖 RM-13 DONE）
 ```
 
 M0 Bundle/fixture 仍是合同输入。2026-09-04 曾把 RM-01 受控 live 延后以免阻塞 M3；2026-09-06 已在受控 public backend 重跑 live AC-03/AC-04 并将 RM-01 标为 DONE。
@@ -269,7 +275,23 @@ M5 已关闭。v1.2.1 Bundle 把 `approval` 与 `attachments` 标为 `unsupporte
 
 **Deliverables:** 把上述事件从 `rawUnknown` 提升为 Work activity projection；unknown 仍 fail-soft；`approval.requested` / `clarify.requested` 只读；不复用 Local Chat `ClarifyCard` 或 `clarify-respond` IPC；不增加 Approval decision。
 
-**RM-09–RM-12** 各自独立 Grounding。RM-09 / RM-11 在新 Bundle 关闭 `unsupported` 并补齐 endpoint 前不得开实施 Plan。
+**RM-09–RM-12** 各自独立 Grounding。RM-09 / RM-11 已随对应 Bundle 关闭并 DONE。
+
+**RM-13 / M6g — P1 Streaming delta 合同进口**
+
+**Owner:** 现有 Work Skill Run consumer-lock owner。Delta 事件类型 / payload / fixture / tag 仍属 NoDeskClaw Provider Owner。
+
+**Dependencies:** RM-11 DONE 仅表示现行消费合同基线停在 v1.4.0 lock，不是附件功能依赖。架构出处：`AD-WORK-v4.0.1-STREAMING-DELTA`。仓外 Provider 尚未发布已枚举 delta Bundle 前保持 BACKLOG。
+
+**Deliverables:** 进口 Provider 发布的、已枚举 streaming/token delta 事件类型与 payload 的不可变 Bundle，并完成 checksum consumer-lock。不映射 UI，不改 parser 去猜测未枚举类型，不回归附件 / `approvalExpiry` / download-by-ref。
+
+**RM-14 / M6h — P1 Streaming delta 映射**
+
+**Owner:** 现有 Main contract parser + SkillRunService projection；Renderer `modules/skill-run` 只展示已枚举、已清洗的 payload 字段。
+
+**Dependencies:** RM-13 DONE。架构出处：`AD-WORK-v4.0.1-STREAMING-DELTA`。Import DONE 前不得 READY，不得 Grounding Stage PRD。
+
+**Deliverables:** 仅映射 Bundle 已枚举的 delta 事件与已发布 payload 字段；unknown fail-soft；不新增 Chat 页面、IPC channel 或 Production Owner；不向 Renderer 传递 raw Provider event；不复用 Local Chat 流式通道；不得与 `approvalExpiry`、download-by-ref、clarify respond 合并。「增量文本 / token」在 Provider 枚举 payload 前不是合同事实。
 
 不得借 P1 把 Runtime routing、raw Provider payload 或第二 Session/File owner 引入 Renderer。
 
@@ -291,7 +313,9 @@ M5 已关闭。v1.2.1 Bundle 把 `approval` 与 `attachments` 标为 `unsupporte
 - run-scoped file identity migration在 Skill Artifact production upsert 前；
 - Checkpoint B 在 production default 前；
 - v4.2 Removal PRD（RM-07）在 Expert 默认入口删除前；
-- Approval decision（RM-09）与 Attachment（RM-11）在新 Bundle 关闭 `unsupported` 前。
+- Approval decision（RM-09）与 Attachment（RM-11）在新 Bundle 关闭 `unsupported` 前（两项均已 DONE）；
+- Streaming delta 进口（RM-13）在仓外 Provider 发布已枚举 delta Bundle 前保持 BACKLOG；
+- Streaming delta 映射（RM-14）在 RM-13 DONE 前保持 BACKLOG，且不得与进口、expiry、upload 混项。
 
 ## Risks and Mitigations
 
@@ -321,8 +345,9 @@ ROADMAP 完成需同时满足：
 
 - M0–M5 全部退出条件通过；
 - RM-07–RM-12 各有独立 Stage PRD，不得把 P1 与 Expert removal 混进同一 Item；
+- RM-13 / RM-14 是 streaming delta named increment，初始 BACKLOG，不纳入上述 P0/P1 收尾；Provider tag 前不得 READY，不得从父 P1 直接开单一映射 PRD；
 - APPROVED 架构 PRD 的所有 P0 Acceptance Criteria 有自动化或明确人工证据；
 - Skill-first 成为生产默认但可安全回滚；
 - Expert 兼容 reader、Local Chat 和 Runtime ChatRun 无回归；
 - 没有 silent fallback、duplicate Run、raw credential/URL 泄漏或第二 Session/File owner；
-- P1 与 Expert Removal 各留在独立 Item / PRD / Plan（RM-07–RM-12），不混入 P0 收尾。
+- P1 与 Expert Removal 各留在独立 Item / PRD / Plan（RM-07–RM-12），不混入 P0 收尾；streaming delta 分 RM-13 进口与 RM-14 映射，均引用 `AD-WORK-v4.0.1-STREAMING-DELTA`。
