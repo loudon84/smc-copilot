@@ -138,7 +138,9 @@ export function createAuthorizedBackendTransport(
     const token = (await ensureAccessToken()) || requireCachedAccessToken();
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${token}`);
-    if (!headers.has("Content-Type") && init.body) {
+    const formDataBody =
+      typeof FormData !== "undefined" && init.body instanceof FormData;
+    if (!headers.has("Content-Type") && init.body && !formDataBody) {
       headers.set("Content-Type", "application/json");
     }
     if (init.idempotencyKey) {

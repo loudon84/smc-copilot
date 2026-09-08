@@ -14,7 +14,7 @@ export default {
   activeSkill: "Active Skill",
   clearSelection: "Change skill",
   selectSkillBeforeSending: "Select a skill before sending.",
-  attachmentsDisabled: "Attachments are disabled in Skill mode.",
+  attachmentsDisabled: "Attachments are disabled unless the selected skill accepts files.",
   refresh: "Refresh",
   favoritesGroup: "Favorites",
   recentGroup: "Recent",

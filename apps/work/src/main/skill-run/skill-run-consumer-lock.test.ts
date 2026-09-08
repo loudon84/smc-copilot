@@ -16,6 +16,7 @@ import {
 } from "../../shared/skill-run";
 import {
   hasSkillRunApprovalDecisionBundle,
+  hasSkillRunAttachmentBundle,
   isCompleteSkillRunBundleDir,
 } from "./skill-run-consumer-lock";
 
@@ -259,6 +260,7 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(unsupported.properties).toHaveProperty("attachments");
     expect(unsupported.properties).not.toHaveProperty("approval");
     expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V140)).toBe(true);
+    expect(hasSkillRunAttachmentBundle()).toBe(true);
   });
 
   it("keeps P0 required paths free of approval-decision schemas", () => {
@@ -282,6 +284,11 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(hasSkillRunApprovalDecisionBundle()).toBe(
       isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V130),
     );
+    expect(hasSkillRunAttachmentBundle()).toBe(
+      isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V140),
+    );
+    expect(source).toContain("hasSkillRunAttachmentBundle");
+    expect(source).toContain("contracts/skill-run/v1.4.0");
   });
 
   it("accepts a checksum-valid complete Bundle fixture", () => {

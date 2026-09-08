@@ -300,4 +300,44 @@ describe("registerSkillRunIpc", () => {
       }),
     ).rejects.toThrow(/Invalid SkillRunDecideApprovalInput/);
   });
+
+  it("start forwards optional fileIds and rejects refs, paths, and oversize lists", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.START)!;
+    startMock.mockResolvedValueOnce({
+      accepted: true,
+      projection: { clientRequestId: "req-1", phase: "pending-submit" },
+    });
+    await expect(
+      handler(validEvent(), validStartInput({ fileIds: ["file-a", "file-b"] })),
+    ).resolves.toMatchObject({ accepted: true });
+    expect(startMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fileIds: ["file-a", "file-b"],
+      }),
+    );
+    const forwarded = startMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(forwarded).not.toHaveProperty("attachment_refs");
+    expect(JSON.stringify(forwarded)).not.toMatch(/att_/);
+
+    await expect(
+      handler(validEvent(), validStartInput({ attachment_refs: ["att_stolen"] })),
+    ).rejects.toThrow(/Invalid SkillRunStartInput/);
+    await expect(
+      handler(validEvent(), validStartInput({ path: "C:\\\\Users\\\\x.pdf" })),
+    ).rejects.toThrow(/Invalid SkillRunStartInput/);
+    await expect(
+      handler(validEvent(), validStartInput({ fileIds: ["att_live_example"] })),
+    ).rejects.toThrow(/Invalid SkillRunStartInput\.fileIds/);
+    await expect(
+      handler(validEvent(), validStartInput({ fileIds: ["C:\\\\staged\\\\a.pdf"] })),
+    ).rejects.toThrow(/Invalid SkillRunStartInput\.fileIds/);
+    await expect(
+      handler(
+        validEvent(),
+        validStartInput({
+          fileIds: Array.from({ length: 11 }, (_, i) => `file-${i}`),
+        }),
+      ),
+    ).rejects.toThrow(/Invalid SkillRunStartInput\.fileIds/);
+  });
 });

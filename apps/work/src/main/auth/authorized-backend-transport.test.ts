@@ -52,6 +52,34 @@ describe("authorized-backend-transport", () => {
     expect(capturedHeaders?.get("X-Idempotency-Key")).toBe("idem-123");
   });
 
+  it("keeps Authorization and omits JSON Content-Type for FormData bodies", async () => {
+    let capturedHeaders: Headers | undefined;
+    let capturedBody: BodyInit | undefined;
+
+    const mockFetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedHeaders = new Headers(init?.headers);
+      capturedBody = init?.body ?? undefined;
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    const transport = createAuthorizedBackendTransport({
+      fetchImpl: mockFetch as unknown as typeof fetch,
+      ensureAccessToken: async () => "fresh-jwt-token",
+    });
+
+    const form = new FormData();
+    form.append("file", new Blob(["hello"], { type: "text/plain" }), "note.txt");
+    await transport.authorizedFetch("/api/v1/attachments", {
+      method: "POST",
+      body: form,
+    });
+
+    expect(capturedBody).toBe(form);
+    expect(capturedHeaders?.get("Authorization")).toBe("Bearer fresh-jwt-token");
+    expect(capturedHeaders?.get("Content-Type")).toBeNull();
+    expect(capturedHeaders?.get("X-Idempotency-Key")).toBeNull();
+  });
+
   it("rejects cross-origin paths", async () => {
     const transport = createAuthorizedBackendTransport();
     await expect(

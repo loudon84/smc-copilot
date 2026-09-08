@@ -593,3 +593,158 @@ describe("skill-run gateway approval decision", () => {
     );
   });
 });
+
+describe("skill-run gateway attachment upload", () => {
+  const receipt = {
+    attachment_ref: "att_live_example",
+    name: "report.pdf",
+    size_bytes: 123456,
+    checksum_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    content_type: "application/pdf",
+    expires_at: "2026-09-09T00:00:00Z",
+  };
+
+  function createAttachmentClient(
+    fetchImpl: typeof fetch,
+    hasAttachmentBundle = true,
+  ) {
+    return createSkillRunGatewayClient({
+      hasConsumerLock: true,
+      hasAttachmentBundle,
+      getAuthScopeKey: () => "test-scope",
+      transport: createAuthorizedBackendTransport({
+        fetchImpl,
+        ensureAccessToken: async () => "fresh-jwt-token",
+      }),
+    });
+  }
+
+  it("POSTs multipart /api/v1/attachments without X-Idempotency-Key", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe("http://nodeskclaw.test:4510/api/v1/attachments");
+      expect(init?.method).toBe("POST");
+      expect(headerValue(init, "X-Idempotency-Key")).toBeNull();
+      expect(headerValue(init, "Content-Type")).not.toBe("application/json");
+      expect(init?.body).toBeInstanceOf(FormData);
+      const form = init?.body as FormData;
+      expect(form.has("file")).toBe(true);
+      return new Response(JSON.stringify(receipt), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const client = createAttachmentClient(fetchImpl as unknown as typeof fetch);
+    const result = await client.uploadAttachment({
+      filename: "report.pdf",
+      bytes: new Uint8Array([1, 2, 3]),
+      contentType: "application/pdf",
+    });
+    expect(result.attachmentRef).toBe("att_live_example");
+    expect(result.sizeBytes).toBe(123456);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws without fetch when the attachment bundle is absent", async () => {
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
+    const client = createAttachmentClient(fetchImpl as unknown as typeof fetch, false);
+    await expect(
+      client.uploadAttachment({
+        filename: "report.pdf",
+        bytes: new Uint8Array([1]),
+        contentType: "application/pdf",
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "SkillRunGatewayError",
+        errorCode: "ATTACHMENT_NOT_SUPPORTED",
+      }),
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(client.hasAttachmentBundle()).toBe(false);
+  });
+
+  it("maps Bundle attachment error_code onto SkillRunGatewayError", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          error_code: "ATTACHMENT_TOO_LARGE",
+          message_key: "errors.run.attachment_too_large",
+          message: "ATTACHMENT_TOO_LARGE",
+        }),
+        { status: 413, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const client = createAttachmentClient(fetchImpl as unknown as typeof fetch);
+    await expect(
+      client.uploadAttachment({
+        filename: "report.pdf",
+        bytes: new Uint8Array([1]),
+        contentType: "application/pdf",
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "SkillRunGatewayError",
+        errorCode: "ATTACHMENT_TOO_LARGE",
+      }),
+    );
+  });
+
+  it("sends client_context.attachment_refs on tools/call and omits them from arguments", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        method?: string;
+        params?: {
+          name?: string;
+          arguments?: Record<string, unknown>;
+          client_context?: { attachment_refs?: string[] };
+        };
+      };
+      expect(body.method).toBe("tools/call");
+      expect(body.params?.name).toBe("writer.article");
+      expect(body.params?.arguments).toEqual({ prompt: "hello" });
+      expect(body.params?.client_context?.attachment_refs).toEqual([
+        "att_live_example",
+      ]);
+      expect(body.params?.arguments).not.toHaveProperty("attachment_refs");
+      return jsonRpcResult({
+        structuredContent: {
+          run_id: "run-att-1",
+          status: "QUEUED",
+          event_stream: "/api/v1/runs/run-att-1/events",
+          attachment_refs: ["att_live_example"],
+        },
+      });
+    });
+    const client = createAttachmentClient(fetchImpl as unknown as typeof fetch);
+    const accepted = await client.callSkill({
+      toolName: "writer.article",
+      arguments: { prompt: "hello" },
+      idempotencyKey: "req-att-1",
+      attachmentRefs: ["att_live_example"],
+    });
+    expect(accepted.runId).toBe("run-att-1");
+  });
+
+  it("omits client_context when no attachment refs are sent", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        params?: { client_context?: unknown };
+      };
+      expect(body.params?.client_context).toBeUndefined();
+      return jsonRpcResult({
+        structuredContent: {
+          run_id: "run-plain-1",
+          status: "QUEUED",
+          event_stream: "/api/v1/runs/run-plain-1/events",
+        },
+      });
+    });
+    const client = createAttachmentClient(fetchImpl as unknown as typeof fetch);
+    const accepted = await client.callSkill({
+      toolName: "writer.article",
+      arguments: { prompt: "hello" },
+      idempotencyKey: "req-plain-1",
+    });
+    expect(accepted.runId).toBe("run-plain-1");
+  });
+});

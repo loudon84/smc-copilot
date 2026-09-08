@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SkillCatalogToolItem } from "../../../../shared/skill-run";
-import { resolveRestoredSkillSelection, buildSkillRunQueueRequest, isSkillRunCallable } from "./Chat";
+import { resolveRestoredSkillSelection, buildSkillRunQueueRequest, isSkillRunCallable, skillRunComposerAttachmentsDisabled } from "./Chat";
 
 const catalogTool: SkillCatalogToolItem = {
   toolName: "calculator",
@@ -61,6 +61,28 @@ describe("buildSkillRunQueueRequest", () => {
       clientRequestId: "req-2",
     });
     expect(snapshot.extraParameters).toBeUndefined();
+  });
+
+  it("copies fileIds at enqueue and does not alias later array edits", () => {
+    const live = ["file-a", "file-b"];
+    const snapshot = buildSkillRunQueueRequest({
+      toolName: "writer.article",
+      prompt: "hello",
+      clientRequestId: "req-att-1",
+      fileIds: live,
+    });
+    live.push("file-later");
+    live[0] = "file-edited";
+    expect(snapshot.fileIds).toEqual(["file-a", "file-b"]);
+  });
+});
+
+describe("skillRunComposerAttachmentsDisabled", () => {
+  it("enables attach only in Skill mode when Catalog supportsAttachments is true", () => {
+    expect(skillRunComposerAttachmentsDisabled(true, true)).toBe(false);
+    expect(skillRunComposerAttachmentsDisabled(true, false)).toBe(true);
+    expect(skillRunComposerAttachmentsDisabled(true, undefined)).toBe(true);
+    expect(skillRunComposerAttachmentsDisabled(false, true)).toBe(true);
   });
 });
 

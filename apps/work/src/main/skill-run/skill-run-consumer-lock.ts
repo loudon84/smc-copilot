@@ -145,3 +145,14 @@ export function hasSkillRunApprovalDecisionBundle(): boolean {
   const dir = existsSync(fromWork) ? fromWork : fromRepo;
   return isCompleteSkillRunBundleDir(dir);
 }
+
+/**
+ * Attachment upload HTTP is v1.4.0-only. Do not use first-complete P0 finder:
+ * a checksum-complete v1.2.1 bundle must still open Catalog/start.
+ */
+export function hasSkillRunAttachmentBundle(): boolean {
+  const fromWork = join(process.cwd(), "../../contracts/skill-run/v1.4.0");
+  const fromRepo = join(process.cwd(), "contracts/skill-run/v1.4.0");
+  const dir = existsSync(fromWork) ? fromWork : fromRepo;
+  return isCompleteSkillRunBundleDir(dir);
+}

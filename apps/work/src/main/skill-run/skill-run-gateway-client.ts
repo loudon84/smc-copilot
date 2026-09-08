@@ -3,7 +3,8 @@
  * Responsible for MCP tools/list, tools/call, run status/SSE, cancel, artifacts,
  * and v1.3.0 canonical approval decision.
  * Strictly gated behind `hasSkillRunConsumerLock()` for P0 HTTP;
- * decision HTTP is additionally gated by `hasSkillRunApprovalDecisionBundle()`.
+ * decision HTTP is additionally gated by `hasSkillRunApprovalDecisionBundle()`;
+ * attachment upload is additionally gated by `hasSkillRunAttachmentBundle()`.
  */
 
 import {
@@ -13,6 +14,7 @@ import {
 import { readStoredSessionSync } from "../auth/token-store";
 import {
   hasSkillRunApprovalDecisionBundle,
+  hasSkillRunAttachmentBundle,
   hasSkillRunConsumerLock,
 } from "./skill-run-consumer-lock";
 import {
@@ -59,12 +61,48 @@ export interface SkillRunApprovalDecisionReceipt {
   decidedAt: string;
 }
 
+export interface SkillRunAttachmentUploadReceipt {
+  attachmentRef: string;
+  name: string;
+  sizeBytes: number;
+  checksumSha256: string;
+  contentType: string;
+  expiresAt: string;
+}
+
+const ATTACHMENT_REF_PATTERN = /^att_[A-Za-z0-9_-]+$/;
+const ATTACHMENT_ERROR_CODES = new Set([
+  "ATTACHMENT_UNAUTHORIZED",
+  "ATTACHMENT_NOT_FOUND",
+  "ATTACHMENT_EXPIRED",
+  "ATTACHMENT_SCOPE_DENIED",
+  "ATTACHMENT_REF_INVALID",
+  "ATTACHMENT_TOO_LARGE",
+  "ATTACHMENT_TYPE_UNSUPPORTED",
+  "ATTACHMENT_SCAN_BLOCKED",
+  "ATTACHMENT_NOT_SUPPORTED",
+]);
+
+function attachmentFileName(filename: string): string {
+  const base = filename.trim().replace(/\\/g, "/").split("/").pop() ?? "";
+  return base || "file";
+}
+
+function sameAttachmentRefSet(sent: string[], echo: unknown[]): boolean {
+  if (echo.length !== sent.length) return false;
+  if (!echo.every((item) => typeof item === "string")) return false;
+  const left = [...sent].sort();
+  const right = [...(echo as string[])].sort();
+  return left.every((value, index) => value === right[index]);
+}
+
 export interface SkillRunGatewayClient {
   listCatalog(): Promise<SkillCatalogResponse>;
   callSkill(input: {
     toolName: string;
     arguments: Record<string, unknown>;
     idempotencyKey: string;
+    attachmentRefs?: string[];
   }): Promise<SkillRunStartAcceptedResponse>;
   getRunSnapshot(runId: string): Promise<SkillRunSnapshotResponse>;
   cancelRun(runId: string): Promise<void>;
@@ -75,6 +113,12 @@ export interface SkillRunGatewayClient {
   ): Promise<Response>;
   hasConsumerLock(): boolean;
   hasApprovalDecisionBundle(): boolean;
+  hasAttachmentBundle(): boolean;
+  uploadAttachment(input: {
+    filename: string;
+    bytes: Uint8Array;
+    contentType: string;
+  }): Promise<SkillRunAttachmentUploadReceipt>;
   decideApproval(input: {
     runId: string;
     approvalId: string;
@@ -90,6 +134,7 @@ export interface CreateSkillRunGatewayClientOptions {
   transport?: AuthorizedBackendTransport;
   hasConsumerLock?: boolean;
   hasApprovalDecisionBundle?: boolean;
+  hasAttachmentBundle?: boolean;
   getAuthScopeKey?: () => string;
 }
 
@@ -100,6 +145,8 @@ export function createSkillRunGatewayClient(
   const lockGate = options.hasConsumerLock ?? hasSkillRunConsumerLock();
   const decisionBundleGate =
     options.hasApprovalDecisionBundle ?? hasSkillRunApprovalDecisionBundle();
+  const attachmentBundleGate =
+    options.hasAttachmentBundle ?? hasSkillRunAttachmentBundle();
   const resolveAuthScopeKey =
     options.getAuthScopeKey ??
     (() => {
@@ -315,16 +362,25 @@ export function createSkillRunGatewayClient(
       toolName: string;
       arguments: Record<string, unknown>;
       idempotencyKey: string;
+      attachmentRefs?: string[];
     }): Promise<SkillRunStartAcceptedResponse> {
       assertNotDisposed();
       assertLock();
 
+      const sentRefs = (input.attachmentRefs ?? []).filter(
+        (value) => typeof value === "string" && value.trim().length > 0,
+      );
+      const params: Record<string, unknown> = {
+        name: input.toolName,
+        arguments: input.arguments,
+      };
+      if (sentRefs.length > 0) {
+        params.client_context = { attachment_refs: sentRefs };
+      }
+
       const { result } = await jsonRpc(
         "tools/call",
-        {
-          name: input.toolName,
-          arguments: input.arguments,
-        },
+        params,
         { idempotencyKey: input.idempotencyKey },
       );
 
@@ -346,6 +402,17 @@ export function createSkillRunGatewayClient(
           502,
           "SKILL_UNSUPPORTED_SCHEMA",
         );
+      }
+
+      const echoedRefs = structured?.attachment_refs;
+      if (Array.isArray(echoedRefs) && echoedRefs.length > 0) {
+        if (!sameAttachmentRefSet(sentRefs, echoedRefs)) {
+          throw new SkillRunGatewayError(
+            "Invalid backend response: attachment_refs echo does not match the sent set",
+            502,
+            "SKILL_UNSUPPORTED_SCHEMA",
+          );
+        }
       }
 
       const defaults = defaultSkillRunRoutes(runId);
@@ -490,6 +557,95 @@ export function createSkillRunGatewayClient(
 
     hasApprovalDecisionBundle(): boolean {
       return decisionBundleGate;
+    },
+
+    hasAttachmentBundle(): boolean {
+      return attachmentBundleGate;
+    },
+
+    async uploadAttachment(input: {
+      filename: string;
+      bytes: Uint8Array;
+      contentType: string;
+    }): Promise<SkillRunAttachmentUploadReceipt> {
+      assertNotDisposed();
+      if (!attachmentBundleGate) {
+        throw new SkillRunGatewayError(
+          "Skill Run attachment contract is not available.",
+          400,
+          "ATTACHMENT_NOT_SUPPORTED",
+        );
+      }
+      assertLock();
+
+      const filename = attachmentFileName(input.filename);
+      const contentType = input.contentType.trim() || "application/octet-stream";
+      const form = new FormData();
+      const blob = new Blob([new Uint8Array(input.bytes)], { type: contentType });
+      form.append("file", blob, filename);
+
+      const res = await transport.authorizedFetch("/api/v1/attachments", {
+        method: "POST",
+        body: form,
+      });
+
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+
+      if (!res.ok) {
+        const errBody = isRecord(body) ? body : {};
+        const errorCode =
+          typeof errBody.error_code === "string" &&
+          ATTACHMENT_ERROR_CODES.has(errBody.error_code)
+            ? errBody.error_code
+            : "ATTACHMENT_NOT_SUPPORTED";
+        const message =
+          (typeof errBody.message === "string" && errBody.message) ||
+          `Attachment upload failed with status ${res.status}`;
+        throw new SkillRunGatewayError(message, res.status, errorCode);
+      }
+
+      const data = isRecord(body) ? body : {};
+      const attachmentRef =
+        typeof data.attachment_ref === "string" ? data.attachment_ref.trim() : "";
+      const name = typeof data.name === "string" ? data.name.trim() : "";
+      const sizeBytes =
+        typeof data.size_bytes === "number" && Number.isFinite(data.size_bytes)
+          ? data.size_bytes
+          : NaN;
+      const checksumSha256 =
+        typeof data.checksum_sha256 === "string" ? data.checksum_sha256.trim() : "";
+      const receiptType =
+        typeof data.content_type === "string" ? data.content_type.trim() : "";
+      const expiresAt =
+        typeof data.expires_at === "string" ? data.expires_at.trim() : "";
+      if (
+        !ATTACHMENT_REF_PATTERN.test(attachmentRef) ||
+        !name ||
+        !Number.isInteger(sizeBytes) ||
+        sizeBytes < 0 ||
+        !checksumSha256 ||
+        !receiptType ||
+        !expiresAt
+      ) {
+        throw new SkillRunGatewayError(
+          "Invalid backend response: missing attachment upload receipt fields",
+          502,
+          "SKILL_UNSUPPORTED_SCHEMA",
+        );
+      }
+      return {
+        attachmentRef,
+        name,
+        sizeBytes,
+        checksumSha256,
+        contentType: receiptType,
+        expiresAt,
+      };
     },
 
     async decideApproval(input: {

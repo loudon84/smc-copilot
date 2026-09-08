@@ -5,7 +5,10 @@
  */
 
 import { randomUUID } from "crypto";
+import { readFile } from "fs/promises";
 import { parseRunSseBlock } from "../run-stream";
+import { getManagedFile as lookupManagedFile } from "../files/file-association-store";
+import type { ManagedFile } from "../../shared/files";
 import {
   createSkillRunGatewayClient,
   SkillRunGatewayClient,
@@ -57,6 +60,38 @@ function currentWaitingApprovalId(
     }
   }
   return undefined;
+}
+
+function requestedStartFileIds(input: SkillRunStartInput): string[] {
+  return (input.fileIds ?? []).map((id) => id.trim()).filter(Boolean);
+}
+
+function isIneligibleManagedFile(file: ManagedFile): boolean {
+  return file.locality === "remote" || Boolean(file.remoteArtifactId);
+}
+
+function sanitizeStartFailure(err: unknown): {
+  errorCode: string;
+  errorMessage: string;
+} {
+  if (err instanceof SkillRunGatewayError) {
+    const errorCode = err.errorCode?.trim() || "START_FAILED";
+    if (errorCode.startsWith("ATTACHMENT_")) {
+      return {
+        errorCode,
+        errorMessage: "Skill attachment request was not accepted",
+      };
+    }
+    return {
+      errorCode,
+      errorMessage: err.message,
+    };
+  }
+  return {
+    errorCode: "START_FAILED",
+    errorMessage:
+      err instanceof Error ? err.message : "Skill execution start failed",
+  };
 }
 
 function sanitizeDecisionFailure(err: unknown): {
@@ -180,6 +215,8 @@ export interface CreateSkillRunServiceOptions {
     clientRequestId: string;
   }) => Promise<void>;
   recordTelemetry?: (event: SkillRunTelemetryEvent) => void;
+  getManagedFile?: (profileId: string, fileId: string) => ManagedFile | null;
+  readManagedFileBytes?: (managedPath: string) => Promise<Uint8Array>;
 }
 
 export function createSkillRunService(
@@ -191,6 +228,10 @@ export function createSkillRunService(
   const getMode = options.getFeatureMode ?? getSkillRunFeatureMode;
   const persistContinuation = options.onPersistContinuation;
   const recordTelemetry = options.recordTelemetry ?? recordSkillRunTelemetry;
+  const resolveManagedFile = options.getManagedFile ?? lookupManagedFile;
+  const readManagedBytes =
+    options.readManagedFileBytes ??
+    (async (managedPath: string) => new Uint8Array(await readFile(managedPath)));
   const sleep =
     options.sleep ??
     ((ms, signal) =>
@@ -674,6 +715,50 @@ export function createSkillRunService(
         return rejectStart(input, bindResult.errorCode, bindResult.message);
       }
 
+      const requestedFileIds = requestedStartFileIds(input);
+      const stagedAttachments: Array<{
+        filename: string;
+        bytes: Uint8Array;
+        contentType: string;
+      }> = [];
+      if (requestedFileIds.length > 0) {
+        if (
+          bindResult.tool.supportsAttachments !== true ||
+          !gateway.hasAttachmentBundle()
+        ) {
+          return rejectStart(
+            input,
+            "ATTACHMENT_NOT_SUPPORTED",
+            "This skill does not accept attachments.",
+          );
+        }
+        for (const fileId of requestedFileIds) {
+          const managed = resolveManagedFile(input.profileId, fileId);
+          if (!managed || isIneligibleManagedFile(managed) || !managed.managedPath) {
+            return rejectStart(
+              input,
+              managed && isIneligibleManagedFile(managed)
+                ? "ATTACHMENT_NOT_SUPPORTED"
+                : "ATTACHMENT_NOT_FOUND",
+              "Skill attachment request was not accepted",
+            );
+          }
+          try {
+            stagedAttachments.push({
+              filename: managed.name,
+              bytes: await readManagedBytes(managed.managedPath),
+              contentType: managed.mime.trim() || "application/octet-stream",
+            });
+          } catch {
+            return rejectStart(
+              input,
+              "ATTACHMENT_NOT_FOUND",
+              "Skill attachment request was not accepted",
+            );
+          }
+        }
+      }
+
       const validatedToolName = bindResult.tool.toolName;
       const createdAt = nowIso();
       const initialProjection: SkillRunProjection = {
@@ -724,10 +809,16 @@ export function createSkillRunService(
               requestFingerprint: fingerprintRequestId(input.clientRequestId),
             });
           }
+          const attachmentRefs: string[] = [];
+          for (const staged of stagedAttachments) {
+            const receipt = await gateway.uploadAttachment(staged);
+            attachmentRefs.push(receipt.attachmentRef);
+          }
           const accepted = await gateway.callSkill({
             toolName: validatedToolName,
             arguments: activeRun.callArguments,
             idempotencyKey: input.clientRequestId,
+            ...(attachmentRefs.length > 0 ? { attachmentRefs } : {}),
           });
 
           updateProjection(activeRun, {
@@ -742,21 +833,12 @@ export function createSkillRunService(
 
           void consumeSse(activeRun, accepted.runId);
         } catch (err) {
-          const message =
-            err instanceof SkillRunGatewayError
-              ? err.message
-              : err instanceof Error
-              ? err.message
-              : "Skill execution start failed";
-          const errorCode =
-            err instanceof SkillRunGatewayError && err.errorCode
-              ? err.errorCode
-              : "START_FAILED";
+          const { errorCode, errorMessage } = sanitizeStartFailure(err);
 
           updateProjection(activeRun, {
             phase: "failed",
             errorCode,
-            errorMessage: message,
+            errorMessage,
           });
           emitTelemetry({
             event: "terminal",

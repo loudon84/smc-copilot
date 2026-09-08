@@ -56,7 +56,7 @@ Work has also imported immutable `SKILL-RUN-CONTRACT` v1.3.0. Tag `skill-run-con
 
 Work has also imported immutable `SKILL-RUN-CONTRACT` v1.4.0. Tag `skill-run-contract-v1.4.0` pins `5d0e538fa68655f0084850d5378398f622ed90ba`.
 
-`contracts/skill-run/v1.4.0/consumer-lock.json` records that pin. Provider files stay under LF `SHA256SUMS`. Manifest sets `attachments` to `supported` and keeps `approvalExpiry` `unsupported`. Public upload is `POST /api/v1/attachments` (multipart). Binding is `params.client_context.attachment_refs` only. Accepted `structuredContent` may echo opaque `attachment_refs`. P0 `REQUIRED_BUNDLE_PATHS` stays unchanged so v1.2.1 can still open Catalog/start. This import does not implement RM-11 upload IPC/UI, does not call upload HTTP, and does not add a second File Platform owner.
+`contracts/skill-run/v1.4.0/consumer-lock.json` records that pin. Provider files stay under LF `SHA256SUMS`. Manifest sets `attachments` to `supported` and keeps `approvalExpiry` `unsupported`. Public upload is `POST /api/v1/attachments` (multipart). Binding is `params.client_context.attachment_refs` only. Accepted `structuredContent` may echo opaque `attachment_refs`. P0 `REQUIRED_BUNDLE_PATHS` stays unchanged so v1.2.1 can still open Catalog/start. RM-11 uses this bundle for upload HTTP and File Platform file ids; it does not add a second File Platform owner or a `skill-run:upload` channel.
 
 ## Checkpoint B Live / Fixture E2E
 
@@ -108,6 +108,12 @@ Work lifts a fail-closed subset of extra required string fields into callable `l
 
 [[src/renderer/src/modules/skill-run/SkillCatalogPanel.tsx#SkillCatalogPanel]] selects `callability === "callable"`. [[src/renderer/src/modules/skill-run/SkillSelectionBar.tsx#SkillSelectionBar]] collects the projected extra strings. Chat queues an immutable extra-parameter snapshot.
 
+## M6e File Platform Skill attachments
+
+Work sends File Platform file ids on Skill Run start; Gateway uploads bytes and binds attachment refs.
+
+[[src/renderer/src/screens/Chat/Chat.tsx#skillRunComposerAttachmentsDisabled]] enables the existing Chat attach control only when Skill mode is on and Catalog `supportsAttachments === true`. Unselected skills stay disabled. [[src/renderer/src/screens/Chat/Chat.tsx#buildSkillRunQueueRequest]] snapshots `fileIds` with the queued toolName; drain must not reread the live composer. File Platform still owns picker, local policy, and staging bytes. Skill Run Gateway owns `POST /api/v1/attachments` and `params.client_context.attachment_refs`. Renderer never mints Provider attachment refs and never receives upload URLs or filesystem paths from Skill IPC. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] rejects ineligible files before upload and does not strip attachments to send a prompt-only `tools/call`. Provider preview download-by-ref and `approvalExpiry` stay out.
+
 ## M6f Catalog favorites and recent use
 
 Work overlays local **Favorites** and **Recent** on the existing Main Catalog. Identity is Skill Run `toolName`. Display members are preference names intersected with current Catalog `tools`.
@@ -125,7 +131,8 @@ Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
 - Hosted telemetry dashboard / metrics UI
-- Attachment upload
+- Provider attachment preview / download-by-ref
+- `approvalExpiry`
 - Legacy `POST /api/v1/runs/{run_id}/approvals/{approval_id}` (Work never calls it)
 - Local Chat / Hermes `MessageRow` approve-deny as Skill Run decision
 - Unrestricted JSON Schema / `$ref` / non-string parameter widgets

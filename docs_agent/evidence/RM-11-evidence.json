@@ -1,0 +1,371 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:9430831871e05ec34fc76c5dd0161809787de69028634efbd96bdc04d17f87b8",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "ChatInput skill mode attachmentsDisabled test",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "start currently discards composer attachments",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "extraParameters snapshot tests exist",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "those owners exist independently",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V06",
+        "V09"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "start input has no refs today",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V04",
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "existing lock tests omit attachment schemas from P0 paths",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V03",
+        "V04",
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V06",
+        "V09",
+        "V10"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-09": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-gateway-client.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082008.973820Z-V01.log",
+      "raw_log_sha256": "sha256:cd976836bc9fb15e852fa26b6c2726f90345df628386a265bd35df0830f161ee",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:20:08.973820Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-consumer-lock.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082020.958031Z-V02.log",
+      "raw_log_sha256": "sha256:67bce024dd70a73ec7708235394ff448317c2b599f864abc3a62656cb445d6f4",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:20:20.958031Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-04",
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-04": "PASS",
+        "CLM-09": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082032.079563Z-V03.log",
+      "raw_log_sha256": "sha256:cebe340acbf852f1f43e88a2bd39eeb1631e9000792522d56d9c2ce0b650533a",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:20:32.079563Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-03",
+        "CLM-07",
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-03": "PASS",
+        "CLM-07": "PASS",
+        "CLM-09": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-ipc.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082043.872929Z-V04.log",
+      "raw_log_sha256": "sha256:a36bc8d7f431e04ad0f2b5c96c2af8e30b6f1463eda15cd6cdd108dc1a9adcea",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:20:43.872929Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-05"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-05": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Chat/ChatInput.test.tsx src/renderer/src/screens/Chat/skillSelectionRestore.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082055.117416Z-V05.log",
+      "raw_log_sha256": "sha256:a9c20f83ac5123c9abe902bc65f715dcbca6abe426c5c5cf9446a08bdc73905d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:20:55.117416Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06",
+        "CLM-07",
+        "CLM-09",
+        "CLM-11"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS",
+        "CLM-07": "PASS",
+        "CLM-09": "PASS",
+        "CLM-11": "PASS"
+      },
+      "command": "python -c 'from pathlib import Path; import sys; gw=Path('\"'\"'apps/work/src/main/skill-run/skill-run-gateway-client.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); svc=Path('\"'\"'apps/work/src/main/skill-run/skill-run-service.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ipc=Path('\"'\"'apps/work/src/main/skill-run/skill-run-ipc.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); chat=Path('\"'\"'apps/work/src/renderer/src/screens/Chat/Chat.tsx'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); dto=Path('\"'\"'apps/work/src/shared/skill-run.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'/api/v1/attachments'\"'\"' in gw and '\"'\"'client_context'\"'\"' in gw and '\"'\"'uploadAttachment'\"'\"' in svc and '\"'\"'fileIds'\"'\"' in ipc and '\"'\"'fileIds'\"'\"' in dto and '\"'\"'attachment_refs'\"'\"' not in dto and '\"'\"'decideApproval'\"'\"' in chat and '\"'\"'skillRun.decideApproval'\"'\"' in Path('\"'\"'apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"') and '\"'\"'expert.start'\"'\"' not in svc and '\"'\"'upsertSkillRunRemoteArtifact'\"'\"' not in svc.split('\"'\"'start'\"'\"')[0]); sys.exit(0 if ('\"'\"'fileIds'\"'\"' in chat and '\"'\"'supportsAttachments'\"'\"' in chat and '\"'\"'/api/v1/attachments'\"'\"' in gw) else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082127.117900Z-V06.log",
+      "raw_log_sha256": "sha256:4f22287618bfcb88f9e46c94e82a486bf2dddc35854971da919eaaf8690438b2",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:21:27.117900Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06",
+        "CLM-11"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS",
+        "CLM-11": "PASS"
+      },
+      "command": "python -c 'from pathlib import Path; import sys; gw=Path('\"'\"'apps/work/src/main/skill-run/skill-run-gateway-client.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); u14=Path('\"'\"'contracts/skill-run/v1.4.0/capabilities/unsupported.schema.json'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); u12=Path('\"'\"'contracts/skill-run/v1.2.1/SHA256SUMS'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ch=Path('\"'\"'apps/work/src/shared/skill-run.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'download'\"'\"' not in gw.lower() or '\"'\"'artifacts'\"'\"' in gw) and '\"'\"'approvalExpiry'\"'\"' in u14 and '\"'\"'unsupported'\"'\"' in u14 and '\"'\"'fileIds'\"'\"' in ch and '\"'\"'skill-run:upload'\"'\"' not in ch and len(u12)>0; sys.exit(0 if ('\"'\"'/api/v1/attachments'\"'\"' in gw and '\"'\"'fileIds'\"'\"' in ch and '\"'\"'att_'\"'\"' not in ch.split('\"'\"'SkillRunStartInput'\"'\"')[1].split('\"'\"'interface'\"'\"')[0]) else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082131.320433Z-V09.log",
+      "raw_log_sha256": "sha256:6061c33da83365203ec6506ccae6fc97a17c1f0e231b55d0d42b49d7391b4d8e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:21:31.320433Z",
+      "verification_id": "V09"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-10",
+        "CLM-11"
+      ],
+      "claim_results": {
+        "CLM-10": "PASS",
+        "CLM-11": "PASS"
+      },
+      "command": "python -c 'from pathlib import Path; import sys; r=Path('\"'\"'docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); lat=Path('\"'\"'apps/work/lat.md/skill-run.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); p=chr(124); row=next(x for x in r.splitlines() if x.startswith(p+'\"'\"' RM-11 '\"'\"')); ok=(row.split(p)[4].strip()!='\"'\"'DONE'\"'\"' and '\"'\"'attachment'\"'\"' in lat.lower() and '\"'\"'File Platform'\"'\"' in lat); sys.exit(0 if ok else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-11/logs/20260908T082135.779671Z-V10.log",
+      "raw_log_sha256": "sha256:08515ea1154358b885db3b7d9c2570ab581c84ff9b8d2d79579d0286d4aba4d9",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-08T08:21:35.779671Z",
+      "verification_id": "V10"
+    }
+  ],
+  "completion_audit": {
+    "changed": 5,
+    "deferred": 0,
+    "done": 8,
+    "scope_drift": 0,
+    "timestamp": "2026-09-08T08:18:32.344723Z",
+    "total_items": 8,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-08T08:25:32.533887Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:f04b9caa3d7b43bb7ebee5a510c14b624ce3db3833d28d1c2eaf4a2e4456b72c",
+    "timestamp": "2026-09-08T08:18:55.685886Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:989a4f63d9d0d8b45d45425aafa8b7e21ab72ad428f95bcd417d2c3e4e06d8cd",
+  "plan": ".cursor/plans/work-v4.0.1-m6-attachment-refs-upload.plan.md",
+  "plan_id": "RM-11",
+  "plan_review": {
+    "plan_sha256": "sha256:6474adf6285124ba00667e54151ba5e2c38f78f73996b77cfdd71eb43361088a",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-08T07:41:44.569225Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:f04b9caa3d7b43bb7ebee5a510c14b624ce3db3833d28d1c2eaf4a2e4456b72c",
+  "verification_candidate": {
+    "candidate_id": "sha256:b598f7c0db7bf1b5796695dca6a837b7999ef43c147d75fa8b3e3d1c2bbbd5b1",
+    "captured_at": "2026-09-08T08:19:22.887909Z",
+    "plan_id": "RM-11",
+    "schema": "smc.verification.candidate.v1",
+    "scope_fingerprint": "sha256:f04b9caa3d7b43bb7ebee5a510c14b624ce3db3833d28d1c2eaf4a2e4456b72c"
+  },
+  "workspace_base_commit": "5f3d14d809147903170c378473f62c4e8b2d7a7a"
+}

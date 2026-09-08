@@ -42,6 +42,10 @@ const MAX_CLIENT_REQUEST_ID_LENGTH = 128;
 const MAX_SESSION_ID_LENGTH = 256;
 const MAX_PROFILE_ID_LENGTH = 128;
 const EXTRA_PARAMETERS_MAX = 8;
+const FILE_IDS_MAX = 10;
+const FILE_ID_MAX_LENGTH = 128;
+const ATTACHMENT_REF_ID_PATTERN = /^att_/i;
+const FILE_ID_PATH_PATTERN = /[\\/]|^[A-Za-z]:/;
 
 let activeService: SkillRunService | null = null;
 let projectionUnsubscribe: (() => void) | null = null;
@@ -130,6 +134,46 @@ function validateStartInput(value: unknown): SkillRunStartInput {
     }
   }
 
+  if (
+    "attachment_refs" in value ||
+    "attachmentRefs" in value ||
+    "path" in value
+  ) {
+    throw new Error("Invalid SkillRunStartInput");
+  }
+
+  let fileIds: string[] | undefined;
+  if (value.fileIds !== undefined) {
+    if (!Array.isArray(value.fileIds)) {
+      throw new Error("Invalid SkillRunStartInput.fileIds");
+    }
+    if (value.fileIds.length > FILE_IDS_MAX) {
+      throw new Error("Invalid SkillRunStartInput.fileIds");
+    }
+    const seen = new Set<string>();
+    fileIds = [];
+    for (const item of value.fileIds) {
+      if (typeof item !== "string") {
+        throw new Error("Invalid SkillRunStartInput.fileIds");
+      }
+      const id = item.trim();
+      if (
+        !id ||
+        id.length > FILE_ID_MAX_LENGTH ||
+        ATTACHMENT_REF_ID_PATTERN.test(id) ||
+        FILE_ID_PATH_PATTERN.test(id) ||
+        seen.has(id)
+      ) {
+        throw new Error("Invalid SkillRunStartInput.fileIds");
+      }
+      seen.add(id);
+      fileIds.push(id);
+    }
+    if (fileIds.length === 0) {
+      fileIds = undefined;
+    }
+  }
+
   return {
     toolName,
     prompt,
@@ -138,6 +182,7 @@ function validateStartInput(value: unknown): SkillRunStartInput {
     profileId,
     authGeneration,
     ...(extraParameters ? { extraParameters } : {}),
+    ...(fileIds ? { fileIds } : {}),
   };
 }
 

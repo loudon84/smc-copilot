@@ -124,18 +124,27 @@ export function isSkillRunCallable(
   return tool.callability === "callable";
 }
 
+export function skillRunComposerAttachmentsDisabled(
+  isSkillRunMode: boolean,
+  supportsAttachments?: boolean,
+): boolean {
+  return !(isSkillRunMode && supportsAttachments === true);
+}
+
 export function buildSkillRunQueueRequest(input: {
   toolName: string;
   prompt: string;
   clientRequestId: string;
   toolTitle?: string;
   extraParameters?: Record<string, string>;
+  fileIds?: string[];
 }): {
   toolName: string;
   prompt: string;
   clientRequestId: string;
   toolTitle?: string;
   extraParameters?: Record<string, string>;
+  fileIds?: string[];
 } {
   return {
     toolName: input.toolName,
@@ -145,6 +154,7 @@ export function buildSkillRunQueueRequest(input: {
     extraParameters: input.extraParameters
       ? { ...input.extraParameters }
       : undefined,
+    fileIds: input.fileIds ? [...input.fileIds] : undefined,
   };
 }
 
@@ -1316,6 +1326,7 @@ function Chat({
       clientRequestId: string;
       toolTitle?: string;
       extraParameters?: Record<string, string>;
+      fileIds?: string[];
     }) => {
       try {
         let sessionId = hermesSessionId || initialSessionId || "";
@@ -1331,6 +1342,7 @@ function Chat({
           profileId: profile ?? "default",
           authGeneration,
           extraParameters: request.extraParameters,
+          fileIds: request.fileIds,
         };
         const result = await window.hermesAPI.skillRun.start(input);
         if (!result.accepted) {
@@ -1473,6 +1485,7 @@ function Chat({
           clientRequestId,
           toolTitle: selectedSkill.title,
           extraParameters,
+          fileIds: attachments.map((attachment) => attachment.id),
         });
         if (chatBusy) {
           queueRef.current.push({ text, attachments: [], skillRequest: request });
@@ -1960,7 +1973,14 @@ function Chat({
           contextUsage={contextUsage}
           readiness={effectiveReadiness}
           slashCommands={slashMenuCommands}
-          attachmentsDisabled={isSkillRunMode}
+          attachmentsDisabled={
+            isSkillRunMode
+              ? skillRunComposerAttachmentsDisabled(
+                  true,
+                  selectedSkill?.supportsAttachments,
+                )
+              : false
+          }
           onSubmit={handleSubmitOrQueue}
           onQuickAsk={(text, attachments) => {
             if (isSkillRunMode) {

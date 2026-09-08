@@ -14,6 +14,7 @@ import {
   type SkillCatalogToolItem,
   type SkillRunProjection,
 } from "../../shared/skill-run";
+import type { ManagedFile } from "../../shared/files";
 
 const services: SkillRunService[] = [];
 
@@ -81,6 +82,14 @@ function createMockGateway(
     }),
     hasConsumerLock: () => true,
     hasApprovalDecisionBundle: () => true,
+    hasAttachmentBundle: () => true,
+    uploadAttachment: vi.fn().mockRejectedValue(
+      new SkillRunGatewayError(
+        "uploadAttachment not expected",
+        500,
+        "ATTACHMENT_NOT_SUPPORTED",
+      ),
+    ),
     decideApproval: vi.fn().mockResolvedValue({
       runId: "run-xyz-999",
       approvalId: "appr-1",
@@ -1531,6 +1540,279 @@ describe("skill-run-service", () => {
     expect(catalog.status).toBe("contract-unsupported");
     expect(catalog.tools).toEqual([]);
     if (existsSync(file)) rmSync(file);
+  });
+});
+
+describe("skill-run-service attachment upload bind", () => {
+  const attachableTool: SkillCatalogToolItem = {
+    ...callableTool,
+    toolName: "writer.article",
+    title: "Writer",
+    supportsAttachments: true,
+  };
+
+  function localFile(id: string, overrides: Partial<ManagedFile> = {}): ManagedFile {
+    return {
+      id,
+      profileId: "profile-xyz",
+      name: `${id}.pdf`,
+      extension: "pdf",
+      mime: "application/pdf",
+      category: "pdf",
+      source: "picker",
+      status: "ready",
+      size: 3,
+      managedPath: `E:\\staged\\${id}.pdf`,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      locality: "local",
+      ...overrides,
+    };
+  }
+
+  function startInput(
+    overrides: {
+      fileIds?: string[];
+      toolName?: string;
+      clientRequestId?: string;
+    } = {},
+  ) {
+    return {
+      toolName: overrides.toolName ?? "writer.article",
+      prompt: "hello",
+      clientRequestId: overrides.clientRequestId ?? "req-att",
+      sessionId: "session-att",
+      profileId: "profile-xyz",
+      ...(overrides.fileIds ? { fileIds: overrides.fileIds } : {}),
+    };
+  }
+
+  it("uploads then callSkill with refs in user order", async () => {
+    const files = new Map<string, ManagedFile>([
+      ["file-a", localFile("file-a")],
+      ["file-b", localFile("file-b")],
+    ]);
+    const uploadOrder: string[] = [];
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [attachableTool] }),
+      hasAttachmentBundle: () => true,
+      uploadAttachment: vi.fn(async (input: { filename: string }) => {
+        uploadOrder.push(input.filename);
+        return {
+          attachmentRef: input.filename.startsWith("file-a") ? "att_first" : "att_second",
+          name: input.filename,
+          sizeBytes: 3,
+          checksumSha256: "aa".repeat(32),
+          contentType: "application/pdf",
+          expiresAt: "2026-09-09T00:00:00Z",
+        };
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: () =>
+              new Promise<{ done: boolean; value?: Uint8Array }>(() => {
+                // Keep the run non-terminal so start cannot upsert artifacts.
+              }),
+          }),
+        },
+      }),
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+    });
+    const upsertArtifact = vi.fn();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: (profileId, fileId) => {
+          expect(profileId).toBe("profile-xyz");
+          return files.get(fileId) ?? null;
+        },
+        readManagedFileBytes: async () => new Uint8Array([1, 2, 3]),
+        onUpsertArtifact: upsertArtifact,
+      }),
+    );
+    const result = await service.start(
+      startInput({ fileIds: ["file-a", "file-b"], clientRequestId: "req-att-ok" }),
+    );
+    expect(result.accepted).toBe(true);
+    if (result.accepted) {
+      expect(JSON.stringify(result.projection)).not.toMatch(/att_/);
+    }
+    await waitForProjection(
+      service,
+      "req-att-ok",
+      (projection) => projection.phase === "running",
+    );
+    expect(uploadOrder).toEqual(["file-a.pdf", "file-b.pdf"]);
+    expect(gateway.callSkill).toHaveBeenCalledWith({
+      toolName: "writer.article",
+      arguments: { prompt: "hello" },
+      idempotencyKey: "req-att-ok",
+      attachmentRefs: ["att_first", "att_second"],
+    });
+    expect(upsertArtifact).not.toHaveBeenCalled();
+  });
+
+  it("does not upload on prompt-only start", async () => {
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [attachableTool] }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: () => {
+          throw new Error("getManagedFile must not run for prompt-only start");
+        },
+      }),
+    );
+    const result = await service.start(startInput({ clientRequestId: "req-att-plain" }));
+    expect(result.accepted).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(gateway.uploadAttachment).not.toHaveBeenCalled();
+    expect(gateway.callSkill).toHaveBeenCalledWith({
+      toolName: "writer.article",
+      arguments: { prompt: "hello" },
+      idempotencyKey: "req-att-plain",
+    });
+  });
+
+  it("rejects catalog false with zero upload and zero callSkill", async () => {
+    const gateway = createMockGateway();
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: () => localFile("file-a"),
+      }),
+    );
+    const result = await service.start(
+      startInput({
+        toolName: "calculator",
+        fileIds: ["file-a"],
+        clientRequestId: "req-att-catalog",
+      }),
+    );
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("ATTACHMENT_NOT_SUPPORTED");
+    }
+    expect(gateway.uploadAttachment).not.toHaveBeenCalled();
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing v1.4.0 bundle with zero upload and zero callSkill", async () => {
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [attachableTool] }),
+      hasAttachmentBundle: () => false,
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: () => localFile("file-a"),
+      }),
+    );
+    const result = await service.start(
+      startInput({ fileIds: ["file-a"], clientRequestId: "req-att-bundle" }),
+    );
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("ATTACHMENT_NOT_SUPPORTED");
+    }
+    expect(gateway.uploadAttachment).not.toHaveBeenCalled();
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown fileId with zero upload and zero callSkill", async () => {
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [attachableTool] }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: () => null,
+      }),
+    );
+    const result = await service.start(
+      startInput({ fileIds: ["missing-file"], clientRequestId: "req-att-missing" }),
+    );
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("ATTACHMENT_NOT_FOUND");
+    }
+    expect(gateway.uploadAttachment).not.toHaveBeenCalled();
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
+
+  it("rejects remoteArtifactId files with zero upload and zero callSkill", async () => {
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [attachableTool] }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: () =>
+          localFile("file-remote", {
+            locality: "remote",
+            remoteArtifactId: "art-1",
+            managedPath: undefined,
+          }),
+      }),
+    );
+    const result = await service.start(
+      startInput({ fileIds: ["file-remote"], clientRequestId: "req-att-remote" }),
+    );
+    expect(result.accepted).toBe(false);
+    if (!result.accepted) {
+      expect(result.errorCode).toBe("ATTACHMENT_NOT_SUPPORTED");
+    }
+    expect(gateway.uploadAttachment).not.toHaveBeenCalled();
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
+
+  it("maps ATTACHMENT_EXPIRED onto failed and does not retry upload", async () => {
+    const gateway = createMockGateway({
+      listCatalog: vi.fn().mockResolvedValue({ status: "ready", tools: [attachableTool] }),
+      uploadAttachment: vi.fn().mockRejectedValue(
+        new SkillRunGatewayError(
+          "expired path C:\\\\secret\\\\file.pdf jwt eyJhbGciOi",
+          410,
+          "ATTACHMENT_EXPIRED",
+        ),
+      ),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: gateway,
+        ...skillFirstOptions,
+        getManagedFile: () => localFile("file-a"),
+        readManagedFileBytes: async () => new Uint8Array([1, 2, 3]),
+      }),
+    );
+    const result = await service.start(
+      startInput({ fileIds: ["file-a"], clientRequestId: "req-att-expired" }),
+    );
+    expect(result.accepted).toBe(true);
+    const terminal = await waitForProjection(
+      service,
+      "req-att-expired",
+      (projection) => projection.phase === "failed",
+    );
+    expect(terminal?.phase).toBe("failed");
+    expect(terminal?.errorCode).toBe("ATTACHMENT_EXPIRED");
+    expect(terminal?.errorMessage).toBe("Skill attachment request was not accepted");
+    expect(terminal?.errorMessage).not.toMatch(/eyJ|C:\\\\|secret/);
+    expect(gateway.uploadAttachment).toHaveBeenCalledTimes(1);
+    expect(gateway.callSkill).not.toHaveBeenCalled();
   });
 });
 

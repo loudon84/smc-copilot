@@ -176,6 +176,8 @@ export interface SkillRunStartInput {
   profileId: string;
   authGeneration?: string;
   extraParameters?: Record<string, string>;
+  /** File Platform ManagedFile ids only. Never Provider attachment refs. */
+  fileIds?: string[];
 }
 
 export type SkillRunStartResult =
