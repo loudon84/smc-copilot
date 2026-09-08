@@ -1,7 +1,9 @@
 /**
  * Skill Run Gateway Client.
- * Responsible for MCP tools/list, tools/call, run status/SSE, cancel, and artifact discovery.
- * Strictly gated behind `hasSkillRunConsumerLock()`.
+ * Responsible for MCP tools/list, tools/call, run status/SSE, cancel, artifacts,
+ * and v1.3.0 canonical approval decision.
+ * Strictly gated behind `hasSkillRunConsumerLock()` for P0 HTTP;
+ * decision HTTP is additionally gated by `hasSkillRunApprovalDecisionBundle()`.
  */
 
 import {
@@ -9,7 +11,10 @@ import {
   createAuthorizedBackendTransport,
 } from "../auth/authorized-backend-transport";
 import { readStoredSessionSync } from "../auth/token-store";
-import { hasSkillRunConsumerLock } from "./skill-run-consumer-lock";
+import {
+  hasSkillRunApprovalDecisionBundle,
+  hasSkillRunConsumerLock,
+} from "./skill-run-consumer-lock";
 import {
   mapPublicArtifactList,
   mapPublicSkillCatalogTools,
@@ -46,6 +51,14 @@ export interface SkillRunSnapshotResponse {
   artifacts?: SkillRunArtifactDescriptor[];
 }
 
+export interface SkillRunApprovalDecisionReceipt {
+  runId: string;
+  approvalId: string;
+  decision: "allow" | "deny";
+  status: string;
+  decidedAt: string;
+}
+
 export interface SkillRunGatewayClient {
   listCatalog(): Promise<SkillCatalogResponse>;
   callSkill(input: {
@@ -61,6 +74,13 @@ export interface SkillRunGatewayClient {
     options?: { lastEventId?: string; signal?: AbortSignal },
   ): Promise<Response>;
   hasConsumerLock(): boolean;
+  hasApprovalDecisionBundle(): boolean;
+  decideApproval(input: {
+    runId: string;
+    approvalId: string;
+    decision: "allow" | "deny";
+    idempotencyKey: string;
+  }): Promise<SkillRunApprovalDecisionReceipt>;
   getAuthScopeKey?(): string;
   clearCache(): void;
   dispose(): void;
@@ -69,6 +89,7 @@ export interface SkillRunGatewayClient {
 export interface CreateSkillRunGatewayClientOptions {
   transport?: AuthorizedBackendTransport;
   hasConsumerLock?: boolean;
+  hasApprovalDecisionBundle?: boolean;
   getAuthScopeKey?: () => string;
 }
 
@@ -77,6 +98,8 @@ export function createSkillRunGatewayClient(
 ): SkillRunGatewayClient {
   const transport = options.transport ?? createAuthorizedBackendTransport();
   const lockGate = options.hasConsumerLock ?? hasSkillRunConsumerLock();
+  const decisionBundleGate =
+    options.hasApprovalDecisionBundle ?? hasSkillRunApprovalDecisionBundle();
   const resolveAuthScopeKey =
     options.getAuthScopeKey ??
     (() => {
@@ -463,6 +486,102 @@ export function createSkillRunGatewayClient(
 
     hasConsumerLock(): boolean {
       return lockGate;
+    },
+
+    hasApprovalDecisionBundle(): boolean {
+      return decisionBundleGate;
+    },
+
+    async decideApproval(input: {
+      runId: string;
+      approvalId: string;
+      decision: "allow" | "deny";
+      idempotencyKey: string;
+    }): Promise<SkillRunApprovalDecisionReceipt> {
+      assertNotDisposed();
+      if (!decisionBundleGate) {
+        throw new SkillRunGatewayError(
+          "Skill Run approval decision contract is not available.",
+          400,
+          "APPROVAL_DECISION_UNSUPPORTED",
+        );
+      }
+      if (input.decision !== "allow" && input.decision !== "deny") {
+        throw new SkillRunGatewayError(
+          "Invalid approval decision",
+          400,
+          "INVALID_DECISION",
+        );
+      }
+      if (!input.idempotencyKey.trim()) {
+        throw new SkillRunGatewayError(
+          "X-Idempotency-Key is required",
+          400,
+          "IDEMPOTENCY_KEY_REQUIRED",
+        );
+      }
+
+      const encRun = encodeURIComponent(input.runId);
+      const encApproval = encodeURIComponent(input.approvalId);
+      const path = `/api/v1/runs/${encRun}/approvals/${encApproval}/decision`;
+      const res = await transport.authorizedFetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        idempotencyKey: input.idempotencyKey,
+        body: JSON.stringify({ decision: input.decision }),
+      });
+
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+
+      if (!res.ok) {
+        const errBody = isRecord(body) ? body : {};
+        const message =
+          (typeof errBody.message === "string" && errBody.message) ||
+          (typeof errBody.error === "string" && errBody.error) ||
+          `Approval decision failed with status ${res.status}`;
+        const errorCode =
+          typeof errBody.error_code === "string"
+            ? errBody.error_code
+            : res.status === 409
+              ? "IDEMPOTENCY_CONFLICT"
+              : "APPROVAL_DECISION_FAILED";
+        throw new SkillRunGatewayError(message, res.status, errorCode);
+      }
+
+      const data = isRecord(body) ? body : {};
+      const runId =
+        typeof data.run_id === "string" && data.run_id.trim() ? data.run_id.trim() : "";
+      const approvalId =
+        typeof data.approval_id === "string" && data.approval_id.trim()
+          ? data.approval_id.trim()
+          : "";
+      const decision =
+        data.decision === "allow" || data.decision === "deny" ? data.decision : "";
+      const status =
+        typeof data.status === "string" && data.status.trim() ? data.status.trim() : "";
+      const decidedAt =
+        typeof data.decided_at === "string" && data.decided_at.trim()
+          ? data.decided_at.trim()
+          : "";
+      if (!runId || !approvalId || !decision || !status || !decidedAt) {
+        throw new SkillRunGatewayError(
+          "Invalid backend response: missing approval decision receipt fields",
+          502,
+          "SKILL_UNSUPPORTED_SCHEMA",
+        );
+      }
+      return {
+        runId,
+        approvalId,
+        decision,
+        status,
+        decidedAt,
+      };
     },
 
     getAuthScopeKey(): string {

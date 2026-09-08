@@ -2,7 +2,7 @@ import { existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createSkillRunGatewayClient, SkillRunGatewayClient } from "./skill-run-gateway-client";
+import { createSkillRunGatewayClient, SkillRunGatewayClient, SkillRunGatewayError } from "./skill-run-gateway-client";
 import {
   FAVORITE_UNKNOWN_TOOL,
   createSkillRunCatalogPreferenceStore,
@@ -80,6 +80,14 @@ function createMockGateway(
       },
     }),
     hasConsumerLock: () => true,
+    hasApprovalDecisionBundle: () => true,
+    decideApproval: vi.fn().mockResolvedValue({
+      runId: "run-xyz-999",
+      approvalId: "appr-1",
+      decision: "allow",
+      status: "WAITING_APPROVAL",
+      decidedAt: "2026-01-01T00:00:00.000Z",
+    }),
     getAuthScopeKey: vi.fn(() => "test-scope"),
     clearCache: vi.fn(),
     dispose: vi.fn(),
@@ -870,6 +878,447 @@ describe("skill-run-service", () => {
     expect(serviceRewind.getProjection("req-rewind")?.displayStage).not.toBe(
       "Waiting for approval...",
     );
+  });
+
+  it("allow keeps waiting-approval on non-terminal receipt and reuses the decision key", async () => {
+    const approval = loadBundleFixture("run-event-approval-requested.json");
+    const decideApproval = vi.fn().mockResolvedValue({
+      runId: "run-xyz-999",
+      approvalId: "appr-1",
+      decision: "allow",
+      status: "WAITING_APPROVAL",
+      decidedAt: "2026-01-01T00:00:00.000Z",
+    });
+    let emitted = false;
+    const mockGateway = createMockGateway({
+      decideApproval,
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "WAITING_APPROVAL",
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => {
+              if (!emitted) {
+                emitted = true;
+                return {
+                  done: false,
+                  value: encodeSseEvents([
+                    {
+                      eventType: "approval.requested",
+                      id: String(approval.event_id),
+                      data: approval,
+                    },
+                  ]),
+                };
+              }
+              return new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined);
+            },
+          }),
+        },
+      }),
+    });
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "approve",
+      clientRequestId: "req-decide-allow",
+      sessionId: "session-decide-allow",
+      profileId: "default",
+    });
+    await waitForProjection(
+      service,
+      "req-decide-allow",
+      (p) => p.phase === "waiting-approval",
+    );
+    const first = await service.decideApproval({
+      clientRequestId: "req-decide-allow",
+      sessionId: "session-decide-allow",
+      decision: "allow",
+    });
+    expect(first.success).toBe(true);
+    expect(first.projection?.phase).toBe("waiting-approval");
+    expect(first.projection?.decidedApprovalId).toBe("appr-1");
+    const replay = await service.decideApproval({
+      clientRequestId: "req-decide-allow",
+      sessionId: "session-decide-allow",
+      decision: "allow",
+    });
+    expect(replay.success).toBe(true);
+    expect(decideApproval).toHaveBeenCalledTimes(2);
+    expect(decideApproval.mock.calls[0][0].idempotencyKey).toBe(
+      decideApproval.mock.calls[1][0].idempotencyKey,
+    );
+    expect(decideApproval.mock.calls[0][0].idempotencyKey).not.toBe("req-decide-allow");
+    expect(decideApproval.mock.calls[0][0]).toMatchObject({
+      runId: "run-xyz-999",
+      approvalId: "appr-1",
+      decision: "allow",
+    });
+    expect(mockGateway.callSkill).toHaveBeenCalledTimes(1);
+    const blocked = await service.start({
+      toolName: "calculator",
+      prompt: "second",
+      clientRequestId: "req-decide-allow-2",
+      sessionId: "session-decide-allow",
+      profileId: "default",
+    });
+    expect(blocked).toMatchObject({
+      accepted: false,
+      errorCode: "RUN_ALREADY_ACTIVE",
+    });
+  });
+
+  it("maps deny receipts through Public status and never forces cancelled", async () => {
+    const approval = loadBundleFixture("run-event-approval-requested.json");
+    function hangingApprovalGateway(
+      decideApproval: ReturnType<typeof vi.fn>,
+    ): SkillRunGatewayClient {
+      let emitted = false;
+      return createMockGateway({
+        decideApproval,
+        getRunSnapshot: vi.fn().mockResolvedValue({
+          runId: "run-xyz-999",
+          status: "WAITING_APPROVAL",
+        }),
+        openEventStream: vi.fn().mockResolvedValue({
+          ok: true,
+          body: {
+            getReader: () => ({
+              read: async () => {
+                if (!emitted) {
+                  emitted = true;
+                  return {
+                    done: false,
+                    value: encodeSseEvents([
+                      {
+                        eventType: "approval.requested",
+                        id: String(approval.event_id),
+                        data: approval,
+                      },
+                    ]),
+                  };
+                }
+                return new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined);
+              },
+            }),
+          },
+        }),
+      });
+    }
+
+    const completedGateway = hangingApprovalGateway(
+      vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        approvalId: "appr-1",
+        decision: "deny",
+        status: "COMPLETED",
+        decidedAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    const completedService = trackService(
+      createSkillRunService({
+        gatewayClient: completedGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await completedService.start({
+      toolName: "calculator",
+      prompt: "deny-completed",
+      clientRequestId: "req-deny-completed",
+      sessionId: "session-deny-completed",
+      profileId: "default",
+    });
+    await waitForProjection(
+      completedService,
+      "req-deny-completed",
+      (p) => p.phase === "waiting-approval",
+    );
+    const completed = await completedService.decideApproval({
+      clientRequestId: "req-deny-completed",
+      sessionId: "session-deny-completed",
+      decision: "deny",
+    });
+    expect(completed.projection?.phase).toBe("succeeded");
+    expect(completed.projection?.phase).not.toBe("cancelled");
+
+    const failedGateway = hangingApprovalGateway(
+      vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        approvalId: "appr-1",
+        decision: "deny",
+        status: "FAILED",
+        decidedAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    const failedService = trackService(
+      createSkillRunService({
+        gatewayClient: failedGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await failedService.start({
+      toolName: "calculator",
+      prompt: "deny-failed",
+      clientRequestId: "req-deny-failed",
+      sessionId: "session-deny-failed",
+      profileId: "default",
+    });
+    await waitForProjection(
+      failedService,
+      "req-deny-failed",
+      (p) => p.phase === "waiting-approval",
+    );
+    const failed = await failedService.decideApproval({
+      clientRequestId: "req-deny-failed",
+      sessionId: "session-deny-failed",
+      decision: "deny",
+    });
+    expect(failed.projection?.phase).toBe("failed");
+    expect(failed.projection?.phase).not.toBe("cancelled");
+  });
+
+  it("rejects ineligible decisions without HTTP and does not rewind terminal on 409", async () => {
+    const runningGateway = createMockGateway({
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined),
+          }),
+        },
+      }),
+    });
+    const runningService = trackService(
+      createSkillRunService({
+        gatewayClient: runningGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await runningService.start({
+      toolName: "calculator",
+      prompt: "running",
+      clientRequestId: "req-running-decide",
+      sessionId: "session-running-decide",
+      profileId: "default",
+    });
+    await waitForProjection(
+      runningService,
+      "req-running-decide",
+      (p) => p.phase === "running",
+    );
+    const runningResult = await runningService.decideApproval({
+      clientRequestId: "req-running-decide",
+      sessionId: "session-running-decide",
+      decision: "allow",
+    });
+    expect(runningResult.errorCode).toBe("APPROVAL_NOT_WAITING");
+    expect(runningGateway.decideApproval).not.toHaveBeenCalled();
+
+    const approval = loadBundleFixture("run-event-approval-requested.json");
+    let unsupportedEmitted = false;
+    const unsupportedGateway = createMockGateway({
+      hasApprovalDecisionBundle: () => false,
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "WAITING_APPROVAL",
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => {
+              if (!unsupportedEmitted) {
+                unsupportedEmitted = true;
+                return {
+                  done: false,
+                  value: encodeSseEvents([
+                    {
+                      eventType: "approval.requested",
+                      id: String(approval.event_id),
+                      data: approval,
+                    },
+                  ]),
+                };
+              }
+              return new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined);
+            },
+          }),
+        },
+      }),
+    });
+    const unsupportedService = trackService(
+      createSkillRunService({
+        gatewayClient: unsupportedGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await unsupportedService.start({
+      toolName: "calculator",
+      prompt: "unsupported",
+      clientRequestId: "req-unsupported-decide",
+      sessionId: "session-unsupported-decide",
+      profileId: "default",
+    });
+    await waitForProjection(
+      unsupportedService,
+      "req-unsupported-decide",
+      (p) => p.phase === "waiting-approval",
+    );
+    const unsupported = await unsupportedService.decideApproval({
+      clientRequestId: "req-unsupported-decide",
+      sessionId: "session-unsupported-decide",
+      decision: "allow",
+    });
+    expect(unsupported.errorCode).toBe("APPROVAL_DECISION_UNSUPPORTED");
+    expect(unsupportedGateway.decideApproval).not.toHaveBeenCalled();
+
+    const missingIdGateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "WAITING_APPROVAL",
+      }),
+      openEventStream: vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined),
+          }),
+        },
+      }),
+    });
+    const missingIdService = trackService(
+      createSkillRunService({
+        gatewayClient: missingIdGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await missingIdService.start({
+      toolName: "calculator",
+      prompt: "missing-id",
+      clientRequestId: "req-missing-approval",
+      sessionId: "session-missing-approval",
+      profileId: "default",
+    });
+    await waitForProjection(
+      missingIdService,
+      "req-missing-approval",
+      (p) => p.phase === "waiting-approval",
+    );
+    const missing = await missingIdService.decideApproval({
+      clientRequestId: "req-missing-approval",
+      sessionId: "session-missing-approval",
+      decision: "allow",
+    });
+    expect(missing.errorCode).toBe("APPROVAL_ID_MISSING");
+    expect(missingIdGateway.decideApproval).not.toHaveBeenCalled();
+
+    const alreadyGateway = hangingApprovalForConflict();
+    function hangingApprovalForConflict(): SkillRunGatewayClient {
+      let emitted = false;
+      return createMockGateway({
+        decideApproval: vi.fn().mockRejectedValue(
+          new SkillRunGatewayError("already decided", 409, "APPROVAL_ALREADY_DECIDED"),
+        ),
+        getRunSnapshot: vi.fn().mockResolvedValue({
+          runId: "run-xyz-999",
+          status: "WAITING_APPROVAL",
+        }),
+        openEventStream: vi.fn().mockResolvedValue({
+          ok: true,
+          body: {
+            getReader: () => ({
+              read: async () => {
+                if (!emitted) {
+                  emitted = true;
+                  return {
+                    done: false,
+                    value: encodeSseEvents([
+                      {
+                        eventType: "approval.requested",
+                        id: String(approval.event_id),
+                        data: approval,
+                      },
+                    ]),
+                  };
+                }
+                return new Promise<{ done: boolean; value?: Uint8Array }>(() => undefined);
+              },
+            }),
+          },
+        }),
+      });
+    }
+    const conflictService = trackService(
+      createSkillRunService({
+        gatewayClient: alreadyGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await conflictService.start({
+      toolName: "calculator",
+      prompt: "conflict",
+      clientRequestId: "req-conflict-decide",
+      sessionId: "session-conflict-decide",
+      profileId: "default",
+    });
+    await waitForProjection(
+      conflictService,
+      "req-conflict-decide",
+      (p) => p.phase === "waiting-approval",
+    );
+    const conflict = await conflictService.decideApproval({
+      clientRequestId: "req-conflict-decide",
+      sessionId: "session-conflict-decide",
+      decision: "allow",
+    });
+    expect(conflict.success).toBe(false);
+    expect(conflict.errorCode).toBe("APPROVAL_ALREADY_DECIDED");
+    expect(conflict.projection?.phase).toBe("waiting-approval");
+
+    const rewindService = trackService(
+      createSkillRunService({
+        gatewayClient: createMockGateway({
+          decideApproval: vi.fn().mockRejectedValue(
+            new SkillRunGatewayError("already decided", 409, "APPROVAL_ALREADY_DECIDED"),
+          ),
+          getRunSnapshot: vi.fn().mockResolvedValue({
+            runId: "run-xyz-999",
+            status: "succeeded",
+            resultText: "done",
+            artifacts: [],
+          }),
+        }),
+        ...skillFirstOptions,
+      }),
+    );
+    await rewindService.start({
+      toolName: "calculator",
+      prompt: "rewind-decide",
+      clientRequestId: "req-rewind-decide",
+      sessionId: "session-rewind-decide",
+      profileId: "default",
+    });
+    const succeeded = await waitForProjection(
+      rewindService,
+      "req-rewind-decide",
+      (p) => p.phase === "succeeded",
+    );
+    expect(succeeded?.phase).toBe("succeeded");
+    const rewind = await rewindService.decideApproval({
+      clientRequestId: "req-rewind-decide",
+      sessionId: "session-rewind-decide",
+      decision: "allow",
+    });
+    expect(rewind.errorCode).toBe("APPROVAL_NOT_WAITING");
+    expect(rewindService.getProjection("req-rewind-decide")?.phase).toBe("succeeded");
   });
 
   it("dedupes activity by event_id", async () => {

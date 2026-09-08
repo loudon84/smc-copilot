@@ -146,6 +146,8 @@ export interface SkillRunProjection {
   artifactDiscoveryError?: boolean;
   /** Renderer-safe discovery error text; never URLs, paths, or bytes. */
   artifactDiscoveryMessage?: string;
+  /** Last approval_id successfully submitted via decideApproval; never the idempotency key. */
+  decidedApprovalId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -205,6 +207,19 @@ export interface SkillRunRetryArtifactDiscoveryInput {
   sessionId: string;
 }
 
+export interface SkillRunDecideApprovalInput {
+  clientRequestId: string;
+  sessionId: string;
+  decision: "allow" | "deny";
+}
+
+export interface SkillRunDecideApprovalResult {
+  success: boolean;
+  errorCode?: string;
+  message?: string;
+  projection?: SkillRunProjection;
+}
+
 export interface SkillRunSessionModeSnapshot {
   executionMode: "skill-run";
   toolName: string;
@@ -225,6 +240,7 @@ export const SKILL_RUN_IPC_CHANNELS = {
   GET_SESSION_MODE: "skill-run:get-session-mode",
   SET_SESSION_MODE: "skill-run:set-session-mode",
   SET_CATALOG_FAVORITE: "skill-run:set-catalog-favorite",
+  DECIDE_APPROVAL: "skill-run:decide-approval",
   ON_PROJECTION_CHANGED: "skill-run:on-projection-changed",
 } as const;
 
@@ -244,6 +260,7 @@ export interface SkillRunApi {
   listProjections(sessionId: string): Promise<SkillRunProjection[]>;
   rehydrateSession(sessionId: string): Promise<SkillRunProjection[]>;
   retryArtifactDiscovery(input: SkillRunRetryArtifactDiscoveryInput): Promise<SkillRunProjection | null>;
+  decideApproval(input: SkillRunDecideApprovalInput): Promise<SkillRunDecideApprovalResult>;
   getSessionMode(sessionId: string): Promise<SkillRunSessionModeSnapshot | null>;
   setSessionMode(
     input: SkillRunSessionModeSnapshot & { sessionId: string },

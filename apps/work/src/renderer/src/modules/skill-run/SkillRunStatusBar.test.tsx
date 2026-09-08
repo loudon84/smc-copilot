@@ -37,6 +37,7 @@ describe("SkillRunStatusBar", () => {
     vi.stubGlobal("hermesAPI", {
       skillRun: {
         retryArtifactDiscovery: vi.fn().mockResolvedValue(null),
+        decideApproval: vi.fn().mockResolvedValue(null),
       },
     });
   });
@@ -80,7 +81,7 @@ describe("SkillRunStatusBar", () => {
     expect(source).not.toContain("ExpertArtifactCards");
   });
 
-  it("renders read-only activity kinds under the compact phase row", () => {
+  it("renders read-only activity kinds under the compact phase row", async () => {
     render(
       <SkillRunStatusBar
         projection={projection({
@@ -124,12 +125,20 @@ describe("SkillRunStatusBar", () => {
     expect(screen.getByText("b")).toBeTruthy();
     expect(screen.getByText("Approval requested: delete file")).toBeTruthy();
     expect(screen.getByText("Cancel")).toBeTruthy();
+    expect(screen.getByText("Allow")).toBeTruthy();
+    expect(screen.getByText("Deny")).toBeTruthy();
+    fireEvent.click(screen.getByText("Allow"));
+    await vi.waitFor(() =>
+      expect(window.hermesAPI.skillRun.decideApproval).toHaveBeenCalledWith({
+        clientRequestId: "req-1",
+        sessionId: "sess-1",
+        decision: "allow",
+      }),
+    );
     expect(screen.queryByText("Approve")).toBeNull();
-    expect(screen.queryByText("Deny")).toBeNull();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.queryByText("Respond")).toBeNull();
     expect(screen.queryByText("Send")).toBeNull();
-    expect(screen.queryByRole("button", { name: /approve|deny|skip|respond|send/i })).toBeNull();
 
     const relative = "src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx";
     const sourcePath = existsSync(join(process.cwd(), relative))
@@ -137,7 +146,75 @@ describe("SkillRunStatusBar", () => {
       : join(process.cwd(), "apps/work", relative);
     const source = readFileSync(sourcePath, "utf8");
     expect(source).not.toContain("ClarifyCard");
+    expect(source).not.toContain("MessageRow");
+    expect(source).not.toContain("handleApprove");
     expect(source).not.toContain("clarify-respond");
     expect(source).not.toContain("respondClarify");
+    expect(source).toContain("decideApproval");
+  });
+
+  it("hides Allow and Deny when the current approval is already decided", () => {
+    render(
+      <SkillRunStatusBar
+        projection={projection({
+          phase: "waiting-approval",
+          displayStage: "Waiting for approval...",
+          decidedApprovalId: "appr-1",
+          activities: [
+            {
+              eventId: "evt-6",
+              kind: "approval.requested",
+              approvalId: "appr-1",
+              summary: "delete file",
+            },
+          ],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Approval requested: delete file")).toBeTruthy();
+    expect(screen.getByText("Cancel")).toBeTruthy();
+    expect(screen.queryByText("Allow")).toBeNull();
+    expect(screen.queryByText("Deny")).toBeNull();
+  });
+
+  it("does not show Allow or Deny on running or succeeded phases", () => {
+    const { rerender } = render(
+      <SkillRunStatusBar
+        projection={projection({
+          phase: "running",
+          displayStage: "Executing skill...",
+          activities: [
+            {
+              eventId: "evt-6",
+              kind: "approval.requested",
+              approvalId: "appr-1",
+              summary: "delete file",
+            },
+          ],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Allow")).toBeNull();
+    expect(screen.queryByText("Deny")).toBeNull();
+    rerender(
+      <SkillRunStatusBar
+        projection={projection({
+          phase: "succeeded",
+          activities: [
+            {
+              eventId: "evt-6",
+              kind: "approval.requested",
+              approvalId: "appr-1",
+              summary: "delete file",
+            },
+          ],
+        })}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Allow")).toBeNull();
+    expect(screen.queryByText("Deny")).toBeNull();
   });
 });

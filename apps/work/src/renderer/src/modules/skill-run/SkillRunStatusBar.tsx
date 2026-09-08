@@ -61,6 +61,23 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
   };
 
   const activities = projection.activities ?? [];
+  const currentApproval = [...activities]
+    .reverse()
+    .find((item) => item.kind === "approval.requested" && Boolean(item.approvalId));
+  const showDecisionControls =
+    projection.phase === "waiting-approval" &&
+    Boolean(currentApproval?.approvalId) &&
+    projection.decidedApprovalId !== currentApproval?.approvalId;
+
+  const handleDecide = (decision: "allow" | "deny") => {
+    startTransition(() => {
+      void window.hermesAPI.skillRun.decideApproval({
+        clientRequestId: projection.clientRequestId,
+        sessionId: projection.sessionId,
+        decision,
+      });
+    });
+  };
 
   return (
     <div className="my-2">
@@ -94,25 +111,45 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
           </div>
         </div>
 
-        {showArtifactRetry ? (
-          <button
-            type="button"
-            onClick={handleRetryDiscovery}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>{t("skillRun.artifactRetry", "Retry artifact discovery")}</span>
-          </button>
-        ) : !isTerminal && onCancel ? (
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
-          >
-            <StopCircle className="w-3.5 h-3.5" />
-            <span>{t("skillRun.cancelSkillRun", "Cancel")}</span>
-          </button>
-        ) : null}
+        <div className="flex items-center gap-1 shrink-0">
+          {showDecisionControls ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleDecide("allow")}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+              >
+                <span>{t("skillRun.approvalAllow", "Allow")}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDecide("deny")}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+              >
+                <span>{t("skillRun.approvalDeny", "Deny")}</span>
+              </button>
+            </>
+          ) : null}
+          {showArtifactRetry ? (
+            <button
+              type="button"
+              onClick={handleRetryDiscovery}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{t("skillRun.artifactRetry", "Retry artifact discovery")}</span>
+            </button>
+          ) : !isTerminal && onCancel ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-secondary-foreground shrink-0 transition-colors"
+            >
+              <StopCircle className="w-3.5 h-3.5" />
+              <span>{t("skillRun.cancelSkillRun", "Cancel")}</span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {activities.length > 0 ? (

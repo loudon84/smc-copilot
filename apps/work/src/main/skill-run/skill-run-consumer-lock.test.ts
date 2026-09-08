@@ -15,26 +15,30 @@ import {
   WORK_SKILL_RUN_CONTRACT_VERSION,
 } from "../../shared/skill-run";
 import {
-  hasSkillRunConsumerLock,
+  hasSkillRunApprovalDecisionBundle,
   isCompleteSkillRunBundleDir,
 } from "./skill-run-consumer-lock";
 
-const IDENTITY_LOCK_DIR = join(
-  process.cwd(),
-  "../../contracts/skill-run/v1.0.0",
-);
-const COMPLETE_LOCK_DIR = join(
-  process.cwd(),
-  "../../contracts/skill-run/v1.2.1",
-);
-const COMPLETE_LOCK_DIR_V130 = join(
-  process.cwd(),
-  "../../contracts/skill-run/v1.3.0",
-);
-const EXPERT_LOCK = join(
-  process.cwd(),
-  "../../contracts/work-expert/v1.0.2/consumer-lock.json",
-);
+function contractsSkillRunDir(version: string): string {
+  const fromWork = join(process.cwd(), "../../contracts/skill-run", version);
+  const fromRepo = join(process.cwd(), "contracts/skill-run", version);
+  return existsSync(fromWork) ? fromWork : fromRepo;
+}
+
+const IDENTITY_LOCK_DIR = contractsSkillRunDir("v1.0.0");
+const COMPLETE_LOCK_DIR = contractsSkillRunDir("v1.2.1");
+const COMPLETE_LOCK_DIR_V130 = contractsSkillRunDir("v1.3.0");
+const EXPERT_LOCK = (() => {
+  const fromWork = join(
+    process.cwd(),
+    "../../contracts/work-expert/v1.0.2/consumer-lock.json",
+  );
+  const fromRepo = join(
+    process.cwd(),
+    "contracts/work-expert/v1.0.2/consumer-lock.json",
+  );
+  return existsSync(fromWork) ? fromWork : fromRepo;
+})();
 
 const FIXTURE_FILES: Record<string, string> = {
   "manifest.json": JSON.stringify({
@@ -163,7 +167,6 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(lock.sha256sumsPath).toBe("SHA256SUMS");
     expect(sumsBytes.includes(0x0d)).toBe(false);
     expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR)).toBe(true);
-    expect(hasSkillRunConsumerLock()).toBe(true);
   });
 
   it("opens the gate for the checksum-valid v1.3.0 Provider Bundle", () => {
@@ -207,7 +210,27 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(unsupported.properties).toHaveProperty("attachments");
     expect(unsupported.properties).not.toHaveProperty("approval");
     expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V130)).toBe(true);
-    expect(hasSkillRunConsumerLock()).toBe(true);
+    expect(hasSkillRunApprovalDecisionBundle()).toBe(true);
+  });
+
+  it("keeps P0 required paths free of approval-decision schemas", () => {
+    const sourcePath = join(
+      process.cwd(),
+      "src/main/skill-run/skill-run-consumer-lock.ts",
+    );
+    const source = existsSync(sourcePath)
+      ? readFileSync(sourcePath, "utf8")
+      : readFileSync(
+          join(process.cwd(), "apps/work/src/main/skill-run/skill-run-consumer-lock.ts"),
+          "utf8",
+        );
+    expect(source).not.toContain("approval-decision.request.schema.json");
+    expect(source).not.toContain("approval-decision.response.schema.json");
+    expect(isCompleteSkillRunBundleDir(IDENTITY_LOCK_DIR)).toBe(false);
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR)).toBe(true);
+    expect(hasSkillRunApprovalDecisionBundle()).toBe(
+      isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V130),
+    );
   });
 
   it("accepts a checksum-valid complete Bundle fixture", () => {

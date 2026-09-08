@@ -134,3 +134,14 @@ export function findSkillRunConsumerLockDir(): string | null {
 export function hasSkillRunConsumerLock(): boolean {
   return findSkillRunConsumerLockDir() !== null;
 }
+
+/**
+ * Decision HTTP is v1.3.0-only. Do not use first-complete P0 finder here:
+ * a checksum-complete v1.2.1 bundle must still open Catalog/start.
+ */
+export function hasSkillRunApprovalDecisionBundle(): boolean {
+  const fromWork = join(process.cwd(), "../../contracts/skill-run/v1.3.0");
+  const fromRepo = join(process.cwd(), "contracts/skill-run/v1.3.0");
+  const dir = existsSync(fromWork) ? fromWork : fromRepo;
+  return isCompleteSkillRunBundleDir(dir);
+}

@@ -30,6 +30,8 @@ export default {
   runFailed: "Skill execution failed",
   runCancelled: "Skill execution cancelled",
   cancelSkillRun: "Cancel",
+  approvalAllow: "Allow",
+  approvalDeny: "Deny",
   resultReady: "Result ready",
   artifactRetry: "Retry artifact discovery",
   startDisabledNoLock: "Skill Run execution is disabled because no consumer lock is present.",

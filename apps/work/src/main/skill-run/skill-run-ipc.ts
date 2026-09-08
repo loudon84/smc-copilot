@@ -9,6 +9,8 @@ import {
   type SkillCatalogResponse,
   type SkillRunCancelInput,
   type SkillRunCancelResult,
+  type SkillRunDecideApprovalInput,
+  type SkillRunDecideApprovalResult,
   type SkillRunFeatureMode,
   type SkillRunProjection,
   type SkillRunRetryArtifactDiscoveryInput,
@@ -320,6 +322,41 @@ export function registerSkillRunIpc(): () => void {
     return service.retryArtifactDiscovery(sanitized);
   };
 
+  const decideApprovalHandler = async (
+    event: IpcMainInvokeEvent,
+    input: unknown,
+  ): Promise<SkillRunDecideApprovalResult> => {
+    assertSender(event);
+    await requireAuthSession();
+    if (!isRecord(input)) {
+      throw new Error("Invalid SkillRunDecideApprovalInput");
+    }
+    if ("approvalId" in input || "idempotencyKey" in input) {
+      throw new Error("Invalid SkillRunDecideApprovalInput");
+    }
+    const clientRequestId = String(input.clientRequestId || "").trim();
+    const sessionId = String(input.sessionId || "").trim();
+    if (!clientRequestId || !sessionId) {
+      throw new Error("Invalid SkillRunDecideApprovalInput");
+    }
+    if (clientRequestId.length > MAX_CLIENT_REQUEST_ID_LENGTH) {
+      throw new Error("Invalid SkillRunDecideApprovalInput.clientRequestId");
+    }
+    if (sessionId.length > MAX_SESSION_ID_LENGTH) {
+      throw new Error("Invalid SkillRunDecideApprovalInput.sessionId");
+    }
+    if (input.decision !== "allow" && input.decision !== "deny") {
+      throw new Error("Invalid SkillRunDecideApprovalInput.decision");
+    }
+    const sanitized: SkillRunDecideApprovalInput = {
+      clientRequestId,
+      sessionId,
+      decision: input.decision,
+    };
+    const service = getSkillRunService();
+    return service.decideApproval(sanitized);
+  };
+
   const getSessionModeHandler = async (
     event: IpcMainInvokeEvent,
     sessionId: unknown,
@@ -364,6 +401,7 @@ export function registerSkillRunIpc(): () => void {
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.LIST_PROJECTIONS, listProjectionsHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.REHYDRATE_SESSION, rehydrateSessionHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY, retryArtifactDiscoveryHandler);
+  ipcMain.handle(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL, decideApprovalHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE, getSessionModeHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE, setSessionModeHandler);
 
@@ -378,6 +416,7 @@ export function registerSkillRunIpc(): () => void {
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.LIST_PROJECTIONS);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.REHYDRATE_SESSION);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY);
+    ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE);
   };

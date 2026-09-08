@@ -13,6 +13,7 @@ const {
   listCatalogMock,
   clearCacheMock,
   setFavoriteMock,
+  decideApprovalMock,
 } = vi.hoisted(() => ({
   ensureFreshAccessToken: vi.fn(async () => "token"),
   readStoredSessionSync: vi.fn(() => ({
@@ -24,6 +25,7 @@ const {
   listCatalogMock: vi.fn(),
   clearCacheMock: vi.fn(),
   setFavoriteMock: vi.fn(),
+  decideApprovalMock: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
@@ -79,6 +81,7 @@ vi.mock("./skill-run-service", () => ({
     setCatalogFavorite: setFavoriteMock,
     start: startMock,
     cancel: vi.fn(),
+    decideApproval: decideApprovalMock,
     getFeatureMode: () => "expert-compat",
     getProjection: vi.fn(),
     listProjections: vi.fn(),
@@ -248,5 +251,53 @@ describe("registerSkillRunIpc", () => {
     expect(Object.values(SKILL_RUN_IPC_CHANNELS)).not.toEqual(
       expect.arrayContaining([expect.stringContaining("recommend")]),
     );
+  });
+
+  it("DECIDE_APPROVAL accepts allow/deny and rejects extra approval identity", async () => {
+    const handler = handlers.get(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL)!;
+    decideApprovalMock.mockResolvedValueOnce({
+      success: true,
+      projection: { clientRequestId: "req-1", phase: "waiting-approval" },
+    });
+    await expect(
+      handler(validEvent(), {
+        clientRequestId: "req-1",
+        sessionId: "session-1",
+        decision: "allow",
+      }),
+    ).resolves.toMatchObject({ success: true });
+    expect(decideApprovalMock).toHaveBeenCalledWith({
+      clientRequestId: "req-1",
+      sessionId: "session-1",
+      decision: "allow",
+    });
+    expect(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL).toBe("skill-run:decide-approval");
+
+    await expect(handler(validEvent(), { sessionId: "session-1", decision: "allow" })).rejects.toThrow(
+      /Invalid SkillRunDecideApprovalInput/,
+    );
+    await expect(
+      handler(validEvent(), {
+        clientRequestId: "req-1",
+        sessionId: "session-1",
+        decision: "skip",
+      }),
+    ).rejects.toThrow(/Invalid SkillRunDecideApprovalInput.decision/);
+    await expect(
+      handler(validEvent(), {
+        clientRequestId: "req-1",
+        sessionId: "session-1",
+        decision: "allow",
+        approvalId: "appr-1",
+      }),
+    ).rejects.toThrow(/Invalid SkillRunDecideApprovalInput/);
+    await expect(
+      handler(validEvent(), {
+        clientRequestId: "req-1",
+        sessionId: "session-1",
+        decision: "deny",
+        idempotencyKey: "stolen-key",
+      }),
+    ).rejects.toThrow(/Invalid SkillRunDecideApprovalInput/);
   });
 });

@@ -4,6 +4,7 @@
  * Enforces fail-closed gate when consumer lock is missing.
  */
 
+import { randomUUID } from "crypto";
 import { parseRunSseBlock } from "../run-stream";
 import {
   createSkillRunGatewayClient,
@@ -32,6 +33,8 @@ import {
   type SkillRunArtifactDescriptor,
   type SkillRunCancelInput,
   type SkillRunCancelResult,
+  type SkillRunDecideApprovalInput,
+  type SkillRunDecideApprovalResult,
   type SkillRunFeatureMode,
   type SkillRunLocalPhase,
   type SkillRunProjection,
@@ -42,6 +45,36 @@ import {
 } from "../../shared/skill-run";
 
 const ACTIVITY_LIST_CAP = 32;
+
+function currentWaitingApprovalId(
+  projection: SkillRunProjection,
+): string | undefined {
+  const activities = projection.activities ?? [];
+  for (let i = activities.length - 1; i >= 0; i -= 1) {
+    const item = activities[i];
+    if (item.kind === "approval.requested" && item.approvalId) {
+      return item.approvalId;
+    }
+  }
+  return undefined;
+}
+
+function sanitizeDecisionFailure(err: unknown): {
+  errorCode: string;
+  errorMessage: string;
+} {
+  if (err instanceof SkillRunGatewayError) {
+    const errorCode = err.errorCode?.trim() || "APPROVAL_DECISION_FAILED";
+    return {
+      errorCode,
+      errorMessage: "Approval decision was not accepted",
+    };
+  }
+  return {
+    errorCode: "APPROVAL_DECISION_FAILED",
+    errorMessage: "Approval decision was not accepted",
+  };
+}
 
 function appendSanitizedActivity(
   existing: SkillRunActivityItem[] | undefined,
@@ -66,6 +99,7 @@ export interface SkillRunService {
   setCatalogFavorite(input: SkillRunSetCatalogFavoriteInput): Promise<SkillCatalogResponse>;
   start(input: SkillRunStartInput): Promise<SkillRunStartResult>;
   cancel(input: SkillRunCancelInput): Promise<SkillRunCancelResult>;
+  decideApproval(input: SkillRunDecideApprovalInput): Promise<SkillRunDecideApprovalResult>;
   getProjection(clientRequestId: string): SkillRunProjection | null;
   listProjections(sessionId: string): SkillRunProjection[];
   rehydrate(item: {
@@ -98,6 +132,7 @@ interface ActiveRun {
   pollTimer: NodeJS.Timeout | null;
   terminalConfirmed: boolean;
   seenEventIds: Set<string>;
+  approvalDecisionKeys: Map<string, string>;
 }
 
 function nowIso(): string {
@@ -666,6 +701,7 @@ export function createSkillRunService(
         pollTimer: null,
         terminalConfirmed: false,
         seenEventIds: new Set(),
+        approvalDecisionKeys: new Map(),
       };
 
       runs.set(input.clientRequestId, activeRun);
@@ -787,6 +823,109 @@ export function createSkillRunService(
       };
     },
 
+    async decideApproval(
+      input: SkillRunDecideApprovalInput,
+    ): Promise<SkillRunDecideApprovalResult> {
+      const active = runs.get(input.clientRequestId);
+      if (!active || active.request.sessionId !== input.sessionId) {
+        return {
+          success: false,
+          errorCode: "NO_ACTIVE_RUN",
+          message: `No active skill run found for clientRequestId: ${input.clientRequestId}`,
+        };
+      }
+
+      if (active.projection.phase !== "waiting-approval") {
+        return {
+          success: false,
+          errorCode: "APPROVAL_NOT_WAITING",
+          message: "Approval decision is only allowed while waiting for approval.",
+          projection: active.projection,
+        };
+      }
+
+      const approvalId = currentWaitingApprovalId(active.projection);
+      if (!approvalId) {
+        return {
+          success: false,
+          errorCode: "APPROVAL_ID_MISSING",
+          message: "No current approval id is available for this run.",
+          projection: active.projection,
+        };
+      }
+
+      if (!active.projection.providerRunId) {
+        return {
+          success: false,
+          errorCode: "APPROVAL_NOT_WAITING",
+          message: "Approval decision is only allowed while waiting for approval.",
+          projection: active.projection,
+        };
+      }
+
+      if (!gateway.hasApprovalDecisionBundle()) {
+        return {
+          success: false,
+          errorCode: "APPROVAL_DECISION_UNSUPPORTED",
+          message: "Skill Run approval decision contract is not available.",
+          projection: active.projection,
+        };
+      }
+
+      let idempotencyKey = active.approvalDecisionKeys.get(approvalId);
+      if (!idempotencyKey) {
+        idempotencyKey = randomUUID();
+        active.approvalDecisionKeys.set(approvalId, idempotencyKey);
+      }
+
+      try {
+        const receipt = await gateway.decideApproval({
+          runId: active.projection.providerRunId,
+          approvalId,
+          decision: input.decision,
+          idempotencyKey,
+        });
+        const receiptPhase = parseSkillRunStatusToPhase(receipt.status);
+        if (isSkillRunTerminalPhase(receiptPhase)) {
+          const updated = updateProjection(active, {
+            phase: receiptPhase,
+            decidedApprovalId: approvalId,
+          });
+          return {
+            success: true,
+            projection: updated,
+          };
+        }
+        const updated = updateProjection(active, {
+          decidedApprovalId: approvalId,
+        });
+        return {
+          success: true,
+          projection: updated,
+        };
+      } catch (err) {
+        const sanitized = sanitizeDecisionFailure(err);
+        if (active.terminalConfirmed) {
+          return {
+            success: false,
+            errorCode: sanitized.errorCode,
+            message: sanitized.errorMessage,
+            projection: active.projection,
+          };
+        }
+        const updated = updateProjection(active, {
+          errorCode: sanitized.errorCode,
+          errorMessage: sanitized.errorMessage,
+        });
+        return {
+          success: false,
+          errorCode: sanitized.errorCode,
+          message: sanitized.errorMessage,
+          projection: updated,
+        };
+      }
+    },
+
     getProjection(clientRequestId: string): SkillRunProjection | null {
       return runs.get(clientRequestId)?.projection ?? null;
     },
@@ -852,6 +991,7 @@ export function createSkillRunService(
         pollTimer: null,
         terminalConfirmed: isTerminal,
         seenEventIds: new Set(),
+        approvalDecisionKeys: new Map(),
       };
 
       runs.set(item.clientRequestId, activeRun);

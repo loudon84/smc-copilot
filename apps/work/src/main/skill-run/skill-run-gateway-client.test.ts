@@ -444,3 +444,152 @@ describe("skill-run gateway artifact list adapter", () => {
     await expect(client.listRunArtifacts("run-private")).resolves.toEqual([]);
   });
 });
+
+describe("skill-run gateway approval decision", () => {
+  const receipt = {
+    run_id: "run-1",
+    approval_id: "appr-1",
+    decision: "allow",
+    status: "WAITING_APPROVAL",
+    decided_at: "2026-01-01T00:00:00.000Z",
+  };
+
+  function createDecisionClient(
+    fetchImpl: typeof fetch,
+    hasApprovalDecisionBundle = true,
+  ) {
+    return createSkillRunGatewayClient({
+      hasConsumerLock: true,
+      hasApprovalDecisionBundle,
+      getAuthScopeKey: () => "test-scope",
+      transport: createAuthorizedBackendTransport({
+        fetchImpl,
+        ensureAccessToken: async () => "fresh-jwt-token",
+      }),
+    });
+  }
+
+  it("POSTs canonical /decision with X-Idempotency-Key and allow body", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe(
+        "http://nodeskclaw.test:4510/api/v1/runs/run-1/approvals/appr-1/decision",
+      );
+      expect(String(url)).toContain("/decision");
+      expect(String(url).endsWith("/approvals/appr-1")).toBe(false);
+      expect(init?.method).toBe("POST");
+      expect(headerValue(init, "X-Idempotency-Key")).toBe("decision-key-1");
+      expect(JSON.parse(String(init?.body ?? "{}"))).toEqual({ decision: "allow" });
+      return new Response(JSON.stringify(receipt), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const client = createDecisionClient(fetchImpl as unknown as typeof fetch);
+    const result = await client.decideApproval({
+      runId: "run-1",
+      approvalId: "appr-1",
+      decision: "allow",
+      idempotencyKey: "decision-key-1",
+    });
+    expect(result).toEqual({
+      runId: "run-1",
+      approvalId: "appr-1",
+      decision: "allow",
+      status: "WAITING_APPROVAL",
+      decidedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("POSTs deny on the same canonical path", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toContain("/approvals/appr-1/decision");
+      expect(JSON.parse(String(init?.body ?? "{}"))).toEqual({ decision: "deny" });
+      return new Response(
+        JSON.stringify({ ...receipt, decision: "deny", status: "COMPLETED" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    const client = createDecisionClient(fetchImpl as unknown as typeof fetch);
+    const result = await client.decideApproval({
+      runId: "run-1",
+      approvalId: "appr-1",
+      decision: "deny",
+      idempotencyKey: "decision-key-deny",
+    });
+    expect(result.decision).toBe("deny");
+    expect(result.status).toBe("COMPLETED");
+  });
+
+  it("replays the same idempotency key without changing the body", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      expect(headerValue(init, "X-Idempotency-Key")).toBe("decision-replay");
+      expect(JSON.parse(String(init?.body ?? "{}"))).toEqual({ decision: "allow" });
+      return new Response(JSON.stringify(receipt), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    const client = createDecisionClient(fetchImpl as unknown as typeof fetch);
+    const first = await client.decideApproval({
+      runId: "run-1",
+      approvalId: "appr-1",
+      decision: "allow",
+      idempotencyKey: "decision-replay",
+    });
+    const replay = await client.decideApproval({
+      runId: "run-1",
+      approvalId: "appr-1",
+      decision: "allow",
+      idempotencyKey: "decision-replay",
+    });
+    expect(replay).toEqual(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const bodies = fetchImpl.mock.calls.map((call) => String(call[1]?.body ?? ""));
+    expect(bodies[0]).toBe(bodies[1]);
+  });
+
+  it("throws without fetch when the approval-decision bundle is absent", async () => {
+    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
+    const client = createDecisionClient(fetchImpl as unknown as typeof fetch, false);
+    await expect(
+      client.decideApproval({
+        runId: "run-1",
+        approvalId: "appr-1",
+        decision: "allow",
+        idempotencyKey: "decision-key-1",
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "SkillRunGatewayError",
+        errorCode: "APPROVAL_DECISION_UNSUPPORTED",
+      }),
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(client.hasApprovalDecisionBundle()).toBe(false);
+  });
+
+  it("maps 409 JSON error_code onto SkillRunGatewayError", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ error_code: "APPROVAL_ALREADY_DECIDED", message: "already decided" }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const client = createDecisionClient(fetchImpl as unknown as typeof fetch);
+    await expect(
+      client.decideApproval({
+        runId: "run-1",
+        approvalId: "appr-1",
+        decision: "allow",
+        idempotencyKey: "decision-key-1",
+      }),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "SkillRunGatewayError",
+        status: 409,
+        errorCode: "APPROVAL_ALREADY_DECIDED",
+      }),
+    );
+  });
+});

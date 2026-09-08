@@ -84,7 +84,15 @@ Work maps v1.2.1 enumerated `reasoning.summary`, `tool.call`, `clarify.requested
 
 [[src/main/skill-run/skill-run-contract-parser.ts#parseSkillRunEvent]] produces Work-owned [[src/shared/skill-run.ts#SkillRunActivityItem]] items on [[src/shared/skill-run.ts#SkillRunProjection]]. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] appends a bounded list (cap 32, deduped by contract `event_id`) over the existing projection subscribe path. [[src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx#SkillRunStatusBar]] renders those items as read-only text under the compact phase row.
 
-`tool.call` copies only `tool_name` / `call_id` / `status`. `clarify.requested` shows the question and string options only; Skill Run does not call Hermes `clarify-respond` or reuse Local Chat `ClarifyCard`. `approval.requested` may set phase `waiting-approval` and shows the summary without allow/deny controls. Unknown and unmapped control events stay `rawUnknown` and are not textified into transcript or activity.
+`tool.call` copies only `tool_name` / `call_id` / `status`. `clarify.requested` shows the question and string options only; Skill Run does not call Hermes `clarify-respond` or reuse Local Chat `ClarifyCard`. `approval.requested` may set phase `waiting-approval` and shows the summary. M6c adds Allow/Deny on this same compact bar; it does not reuse Local Chat `ClarifyCard` or `MessageRow` approve/deny. Unknown and unmapped control events stay `rawUnknown` and are not textified into transcript or activity.
+
+## M6c Skill Run approval decision
+
+Work posts canonical v1.3.0 Allow/Deny from the existing Skill Run status bar.
+
+[[src/main/skill-run/skill-run-gateway-client.ts#createSkillRunGatewayClient]] owns `POST /api/v1/runs/{run_id}/approvals/{approval_id}/decision` with Main `X-Idempotency-Key`. [[src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunApprovalDecisionBundle]] requires checksum-complete `contracts/skill-run/v1.3.0`; P0 `REQUIRED_BUNDLE_PATHS` stays unchanged so v1.2.1 can still open Catalog/start. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] binds the current `approval.requested` `approvalId`, stores a per-approval UUID (never the start `clientRequestId`), and treats a 200 receipt as non-terminal unless Public status is already terminal. Deny follows Public `COMPLETED`/`FAILED`; Work must not rewrite deny as `cancelled`. Cancel remains the existing cancel IPC.
+
+Renderer [[src/renderer/src/modules/skill-run/SkillRunStatusBar.tsx#SkillRunStatusBar]] shows English Allow and Deny only while `waiting-approval` and the current approval is not yet `decidedApprovalId`. Clicks call `hermesAPI.skillRun.decideApproval({ clientRequestId, sessionId, decision })`. Chat `MessageRow` Local/Hermes approval is unchanged.
 
 ## M6d Limited parameter form
 
@@ -111,9 +119,10 @@ Repository default feature mode is `skill-first`. `SMC_WORK_SKILL_RUN_MODE` and 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.
 
 - Hosted telemetry dashboard / metrics UI
-- Approval decision IPC / allow-deny cards
-- Unrestricted JSON Schema / `$ref` / non-string parameter widgets
 - Attachment upload
+- Legacy `POST /api/v1/runs/{run_id}/approvals/{approval_id}` (Work never calls it)
+- Local Chat / Hermes `MessageRow` approve-deny as Skill Run decision
+- Unrestricted JSON Schema / `$ref` / non-string parameter widgets
 - Org recommendation / curated catalog API
 
 ## Cross References
