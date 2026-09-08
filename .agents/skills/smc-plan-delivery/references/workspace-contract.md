@@ -62,6 +62,8 @@ Repository-wide clean worktree is NOT required after commit. Original ambient di
 
 Before implementation commit, repository `HEAD` must remain equal to the frozen workspace `base_commit`. Unrelated dirty files may coexist, but unrelated commits/rebases in the same worktree are not ambient state and return `DELIVERY_HEAD_DRIFT`. After the guarded implementation commit, verification of the commit may allow the expected HEAD change only to that verified commit.
 
+`workspace.py rebind-head` may move `base_commit` to current `HEAD` when all of the following hold: current `HEAD` is a descendant of the frozen base; intervening commits do not touch planned, ambient or owned-control paths; ambient is stable; Plan semantics are unchanged; and the worktree has no unexpected dirty. It must not rewrite planned/ambient snapshots.
+
 ## Dirty-state Identity
 
 Ambient stability covers both file content identity and Git dirty class (`worktree`, `index`, `untracked`). Staging/unstaging, cleaning, committing, deleting, or rewriting an ambient path therefore counts as mutation even if its visible bytes are unchanged.

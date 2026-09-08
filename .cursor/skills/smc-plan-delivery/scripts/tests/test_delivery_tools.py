@@ -197,19 +197,19 @@ class DeliveryToolsTest(unittest.TestCase):
 
     def test_cursor_projection_missing_fails_v34(self):
         # @lat: [[ges-tests#GES Tests#Plan contract#Missing content fails v3.4]]
-        self.plan.write_text(self.plan.read_text().replace('    content: "T1 — change app [C01]"\n', ""), encoding="utf-8")
+        self.plan.write_text(self.plan.read_text(encoding="utf-8").replace('    content: "T1 — change app [C01]"\n', ""), encoding="utf-8")
         self.assertTrue(any(x.startswith("PLAN_CURSOR_TODO_CONTENT_MISSING") for x in plan_state.validate(self.plan)))
 
     def test_cursor_projection_drift_fails_v34(self):
         # @lat: [[ges-tests#GES Tests#Plan contract#Content drift fails v3.4]]
-        self.plan.write_text(self.plan.read_text().replace("change app [C01]", "old title [C01]"), encoding="utf-8")
+        self.plan.write_text(self.plan.read_text(encoding="utf-8").replace("change app [C01]", "old title [C01]"), encoding="utf-8")
         self.assertTrue(any(x.startswith("PLAN_CURSOR_TODO_CONTENT_DRIFT") for x in plan_state.validate(self.plan)))
 
     def test_set_status_preserves_content(self):
         # @lat: [[ges-tests#GES Tests#Plan contract#Status update preserves content]]
-        before = plan_state.cursor_todos(self.plan.read_text())[0]["content"]
+        before = plan_state.cursor_todos(self.plan.read_text(encoding="utf-8"))[0]["content"]
         plan_state.set_status(self.plan, "T1", "completed")
-        item = plan_state.cursor_todos(self.plan.read_text())[0]
+        item = plan_state.cursor_todos(self.plan.read_text(encoding="utf-8"))[0]
         self.assertEqual(before, item["content"])
         self.assertEqual("completed", item["status"])
 
@@ -219,10 +219,10 @@ class DeliveryToolsTest(unittest.TestCase):
         plan_state.set_status(self.plan, "T1", "completed")
         b = common.semantic_plan_sha256(self.plan)
         self.assertEqual(a, b)
-        text = self.plan.read_text().replace('content: "T1 — change app [C01]"', 'content: "display-only"')
+        text = self.plan.read_text(encoding="utf-8").replace('content: "T1 — change app [C01]"', 'content: "display-only"')
         self.plan.write_text(text, encoding="utf-8")
         self.assertEqual(a, common.semantic_plan_sha256(self.plan))
-        self.plan.write_text(self.plan.read_text().replace("## Todo T1 — change app", "## Todo T1 — changed semantics"), encoding="utf-8")
+        self.plan.write_text(self.plan.read_text(encoding="utf-8").replace("## Todo T1 — change app", "## Todo T1 — changed semantics"), encoding="utf-8")
         self.assertNotEqual(a, common.semantic_plan_sha256(self.plan))
 
     def test_plan_review_survives_runtime_status(self):
@@ -290,10 +290,51 @@ class DeliveryToolsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "DELIVERY_HEAD_DRIFT"):
             workspace.assert_stable(self.plan)
 
+    def test_workspace_rebind_head_after_unrelated_commit(self):
+        # @lat: [[ges-tests#GES Tests#Workspace#Rebind HEAD after unrelated commit]]
+        self.init_workspace()
+        (self.root / "app.py").write_text("def main():\n    return 2\n", encoding="utf-8")
+        path = self.root / ".agents/skills/smc-plan-validator/SKILL.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("tooling fix\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.root), "add", ".agents/skills/smc-plan-validator/SKILL.md"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "tooling"], check=True)
+        with self.assertRaisesRegex(ValueError, "DELIVERY_HEAD_DRIFT"):
+            workspace.assert_stable(self.plan)
+        before = workspace.scope_fingerprint(self.plan)
+        data = workspace.rebind_head(self.plan)
+        status = workspace.inspect(self.plan)
+        self.assertEqual(data["base_commit"], status["current_head"])
+        self.assertTrue(status["head_stable"])
+        self.assertTrue(status["pass"], status)
+        self.assertEqual(["app.py"], status["scope_changed_files"])
+        self.assertEqual(before, status["scope_fingerprint"])
+
+    def test_workspace_rebind_head_rejects_planned_path(self):
+        # @lat: [[ges-tests#GES Tests#Workspace#Rebind HEAD rejects planned path]]
+        self.init_workspace()
+        (self.root / "app.py").write_text("def main():\n    return 2\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.root), "add", "app.py"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "impl"], check=True)
+        with self.assertRaisesRegex(ValueError, "DELIVERY_HEAD_REBIND_TOUCHED_SCOPE"):
+            workspace.rebind_head(self.plan)
+
+    def test_workspace_rebind_head_rejects_tooling_dirty(self):
+        # @lat: [[ges-tests#GES Tests#Workspace#Rebind HEAD rejects tooling dirty]]
+        self.init_workspace()
+        (self.root / "other.txt").write_text("x\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.root), "add", "other.txt"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "other"], check=True)
+        path = self.root / ".agents/skills/smc-plan-validator/SKILL.md"
+        path.parent.mkdir(parents=True)
+        path.write_text("dirty tooling\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "DELIVERY_TOOLING_MUTATION"):
+            workspace.rebind_head(self.plan)
+
     def test_workspace_plan_semantic_drift_blocks(self):
         # @lat: [[ges-tests#GES Tests#Workspace#Plan semantic drift blocks]]
         self.init_workspace()
-        self.plan.write_text(self.plan.read_text().replace("- In: x", "- In: changed"), encoding="utf-8")
+        self.plan.write_text(self.plan.read_text(encoding="utf-8").replace("- In: x", "- In: changed"), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "DELIVERY_PLAN_SEMANTIC_DRIFT"):
             workspace.assert_stable(self.plan)
 

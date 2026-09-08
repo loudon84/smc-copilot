@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Compatibility-preserving validator core for smc.plan.v3.3/v3.4.
+"""Compatibility-preserving validator core for every governed Plan contract.
 
-The v3.3 CLI remains a strict v3.3 validator.  v3.4 imports validate_plan()
-with expected_contract="smc.plan.v3.4", adds Cursor content projection checks
-through plan_state.validate(), then reuses the legacy v3.2 structural gates.
+The v3.3 CLI remains a strict v3.3 validator.  The v3.4 and v3.5 CLIs import
+validate_plan() with their own expected_contract, add Cursor content projection
+checks through plan_state.validate(), then reuse the legacy v3.2 structural
+gates by downgrading the declared contract in an in-memory compat copy.
 """
 from __future__ import annotations
 
@@ -19,10 +20,11 @@ from pathlib import Path
 HERE=Path(__file__).resolve().parent
 DELIVERY=HERE.parents[1]/"smc-plan-delivery"/"scripts"
 sys.path.insert(0,str(DELIVERY))
-from common import parse_first_table, parse_top_level_frontmatter, repo_relative_path, section, strip_md  # type: ignore
+from common import PLAN_VALIDATORS, parse_first_table, parse_top_level_frontmatter, repo_relative_path, section, strip_md  # type: ignore
 from plan_state import legacy_content_warnings, validate as validate_cursor_todos  # type: ignore
 
 VALID_POLICIES={"LOCAL_TRANSIENT","LOCAL_DURABLE","CI_ARTIFACT","EXTERNAL_ARTIFACT","REPO_SUMMARY"}
+GOVERNED_CONTRACT_LINE=re.compile(r"^plan_contract\s*:\s*(?:"+"|".join(re.escape(c) for c in PLAN_VALIDATORS)+r")\s*$")
 
 
 def load_legacy():
@@ -79,7 +81,7 @@ def contract_checks(plan:Path,expected_contract:str)->list[dict[str,str]]:
 def transform_to_v32(text:str)->str:
     lines=text.splitlines();in_ver=False;policy_idx=None;header_seen=False
     for i,line in enumerate(lines):
-        if re.match(r"^plan_contract\s*:\s*smc\.plan\.v3\.[34]\s*$",line):lines[i]="plan_contract: smc.plan.v3.2"
+        if GOVERNED_CONTRACT_LINE.match(line):lines[i]="plan_contract: smc.plan.v3.2"
         if line.strip()=="## Verification Ledger":in_ver=True;continue
         if in_ver and line.startswith("## "):in_ver=False
         if in_ver and line.strip().startswith("|") and "Verification ID" in line and "Evidence Policy" in line:

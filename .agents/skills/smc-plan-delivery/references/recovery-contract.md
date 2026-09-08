@@ -23,3 +23,5 @@ Resume 不依赖 conversation transcript。
 - governance tooling mutation outside Plan -> tooling mutation blocked。
 
 不得通过 refresh workspace baseline 隐藏已经发生的 implementation/ambient drift。
+
+独立 tooling commit 造成的 `DELIVERY_HEAD_DRIFT` 只能通过 `workspace.py rebind-head` 处理：它只移动 frozen `base_commit`，不得改写 planned/ambient snapshots。intervening commits 若触碰 Plan scope / ambient / owned-control，必须拒绝。

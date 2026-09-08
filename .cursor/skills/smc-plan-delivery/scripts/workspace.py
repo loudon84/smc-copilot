@@ -292,6 +292,61 @@ def inspect(plan: Path, *, allow_head_change: bool = False) -> dict:
     }
 
 
+def rebind_head(plan: Path) -> dict:
+    """Rebind frozen HEAD after an unrelated descendant commit.
+
+    This does not refresh planned/ambient snapshots and therefore cannot hide an
+    implementation delta.  Intervening commits may not touch planned, ambient or
+    owned-control paths, and the worktree must already be free of unexpected dirty.
+    """
+    root = find_repo_root(plan)
+    data = ensure(plan)
+    status = inspect(plan, allow_head_change=True)
+    if status["head_stable"]:
+        return data
+    if status["plan_semantic_changed"]:
+        raise ValueError("DELIVERY_PLAN_SEMANTIC_DRIFT")
+    if status["ambient_mutated"]:
+        raise ValueError("DELIVERY_AMBIENT_MUTATED: " + ", ".join(status["ambient_mutated"]))
+    if status["tooling_mutated"]:
+        raise ValueError("DELIVERY_TOOLING_MUTATION: " + ", ".join(status["tooling_mutated"]))
+    if status["unexpected_dirty"]:
+        raise ValueError("DELIVERY_SCOPE_DRIFT: " + ", ".join(status["unexpected_dirty"]))
+
+    old = str(data.get("base_commit") or "")
+    new = str(status["current_head"] or "")
+    if not old or not new:
+        raise ValueError("DELIVERY_HEAD_REBIND_MISSING_COMMIT")
+    ancestor = git(root, "merge-base", "--is-ancestor", old, new, check=False)
+    if ancestor.returncode:
+        raise ValueError(f"DELIVERY_HEAD_REBIND_NOT_DESCENDANT: base={old} current={new}")
+
+    changed = {
+        _norm(raw.strip())
+        for raw in git(root, "diff", "--name-only", old, new, "--").stdout.splitlines()
+        if raw.strip()
+    }
+    planned = {_norm(x) for x in data.get("planned_files", [])}
+    ambient = {_norm(x) for x in data.get("ambient_preexisting", {})}
+    control = {_norm(x) for x in data.get("owned_control_paths", [])}
+    touched = sorted((changed & planned) | (changed & ambient) | (changed & control))
+    if touched:
+        raise ValueError("DELIVERY_HEAD_REBIND_TOUCHED_SCOPE: " + ", ".join(touched))
+
+    data["base_commit"] = new
+    data["head_rebind"] = {
+        "from": old,
+        "to": new,
+        "at": utc_now(),
+        "intervening_paths": sorted(changed),
+    }
+    atomic_write(
+        baseline_path(plan),
+        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    )
+    return data
+
+
 def assert_stable(plan: Path, *, allow_head_change: bool = False) -> dict:
     status = inspect(plan, allow_head_change=allow_head_change)
     problems: list[str] = []
@@ -319,6 +374,7 @@ def main() -> int:
     p = sub.add_parser("inspect"); p.add_argument("plan", type=Path); p.add_argument("--allow-head-change", action="store_true"); p.add_argument("--json", action="store_true")
     p = sub.add_parser("fingerprint"); p.add_argument("plan", type=Path)
     p = sub.add_parser("assert-stable"); p.add_argument("plan", type=Path); p.add_argument("--allow-head-change", action="store_true")
+    p = sub.add_parser("rebind-head"); p.add_argument("plan", type=Path); p.add_argument("--json", action="store_true")
     args = ap.parse_args()
     plan = args.plan.resolve()
     if not plan.is_file():
@@ -331,6 +387,11 @@ def main() -> int:
             result = inspect(plan, allow_head_change=args.allow_head_change)
         elif args.cmd == "fingerprint":
             print(scope_fingerprint(plan)); return 0
+        elif args.cmd == "rebind-head":
+            result = rebind_head(plan)
+            if not args.json:
+                print(f"WORKSPACE HEAD_REBOUND plan={result.get('plan_id')} base={result.get('base_commit')}")
+                return 0
         else:
             result = assert_stable(plan, allow_head_change=args.allow_head_change)
     except (ValueError, RuntimeError) as exc:

@@ -12,6 +12,21 @@ from typing import Iterable
 
 EMPTY = {"", "-", "none", "n/a", "na"}
 
+# Single source of truth for Plan contract governance.  PLAN_VALIDATORS covers
+# every contract the static gate can still read; DELIVERABLE_PLAN_CONTRACTS is
+# the subset a delivery may complete on.  Anything older is readable legacy that
+# must be migrated first.
+PLAN_VALIDATORS = {
+    "smc.plan.v3.3": "validate_plan_v33.py",
+    "smc.plan.v3.4": "validate_plan_v34.py",
+    "smc.plan.v3.5": "validate_plan_v35.py",
+}
+DELIVERABLE_PLAN_CONTRACTS = ("smc.plan.v3.4", "smc.plan.v3.5")
+
+
+def plan_validator_name(contract: str) -> str:
+    return PLAN_VALIDATORS.get((contract or "").strip(), "validate_plan_v33.py")
+
 
 def find_repo_root(path: Path | str) -> Path:
     p = Path(path).resolve()

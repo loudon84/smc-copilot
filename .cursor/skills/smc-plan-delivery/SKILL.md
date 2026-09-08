@@ -140,7 +140,7 @@ ROADMAP_UPDATE_BLOCKED
 python .agents/skills/smc-plan-delivery/scripts/resolve_plan.py --plan "$PLAN_PATH"
 ```
 
-新交付要求 `plan_contract: smc.plan.v3.4`。legacy v3.2/v3.3 必须先迁移：
+新交付要求 `plan_contract: smc.plan.v3.4` 或 `smc.plan.v3.5`，canonical 新 Plan 为 v3.5。legacy v3.2/v3.3 必须先迁移：
 
 ```bash
 python .agents/skills/smc-plan-delivery/scripts/migrate_legacy_plan.py "$PLAN_PATH" --in-place
@@ -158,11 +158,13 @@ python .agents/skills/smc-plan-delivery/scripts/delivery_state.py init "$PLAN_PA
 
 # Phase 1 — Plan Static Gate
 
+validator 由 `plan_contract` 决定：v3.5 用 `validate_plan_v35.py`，v3.4 用 `validate_plan_v34.py`。同一映射由 `common.PLAN_VALIDATORS` 持有，`readiness.py` 与 `validate_delivery_completion.py` 自动按此选择。
+
 ```bash
-python .agents/skills/smc-plan-validator/scripts/validate_plan_v34.py "$PLAN_PATH"
+python .agents/skills/smc-plan-validator/scripts/validate_plan_v35.py "$PLAN_PATH"
 ```
 
-必须同时验证：SMC structural contract、Cursor `id/content/status` projection、Todo mapping、Change/ownership/verification ledgers。若 generation integrity script 存在也必须 PASS。
+必须同时验证：SMC structural contract、Cursor `id/content/status` projection、Todo mapping、Change/ownership/verification ledgers。v3.5 另加 Domain Pack binding。若 generation integrity script 存在也必须 PASS。
 
 治理工具自身 crash/runtime incompatibility：返回 `DELIVERY_TOOLING_BLOCKED`。当前 business Plan 禁止顺手修改 validator/Skill 再继续证明自己 PASS。
 
@@ -571,6 +573,12 @@ python .agents/skills/smc-plan-delivery/scripts/workspace.py inspect "$PLAN_PATH
 python .agents/skills/smc-plan-delivery/scripts/execution_context.py refresh "$PLAN_PATH" --json
 python .agents/skills/smc-plan-delivery/scripts/delivery_state.py inspect "$PLAN_PATH"
 python .agents/skills/smc-plan-delivery/scripts/readiness.py "$PLAN_PATH"
+```
+
+若唯一阻塞是独立 tooling commit 造成的 `DELIVERY_HEAD_DRIFT`，且 intervening commits 未触碰 Plan scope / ambient / owned-control：
+
+```bash
+python .agents/skills/smc-plan-delivery/scripts/workspace.py rebind-head "$PLAN_PATH"
 ```
 
 从第一个未满足或 STALE Gate 恢复。禁止无条件重跑全部昂贵步骤。
