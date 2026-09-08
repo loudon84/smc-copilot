@@ -27,6 +27,10 @@ const COMPLETE_LOCK_DIR = join(
   process.cwd(),
   "../../contracts/skill-run/v1.2.1",
 );
+const COMPLETE_LOCK_DIR_V130 = join(
+  process.cwd(),
+  "../../contracts/skill-run/v1.3.0",
+);
 const EXPERT_LOCK = join(
   process.cwd(),
   "../../contracts/work-expert/v1.0.2/consumer-lock.json",
@@ -159,6 +163,50 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     expect(lock.sha256sumsPath).toBe("SHA256SUMS");
     expect(sumsBytes.includes(0x0d)).toBe(false);
     expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR)).toBe(true);
+    expect(hasSkillRunConsumerLock()).toBe(true);
+  });
+
+  it("opens the gate for the checksum-valid v1.3.0 Provider Bundle", () => {
+    const lock = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR_V130, "consumer-lock.json"), "utf8"),
+    ) as {
+      contractName: string;
+      contractVersion: string;
+      tagName: string;
+      tagTargetCommit: string;
+      providerSha256sumsPath: string;
+      sha256sumsPath: string;
+    };
+    const sumsBytes = readFileSync(join(COMPLETE_LOCK_DIR_V130, "SHA256SUMS"));
+    const manifest = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR_V130, "manifest.json"), "utf8"),
+    ) as {
+      capabilities?: Record<string, unknown>;
+    };
+    const unsupported = JSON.parse(
+      readFileSync(
+        join(COMPLETE_LOCK_DIR_V130, "capabilities/unsupported.schema.json"),
+        "utf8",
+      ),
+    ) as { properties?: Record<string, unknown> };
+
+    expect(lock.contractName).toBe("SKILL-RUN-CONTRACT");
+    expect(lock.contractVersion).toBe("1.3.0");
+    expect(lock.tagName).toBe("skill-run-contract-v1.3.0");
+    expect(lock.tagTargetCommit).toBe(
+      "26e1cb5aa2aebbb4bdc1a8e1c65617aaa6b6c948",
+    );
+    expect(lock.providerSha256sumsPath).toBe(
+      "nodeskclaw-backend/contracts/skill-run/v1.3.0/SHA256SUMS",
+    );
+    expect(lock.sha256sumsPath).toBe("SHA256SUMS");
+    expect(sumsBytes.includes(0x0d)).toBe(false);
+    expect(manifest.capabilities?.approvalDecision).toBe("supported");
+    expect(manifest.capabilities?.approval).toBe("supported");
+    expect(manifest.capabilities?.attachments).toBe("unsupported");
+    expect(unsupported.properties).toHaveProperty("attachments");
+    expect(unsupported.properties).not.toHaveProperty("approval");
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V130)).toBe(true);
     expect(hasSkillRunConsumerLock()).toBe(true);
   });
 
