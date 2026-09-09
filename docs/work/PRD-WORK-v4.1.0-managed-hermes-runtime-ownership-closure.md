@@ -1,12 +1,12 @@
 ---
 work_item_id: RM-01
-version: v1.1.2
+version: v1.1.3
 status: APPROVED
 review_verdict: PASS
-approved_at: 2026-09-09T18:20:00+08:00
+approved_at: 2026-09-10T07:10:00+08:00
 target_branch: work/prd-v4.1
-source_revision: WORK-MANAGED-HERMES-RUNTIME-V4.1.0@v1.1.2/RM-01
-grounded_commit: 6e7516bf53d9c2144453c291a8b1405d32af43a9
+source_revision: WORK-MANAGED-HERMES-RUNTIME-V4.1.0@v1.1.3/RM-01
+grounded_commit: 983d2b484cafbfeb019af76957ff17c982b0908d
 grounding_mode: revision
 proposal_source: reports/WORK PRD v4.1.0 — Managed Hermes Runtime Ownership Closure.md
 parent_prd: docs/work/PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md
@@ -32,7 +32,7 @@ runtime_contract: managed-local-v1
 | Repository baseline | `6e7516bf53d9c2144453c291a8b1405d32af43a9`（HEAD） |
 | Freshness | `source_revision` 变更为 Roadmap RM-01 → `REGROUND_REQUIRED`。HEAD 仍为 `6e7516bf`，Inventory 复用；本轮 `revision` 只关 Review B1/M1/M2/M3 |
 | Roadmap | `docs/work/ROADMAP-WORK-v4.1.0-managed-hermes-runtime-ownership.md` **RM-01 READY**。不是 Skill-First RM-13/RM-14/RM-16 |
-| Revision closed | B1/M2/M3 已关。M1 残留：Windows 听口检查失败不得 fail-open READY（v1.1.1）。v1.1.2：AC-02 保留 live `HERMES_HOME` 导出，只改二阶 module snapshot |
+| Revision closed | B1/M2/M3 已关。M1 残留：Windows 听口检查失败不得 fail-open READY（v1.1.1）。v1.1.2：AC-02 保留 live `HERMES_HOME` 导出，只改二阶 module snapshot。v1.1.3：AC-20 将 package-wide typecheck 降为独立 baseline restoration（focused unit + `lat check` + guard 仍阻断）；AC-21/C05 听口匹配接受 managed Python launcher 启动期望 `hermes.exe gateway`，foreign 仍 CONFLICT |
 | Runtime getters | `apps/work/src/main/runtime/hermes-runtime-config.ts`：Windows 默认 home=`C:\ProgramData\SMC\Hermes`，programRoot=`D:\Programs\SMC\Hermes`，cliPath=`...\bin\hermes.exe`，gateway=`http://127.0.0.1:8642` |
 | CLI runner | `apps/work/src/main/runtime/hermes-cli-runner.ts`：`runHermesCliSync` / `runHermesCliAsync` / `spawnHermesCli` 已存在，生产 CLI 调用未统一迁入 |
 | Legacy path SOT | `apps/work/src/main/runtime/hermes-runtime-paths.ts:70-104`：`HERMES_HOME`/`HERMES_REPO`/`HERMES_VENV`/`HERMES_PYTHON`/`HERMES_SCRIPT`/`HERMES_ENV_FILE`/`HERMES_CONFIG_FILE`/`HERMES_AUTH_FILE`/`installBinariesFor`/`hermesCliArgs`；另有 `looksLikeHermesHome`、`defaultHermesHome` |
@@ -157,9 +157,16 @@ runtime_contract: managed-local-v1
 
 1. **Locator 期望值**（已有）：`homePath`、`executablePath`、`endpoint`。
 2. **Gateway `/health` + authentication**（已有）。
-3. **配置端口上的监听进程映像**（只读 OS 诊断，归同一 Probe Owner）：OwningProcess 的可执行路径。禁止对 PID 发信号。
+3. **配置端口上的监听进程映像与命令行**（只读 OS 诊断，归同一 Probe Owner）：OwningProcess 的可执行路径，以及（在需要判定 managed launcher 时）只读 CommandLine。禁止对 PID 发信号。
 
 Windows 托管（本 PRD 生产验收面）：听口检查是 READY 的硬门，失败不得当作「未观察」而放行。非 Windows 不作为 CONFLICT / 听口硬门的必测面。
+
+**合法 managed Hermes Gateway 进程（Windows）**仅当以下之一成立：
+
+1. OwningProcess 可执行路径 = Locator 期望 CLI（`getHermesCliPath()` / `hermes.exe`）；或
+2. OwningProcess 可执行路径 = 与期望 CLI **同一 managed install root** 下的 `python.exe`（例如期望 CLI 为 `...\Hermes\bin\hermes.exe` 时，仅接受 `...\Hermes\python\python.exe`），**且** CommandLine 可解析并同时包含：期望 CLI 的绝对路径 token、子命令 token `gateway`、以及 `run`（允许 `--replace` 等附加参数）。
+
+其余情况（任意其它 python、其它目录的 python、CommandLine 缺失/不可解析、仅字符串偶然包含 `hermes.exe`、同端口多个互不一致监听者）一律非 READY：foreign → CONFLICT；解析失败/混合监听 → `configuration_error`（或等价）。**禁止** kill。
 
 Chat 回报的 `HERMES_HOME` / `TERMINAL_CWD` **不是** Probe 输入（见 AC-12）。
 
@@ -168,15 +175,15 @@ Chat 回报的 `HERMES_HOME` / `TERMINAL_CWD` **不是** Probe 输入（见 AC-1
 | 状态 | 何时 | Work 行为 |
 |---|---|---|
 | UNAVAILABLE | `/health` 失败或 auth 失败（含 connection refused / timeout） | 显示不可用；允许 retry/reconnect；**禁止** start Gateway |
-| CONFLICT | 配置端口上存在监听，且其可执行路径 ≠ Locator `executablePath`（期望 `getHermesCliPath()`） | **不得**报告 READY；**禁止** kill/stop 该 PID；提示所有权冲突，修复属 OPSI/Installer |
-| configuration_error（或等价非 READY） | **Windows 托管：** 听口检查失败（权限/API 错误、无法解析 OwningProcess 可执行路径）；或 health 成功但检查结果为「无监听」 | **不得**报告 READY；**禁止**把检查失败解释为「跳过听口」；不 start/kill Gateway |
-| READY（Windows 托管） | health 成功 **且** auth 成功 **且** 听口检查**成功完成** **且** 监听可执行路径 = 期望 CLI **且** Locator `homePath` 不是 `%LOCALAPPDATA%\hermes` | 允许 Chat / CLI |
+| CONFLICT | 配置端口上存在监听，且监听映像**不是**合法 managed Hermes Gateway 进程 | **不得**报告 READY；**禁止** kill/stop 该 PID；提示所有权冲突，修复属 OPSI/Installer |
+| configuration_error（或等价非 READY） | **Windows 托管：** 听口检查失败（权限/API 错误、无法解析 OwningProcess 可执行路径 / CommandLine）；或 health 成功但检查结果为「无监听」；或同端口多个互不一致的监听者 | **不得**报告 READY；**禁止**把检查失败解释为「跳过听口」；不 start/kill Gateway |
+| READY（Windows 托管） | health 成功 **且** auth 成功 **且** 听口检查**成功完成** **且** 监听进程为合法 managed Hermes Gateway **且** Locator `homePath` 不是 `%LOCALAPPDATA%\hermes` | 允许 Chat / CLI |
 | READY（非 Windows） | health 成功 **且** auth 成功 **且** Locator `homePath` 不是 `%LOCALAPPDATA%\hermes` | 允许 Chat / CLI；听口不是本 PRD 必测面 |
 | runtime_missing / runtime_invalid / configuration_error | Locator 既有失败 | 保持；不是 CONFLICT |
 
 `/health=200` 单独不得等于 READY。
 
-`runtimeContextVerified`（Windows 托管）仅在听口检查**成功完成**且 Locator home + CLI 路径 + 监听映像均核对后为真。听口检查失败时该标志不得为真。它 **不** 证明 Agent 工具 cwd。若 AC-12 LIVE 发现 `TERMINAL_CWD`/`HERMES_HOME` 落入 AppData，而 Probe 已 READY：判定为 **Installer defect**，阻断本 Work 实施，禁止用 Python Runtime 或改 Probe 去“猜”进程环境。
+`runtimeContextVerified`（Windows 托管）仅在听口检查**成功完成**且 Locator home + 合法 managed Hermes Gateway 进程均核对后为真。听口检查失败时该标志不得为真。它 **不** 证明 Agent 工具 cwd。若 AC-12 LIVE 发现 `TERMINAL_CWD`/`HERMES_HOME` 落入 AppData，而 Probe 已 READY：判定为 **Installer defect**，阻断本 Work 实施，禁止用 Python Runtime 或改 Probe 去“猜”进程环境。
 
 ### Renderer 连接态（M3）
 
@@ -217,8 +224,8 @@ Chat 回报的 `HERMES_HOME` / `TERMINAL_CWD` **不是** Probe 输入（见 AC-1
 - **AC-17**: 关闭 Work 后 Managed Gateway 仍存活。
 - **AC-18**: remote / SSH / remote OAuth dashboard 行为不回归。
 - **AC-19**: `npm --prefix apps/work run guard` 对重新引入 Python Runtime、Source Runtime、Gateway spawn 失败。
-- **AC-20**: typecheck、focused unit、`lat check apps/work` 通过。
-- **AC-21**: Windows 托管：配置端口听口检查必须成功完成才能 READY。可执行路径 ≠ 期望 `hermes.exe` → CONFLICT，不 kill。听口检查失败（无法读取 OwningProcess / 无法解析映像）或 health 成功但无本地监听 → 非 READY（UNAVAILABLE 或 `configuration_error`），**禁止**当作未观察而放行。Messaging 平台配置态不因此改名。
+- **AC-20**: focused unit（本 Item Verification Ledger 绑定的单元/组件集）与 `lat check apps/work` 通过。`npm --prefix apps/work run typecheck`（package-wide）**不是**本 Item 阻断证据；其失败必须登记为独立 Work baseline restoration 输入，不得因此回退 Python Runtime / Gateway supervisor。
+- **AC-21**: Windows 托管：配置端口听口检查必须成功完成才能 READY。监听进程必须是上文「合法 managed Hermes Gateway 进程」；否则 CONFLICT 或 `configuration_error`，不 kill。听口检查失败（无法读取 OwningProcess / 无法解析映像或 CommandLine）或 health 成功但无本地监听 → 非 READY，**禁止**当作未观察而放行。Messaging 平台配置态不因此改名。
 
 
 ## Definition of Done
@@ -251,8 +258,8 @@ Chat 回报的 `HERMES_HOME` / `TERMINAL_CWD` **不是** Probe 输入（见 AC-1
 | AC-17 | Work exit Gateway 存活 | PID | 是 | 父 PRD 要求；`stopGateway` 风险 | NOT_TESTED | NEW_EVIDENCE | |
 | AC-18 | remote/SSH | 既有测试 | 是 | 既有测试套件 | PROVEN_BUT_AFFECTED | TARGETED_RERUN | dashboard.ts local 删除可能误伤 |
 | AC-19 | guard | guard FAIL on reintro | 是 | spawn 护栏仅 register.ts | PARTIAL | NEW_EVIDENCE | |
-| AC-20 | typecheck/unit/lat | 命令 PASS | 是 | 无本范围证据 | NOT_TESTED | NEW_EVIDENCE | |
-| AC-21 | Windows 听口硬门 | 检查成功且 exe 匹配才 READY；失败或错误 exe 均非 READY；不 kill | 是 | Probe 现只看 health+auth；v1.1.0 READY 含「若能观察」fail-open | FAILED（合同缺口） | NEW_EVIDENCE | Review M1 residual fail-closed |
+| AC-20 | focused unit + lat | 绑定命令 PASS；package-wide typecheck 排除并登记 baseline restoration | 是 | package-wide typecheck 被无关 Skill-First/Expert 债务阻断 | FAILED（过宽） | NEW_EVIDENCE | v1.1.3 收窄 AC-20 |
+| AC-21 | Windows 听口硬门 | 合法 managed Hermes（含同 root python launcher + gateway run）才 READY；foreign/解析失败非 READY；不 kill | 是 | ExecutablePath-only 会把合法 managed python launcher 误判 CONFLICT | FAILED（合同过窄） | NEW_EVIDENCE | v1.1.3 对齐真实打包 |
 
 禁止把 AC-05/AC-06 的现场 FAIL 改写成 observation 后 closure。
 
@@ -261,6 +268,7 @@ Chat 回报的 `HERMES_HOME` / `TERMINAL_CWD` **不是** Probe 输入（见 AC-1
 - `WORK-HERMES-EXTENDED-API`：slash、structured tool events、STT、dynamic provider catalog、dashboard session API。
 - `WORK-HERMES-CREDENTIAL-HARDENING`：`.env` ACL、DPAPI、secret injection。
 - Installer defect：若 LIVE 证明 `TERMINAL_CWD` 错误来自 Installer，**阻断**本 Work 实施并单独立项，禁止在本 PRD 改 `infra/windows/hermes-agent`。
+- Work baseline restoration：package-wide `npm --prefix apps/work run typecheck` 失败（含无关 Skill-First/Expert/File 债务与删除后 unused import 噪声）不阻塞本 Item DONE；另立 restoration Item。
 
 ## Rollback
 
