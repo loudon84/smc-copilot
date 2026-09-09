@@ -12,6 +12,7 @@ import type {
   SkillRunExtraStringField,
   SkillRunLocalPhase,
 } from "../../shared/skill-run";
+import { hasSkillRunStreamingDeltaBundle } from "./skill-run-consumer-lock";
 
 export type BindPromptFirstErrorCode =
   | "TOOL_NOT_FOUND"
@@ -98,6 +99,10 @@ function unknownEvent(
     eventSeq,
     rawUnknown: true,
   };
+}
+
+function isDeltaSeq(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1;
 }
 
 function reasonToErrorCode(
@@ -496,6 +501,9 @@ export interface ParsedSkillRunEvent {
   phase?: SkillRunLocalPhase;
   displayStage?: string;
   text?: string;
+  messageId?: string;
+  deltaSeq?: number;
+  deltaText?: string;
   errorCode?: string;
   errorMessage?: string;
   artifacts?: SkillRunArtifactDescriptor[];
@@ -636,13 +644,35 @@ export function parseSkillRunEvent(
       };
     }
 
-    case "assistant.message":
+    case "assistant.message": {
+      const messageId = clipDisplayString(inner.message_id);
       return {
         eventId,
         eventSeq,
         phase: "running",
         text: typeof inner.text === "string" ? inner.text : undefined,
+        ...(messageId ? { messageId } : {}),
       };
+    }
+
+    case "assistant.delta": {
+      if (!hasSkillRunStreamingDeltaBundle()) {
+        return unknownEvent(eventId, eventSeq);
+      }
+      const messageId = clipDisplayString(inner.message_id);
+      const deltaText = clipDisplayString(inner.delta);
+      if (!messageId || !isDeltaSeq(inner.delta_seq) || !deltaText) {
+        return unknownEvent(eventId, eventSeq);
+      }
+      return {
+        eventId,
+        eventSeq,
+        phase: "running",
+        messageId,
+        deltaSeq: inner.delta_seq,
+        deltaText,
+      };
+    }
 
     case "artifact.persisted":
     case "task.artifact_ready":

@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bindPromptFirstTool,
   classifySkillInvocation,
@@ -17,7 +17,12 @@ import {
   normalizeSkillToolDescriptor,
   parseSkillRunEvent,
 } from "./skill-run-contract-parser";
+import { hasSkillRunStreamingDeltaBundle } from "./skill-run-consumer-lock";
 import type { SkillCatalogToolItem } from "../../shared/skill-run";
+
+vi.mock("./skill-run-consumer-lock", () => ({
+  hasSkillRunStreamingDeltaBundle: vi.fn(() => true),
+}));
 
 function baseDescriptor(
   overrides: Record<string, unknown> = {},
@@ -731,6 +736,88 @@ describe("parseSkillRunEvent enumerated activity mapping", () => {
     expect(control.activity).toBeUndefined();
     expect(control.text).toBeUndefined();
     expect(JSON.stringify(control)).not.toContain("still-alive");
+  });
+});
+
+function loadV15Fixture(name: string): Record<string, unknown> {
+  const relative = join("contracts", "skill-run", "v1.5.0", "fixtures", name);
+  const fromCwd = join(process.cwd(), relative);
+  const fromWork = join(process.cwd(), "..", "..", relative);
+  const path = existsSync(fromCwd) ? fromCwd : fromWork;
+  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+}
+
+describe("parseSkillRunEvent enumerated assistant.delta mapping", () => {
+  beforeEach(() => {
+    vi.mocked(hasSkillRunStreamingDeltaBundle).mockReturnValue(true);
+  });
+
+  it("maps v1.5 assistant.delta fixture to sanitized fields without text or activity", () => {
+    const fixture = loadV15Fixture("run-event-assistant-delta.json");
+    const parsed = parseSkillRunEvent("assistant.delta", fixture);
+    expect(parsed.rawUnknown).toBeUndefined();
+    expect(parsed.messageId).toBe("msg_opaque_001");
+    expect(parsed.deltaSeq).toBe(1);
+    expect(parsed.deltaText).toBe("正在分析");
+    expect(parsed.text).toBeUndefined();
+    expect(parsed.activity).toBeUndefined();
+  });
+
+  it("keeps v1.5 assistant.message snapshot text and optional messageId", () => {
+    const fixture = loadV15Fixture("run-event-assistant-message.json");
+    const parsed = parseSkillRunEvent("assistant.message", fixture);
+    expect(parsed.rawUnknown).toBeUndefined();
+    expect(parsed.text).toBe("正在分析完整结果");
+    expect(parsed.messageId).toBe("msg_opaque_001");
+    expect(parsed.deltaText).toBeUndefined();
+    expect(parsed.activity).toBeUndefined();
+  });
+
+  it("keeps snapshot replace-all when message_id is missing", () => {
+    const parsed = parseSkillRunEvent("assistant.message", {
+      event_type: "assistant.message",
+      payload: { text: "legacy snapshot" },
+    });
+    expect(parsed.rawUnknown).toBeUndefined();
+    expect(parsed.text).toBe("legacy snapshot");
+    expect(parsed.messageId).toBeUndefined();
+  });
+
+  it("keeps missing, empty, non-string, and non-positive seq payloads rawUnknown", () => {
+    const basePayload = {
+      message_id: "msg_opaque_001",
+      delta_seq: 1,
+      delta: "正在分析",
+    };
+    const cases: Record<string, unknown>[] = [
+      { ...basePayload, message_id: undefined },
+      { ...basePayload, message_id: "   " },
+      { ...basePayload, delta_seq: undefined },
+      { ...basePayload, delta_seq: 0 },
+      { ...basePayload, delta_seq: 1.5 },
+      { ...basePayload, delta: undefined },
+      { ...basePayload, delta: 12 },
+    ];
+    for (const payload of cases) {
+      const parsed = parseSkillRunEvent("assistant.delta", {
+        event_type: "assistant.delta",
+        payload,
+      });
+      expect(parsed.rawUnknown).toBe(true);
+      expect(parsed.text).toBeUndefined();
+      expect(parsed.deltaText).toBeUndefined();
+      expect(parsed.activity).toBeUndefined();
+    }
+  });
+
+  it("keeps assistant.delta rawUnknown when streaming-delta eligibility is false", () => {
+    vi.mocked(hasSkillRunStreamingDeltaBundle).mockReturnValue(false);
+    const fixture = loadV15Fixture("run-event-assistant-delta.json");
+    const parsed = parseSkillRunEvent("assistant.delta", fixture);
+    expect(parsed.rawUnknown).toBe(true);
+    expect(parsed.text).toBeUndefined();
+    expect(parsed.deltaText).toBeUndefined();
+    expect(parsed.activity).toBeUndefined();
   });
 });
 

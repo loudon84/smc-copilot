@@ -218,6 +218,7 @@ interface ActiveRun {
   nextDurableOrdinal: number;
   persistedActivityEventIds: Set<string>;
   persistenceGap: boolean;
+  deltaBuffers: Map<string, { text: string; nextSeq: number; sealed: boolean }>;
 }
 
 function nowIso(): string {
@@ -661,7 +662,31 @@ export function createSkillRunService(
               };
               if (event.phase) patch.phase = event.phase;
               if (event.displayStage) patch.displayStage = event.displayStage;
-              if (event.text) patch.text = event.text;
+              if (
+                event.messageId &&
+                event.deltaSeq != null &&
+                event.deltaText
+              ) {
+                let buffer = run.deltaBuffers.get(event.messageId);
+                if (!buffer) {
+                  buffer = { text: "", nextSeq: 1, sealed: false };
+                  run.deltaBuffers.set(event.messageId, buffer);
+                }
+                if (!buffer.sealed && event.deltaSeq === buffer.nextSeq) {
+                  buffer.text += event.deltaText;
+                  buffer.nextSeq += 1;
+                  patch.text = buffer.text;
+                }
+              } else if (event.text) {
+                if (event.messageId) {
+                  run.deltaBuffers.set(event.messageId, {
+                    text: event.text,
+                    nextSeq: 1,
+                    sealed: true,
+                  });
+                }
+                patch.text = event.text;
+              }
               if (event.errorCode) patch.errorCode = event.errorCode;
               if (event.errorMessage) patch.errorMessage = event.errorMessage;
               if (event.artifacts) patch.artifacts = event.artifacts;
@@ -927,6 +952,7 @@ export function createSkillRunService(
         nextDurableOrdinal: 0,
         persistedActivityEventIds: new Set(),
         persistenceGap: false,
+        deltaBuffers: new Map(),
       };
 
       runs.set(input.clientRequestId, activeRun);
@@ -1218,6 +1244,7 @@ export function createSkillRunService(
         nextDurableOrdinal: 0,
         persistedActivityEventIds: new Set(),
         persistenceGap: false,
+        deltaBuffers: new Map(),
       };
 
       runs.set(item.clientRequestId, activeRun);

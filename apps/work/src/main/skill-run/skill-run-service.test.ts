@@ -2029,8 +2029,351 @@ describe("skill-run-service attachment upload bind", () => {
   });
 });
 
+describe("skill-run-service enumerated assistant.delta merge", () => {
+  function runningGateway(
+    openEventStream: SkillRunGatewayClient["openEventStream"],
+  ): SkillRunGatewayClient {
+    return createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({
+        runId: "run-xyz-999",
+        status: "running",
+      }),
+      openEventStream,
+    });
+  }
+
+  it("ends replay on snapshot text rather than concatenating delta and snapshot", async () => {
+    const replay = loadV15Fixture("sse-assistant-delta-replay.json");
+    const events = Array.isArray(replay.events) ? replay.events : [];
+    const mockGateway = runningGateway(
+      vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            ...events.map((raw) => {
+              const fixture = raw as Record<string, unknown>;
+              return {
+                eventType: String(fixture.event_type),
+                id: String(fixture.event_id),
+                data: fixture,
+              };
+            }),
+            {
+              eventType: "run.completed",
+              id: "evt-delta-done",
+              data: {
+                event_id: "evt-delta-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "正在分析完整结果" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    );
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "analyze",
+      clientRequestId: "req-delta-replay",
+      sessionId: "session-delta",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-delta-replay",
+      (p) => p.phase === "succeeded",
+    );
+    expect(terminal?.text).toBe("正在分析完整结果");
+    expect(terminal?.text).not.toBe("正在分析正在分析完整结果");
+  });
+
+  it("projects the first eligible delta into text before the snapshot arrives", async () => {
+    let releaseSnapshot: (() => void) | undefined;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    let stage = 0;
+    const delta = loadV15Fixture("run-event-assistant-delta.json");
+    const snapshot = loadV15Fixture("run-event-assistant-message.json");
+    const mockGateway = runningGateway(
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: async () => {
+              if (stage === 0) {
+                stage += 1;
+                return {
+                  done: false,
+                  value: encodeSseEvents([
+                    {
+                      eventType: "assistant.delta",
+                      id: String(delta.event_id),
+                      data: delta,
+                    },
+                  ]),
+                };
+              }
+              if (stage === 1) {
+                await snapshotGate;
+                stage += 1;
+                return {
+                  done: false,
+                  value: encodeSseEvents([
+                    {
+                      eventType: "assistant.message",
+                      id: String(snapshot.event_id),
+                      data: snapshot,
+                    },
+                    {
+                      eventType: "run.completed",
+                      id: "evt-delta-live-done",
+                      data: {
+                        event_id: "evt-delta-live-done",
+                        event_type: "run.completed",
+                        event_seq: 99,
+                        payload: { text: "正在分析完整结果" },
+                      },
+                    },
+                  ]),
+                };
+              }
+              return { done: true, value: undefined };
+            },
+          }),
+        },
+      }),
+    );
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "analyze",
+      clientRequestId: "req-delta-live",
+      sessionId: "session-delta",
+      profileId: "default",
+    });
+    const live = await waitForProjection(
+      service,
+      "req-delta-live",
+      (p) => p.text === "正在分析",
+    );
+    expect(live?.text).toBe("正在分析");
+    releaseSnapshot?.();
+    const terminal = await waitForProjection(
+      service,
+      "req-delta-live",
+      (p) => p.phase === "succeeded",
+    );
+    expect(terminal?.text).toBe("正在分析完整结果");
+  });
+
+  it("does not double-append a duplicate message_id/delta_seq", async () => {
+    const delta = loadV15Fixture("run-event-assistant-delta.json");
+    const snapshot = loadV15Fixture("run-event-assistant-message.json");
+    const mockGateway = runningGateway(
+      vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "assistant.delta",
+              id: "run_demo:3",
+              data: delta,
+            },
+            {
+              eventType: "assistant.delta",
+              id: "run_demo:3b",
+              data: {
+                ...delta,
+                event_id: "run_demo:3b",
+              },
+            },
+            {
+              eventType: "assistant.message",
+              id: String(snapshot.event_id),
+              data: snapshot,
+            },
+            {
+              eventType: "run.completed",
+              id: "evt-dup-done",
+              data: {
+                event_id: "evt-dup-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "正在分析完整结果" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    );
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "analyze",
+      clientRequestId: "req-delta-dup",
+      sessionId: "session-delta",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-delta-dup",
+      (p) => p.phase === "succeeded",
+    );
+    expect(terminal?.text).toBe("正在分析完整结果");
+    expect(terminal?.text).not.toContain("正在分析正在分析");
+  });
+
+  it("ignores a gapped delta and does not unseal a snapshot with a late chunk", async () => {
+    const snapshot = loadV15Fixture("run-event-assistant-message.json");
+    const late = loadV15Fixture("run-event-assistant-delta.json");
+    const mockGateway = runningGateway(
+      vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "assistant.delta",
+              id: "run_demo:gap",
+              data: {
+                event_id: "run_demo:gap",
+                event_type: "assistant.delta",
+                payload: {
+                  message_id: "msg_opaque_001",
+                  delta_seq: 2,
+                  delta: "缺口token",
+                },
+              },
+            },
+            {
+              eventType: "assistant.message",
+              id: String(snapshot.event_id),
+              data: snapshot,
+            },
+            {
+              eventType: "assistant.delta",
+              id: "run_demo:late",
+              data: {
+                ...late,
+                event_id: "run_demo:late",
+              },
+            },
+            {
+              eventType: "run.completed",
+              id: "evt-gap-done",
+              data: {
+                event_id: "evt-gap-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "正在分析完整结果" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    );
+    const texts: string[] = [];
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    service.subscribe((p) => {
+      if (p.clientRequestId === "req-delta-gap" && p.text) texts.push(p.text);
+    });
+    await service.start({
+      toolName: "calculator",
+      prompt: "analyze",
+      clientRequestId: "req-delta-gap",
+      sessionId: "session-delta",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-delta-gap",
+      (p) => p.phase === "succeeded",
+    );
+    expect(texts.some((text) => text.includes("缺口token"))).toBe(false);
+    expect(terminal?.text).toBe("正在分析完整结果");
+    expect(terminal?.text).not.toContain("正在分析正在分析完整结果");
+  });
+
+  it("does not write unknown event payload into text", async () => {
+    const mockGateway = runningGateway(
+      vi.fn().mockResolvedValue(
+        sseBodyFromChunks([
+          encodeSseEvents([
+            {
+              eventType: "not.a.real.event",
+              id: "sse-unknown-delta",
+              data: {
+                event_id: "evt-unknown-delta",
+                event_type: "not.a.real.event",
+                payload: { text: "leak-delta", delta: "leak-delta" },
+              },
+            },
+            {
+              eventType: "run.completed",
+              id: "evt-unknown-done",
+              data: {
+                event_id: "evt-unknown-done",
+                event_type: "run.completed",
+                event_seq: 99,
+                payload: { text: "done" },
+              },
+            },
+          ]),
+        ]),
+      ),
+    );
+    const service = trackService(
+      createSkillRunService({
+        gatewayClient: mockGateway,
+        ...skillFirstOptions,
+      }),
+    );
+    await service.start({
+      toolName: "calculator",
+      prompt: "analyze",
+      clientRequestId: "req-delta-unknown",
+      sessionId: "session-delta",
+      profileId: "default",
+    });
+    const terminal = await waitForProjection(
+      service,
+      "req-delta-unknown",
+      (p) => p.phase === "succeeded",
+    );
+    expect(terminal?.text).toBe("done");
+    expect(JSON.stringify(terminal)).not.toContain("leak-delta");
+  });
+});
+
 function loadBundleFixture(name: string): Record<string, unknown> {
   const relative = join("contracts", "skill-run", "v1.2.1", "fixtures", name);
+  const fromCwd = join(process.cwd(), relative);
+  const fromWork = join(process.cwd(), "..", "..", relative);
+  const path = existsSync(fromCwd) ? fromCwd : fromWork;
+  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+}
+
+function loadV15Fixture(name: string): Record<string, unknown> {
+  const relative = join("contracts", "skill-run", "v1.5.0", "fixtures", name);
   const fromCwd = join(process.cwd(), relative);
   const fromWork = join(process.cwd(), "..", "..", relative);
   const path = existsSync(fromCwd) ? fromCwd : fromWork;

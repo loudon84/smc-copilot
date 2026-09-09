@@ -1,0 +1,290 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:13944c3a33e3230698c306bbbfc06d7fd840c09bfec4703a01affff1070bf000",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-13 lock/helper PASS; parser currently rawUnknown",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Provider replay fixture locked; Work unconsumed",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "parser unknown + helper negatives",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "SSE id dedupe exists; no delta_seq buffer",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-08/RM-15 boundary; RM-13 AC-05",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "existing focused suites",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V04",
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "LAT still names RM-14 BACKLOG",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "no RM-14 implementation evidence",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Roadmap currently READY",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "approved PRD boundary",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-03",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-03": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-contract-parser.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-14/logs/20260909T080619.155958Z-V01.log",
+      "raw_log_sha256": "sha256:d4af420bade838c4299b0af9f349ce2ad10076ed8cc348c400bbd8ac1701b711",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T08:06:19.155958Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-02",
+        "CLM-03",
+        "CLM-04",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-04": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-14/logs/20260909T080627.297842Z-V02.log",
+      "raw_log_sha256": "sha256:6a081dd8f3a81c6b665100be487331ae0ca1a9c9e3deaf1d861dbf17f9db362b",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T08:06:27.297842Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-05",
+        "CLM-07",
+        "CLM-08",
+        "CLM-09",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-05": "PASS",
+        "CLM-07": "PASS",
+        "CLM-08": "PASS",
+        "CLM-09": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'from pathlib import Path; import subprocess,sys; kinds=Path('\"'\"'apps/work/src/shared/skill-run.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); store=Path('\"'\"'apps/work/src/main/skill-run/skill-run-transcript-store.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); preload=Path('\"'\"'apps/work/src/preload/skill-run-api.ts'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); lat=Path('\"'\"'apps/work/lat.md/skill-run.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); road=Path('\"'\"'docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); row=next(x for x in road.splitlines() if x.startswith(chr(124)+'\"'\"' RM-14 '\"'\"')); status=row.split(chr(124))[4].strip(); ok=('\"'\"'assistant.delta'\"'\"' not in kinds.split('\"'\"'SkillRunActivityKind'\"'\"')[1].split('\"'\"'export type'\"'\"')[0] and '\"'\"'assistant.delta'\"'\"' not in store and '\"'\"'DELTA'\"'\"' not in preload and '\"'\"'projection text'\"'\"' in lat.lower() and '\"'\"'BACKLOG'\"'\"' not in lat.split('\"'\"'Still Out'\"'\"')[-1] and status!='\"'\"'DONE'\"'\"'); sys.exit(0 if ok and subprocess.call('\"'\"'lat check'\"'\"',shell=True,cwd='\"'\"'apps/work'\"'\"')==0 else 1)'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-14/logs/20260909T080635.288964Z-V03.log",
+      "raw_log_sha256": "sha256:bfd94b098d17dadb819266e605d094375ae285570e63e15ba6a24801babc3226",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T08:06:35.288964Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-contract-parser.test.ts src/main/skill-run/skill-run-consumer-lock.test.ts src/renderer/src/modules/skill-run/SkillRunTranscriptCard.test.tsx --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-14/logs/20260909T080639.629282Z-V04.log",
+      "raw_log_sha256": "sha256:710607f82f40496cc3bb9ec4d28152eaf89e4ae49faa8cb77b652ea4aee0939d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T08:06:39.629282Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run guard'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-14/logs/20260909T080647.276960Z-V05.log",
+      "raw_log_sha256": "sha256:0d9ac9d6d25dc129823fcdd95b48dd5f0570ad1668f0b8bd5c89b201bdce6ad6",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T08:06:47.276960Z",
+      "verification_id": "V05"
+    }
+  ],
+  "completion_audit": {
+    "changed": 5,
+    "deferred": 0,
+    "done": 3,
+    "scope_drift": 0,
+    "timestamp": "2026-09-09T08:04:54.822912Z",
+    "total_items": 3,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-09T08:08:08.248905Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:7c13530f101a52e997e8cac7c9ab99c02ccbfe591f096be37813434cac22fad5",
+    "timestamp": "2026-09-09T08:05:16.976165Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:f9c153bd9bc3fb87591a2d46ce510ae743002c14452da5e51f014193fe1437c9",
+  "plan": ".cursor/plans/work-v4.0.1-m6h-streaming-delta-mapping.plan.md",
+  "plan_id": "RM-14",
+  "plan_review": {
+    "plan_sha256": "sha256:4af8c8873d33d1843afa0ad572b4011d765b1daa33e047a741c4930435440d88",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-09T07:02:52.253842Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:7c13530f101a52e997e8cac7c9ab99c02ccbfe591f096be37813434cac22fad5",
+  "verification_candidate": {
+    "candidate_id": "sha256:31462d2d53f6a25a0bbb16232d592e868e71c11c415fdae0752d9113e46b24a3",
+    "captured_at": "2026-09-09T08:05:47.240362Z",
+    "plan_id": "RM-14",
+    "schema": "smc.verification.candidate.v1",
+    "scope_fingerprint": "sha256:7c13530f101a52e997e8cac7c9ab99c02ccbfe591f096be37813434cac22fad5"
+  },
+  "workspace_base_commit": "d2d25f881051e084c0016198ee5c5997ba92041e"
+}
