@@ -6,6 +6,7 @@
 import { execFile } from "child_process";
 import http from "http";
 import https from "https";
+import path from "path";
 import { promisify } from "util";
 import { getApiServerKey } from "../config";
 import {
@@ -26,6 +27,11 @@ export type GatewayAuthProbeResult =
   | "ok"
   | "unauthorized"
   | "unreachable";
+
+export type GatewayListenerProcess = {
+  executablePath: string;
+  commandLine?: string | null;
+};
 
 function requestStatus(
   url: string,
@@ -112,9 +118,73 @@ function normalizeExecutablePath(value: string): string {
   return value.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
 }
 
-function parseInspectStdout(stdout: string): string[] | { error: string } {
+function managedPythonPathForExpectedCli(expectedExe: string): string {
+  const expectedNorm = path.normalize(expectedExe.trim());
+  const installRoot = path.dirname(path.dirname(expectedNorm));
+  return path.join(installRoot, "python", "python.exe");
+}
+
+function commandLineHasToken(commandLine: string, token: string): boolean {
+  const pattern = new RegExp(`(?:^|[\\s"'])${token}(?:$|[\\s"'])`, "i");
+  return pattern.test(commandLine);
+}
+
+function commandLineContainsExpectedCli(
+  commandLine: string,
+  expectedExe: string,
+): boolean {
+  const cmd = normalizeExecutablePath(commandLine);
+  const expected = normalizeExecutablePath(expectedExe);
+  if (!expected) return false;
+  return cmd.includes(expected) || cmd.includes(`"${expected}"`);
+}
+
+/**
+ * Parent v1.1.3 C05: hermes.exe direct OR same-install-root python.exe
+ * launching expected hermes.exe with gateway + run tokens.
+ */
+export function isManagedHermesGatewayProcess(
+  expectedExe: string,
+  listener: GatewayListenerProcess,
+): boolean | "missing_command_line" {
+  const expected = expectedExe.trim();
+  if (!expected || !listener.executablePath?.trim()) {
+    return false;
+  }
+  const expectedNorm = normalizeExecutablePath(expected);
+  const actualNorm = normalizeExecutablePath(listener.executablePath);
+  if (actualNorm === expectedNorm) {
+    return true;
+  }
+
+  const managedPythonNorm = normalizeExecutablePath(
+    managedPythonPathForExpectedCli(expected),
+  );
+  if (actualNorm !== managedPythonNorm) {
+    return false;
+  }
+
+  const commandLine = listener.commandLine?.trim() ?? "";
+  if (!commandLine) {
+    return "missing_command_line";
+  }
+  if (
+    !commandLineContainsExpectedCli(commandLine, expected) ||
+    !commandLineHasToken(commandLine, "gateway") ||
+    !commandLineHasToken(commandLine, "run")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+type ParsedListenerInspect =
+  | { kind: "paths"; listeners: GatewayListenerProcess[] }
+  | { kind: "error"; error: string };
+
+function parseInspectStdout(stdout: string): ParsedListenerInspect {
   const trimmed = String(stdout || "").trim();
-  if (!trimmed) return { error: "empty_inspect_output" };
+  if (!trimmed) return { kind: "error", error: "empty_inspect_output" };
   try {
     const parsed: unknown = JSON.parse(trimmed);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -122,16 +192,55 @@ function parseInspectStdout(stdout: string): string[] | { error: string } {
         typeof (parsed as { error?: unknown }).error === "string"
           ? (parsed as { error: string }).error
           : "inspect_error";
-      return { error };
+      return { kind: "error", error };
     }
-    if (typeof parsed === "string") return [parsed];
+    if (typeof parsed === "string") {
+      return {
+        kind: "paths",
+        listeners: [{ executablePath: parsed, commandLine: null }],
+      };
+    }
     if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === "string");
+      if (parsed.length === 0) {
+        return { kind: "paths", listeners: [] };
+      }
+      // Legacy: array of path strings
+      if (parsed.every((item) => typeof item === "string")) {
+        return {
+          kind: "paths",
+          listeners: (parsed as string[]).map((executablePath) => ({
+            executablePath,
+            commandLine: null,
+          })),
+        };
+      }
+      const listeners: GatewayListenerProcess[] = [];
+      for (const item of parsed) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) {
+          return { kind: "error", error: "unparseable_inspect_output" };
+        }
+        const executablePath = (item as { ExecutablePath?: unknown })
+          .ExecutablePath;
+        const commandLine = (item as { CommandLine?: unknown }).CommandLine;
+        if (typeof executablePath !== "string" || !executablePath.trim()) {
+          return { kind: "error", error: "missing_executable_path" };
+        }
+        listeners.push({
+          executablePath,
+          commandLine:
+            typeof commandLine === "string"
+              ? commandLine
+              : commandLine == null
+                ? null
+                : String(commandLine),
+        });
+      }
+      return { kind: "paths", listeners };
     }
   } catch {
-    return { error: "unparseable_inspect_output" };
+    return { kind: "error", error: "unparseable_inspect_output" };
   }
-  return { error: "unparseable_inspect_output" };
+  return { kind: "error", error: "unparseable_inspect_output" };
 }
 
 /** Read-only Windows listen inspect. Never signals or kills OwningProcess. */
@@ -155,13 +264,13 @@ export async function inspectGatewayListener(
     `try { $conns = @(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction Stop) } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { Write-Output '[]'; exit 0 }; throw }`,
     "if ($conns.Count -eq 0) { Write-Output '[]'; exit 0 }",
     "$pids = @($conns | Select-Object -ExpandProperty OwningProcess -Unique)",
-    "$paths = @()",
+    "$rows = @()",
     "foreach ($procId in $pids) {",
     "  $proc = Get-CimInstance Win32_Process -Filter \"ProcessId=$procId\"",
     "  if (-not $proc -or [string]::IsNullOrWhiteSpace($proc.ExecutablePath)) { Write-Output '{\"error\":\"missing_executable_path\"}'; exit 0 }",
-    "  $paths += $proc.ExecutablePath",
+    "  $rows += [pscustomobject]@{ ExecutablePath = $proc.ExecutablePath; CommandLine = $proc.CommandLine }",
     "}",
-    "if ($paths.Count -eq 1) { Write-Output (ConvertTo-Json -Compress -InputObject @($paths[0])) } else { Write-Output (ConvertTo-Json -Compress -InputObject $paths) }",
+    "Write-Output (ConvertTo-Json -Compress -InputObject @($rows))",
   ].join("; ");
   try {
     const { stdout } = await execFileAsync(
@@ -170,20 +279,34 @@ export async function inspectGatewayListener(
       { timeout: 8000, windowsHide: true },
     );
     const parsed = parseInspectStdout(stdout);
-    if (!Array.isArray(parsed)) {
+    if (parsed.kind === "error") {
       return { status: "inspect_failed", reason: parsed.error };
     }
-    if (parsed.length === 0) {
+    if (parsed.listeners.length === 0) {
       return { status: "no_listener" };
     }
-    const expectedNorm = normalizeExecutablePath(expected);
-    const mismatch = parsed.find(
-      (actual) => normalizeExecutablePath(actual) !== expectedNorm,
-    );
-    if (mismatch) {
-      return { status: "mismatch", actualPath: mismatch };
+
+    const evaluations = parsed.listeners.map((listener) => ({
+      listener,
+      result: isManagedHermesGatewayProcess(expected, listener),
+    }));
+
+    if (evaluations.every((item) => item.result === true)) {
+      return { status: "match" };
     }
-    return { status: "match" };
+
+    if (parsed.listeners.length > 1) {
+      return { status: "inspect_failed", reason: "mixed_listeners" };
+    }
+
+    const only = evaluations[0];
+    if (only.result === "missing_command_line") {
+      return { status: "inspect_failed", reason: "missing_command_line" };
+    }
+    return {
+      status: "mismatch",
+      actualPath: only.listener.executablePath,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (/ObjectNotFound|no matching|cannot find/i.test(message)) {

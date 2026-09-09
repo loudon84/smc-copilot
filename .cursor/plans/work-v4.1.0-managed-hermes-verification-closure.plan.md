@@ -3,17 +3,17 @@ name: Work v4.1.0 Managed Hermes Verification Closure
 overview: Close governed evidence for committed Managed Hermes Data Plane Client (cb562e91), tighten Windows listen-match for managed python launcher, and mark RM-01/RM-02 DONE without rewriting the blocked parent delivery run.
 todos:
   - id: t1-listen-match-oracle
-    content: "T1 — Listen-match oracle [C03]"
-    status: pending
+    content: "T1 — Listen-match oracle [C03, C05]"
+    status: completed
   - id: t2-closure-baseline-record
     content: "T2 — Closure baseline record [C01]"
-    status: pending
+    status: completed
   - id: t3-durable-evidence-manifest
     content: "T3 — Durable evidence manifest"
-    status: pending
+    status: completed
   - id: t4-roadmap-status
     content: "T4 — RM-01/RM-02 Roadmap status [C04]"
-    status: pending
+    status: completed
 isProject: false
 plan_contract: smc.plan.v3.5
 plan_id: WORK-V4.1.0-RUNTIME-RM-02
@@ -48,6 +48,8 @@ working_tree_fingerprint: clean
 |---|---|---|---|---|---|---|
 | C03 | `apps/work/src/main/runtime/gateway-probe.ts#inspectGatewayListener` | compares only ExecutablePath to expected CLI; managed install listens as `...\Hermes\python\python.exe` with CommandLine containing `...\bin\hermes.exe gateway run` | `inspectGatewayListener`; `normalizeExecutablePath` | `legacy-local-runtime-adapter.ts#probeLocal` | keep adapter owner; extend probe helper only | PASS |
 | C03 | `apps/work/src/main/runtime/gateway-probe.test.ts` | path absent | new unit file for match/mismatch/python-launcher/foreign/missing-cmdline | vitest via apps/work | add beside probe module; adapter tests keep mocks | PASS |
+| C05 | `apps/work/src/renderer/src/components/settings/RuntimePane.test.tsx` | jsdom Self-Install gate tests lack `afterEach(cleanup)`; multi-case run accumulates Retry buttons | `describe` / `render` / `getByRole('button', { name: 'Retry' })` | V09 vitest command | same test owner; cleanup only | PASS |
+| C05 | `apps/work/src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx` | same jsdom accumulation on Retry | `describe` / `renderScreen` | V09 vitest command | same test owner; cleanup only | PASS |
 | C01 | `docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-closure.json` | absent | closure schema `smc.closure-record.v1` | V10-style governance check | RM-17 closure precedent | PASS |
 | C04 | `docs/work/ROADMAP-WORK-v4.1.0-managed-hermes-runtime-ownership.md` | RM-01 IN_PRD; RM-02 IN_PRD; Commit/Evidence `-` | roadmap columns | `roadmap_update.py` / `validate_roadmap_v11.py --no-architecture-check` | reuse tooling | PASS |
 | C01 | `.smc/runs/WORK-V4.1.0-RUNTIME-RM-01.json` | `IMPLEMENTATION_COMPLETE`; ambient previously mutated | run schema v2 | preserve only | attest sha256 in closure | PASS |
@@ -120,7 +122,7 @@ working_tree_fingerprint: clean
 | Environment ID | Required Env Vars | Preflight Command | Fault Driver Env | Candidate Mode | Candidate Probe |
 |---|---|---|---|---|---|
 | ENV-01 | - | `node -v` | - | LOCAL_WORKTREE | - |
-| ENV-02 | - | `python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/health', timeout=3); import pathlib; assert pathlib.Path(r'D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe').exists()"` | - | COMMAND | health 200 + CLI exists + listen match after C03 |
+| ENV-02 | - | `python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/health', timeout=3); import pathlib; assert pathlib.Path(r'D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe').exists()"` | - | COMMAND | `python -c "import json; from pathlib import Path; print(json.loads(Path('.smc/runs/WORK-V4.1.0-RUNTIME-RM-02/verification-candidate.json').read_text(encoding='utf-8'))['candidate_id'])"` |
 
 ## Verification Ledger
 
@@ -131,16 +133,16 @@ Parent LOCAL commands reused via `python -c … shell=True`. Parent V12 is **spl
 | V01 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run tests/hermes-runtime-paths.test.ts --pool=threads --maxWorkers=1', shell=True))"` | no Self-Install path exports; HERMES_HOME live | fixtures may keep literals | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 | V02 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run tests/profiles.test.ts tests/cronjobs.test.ts tests/mcp-servers.test.ts tests/kanban-unsupported.test.ts tests/skills-cli-output.test.ts tests/hermes-auth.test.ts --pool=threads --maxWorkers=1', shell=True))"` | CLI via hermes-cli-runner | PATH hermes spawn forbidden | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 | V03 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work run guard', shell=True))"` | guard PASS | reintro FAIL | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
-| V04 | CLM-06 | LIVE | LIVE | SCN-01 Work start + Chat | response; forbidden logs absent | no TUI fallback | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
-| V05 | CLM-06 | LIVE | LIVE | SCN-02 UI ops with PATH stripped | CRUD/list success | pythonw never launched | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
+| V04 | CLM-06 | LIVE | LIVE | `python .smc/runs/WORK-V4.1.0-RUNTIME-RM-02/live_verify.py V04` | response; forbidden logs absent | no TUI fallback | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
+| V05 | CLM-06 | LIVE | LIVE | `python .smc/runs/WORK-V4.1.0-RUNTIME-RM-02/live_verify.py V05` | CRUD/list success | pythonw never launched | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
 | V06 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run tests/model-discovery.test.ts --pool=threads --maxWorkers=1', shell=True))"` | curated; no Python discovery | helper gone | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 | V07 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run src/main/hermes.test.ts --pool=threads --maxWorkers=1', shell=True))"` | STT unavailable | no HERMES_PYTHON | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
-| V08 | CLM-06 | LIVE | LIVE | SCN-03 Chat cwd report | managed ProgramData paths | AppData → BLOCK installer | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
+| V08 | CLM-06 | LIVE | LIVE | `python .smc/runs/WORK-V4.1.0-RUNTIME-RM-02/live_verify.py V08` | managed ProgramData paths | AppData → BLOCK installer | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
 | V09 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run src/renderer/src/components/settings/RuntimePane.test.tsx src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx --pool=threads --maxWorkers=1', shell=True))"` | Self-Install UI unreachable | INSTALL_CMD* gone | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
-| V10 | CLM-06 | LIVE | LIVE | SCN-04 task stop/start/quit | UNAVAILABLE; READY; PID stable | Work did not spawn | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
+| V10 | CLM-06 | LIVE | LIVE | `python .smc/runs/WORK-V4.1.0-RUNTIME-RM-02/live_verify.py V10` | UNAVAILABLE; READY; PID stable | Work did not spawn | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
 | V11 | CLM-04 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run tests/dashboard-remote.test.ts tests/dashboard-launch.test.ts tests/dashboard-web-dist.test.ts --pool=threads --maxWorkers=1', shell=True))"` | remote/SSH PASS | local spawn gone | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 | V12 | CLM-07 | DOCUMENT_SEMANTIC | LOCAL | `python -c "import subprocess,sys; from pathlib import Path; lat=subprocess.call('lat check', cwd='apps/work', shell=True); txt='\n'.join(Path(p).read_text(encoding='utf-8') for p in ['apps/work/README.md','apps/work/lat.md/runtime-connection.md']); ok=('data-plane' in txt.lower() or 'Data Plane' in txt or 'managed' in txt.lower()) and 'hermes-agent/venv' not in txt; sys.exit(0 if lat==0 and ok else 1)"` | lat PASS; docs data-plane client | no package-wide typecheck | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
-| V13 | CLM-05, CLM-06 | LIVE | LIVE | SCN-05 foreign listener or inspect failure | not READY; no kill | health-only must not READY | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
+| V13 | CLM-05, CLM-06 | LIVE | LIVE | `python .smc/runs/WORK-V4.1.0-RUNTIME-RM-02/live_verify.py V13` | not READY; no kill | health-only must not READY | LOCAL_TRANSIENT | ENV-02 | NEW_EVIDENCE | yes |
 | V14 | CLM-01, CLM-02, CLM-03, CLM-07, CLM-08, CLM-09, CLM-10, CLM-11, CLM-12, CLM-13, CLM-14, CLM-15 | STATIC | LOCAL | `python -c "import json,subprocess,sys,hashlib; from pathlib import Path; plan='.cursor/plans/work-v4.1.0-managed-hermes-verification-closure.plan.md'; rec=json.loads(Path('docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-closure.json').read_text(encoding='utf-8')); old=Path('.smc/runs/WORK-V4.1.0-RUNTIME-RM-01.json').read_bytes(); ok=rec.get('schema')=='smc.closure-record.v1' and rec.get('plan_id')=='WORK-V4.1.0-RUNTIME-RM-02' and rec.get('parent_implementation_commit')=='cb562e91' and json.loads(old.decode()).get('state')=='IMPLEMENTATION_COMPLETE' and rec.get('old_run_sha256')=='sha256:'+hashlib.sha256(old).hexdigest() and rec.get('typecheck_baseline',{}).get('disposition')=='BASELINE_RESTORATION_INPUT'; ok=ok and subprocess.call([sys.executable,'.agents/skills/smc-plan-delivery/scripts/completion_audit.py','check','--plan',plan])==0; ok=ok and subprocess.call([sys.executable,'.agents/skills/smc-plan-delivery/scripts/review_record.py','check','--plan',plan,'--kind','implementation'])==0; sys.exit(0 if ok else 1)"` | closure+audit+review; old run preserved; typecheck excluded | tamper fails | REPO_SUMMARY | ENV-01 | NEW_EVIDENCE | yes |
 | V15 | CLM-05, CLM-13 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run src/main/runtime/gateway-probe.test.ts tests/runtime-adapter.test.ts --pool=threads --maxWorkers=1', shell=True))"` | hermes match; same-root python+gateway run match; foreign/missing cmdline/other-root mismatch | never kill | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 
@@ -164,6 +166,8 @@ Parent LOCAL commands reused via `python -c … shell=True`. Parent V12 is **spl
 |---|---|---|---|---|---|---|---|---|
 | C03 | `apps/work/src/main/runtime/gateway-probe.ts#inspectGatewayListener` | PROD | MODIFY | gateway-probe | T1 | match hermes.exe or same-install-root python.exe with CommandLine tokens (expected CLI path, gateway, run); else mismatch/inspect_failed; never kill | Listen-match oracle | no |
 | C03 | `apps/work/src/main/runtime/gateway-probe.test.ts` | TEST | ADD | gateway-probe tests | T1 | unit coverage for hermes/python-launcher/foreign/missing-cmdline/other-root | Listen-match oracle | yes |
+| C05 | `apps/work/src/renderer/src/components/settings/RuntimePane.test.tsx` | TEST | MODIFY | RuntimePane tests | T1 | afterEach(cleanup) so V09 jsdom isolation does not accumulate Retry buttons | Self-Install UI gate proof | no |
+| C05 | `apps/work/src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx` | TEST | MODIFY | ConnectionErrorScreen tests | T1 | afterEach(cleanup) so V09 jsdom isolation does not accumulate Retry buttons | Self-Install UI gate proof | no |
 | C01 | `docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-closure.json` | DOC | ADD | SMC Delivery evidence | T2 | closure attestations for freeze/old-run/V-map/typecheck exclusion | Completion proof | yes |
 | C04 | `docs/work/ROADMAP-WORK-v4.1.0-managed-hermes-runtime-ownership.md` | DOC | MODIFY | Managed Hermes Roadmap | T4 | RM-01 DONE external-artifact; RM-02 DONE smc-evidence | Roadmap status | no |
 
@@ -183,6 +187,7 @@ None
 | Change ID | Strategy | Root-Cause / Reuse Evidence | Why This Is Minimum |
 |---|---|---|---|
 | C03 | MODIFY_EXISTING | parent v1.1.3 C05; real packaging uses python launcher | extend existing inspect helper; no new Adapter |
+| C05 | MODIFY_EXISTING | V09 jsdom accumulates DOM without cleanup (same class as RM-17 SessionFilesPanel) | afterEach(cleanup) only |
 | C01 | MINIMAL_NEW | RM-17 closure precedent | one JSON record |
 | C04 | MODIFY_EXISTING | roadmap_update tooling | two row updates |
 
@@ -190,7 +195,7 @@ None
 
 | Todo | Owns Changes | Writes | Reads | Depends On | Parallel Safe |
 |---|---|---|---|---|---|
-| T1 | C03 | `apps/work/src/main/runtime/gateway-probe.ts#inspectGatewayListener`<br>`apps/work/src/main/runtime/gateway-probe.test.ts` | `legacy-local-runtime-adapter.ts`<br>`tests/runtime-adapter.test.ts`<br>parent PRD C05 | - | no |
+| T1 | C03, C05 | `apps/work/src/main/runtime/gateway-probe.ts#inspectGatewayListener`<br>`apps/work/src/main/runtime/gateway-probe.test.ts`<br>`apps/work/src/renderer/src/components/settings/RuntimePane.test.tsx`<br>`apps/work/src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx` | `legacy-local-runtime-adapter.ts`<br>`tests/runtime-adapter.test.ts`<br>parent PRD C05 | - | no |
 | T2 | C01 | `docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-closure.json` | `.smc/runs/WORK-V4.1.0-RUNTIME-RM-01.json`<br>parent Plan<br>Managed Hermes Roadmap | T1 | no |
 | T3 | - | - | `docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-closure.json` | T2 | no |
 | T4 | C04 | `docs/work/ROADMAP-WORK-v4.1.0-managed-hermes-runtime-ownership.md` | `docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json` | T3 | no |
@@ -209,6 +214,7 @@ None
 
 **Owns Changes**
 - C03
+- C05
 
 **Goal**
 
@@ -223,6 +229,7 @@ Make Windows listen inspect accept the real managed Hermes packaging without fai
 - Match when path equals expected CLI **or** (path is `{installRoot}\python\python.exe` for expected `{installRoot}\bin\hermes.exe` **and** CommandLine contains expected CLI absolute path token plus `gateway` and `run` tokens).
 - Otherwise mismatch / inspect_failed; never signal PID.
 - Add `gateway-probe.test.ts` covering hermes / same-root python launcher / other-root python / foreign exe / missing cmdline.
+- Authorized V09 harness: `afterEach(cleanup)` on RuntimePane + ConnectionErrorScreen tests (jsdom accumulation).
 
 **Stop conditions**
 - [ ] V15 PASS.

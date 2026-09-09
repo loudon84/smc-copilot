@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HermesRuntimeProbe } from "../../../../shared/runtime/runtime-contract";
 import type { HermesControlOwner } from "../../../../shared/runtime/control-owner";
 import ConnectionErrorScreen from "./ConnectionErrorScreen";
@@ -57,6 +57,10 @@ function renderScreen(
 }
 
 describe("ConnectionErrorScreen Self-Install gate", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     getControlOwnerMock.mockReset();
   });

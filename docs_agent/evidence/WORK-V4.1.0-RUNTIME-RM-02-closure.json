@@ -1,0 +1,65 @@
+{
+  "schema": "smc.closure-record.v1",
+  "plan_id": "WORK-V4.1.0-RUNTIME-RM-02",
+  "parent_plan_id": "WORK-V4.1.0-RUNTIME-RM-01",
+  "parent_implementation_commit": "cb562e91",
+  "governance_baseline_commits": {
+    "parent_implementation": "cb562e91",
+    "rm02_roadmap_ready": "983d2b48",
+    "prd_approved": "09314441",
+    "plan_gate_cleared": "399d9c9d"
+  },
+  "frozen_head": "399d9c9d1bac996d483a995131024a8870969a45",
+  "old_run": {
+    "path": ".smc/runs/WORK-V4.1.0-RUNTIME-RM-01.json",
+    "state": "IMPLEMENTATION_COMPLETE",
+    "note": "Preserved historical run; not current proof. Ambient previously mutated; RM-02 owns fresh evidence."
+  },
+  "old_run_sha256": "sha256:f14d85d2fa62ac08ad0433de5850a396a84b95b91c01ad19ff3a6cc9a1559717",
+  "verification_mapping": {
+    "V01": { "parent_verification": "V01", "disposition": "REUSE_PARENT_COMMAND" },
+    "V02": { "parent_verification": "V02", "disposition": "REUSE_PARENT_COMMAND" },
+    "V03": { "parent_verification": "V03", "disposition": "REUSE_PARENT_COMMAND" },
+    "V04": { "parent_verification": "V04", "disposition": "REUSE_PARENT_LIVE_SCENARIO" },
+    "V05": { "parent_verification": "V05", "disposition": "REUSE_PARENT_LIVE_SCENARIO" },
+    "V06": { "parent_verification": "V06", "disposition": "REUSE_PARENT_COMMAND" },
+    "V07": { "parent_verification": "V07", "disposition": "REUSE_PARENT_COMMAND" },
+    "V08": { "parent_verification": "V08", "disposition": "REUSE_PARENT_LIVE_SCENARIO" },
+    "V09": { "parent_verification": "V09", "disposition": "REUSE_PARENT_COMMAND" },
+    "V10": { "parent_verification": "V10", "disposition": "REUSE_PARENT_LIVE_SCENARIO" },
+    "V11": { "parent_verification": "V11", "disposition": "REUSE_PARENT_COMMAND" },
+    "V12": {
+      "parent_verification": "V12",
+      "disposition": "SPLIT_EXCLUDE_PACKAGE_WIDE_TYPECHECK",
+      "retained": "lat check + docs/status oracles",
+      "excluded": "npm --prefix apps/work run typecheck"
+    },
+    "V13": { "parent_verification": "V13", "disposition": "REUSE_PARENT_LIVE_SCENARIO" },
+    "V14": { "parent_verification": null, "disposition": "RM02_GOVERNANCE_CLOSURE_CHECK" },
+    "V15": { "parent_verification": null, "disposition": "NEW_LISTEN_MATCH_UNIT" }
+  },
+  "roadmap_evidence_strategy": {
+    "rm01_row": {
+      "plan": ".cursor/plans/work-v4.1.0-managed-hermes-runtime-ownership-closure.plan.md",
+      "implementation_commit": "cb562e91",
+      "verification_evidence": "external-artifact:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json"
+    },
+    "rm02_row": {
+      "plan": ".cursor/plans/work-v4.1.0-managed-hermes-verification-closure.plan.md",
+      "verification_evidence": "smc-evidence:WORK-V4.1.0-RUNTIME-RM-02@sha256:<scope-fingerprint>"
+    }
+  },
+  "typecheck_baseline": {
+    "command": "npm --prefix apps/work run typecheck",
+    "observed_at": "2026-09-10T00:00:00Z",
+    "result": "FAIL",
+    "summary": "Package-wide typecheck fails due to Skill-First/Expert/File residual errors plus hermes unused leftovers; excluded from RM-02 blocking evidence per parent PRD v1.1.3 AC-20 and RM-02 AC-07. Focused unit + lat check + guard remain blocking.",
+    "disposition": "BASELINE_RESTORATION_INPUT"
+  },
+  "production_delta": {
+    "only_intentional_apps_work_change": "apps/work/src/main/runtime/gateway-probe.ts",
+    "test_add": "apps/work/src/main/runtime/gateway-probe.test.ts",
+    "reason": "C03 listen-match oracle for managed python launcher per parent v1.1.3 C05"
+  },
+  "disclaimer": "Old parent run is historical only. Blocking proof must be RM-02 Plan-bound fresh runs in .smc/evidence/WORK-V4.1.0-RUNTIME-RM-02/ledger.jsonl. Durable Evidence Manifest is delivery owned_control and must not enter Change Matrix planned_files."
+}

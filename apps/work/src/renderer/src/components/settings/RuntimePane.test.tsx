@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HermesRuntimeProbe } from "../../../../shared/runtime/runtime-contract";
 import type { ControlOwnerSnapshot } from "../../../../shared/runtime/control-owner";
 import type { RuntimeContextValue } from "../../runtime/runtime-context";
@@ -81,6 +81,10 @@ function stubApi(owner: ControlOwnerSnapshot): void {
 }
 
 describe("RuntimePane Self-Install gate", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     connectMock.mockClear();
     refreshMock.mockClear();
