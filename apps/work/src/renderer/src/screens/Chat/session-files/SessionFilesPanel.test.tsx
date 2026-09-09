@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { SessionFilesPanel } from "./SessionFilesPanel";
 
 vi.mock("./useSessionFiles", () => ({
@@ -28,6 +28,10 @@ describe("SessionFilesPanel", () => {
         onDomainEvent: vi.fn(() => () => undefined),
       },
     });
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("shows hide button when onHide is provided", () => {
