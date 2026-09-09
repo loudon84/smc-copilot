@@ -1,11 +1,11 @@
 ---
 roadmap_id: WORK-MANAGED-HERMES-RUNTIME-V4.1.0
-version: 1.1.0
+version: 1.2.0
 status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md
 source_revision: PRD-WORK-v2.4@managed-runtime/v4.1.0-ownership-closure
 target_branch: work/prd-v4.1
-updated_at: 2026-09-09T12:00:00+08:00
+updated_at: 2026-09-10T06:55:00+08:00
 implementation_plan_required: true
 architecture_approval_note: parent-v2.4-predates-yaml-approved-frontmatter
 ---
@@ -31,15 +31,18 @@ Stage PRD 不得把 Skill Run 合同或 `AD-WORK-v4.0.1-STREAMING-DELTA` / `AD-W
 
 | Item ID | Outcome | Depends On | Status | Exit Criteria | PRD | Plan | Implementation Commit | Verification Evidence |
 |---|---|---|---|---|---|---|---|---|
-| RM-01 | Managed Hermes Runtime Ownership Closure：`apps/work` 仅为 Data Plane Client。无 Self-Install Python Runtime；任何 control owner（含默认 `direct`）都不 start/stop/kill Gateway；Local Chat 单传输连接托管 Gateway；管理 CLI 经绝对路径 `hermes.exe`；Probe 能区分 UNAVAILABLE 与 CONFLICT；`managed-local-v1`（含 `direct`）下 Self-Install UI 不可达。 | - | READY | AC-01–AC-21 PASS；无 Python/source Runtime 生产残留；无 Work Gateway lifecycle；托管真机 Chat 与 CLI 可用；CONTEXT LIVE 若失败则阻断并单独立 Installer defect，不回退 Python Runtime。 | docs/work/PRD-WORK-v4.1.0-managed-hermes-runtime-ownership-closure.md | - | - | - |
+| RM-01 | Managed Hermes Runtime Ownership Closure：`apps/work` 仅为 Data Plane Client。无 Self-Install Python Runtime；任何 control owner（含默认 `direct`）都不 start/stop/kill Gateway；Local Chat 单传输连接托管 Gateway；管理 CLI 经绝对路径 `hermes.exe`；Probe 能区分 UNAVAILABLE 与 CONFLICT；`managed-local-v1`（含 `direct`）下 Self-Install UI 不可达。 | - | IN_PRD | AC-01–AC-21 PASS；无 Python/source Runtime 生产残留；无 Work Gateway lifecycle；托管真机 Chat 与 CLI 可用；CONTEXT LIVE 若失败则阻断并单独立 Installer defect，不回退 Python Runtime。 | docs/work/PRD-WORK-v4.1.0-managed-hermes-runtime-ownership-closure.md | .cursor/plans/work-v4.1.0-managed-hermes-runtime-ownership-closure.plan.md | - | - |
+| RM-02 | Managed Hermes Verification Closure：不重写 RM-01 Data Plane Client 实现；以已提交实现 `cb562e91` 为 grounding，收口 governed audit/review/LOCAL+LIVE verification 与 durable evidence；修正听口匹配以识别 managed `python.exe` 托管启动 `hermes.exe gateway`；package-wide typecheck 登记为独立 baseline restoration，不作为本 Item 阻断。 | - | READY | Completion audit PASS；implementation review PASS；parent LOCAL V01–V03/V06/V07/V09/V11 fresh PASS；listen-match oracle 接受 managed python launcher；LIVE V04/V05/V08/V10/V13 fresh PASS 或按 PRD 明确 BLOCK+defect；durable evidence manifest 存在；RM-01 DONE（Plan=RM-01 canonical Plan、Commit=`cb562e91`、Evidence=`external-artifact:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json`）；RM-02 DONE（Plan=RM-02 Plan、Commit=RM-02 impl commit、Evidence=`smc-evidence:WORK-V4.1.0-RUNTIME-RM-02@sha256:<scope-fingerprint>`）。 | - | - | - | - |
 
 ## Critical Path
 
 ```text
-RM-01 READY
+RM-01 IN_PRD (implementation committed at cb562e91; evidence incomplete)
+  → RM-02 READY
   → Stage PRD REVIEW_REQUIRED / APPROVED
   → Plan
-  → Implement apps/work only
+  → Verification closure (+ bounded listen-match fix)
+  → RM-01 DONE then RM-02 DONE
 ```
 
 不依赖 Skill-First RM-01–RM-15。不打开 Skill Run streaming / transcript Item。
