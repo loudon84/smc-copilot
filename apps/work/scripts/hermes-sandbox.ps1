@@ -21,7 +21,6 @@ function Looks-LikeHermesHome([string]$Path) {
     (Test-Path -LiteralPath (Join-Path $Path "config.yaml")) -or
     (Test-Path -LiteralPath (Join-Path $Path ".env")) -or
     (Test-Path -LiteralPath (Join-Path $Path "auth.json")) -or
-    (Test-Path -LiteralPath (Join-Path $Path "hermes-agent")) -or
     (Test-Path -LiteralPath (Join-Path $Path "desktop.json"))
   )
 }
@@ -238,7 +237,6 @@ function Use-SandboxEnv {
 }
 
 function Repair-SandboxUserEnvironment {
-  $sandboxVenv = Join-Path $HermesHome "hermes-agent\venv\Scripts"
   $userHermesHome = [Environment]::GetEnvironmentVariable("HERMES_HOME", "User")
   if ($userHermesHome -and ($userHermesHome.TrimEnd("\") -ieq $HermesHome.TrimEnd("\"))) {
     [Environment]::SetEnvironmentVariable("HERMES_HOME", $null, "User")
@@ -248,9 +246,11 @@ function Repair-SandboxUserEnvironment {
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
   if ($userPath) {
     $hadSandboxPath = $false
+    $homePrefix = $HermesHome.TrimEnd("\")
     $parts = $userPath -split ";" | Where-Object {
       if (-not $_) { return $false }
-      if ($_.TrimEnd("\") -ieq $sandboxVenv.TrimEnd("\")) {
+      $entry = $_.TrimEnd("\")
+      if ($entry -ieq $homePrefix -or $entry.StartsWith($homePrefix + "\", [System.StringComparison]::OrdinalIgnoreCase)) {
         $hadSandboxPath = $true
         return $false
       }
@@ -258,7 +258,7 @@ function Repair-SandboxUserEnvironment {
     }
     if ($hadSandboxPath) {
       [Environment]::SetEnvironmentVariable("Path", ($parts -join ";"), "User")
-      Write-Host "[hermes-sandbox] removed sandbox venv from user PATH"
+      Write-Host "[hermes-sandbox] removed sandbox data-home from user PATH"
     }
   }
 }

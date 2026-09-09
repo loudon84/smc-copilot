@@ -1,0 +1,53 @@
+---
+roadmap_id: WORK-MANAGED-HERMES-RUNTIME-V4.1.0
+version: 1.1.0
+status: ACTIVE
+architecture_decision: docs/work/PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md
+source_revision: PRD-WORK-v2.4@managed-runtime/v4.1.0-ownership-closure
+target_branch: work/prd-v4.1
+updated_at: 2026-09-09T12:00:00+08:00
+implementation_plan_required: true
+architecture_approval_note: parent-v2.4-predates-yaml-approved-frontmatter
+---
+
+# ROADMAP — Work v4.1.0 Managed Hermes Runtime Ownership Closure
+
+本路线图是 **Hermes Runtime / Data Plane** 交付 SOT，与 Skill-First / Skill Run 路线图分离。禁止把本项登记为 `ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md` 的 RM-13、RM-14 或任何 M6 后续。
+
+## Architecture Decision
+
+父架构：[`PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md`](PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md)（ADR-01/02/05/07，AC-07/08/09/18）。该文档早于现行 YAML `APPROVED` frontmatter；本 Roadmap 不把它改写成新的 Architecture Decision，只交付其未关闭的 Self-Install / Gateway 监护残留。
+
+Stage PRD 不得把 Skill Run 合同或 `AD-WORK-v4.0.1-STREAMING-DELTA` / `AD-WORK-v4.0.1-SKILL-RUN-TRANSCRIPT-LIVE-SYNC` 当作本项架构出处。
+
+## Delivery Invariants
+
+- One Roadmap Item → one Stage PRD.
+- DONE 需要 implementation commit + verification evidence.
+- Work 不是 Hermes Gateway Process Owner；OPSI / Managed Installer 才是。
+- 不新增 Runtime Adapter；不修改 Hermes 打包；不虚构 Gateway `/api/*`。
+
+## Roadmap Items
+
+| Item ID | Outcome | Depends On | Status | Exit Criteria | PRD | Plan | Implementation Commit | Verification Evidence |
+|---|---|---|---|---|---|---|---|---|
+| RM-01 | Managed Hermes Runtime Ownership Closure：`apps/work` 仅为 Data Plane Client。无 Self-Install Python Runtime；任何 control owner（含默认 `direct`）都不 start/stop/kill Gateway；Local Chat 单传输连接托管 Gateway；管理 CLI 经绝对路径 `hermes.exe`；Probe 能区分 UNAVAILABLE 与 CONFLICT；`managed-local-v1`（含 `direct`）下 Self-Install UI 不可达。 | - | READY | AC-01–AC-21 PASS；无 Python/source Runtime 生产残留；无 Work Gateway lifecycle；托管真机 Chat 与 CLI 可用；CONTEXT LIVE 若失败则阻断并单独立 Installer defect，不回退 Python Runtime。 | docs/work/PRD-WORK-v4.1.0-managed-hermes-runtime-ownership-closure.md | - | - | - |
+
+## Critical Path
+
+```text
+RM-01 READY
+  → Stage PRD REVIEW_REQUIRED / APPROVED
+  → Plan
+  → Implement apps/work only
+```
+
+不依赖 Skill-First RM-01–RM-15。不打开 Skill Run streaming / transcript Item。
+
+## Out of this Roadmap
+
+- Skill Run / Expert / Catalog（既有 Skill-First Roadmap）
+- Hermes Gateway 新增 `/api/*`（`WORK-HERMES-EXTENDED-API`）
+- Credential / `.env` ACL（`WORK-HERMES-CREDENTIAL-HARDENING`）
+- `infra/windows/hermes-agent` 打包与 Installer（除非 LIVE 证明 cwd 错误来自 Installer，则本 Item BLOCK，另立 defect）
+- `apps/desktop`

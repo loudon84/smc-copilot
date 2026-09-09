@@ -1,12 +1,7 @@
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { execFile } from "child_process";
-import {
-  HERMES_HOME,
-  HERMES_PYTHON,
-  hermesCliArgs,
-} from "./runtime/hermes-runtime-paths";
+import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 import { profileHome } from "./utils";
 import {
   isRemoteMode,
@@ -15,7 +10,6 @@ import {
   normaliseRemoteUrl,
 } from "./hermes";
 import { getConnectionConfig } from "./config";
-import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
 import { sshRunCron } from "./ssh-remote";
 import type { SshConfig } from "./ssh-tunnel";
 
@@ -331,34 +325,25 @@ function runCronCommand(
   args: string[],
   profile?: string,
 ): Promise<{ success: boolean; output: string; error?: string }> {
-  const cliArgs = hermesCliArgs();
-  if (profile && profile !== "default") {
-    cliArgs.push("-p", profile);
+  const cliArgs =
+    profile && profile !== "default"
+      ? ["-p", profile, "cron", ...args]
+      : ["cron", ...args];
+  try {
+    const output = runHermesCliSync(cliArgs, 15_000);
+    return Promise.resolve({ success: true, output });
+  } catch (err) {
+    const e = err as {
+      stdout?: Buffer | string;
+      stderr?: Buffer | string;
+      message?: string;
+    };
+    return Promise.resolve({
+      success: false,
+      output: e.stdout?.toString() || "",
+      error: e.stderr?.toString() || e.message,
+    });
   }
-  cliArgs.push("cron", ...args);
-
-  return new Promise((resolve) => {
-    execFile(
-      HERMES_PYTHON,
-      cliArgs,
-      {
-        cwd: join(HERMES_HOME, "hermes-agent"),
-        timeout: 15000,
-        ...HIDDEN_SUBPROCESS_OPTIONS,
-      },
-      (err, stdout, stderr) => {
-        if (err) {
-          resolve({
-            success: false,
-            output: stdout || "",
-            error: stderr || err.message,
-          });
-        } else {
-          resolve({ success: true, output: stdout || "" });
-        }
-      },
-    );
-  });
 }
 
 export async function createCronJob(

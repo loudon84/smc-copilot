@@ -1,11 +1,4 @@
-import { execFile, ExecFileOptions } from "child_process";
-import { join } from "path";
-import {
-  HERMES_HOME,
-  HERMES_PYTHON,
-  hermesCliArgs,
-  getEnhancedPath,
-} from "./runtime/hermes-runtime-paths";
+import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 import { isRemoteOnlyMode } from "./hermes";
 import { getConnectionConfig } from "./config";
 import { sshRunKanban, sshListClaw3dHqTasks } from "./ssh-remote";
@@ -119,45 +112,38 @@ async function runKanban(
     });
   }
 
-  const cliArgs = hermesCliArgs();
-  if (opts.profile && opts.profile !== "default") {
-    cliArgs.push("-p", opts.profile);
-  }
-  cliArgs.push("kanban", ...args);
+  const cliArgs =
+    opts.profile && opts.profile !== "default"
+      ? ["-p", opts.profile, "kanban", ...args]
+      : ["kanban", ...args];
 
-  const execOpts: ExecFileOptions = {
-    cwd: join(HERMES_HOME, "hermes-agent"),
-    timeout: opts.timeoutMs ?? KANBAN_TIMEOUT_MS,
-    env: { ...process.env, PATH: getEnhancedPath() },
-    maxBuffer: 16 * 1024 * 1024,
-  };
-
-  return new Promise((resolve) => {
-    execFile(HERMES_PYTHON, cliArgs, execOpts, (err, stdout, stderr) => {
-      const out = (stdout || "").toString();
-      if (err) {
-        resolve({
+  try {
+    const out = runHermesCliSync(cliArgs, opts.timeoutMs ?? KANBAN_TIMEOUT_MS);
+    if (opts.parseJson) {
+      try {
+        return { success: true, data: JSON.parse(out), stdout: out };
+      } catch (parseErr) {
+        return {
           success: false,
-          error: (stderr || err.message || "").toString().trim(),
+          error: `Failed to parse JSON from 'hermes kanban': ${(parseErr as Error).message}`,
           stdout: out,
-        });
-        return;
+        };
       }
-      if (opts.parseJson) {
-        try {
-          resolve({ success: true, data: JSON.parse(out), stdout: out });
-        } catch (parseErr) {
-          resolve({
-            success: false,
-            error: `Failed to parse JSON from 'hermes kanban': ${(parseErr as Error).message}`,
-            stdout: out,
-          });
-        }
-        return;
-      }
-      resolve({ success: true, stdout: out });
-    });
-  });
+    }
+    return { success: true, stdout: out };
+  } catch (err) {
+    const e = err as {
+      stdout?: Buffer | string;
+      stderr?: Buffer | string;
+      message?: string;
+    };
+    const out = e.stdout?.toString() || "";
+    return {
+      success: false,
+      error: (e.stderr?.toString() || e.message || "").trim(),
+      stdout: out,
+    };
+  }
 }
 
 export function unsupportedInRemote<T>(): KanbanResult<T> {

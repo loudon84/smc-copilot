@@ -1,13 +1,5 @@
-import { spawn, type ChildProcess } from "child_process";
-import { homedir } from "os";
-import {
-  HERMES_PYTHON,
-  HERMES_REPO,
-  HERMES_HOME,
-  hermesCliArgs,
-  getEnhancedPath,
-} from "./runtime/hermes-runtime-paths";
-import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
+import { type ChildProcess } from "child_process";
+import { spawnHermesCli } from "./runtime/hermes-cli-runner";
 import { stripAnsi } from "./utils";
 
 /**
@@ -113,18 +105,12 @@ export function runHermesAuthLogin(
 
     let proc: ChildProcess;
     try {
-      proc = spawn(HERMES_PYTHON, hermesCliArgs(subArgs), {
-        cwd: HERMES_REPO,
+      proc = spawnHermesCli(subArgs, {
         env: {
-          ...process.env,
-          PATH: getEnhancedPath(),
-          HOME: homedir(),
-          HERMES_HOME,
           PYTHONUNBUFFERED: "1",
           TERM: "dumb",
         },
         stdio: ["ignore", "pipe", "pipe"],
-        ...HIDDEN_SUBPROCESS_OPTIONS,
       });
     } catch (err) {
       resolve({ success: false, error: (err as Error).message });

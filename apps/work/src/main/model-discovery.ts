@@ -14,17 +14,10 @@
 import http from "http";
 import https from "https";
 import { URL } from "url";
-import { execFile } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { readEnv, getModelContextLengthOverride } from "./config";
 import { profileHome } from "./utils";
-import {
-  HERMES_PYTHON,
-  HERMES_REPO,
-  HERMES_HOME,
-  getEnhancedPath,
-} from "./runtime/hermes-runtime-paths";
 import { expectedEnvKeyForModel } from "./installer";
 // PROVIDER_BASE_URLS lives in its own module so `config.ts` can use the
 // same lookup without pulling in this whole file (and triggering a
@@ -46,8 +39,8 @@ const NON_DISCOVERABLE_PROVIDERS = new Set<string>([
 ]);
 
 /** OAuth/subscription providers — no static-key `/v1/models` endpoint.
- *  Their model lists come from hermes-agent's `provider_model_ids`
- *  (live + account-aware for Codex), reached via a short Python call.
+ *  Their model lists come from the curated catalogs below. Work does not
+ *  spawn Hermes Python to call `provider_model_ids`.
  *  `nous` is included here since the desktop now exposes its OAuth
  *  sign-in surface (issue #367). */
 const OAUTH_DISCOVERY_PROVIDERS = new Set<string>([
@@ -59,11 +52,10 @@ const OAUTH_DISCOVERY_PROVIDERS = new Set<string>([
   "nous",
 ]);
 
-/** Curated fallback model lists, mirrored from hermes-agent's
+/** Curated OAuth model lists, mirrored from hermes-agent's
  *  `hermes_cli/models.py` (`_PROVIDER_MODELS`) and `codex_models.py`
- *  (`DEFAULT_CODEX_MODELS`). Used only when the Python call below is
- *  unavailable (agent not installed, import error, timeout). The live
- *  call is always preferred — these will drift as new models ship. */
+ *  (`DEFAULT_CODEX_MODELS`). These are the desktop catalog — Work does
+ *  not call Python `provider_model_ids`. */
 const OAUTH_PROVIDER_CURATED: Record<string, string[]> = {
   "openai-codex": [
     "gpt-5.5",
@@ -90,53 +82,9 @@ const OAUTH_PROVIDER_CURATED: Record<string, string[]> = {
   "qwen-oauth": [],
 };
 
-// One-liner that prints hermes-agent's model list for a provider as a
-// JSON array. `provider_model_ids` does the heavy lifting — curated
-// lists for most, plus a live account-aware query for openai-codex.
-const PROVIDER_MODELS_SNIPPET =
-  "import json,sys; from hermes_cli.models import provider_model_ids; " +
-  "print(json.dumps(list(provider_model_ids(sys.argv[1]))))";
-
-/** Ask hermes-agent's `provider_model_ids` for a provider's models by
- *  running a short Python snippet against the bundled venv. Returns the
- *  parsed list, or null on any failure (so the caller can fall back). */
-function runProviderModelIdsPython(provider: string): Promise<string[] | null> {
-  return new Promise((resolve) => {
-    execFile(
-      HERMES_PYTHON,
-      ["-c", PROVIDER_MODELS_SNIPPET, provider],
-      {
-        cwd: HERMES_REPO,
-        env: { ...process.env, PATH: getEnhancedPath(), HERMES_HOME },
-        timeout: 20_000,
-        windowsHide: true,
-      },
-      (err, stdout) => {
-        if (err) {
-          resolve(null);
-          return;
-        }
-        try {
-          const parsed: unknown = JSON.parse(String(stdout).trim());
-          if (Array.isArray(parsed)) {
-            resolve(parsed.filter((x): x is string => typeof x === "string"));
-            return;
-          }
-        } catch {
-          /* unparseable — fall through */
-        }
-        resolve(null);
-      },
-    );
-  });
-}
-
-/** Resolve an OAuth provider's models: hermes-agent's live list first,
- *  curated fallback when that's unavailable. */
-async function discoverOAuthModels(provider: string): Promise<string[]> {
-  const live = await runProviderModelIdsPython(provider);
-  if (live && live.length > 0) return uniqueSorted(live);
-  return OAUTH_PROVIDER_CURATED[provider] ?? [];
+/** Resolve an OAuth provider's models from the curated catalog. */
+function discoverOAuthModels(provider: string): string[] {
+  return uniqueSorted(OAUTH_PROVIDER_CURATED[provider] ?? []);
 }
 
 /**
@@ -520,7 +468,7 @@ export async function discoverProviderModels(
   const lowerProvider = (provider || "").trim().toLowerCase();
 
   // OAuth/subscription providers don't have a static-key /v1/models
-  // endpoint — route them through hermes-agent's provider_model_ids.
+  // endpoint — serve the curated catalog.
   if (OAUTH_DISCOVERY_PROVIDERS.has(lowerProvider)) {
     const hit = fromCache(lowerProvider, "");
     if (hit) {
@@ -544,8 +492,8 @@ export async function discoverProviderModels(
       const allFree = await fetchNousFreeModelIds(profile);
       // Keep only the free IDs that are actually in the curated list
       // we're surfacing — avoids confusing the user with names that
-      // wouldn't autocomplete anyway. If hermes-agent's list misses
-      // some free ones, fall back to the full live list.
+      // wouldn't autocomplete anyway. If the curated list is empty,
+      // fall back to the live free-tier IDs from auth.json.
       const inCurated = allFree.filter((id) => models.includes(id));
       freeModels = inCurated.length > 0 ? inCurated : allFree;
       _freeCache.set(lowerProvider, freeModels);

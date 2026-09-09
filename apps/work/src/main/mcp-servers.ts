@@ -1,13 +1,8 @@
-import { execFile } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { profilePaths, safeWriteFile } from "./utils";
 import { getApiUrl, getRemoteAuthHeader, isRemoteMode } from "./hermes";
 import { getApiServerKey } from "./config";
-import {
-  getEnhancedPath,
-  HERMES_PYTHON,
-  hermesCliArgs,
-} from "./runtime/hermes-runtime-paths";
+import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 
 export type McpTransport = "http" | "stdio" | "unknown";
 
@@ -88,34 +83,26 @@ function runHermesMcpCli(
   args: string[],
   profile?: string,
 ): Promise<HermesCliResult> {
-  return new Promise((resolve, reject) => {
-    const child = execFile(
-      HERMES_PYTHON,
-      hermesCliArgs(["mcp", ...args]),
-      {
-        cwd: profilePaths(profile).home,
-        env: {
-          ...process.env,
-          HERMES_HOME: profilePaths(profile).home,
-          PATH: getEnhancedPath(),
-        },
-        timeout: 30000,
-        windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          const message =
-            String(stderr || "").trim() ||
-            String(stdout || "").trim() ||
-            error.message;
-          reject(new Error(message));
-          return;
-        }
-        resolve({ stdout: String(stdout || ""), stderr: String(stderr || "") });
-      },
-    );
-    child.stdin?.end();
-  });
+  const cliArgs =
+    profile && profile !== "default"
+      ? ["-p", profile, "mcp", ...args]
+      : ["mcp", ...args];
+  try {
+    const stdout = runHermesCliSync(cliArgs);
+    return Promise.resolve({ stdout, stderr: "" });
+  } catch (error) {
+    const err = error as {
+      stdout?: Buffer | string;
+      stderr?: Buffer | string;
+      message?: string;
+    };
+    const message =
+      String(err.stderr || "").trim() ||
+      String(err.stdout || "").trim() ||
+      err.message ||
+      "MCP CLI failed";
+    return Promise.reject(new Error(message));
+  }
 }
 
 function quoteYamlScalar(value: string): string {

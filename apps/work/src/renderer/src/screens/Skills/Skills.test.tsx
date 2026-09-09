@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,7 +28,7 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
         name: "concept-diagram",
         description: "draw diagrams",
         category: "creative",
-        source: "bundled",
+        source: "hub",
         installed: false,
       },
     ]);
@@ -51,7 +52,7 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
       expect(listInstalledSkills).toHaveBeenCalled();
     });
 
-    // Default tab is "installed"; switch to Browse so the bundled card renders.
+    // Default tab is "installed"; switch to Browse so the hub card renders.
     const tabs = view.container.querySelectorAll(".skills-tab");
     const browseTab = tabs[1] as HTMLButtonElement;
     expect(browseTab).toBeTruthy();
@@ -59,7 +60,7 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
       fireEvent.click(browseTab);
     });
 
-    // Find the Install button on the bundled card.
+    // Find the Install button on the browse card.
     let installBtn: HTMLButtonElement | null = null;
     await waitFor(() => {
       installBtn = view.container.querySelector(
@@ -94,7 +95,7 @@ describe("Skills.tsx — Install button (issue #310 diagnosis)", () => {
         name: "concept-diagram",
         description: "",
         category: "creative",
-        source: "bundled",
+        source: "hub",
         installed: false,
       },
     ]);

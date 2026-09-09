@@ -18,11 +18,25 @@ import { getApiServerKey, getConnectionConfig, getModelConfig } from "./config";
 import http from "http";
 
 const HERMES_OFFICE_REPO = "https://github.com/fathah/hermes-office";
-const HERMES_OFFICE_DIR = join(HERMES_HOME, "hermes-office");
-const DEV_PID_FILE = join(HERMES_HOME, "claw3d-dev.pid");
-const ADAPTER_PID_FILE = join(HERMES_HOME, "claw3d-adapter.pid");
-const PORT_FILE = join(HERMES_HOME, "claw3d-port");
-const WS_URL_FILE = join(HERMES_HOME, "claw3d-ws-url");
+function hermesOfficeDir(): string {
+  return join(HERMES_HOME, "hermes-office");
+}
+
+function claw3dDevPidFile(): string {
+  return join(HERMES_HOME, "claw3d-dev.pid");
+}
+
+function claw3dAdapterPidFile(): string {
+  return join(HERMES_HOME, "claw3d-adapter.pid");
+}
+
+function claw3dPortFile(): string {
+  return join(HERMES_HOME, "claw3d-port");
+}
+
+function claw3dWsUrlFile(): string {
+  return join(HERMES_HOME, "claw3d-ws-url");
+}
 const DEFAULT_PORT = 3000;
 const OLD_DEFAULT_WS_URL = "ws://localhost:18789";
 const DEFAULT_ADAPTER_PORT = 18989;
@@ -208,7 +222,7 @@ export function createClaw3dScriptInvocation(
 
 function getSavedPort(): number {
   try {
-    const port = parseInt(readFileSync(PORT_FILE, "utf-8").trim(), 10);
+    const port = parseInt(readFileSync(claw3dPortFile(), "utf-8").trim(), 10);
     return isNaN(port) ? DEFAULT_PORT : port;
   } catch {
     return DEFAULT_PORT;
@@ -216,7 +230,7 @@ function getSavedPort(): number {
 }
 
 export function setClaw3dPort(port: number): void {
-  safeWriteFile(PORT_FILE, String(port));
+  safeWriteFile(claw3dPortFile(), String(port));
   // Re-write .env with updated port
   writeClaw3dSettings();
 }
@@ -227,7 +241,7 @@ export function getClaw3dPort(): number {
 
 function getSavedWsUrl(): string {
   try {
-    const url = readFileSync(WS_URL_FILE, "utf-8").trim();
+    const url = readFileSync(claw3dWsUrlFile(), "utf-8").trim();
     if (url === OLD_DEFAULT_WS_URL) return DEFAULT_WS_URL;
     return url || DEFAULT_WS_URL;
   } catch {
@@ -236,7 +250,7 @@ function getSavedWsUrl(): string {
 }
 
 export function setClaw3dWsUrl(url: string): void {
-  safeWriteFile(WS_URL_FILE, url);
+  safeWriteFile(claw3dWsUrlFile(), url);
   // Also update the settings.json so Claw3D picks it up
   writeClaw3dSettings(url);
 }
@@ -391,8 +405,8 @@ function writeClaw3dSettings(wsUrl?: string, profile?: string): void {
 
   // Write .env in claw3d directory
   try {
-    if (existsSync(HERMES_OFFICE_DIR)) {
-      const envPath = join(HERMES_OFFICE_DIR, ".env");
+    if (existsSync(hermesOfficeDir())) {
+      const envPath = join(hermesOfficeDir(), ".env");
       writeOfficeFileIfChanged(
         envPath,
         buildOfficeEnv({
@@ -494,17 +508,17 @@ function cleanupPid(file: string): void {
 
 function isDevServerRunning(): boolean {
   if (devServerProcess && !devServerProcess.killed) return true;
-  const pid = readPid(DEV_PID_FILE);
+  const pid = readPid(claw3dDevPidFile());
   if (pid && isProcessRunning(pid)) return true;
-  cleanupPid(DEV_PID_FILE);
+  cleanupPid(claw3dDevPidFile());
   return false;
 }
 
 function isAdapterRunning(): boolean {
   if (adapterProcess && !adapterProcess.killed) return true;
-  const pid = readPid(ADAPTER_PID_FILE);
+  const pid = readPid(claw3dAdapterPidFile());
   if (pid && isProcessRunning(pid)) return true;
-  cleanupPid(ADAPTER_PID_FILE);
+  cleanupPid(claw3dAdapterPidFile());
   return false;
 }
 
@@ -560,8 +574,8 @@ export async function waitForClaw3dReady(
 }
 
 export async function getClaw3dStatus(): Promise<Claw3dStatus> {
-  const cloned = existsSync(join(HERMES_OFFICE_DIR, "package.json"));
-  const installed = existsSync(join(HERMES_OFFICE_DIR, "node_modules"));
+  const cloned = existsSync(join(hermesOfficeDir(), "package.json"));
+  const installed = existsSync(join(hermesOfficeDir(), "node_modules"));
   if (installed) {
     writeClaw3dSettings();
   }
@@ -707,7 +721,7 @@ export async function setupClaw3d(
   const git = resolveCommand("git", env.PATH);
 
   // Step 1: Clone (or pull if already cloned)
-  const cloned = existsSync(join(HERMES_OFFICE_DIR, "package.json"));
+  const cloned = existsSync(join(hermesOfficeDir(), "package.json"));
 
   if (!cloned) {
     emit(1, "Cloning Claw3D repository...", "Cloning from GitHub...\n");
@@ -715,7 +729,7 @@ export async function setupClaw3d(
       const gitClone = createCommandInvocation(git, [
         "clone",
         HERMES_OFFICE_REPO,
-        HERMES_OFFICE_DIR,
+        hermesOfficeDir(),
       ]);
       const proc = spawn(gitClone.command, gitClone.args, {
         cwd: homedir(),
@@ -753,7 +767,7 @@ export async function setupClaw3d(
     await new Promise<void>((resolve) => {
       const gitPull = createCommandInvocation(git, ["pull", "--ff-only"]);
       const proc = spawn(gitPull.command, gitPull.args, {
-        cwd: HERMES_OFFICE_DIR,
+        cwd: hermesOfficeDir(),
         env,
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
@@ -781,7 +795,7 @@ export async function setupClaw3d(
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn(npm.command, npm.args, {
-      cwd: HERMES_OFFICE_DIR,
+      cwd: hermesOfficeDir(),
       env,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -866,7 +880,7 @@ function killProcessTree(proc: ChildProcess): void {
 
 export function startDevServer(): boolean {
   if (isDevServerRunning()) return true;
-  if (!existsSync(join(HERMES_OFFICE_DIR, "node_modules"))) return false;
+  if (!existsSync(join(hermesOfficeDir(), "node_modules"))) return false;
 
   devServerError = "";
   devServerLogs = "";
@@ -882,7 +896,7 @@ export function startDevServer(): boolean {
   const node = resolveCommand("node", env.PATH);
   const devScript = createClaw3dScriptInvocation("dev", node.command);
   const proc = spawn(devScript.command, devScript.args, {
-    cwd: HERMES_OFFICE_DIR,
+    cwd: hermesOfficeDir(),
     env,
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -891,7 +905,7 @@ export function startDevServer(): boolean {
   });
 
   devServerProcess = proc;
-  if (proc.pid) writePid(DEV_PID_FILE, proc.pid);
+  if (proc.pid) writePid(claw3dDevPidFile(), proc.pid);
 
   proc.stdout?.on("data", (data: Buffer) => {
     devServerLogs += stripAnsi(data.toString());
@@ -917,7 +931,7 @@ export function startDevServer(): boolean {
       devServerError = `Dev server exited with code ${code}. Check if port ${port} is available.`;
     }
     devServerProcess = null;
-    cleanupPid(DEV_PID_FILE);
+    cleanupPid(claw3dDevPidFile());
   });
 
   proc.unref();
@@ -930,7 +944,7 @@ export function stopDevServer(): void {
     devServerProcess = null;
   }
 
-  const pid = readPid(DEV_PID_FILE);
+  const pid = readPid(claw3dDevPidFile());
   if (pid) {
     try {
       process.kill(-pid, "SIGTERM");
@@ -942,12 +956,12 @@ export function stopDevServer(): void {
       }
     }
   }
-  cleanupPid(DEV_PID_FILE);
+  cleanupPid(claw3dDevPidFile());
 }
 
 export function startAdapter(): boolean {
   if (isAdapterRunning()) return true;
-  if (!existsSync(join(HERMES_OFFICE_DIR, "node_modules"))) return false;
+  if (!existsSync(join(hermesOfficeDir(), "node_modules"))) return false;
 
   adapterError = "";
   adapterLogs = "";
@@ -968,7 +982,7 @@ export function startAdapter(): boolean {
     node.command,
   );
   const proc = spawn(adapterScript.command, adapterScript.args, {
-    cwd: HERMES_OFFICE_DIR,
+    cwd: hermesOfficeDir(),
     env,
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -977,7 +991,7 @@ export function startAdapter(): boolean {
   });
 
   adapterProcess = proc;
-  if (proc.pid) writePid(ADAPTER_PID_FILE, proc.pid);
+  if (proc.pid) writePid(claw3dAdapterPidFile(), proc.pid);
 
   proc.stdout?.on("data", (data: Buffer) => {
     adapterLogs += stripAnsi(data.toString());
@@ -1001,7 +1015,7 @@ export function startAdapter(): boolean {
       adapterError = `Hermes adapter exited with code ${code}`;
     }
     adapterProcess = null;
-    cleanupPid(ADAPTER_PID_FILE);
+    cleanupPid(claw3dAdapterPidFile());
   });
 
   proc.unref();
@@ -1014,7 +1028,7 @@ export function stopAdapter(): void {
     adapterProcess = null;
   }
 
-  const pid = readPid(ADAPTER_PID_FILE);
+  const pid = readPid(claw3dAdapterPidFile());
   if (pid) {
     try {
       process.kill(-pid, "SIGTERM");
@@ -1026,14 +1040,14 @@ export function stopAdapter(): void {
       }
     }
   }
-  cleanupPid(ADAPTER_PID_FILE);
+  cleanupPid(claw3dAdapterPidFile());
 }
 
 export function startAll(profile?: string): {
   success: boolean;
   error?: string;
 } {
-  if (!existsSync(join(HERMES_OFFICE_DIR, "node_modules"))) {
+  if (!existsSync(join(hermesOfficeDir(), "node_modules"))) {
     return {
       success: false,
       error: "Claw3D is not installed. Please install it first.",

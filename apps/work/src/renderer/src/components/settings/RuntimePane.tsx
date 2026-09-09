@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRuntime } from "../../runtime/use-runtime";
 import type { HermesRuntimeProbe } from "../../../../shared/runtime/runtime-contract";
-import type { ControlOwnerSnapshot } from "../../../../shared/runtime/control-owner";
+import type {
+  ControlOwnerSnapshot,
+  HermesControlOwner,
+} from "../../../../shared/runtime/control-owner";
+
+/** Production default contract. Self-Install UI is unreachable under this id. */
+const MANAGED_RUNTIME_CONTRACT = "managed-local-v1";
+
+function isEnterpriseManagedOwner(owner: HermesControlOwner | undefined): boolean {
+  return owner === "salt" || owner === "opsi";
+}
+
+function isSelfInstallUnreachable(owner: HermesControlOwner | undefined): boolean {
+  return (
+    MANAGED_RUNTIME_CONTRACT === "managed-local-v1" ||
+    isEnterpriseManagedOwner(owner)
+  );
+}
 
 /**
  * Settings → Hermes → Runtime / Availability status pane.
@@ -48,6 +65,7 @@ function RuntimePane(): React.JSX.Element {
   }
 
   async function handleChooseHome(): Promise<void> {
+    if (isSelfInstallUnreachable(owner?.owner)) return;
     const dir = await window.hermesAPI.selectFolder();
     if (!dir) return;
     const valid = await runtime.validateHome(dir);
@@ -72,7 +90,8 @@ function RuntimePane(): React.JSX.Element {
     }
   }
 
-  const managedMode = owner?.owner === "salt" || owner?.owner === "opsi";
+  const managedMode = isEnterpriseManagedOwner(owner?.owner);
+  const selfInstallUnreachable = isSelfInstallUnreachable(owner?.owner);
 
   return (
     <div className="settings-pane">
@@ -141,9 +160,9 @@ function RuntimePane(): React.JSX.Element {
           disabled={busy}
           onClick={() => void handleReconnect()}
         >
-          {managedMode ? "Retry" : "Reconnect"}
+          {selfInstallUnreachable ? "Retry" : "Reconnect"}
         </button>
-        {!managedMode && (
+        {!selfInstallUnreachable && (
           <button
             type="button"
             disabled={busy}

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { join } from "path";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "fs";
 
-const execFileSyncMock = vi.hoisted(() => vi.fn());
+const runHermesCliSyncMock = vi.hoisted(() => vi.fn());
 
 // `vi.hoisted` runs before module imports, so we can't reference imported
 // `join` / `tmpdir` here — use the bare Node modules via require, which is
@@ -17,19 +17,12 @@ const { TEST_HOME } = vi.hoisted(() => {
   };
 });
 
-// Mock installer module so HERMES_HOME points at our temp dir before
-// profiles.ts evaluates the `PROFILES_DIR` constant from it.
-vi.mock("../src/main/installer", () => ({
+vi.mock("../src/main/runtime/hermes-runtime-paths", () => ({
   HERMES_HOME: TEST_HOME,
-  HERMES_PYTHON: "/usr/bin/python3",
-  HERMES_SCRIPT: "/dev/null",
-  hermesCliArgs: (args: string[] = []) => ["/dev/null", ...args],
-  getEnhancedPath: () => process.env.PATH || "",
 }));
 
-vi.mock("child_process", () => ({
-  default: { execFileSync: execFileSyncMock },
-  execFileSync: execFileSyncMock,
+vi.mock("../src/main/runtime/hermes-cli-runner", () => ({
+  runHermesCliSync: runHermesCliSyncMock,
 }));
 
 // Import AFTER the mock so PROFILES_DIR is resolved against TEST_HOME.
@@ -44,7 +37,7 @@ import { setProfileName } from "../src/main/profile-meta";
 const PROFILES_DIR = join(TEST_HOME, "profiles");
 
 beforeEach(() => {
-  execFileSyncMock.mockReset();
+  runHermesCliSyncMock.mockReset();
   mkdirSync(TEST_HOME, { recursive: true });
   mkdirSync(PROFILES_DIR, { recursive: true });
 });
@@ -182,31 +175,31 @@ describe("listProfiles", () => {
     expect(() => setActiveProfile("../outside")).toThrow(
       "Profile names may contain lowercase letters",
     );
-    expect(execFileSyncMock).not.toHaveBeenCalled();
+    expect(runHermesCliSyncMock).not.toHaveBeenCalled();
   });
 
   it("creates a safe profile id behind a user-facing agent name", async () => {
-    execFileSyncMock.mockReturnValue(Buffer.from(""));
+    runHermesCliSyncMock.mockReturnValue("");
 
     const result = createProfile("  卢姐  ", null);
 
     expect(result).toEqual({ success: true, id: "agent" });
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      "/usr/bin/python3",
-      ["/dev/null", "profile", "create", "agent"],
-      expect.objectContaining({ timeout: 30000 }),
-    );
+    expect(runHermesCliSyncMock).toHaveBeenCalledWith([
+      "profile",
+      "create",
+      "agent",
+    ]);
     const profiles = await listProfiles();
     const created = profiles.find((p) => p.id === "agent");
     expect(created?.name).toBe("卢姐");
   });
 
   it("keeps a successful CLI-created profile when metadata cannot be written", async () => {
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       mkdirSync(join(PROFILES_DIR, "agent", "profile-meta.json"), {
         recursive: true,
       });
-      return Buffer.from("");
+      return "";
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -233,7 +226,7 @@ describe("listProfiles", () => {
       ),
       stderr: Buffer.from(""),
     });
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       throw err;
     });
 
@@ -252,7 +245,7 @@ describe("listProfiles", () => {
       ),
       stderr: Buffer.from(""),
     });
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       throw err;
     });
 
@@ -265,34 +258,30 @@ describe("listProfiles", () => {
   });
 
   it("allows slower cloned profile creation before timing out", () => {
-    execFileSyncMock.mockReturnValue(Buffer.from(""));
+    runHermesCliSyncMock.mockReturnValue("");
 
     expect(createProfile("slow-clone", "default").success).toBe(true);
 
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      "/usr/bin/python3",
-      [
-        "/dev/null",
-        "profile",
-        "create",
-        "slow-clone",
-        "--clone-from",
-        "default",
-      ],
-      expect.objectContaining({ timeout: 30000 }),
-    );
+    expect(runHermesCliSyncMock).toHaveBeenCalledWith([
+      "profile",
+      "create",
+      "slow-clone",
+      "--clone-from",
+      "default",
+    ]);
   });
 
   it("bounds profile deletion with the same timeout as profile creation", () => {
-    execFileSyncMock.mockReturnValue(Buffer.from(""));
+    runHermesCliSyncMock.mockReturnValue("");
 
     expect(deleteProfile("slow-delete").success).toBe(true);
 
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      "/usr/bin/python3",
-      ["/dev/null", "profile", "delete", "slow-delete", "--yes"],
-      expect.objectContaining({ timeout: 30000 }),
-    );
+    expect(runHermesCliSyncMock).toHaveBeenCalledWith([
+      "profile",
+      "delete",
+      "slow-delete",
+      "--yes",
+    ]);
   });
 });
 
@@ -306,7 +295,7 @@ describe("setActiveProfile persistence", () => {
     // was swallowed and ~/.hermes/active_profile never changed — so the
     // selection reset to `default` on relaunch and activeSshProfile() scoped
     // the unified SSH dashboard to the wrong profile.
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       throw new Error("Profile 'vps-agent' does not exist.");
     });
 
@@ -316,7 +305,7 @@ describe("setActiveProfile persistence", () => {
   });
 
   it("persists even when there is no local hermes install at all", () => {
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       const err = new Error("spawn ENOENT") as Error & { code?: string };
       err.code = "ENOENT";
       throw err;
@@ -330,20 +319,20 @@ describe("setActiveProfile persistence", () => {
   it("leaves the file alone when the CLI already persisted the selection", () => {
     // Local mode: the CLI writes active_profile itself. The fallback must
     // detect that via read-back and not double-write.
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       writeFileSync(activeFile, "work\n");
-      return Buffer.from("");
+      return "";
     });
 
     setActiveProfile("work");
 
     expect(readFileSync(activeFile, "utf-8")).toBe("work\n");
-    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+    expect(runHermesCliSyncMock).toHaveBeenCalledTimes(1);
   });
 
   it("persists switching back to default when the CLI fails", () => {
     writeFileSync(activeFile, "work\n");
-    execFileSyncMock.mockImplementation(() => {
+    runHermesCliSyncMock.mockImplementation(() => {
       throw new Error("no local install");
     });
 
@@ -357,7 +346,7 @@ describe("setActiveProfile persistence", () => {
     expect(() => setActiveProfile("../outside")).toThrow(
       "Profile names may contain lowercase letters",
     );
-    expect(execFileSyncMock).not.toHaveBeenCalled();
+    expect(runHermesCliSyncMock).not.toHaveBeenCalled();
     expect(existsSync(activeFile)).toBe(false);
   });
 });

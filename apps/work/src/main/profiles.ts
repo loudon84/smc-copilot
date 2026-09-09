@@ -1,14 +1,8 @@
-import { execFileSync } from "child_process";
 import { join } from "path";
-import { homedir } from "os";
 import { promises as fs } from "fs";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
-import {
-  HERMES_HOME,
-  HERMES_PYTHON,
-  hermesCliArgs,
-  getEnhancedPath,
-} from "./runtime/hermes-runtime-paths";
+import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
+import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 import {
   getActiveProfileNameSync,
   isValidNamedProfileName,
@@ -17,10 +11,11 @@ import {
   profileHome,
   PROFILE_NAME_ERROR,
 } from "./utils";
-import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
 import { readProfileMeta, defaultColorForName } from "./profile-meta";
 
-const PROFILES_DIR = join(HERMES_HOME, "profiles");
+function profilesDir(): string {
+  return join(HERMES_HOME, "profiles");
+}
 
 function commandErrorMessage(err: unknown): string {
   const e = err as {
@@ -82,7 +77,7 @@ function slugBaseForAgentName(name: string): string {
 }
 
 function profileIdExists(id: string): boolean {
-  return id === "default" || existsSync(join(PROFILES_DIR, id));
+  return id === "default" || existsSync(join(profilesDir(), id));
 }
 
 export function profileIdForAgentName(agentName: string): string {
@@ -154,7 +149,7 @@ async function isGatewayRunning(profilePath: string): Promise<boolean> {
     const pid =
       typeof parsed === "number" && Number.isFinite(parsed) ? parsed : NaN;
     if (isNaN(pid)) return false;
-    return pidIsAliveAs(pid, ["python", "pythonw"]);
+    return pidIsAliveAs(pid, ["hermes"]);
   } catch {
     return false;
   }
@@ -211,15 +206,15 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
   });
 
   // Named profiles under ~/.hermes/profiles/
-  if (existsSync(PROFILES_DIR)) {
+  if (existsSync(profilesDir())) {
     try {
-      const dirs = await fs.readdir(PROFILES_DIR);
+      const dirs = await fs.readdir(profilesDir());
       const profilePromises = dirs.map(async (name) => {
         // Skip dotfiles like .DS_Store so they don't get mistaken for profiles.
         if (name.startsWith(".")) return null;
         if (!isValidNamedProfileName(name)) return null;
 
-        const profilePath = join(PROFILES_DIR, name);
+        const profilePath = join(profilesDir(), name);
         const stat = await fs.stat(profilePath);
         if (!stat.isDirectory()) return null;
 
@@ -292,18 +287,7 @@ export function createProfile(
     : ["profile", "create", id];
 
   try {
-    execFileSync(HERMES_PYTHON, hermesCliArgs(args), {
-      cwd: join(HERMES_HOME, "hermes-agent"),
-      env: {
-        ...process.env,
-        PATH: getEnhancedPath(),
-        HOME: homedir(),
-        HERMES_HOME,
-      },
-      stdio: "pipe",
-      timeout: 30000,
-      ...HIDDEN_SUBPROCESS_OPTIONS,
-    });
+    runHermesCliSync(args);
   } catch (err) {
     return { success: false, error: commandErrorMessage(err) };
   }
@@ -336,22 +320,7 @@ export function deleteProfile(name: string): {
   }
 
   try {
-    execFileSync(
-      HERMES_PYTHON,
-      hermesCliArgs(["profile", "delete", name, "--yes"]),
-      {
-        cwd: join(HERMES_HOME, "hermes-agent"),
-        env: {
-          ...process.env,
-          PATH: getEnhancedPath(),
-          HOME: homedir(),
-          HERMES_HOME,
-        },
-        stdio: "pipe",
-        timeout: 30000,
-        ...HIDDEN_SUBPROCESS_OPTIONS,
-      },
-    );
+    runHermesCliSync(["profile", "delete", name, "--yes"]);
     return { success: true };
   } catch (err) {
     return { success: false, error: commandErrorMessage(err) };
@@ -364,18 +333,7 @@ export function setActiveProfile(name: string): void {
   }
 
   try {
-    execFileSync(HERMES_PYTHON, hermesCliArgs(["profile", "use", name]), {
-      cwd: join(HERMES_HOME, "hermes-agent"),
-      env: {
-        ...process.env,
-        PATH: getEnhancedPath(),
-        HOME: homedir(),
-        HERMES_HOME,
-      },
-      stdio: "pipe",
-      timeout: 10000,
-      ...HIDDEN_SUBPROCESS_OPTIONS,
-    });
+    runHermesCliSync(["profile", "use", name], 10_000);
   } catch {
     // ignore — verified and repaired below
   }

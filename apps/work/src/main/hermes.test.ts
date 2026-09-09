@@ -4,12 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // import-time side effects (installer → electron) and the two seams under
 // test (config's readEnv / secrets' providerListSafe). Everything else
 // (run-stream, url-key-map, …) is pure and loads for real.
-vi.mock("./installer", () => ({
+vi.mock("./runtime/hermes-runtime-paths", () => ({
   HERMES_HOME: "/tmp/hermes-test-home",
-  HERMES_REPO: "/tmp/hermes-test-repo",
-  HERMES_PYTHON: "python3",
-  hermesCliArgs: vi.fn(() => []),
   getEnhancedPath: vi.fn(() => ""),
+  getGatewayBaseUrl: vi.fn(() => "http://127.0.0.1:8642"),
 }));
 vi.mock("./config", () => ({
   getApiServerKey: vi.fn(() => ""),
@@ -213,6 +211,27 @@ describe("transcribeAudio API route", () => {
       transcribeAudio(new Uint8Array([1, 2, 3]), "audio/webm", "default"),
     ).rejects.toThrow("Transcription failed (404). 404 page not found");
   });
+
+  it("does not fall back to Python when local STT is missing", async () => {
+    mockedGetConnectionConfig.mockReturnValue(
+      testConnection({
+        mode: "local",
+        remoteUrl: "",
+        apiKey: "",
+      }),
+    );
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: async () => "404 page not found",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      transcribeAudio(new Uint8Array([1, 2, 3]), "audio/webm", "default"),
+    ).rejects.toThrow(/unavailable/i);
+    expect(mockedSpawn).not.toHaveBeenCalled();
+  });
 });
 
 describe("sendMessage session model override routing", () => {
@@ -230,11 +249,6 @@ describe("sendMessage session model override routing", () => {
       kill: vi.fn(),
       killed: false,
     };
-  }
-
-  function cliArgs(): string[] {
-    expect(mockedSpawn).toHaveBeenCalledTimes(1);
-    return mockedSpawn.mock.calls[0][1] as string[];
   }
 
   beforeEach(() => {
@@ -268,10 +282,11 @@ describe("sendMessage session model override routing", () => {
   });
 
   // @lat: [[model-selection#Session model override#Text-only legacy fallback routes via CLI]]
-  it("routes a cross-provider override through the CLI with its provider + model", async () => {
+  it("does not spawn a Python CLI for a cross-provider session override", async () => {
+    const onError = vi.fn();
     await sendMessage(
       "hello",
-      noopCallbacks,
+      { ...noopCallbacks, onError },
       "default",
       undefined,
       undefined,
@@ -280,11 +295,7 @@ describe("sendMessage session model override routing", () => {
       { provider: "gemini", model: "gemini-2.5-pro", baseUrl: "" },
     );
 
-    const args = cliArgs();
-    expect(args).toContain("-m");
-    expect(args[args.indexOf("-m") + 1]).toBe("gemini-2.5-pro");
-    expect(args).toContain("--provider");
-    expect(args[args.indexOf("--provider") + 1]).toBe("gemini");
+    expect(mockedSpawn).not.toHaveBeenCalled();
   });
 
   // @lat: [[model-selection#Session model override#Attachment turns stay on session transport]]

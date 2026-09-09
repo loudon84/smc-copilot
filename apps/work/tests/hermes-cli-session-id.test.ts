@@ -234,9 +234,6 @@ vi.mock("child_process", () => ({
 
 vi.mock("../src/main/installer", () => ({
   HERMES_HOME: TEST_HOME,
-  HERMES_PYTHON: process.execPath,
-  HERMES_REPO: TEST_REPO,
-  hermesCliArgs: (extra?: string[]) => ["/dev/null", ...(extra || [])],
   getEnhancedPath: () => process.env.PATH || "",
 }));
 
@@ -278,13 +275,14 @@ vi.mock("../src/main/process-options", () => ({
 }));
 
 import {
+  notifyProfileSwitched,
   sendMessage,
   startGateway,
   stopGateway,
   stopHealthPolling,
 } from "../src/main/hermes";
 
-describe("CLI fallback session id propagation", () => {
+describe("Gateway-only local chat (no Python CLI fallback)", () => {
   beforeEach(() => {
     healthStatuses.length = 0;
     apiRequests.length = 0;
@@ -297,6 +295,7 @@ describe("CLI fallback session id propagation", () => {
       delete profileEnv[key];
     }
     rmSync(TEST_REPO, { recursive: true, force: true });
+    notifyProfileSwitched();
   });
 
   afterEach(() => {
@@ -305,80 +304,44 @@ describe("CLI fallback session id propagation", () => {
     spawned.length = 0;
   });
 
-  it("captures the quiet CLI session id from stderr so the next desktop turn can resume it", async () => {
-    const done = new Promise<string | undefined>((resolve) => {
-      sendMessage("hi", {
-        onChunk: () => {},
-        onDone: resolve,
-        onError: () => {},
-      }).then(() => {
-        const proc = spawned[0];
-        proc.stdout.emit("data", Buffer.from("Hi there"));
-        proc.stderr.emit(
-          "data",
-          Buffer.from("\nsession_id: 20260527_143413_10df4c\n"),
-        );
-        proc.emit("close", 0);
-      });
+  it("does not spawn a Python CLI when the gateway is unavailable", async () => {
+    const onError = vi.fn();
+    await sendMessage("hi", {
+      onChunk: () => {},
+      onDone: () => {},
+      onError,
     });
-
-    await expect(done).resolves.toBe("20260527_143413_10df4c");
+    expect(spawned).toHaveLength(0);
+    expect(onError).toHaveBeenCalledWith("Hermes gateway is unavailable.");
   });
 
-  it("runs AIML API through the CLI custom provider bridge", async () => {
+  it("stopGateway does not kill a CLI or Gateway process", () => {
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+    stopGateway(undefined, true);
+    expect(killSpy).not.toHaveBeenCalled();
+    killSpy.mockRestore();
+  });
+
+  it("does not spawn a Python CLI for AIML custom-provider routing", async () => {
     modelConfig.model = "gpt-4o-mini";
     modelConfig.provider = "aimlapi";
     modelConfig.baseUrl = "https://api.aimlapi.com/v1";
     profileEnv.AIMLAPI_API_KEY = "sk-aiml-test";
 
-    const done = new Promise<string | undefined>((resolve) => {
-      sendMessage("hi", {
-        onChunk: () => {},
-        onDone: resolve,
-        onError: () => {},
-      }).then(() => {
-        const proc = spawned[0];
-        proc.stdout.emit("data", Buffer.from("Hi there"));
-        proc.emit("close", 0);
-      });
+    const onError = vi.fn();
+    await sendMessage("hi", {
+      onChunk: () => {},
+      onDone: () => {},
+      onError,
     });
-
-    await expect(done).resolves.toBeUndefined();
-
-    const proc = spawned[0];
-    expect(proc.spawnArgs).toEqual(
-      expect.arrayContaining(["-m", "gpt-4o-mini", "--provider", "custom"]),
-    );
-    expect(proc.spawnOptions?.env).toMatchObject({
-      AIMLAPI_API_KEY: "sk-aiml-test",
-      OPENAI_API_KEY: "sk-aiml-test",
-      OPENAI_BASE_URL: "https://api.aimlapi.com/v1",
-      CUSTOM_BASE_URL: "https://api.aimlapi.com/v1",
-      HERMES_INFERENCE_PROVIDER: "custom",
-    });
+    expect(spawned).toHaveLength(0);
+    expect(onError).toHaveBeenCalledWith("Hermes gateway is unavailable.");
   });
 
-  it("continues a CLI-created timestamp session over the API instead of minting a desk id", async () => {
-    const cliSessionId = "20260527_143413_10df4c";
-    const firstDone = new Promise<string | undefined>((resolve) => {
-      sendMessage("hi", {
-        onChunk: () => {},
-        onDone: resolve,
-        onError: () => {},
-      }).then(() => {
-        const proc = spawned[0];
-        proc.stdout.emit("data", Buffer.from("Hi there"));
-        proc.stderr.emit(
-          "data",
-          Buffer.from(`\nsession_id: ${cliSessionId}\n`),
-        );
-        proc.emit("close", 0);
-      });
-    });
-
-    await expect(firstDone).resolves.toBe(cliSessionId);
-
+  it("resumes a timestamp session over the Gateway API instead of minting a desk id", async () => {
+    const sessionId = "20260527_143413_10df4c";
     healthStatuses.push(200);
+
     await expect(
       new Promise<string | undefined>((resolve, reject) => {
         sendMessage(
@@ -389,26 +352,26 @@ describe("CLI fallback session id propagation", () => {
             onError: reject,
           },
           undefined,
-          cliSessionId,
+          sessionId,
         ).catch(reject);
       }),
     ).resolves.toBe("desk-cold-gateway");
 
+    expect(spawned).toHaveLength(0);
     expect(apiRequests).toHaveLength(1);
-    expect(apiRequests[0].headers["X-Hermes-Session-Id"]).toBe(cliSessionId);
+    expect(apiRequests[0].headers["X-Hermes-Session-Id"]).toBe(sessionId);
     expect(JSON.parse(apiRequests[0].body)).toMatchObject({
-      session_id: cliSessionId,
+      session_id: sessionId,
       messages: [{ role: "user", content: "what time is it?" }],
       stream: true,
     });
   });
 
   it("uses a healthy running gateway API instead of falling back to CLI", async () => {
-    mkdirSync(TEST_REPO, { recursive: true });
     healthStatuses.push(200);
 
-    expect(startGateway()).toBe(true);
-    expect(spawned).toHaveLength(1);
+    expect(startGateway()).toBe(false);
+    expect(spawned).toHaveLength(0);
 
     const chunks: string[] = [];
     const done = new Promise<string | undefined>((resolve, reject) => {
@@ -421,7 +384,7 @@ describe("CLI fallback session id propagation", () => {
 
     await expect(done).resolves.toBe("desk-cold-gateway");
     expect(chunks.join("")).toBe("Hi from API");
-    expect(spawned).toHaveLength(1);
+    expect(spawned).toHaveLength(0);
     expect(apiRequests).toHaveLength(1);
     expect(JSON.parse(apiRequests[0].body)).toMatchObject({
       messages: [{ role: "user", content: "hi" }],
@@ -429,9 +392,8 @@ describe("CLI fallback session id propagation", () => {
     });
   });
 
-  it("recovers a stopped local gateway before sending via the API", async () => {
-    mkdirSync(TEST_REPO, { recursive: true });
-    healthStatuses.push(503, 503, 200);
+  it("sends via API when Gateway is already healthy without Work starting it", async () => {
+    healthStatuses.push(200);
 
     const chunks: string[] = [];
     const done = new Promise<string | undefined>((resolve, reject) => {
@@ -444,7 +406,8 @@ describe("CLI fallback session id propagation", () => {
 
     await expect(done).resolves.toBe("desk-cold-gateway");
     expect(chunks.join("")).toBe("Hi from API");
-    expect(spawned).toHaveLength(1);
+    expect(startGateway()).toBe(false);
+    expect(spawned).toHaveLength(0);
     expect(apiRequests).toHaveLength(1);
     expect(JSON.parse(apiRequests[0].body)).toMatchObject({
       messages: [{ role: "user", content: "hi after update" }],
@@ -452,11 +415,10 @@ describe("CLI fallback session id propagation", () => {
     });
   });
 
-  it("restarts a tracked but unhealthy local gateway before sending via the API", async () => {
-    mkdirSync(TEST_REPO, { recursive: true });
-    expect(startGateway()).toBe(true);
-    expect(spawned).toHaveLength(1);
-    healthStatuses.push(503, 503, 503, 200);
+  it("does not restart an unhealthy local gateway from Work", async () => {
+    expect(startGateway()).toBe(false);
+    expect(spawned).toHaveLength(0);
+    healthStatuses.push(200);
 
     const chunks: string[] = [];
     const done = new Promise<string | undefined>((resolve, reject) => {
@@ -469,7 +431,7 @@ describe("CLI fallback session id propagation", () => {
 
     await expect(done).resolves.toBe("desk-cold-gateway");
     expect(chunks.join("")).toBe("Hi from API");
-    expect(spawned).toHaveLength(2);
+    expect(spawned).toHaveLength(0);
     expect(apiRequests).toHaveLength(1);
     expect(JSON.parse(apiRequests[0].body)).toMatchObject({
       messages: [{ role: "user", content: "hi after stale gateway" }],
@@ -494,7 +456,7 @@ describe("CLI fallback session id propagation", () => {
     expect(requestEvents).toEqual(["health", "chat"]);
 
     apiRequestErrors.push("connect ECONNREFUSED 127.0.0.1:8765");
-    healthStatuses.push(503, 200);
+    healthStatuses.push(200);
     const secondSendStart = requestEvents.length;
 
     const chunks: string[] = [];
@@ -508,8 +470,7 @@ describe("CLI fallback session id propagation", () => {
       }),
     ).resolves.toBe("desk-cold-gateway");
 
-    expect(chunks.join("")).toBe("Hi from API");
-    expect(spawned).toHaveLength(1);
+    expect(spawned).toHaveLength(0);
     expect(apiRequests).toHaveLength(2);
     expect(requestEvents[secondSendStart]).toBe("chat");
     expect(requestEvents.at(-1)).toBe("chat");
@@ -534,7 +495,7 @@ describe("CLI fallback session id propagation", () => {
     ).resolves.toBe("desk-cold-gateway");
 
     apiRequestErrors.push("read ECONNRESET");
-    healthStatuses.push(503, 200);
+    healthStatuses.push(200);
 
     const chunks: string[] = [];
     await expect(
@@ -624,11 +585,7 @@ describe("CLI fallback session id propagation", () => {
     expect(chunks.join("")).toBe("Partial");
     expect(apiRequests).toHaveLength(2);
     expect(requestEvents[secondSendStart]).toBe("chat");
-    await vi.waitFor(() => {
-      expect(spawned).toHaveLength(1);
-      expect(healthStatuses).toHaveLength(0);
-      expect(requestEvents.slice(secondSendStart + 1)).toContain("health");
-    });
+    expect(spawned).toHaveLength(0);
     expect(JSON.parse(apiRequests[1].body)).toMatchObject({
       messages: [{ role: "user", content: "partial stream" }],
       stream: true,
@@ -668,7 +625,7 @@ describe("CLI fallback session id propagation", () => {
     );
 
     expect(chunks).toEqual([]);
-    expect(spawned).toHaveLength(1);
+    expect(spawned).toHaveLength(0);
     expect(apiRequests).toHaveLength(2);
     expect(requestEvents[secondSendStart]).toBe("chat");
     expect(requestEvents.slice(secondSendStart + 1)).toContain("health");

@@ -1,19 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { execFileSpy } = vi.hoisted(() => ({
-  execFileSpy: vi.fn(
-    (
-      _file: string,
-      _args: string[],
-      _options: Record<string, unknown>,
-      callback: (err: Error | null, stdout: string, stderr: string) => void,
-    ) => callback(null, "ok", ""),
-  ),
+const { runHermesCliSyncMock } = vi.hoisted(() => ({
+  runHermesCliSyncMock: vi.fn(() => "ok"),
 }));
 
-vi.mock("child_process", () => ({
-  execFile: execFileSpy,
-  default: { execFile: execFileSpy },
+vi.mock("../src/main/runtime/hermes-cli-runner", () => ({
+  runHermesCliSync: runHermesCliSyncMock,
 }));
 
 vi.mock("../src/main/utils", () => ({
@@ -26,15 +18,9 @@ vi.mock("../src/main/hermes", () => ({
   getRemoteAuthHeader: () => ({}),
 }));
 
-vi.mock("../src/main/installer", () => ({
-  HERMES_HOME: "C:/hermes",
-  HERMES_PYTHON: "C:/hermes/hermes-agent/venv/Scripts/pythonw.exe",
-  hermesCliArgs: (args: string[] = []) => ["-m", "hermes_cli.main", ...args],
-}));
-
 describe("createCronJob", () => {
   beforeEach(() => {
-    execFileSpy.mockClear();
+    runHermesCliSyncMock.mockClear();
   });
 
   it("passes the prompt as the cron create positional argument before flags", async () => {
@@ -47,10 +33,8 @@ describe("createCronJob", () => {
       "telegram",
     );
 
-    expect(execFileSpy).toHaveBeenCalledTimes(1);
-    expect(execFileSpy.mock.calls[0][1]).toEqual([
-      "-m",
-      "hermes_cli.main",
+    expect(runHermesCliSyncMock).toHaveBeenCalledTimes(1);
+    expect(runHermesCliSyncMock.mock.calls[0][0]).toEqual([
       "cron",
       "create",
       "7 17 * * *",
@@ -60,7 +44,8 @@ describe("createCronJob", () => {
       "--deliver",
       "telegram",
     ]);
-    expect(execFileSpy.mock.calls[0][1]).not.toContain("--");
+    expect(runHermesCliSyncMock.mock.calls[0][0]).not.toContain("--");
+    expect(runHermesCliSyncMock.mock.calls[0][1]).toBe(15_000);
   });
 });
 

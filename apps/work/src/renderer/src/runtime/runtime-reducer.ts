@@ -19,7 +19,7 @@ export interface RuntimeReducerState {
 }
 
 export const initialRuntimeState: RuntimeReducerState = {
-  state: "gateway_stopped",
+  state: "gateway_unreachable",
   status: null,
   connecting: false,
   ready: false,
@@ -36,7 +36,6 @@ export function runtimeReducer(
         ...state,
         connecting: true,
         error: null,
-        state: "gateway_starting",
       };
     case "CONNECT_SUCCESS":
       return {
@@ -67,7 +66,9 @@ export function runtimeReducer(
       };
     case "RESET":
       return initialRuntimeState;
-    default:
-      return state;
+    default: {
+      const _exhaustive: never = action;
+      return _exhaustive;
+    }
   }
 }

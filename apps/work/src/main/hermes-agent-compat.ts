@@ -10,7 +10,7 @@ import {
 import { join } from "path";
 import { Buffer } from "buffer";
 import type { SshConfig } from "./ssh-tunnel";
-import { HERMES_HOME, HERMES_REPO } from "./runtime/hermes-runtime-paths";
+import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
 import { sshExec } from "./ssh-remote";
 
 export const HERMES_AGENT_COMPAT_VERSION =
@@ -397,53 +397,17 @@ export function writeCompatFileAtomically(path: string, source: string): void {
 }
 
 export function ensureLocalDashboardCompatibility(): HermesAgentCompatResult {
-  const path = join(HERMES_REPO, "hermes_cli", "web_server.py");
-  try {
-    const source = readFileSync(path, "utf-8");
-    const patched = patchDashboardCompatibilitySource(source);
-    if (!patched.compatible) {
-      const result: HermesAgentCompatResult = {
-        ok: false,
-        target: "local",
-        compatible: false,
-        applied: false,
-        version: HERMES_AGENT_COMPAT_VERSION,
-        detail: patched.detail,
-        path,
-      };
-      writeLocalMarker(result);
-      return result;
-    }
-
-    if (patched.changed) {
-      writeCompatFileAtomically(path, patched.source);
-    }
-
-    const result: HermesAgentCompatResult = {
-      ok: true,
-      target: "local",
-      compatible: true,
-      applied: patched.changed,
-      version: HERMES_AGENT_COMPAT_VERSION,
-      detail: patched.detail,
-      path,
-    };
-    writeLocalMarker(result);
-    return result;
-  } catch (err) {
-    const result: HermesAgentCompatResult = {
-      ok: false,
-      target: "local",
-      compatible: false,
-      applied: false,
-      version: HERMES_AGENT_COMPAT_VERSION,
-      detail: "Could not inspect local Hermes Agent dashboard source.",
-      path,
-      error: err instanceof Error ? err.message : String(err),
-    };
-    writeLocalMarker(result);
-    return result;
-  }
+  const result: HermesAgentCompatResult = {
+    ok: false,
+    target: "local",
+    compatible: false,
+    applied: false,
+    version: HERMES_AGENT_COMPAT_VERSION,
+    detail:
+      "Local dashboard source patching is not used; Work does not own the Gateway process.",
+  };
+  writeLocalMarker(result);
+  return result;
 }
 
 function shellQuote(value: string): string {

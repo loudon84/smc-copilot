@@ -7,11 +7,12 @@ export type HermesRuntimeState =
   | "ready"
   | "runtime_missing"
   | "runtime_invalid"
+  /** Frozen Runtime Service adapter only. Managed probeLocal never emits this. */
   | "gateway_stopped"
-  | "gateway_starting"
   | "gateway_unreachable"
   | "gateway_auth_failed"
-  | "configuration_error";
+  | "configuration_error"
+  | "conflict";
 
 export interface HermesRuntimeProbe {
   mode: "local";
@@ -32,6 +33,8 @@ export interface HermesRuntimeProbe {
   errorCode?: string;
   errorMessage?: string;
   probedAt?: number;
+  /** True only after Windows listen inspect succeeded and matched the managed CLI. */
+  runtimeContextVerified?: boolean;
 }
 
 export interface HermesRuntimeConnectionResult {

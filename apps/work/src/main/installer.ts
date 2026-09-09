@@ -1,4 +1,3 @@
-import { spawn, execFile } from "child_process";
 import {
   existsSync,
   readFileSync,
@@ -8,36 +7,28 @@ import {
 import { join, resolve } from "path";
 import { homedir } from "os";
 import { stripAnsi, profileHome } from "./utils";
-import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
 import {
   HERMES_HOME,
-  HERMES_REPO,
-  HERMES_PYTHON,
-  HERMES_SCRIPT,
-  hermesCliArgs,
-  getEnhancedPath,
   canInvokeHermesCli,
+  getHermesRuntimeConfig,
 } from "./runtime/hermes-runtime-paths";
 import {
   cliPathExists,
   runHermesCliAsync,
   runHermesCliSync,
+  spawnHermesCli,
 } from "./runtime/hermes-cli-runner";
 
-// Re-export runtime paths for legacy callers.
 export {
   HERMES_HOME,
-  HERMES_REPO,
-  HERMES_VENV,
-  HERMES_PYTHON,
-  HERMES_SCRIPT,
-  HERMES_ENV_FILE,
-  HERMES_CONFIG_FILE,
-  HERMES_AUTH_FILE,
-  hermesCliArgs,
   getEnhancedPath,
   setHermesHomeOverride,
 } from "./runtime/hermes-runtime-paths";
+
+function profileCliArgs(sub: string[], profile?: string): string[] {
+  if (profile && profile !== "default") return ["-p", profile, ...sub];
+  return sub;
+}
 
 export interface InstallProgress {
   step: number;
@@ -220,7 +211,7 @@ export function checkOpenClawExists(home: string = homedir()): {
 export async function runClawMigrate(
   onProgress: (progress: InstallProgress) => void,
 ): Promise<void> {
-  if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_SCRIPT)) {
+  if (!cliPathExists()) {
     throw new Error("Hermes is not installed.");
   }
 
@@ -244,19 +235,11 @@ export async function runClawMigrate(
   emit(`Migrating from ${openclaw.path}...\n`);
 
   return new Promise((resolve, reject) => {
-    const args = hermesCliArgs(["claw", "migrate", "--preset", "full"]);
+    const args = ["claw", "migrate", "--preset", "full"];
 
-    const proc = spawn(HERMES_PYTHON, args, {
-      cwd: HERMES_REPO,
-      env: {
-        ...process.env,
-        PATH: getEnhancedPath(),
-        HOME: homedir(),
-        HERMES_HOME,
-        TERM: "dumb",
-      },
+    const proc = spawnHermesCli(args, {
+      env: { TERM: "dumb" },
       stdio: ["ignore", "pipe", "pipe"],
-      ...HIDDEN_SUBPROCESS_OPTIONS,
     });
 
     proc.stdout?.on("data", (data: Buffer) => {
@@ -285,7 +268,7 @@ export async function runClawMigrate(
 export async function runHermesUpdate(
   onProgress: (progress: InstallProgress) => void,
 ): Promise<void> {
-  if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_SCRIPT)) {
+  if (!cliPathExists()) {
     throw new Error("Hermes is not installed. Please install it first.");
   }
 
@@ -304,17 +287,9 @@ export async function runHermesUpdate(
   emit("Running hermes update...\n");
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(HERMES_PYTHON, hermesCliArgs(["update"]), {
-      cwd: HERMES_REPO,
-      env: {
-        ...process.env,
-        PATH: getEnhancedPath(),
-        HOME: homedir(),
-        HERMES_HOME,
-        TERM: "dumb",
-      },
+    const proc = spawnHermesCli(["update"], {
+      env: { TERM: "dumb" },
       stdio: ["ignore", "pipe", "pipe"],
-      ...HIDDEN_SUBPROCESS_OPTIONS,
     });
 
     proc.stdout?.on("data", (data: Buffer) => {
@@ -343,49 +318,28 @@ export async function runHermesUpdate(
 export async function runHermesBackup(
   profile?: string,
 ): Promise<{ success: boolean; path?: string; error?: string }> {
-  if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_SCRIPT)) {
+  if (!cliPathExists()) {
     return { success: false, error: "Hermes is not installed." };
   }
-  const args = hermesCliArgs();
-  if (profile && profile !== "default") args.push("-p", profile);
-  args.push("backup");
-
-  return new Promise((resolve) => {
-    execFile(
-      HERMES_PYTHON,
-      args,
-      {
-        cwd: HERMES_REPO,
-        env: {
-          ...process.env,
-          PATH: getEnhancedPath(),
-          HOME: homedir(),
-          HERMES_HOME,
-          TERM: "dumb",
-        },
-        timeout: 120000,
-        ...HIDDEN_SUBPROCESS_OPTIONS,
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolve({
-            success: false,
-            error: stripAnsi(stderr || error.message).slice(0, 500),
-          });
-          return;
-        }
-        const output = stripAnsi(stdout);
-        // Try to extract the backup file path from output
-        const pathMatch = output.match(
-          /(?:Backup saved|Written|Created).*?(\S+\.(?:tar\.gz|zip|tgz))/i,
-        );
-        resolve({
-          success: true,
-          path: pathMatch?.[1] || output.trim().split("\n").pop()?.trim(),
-        });
-      },
+  try {
+    const output = stripAnsi(
+      runHermesCliSync(profileCliArgs(["backup"], profile), 120_000),
     );
-  });
+    const pathMatch = output.match(
+      /(?:Backup saved|Written|Created).*?(\S+\.(?:tar\.gz|zip|tgz))/i,
+    );
+    return {
+      success: true,
+      path: pathMatch?.[1] || output.trim().split("\n").pop()?.trim(),
+    };
+  } catch (error) {
+    const err = error as { stderr?: Buffer | string; message?: string };
+    const detail = typeof err.stderr === "string" ? err.stderr : err.stderr?.toString();
+    return {
+      success: false,
+      error: stripAnsi(detail || err.message || "Backup failed").slice(0, 500),
+    };
+  }
 }
 
 export async function runHermesImport(
@@ -397,41 +351,20 @@ export async function runHermesImport(
     return { success: false, error: archive.error };
   }
 
-  if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_SCRIPT)) {
+  if (!cliPathExists()) {
     return { success: false, error: "Hermes is not installed." };
   }
-  const args = hermesCliArgs();
-  if (profile && profile !== "default") args.push("-p", profile);
-  args.push("import", archive.path);
-
-  return new Promise((resolve) => {
-    execFile(
-      HERMES_PYTHON,
-      args,
-      {
-        cwd: HERMES_REPO,
-        env: {
-          ...process.env,
-          PATH: getEnhancedPath(),
-          HOME: homedir(),
-          HERMES_HOME,
-          TERM: "dumb",
-        },
-        timeout: 120000,
-        ...HIDDEN_SUBPROCESS_OPTIONS,
-      },
-      (error, _stdout, stderr) => {
-        if (error) {
-          resolve({
-            success: false,
-            error: stripAnsi(stderr || error.message).slice(0, 500),
-          });
-          return;
-        }
-        resolve({ success: true });
-      },
-    );
-  });
+  try {
+    runHermesCliSync(profileCliArgs(["import", archive.path], profile), 120_000);
+    return { success: true };
+  } catch (error) {
+    const err = error as { stderr?: Buffer | string; message?: string };
+    const detail = typeof err.stderr === "string" ? err.stderr : err.stderr?.toString();
+    return {
+      success: false,
+      error: stripAnsi(detail || err.message || "Import failed").slice(0, 500),
+    };
+  }
 }
 
 export function validateImportArchivePath(
@@ -462,34 +395,16 @@ export function validateImportArchivePath(
 // ────────────────────────────────────────────────────
 
 export function runHermesDump(): Promise<string> {
-  if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_SCRIPT)) {
+  if (!cliPathExists()) {
     return Promise.resolve("Hermes is not installed.");
   }
-  return new Promise((resolve) => {
-    execFile(
-      HERMES_PYTHON,
-      hermesCliArgs(["dump"]),
-      {
-        cwd: HERMES_REPO,
-        env: {
-          ...process.env,
-          PATH: getEnhancedPath(),
-          HOME: homedir(),
-          HERMES_HOME,
-          TERM: "dumb",
-        },
-        timeout: 30000,
-        ...HIDDEN_SUBPROCESS_OPTIONS,
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          resolve(stripAnsi(stderr || error.message));
-        } else {
-          resolve(stripAnsi(stdout));
-        }
-      },
-    );
-  });
+  try {
+    return Promise.resolve(stripAnsi(runHermesCliSync(["dump"])));
+  } catch (error) {
+    const err = error as { stderr?: Buffer | string; message?: string };
+    const detail = typeof err.stderr === "string" ? err.stderr : err.stderr?.toString();
+    return Promise.resolve(stripAnsi(detail || err.message || "Dump failed"));
+  }
 }
 
 // ────────────────────────────────────────────────────
@@ -511,7 +426,10 @@ export interface MemoryProviderInfo {
 export function discoverMemoryProviders(
   profile?: string,
 ): MemoryProviderInfo[] {
-  const pluginsDir = join(HERMES_REPO, "plugins", "memory");
+  const agentRoot = getHermesRuntimeConfig().hermes.agentRoot;
+  const pluginsDir = agentRoot
+    ? join(agentRoot, "plugins", "memory")
+    : "";
   if (!existsSync(pluginsDir)) return [];
 
   const activeProvider = getActiveMemoryProvider(profile);

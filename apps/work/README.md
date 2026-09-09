@@ -41,9 +41,11 @@
 
 > **This project is in active development.** Features may change, and some things might break. If you run into a problem or have an idea, [open an issue](https://github.com/fathah/hermes-desktop/issues). Contributions are welcome!
 
-SMC Copilot is a community maintained native desktop app for installing, configuring, and chatting with [Hermes Agent](https://github.com/NousResearch/hermes-agent) — a self-improving AI assistant with tool use, multi-platform messaging, and a closed learning loop.
+Work is a **data-plane client** of a managed Hermes runtime: it talks to absolute-path `hermes.exe` and Gateway `127.0.0.1:8642`. It does not install Hermes, create a venv, or own the Gateway process.
 
-Instead of managing the CLI by hand, the app walks through install, provider setup, and day-to-day usage in one place. It uses the official Hermes install script, stores Hermes in `~/.hermes`, and gives you a GUI for chat, sessions, profiles, memory, skills, tools, scheduling, messaging gateways, and more.
+SMC Copilot is a native desktop app for chatting with [Hermes Agent](https://github.com/NousResearch/hermes-agent) — a self-improving AI assistant with tool use, multi-platform messaging, and a closed learning loop.
+
+Hermes itself is installed and upgraded by the endpoint installer (OPSI / Salt / SMC Hermes). Work discovers `HERMES_HOME`, probes Gateway health, and gives you a GUI for chat, sessions, profiles, memory, skills, tools, scheduling, and messaging gateways.
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/D1D41ZEKFO)
 
@@ -135,7 +137,7 @@ sudo dnf install ./hermes-desktop-<version>.rpm
 
 ## Features
 
-- **Guided first-run install** for Hermes Agent with progress tracking and dependency resolution
+- **Managed Hermes runtime** — Work connects to an already-installed Gateway; it does not run a first-run Python installer or own Gateway lifecycle
 - **Local or remote backend** — run Hermes locally on `127.0.0.1:8642`, or connect the desktop app to a remote Hermes API server with URL + API key
 - **Multi-provider support** — OpenRouter, Anthropic, OpenAI, Google (Gemini), xAI (Grok), Nous Portal, Qwen, MiniMax, Hugging Face, Groq, and local OpenAI-compatible endpoints (LM Studio, Atomic Chat, Ollama, vLLM, llama.cpp)
 - **Streaming chat UI** with SSE streaming, tool progress indicators, markdown rendering, and syntax highlighting
@@ -160,12 +162,12 @@ sudo dnf install ./hermes-desktop-<version>.rpm
 
 On first launch, the app:
 
-1. Asks whether you want to run Hermes **locally** or connect to a **remote** Hermes API server.
-2. **Local mode:** checks whether Hermes is already installed in `~/.hermes`; if not, runs the official Hermes installer with dependency resolution (Git, uv, Python 3.11+).
-3. **Remote mode:** prompts for the remote API URL and API key, validates the connection, and skips local install.
-4. Prompts for an API provider or local model endpoint.
+1. Asks whether you want to run against a **local** managed Hermes Gateway or connect to a **remote** Hermes API server.
+2. **Local mode:** discovers the managed runtime (`HERMES_HOME`, `hermes.exe`, Gateway `:8642`), probes health, and connects. Work does not install Hermes or start Gateway.
+3. **Remote mode:** prompts for the remote API URL and API key, validates the connection, and skips local probe.
+4. Prompts for an API provider or local model endpoint when agent config still needs keys.
 5. Saves provider config and API keys through Hermes config files.
-6. Launches the main workspace once setup is complete.
+6. Launches the main workspace once Connection Ready succeeds.
 
 In local mode, chat requests go through `http://127.0.0.1:8642` with SSE streaming. In remote mode, the app talks to your configured remote URL with the same streaming protocol. The desktop app parses the stream in real time, rendering tool progress, markdown content, and token usage as it arrives.
 
@@ -176,7 +178,7 @@ In local mode, chat requests go through `http://127.0.0.1:8642` with SSE streami
 | **Chat**      | Streaming conversation UI with slash commands, tool progress, and token tracking      |
 | **Sessions**  | Browse, search, and resume past conversations                                         |
 | **Agents**    | Create, delete, and switch between Hermes profiles                                    |
-| **Skills**    | Browse, install, and manage bundled and installed skills                              |
+| **Skills**    | Browse, install, and manage installed skills                                          |
 | **Models**    | Manage saved model configurations per provider                                        |
 | **Memory**    | View/edit memory entries, user profile, and configure memory providers                |
 | **Soul**      | Edit the active profile's persona (SOUL.md)                                           |
@@ -222,7 +224,7 @@ Exa Search, Parallel API, Tavily, Firecrawl, FAL.ai (image generation), Honcho, 
 
 ## First-Time Setup
 
-When the app opens for the first time, it will either detect an existing Hermes installation or offer to install it for you.
+When the app opens for the first time, it probes the managed Hermes Gateway. It does not offer a Work-owned Hermes installer.
 
 Supported setup paths in the UI:
 
@@ -239,15 +241,14 @@ Local presets are included for:
 - vLLM
 - llama.cpp
 
-Hermes files are managed in:
+Managed Hermes data-home typically includes:
 
-- `~/.hermes`
-- `~/.hermes/.env`
-- `~/.hermes/config.yaml`
-- `~/.hermes/hermes-agent`
-- `~/.hermes/profiles/` — named profile directories
-- `~/.hermes/state.db` — session history database
-- `~/.hermes/cron/jobs.json` — scheduled tasks
+- `HERMES_HOME` (Windows default `C:\ProgramData\SMC\Hermes`)
+- `HERMES_HOME/.env`
+- `HERMES_HOME/config.yaml`
+- `HERMES_HOME/profiles/` — named profile directories
+- `HERMES_HOME/state.db` — session history database
+- `HERMES_HOME/cron/jobs.json` — scheduled tasks
 
 ## Secrets provider
 
@@ -333,7 +334,7 @@ Source of truth: [`src/main/secrets/`](src/main/secrets/).
 ## Notes
 
 - The desktop app depends on the upstream Hermes Agent project for agent behavior and tool execution.
-- The built-in installer runs the official Hermes install script with `--skip-setup`, then completes provider configuration in the GUI.
+- Hermes install, upgrade, and Gateway lifecycle are owned by the endpoint installer, not by Work.
 - Local model providers do not require an API key, but the compatible server must already be running.
 - Alternative npm registry routes are supported for environments with restricted network access.
 

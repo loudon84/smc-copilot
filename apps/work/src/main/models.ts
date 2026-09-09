@@ -9,8 +9,13 @@ import { customProviderEnvKey } from "../shared/url-key-map";
 import { getModelConfig } from "./config";
 import DEFAULT_MODELS from "./default-models";
 
-const MODELS_FILE = join(HERMES_HOME, "models.json");
-const MODEL_DEFS_FILE = join(HERMES_HOME, "model-definitions.json");
+function modelsFile(): string {
+  return join(HERMES_HOME, "models.json");
+}
+
+function modelDefsFile(): string {
+  return join(HERMES_HOME, "model-definitions.json");
+}
 
 /**
  * A persisted `models.json` row ù?a pure *attachment* of a model id to a
@@ -96,8 +101,8 @@ function normalizeContextLength(value: unknown): number | undefined {
  */
 export function readModelsRaw(): SavedModelRow[] {
   try {
-    if (!existsSync(MODELS_FILE)) return [];
-    return JSON.parse(readFileSync(MODELS_FILE, "utf-8"));
+    if (!existsSync(modelsFile())) return [];
+    return JSON.parse(readFileSync(modelsFile(), "utf-8"));
   } catch {
     return [];
   }
@@ -129,15 +134,15 @@ export function readModels(): SavedModel[] {
 }
 
 function writeModels(models: SavedModelRow[]): void {
-  safeWriteFile(MODELS_FILE, JSON.stringify(models, null, 2));
+  safeWriteFile(modelsFile(), JSON.stringify(models, null, 2));
 }
 
 /** Read the definitions map (`{ [modelId]: ModelDefinition }`), tolerant of a
  *  missing/corrupt file. */
 export function readModelDefinitions(): Record<string, ModelDefinition> {
   try {
-    if (!existsSync(MODEL_DEFS_FILE)) return {};
-    const parsed = JSON.parse(readFileSync(MODEL_DEFS_FILE, "utf-8"));
+    if (!existsSync(modelDefsFile())) return {};
+    const parsed = JSON.parse(readFileSync(modelDefsFile(), "utf-8"));
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
@@ -145,7 +150,7 @@ export function readModelDefinitions(): Record<string, ModelDefinition> {
 }
 
 function writeModelDefinitions(defs: Record<string, ModelDefinition>): void {
-  safeWriteFile(MODEL_DEFS_FILE, JSON.stringify(defs, null, 2));
+  safeWriteFile(modelDefsFile(), JSON.stringify(defs, null, 2));
 }
 
 export function listModelDefinitions(): ModelDefinition[] {
@@ -478,7 +483,7 @@ function seedDefaults(profile?: string): SavedModelRow[] {
 }
 
 export function listModels(profile?: string): SavedModel[] {
-  if (!existsSync(MODELS_FILE)) {
+  if (!existsSync(modelsFile())) {
     seedDefaults(profile);
   } else {
     // Pick up providers/models added to config.yaml from the terminal since
@@ -562,7 +567,7 @@ export function listConfiguredAgentModels(profile?: string): SavedModel[] {
     );
     for (const modelId of modelIds) {
       push({
-        name: modelIds.length > 1 ? `${cp.name} ∑ ${modelId}` : cp.name,
+        name: modelIds.length > 1 ? `${cp.name} ù ${modelId}` : cp.name,
         provider: cp.provider,
         model: modelId,
         baseUrl: cp.baseUrl,

@@ -33,9 +33,6 @@ const { TEST_HOME, connModeRef, sshTunnelUrlRef, sshLocalPortRef, spawnSpy } =
 
 vi.mock("../src/main/installer", () => ({
   HERMES_HOME: TEST_HOME,
-  HERMES_PYTHON: "/usr/bin/python3",
-  HERMES_REPO: "/dev/null",
-  hermesCliArgs: () => ["gateway"],
   getEnhancedPath: () => process.env.PATH || "",
 }));
 
@@ -299,7 +296,15 @@ describe("testRemoteConnection URL probe", () => {
   });
 });
 
-describe("startGateway / restartGateway in remote mode", () => {
+describe("startGateway / restartGateway", () => {
+  it("startGatewayDetailed refuses local spawn as well", () => {
+    spawnSpy.mockClear();
+    connModeRef.mode = "local";
+    const result = startGatewayDetailed();
+    expect(result.success).toBe(false);
+    expect(result.running).toBe(false);
+    expect(spawnSpy).not.toHaveBeenCalled();
+  });
   it("startGateway refuses to spawn in remote mode", () => {
     spawnSpy.mockClear();
     connModeRef.mode = "remote";
@@ -314,7 +319,7 @@ describe("startGateway / restartGateway in remote mode", () => {
     const result = startGatewayDetailed();
     expect(result.success).toBe(false);
     expect(result.running).toBe(false);
-    expect(result.error).toContain("local mode");
+    expect(result.error).toMatch(/managed|process owner/i);
     expect(spawnSpy).not.toHaveBeenCalled();
   });
 
@@ -332,7 +337,7 @@ describe("startGateway / restartGateway in remote mode", () => {
     const result = startGatewayDetailed();
     expect(result.success).toBe(false);
     expect(result.running).toBe(false);
-    expect(result.error).toContain("local mode");
+    expect(result.error).toMatch(/managed|process owner/i);
     expect(spawnSpy).not.toHaveBeenCalled();
   });
 

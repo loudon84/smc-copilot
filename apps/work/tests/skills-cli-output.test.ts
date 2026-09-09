@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifySkillCliOutput } from "../src/main/skills";
+import { classifySkillCliOutput, listBundledSkills } from "../src/main/skills";
 
 /**
  * Issue #310: `hermes skills install` exits 0 even when no skill was
@@ -10,6 +10,12 @@ import { classifySkillCliOutput } from "../src/main/skills";
  * against the CLI output captured live on 2026-05-22 (Hermes Agent
  * v0.14.0).
  */
+describe("listBundledSkills", () => {
+  it("does not list bundled repo skills as a managed-runtime source", () => {
+    expect(listBundledSkills()).toEqual([]);
+  });
+});
+
 describe("classifySkillCliOutput", () => {
   it("returns success on clean exit-0 output with no failure markers", () => {
     expect(classifySkillCliOutput("Resolving 'demo'...\nInstalled.")).toEqual({

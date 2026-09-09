@@ -1,28 +1,9 @@
-import { spawn, type ChildProcess } from "child_process";
+import { type ChildProcess } from "child_process";
 import { randomBytes } from "crypto";
-import { closeSync, existsSync, mkdirSync, openSync } from "fs";
 import http from "http";
 import https from "https";
-import net from "net";
-import { homedir } from "os";
-import { join } from "path";
 import { getConnectionConfig, type ConnectionConfig } from "./config";
-import {
-  getEnhancedPath,
-  hermesCliArgs,
-  HERMES_HOME,
-  HERMES_PYTHON,
-  HERMES_REPO,
-} from "./runtime/hermes-runtime-paths";
-import { buildLocalDashboardCliArgs } from "./dashboard-launch";
-import {
-  ensureLocalDashboardWebDist,
-  hasLocalDashboardWebDist,
-  localDashboardWebDistDir,
-} from "./dashboard-web-dist";
 import { dashboardWebSocketUrlForRenderer } from "./dashboard-websocket-relay";
-import { ensureLocalDashboardCompatibility } from "./hermes-agent-compat";
-import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
 import {
   buildRemoteOAuthWsUrl,
   mintRemoteOAuthWsTicket,
@@ -35,7 +16,6 @@ import { sshEnsureDashboard } from "./ssh-remote";
 import {
   getActiveProfileNameSync,
   normalizeProfileName,
-  profileHome,
 } from "./utils";
 
 export interface DashboardConnection {
@@ -170,50 +150,6 @@ function getManagedDashboard(profile?: string): ManagedDashboard | undefined {
   if (managed.proc.exitCode === null && !managed.proc.killed) return managed;
   dashboards.delete(key);
   return undefined;
-}
-
-function unsupportedReasonForLocalSpawn(): string | undefined {
-  if (!existsSync(HERMES_REPO)) {
-    return `Hermes repo not found at ${HERMES_REPO}.`;
-  }
-  if (!existsSync(HERMES_PYTHON)) {
-    return `Hermes Python environment not found at ${HERMES_PYTHON}.`;
-  }
-  return undefined;
-}
-
-function dashboardLogPath(profile: string | undefined): string {
-  const dir = profileHome(profile);
-  mkdirSync(dir, { recursive: true });
-  return join(dir, "dashboard-stderr.log");
-}
-
-async function getFreePort(): Promise<number> {
-  const preferred = Number(process.env.HERMES_DESKTOP_DASHBOARD_PORT);
-  if (Number.isInteger(preferred) && preferred > 0 && preferred < 65536) {
-    if (await isPortFree(preferred)) return preferred;
-  }
-
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      const port =
-        typeof address === "object" && address !== null ? address.port : 0;
-      server.close((err) => (err ? reject(err) : resolve(port)));
-    });
-  });
-}
-
-function isPortFree(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.listen(port, "127.0.0.1", () => {
-      server.close(() => resolve(true));
-    });
-  });
 }
 
 function requestJson(
@@ -532,25 +468,10 @@ export async function getDashboardStatus(
     return getRemoteDashboardStatusForConfig(config, profile);
   if (mode === "ssh") return getSshDashboardStatusForConfig(config, profile);
 
-  const managed = getManagedDashboard(profile);
-  if (managed) {
-    return {
-      supported: true,
-      running: true,
-      connection: { ...managed.connection, alreadyRunning: true },
-      logPath: managed.connection.logPath,
-    };
-  }
-
-  const unsupported = unsupportedReasonForLocalSpawn();
-  if (unsupported) {
-    return { supported: false, running: false, error: unsupported };
-  }
-
   return {
-    supported: true,
+    supported: false,
     running: false,
-    logPath: dashboardLogPath(resolveProfile(profile)),
+    error: "Local dashboard process is not owned by Work.",
   };
 }
 
@@ -595,124 +516,11 @@ export async function startDashboard(
     return getRemoteDashboardStatusForConfig(config, profile);
   if (mode === "ssh") return getSshDashboardStatusForConfig(config, profile);
 
-  const existing = getManagedDashboard(profile);
-  if (existing) {
-    return {
-      supported: true,
-      running: true,
-      connection: { ...existing.connection, alreadyRunning: true },
-      logPath: existing.connection.logPath,
-    };
-  }
-
-  const unsupported = unsupportedReasonForLocalSpawn();
-  if (unsupported) {
-    return { supported: false, running: false, error: unsupported };
-  }
-
-  const compat = ensureLocalDashboardCompatibility();
-  const compatWarning = compat.ok
-    ? ""
-    : compat.error
-      ? `${compat.detail}: ${compat.error}`
-      : compat.detail;
-
-  const resolvedProfile = resolveProfile(profile);
-  const key = profileKey(profile);
-  const token = randomBytes(24).toString("hex");
-  const port = await getFreePort();
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const logPath = dashboardLogPath(resolvedProfile);
-  const stderrFd = openSync(logPath, "a");
-
-  // Build outside the readiness wait — see dashboard-web-dist.ts.
-  const distReady = await ensureLocalDashboardWebDist();
-  if (!distReady) {
-    closeSync(stderrFd);
-    return {
-      supported: true,
-      running: false,
-      logPath,
-      error:
-        `Hermes dashboard web UI is not built at ${localDashboardWebDistDir()}. ` +
-        "Install Node.js, then run: npm install --workspace web && npm run build -w web " +
-        `in ${HERMES_REPO}`,
-    };
-  }
-
-  const cliArgs = buildLocalDashboardCliArgs(resolvedProfile, port, {
-    skipBuild: hasLocalDashboardWebDist(),
-  });
-
-  let proc: ChildProcess;
-  try {
-    proc = spawn(HERMES_PYTHON, hermesCliArgs(cliArgs), {
-      cwd: HERMES_REPO,
-      env: {
-        ...process.env,
-        PATH: getEnhancedPath(),
-        HOME: process.env.HOME || homedir(),
-        HERMES_HOME,
-        HERMES_DASHBOARD_SESSION_TOKEN: token,
-        HERMES_DESKTOP: "1",
-        HERMES_WEB_DIST: localDashboardWebDistDir(),
-      },
-      stdio: ["ignore", "ignore", stderrFd],
-      detached: false,
-      ...HIDDEN_SUBPROCESS_OPTIONS,
-    });
-  } catch (err) {
-    closeSync(stderrFd);
-    return {
-      supported: true,
-      running: false,
-      logPath,
-      error: err instanceof Error ? err.message : String(err),
-    };
-  }
-  closeSync(stderrFd);
-
-  const connection: DashboardConnection = {
-    baseUrl,
-    wsUrl: dashboardWsUrl(baseUrl, token),
-    token,
-    authMode: "token",
-    mode: "local",
-    profile: resolvedProfile,
-    pid: proc.pid,
-    port,
-    logPath,
+  return {
+    supported: false,
+    running: false,
+    error: "Local dashboard process is not owned by Work.",
   };
-
-  dashboards.set(key, { proc, connection });
-  proc.once("exit", () => {
-    if (dashboards.get(key)?.proc === proc) dashboards.delete(key);
-  });
-
-  try {
-    await waitForDashboardReady(connection, 45_000);
-    await probeDashboardWebSocket(connection, 5_000);
-  } catch (err) {
-    dashboards.delete(key);
-    try {
-      proc.kill();
-    } catch {
-      // Ignore shutdown errors for a failed probe; the log path is returned.
-    }
-    return {
-      supported: true,
-      running: false,
-      logPath,
-      error: [
-        err instanceof Error ? err.message : String(err),
-        compatWarning ? `compatibility: ${compatWarning}` : "",
-      ]
-        .filter(Boolean)
-        .join("; "),
-    };
-  }
-
-  return { supported: true, running: true, connection, logPath };
 }
 
 export function stopDashboard(profile?: string): boolean {

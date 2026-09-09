@@ -33,10 +33,8 @@ vi.mock("../src/main/hermes", () => ({
   normaliseRemoteUrl: (url: string) => url.replace(/\/+$/, ""),
 }));
 
-vi.mock("../src/main/installer", () => ({
-  HERMES_HOME: "C:/hermes",
-  HERMES_PYTHON: "C:/hermes/hermes-agent/venv/Scripts/pythonw.exe",
-  hermesCliArgs: (args: string[] = []) => ["-m", "hermes_cli.main", ...args],
+vi.mock("../src/main/runtime/hermes-cli-runner", () => ({
+  runHermesCliSync: vi.fn(),
 }));
 
 vi.mock("../src/main/process-options", () => ({

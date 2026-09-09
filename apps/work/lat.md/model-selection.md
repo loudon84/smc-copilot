@@ -47,12 +47,10 @@ The selected model/provider is saved in a desktop-owned table keyed by session i
 
 ## Text-only legacy fallback routes via CLI
 
-Text-only legacy turns can use the CLI fallback when a session override changes provider or base URL away from `config.yaml`.
+Local Chat no longer routes session overrides through a Hermes Python CLI fallback.
 
-The upstream desktop model applies the session switch on the active gateway session with `/model <model> --provider <provider>`, then attaches media and submits on that same session. Hermes Desktop's dashboard transport follows that path; [[src/main/hermes.ts#shouldForceCliForSessionOverride]] keeps the CLI escape hatch only for text-only legacy fallback, where it can pass `-m <model>` and `--provider` without dropping attachments. Same-provider model swaps stay on the gateway/API path, where the new `model` string is sufficient. Remote (SSH) mode has no local CLI transport, so it remains limited to the model string.
+[[src/main/hermes.ts#shouldForceCliForSessionOverride]] is always `false`, so same-provider and cross-provider swaps stay on the gateway/API path. If the gateway is unavailable the turn errors closed.
 
 ## Attachment turns stay on session transport
 
-Attachment turns must not be forced through the CLI override fallback because the CLI path cannot carry multimodal input.
-
-[[src/main/hermes.ts#sendMessageViaCli]] can inline text-file attachments but ignores images, while the gateway/API path preserves image parts and path refs through [[src/main/hermes.ts#buildUserContent]]. When a session override is active and the user sends attachments, [[src/main/hermes.ts#shouldForceCliForSessionOverride]] leaves the turn eligible for the dashboard/gateway or API transport instead of silently dropping media.
+Attachment turns use the gateway/API path, which preserves image parts and path refs through [[src/main/hermes.ts#buildUserContent]]. There is no CLI transport that could drop multimodal input.

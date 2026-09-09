@@ -34,28 +34,12 @@ const { spawnSpy, fakeProcs } = vi.hoisted(() => {
   };
 });
 
-vi.mock("../src/main/installer", () => ({
-  HERMES_PYTHON: "/usr/bin/python3",
-  HERMES_REPO: "/tmp/hermes-repo",
-  HERMES_HOME: "/tmp/hermes-home",
-  hermesCliArgs: (args: string[]) => args,
-  getEnhancedPath: () => process.env.PATH || "",
-}));
-
-vi.mock("../src/main/process-options", () => ({
-  HIDDEN_SUBPROCESS_OPTIONS: {},
-}));
-
 vi.mock("../src/main/utils", () => ({
   stripAnsi: (s: string) => s,
 }));
 
-// hermes-auth.ts only consumes `spawn` from child_process, so a minimal
-// replacement is enough. Both the named export and a `default` are
-// provided so the CJS↔ESM interop layer is satisfied.
-vi.mock("child_process", () => ({
-  spawn: spawnSpy,
-  default: { spawn: spawnSpy },
+vi.mock("../src/main/runtime/hermes-cli-runner", () => ({
+  spawnHermesCli: spawnSpy,
 }));
 
 import {
@@ -174,7 +158,7 @@ describe("runHermesAuthLogin", () => {
     );
 
     expect(spawnSpy).toHaveBeenCalledTimes(1);
-    const args = spawnSpy.mock.calls[0][1] as string[];
+    const args = spawnSpy.mock.calls[0][0] as string[];
     expect(args).toEqual([
       "auth",
       "add",
@@ -182,7 +166,7 @@ describe("runHermesAuthLogin", () => {
       "--type",
       "oauth",
     ]);
-    const options = spawnSpy.mock.calls[0][2] as {
+    const options = spawnSpy.mock.calls[0][1] as {
       env?: Record<string, string | undefined>;
     };
     expect(options.env?.PYTHONUNBUFFERED).toBe("1");
@@ -200,7 +184,7 @@ describe("runHermesAuthLogin", () => {
 
   it("passes the profile flag when a named profile is given", async () => {
     const promise = runHermesAuthLogin("xai-oauth", () => {}, "work");
-    const args = spawnSpy.mock.calls[0][1] as string[];
+    const args = spawnSpy.mock.calls[0][0] as string[];
     expect(args).toEqual([
       "-p",
       "work",

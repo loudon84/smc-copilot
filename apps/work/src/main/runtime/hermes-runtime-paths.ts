@@ -1,6 +1,6 @@
 /**
- * Hermes runtime path resolution — legacy compatibility layer over
- * HermesRuntimeConfig. New code should use hermes-runtime-config getters.
+ * Hermes runtime path resolution — compatibility layer over HermesRuntimeConfig.
+ * `HERMES_HOME` is a live string binding synced from `getHermesHome()`.
  */
 // @lat: [[runtime-connection#Path resolution]]
 import {
@@ -13,9 +13,9 @@ import { homedir } from "os";
 import { app } from "electron";
 import {
   getHermesCliPath,
-  getHermesHome,
+  getHermesHome as readHermesHome,
   getHermesRuntimeConfig,
-  invalidateHermesRuntimeConfigCache,
+  invalidateHermesRuntimeConfigCache as clearHermesRuntimeConfigCache,
 } from "./hermes-runtime-config";
 import {
   readHermesHomeOverride,
@@ -35,76 +35,34 @@ if (HERMES_DESKTOP_USER_DATA_DIR) {
 }
 
 export {
-  getHermesHome,
   getHermesCliPath,
   getGatewayBaseUrl,
   getHermesRuntimeConfig,
   getHermesProgramRoot,
-  invalidateHermesRuntimeConfigCache,
 } from "./hermes-runtime-config";
 
-export function looksLikeHermesHome(dir: string): boolean {
-  if (!existsSync(dir)) return false;
-  return (
-    existsSync(join(dir, "config.yaml")) ||
-    existsSync(join(dir, "active_profile")) ||
-    existsSync(join(dir, ".env")) ||
-    existsSync(join(dir, "auth.json")) ||
-    existsSync(join(dir, "profiles"))
-  );
-}
-
-/** @deprecated Enterprise managed runtime uses getHermesHome() defaults. */
-export function defaultHermesHome(): string {
-  return getHermesHome();
-}
-
 export { readHermesHomeOverride };
+
+/** Live data-home binding. Must stay a real string for `path.join`. */
+export let HERMES_HOME = readHermesHome();
+
+function syncHermesHome(): string {
+  HERMES_HOME = readHermesHome();
+  return HERMES_HOME;
+}
+
+export function getHermesHome(): string {
+  return syncHermesHome();
+}
+
+export function invalidateHermesRuntimeConfigCache(): void {
+  clearHermesRuntimeConfigCache();
+  syncHermesHome();
+}
 
 export function setHermesHomeOverride(home: string): void {
   persistHermesHomeOverride(home);
   invalidateHermesRuntimeConfigCache();
-}
-
-/** Legacy snapshot — prefer getHermesHome() for runtime resolution. */
-export const HERMES_HOME = getHermesHome();
-export const HERMES_REPO = join(getHermesHome(), "hermes-agent");
-export const HERMES_VENV = join(HERMES_REPO, "venv");
-export const HERMES_PYTHON = IS_WINDOWS
-  ? join(HERMES_VENV, "Scripts", "pythonw.exe")
-  : join(HERMES_VENV, "bin", "python");
-export const HERMES_SCRIPT = IS_WINDOWS
-  ? join(HERMES_VENV, "Scripts", "hermes.exe")
-  : join(HERMES_REPO, "hermes");
-export const HERMES_ENV_FILE = join(getHermesHome(), ".env");
-export const HERMES_CONFIG_FILE = join(getHermesHome(), "config.yaml");
-export const HERMES_AUTH_FILE = join(getHermesHome(), "auth.json");
-
-/** @deprecated Legacy desktop self-install layout. */
-export function installBinariesFor(home: string): {
-  python: string;
-  script: string;
-} {
-  const repo = join(home, "hermes-agent");
-  const venv = join(repo, "venv");
-  return IS_WINDOWS
-    ? {
-        python: join(venv, "Scripts", "python.exe"),
-        script: join(venv, "Scripts", "hermes.exe"),
-      }
-    : { python: join(venv, "bin", "python"), script: join(repo, "hermes") };
-}
-
-/** @deprecated Use runHermesCliAsync/spawnHermesCli with absolute cliPath. */
-export function hermesCliArgs(args: string[] = []): string[] {
-  if (process.platform === "win32") {
-    return ["-m", "hermes_cli.main", ...args];
-  }
-  return [HERMES_SCRIPT, ...args];
-}
-
-export function canInvokeHermesCli(): boolean {
-  return existsSync(getHermesCliPath());
 }
 
 export function getEnhancedPath(): string {
@@ -155,6 +113,10 @@ export function getEnhancedPath(): string {
         ]
   ).filter((entry): entry is string => Boolean(entry));
   return [...extra, process.env.PATH || ""].filter(Boolean).join(delimiter);
+}
+
+export function canInvokeHermesCli(): boolean {
+  return existsSync(getHermesCliPath());
 }
 
 function resolveNvmBin(home: string): string[] {

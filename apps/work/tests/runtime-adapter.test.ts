@@ -146,6 +146,23 @@ describe("LegacyLocalRuntimeAdapter", () => {
     };
   }
 
+  function gatewayProbeMock(overrides: Record<string, unknown> = {}) {
+    return {
+      probeGatewayHealth: vi.fn(async () => true),
+      probeGatewayAuthentication: vi.fn(async () => "ok" as const),
+      inspectGatewayListener: vi.fn(async () => ({ status: "match" as const })),
+      parseGatewayListenPort: (endpoint: string) => {
+        try {
+          const port = new URL(endpoint).port;
+          return port ? Number(port) : 80;
+        } catch {
+          return null;
+        }
+      },
+      ...overrides,
+    };
+  }
+
   it("maps home missing to runtime_missing", async () => {
     vi.doMock("../src/main/runtime/hermes-runtime-locator", () =>
       locatorMock({ runtimeFound: false, runtimeValid: false, cliAvailable: false }),
@@ -200,10 +217,7 @@ describe("LegacyLocalRuntimeAdapter", () => {
 
   it("maps full ready when CLI, health, and auth succeed", async () => {
     vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
-    vi.doMock("../src/main/runtime/gateway-probe", () => ({
-      probeGatewayHealth: vi.fn(async () => true),
-      probeGatewayAuthentication: vi.fn(async () => "ok" as const),
-    }));
+    vi.doMock("../src/main/runtime/gateway-probe", () => gatewayProbeMock());
     vi.doMock("../src/main/installer", () => ({
       getHermesVersion: vi.fn(async () => "1.0.0"),
     }));
@@ -214,6 +228,96 @@ describe("LegacyLocalRuntimeAdapter", () => {
     expect(probe.state).toBe("ready");
     expect(probe.authenticated).toBe(true);
     expect(probe.gatewayHealthy).toBe(true);
+    expect(probe.runtimeContextVerified).toBe(true);
+  });
+
+  it("maps listen mismatch to conflict without becoming ready", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
+    vi.doMock("../src/main/runtime/gateway-probe", () =>
+      gatewayProbeMock({
+        inspectGatewayListener: vi.fn(async () => ({
+          status: "mismatch" as const,
+          actualPath: "C:\\Windows\\System32\\python.exe",
+        })),
+      }),
+    );
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("conflict");
+    expect(probe.errorCode).toBe("CONFLICT");
+    expect(probe.runtimeContextVerified).toBe(false);
+  });
+
+  it("maps missing local listener after health to configuration_error", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
+    vi.doMock("../src/main/runtime/gateway-probe", () =>
+      gatewayProbeMock({
+        inspectGatewayListener: vi.fn(async () => ({
+          status: "no_listener" as const,
+        })),
+      }),
+    );
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("configuration_error");
+    expect(probe.state).not.toBe("ready");
+  });
+
+  it("maps listen inspect failure to configuration_error, not ready", async () => {
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
+    vi.doMock("../src/main/runtime/gateway-probe", () =>
+      gatewayProbeMock({
+        inspectGatewayListener: vi.fn(async () => ({
+          status: "inspect_failed" as const,
+          reason: "access denied",
+        })),
+      }),
+    );
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    const { LegacyLocalRuntimeAdapter } = await import(
+      "../src/main/runtime/legacy-local-runtime-adapter"
+    );
+    const probe = await new LegacyLocalRuntimeAdapter().probe();
+    expect(probe.state).toBe("configuration_error");
+    expect(probe.errorMessage).toContain("access denied");
+  });
+
+  it("rejects %LOCALAPPDATA%\\hermes as a managed home even when listen matches", async () => {
+    const localAppData = "C:\\Users\\test\\AppData\\Local";
+    const previous = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = localAppData;
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () =>
+      locatorMock({
+        homePath: `${localAppData}\\hermes`,
+      }),
+    );
+    vi.doMock("../src/main/runtime/gateway-probe", () => gatewayProbeMock());
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    try {
+      const { LegacyLocalRuntimeAdapter } = await import(
+        "../src/main/runtime/legacy-local-runtime-adapter"
+      );
+      const probe = await new LegacyLocalRuntimeAdapter().probe();
+      expect(probe.state).toBe("configuration_error");
+      expect(probe.runtimeContextVerified).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previous;
+    }
   });
 
   it("restart returns MANAGED_RUNTIME_RESTART_REQUIRED", async () => {

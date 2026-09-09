@@ -4,6 +4,20 @@ import type { HermesControlOwner } from "../../../../shared/runtime/control-owne
 import ConnectionErrorDetails from "./ConnectionErrorDetails";
 import "./connection-error.css";
 
+/** Production default contract. Self-Install UI is unreachable under this id. */
+const MANAGED_RUNTIME_CONTRACT = "managed-local-v1";
+
+function isEnterpriseManagedOwner(owner: HermesControlOwner | undefined): boolean {
+  return owner === "salt" || owner === "opsi";
+}
+
+function isSelfInstallUnreachable(owner: HermesControlOwner | undefined): boolean {
+  return (
+    MANAGED_RUNTIME_CONTRACT === "managed-local-v1" ||
+    isEnterpriseManagedOwner(owner)
+  );
+}
+
 interface ConnectionErrorScreenProps {
   status: HermesRuntimeProbe | null;
   error: string | null;
@@ -26,7 +40,7 @@ function ConnectionErrorScreen({
   onQuit,
 }: ConnectionErrorScreenProps): React.JSX.Element {
   const [busy, setBusy] = useState(false);
-  const [owner, setOwner] = useState<HermesControlOwner>("direct");
+  const [owner, setOwner] = useState<HermesControlOwner | undefined>(undefined);
 
   useEffect(() => {
     void window.hermesAPI.getControlOwner().then((snapshot) => {
@@ -43,7 +57,8 @@ function ConnectionErrorScreen({
     }
   }
 
-  const managedMode = owner === "salt" || owner === "opsi";
+  const managedMode = isEnterpriseManagedOwner(owner);
+  const selfInstallUnreachable = isSelfInstallUnreachable(owner);
 
   return (
     <div className="connection-error">
@@ -58,7 +73,7 @@ function ConnectionErrorScreen({
             ? owner === "opsi"
               ? "Managed by organization (OPSI). Hermes install, update, and Gateway lifecycle are handled by endpoint management. Retry after recovery completes."
               : "Managed by organization. Hermes install, update, and Gateway lifecycle are handled by Salt. Retry after Salt finishes installing or recovering the agent."
-            : "SMC-Copilot needs a local Hermes Agent runtime and a healthy Gateway. Install or configure Hermes separately, then reconnect."}
+            : "SMC-Copilot needs a healthy local Hermes Agent Gateway. Retry after the managed runtime recovers."}
         </p>
         <ConnectionErrorDetails status={status} error={error} />
         <div className="connection-error-actions">
@@ -70,7 +85,7 @@ function ConnectionErrorScreen({
           >
             {connecting || busy ? "Connecting…" : "Retry"}
           </button>
-          {!managedMode && (
+          {!selfInstallUnreachable && (
             <button
               type="button"
               disabled={busy}

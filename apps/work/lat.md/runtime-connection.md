@@ -14,7 +14,9 @@ Resolution priority: Work `runtime.json`, enterprise descriptor, machine `HERMES
 
 ## Path resolution
 
-[[src/main/runtime/hermes-runtime-paths.ts]] re-exports runtime getters and legacy compatibility helpers. New code must call `getHermesHome()`, `getHermesCliPath()`, and `getGatewayBaseUrl()` instead of deriving repo/venv/python paths.
+[[src/main/runtime/hermes-runtime-paths.ts]] keeps a live `HERMES_HOME` synced from `getHermesHome()`. Self-Install exports are gone. Use `getHermesHome()`, `getHermesCliPath()`, and `getGatewayBaseUrl()` instead of joining `hermes-agent` or `venv`.
+
+Former Python/venv path helpers (`HERMES_PYTHON`, `hermesCliArgs`) are not production exports.
 
 ## CLI invocation
 
@@ -36,7 +38,9 @@ Release writes `resources/work-build-info.json` (`smc.work.build.v1`) with versi
 
 ## Gateway probe
 
-[[src/main/runtime/gateway-probe.ts]] performs `GET /health` and authenticated `GET /v1/models`. Authentication success is determined by Gateway HTTP responses, not by reading `API_SERVER_KEY` alone.
+[[src/main/runtime/gateway-probe.ts]] performs `GET /health` and authenticated `GET /v1/models`. On Windows, READY also requires listen inspect of the managed `hermes.exe`.
+
+Inspect failure or a foreign owning process is not READY (UNAVAILABLE / `configuration_error` / CONFLICT) and never kills the process.
 
 ## Startup
 
@@ -49,6 +53,8 @@ App splash checks Portal Auth, then connects Hermes before main UI, or shows Con
 ## Direct Hermes Mode
 
 Default Work local mode probes Gateway at `runtimeConfig.gateway.baseUrl` and never spawns or kills Gateway processes. IPC `start-gateway` / `stop-gateway` / `restart-gateway` refuse local lifecycle changes with a managed-runtime message.
+
+Under production contract `managed-local-v1` (including `controlOwner=direct`), Settings and Connection Error cannot open Install Hermes / Choose Hermes directory / Create venv. Retry is probe-only.
 
 ## Runtime Service Adapter
 
@@ -85,6 +91,10 @@ Covered by `apps/work/tests/enterprise-opsi-mode.test.ts`.
 ## OPSI owner / lifecycle
 
 `owner=opsi` denies install, update, repair, start, stop, and restart. Discovery, CLI, Gateway health/auth, and Chat stay on [[src/main/runtime/runtime-manager.ts]]. Local IPC lifecycle handlers refuse with a managed message and must not call `RuntimeManagementBackend.startGateway()`.
+
+## CI guards
+
+`npm run guard` rejects local Gateway spawn in production Main and Hermes Python/source Self-Install literals in Main/scripts. Test fixtures may keep historical strings. The spawn scan covers `src/main`, not only `register.ts`.
 
 ## Portal Auth Login
 

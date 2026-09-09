@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { hasLocalDashboardWebDist } from "../src/main/dashboard-web-dist";
+import {
+  ensureLocalDashboardWebDist,
+  hasLocalDashboardWebDist,
+} from "../src/main/dashboard-web-dist";
 
 describe("local dashboard web dist", () => {
-  // @lat: [[main-process#Local dashboard web dist]]
-  it("reports whether hermes_cli/web_dist/index.html exists without throwing", () => {
-    expect(typeof hasLocalDashboardWebDist()).toBe("boolean");
+  it("does not treat a local hermes_cli/web_dist as a Work-owned build", () => {
+    expect(hasLocalDashboardWebDist()).toBe(false);
+  });
+
+  it("does not install or build a local dashboard web workspace", async () => {
+    await expect(ensureLocalDashboardWebDist()).resolves.toBe(false);
   });
 });

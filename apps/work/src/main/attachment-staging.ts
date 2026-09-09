@@ -15,7 +15,9 @@ import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
  * on session resume.  Per-session subdirs are cleaned up when the
  * session is deleted.
  */
-const STAGING_ROOT = join(HERMES_HOME, "desktop-staging");
+function stagingRoot(): string {
+  return join(HERMES_HOME, "desktop-staging");
+}
 
 function sanitizeSegment(value: string, fallback: string): string {
   // Strip path separators, null bytes, and any other dodgy chars; collapse
@@ -41,7 +43,7 @@ function uniquePath(dir: string, filename: string): string {
     candidate = join(dir, `${stem}_${i}${ext}`);
     if (!existsSync(candidate)) return candidate;
   }
-  // Astronomically unlikely fallback ‚Ä?append a timestamp.
+  // Astronomically unlikely fallback ù?append a timestamp.
   return join(dir, `${stem}_${Date.now()}${ext}`);
 }
 
@@ -56,7 +58,7 @@ export function stageAttachment(
   base64Bytes: string,
 ): string {
   const sessionSegment = sanitizeSegment(sessionId || "default", "default");
-  const dir = join(STAGING_ROOT, sessionSegment);
+  const dir = join(stagingRoot(), sessionSegment);
   mkdirSync(dir, { recursive: true });
   const target = uniquePath(dir, filename);
   writeFileSync(target, Buffer.from(base64Bytes, "base64"));
@@ -71,7 +73,7 @@ export function clearStagedAttachments(sessionId: string): void {
   if (!sessionId) return;
   const sessionSegment = sanitizeSegment(sessionId, "");
   if (!sessionSegment) return;
-  const dir = join(STAGING_ROOT, sessionSegment);
+  const dir = join(stagingRoot(), sessionSegment);
   if (existsSync(dir)) {
     try {
       rmSync(dir, { recursive: true, force: true });

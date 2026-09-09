@@ -9,11 +9,14 @@ import type {
   HermesRuntimeProbe,
   HermesRuntimeState,
 } from "../../shared/runtime/runtime-contract";
+import { resolve } from "path";
 import { getHermesVersion } from "../installer";
 import {
+  inspectGatewayListener,
   probeGatewayAuthentication,
   probeGatewayHealth,
 } from "./gateway-probe";
+import { getHermesCliPath } from "./hermes-runtime-config";
 import {
   RUNTIME_ERROR_CODES,
   runtimeErrorMessage,
@@ -38,7 +41,7 @@ function resultFromProbe(
 
 function fail(
   state: HermesRuntimeState,
-  code: RuntimeErrorCode,
+  code: RuntimeErrorCode | "CONFLICT",
   base: Omit<
     HermesRuntimeProbe,
     "state" | "errorCode" | "errorMessage" | "probedAt"
@@ -49,9 +52,20 @@ function fail(
     ...base,
     state,
     errorCode: code,
-    errorMessage: message ?? runtimeErrorMessage(code),
+    errorMessage:
+      message ??
+      (code === "CONFLICT"
+        ? "The process listening on the configured Gateway port is not the managed Hermes CLI."
+        : runtimeErrorMessage(code)),
     probedAt: Date.now(),
+    runtimeContextVerified: false,
   };
+}
+
+function isForbiddenSelfInstallHome(homePath: string | undefined): boolean {
+  const local = process.env.LOCALAPPDATA?.trim();
+  if (!local || !homePath?.trim()) return false;
+  return resolve(homePath).toLowerCase() === resolve(local, "hermes").toLowerCase();
 }
 
 async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
@@ -124,12 +138,59 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
     );
   }
 
-  return {
+  const authenticated = {
     ...withStatus,
     authenticated: true,
-    state: "ready",
-    probedAt: Date.now(),
   };
+
+  if (isForbiddenSelfInstallHome(loc.homePath)) {
+    return fail(
+      "configuration_error",
+      RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
+      authenticated,
+      "Hermes home must not be the per-user AppData hermes directory.",
+    );
+  }
+
+  const listen = await inspectGatewayListener(
+    loc.endpoint,
+    getHermesCliPath() || loc.executablePath,
+  );
+  switch (listen.status) {
+    case "not_required":
+    case "match":
+      return {
+        ...authenticated,
+        state: "ready",
+        probedAt: Date.now(),
+        runtimeContextVerified: listen.status === "match",
+      };
+    case "mismatch":
+      return fail(
+        "conflict",
+        "CONFLICT",
+        authenticated,
+        "The process listening on the configured Gateway port is not the managed Hermes CLI. Do not stop that process; repair belongs to the endpoint management service.",
+      );
+    case "no_listener":
+      return fail(
+        "configuration_error",
+        RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
+        authenticated,
+        "Gateway health succeeded but no local listener was found on the configured port.",
+      );
+    case "inspect_failed":
+      return fail(
+        "configuration_error",
+        RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
+        authenticated,
+        `Gateway listen inspect failed: ${listen.reason}`,
+      );
+    default: {
+      const _exhaustive: never = listen;
+      return _exhaustive;
+    }
+  }
 }
 
 export class LegacyLocalRuntimeAdapter implements HermesRuntimeAdapter {
