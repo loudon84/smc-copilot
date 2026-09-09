@@ -156,3 +156,128 @@ export function hasSkillRunAttachmentBundle(): boolean {
   const dir = existsSync(fromWork) ? fromWork : fromRepo;
   return isCompleteSkillRunBundleDir(dir);
 }
+
+const STREAMING_DELTA_FIXTURES = [
+  "fixtures/run-event-assistant-delta.json",
+  "fixtures/sse-assistant-delta-replay.json",
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function resolveLocalJsonPointer(
+  root: Record<string, unknown>,
+  ref: string,
+): unknown {
+  if (!ref.startsWith("#/")) {
+    return null;
+  }
+  let current: unknown = root;
+  for (const rawPart of ref.slice(2).split("/")) {
+    const part = rawPart.replace(/~1/g, "/").replace(/~0/g, "~");
+    if (!isRecord(current) || !Object.prototype.hasOwnProperty.call(current, part)) {
+      return null;
+    }
+    current = current[part];
+  }
+  return current;
+}
+
+function listedSha256Paths(dir: string): Set<string> | null {
+  const sumsFile = join(dir, "SHA256SUMS");
+  if (!existsSync(sumsFile)) {
+    return null;
+  }
+  let sumsBytes: Buffer;
+  try {
+    sumsBytes = readFileSync(sumsFile);
+  } catch {
+    return null;
+  }
+  const entries = parseSha256Sums(sumsBytes.toString("utf8"));
+  if (!entries) {
+    return null;
+  }
+  return new Set(entries.map((entry) => entry.relativePath));
+}
+
+function hasStreamingDeltaContractShape(dir: string): boolean {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(dir, "manifest.json"), "utf8"),
+    ) as unknown;
+    if (!isRecord(manifest) || !isRecord(manifest.capabilities)) {
+      return false;
+    }
+    if (manifest.capabilities.streamingDelta !== "supported") {
+      return false;
+    }
+    if (manifest.capabilities.assistantMessageSnapshot !== "supported") {
+      return false;
+    }
+
+    const listed = listedSha256Paths(dir);
+    if (!listed) {
+      return false;
+    }
+    for (const fixture of STREAMING_DELTA_FIXTURES) {
+      if (!listed.has(fixture)) {
+        return false;
+      }
+    }
+
+    const schema = JSON.parse(
+      readFileSync(join(dir, "events/run-event.schema.json"), "utf8"),
+    ) as unknown;
+    if (!isRecord(schema) || !Array.isArray(schema.oneOf)) {
+      return false;
+    }
+
+    let deltaBranch: Record<string, unknown> | null = null;
+    for (const branch of schema.oneOf) {
+      if (!isRecord(branch) || !isRecord(branch.properties)) {
+        continue;
+      }
+      const eventType = branch.properties.event_type;
+      if (isRecord(eventType) && eventType.const === "assistant.delta") {
+        deltaBranch = branch;
+        break;
+      }
+    }
+    if (!deltaBranch || !isRecord(deltaBranch.properties)) {
+      return false;
+    }
+
+    const payload = deltaBranch.properties.payload;
+    if (!isRecord(payload) || typeof payload.$ref !== "string") {
+      return false;
+    }
+    const resolved = resolveLocalJsonPointer(schema, payload.$ref);
+    if (!isRecord(resolved) || !Array.isArray(resolved.required)) {
+      return false;
+    }
+    const required = new Set(
+      resolved.required.filter((item): item is string => typeof item === "string"),
+    );
+    return (
+      required.has("message_id") &&
+      required.has("delta_seq") &&
+      required.has("delta")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Streaming delta mapping is v1.5.0-only. Do not use first-complete P0 finder:
+ * a checksum-complete v1.2.1/v1.3/v1.4 bundle must still open Catalog/start
+ * without implying delta eligibility.
+ */
+export function hasSkillRunStreamingDeltaBundle(dir?: string): boolean {
+  const fromWork = join(process.cwd(), "../../contracts/skill-run/v1.5.0");
+  const fromRepo = join(process.cwd(), "contracts/skill-run/v1.5.0");
+  const resolved = dir ?? (existsSync(fromWork) ? fromWork : fromRepo);
+  return isCompleteSkillRunBundleDir(resolved) && hasStreamingDeltaContractShape(resolved);
+}

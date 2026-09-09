@@ -136,11 +136,21 @@ Renderer live IPC still sends a bounded SkillRunProjection (cap 32, `eventId` de
 
 Sidebar live-sync is cache-only: a sanitized `{sessionId, reason}` event triggers `listCachedSessions` plus the loaded window, not `syncSessionCache()`. There is no second history IPC channel.
 
-Streaming token/activity delta remains RM-13 / RM-14 BACKLOG. This Plan does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
+Streaming token/activity delta mapping remains RM-14 BACKLOG. RM-13 imported `SKILL-RUN-CONTRACT` v1.5.0 as contract-only; Work still does not parse/project/persist/IPC/render `assistant.delta`. This Plan does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
 
 Sidebar live-sync is cache-only: a sanitized `{sessionId, reason}` event triggers `listCachedSessions` plus the loaded window, not `syncSessionCache()`. There is no second history IPC channel.
 
-Streaming token/activity delta remains RM-13 / RM-14 BACKLOG. This Plan does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
+Streaming token/activity delta mapping remains RM-14 BACKLOG. RM-13 imported `SKILL-RUN-CONTRACT` v1.5.0 as contract-only; Work still does not parse/project/persist/IPC/render `assistant.delta`. This Plan does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
+
+## M6g Streaming delta contract import
+
+Work imported immutable `SKILL-RUN-CONTRACT` v1.5.0. Tag `skill-run-contract-v1.5.0` pins `3a7fa5ac32017d41f7191b8221c861b93d7e7f32`.
+
+`contracts/skill-run/v1.5.0/consumer-lock.json` records that pin. Provider files stay under LF `SHA256SUMS`. Manifest sets `streamingDelta` and `assistantMessageSnapshot` to `supported`.
+
+[[src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunStreamingDeltaBundle]] returns true only for checksum-complete v1.5.0 that also has a local `assistant.delta` discriminator, payload `required` of `message_id` / `delta_seq` / `delta`, and checksum-listed `fixtures/run-event-assistant-delta.json` plus `fixtures/sse-assistant-delta-replay.json`. Generic P0 `REQUIRED_BUNDLE_PATHS` stays unchanged so v1.2.1 can still open Catalog/start. v1.3 decision and v1.4 attachment helpers stay version-specific.
+
+Work does not parse, project, persist, IPC, or render `assistant.delta`. There is no raw SSE transport and no token/delta UI. Mapping is RM-14.
 
 ## Still Out
 
@@ -153,7 +163,7 @@ The following capabilities remain intentionally outside the current Work slice a
 - Local Chat / Hermes `MessageRow` approve-deny as Skill Run decision
 - Unrestricted JSON Schema / `$ref` / non-string parameter widgets
 - Org recommendation / curated catalog API
-- Streaming / token delta (RM-13 / RM-14)
+- Streaming / token delta mapping (RM-14). RM-13 imported v1.5.0 contract-only and does not consume delta.
 
 ## Cross References
 

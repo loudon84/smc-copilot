@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -17,6 +18,7 @@ import {
 import {
   hasSkillRunApprovalDecisionBundle,
   hasSkillRunAttachmentBundle,
+  hasSkillRunStreamingDeltaBundle,
   isCompleteSkillRunBundleDir,
 } from "./skill-run-consumer-lock";
 
@@ -30,6 +32,7 @@ const IDENTITY_LOCK_DIR = contractsSkillRunDir("v1.0.0");
 const COMPLETE_LOCK_DIR = contractsSkillRunDir("v1.2.1");
 const COMPLETE_LOCK_DIR_V130 = contractsSkillRunDir("v1.3.0");
 const COMPLETE_LOCK_DIR_V140 = contractsSkillRunDir("v1.4.0");
+const COMPLETE_LOCK_DIR_V150 = contractsSkillRunDir("v1.5.0");
 const EXPERT_LOCK = (() => {
   const fromWork = join(
     process.cwd(),
@@ -88,6 +91,33 @@ function writeCompleteFixture(root: string): void {
     sumsLines.push(`${sha256Hex(content)}  ${relativePath}`);
   }
   writeFileSync(join(root, "SHA256SUMS"), `${sumsLines.join("\n")}\n`, "utf8");
+}
+
+function copyBundle(source: string): string {
+  const root = mkdtempSync(join(tmpdir(), "skill-run-bundle-copy-"));
+  tempDirs.push(root);
+  cpSync(source, root, { recursive: true });
+  return root;
+}
+
+function rewriteListedHash(root: string, relativePath: string): void {
+  const content = readFileSync(join(root, relativePath));
+  const digest = createHash("sha256").update(content).digest("hex");
+  const sumsPath = join(root, "SHA256SUMS");
+  const next = readFileSync(sumsPath, "utf8")
+    .split("\n")
+    .map((line) => {
+      if (!line.includes(` ${relativePath}`) && !line.endsWith(relativePath)) {
+        return line;
+      }
+      const match = /^([0-9a-fA-F]{64}) [ *](.+)$/.exec(line);
+      if (!match || match[2].trim() !== relativePath) {
+        return line;
+      }
+      return `${digest}  ${relativePath}`;
+    })
+    .join("\n");
+  writeFileSync(sumsPath, next.endsWith("\n") ? next : `${next}\n`, "utf8");
 }
 
 const tempDirs: string[] = [];
@@ -289,6 +319,14 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
     );
     expect(source).toContain("hasSkillRunAttachmentBundle");
     expect(source).toContain("contracts/skill-run/v1.4.0");
+    const requiredBlock = source.slice(
+      source.indexOf("const REQUIRED_BUNDLE_PATHS"),
+      source.indexOf("] as const;"),
+    );
+    expect(requiredBlock).not.toContain("fixtures/run-event-assistant-delta.json");
+    expect(requiredBlock).not.toContain("fixtures/sse-assistant-delta-replay.json");
+    expect(source).toContain("hasSkillRunStreamingDeltaBundle");
+    expect(source).toContain("contracts/skill-run/v1.5.0");
   });
 
   it("accepts a checksum-valid complete Bundle fixture", () => {
@@ -337,5 +375,149 @@ describe("SKILL-RUN-CONTRACT consumer lock", () => {
       .join("\n");
     writeFileSync(sumsPath, filtered.endsWith("\n") ? filtered : `${filtered}\n`, "utf8");
     expect(isCompleteSkillRunBundleDir(root)).toBe(false);
+  });
+
+  it("opens the v1.5.0 streaming-delta gate only for the published contract shape", () => {
+    const lock = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR_V150, "consumer-lock.json"), "utf8"),
+    ) as {
+      contractName: string;
+      contractVersion: string;
+      tagName: string;
+      tagTargetCommit: string;
+      providerSha256sumsPath: string;
+      sha256sumsPath: string;
+    };
+    const sumsBytes = readFileSync(join(COMPLETE_LOCK_DIR_V150, "SHA256SUMS"));
+    const sums = sumsBytes.toString("utf8");
+    const manifest = JSON.parse(
+      readFileSync(join(COMPLETE_LOCK_DIR_V150, "manifest.json"), "utf8"),
+    ) as { capabilities?: Record<string, unknown> };
+    const schema = JSON.parse(
+      readFileSync(
+        join(COMPLETE_LOCK_DIR_V150, "events/run-event.schema.json"),
+        "utf8",
+      ),
+    ) as {
+      oneOf?: Array<{
+        properties?: { event_type?: { const?: string }; payload?: { $ref?: string } };
+      }>;
+      $defs?: { AssistantDeltaPayloadV15?: { required?: string[] } };
+    };
+    const deltaBranch = schema.oneOf?.find(
+      (branch) => branch.properties?.event_type?.const === "assistant.delta",
+    );
+
+    expect(lock.contractName).toBe("SKILL-RUN-CONTRACT");
+    expect(lock.contractVersion).toBe("1.5.0");
+    expect(lock.tagName).toBe("skill-run-contract-v1.5.0");
+    expect(lock.tagTargetCommit).toBe(
+      "3a7fa5ac32017d41f7191b8221c861b93d7e7f32",
+    );
+    expect(lock.providerSha256sumsPath).toBe(
+      "nodeskclaw-backend/contracts/skill-run/v1.5.0/SHA256SUMS",
+    );
+    expect(lock.sha256sumsPath).toBe("SHA256SUMS");
+    expect(sumsBytes.includes(0x0d)).toBe(false);
+    expect(sums).toContain("fixtures/run-event-assistant-delta.json");
+    expect(sums).toContain("fixtures/sse-assistant-delta-replay.json");
+    expect(manifest.capabilities?.streamingDelta).toBe("supported");
+    expect(manifest.capabilities?.assistantMessageSnapshot).toBe("supported");
+    expect(deltaBranch?.properties?.payload?.$ref).toBe(
+      "#/$defs/AssistantDeltaPayloadV15",
+    );
+    expect(schema.$defs?.AssistantDeltaPayloadV15?.required).toEqual(
+      expect.arrayContaining(["message_id", "delta_seq", "delta"]),
+    );
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V150)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle()).toBe(true);
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(COMPLETE_LOCK_DIR)).toBe(false);
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V130)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(COMPLETE_LOCK_DIR_V130)).toBe(false);
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V140)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(COMPLETE_LOCK_DIR_V140)).toBe(false);
+  });
+
+  it("rejects v1.5 streaming-delta eligibility on tamper, CRLF, shape, fixture and wrong version", () => {
+    const tampered = copyBundle(COMPLETE_LOCK_DIR_V150);
+    writeFileSync(join(tampered, "manifest.json"), '{"tampered":true}', "utf8");
+    expect(isCompleteSkillRunBundleDir(tampered)).toBe(false);
+    expect(hasSkillRunStreamingDeltaBundle(tampered)).toBe(false);
+
+    const missingAsset = copyBundle(COMPLETE_LOCK_DIR_V150);
+    rmSync(join(missingAsset, "manifest.json"), { force: true });
+    expect(isCompleteSkillRunBundleDir(missingAsset)).toBe(false);
+    expect(hasSkillRunStreamingDeltaBundle(missingAsset)).toBe(false);
+
+    const crlf = copyBundle(COMPLETE_LOCK_DIR_V150);
+    const crlfSums = join(crlf, "SHA256SUMS");
+    writeFileSync(
+      crlfSums,
+      readFileSync(crlfSums, "utf8").replace(/\n/g, "\r\n"),
+      "utf8",
+    );
+    expect(isCompleteSkillRunBundleDir(crlf)).toBe(false);
+    expect(hasSkillRunStreamingDeltaBundle(crlf)).toBe(false);
+
+    const missingCapability = copyBundle(COMPLETE_LOCK_DIR_V150);
+    const missingCapabilityManifest = JSON.parse(
+      readFileSync(join(missingCapability, "manifest.json"), "utf8"),
+    ) as { capabilities: Record<string, unknown> };
+    delete missingCapabilityManifest.capabilities.streamingDelta;
+    writeFileSync(
+      join(missingCapability, "manifest.json"),
+      `${JSON.stringify(missingCapabilityManifest, null, 2)}\n`,
+      "utf8",
+    );
+    rewriteListedHash(missingCapability, "manifest.json");
+    expect(isCompleteSkillRunBundleDir(missingCapability)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(missingCapability)).toBe(false);
+
+    const unsupportedCapability = copyBundle(COMPLETE_LOCK_DIR_V150);
+    const unsupportedManifest = JSON.parse(
+      readFileSync(join(unsupportedCapability, "manifest.json"), "utf8"),
+    ) as { capabilities: Record<string, unknown> };
+    unsupportedManifest.capabilities.streamingDelta = "unsupported";
+    writeFileSync(
+      join(unsupportedCapability, "manifest.json"),
+      `${JSON.stringify(unsupportedManifest, null, 2)}\n`,
+      "utf8",
+    );
+    rewriteListedHash(unsupportedCapability, "manifest.json");
+    expect(isCompleteSkillRunBundleDir(unsupportedCapability)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(unsupportedCapability)).toBe(false);
+
+    const missingField = copyBundle(COMPLETE_LOCK_DIR_V150);
+    const schema = JSON.parse(
+      readFileSync(join(missingField, "events/run-event.schema.json"), "utf8"),
+    ) as { $defs: { AssistantDeltaPayloadV15: { required: string[] } } };
+    schema.$defs.AssistantDeltaPayloadV15.required = ["message_id", "delta_seq"];
+    writeFileSync(
+      join(missingField, "events/run-event.schema.json"),
+      `${JSON.stringify(schema)}\n`,
+      "utf8",
+    );
+    rewriteListedHash(missingField, "events/run-event.schema.json");
+    expect(isCompleteSkillRunBundleDir(missingField)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(missingField)).toBe(false);
+
+    const missingFixture = copyBundle(COMPLETE_LOCK_DIR_V150);
+    const sumsPath = join(missingFixture, "SHA256SUMS");
+    const filtered = readFileSync(sumsPath, "utf8")
+      .split("\n")
+      .filter((line) => !line.includes("fixtures/run-event-assistant-delta.json"))
+      .join("\n");
+    writeFileSync(
+      sumsPath,
+      filtered.endsWith("\n") ? filtered : `${filtered}\n`,
+      "utf8",
+    );
+    expect(isCompleteSkillRunBundleDir(missingFixture)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(missingFixture)).toBe(false);
+
+    expect(isCompleteSkillRunBundleDir(COMPLETE_LOCK_DIR_V140)).toBe(true);
+    expect(hasSkillRunStreamingDeltaBundle(COMPLETE_LOCK_DIR_V140)).toBe(false);
+    expect(hasSkillRunStreamingDeltaBundle()).toBe(true);
   });
 });
