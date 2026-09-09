@@ -7,6 +7,7 @@ import "./skill-run.css";
 export interface SkillSelectionBarProps {
   selection: SkillCatalogToolItem;
   onClear: () => void;
+  locked?: boolean;
   extraParameterValues?: Record<string, string>;
   onExtraParametersChange?: (values: Record<string, string>) => void;
 }
@@ -14,6 +15,7 @@ export interface SkillSelectionBarProps {
 export const SkillSelectionBar: FC<SkillSelectionBarProps> = ({
   selection,
   onClear,
+  locked = false,
   extraParameterValues = {},
   onExtraParametersChange,
 }) => {
@@ -41,7 +43,7 @@ export const SkillSelectionBar: FC<SkillSelectionBarProps> = ({
             </span>
           )}
         </div>
-        <button
+        {!locked && <button
           type="button"
           className="skill-selection-clear-btn"
           onClick={onClear}
@@ -49,7 +51,7 @@ export const SkillSelectionBar: FC<SkillSelectionBarProps> = ({
           aria-label={t("skillRun.clearSelection") || "Change skill"}
         >
           <X size={14} />
-        </button>
+        </button>}
       </div>
       {extraFields.length > 0 && (
         <div className="skill-catalog-search-row">

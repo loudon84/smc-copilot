@@ -25,6 +25,9 @@ export function SkillRunTranscriptCard({
   const showDecision =
     msg.phase === "waiting-approval" && Boolean(approval?.approvalId);
   const resolvedSessionId = sessionId?.trim() || "";
+  const resultUnavailable = msg.errorCode === "RESULT_RETRIEVAL_FAILED";
+  const completedWithoutText =
+    msg.phase === "succeeded" && !msg.resultText && !msg.errorMessage;
 
   const handleCancel = (): void => {
     if (!resolvedSessionId) return;
@@ -92,7 +95,14 @@ export function SkillRunTranscriptCard({
         <pre className="skill-run-transcript-result">{msg.resultText}</pre>
       ) : null}
       {msg.errorMessage ? (
-        <p className="skill-run-transcript-error">{msg.errorMessage}</p>
+        <p className="skill-run-transcript-error">
+          {resultUnavailable ? t("skillRun.resultUnavailable") : msg.errorMessage}
+        </p>
+      ) : null}
+      {completedWithoutText ? (
+        <p className="skill-run-transcript-no-text">
+          {t("skillRun.completedWithoutText")}
+        </p>
       ) : null}
       {msg.auditComplete === false ? (
         <p className="skill-run-transcript-incomplete">
@@ -121,7 +131,7 @@ export function SkillRunTranscriptCard({
           className="skill-run-transcript-artifact"
           onClick={() => onPreviewFile?.(fileId)}
         >
-          {t("skillRun.resultReady")}
+          {t("skillRun.outputFile")}
         </button>
       ))}
     </div>

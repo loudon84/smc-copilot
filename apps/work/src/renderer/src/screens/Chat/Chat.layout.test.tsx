@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+// @vitest-environment jsdom
+import { cleanup, render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
   SESSION_FILES_VISIBLE_KEY,
@@ -8,8 +9,8 @@ import {
   useSessionFilesVisible,
 } from "./useChatPanelLayout";
 
-function SessionFilesHarness(): React.JSX.Element {
-  const [visible, setVisible] = useSessionFilesVisible();
+function SessionFilesHarness({ sessionId }: { sessionId: string }): React.JSX.Element {
+  const [visible, setVisible] = useSessionFilesVisible(sessionId);
   return (
     <div>
       <span data-testid="visible">{String(visible)}</span>
@@ -66,22 +67,27 @@ describe("Chat panel layout hooks", () => {
   });
 
   afterEach(() => {
+    cleanup();
     localStorage.removeItem(SESSION_FILES_VISIBLE_KEY);
     localStorage.removeItem(PROMPT_NAVIGATOR_OPEN_KEY);
   });
 
-  it("defaults Session Files to visible", () => {
-    render(<SessionFilesHarness />);
-    expect(screen.getByTestId("visible").textContent).toBe("true");
-  });
-
-  it("persists hide preference and restores floating-show path", () => {
-    render(<SessionFilesHarness />);
-    fireEvent.click(screen.getByText("hide"));
+  it("keeps Session Files hidden by default and resets it for a new session", () => {
+    const { rerender } = render(<SessionFilesHarness sessionId="session-a" />);
     expect(screen.getByTestId("visible").textContent).toBe("false");
-    expect(localStorage.getItem(SESSION_FILES_VISIBLE_KEY)).toBe("false");
     fireEvent.click(screen.getByText("show"));
     expect(screen.getByTestId("visible").textContent).toBe("true");
+    rerender(<SessionFilesHarness sessionId="session-b" />);
+    expect(screen.getByTestId("visible").textContent).toBe("false");
+  });
+
+  it("uses explicit show and hide actions without a cross-session preference", () => {
+    render(<SessionFilesHarness sessionId="session-a" />);
+    fireEvent.click(screen.getByText("show"));
+    expect(screen.getByTestId("visible").textContent).toBe("true");
+    fireEvent.click(screen.getByText("hide"));
+    expect(screen.getByTestId("visible").textContent).toBe("false");
+    expect(localStorage.getItem(SESSION_FILES_VISIBLE_KEY)).toBeNull();
   });
 
   // @lat: [[prompt-navigator-tests#Prompt Navigator tests#Open preference persistence]]

@@ -99,7 +99,7 @@ vi.mock("../files/upsert-skill-run-remote-artifact", () => ({
 
 vi.mock("./skill-run-session-mode-store", () => ({
   getSkillRunSessionMode: vi.fn(async () => null),
-  setSkillRunSessionMode: vi.fn(),
+  lockSkillRunSessionMode: vi.fn(() => ({ status: "locked" })),
 }));
 
 vi.mock("./skill-run-service", () => ({

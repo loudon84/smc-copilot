@@ -53,8 +53,12 @@ function createMockGateway(
     getRunSnapshot: vi.fn().mockResolvedValue({
       runId: "run-xyz-999",
       status: "succeeded",
-      resultText: "Calculation completed: 42",
       artifacts: [{ id: "art-1", file_name: "output.txt" }],
+    }),
+    getRunResult: vi.fn().mockResolvedValue({
+      runId: "run-xyz-999",
+      status: "succeeded",
+      text: null,
     }),
     cancelRun: vi.fn().mockResolvedValue(undefined),
     listRunArtifacts: vi.fn().mockResolvedValue([
@@ -110,6 +114,30 @@ const skillFirstOptions = {
 };
 
 describe("skill-run-service", () => {
+  it("rejects a conflicting accepted session tool before calling the Provider", async () => {
+    const gateway = createMockGateway();
+    const service = trackService(createSkillRunService({
+      gatewayClient: gateway,
+      ...skillFirstOptions,
+      lockSessionTool: () => ({ status: "conflict", existing: {
+        executionMode: "skill-run" as const,
+        toolName: "writer.article",
+        toolTitle: "Writer",
+        updatedAt: "2026-09-09T00:00:00.000Z",
+      } }),
+    }));
+
+    const result = await service.start({
+      toolName: "calculator",
+      prompt: "2+2",
+      clientRequestId: "req-locked-tool",
+      sessionId: "session-locked-tool",
+      profileId: "default",
+    });
+
+    expect(result).toMatchObject({ accepted: false, errorCode: "SKILL_SESSION_TOOL_LOCKED" });
+    expect(gateway.callSkill).not.toHaveBeenCalled();
+  });
   it("returns contract-unsupported when no consumer lock is present", async () => {
     const gateway = createSkillRunGatewayClient({ hasConsumerLock: false });
     const service = trackService(createSkillRunService({ gatewayClient: gateway }));
@@ -542,8 +570,12 @@ describe("skill-run-service", () => {
       getRunSnapshot: vi.fn().mockResolvedValue({
         runId: "run-hang-1",
         status: "succeeded",
-        resultText: "poll terminal",
         artifacts: [],
+      }),
+      getRunResult: vi.fn().mockResolvedValue({
+        runId: "run-hang-1",
+        status: "succeeded",
+        text: "poll terminal",
       }),
       openEventStream: vi.fn().mockResolvedValue({
         ok: true,

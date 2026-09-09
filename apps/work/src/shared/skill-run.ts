@@ -240,7 +240,6 @@ export const SKILL_RUN_IPC_CHANNELS = {
   REHYDRATE_SESSION: "skill-run:rehydrate-session",
   RETRY_ARTIFACT_DISCOVERY: "skill-run:retry-artifact-discovery",
   GET_SESSION_MODE: "skill-run:get-session-mode",
-  SET_SESSION_MODE: "skill-run:set-session-mode",
   SET_CATALOG_FAVORITE: "skill-run:set-catalog-favorite",
   DECIDE_APPROVAL: "skill-run:decide-approval",
   ON_PROJECTION_CHANGED: "skill-run:on-projection-changed",
@@ -264,8 +263,5 @@ export interface SkillRunApi {
   retryArtifactDiscovery(input: SkillRunRetryArtifactDiscoveryInput): Promise<SkillRunProjection | null>;
   decideApproval(input: SkillRunDecideApprovalInput): Promise<SkillRunDecideApprovalResult>;
   getSessionMode(sessionId: string): Promise<SkillRunSessionModeSnapshot | null>;
-  setSessionMode(
-    input: SkillRunSessionModeSnapshot & { sessionId: string },
-  ): Promise<void>;
   onProjectionChanged(listener: (projection: SkillRunProjection) => void): () => void;
 }

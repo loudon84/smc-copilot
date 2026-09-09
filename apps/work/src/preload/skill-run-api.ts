@@ -15,7 +15,6 @@ import {
   type SkillRunRetryArtifactDiscoveryInput,
   type SkillRunDecideApprovalInput,
   type SkillRunDecideApprovalResult,
-  type SkillRunSessionModeSnapshot,
   type SkillRunSetCatalogFavoriteInput,
   type SkillRunStartInput,
   type SkillRunStartResult,
@@ -53,10 +52,6 @@ export function createSkillRunApi(): SkillRunApi {
       ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL, input),
     getSessionMode: (sessionId: string) =>
       ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE, sessionId),
-    setSessionMode: (
-      input: SkillRunSessionModeSnapshot & { sessionId: string },
-    ): Promise<void> =>
-      ipcRenderer.invoke(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE, input),
     onProjectionChanged: (
       listener: (projection: SkillRunProjection) => void,
     ): (() => void) => {

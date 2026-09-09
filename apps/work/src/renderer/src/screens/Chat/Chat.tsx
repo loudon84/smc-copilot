@@ -410,7 +410,7 @@ function Chat({
   // Default false so the panel doesn't open automatically and interfere with scrolling
   const [worktreeVisible, setWorktreeVisible] = useState<boolean>(false);
   const [sessionFilesVisible, setSessionFilesVisible] =
-    useSessionFilesVisible();
+    useSessionFilesVisible(hermesSessionId || initialSessionId || "");
   const [promptNavigatorOpen, setPromptNavigatorOpen] =
     usePromptNavigatorOpen();
   const chatMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -432,9 +432,10 @@ function Chat({
   const handleOpenManagedPreview = useCallback(
     (fileId: string) => {
       closeDocumentPreview();
+      setSessionFilesVisible(true);
       void openPreview(fileId, profile);
     },
-    [closeDocumentPreview, openPreview, profile],
+    [closeDocumentPreview, openPreview, profile, setSessionFilesVisible],
   );
 
   const handleOpenDocumentPreview = useCallback(
@@ -511,6 +512,7 @@ function Chat({
   /** Client request ids submitted from this Chat instance — live transcript only. */
   const liveExpertTranscriptIdsRef = useRef(new Set<string>());
   const [selectedSkill, setSelectedSkill] = useState<SkillCatalogToolItem | null>(null);
+  const [skillSessionLocked, setSkillSessionLocked] = useState(false);
   const [extraParameterValues, setExtraParameterValues] = useState<
     Record<string, string>
   >({});
@@ -521,6 +523,8 @@ function Chat({
 
   useEffect(() => {
     const sessionId = hermesSessionId || initialSessionId;
+    setSkillSessionLocked(false);
+    setSelectedSkill(null);
     if (!sessionId || !isSkillRunMode || !window.hermesAPI.skillRun?.getSessionMode) {
       return;
     }
@@ -530,6 +534,7 @@ function Chat({
       setSelectedSkill(
         resolveRestoredSkillSelection(mode, catalog.tools),
       );
+      setSkillSessionLocked(true);
     });
   }, [hermesSessionId, initialSessionId, isSkillRunMode]);
 
@@ -1387,15 +1392,7 @@ function Chat({
           toast.error(result.message || "Skill run rejected");
           return;
         }
-        const title =
-          request.toolTitle || selectedSkill?.title || request.toolName;
-        await window.hermesAPI.skillRun.setSessionMode({
-          sessionId,
-          executionMode: "skill-run",
-          toolName: request.toolName,
-          toolTitle: title,
-          updatedAt: new Date().toISOString(),
-        });
+        setSkillSessionLocked(true);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Skill request failed";
         setMessages((prev) =>
@@ -1847,16 +1844,6 @@ function Chat({
               <SkillCatalogPanel
                 onSelectSkill={(tool) => {
                   setSelectedSkill(tool);
-                  const sessionId = hermesSessionId || initialSessionId;
-                  if (sessionId) {
-                    void window.hermesAPI.skillRun.setSessionMode({
-                      sessionId,
-                      executionMode: "skill-run",
-                      toolName: tool.toolName,
-                      toolTitle: tool.title,
-                      updatedAt: new Date().toISOString(),
-                    });
-                  }
                 }}
               />
             ) : messages.length === 0 ? (
@@ -1979,9 +1966,12 @@ function Chat({
         {isSkillRunMode && selectedSkill && (
           <SkillSelectionBar
             selection={selectedSkill}
+            locked={skillSessionLocked}
             extraParameterValues={extraParameterValues}
             onExtraParametersChange={setExtraParameterValues}
-            onClear={() => setSelectedSkill(null)}
+            onClear={() => {
+              if (!skillSessionLocked) setSelectedSkill(null);
+            }}
           />
         )}
         {!isSkillRunMode && expertProjections.filter((p) => p.taskId == null).length > 0 ? (

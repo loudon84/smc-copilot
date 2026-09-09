@@ -154,6 +154,18 @@ When [[src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunStreamingDeltaBu
 
 Missing fields, helper false, and unenumerated types stay `rawUnknown`. There is no new IPC, activity kind, sidecar activity row, or raw Provider event.
 
+## M6j Session UX and terminal Result closure
+
+M6j makes Session Files user-intent scoped, makes the accepted Skill identity a Main-only lock, and converges successful terminal status with the v1.5 Result endpoint.
+
+[[src/renderer/src/screens/Chat/useChatPanelLayout.ts#useSessionFilesVisible]] starts hidden and resets with the Chat session identity. Only the existing show action and explicit file-preview path in [[src/renderer/src/screens/Chat/Chat.tsx#Chat]] reveal Session Files; run, artifact, and session state changes cannot reopen it. [[src/renderer/src/modules/skill-run/SkillSelectionBar.tsx#SkillSelectionBar]] keeps a locked Skill readable but removes its clear control.
+
+The Renderer no longer writes session mode. [[src/main/skill-run/skill-run-session-mode-store.ts#lockSkillRunSessionMode]] atomically records the first validated, locally accepted tool per session, accepts an idempotent same-tool request, and rejects a different tool before `tools/call`. Legacy rows are only promoted when the existing sidecar has a non-null `providerRunId`; provisional selections alone remain unlocked. Read-only restore and session deletion remain on the existing ownership path.
+
+[[src/main/skill-run/skill-run-gateway-client.ts#createSkillRunGatewayClient]] obtains lifecycle status from Public Run and report text only from the authorized same-origin v1.5 `/api/v1/runs/{run_id}/result` endpoint. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] funnels poll-first and SSE-first successes through one in-flight resolver: a non-empty Result text wins, empty data never erases live text, and finalization, telemetry, artifact discovery, and abort occur once. Result retrieval failure remains Provider `succeeded`, preserves usable artifacts/text, and records only `RESULT_RETRIEVAL_FAILED` with a sanitized message.
+
+[[src/main/skill-run/skill-run-continuation.ts#rehydrateSkillRunContinuationsForSession]] retries only succeeded sidecar rows with `RESULT_RETRIEVAL_FAILED` and a `providerRunId`, using existing service rehydrate without start or SSE reopening. [[src/renderer/src/modules/skill-run/SkillRunTranscriptCard.tsx#SkillRunTranscriptCard]] distinguishes report text, no-text success, temporarily unavailable report, and an output-file preview action; it does not claim every artifact is a textual result.
+
 ## Still Out
 
 The following capabilities remain intentionally outside the current Work slice and require their own Provider Owner delivery or PRD.

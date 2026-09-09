@@ -113,6 +113,25 @@ describe("skill-run-gateway-client lock and discriminator gates", () => {
 });
 
 describe("skill-run-gateway-client contract wire", () => {
+  it("gets terminal report text only from the v1.5 result endpoint", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const urlStr = String(url);
+      if (urlStr.endsWith("/api/v1/runs/run-result-1/result")) {
+        return new Response(
+          JSON.stringify({ run_id: "run-result-1", status: "succeeded", text: "final report" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${urlStr}`);
+    });
+    const client = createClient(fetchImpl as unknown as typeof fetch);
+    await expect(client.getRunResult!("run-result-1")).resolves.toEqual({
+      runId: "run-result-1",
+      status: "succeeded",
+      text: "final report",
+    });
+  });
+
   it("lists catalog via POST /api/v1/mcp tools/list and keeps only capabilityKind=skill", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as { method?: string };

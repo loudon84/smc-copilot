@@ -64,6 +64,27 @@ describe("SkillSelectionBar", () => {
     expect(screen.getByText("skillRun.skillUnavailable")).toBeTruthy();
   });
 
+  it("keeps an accepted skill readable but removes the clear control", () => {
+    render(
+      <SkillSelectionBar
+        selection={{
+          toolName: "writer.article",
+          title: "Writer",
+          interactionMode: "chat",
+          promptField: "prompt",
+          supportsAttachments: false,
+          callability: "callable",
+          invocationMode: "prompt-first",
+        }}
+        locked
+        onClear={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Writer")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "skillRun.clearSelection" })).toBeNull();
+  });
+
   it("renders extra string inputs for limited-parameter-form", () => {
     const onExtraParametersChange = vi.fn();
     render(

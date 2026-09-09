@@ -14,6 +14,7 @@ import {
   persistSessionContinuation,
 } from "../session-continuation-store";
 import { getSkillRunService } from "./skill-run-ipc";
+import { listSkillRunTranscriptForSession } from "./skill-run-transcript-store";
 
 function loadRawContinuationItems(
   sessionId: string,
@@ -110,6 +111,42 @@ export async function rehydrateSkillRunContinuationsForSession(
     } catch {
       // drop broken entries
     }
+  }
+
+  try {
+    const batch = listSkillRunTranscriptForSession(sessionId);
+    const seen = new Set(out.map((projection) => projection.clientRequestId));
+    for (const row of batch.runs) {
+      if (
+        seen.has(row.clientRequestId) ||
+        row.sessionId !== sessionId ||
+        row.phase !== "succeeded" ||
+        !row.providerRunId ||
+        row.errorCode !== "RESULT_RETRIEVAL_FAILED"
+      ) {
+        continue;
+      }
+      const projection = await service.rehydrate({
+        clientRequestId: row.clientRequestId,
+        providerRunId: row.providerRunId,
+        toolName: row.toolName,
+        promptSummary: row.prompt.slice(0, 200),
+        sessionId: row.sessionId,
+        profileId: row.profileId,
+        lastEventId: row.lastEventId,
+        phase: row.phase,
+        text: row.text,
+        errorCode: row.errorCode,
+        errorMessage: row.errorMessage,
+        updatedAt: row.updatedAt,
+      });
+      if (projection) {
+        seen.add(projection.clientRequestId);
+        out.push(projection);
+      }
+    }
+  } catch {
+    // A sidecar read must not prevent normal continuation restoration.
   }
 
   persistSessionContinuation(sessionId, kept);

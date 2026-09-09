@@ -92,7 +92,7 @@ describe("SkillRunTranscriptCard", () => {
       sessionId: "session-1",
       decision: "allow",
     });
-    fireEvent.click(screen.getByText("skillRun.resultReady"));
+    fireEvent.click(screen.getByText("skillRun.outputFile"));
     expect(onPreviewFile).toHaveBeenCalledWith("file-1");
   });
 

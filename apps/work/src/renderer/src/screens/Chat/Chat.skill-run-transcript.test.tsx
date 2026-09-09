@@ -278,7 +278,6 @@ function installHermes(start: ReturnType<typeof vi.fn>): void {
       })),
       rehydrateSession: vi.fn(async () => []),
       start,
-      setSessionMode: vi.fn(async () => undefined),
       listCatalog: vi.fn(async () => writerCatalog),
       refreshCatalog: vi.fn(async () => writerCatalog),
       onProjectionChanged: vi.fn(() => () => undefined),

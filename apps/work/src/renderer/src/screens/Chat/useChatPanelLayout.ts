@@ -3,21 +3,16 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 export const SESSION_FILES_VISIBLE_KEY = "hermes:chat:session-files-visible";
 export const PROMPT_NAVIGATOR_OPEN_KEY = "hermes:chat:prompt-navigator-open";
 
-/** Persisted Session Files sidebar visibility (default shown). */
-export function useSessionFilesVisible(): [
+/** Session-scoped Session Files visibility. It changes only from explicit UI intent. */
+export function useSessionFilesVisible(sessionId = ""): [
   boolean,
   Dispatch<SetStateAction<boolean>>,
 ] {
-  const [sessionFilesVisible, setSessionFilesVisible] = useState<boolean>(
-    () => localStorage.getItem(SESSION_FILES_VISIBLE_KEY) !== "false",
-  );
+  const [sessionFilesVisible, setSessionFilesVisible] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(
-      SESSION_FILES_VISIBLE_KEY,
-      String(sessionFilesVisible),
-    );
-  }, [sessionFilesVisible]);
+    setSessionFilesVisible(false);
+  }, [sessionId]);
 
   return [sessionFilesVisible, setSessionFilesVisible];
 }

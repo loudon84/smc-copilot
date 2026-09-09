@@ -48,6 +48,7 @@ import {
   type SkillRunStartResult,
   type SkillRunToolCallStatus,
 } from "../../shared/skill-run";
+import type { SkillRunSessionLockResult } from "./skill-run-session-mode-store";
 
 const ACTIVITY_LIST_CAP = 32;
 
@@ -195,6 +196,8 @@ export interface SkillRunService {
     lastEventId: string | null;
     phase: SkillRunLocalPhase;
     text?: string;
+    errorCode?: string;
+    errorMessage?: string;
     updatedAt: string;
   }): Promise<SkillRunProjection | null>;
   retryArtifactDiscovery(
@@ -213,6 +216,7 @@ interface ActiveRun {
   abort: AbortController;
   pollTimer: NodeJS.Timeout | null;
   terminalConfirmed: boolean;
+  successfulTerminal?: Promise<void>;
   seenEventIds: Set<string>;
   approvalDecisionKeys: Map<string, string>;
   nextDurableOrdinal: number;
@@ -270,6 +274,12 @@ export interface CreateSkillRunServiceOptions {
   readManagedFileBytes?: (managedPath: string) => Promise<Uint8Array>;
   onPersistSanitizedRun?: SkillRunDurableRunWriter;
   onPersistSanitizedActivity?: SkillRunDurableActivityWriter;
+  lockSessionTool?: (sessionId: string, snapshot: {
+    executionMode: "skill-run";
+    toolName: string;
+    toolTitle: string;
+    updatedAt: string;
+  }) => SkillRunSessionLockResult | null;
 }
 
 export function createSkillRunService(
@@ -325,9 +335,13 @@ export function createSkillRunService(
       return run.projection;
     }
 
+    const preserveText =
+      typeof run.projection.text === "string" && run.projection.text.trim().length > 0 &&
+      (patch.text === undefined || (typeof patch.text === "string" && patch.text.trim().length === 0));
     const next: SkillRunProjection = {
       ...run.projection,
       ...patch,
+      ...(preserveText ? { text: run.projection.text } : {}),
       displayStage:
         patch.displayStage ??
         (patch.phase ? defaultDisplayStage(patch.phase) : run.projection.displayStage),
@@ -335,20 +349,71 @@ export function createSkillRunService(
     };
     run.projection = next;
 
-    if (next.phase && isSkillRunTerminalPhase(next.phase)) {
-      run.terminalConfirmed = true;
-      if (!run.abort.signal.aborted) {
-        run.abort.abort();
-      }
-      if (run.pollTimer) {
-        clearTimeout(run.pollTimer);
-        run.pollTimer = null;
-      }
-    }
-
     emit(next);
     persistRunSnapshot(run);
     return next;
+  }
+
+  function finalizeTerminal(
+    run: ActiveRun,
+    patch: Partial<SkillRunProjection>,
+  ): SkillRunProjection {
+    if (run.terminalConfirmed) return run.projection;
+    run.terminalConfirmed = true;
+    const next = updateProjection(run, patch);
+    if (!run.abort.signal.aborted) {
+      run.abort.abort();
+    }
+    if (run.pollTimer) {
+      clearTimeout(run.pollTimer);
+      run.pollTimer = null;
+    }
+    return next;
+  }
+
+  function resolveSuccessfulTerminal(
+    run: ActiveRun,
+    runId: string,
+    hints: Partial<SkillRunProjection> = {},
+  ): Promise<void> {
+    if (run.successfulTerminal) return run.successfulTerminal;
+    run.successfulTerminal = (async () => {
+      if (run.terminalConfirmed || disposed) return;
+      let text = run.projection.text;
+      let errorCode: string | undefined;
+      let errorMessage: string | undefined;
+      try {
+        if (!gateway.getRunResult) {
+          throw new Error("Skill Run Result endpoint is unavailable");
+        }
+        const result = await gateway.getRunResult(runId);
+        if (typeof result.text === "string" && result.text.trim()) {
+          text = result.text;
+        }
+      } catch {
+        errorCode = "RESULT_RETRIEVAL_FAILED";
+        errorMessage = "Result is temporarily unavailable";
+      }
+      if (run.terminalConfirmed || disposed) return;
+      finalizeTerminal(run, {
+        ...hints,
+        providerRunId: runId,
+        phase: "succeeded",
+        ...(text !== undefined ? { text } : {}),
+        ...(errorCode
+          ? { errorCode, errorMessage }
+          : { errorCode: undefined, errorMessage: undefined }),
+      });
+      emitTelemetry({
+        event: "terminal",
+        outcome: "ok",
+        phase: "succeeded",
+        ...(errorCode ? { errorCode } : {}),
+        requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
+      });
+      await discoverArtifacts(run, runId);
+    })();
+    return run.successfulTerminal;
   }
 
   function persistRunSnapshot(run: ActiveRun): void {
@@ -546,23 +611,12 @@ export function createSkillRunService(
       const snap = await gateway.getRunSnapshot(runId);
       const phase = parseSkillRunStatusToPhase(snap.status);
       if (phase === "succeeded") {
-        run.terminalConfirmed = true;
-        updateProjection(run, {
+        await resolveSuccessfulTerminal(run, runId, {
           providerRunId: snap.runId,
-          phase: "succeeded",
-          text: snap.resultText,
           artifacts: snap.artifacts,
         });
-        emitTelemetry({
-          event: "terminal",
-          outcome: "ok",
-          phase: "succeeded",
-          requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
-        });
-        await discoverArtifacts(run, runId);
       } else if (isSkillRunTerminalPhase(phase)) {
-        run.terminalConfirmed = true;
-        updateProjection(run, {
+        finalizeTerminal(run, {
           providerRunId: snap.runId,
           phase,
           errorCode: snap.errorCode,
@@ -707,21 +761,24 @@ export function createSkillRunService(
                 }
               }
 
-              updateProjection(run, patch);
-
               if (event.phase === "succeeded") {
-                run.terminalConfirmed = true;
-                emitTelemetry({
-                  event: "terminal",
-                  outcome: "ok",
-                  phase: "succeeded",
-                  requestFingerprint: fingerprintRequestId(
-                    run.request.clientRequestId,
-                  ),
-                });
-                await discoverArtifacts(run, runId);
+                await resolveSuccessfulTerminal(run, runId, patch);
                 return;
               }
+
+              if (event.phase && isSkillRunTerminalPhase(event.phase)) {
+                finalizeTerminal(run, patch);
+                emitTelemetry({
+                  event: "terminal",
+                  outcome: event.phase === "cancelled" ? "ok" : "error",
+                  phase: event.phase,
+                  ...(event.errorCode ? { errorCode: event.errorCode } : {}),
+                  requestFingerprint: fingerprintRequestId(run.request.clientRequestId),
+                });
+                return;
+              }
+
+              updateProjection(run, patch);
             }
           }
         }
@@ -923,6 +980,19 @@ export function createSkillRunService(
 
       const validatedToolName = bindResult.tool.toolName;
       const createdAt = nowIso();
+      const lockResult = options.lockSessionTool?.(input.sessionId, {
+        executionMode: "skill-run",
+        toolName: validatedToolName,
+        toolTitle: bindResult.tool.title,
+        updatedAt: createdAt,
+      });
+      if (lockResult?.status === "conflict") {
+        return rejectStart(
+          input,
+          "SKILL_SESSION_TOOL_LOCKED",
+          "This session is locked to a different skill.",
+        );
+      }
       const initialProjection: SkillRunProjection = {
         clientRequestId: input.clientRequestId,
         providerRunId: null,
@@ -1002,7 +1072,7 @@ export function createSkillRunService(
         } catch (err) {
           const { errorCode, errorMessage } = sanitizeStartFailure(err);
 
-          updateProjection(activeRun, {
+          finalizeTerminal(activeRun, {
             phase: "failed",
             errorCode,
             errorMessage,
@@ -1041,13 +1111,7 @@ export function createSkillRunService(
         };
       }
 
-      active.abort.abort();
-      if (active.pollTimer) {
-        clearTimeout(active.pollTimer);
-        active.pollTimer = null;
-      }
-
-      const updated = updateProjection(active, {
+      const updated = finalizeTerminal(active, {
         phase: "cancelled",
         displayStage: "Skill execution cancelled by user",
       });
@@ -1136,7 +1200,7 @@ export function createSkillRunService(
         });
         const receiptPhase = parseSkillRunStatusToPhase(receipt.status);
         if (isSkillRunTerminalPhase(receiptPhase)) {
-          const updated = updateProjection(active, {
+          const updated = finalizeTerminal(active, {
             phase: receiptPhase,
             decidedApprovalId: approvalId,
           });
@@ -1200,6 +1264,8 @@ export function createSkillRunService(
       lastEventId: string | null;
       phase: SkillRunLocalPhase;
       text?: string;
+      errorCode?: string;
+      errorMessage?: string;
       updatedAt: string;
     }): Promise<SkillRunProjection | null> {
       if (runs.has(item.clientRequestId)) {
@@ -1219,11 +1285,17 @@ export function createSkillRunService(
         lastEventId: item.lastEventId,
         eventSeq: 0,
         text: item.text,
+        errorCode: item.errorCode,
+        errorMessage: item.errorMessage,
         createdAt: item.updatedAt,
         updatedAt: item.updatedAt,
       };
 
-      const isTerminal = isSkillRunTerminalPhase(item.phase);
+      const retryResult =
+        item.phase === "succeeded" &&
+        item.providerRunId != null &&
+        item.errorCode === "RESULT_RETRIEVAL_FAILED";
+      const isTerminal = isSkillRunTerminalPhase(item.phase) && !retryResult;
       const activeRun: ActiveRun = {
         request: {
           toolName: item.toolName,
@@ -1250,7 +1322,11 @@ export function createSkillRunService(
       runs.set(item.clientRequestId, activeRun);
 
       if (!isTerminal && item.providerRunId && gateway.hasConsumerLock()) {
-        void consumeSse(activeRun, item.providerRunId);
+        if (retryResult) {
+          void resolveSuccessfulTerminal(activeRun, item.providerRunId);
+        } else {
+          void consumeSse(activeRun, item.providerRunId);
+        }
       }
 
       return projection;

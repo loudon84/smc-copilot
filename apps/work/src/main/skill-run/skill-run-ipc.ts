@@ -42,7 +42,7 @@ import {
 import { upsertSkillRunRemoteArtifact } from "../files/upsert-skill-run-remote-artifact";
 import {
   getSkillRunSessionMode,
-  setSkillRunSessionMode,
+  lockSkillRunSessionMode,
 } from "./skill-run-session-mode-store";
 
 const MAX_PROMPT_LENGTH = 32_000;
@@ -273,6 +273,7 @@ export function getSkillRunService(): SkillRunService {
       },
       onPersistSanitizedRun: persistSanitizedRun,
       onPersistSanitizedActivity: persistSanitizedActivity,
+      lockSessionTool: lockSkillRunSessionMode,
     });
     projectionUnsubscribe = activeService.subscribe(broadcastProjection);
   }
@@ -464,30 +465,6 @@ export function registerSkillRunIpc(): () => void {
     return getSkillRunSessionMode(trimmed);
   };
 
-  const setSessionModeHandler = async (
-    event: IpcMainInvokeEvent,
-    input: unknown,
-  ): Promise<void> => {
-    assertSender(event);
-    if (!isRecord(input)) throw new Error("Invalid session mode input");
-    const sessionId = String(input.sessionId || "").trim();
-    const toolName = String(input.toolName || "").trim();
-    const toolTitle = String(input.toolTitle || "").trim();
-    const updatedAt = String(input.updatedAt || "").trim();
-    if (!sessionId || !toolName || !toolTitle || !updatedAt) {
-      throw new Error("Invalid session mode input");
-    }
-    if (input.executionMode !== "skill-run") {
-      throw new Error("Invalid session mode executionMode");
-    }
-    setSkillRunSessionMode(sessionId, {
-      executionMode: "skill-run",
-      toolName,
-      toolTitle,
-      updatedAt,
-    });
-  };
-
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG, listHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.REFRESH_CATALOG, refreshHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.SET_CATALOG_FAVORITE, setCatalogFavoriteHandler);
@@ -500,7 +477,6 @@ export function registerSkillRunIpc(): () => void {
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY, retryArtifactDiscoveryHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL, decideApprovalHandler);
   ipcMain.handle(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE, getSessionModeHandler);
-  ipcMain.handle(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE, setSessionModeHandler);
 
   return () => {
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.LIST_CATALOG);
@@ -515,6 +491,5 @@ export function registerSkillRunIpc(): () => void {
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.RETRY_ARTIFACT_DISCOVERY);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.DECIDE_APPROVAL);
     ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.GET_SESSION_MODE);
-    ipcMain.removeHandler(SKILL_RUN_IPC_CHANNELS.SET_SESSION_MODE);
   };
 }

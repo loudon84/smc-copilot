@@ -47,10 +47,15 @@ export interface SkillRunStartAcceptedResponse {
 export interface SkillRunSnapshotResponse {
   runId: string;
   status: string;
-  resultText?: string;
   errorCode?: string;
   errorMessage?: string;
   artifacts?: SkillRunArtifactDescriptor[];
+}
+
+export interface SkillRunResultResponse {
+  runId: string;
+  status: string;
+  text: string | null;
 }
 
 export interface SkillRunApprovalDecisionReceipt {
@@ -105,6 +110,7 @@ export interface SkillRunGatewayClient {
     attachmentRefs?: string[];
   }): Promise<SkillRunStartAcceptedResponse>;
   getRunSnapshot(runId: string): Promise<SkillRunSnapshotResponse>;
+  getRunResult?(runId: string): Promise<SkillRunResultResponse>;
   cancelRun(runId: string): Promise<void>;
   listRunArtifacts(runId: string): Promise<SkillRunArtifactDescriptor[]>;
   openEventStream(
@@ -212,7 +218,7 @@ export function createSkillRunGatewayClient(
       kind: "skill-run" as const,
       eventPath: `/api/v1/runs/${enc}/events`,
       snapshotPath: `/api/v1/runs/${enc}`,
-      resultPath: `/api/v1/runs/${enc}`,
+      resultPath: `/api/v1/runs/${enc}/result`,
       artifactPath: `/api/v1/runs/${enc}/artifacts`,
       cancelPath: `/api/v1/runs/${enc}/cancel`,
     };
@@ -224,23 +230,6 @@ export function createSkillRunGatewayClient(
 
   function normalizeArtifactList(body: unknown): SkillRunArtifactDescriptor[] {
     return mapPublicArtifactList(body);
-  }
-
-  function extractResultText(body: unknown): string | undefined {
-    if (!isRecord(body)) return undefined;
-    if (typeof body.result_text === "string") return body.result_text;
-    if (typeof body.text === "string") return body.text;
-    if (typeof body.content === "string") return body.content;
-    if (typeof body.summary === "string") return body.summary;
-    if (isRecord(body.result)) {
-      if (typeof body.result.content === "string") return body.result.content;
-      if (typeof body.result.summary === "string") return body.result.summary;
-      if (typeof body.result.text === "string") return body.result.text;
-    }
-    if (isRecord(body.data)) {
-      return extractResultText(body.data);
-    }
-    return undefined;
   }
 
   async function jsonRpc(
@@ -485,7 +474,6 @@ export function createSkillRunGatewayClient(
           (typeof data.run_id === "string" && data.run_id) ||
           runId,
         status,
-        resultText: extractResultText(data),
         errorCode:
           typeof data.error_code === "string" ? data.error_code : undefined,
         errorMessage:
@@ -496,6 +484,26 @@ export function createSkillRunGatewayClient(
               : undefined,
         artifacts: normalizeArtifactList(data),
       };
+    },
+
+    async getRunResult(runId: string): Promise<SkillRunResultResponse> {
+      assertNotDisposed();
+      assertLock();
+      const routes = resolveRoutes(runId);
+      const res = await transport.authorizedFetch(routes.resultPath, { method: "GET" });
+      if (!res.ok) {
+        throw new SkillRunGatewayError(`Get run result failed: ${res.status}`, res.status);
+      }
+      const body = (await res.json()) as unknown;
+      const data = isRecord(body)
+        ? isRecord(body.data) ? { ...body, ...body.data } : body
+        : {};
+      const responseRunId = typeof data.run_id === "string" ? data.run_id.trim() : "";
+      const status = typeof data.status === "string" ? data.status.trim() : "";
+      if (!responseRunId || responseRunId !== runId || !status || (data.text !== null && typeof data.text !== "string")) {
+        throw new SkillRunGatewayError("Invalid backend result response", 502, "SKILL_UNSUPPORTED_SCHEMA");
+      }
+      return { runId: responseRunId, status, text: data.text as string | null };
     },
 
     async cancelRun(runId: string): Promise<void> {
