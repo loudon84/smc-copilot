@@ -37,13 +37,38 @@ runtime_contract: managed-local-v1
 
 ## Problem and Outcome
 
-见 v0.1.0；另关闭审查 F1–F3：typecheck 排除改由 parent 批准；听口匹配改为 fail-closed managed-root 规则；parent V12 拆分为 focused unit/lat/docs/status（阻断）与 package-wide typecheck（排除）。
+见 initial draft；另关闭审查 F1–F3：typecheck 排除改由 parent 批准；听口匹配改为 fail-closed managed-root 规则；parent V12 拆分为 focused unit/lat/docs/status（阻断）与 package-wide typecheck（排除）。
+
+完成后：RM-02 冻结新的 Plan-scoped workspace；听口匹配实现 parent v1.1.3 规则；LOCAL + LIVE blocking evidence FRESH PASS；durable Evidence Manifest 存在；独立 status commit 先将 RM-01 DONE，再将 RM-02 DONE。旧 parent run 保留为历史。
 
 ## Scope
 
-- **In：** completion audit；implementation review；parent LOCAL V01–V03/V06/V07/V09/V11；拆分后的 V12 非 typecheck 部分（package tests 若过重则用 parent focused unit 集 + `lat check` + docs/status oracles）；LIVE V04/V05/V08/V10/V13；`gateway-probe.ts`（+单测）实现 parent v1.1.3 合法 managed Gateway 判定；closure record；durable manifest（owned_control）；RM-01/RM-02 DONE status。
+- **In：** completion audit；implementation review；parent LOCAL V01–V03/V06/V07/V09/V11；拆分后的 V12 非 typecheck 部分（focused unit 集 + `lat check` + docs/status oracles）；LIVE V04/V05/V08/V10/V13；`gateway-probe.ts`（+单测）实现 parent v1.1.3 合法 managed Gateway 判定；closure record；durable manifest（owned_control）；RM-01/RM-02 DONE status。
 - **Out：** 重做 RM-01 删除面；Installer 打包；Credential；Skill Run；package-wide typecheck 修复；改写旧 run；foreign fail-open。
 - **Production Owner：** 仍为 `gateway-probe.ts` + `LegacyLocalRuntimeAdapter`。
+
+## Current Capability Inventory
+
+| Capability | Existing Owner | Current State | Classification |
+|---|---|---|---|
+| RM-01 Data Plane Client implementation | Work Main runtime / CLI / UI owners | 已在 `cb562e91` 提交 | KEEP |
+| RM-01 approved requirements | Parent PRD v1.1.3 | APPROVED；AC-20/AC-21 已修订 | KEEP |
+| RM-01 delivery proof | SMC Delivery | run 不可干净恢复；无 audit/review/evidence/manifest | MODIFY |
+| RM-01 Roadmap status | Managed Hermes Roadmap | `IN_PRD`；Plan 已挂；Commit/Evidence 空 | MODIFY |
+| Listen match oracle | `gateway-probe.ts#inspectGatewayListener` | 仅比较 ExecutablePath；managed python launcher → 误 CONFLICT | MODIFY |
+| Package-wide typecheck | Work baseline | FAIL；含无关 Skill-First 债务；parent v1.1.3 已排除 | KEEP / OUT |
+| Managed Gateway ENV | OPSI / Installer | health 200；CLI 存在；python 托管 hermes gateway | EXISTS |
+
+## Target End-State Inventory
+
+| Capability | Owner | Target State | Classification |
+|---|---|---|---|
+| RM-01 completion proof | SMC Delivery | Audit/Review/blocking Verification FRESH PASS under RM-02 scope | MODIFY |
+| Listen match | `gateway-probe.ts` | match if exe==expected **or** (same-root python.exe and CommandLine contains expected hermes.exe path + gateway + run); else mismatch/CONFLICT; never kill | MODIFY |
+| Durable evidence | SMC Evidence Manifest | `docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json` in RM-02 impl commit | ADD |
+| RM-01 Roadmap status | Managed Hermes Roadmap | DONE：Plan=parent Plan、Commit=`cb562e91`、Evidence=`external-artifact:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json` | MODIFY |
+| RM-02 Roadmap status | Managed Hermes Roadmap | DONE：Plan=本 Plan、Commit=本 impl、Evidence=`smc-evidence:WORK-V4.1.0-RUNTIME-RM-02@sha256:<fp>` | MODIFY |
+| Old parent run | SMC Delivery | 保留 IMPLEMENTATION_COMPLETE 历史；不作当前 proof | KEEP |
 
 ## Change Classification
 
