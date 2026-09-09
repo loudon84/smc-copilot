@@ -1,11 +1,11 @@
 ---
 roadmap_id: WORK-SKILL-FIRST-LAYOUT-V4.0.1
-version: v2.8
+version: v2.9
 status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v4.0.1-skill-first-layout-run-integration.md
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1
 target_branch: work/prd-v4.1
-updated_at: 2026-09-09T15:50:00.000000Z
+updated_at: 2026-09-09T16:05:00.000000Z
 implementation_plan_required: true
 ---
 
@@ -43,7 +43,7 @@ Managed Hermes Runtime Ownership Closure 不在本 Skill-First DAG。它的 READ
 | RM-14 | M6h P1 Streaming delta 映射：将已进口的枚举 delta 映射为现有 parser/projection/`modules/skill-run` 上已清洗的已枚举 payload 字段。架构出处：AD-WORK-v4.0.1-STREAMING-DELTA。 | RM-13 | DONE | 仅映射已枚举 `assistant.delta` 与已发布 payload 字段 `message_id`/`delta_seq`/`delta`；snapshot `assistant.message` 仍为完整文本权威；unknown fail-soft；无新 Owner；无 raw event 到 Renderer；不得把未枚举增量文本当合同；不得与 approvalExpiry、download-by-ref、clarify respond 合并。v1.5.0 已 lock（RM-13 DONE），可 Grounding Stage PRD。 | docs/work/PRD-WORK-v4.0.1-M6h-streaming-delta-mapping.md | .cursor/plans/work-v4.0.1-m6h-streaming-delta-mapping.plan.md | 6a947afac120583ec1622fc2af3339827fba8aa9 | smc-evidence:RM-14@sha256:7c13530f101a52e997e8cac7c9ab99c02ccbfe591f096be37813434cac22fad5 |
 | RM-15 | M6i Skill Run Transcript & Session Live-Sync Closure：将现有 sanitized Projection 接入唯一 Chat transcript，由 Existing Session Owner 保存完整 Skill execution audit，并在 session cache 变化后实时刷新 Sidebar。架构出处：AD-WORK-v4.0.1-SKILL-RUN-TRANSCRIPT-LIVE-SYNC。 | RM-04, RM-05, RM-08, RM-09 | DONE | Submit 后立即显示完整 Prompt 与单一 Skill Card；live activity/result/error 原位更新；Session reopen/restart 恢复完整且去重的多 Run timeline；Sidebar 无需 focus/定时器即可更新；Live 仍 bounded 32、durable history 完整；无第二 Chat/Session/File Owner、无 raw Provider data、无 streaming delta。 | docs/work/PRD-WORK-v4.0.1-M6i-skill-run-transcript-session-live-sync-closure.md | .cursor/plans/work-v4.0.1-m6i-skill-run-transcript-session-live-sync-closure.plan.md | c01ca3f5266592f2c035dce7c22be9eee8d2c8c0 | smc-evidence:RM-15@sha256:ae05c612f988c261fe73ac91c49b54ab61d776fcdab6d6b4674faf5a00887167 |
 | RM-16 | M6j Skill Session UX & Terminal Result Closure：修复 Session Files 自动展开、已启动会话技能仍可变更，以及 Provider 已成功但终态报告未进入现有 Skill Card 的一致性缺陷。 | RM-14, RM-15 | IN_PRD | 新会话 Session Files 默认折叠且只由用户显式打开文件/面板触发展示；首个 accepted Skill Run 后会话技能由 Main 权威锁定；SSE/poll 任意先后均保留流式文本并从 v1.5.0 `/result` 收敛终态报告，不重复创建 Run、不暴露 raw Provider data。 | docs/work/PRD-WORK-v4.0.1-M6j-skill-session-ux-terminal-result-closure.md | - | - | - |
-| RM-17 | M6j Evidence Closure：不重写 RM-16 实现；以已提交实现 `09efa7ac` 为 grounding baseline，完成 governed completion audit、implementation review、focused verification、durable evidence manifest，并把 RM-16 从 IN_PRD 收口为 DONE。 | - | IN_PRD | RM-16 completion audit PASS；implementation review PASS；V01–V07/V09 fresh PASS；package-wide typecheck 不作为本 Item 阻断项并登记为独立 baseline restoration；durable evidence manifest 存在；RM-16 row 更新为 DONE 且引用 implementation commit/evidence。 | docs/work/PRD-WORK-v4.0.1-M6j-evidence-closure.md | - | - | - |
+| RM-17 | M6j Evidence Closure：不重写 RM-16 实现；以已提交实现 `09efa7ac` 为 grounding baseline，完成 governed completion audit、implementation review、focused verification、durable evidence manifest，并把 RM-16 从 IN_PRD 收口为 DONE。 | - | IN_PRD | RM-16 completion audit PASS；implementation review PASS；V01–V07/V09 fresh PASS；package-wide typecheck 不作为本 Item 阻断项并登记为独立 baseline restoration；durable evidence manifest 存在；RM-16 row DONE（Plan=RM-16 canonical Plan、Commit=09efa7ac、Evidence=external-artifact:docs_agent/evidence/RM-17-evidence.json）；RM-17 row DONE（Plan=RM-17 canonical Plan、Commit=RM-17 implementation commit、Evidence=smc-evidence:RM-17@sha256:<scope-fingerprint>）。 | docs/work/PRD-WORK-v4.0.1-M6j-evidence-closure.md | - | - | - |
 
 ## Outcome
 

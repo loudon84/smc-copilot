@@ -1,12 +1,12 @@
 ---
 work_item_id: RM-17
-version: v1.0.0
+version: v1.1.0
 status: APPROVED
 target_branch: work/prd-v4.1
 review_verdict: PASS
-approved_at: 2026-09-09T22:50:00+08:00
+approved_at: 2026-09-10T00:05:00+08:00
 source_revision: WORK-SKILL-FIRST-LAYOUT-V4.0.1@v4.0.1/RM-17/evidence-closure-2026-09-09
-grounded_commit: 21c645ce91f97272f5631866479ed49ec2ac497b
+grounded_commit: a426e44e5990583e8701e0f98d9a5d31ccd9d09e
 grounding_mode: discover
 provider_contract: SKILL-RUN-CONTRACT v1.5.0
 parent_prd: docs/work/PRD-WORK-v4.0.1-M6j-skill-session-ux-terminal-result-closure.md
@@ -62,7 +62,7 @@ RM-16 的产品行为已经提交，但原 delivery run 无法证明完成：实
 |---|---|---|---|
 | RM-16 completion proof | SMC Delivery | Completion Audit FRESH PASS；Implementation Review FRESH PASS；blocking Verification FRESH PASS；Acceptance Claims PASS | MODIFY |
 | Durable evidence | SMC Evidence Manifest | `docs_agent/evidence/RM-17-evidence.json` 存在于 implementation commit，并绑定 RM-17 scope fingerprint | ADD |
-| RM-16 Roadmap status | Skill-First Roadmap | RM-16 DONE，引用 `09efa7ac` 与 RM-17 evidence reference；RM-17 随后 DONE | MODIFY |
+| RM-16 Roadmap status | Skill-First Roadmap | RM-16 DONE：Plan=RM-16 canonical Plan、Commit=`09efa7ac`、Evidence=`external-artifact:docs_agent/evidence/RM-17-evidence.json`；严格 `smc-evidence:RM-17@…` 绑定记录在 RM-17 行；RM-17 随后 DONE | MODIFY |
 | Old RM-16 run | SMC Delivery | 保留为 blocked historical record；不作为当前 proof | KEEP |
 
 ## Change Classification
@@ -79,6 +79,7 @@ RM-16 的产品行为已经提交，但原 delivery run 无法证明完成：实
 - 不把 diagnostic test output 当作 governed evidence；所有 blocking evidence 必须在 RM-17 workspace 冻结后重新产生。
 - 不把 package-wide typecheck 失败降级为 M6j 产品缺陷；它是独立 Work baseline restoration 输入。
 - 若 fresh evidence 发现 RM-16 实现行为不符合 parent PRD，本 Item 立即返回对应 PRD/Plan，不在 evidence closure 中顺手改代码。
+- RM-16 行的 Verification Evidence 使用 `external-artifact:` 形式引用 RM-17 manifest；不为了在 RM-16 行放下 `smc-evidence:` 引用而修改 roadmap validator 或改写历史 commit。严格 manifest 绑定（plan_id、scope fingerprint、audit/review/verification PASS）由 RM-17 行承担。
 
 ## Acceptance Criteria
 
@@ -89,7 +90,7 @@ RM-16 的产品行为已经提交，但原 delivery run 无法证明完成：实
 5. Package-wide typecheck 不作为 RM-17 blocking evidence；其当前失败被记录为独立 baseline restoration 输入，不影响 RM-16 product behavior closure。
 6. Durable Evidence Manifest 绑定 RM-17 Plan ID、scope fingerprint、Completion Audit、Implementation Review 和所有 blocking Verification PASS。
 7. Implementation commit 只包含 RM-17 Plan 允许的 governance/evidence artifacts；不包含 Roadmap DONE 更新。
-8. Roadmap status commit 先将 RM-16 更新为 DONE，引用 implementation commit `09efa7ac` 与 RM-17 evidence；RM-17 自身随后按同一规则 DONE。
+8. Roadmap status commit 先将 RM-16 更新为 DONE：Plan 列引用 RM-16 canonical Plan，Implementation Commit 引用 `09efa7ac`，Verification Evidence 以 `external-artifact:docs_agent/evidence/RM-17-evidence.json` 引用 RM-17 closure manifest——因为 roadmap validator 要求 `smc-evidence:` 引用的 plan_id 与 Plan 列文件的 plan_id 一致、且 manifest 必须存在于所列 implementation commit 内，跨 Item 的严格 `smc-evidence:RM-17@sha256:<scope-fingerprint>` 绑定记录在 RM-17 行；RM-17 自身随后按同一规则 DONE。
 
 ## Acceptance Claim Baseline
 
@@ -109,5 +110,5 @@ RM-16 的产品行为已经提交，但原 delivery run 无法证明完成：实
 1. RM-17 有一个独立 canonical Plan；不与 RM-16 原 Plan、Managed Hermes Runtime Ownership Closure 或 typecheck baseline restoration 合并。
 2. CL-01–CL-08 均有 fresh PASS；Completion Audit、Implementation Review、blocking Verification 和 Evidence Manifest 均为 RM-17 current scope fingerprint 下的 FRESH PASS。
 3. 不修改 production code；若 evidence 暴露产品缺陷，返回 parent PRD/Plan 或新开 defect item。
-4. Implementation commit 与 Roadmap status commit 分离；RM-16 DONE 必须引用真实 implementation commit `09efa7ac` 和 RM-17 evidence reference。
+4. Implementation commit 与 Roadmap status commit 分离；RM-16 DONE 必须引用真实 implementation commit `09efa7ac`，并以 `external-artifact:docs_agent/evidence/RM-17-evidence.json` 引用 RM-17 evidence；RM-17 行必须引用 RM-17 真实 implementation commit 和 `smc-evidence:RM-17@sha256:<scope-fingerprint>`。
 5. 旧 `.smc/runs/RM-16*` 保留为历史记录；本 Item 不通过删除/重置治理状态取得 PASS。
