@@ -1,0 +1,64 @@
+{
+  "schema": "smc.closure-record.v1",
+  "plan_id": "RM-17",
+  "parent_plan_id": "RM-16",
+  "parent_implementation_commit": "09efa7ac5a539975896b7e9c41cc7397101f36f5",
+  "governance_baseline_commits": {
+    "rm16_governance": "91b8560b",
+    "rm17_roadmap_ready": "21c645ce",
+    "rm17_prd_approved": "3836247a43a77abaa78ddbd9e51d45db872a7a2c",
+    "jsdom_harness_fix": "6c0ee294df5cc4d42647245d409e58119ff82a59",
+    "jsdom_harness_cleanup": "55a595c66ff7416f85536992df369d8c63ecd377"
+  },
+  "frozen_head": "55a595c66ff7416f85536992df369d8c63ecd377",
+  "old_run": {
+    "path": ".smc/runs/RM-16.json",
+    "state": "IMPLEMENTATION_BLOCKED",
+    "block_reason": "V06 and V08 cannot pass within RM-16 write scope",
+    "base_commit": "cb562e91983829cf5401e50c0ee43bdccd9646f0"
+  },
+  "old_run_sha256": "sha256:7802e245b716315f5e25f3e56c4818e7c8afa50c9d1f31c2427e7829c4ac8276",
+  "verification_mapping": {
+    "V01": { "parent_verification": "V01", "disposition": "REUSE_PARENT_COMMAND" },
+    "V02": { "parent_verification": "V02", "disposition": "REUSE_PARENT_COMMAND" },
+    "V03": { "parent_verification": "V03", "disposition": "REUSE_PARENT_COMMAND" },
+    "V04": { "parent_verification": "V04", "disposition": "REUSE_PARENT_COMMAND" },
+    "V05": { "parent_verification": "V05", "disposition": "REUSE_PARENT_COMMAND" },
+    "V06": { "parent_verification": "V06", "disposition": "REUSE_PARENT_COMMAND" },
+    "V07": { "parent_verification": "V07", "disposition": "REUSE_PARENT_COMMAND" },
+    "V08": { "parent_verification": "V08", "disposition": "EXCLUDED_PACKAGE_WIDE_TYPECHECK" },
+    "V09": { "parent_verification": "V09", "disposition": "REUSE_PARENT_COMMAND" },
+    "V10": { "parent_verification": null, "disposition": "RM17_GOVERNANCE_CLOSURE_CHECK" }
+  },
+  "roadmap_evidence_strategy": {
+    "rm16_row": {
+      "plan": ".cursor/plans/work-v4.0.1-m6j-skill-session-ux-terminal-result-closure.plan.md",
+      "implementation_commit": "09efa7ac5a539975896b7e9c41cc7397101f36f5",
+      "verification_evidence": "external-artifact:docs_agent/evidence/RM-17-evidence.json"
+    },
+    "rm17_row": {
+      "plan": ".cursor/plans/work-v4.0.1-m6j-evidence-closure.plan.md",
+      "verification_evidence": "smc-evidence:RM-17@sha256:<scope-fingerprint>"
+    }
+  },
+  "typecheck_baseline": {
+    "command": "npm --prefix apps/work run typecheck",
+    "observed_at": "2026-09-09T16:06:00Z",
+    "result": "FAIL",
+    "summary": "Package-wide typecheck fails due to RM-01 residual and pre-existing Expert/File/Skill baseline errors; excluded from RM-17 blocking evidence per approved PRD AC-05 and Roadmap RM-17 exit criteria.",
+    "disposition": "BASELINE_RESTORATION_INPUT"
+  },
+  "implementation_integrity": {
+    "command": "git diff --name-only 09efa7ac5a539975896b7e9c41cc7397101f36f5 HEAD -- apps/work contracts packages",
+    "result": "PASS",
+    "allowed_delta": [
+      "apps/work/src/renderer/src/screens/Chat/session-files/SessionFilesPanel.test.tsx"
+    ],
+    "allowed_delta_commits": [
+      "6c0ee294df5cc4d42647245d409e58119ff82a59",
+      "55a595c66ff7416f85536992df369d8c63ecd377"
+    ],
+    "allowed_delta_reason": "authorized SessionFilesPanel.test.tsx harness fix: // @vitest-environment jsdom plus afterEach(cleanup) for V06"
+  },
+  "disclaimer": "Diagnostic test output before RM-17 workspace freeze is not governed evidence; blocking proof must be RM-17 Plan-bound fresh runs recorded in .smc/evidence/RM-17/ledger.jsonl. Durable Evidence Manifest is delivery owned_control and must not enter Change Matrix planned_files."
+}

@@ -1,0 +1,428 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:febcd35ca2078ecae7656ce8cd165282a6b456c9076383562c553d41001abd93",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "current HEAD contains RM-17 APPROVED PRD baseline",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "old RM-16 audit MISSING",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "old RM-16 review MISSING",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "diagnostic focused PASS is not governed evidence",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "V07",
+        "V09"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "M6j PRD AC-01–AC-10 never required package-wide typecheck; current baseline FAIL",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "old RM-16 manifest MISSING",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "09efa7ac exists but was not commit-guard verified",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-16 currently IN_PRD",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-17 has no prior delivery",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "no RM-17 evidence ledger",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "V07",
+        "V09",
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "approved PRD boundary; harness fix authorized for V06",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-16/RM-17 rows lack commit/evidence references",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-16.json state IMPLEMENTATION_BLOCKED at baseline",
+      "requirement": "DOD-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V10"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/renderer/src/screens/Chat/Chat.layout.test.tsx src/renderer/src/modules/skill-run/SkillSelectionBar.test.tsx src/renderer/src/screens/Chat/Chat.skill-run-transcript.test.tsx --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163658.654524Z-V01.log",
+      "raw_log_sha256": "sha256:551f1f6eb82a795645117f39f48a207f8775c56c1e617881b05cab85cb37cb73",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:36:58.654524Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-session-mode-store.test.ts src/main/skill-run/skill-run-ipc.test.ts src/main/skill-run/skill-run-service.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163708.082893Z-V02.log",
+      "raw_log_sha256": "sha256:ed90bfe88c61e30e6d1a4a304aaf37197fe860a4162e3aaa7425956dec44f73e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:08.082893Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-gateway-client.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163714.335416Z-V03.log",
+      "raw_log_sha256": "sha256:5a1ef23907025ad2ac2689ec8cb72c06b9d995db7b92d9e1670a0628b6814c7d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:14.335416Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-service.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163718.956672Z-V04.log",
+      "raw_log_sha256": "sha256:b44ead778c230436dc03d90e25f1a94e3a768743d2a0d00d8ce812d925ffc565",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:18.956672Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/skill-run/skill-run-continuation.test.ts src/main/skill-run/skill-run-transcript-store.test.ts src/renderer/src/modules/skill-run/SkillRunTranscriptCard.test.tsx src/renderer/src/modules/skill-run/skill-run-transcript.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163724.577836Z-V05.log",
+      "raw_log_sha256": "sha256:301a26e3b4d95add0a5be0fcc58fd2bcd3be09f6a779403de267c1269bc11b60",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:24.577836Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/expert/expert-run-service.test.ts src/main/files/upsert-skill-run-remote-artifact.test.ts src/renderer/src/screens/Chat/expertDefaultEntry.test.ts src/renderer/src/screens/Chat/session-files/SessionFilesPanel.test.tsx --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163730.244790Z-V06.log",
+      "raw_log_sha256": "sha256:00c6e3ba2941a0fb23a4599eb2fa0db160a4f689b1bb07822a31791c2953a44d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:30.244790Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run guard'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163736.570419Z-V07.log",
+      "raw_log_sha256": "sha256:a3a753ae3c030aee4ff2c298db048cbec44b7ef84c6b16e80dfb1813852fe1de",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:36.570419Z",
+      "verification_id": "V07"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'lat check'\"'\"', cwd='\"'\"'apps/work'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163744.537111Z-V09.log",
+      "raw_log_sha256": "sha256:1cbfb510ea882cd3859aec21c62f07b251503dc5aeb799afc3e98bf26cf2599a",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:44.537111Z",
+      "verification_id": "V09"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-02",
+        "CLM-03",
+        "CLM-05",
+        "CLM-06",
+        "CLM-07",
+        "CLM-08",
+        "CLM-09",
+        "CLM-10",
+        "CLM-11",
+        "CLM-12",
+        "CLM-13"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-05": "PASS",
+        "CLM-06": "PASS",
+        "CLM-07": "PASS",
+        "CLM-08": "PASS",
+        "CLM-09": "PASS",
+        "CLM-10": "PASS",
+        "CLM-11": "PASS",
+        "CLM-12": "PASS",
+        "CLM-13": "PASS"
+      },
+      "command": "python -c 'import json,subprocess,sys,hashlib; from pathlib import Path; plan='\"'\"'.cursor/plans/work-v4.0.1-m6j-evidence-closure.plan.md'\"'\"'; harness='\"'\"'apps/work/src/renderer/src/screens/Chat/session-files/SessionFilesPanel.test.tsx'\"'\"'; rec=json.loads(Path('\"'\"'docs_agent/evidence/RM-17-closure.json'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"')); old=Path('\"'\"'.smc/runs/RM-16.json'\"'\"').read_bytes(); ok=rec.get('\"'\"'schema'\"'\"')=='\"'\"'smc.closure-record.v1'\"'\"' and rec.get('\"'\"'plan_id'\"'\"')=='\"'\"'RM-17'\"'\"' and rec.get('\"'\"'parent_implementation_commit'\"'\"')=='\"'\"'09efa7ac5a539975896b7e9c41cc7397101f36f5'\"'\"' and json.loads(old.decode('\"'\"'utf-8'\"'\"')).get('\"'\"'state'\"'\"')=='\"'\"'IMPLEMENTATION_BLOCKED'\"'\"' and rec.get('\"'\"'old_run_sha256'\"'\"')=='\"'\"'sha256:'\"'\"'+hashlib.sha256(old).hexdigest() and rec.get('\"'\"'typecheck_baseline'\"'\"',{}).get('\"'\"'disposition'\"'\"')=='\"'\"'BASELINE_RESTORATION_INPUT'\"'\"' and rec.get('\"'\"'verification_mapping'\"'\"',{}).get('\"'\"'V08'\"'\"',{}).get('\"'\"'disposition'\"'\"')=='\"'\"'EXCLUDED_PACKAGE_WIDE_TYPECHECK'\"'\"'; ok=ok and subprocess.call([sys.executable,'\"'\"'.agents/skills/smc-plan-delivery/scripts/completion_audit.py'\"'\"','\"'\"'check'\"'\"','\"'\"'--plan'\"'\"',plan])==0; ok=ok and subprocess.call([sys.executable,'\"'\"'.agents/skills/smc-plan-delivery/scripts/review_record.py'\"'\"','\"'\"'check'\"'\"','\"'\"'--plan'\"'\"',plan,'\"'\"'--kind'\"'\"','\"'\"'implementation'\"'\"'])==0; delta=subprocess.check_output(['\"'\"'git'\"'\"','\"'\"'diff'\"'\"','\"'\"'--name-only'\"'\"','\"'\"'09efa7ac5a539975896b7e9c41cc7397101f36f5'\"'\"','\"'\"'HEAD'\"'\"','\"'\"'--'\"'\"','\"'\"'apps/work'\"'\"','\"'\"'contracts'\"'\"','\"'\"'packages'\"'\"'], text=True).strip().splitlines(); ok=ok and delta==[harness] and Path(harness).read_text(encoding='\"'\"'utf-8'\"'\"').startswith('\"'\"'// @vitest-environment jsdom'\"'\"'); sys.exit(0 if ok else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/RM-17/logs/20260909T163748.265216Z-V10.log",
+      "raw_log_sha256": "sha256:6fed9eb6900eccf72f97ca1a0abe41874c2f521e41683b0f8edc16ce51874bc0",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-09T16:37:48.265216Z",
+      "verification_id": "V10"
+    }
+  ],
+  "completion_audit": {
+    "changed": 1,
+    "deferred": 0,
+    "done": 3,
+    "scope_drift": 0,
+    "timestamp": "2026-09-09T16:35:51.178433Z",
+    "total_items": 3,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-09T16:39:13.423245Z",
+  "implementation_review": {
+    "reviewer": "cursor-agent",
+    "scope_fingerprint": "sha256:d6fce26783589898d1b992bc6938f0fd4a583ccf82214a2cd8e21748d6b13156",
+    "timestamp": "2026-09-09T16:35:34.557090Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:28db6b3644d1dc8dcaa9fb18610ba4b94fad3739d31371a000302baef85d6b7f",
+  "plan": ".cursor/plans/work-v4.0.1-m6j-evidence-closure.plan.md",
+  "plan_id": "RM-17",
+  "plan_review": {
+    "plan_sha256": "sha256:25003d9f944a727ef6c2634ce78ed1e477440eef98d9afd0fcfcf34702e0b17e",
+    "reviewer": "cursor-agent",
+    "timestamp": "2026-09-09T16:34:42.423563Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:d6fce26783589898d1b992bc6938f0fd4a583ccf82214a2cd8e21748d6b13156",
+  "verification_candidate": null,
+  "workspace_base_commit": "55a595c66ff7416f85536992df369d8c63ecd377"
+}
