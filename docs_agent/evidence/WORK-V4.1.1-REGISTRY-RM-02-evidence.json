@@ -1,0 +1,421 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:0f3bbba7f88ce4c5ab4e1939c76fb6a41064325a832b82ac9a007073d6b8f8a6",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "generate-work-build-info.mjs`; `electron-builder.yml",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing build identity dirty-tree guard",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing `win-unpacked` build-info verification",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 descriptor validation and manifest evidence",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 evidence manifest `WORK-V4.1.1-REGISTRY-RM-01`",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V03",
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 V03–V07 evidence",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V06",
+        "V07",
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Current package scripts are non-uniform",
+      "requirement": "AC-09",
+      "result": "PASS",
+      "verification_ids": [
+        "V02",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-14",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "-",
+      "requirement": "DOD-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V09"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-04"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-04": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run tests/work-registry-build-profile.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093201.864598Z-V01.log",
+      "raw_log_sha256": "sha256:ace9f574ca29c1b82a129085b62f7a998b8c909dcdc1de5c81784e2af4efc7a2",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:01.864598Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-09": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run tests/work-registry-package-entrypoints.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093205.242715Z-V02.log",
+      "raw_log_sha256": "sha256:954889ff5f6eb02d78110e1bf3b37ae4cc7644adedafe8f57486aff9391d8364",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:05.242715Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-07"
+      ],
+      "claim_results": {
+        "CLM-07": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run src/main/registry.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093206.595019Z-V03.log",
+      "raw_log_sha256": "sha256:e2d3d404611ffe5d422396461eb80e2273d9e5b75c318139a337ed1b0e9f20be",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:06.595019Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-04",
+        "CLM-09",
+        "CLM-10",
+        "CLM-11",
+        "CLM-12",
+        "CLM-13"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-04": "PASS",
+        "CLM-09": "PASS",
+        "CLM-10": "PASS",
+        "CLM-11": "PASS",
+        "CLM-12": "PASS",
+        "CLM-13": "PASS"
+      },
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File apps/work/scripts/test-work-registry-package.ps1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_DURABLE",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093303.727071Z-V04.log",
+      "raw_log_sha256": "sha256:5fcb64eb26a6adcd4de97658af2044389e613149f34d1cd4b319d520ef26a1ed",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:33:03.727071Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-07"
+      ],
+      "claim_results": {
+        "CLM-07": "PASS"
+      },
+      "command": "npm --prefix apps/work run guard",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093208.024618Z-V05.log",
+      "raw_log_sha256": "sha256:8250fb924269657f602a415756c2306109538b7e31978edb9241113c8af5f5e4",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:08.024618Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-08": "PASS"
+      },
+      "command": "npm --prefix apps/work run typecheck",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093211.992573Z-V06.log",
+      "raw_log_sha256": "sha256:3ce56caa3d93643752425b40a934146783f52a71d787d906f94720bdc799e839",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:11.992573Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'lat check'\"'\"', cwd='\"'\"'apps/work'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093331.790728Z-V07.log",
+      "raw_log_sha256": "sha256:cc1ea3b1dc5aa0feead1569e6d12e700b9b0c31345c434a690b7d2c6861ce20a",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:33:31.790728Z",
+      "verification_id": "V07"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-05",
+        "CLM-06",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-05": "PASS",
+        "CLM-06": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run tests/work-registry-build-profile.test.ts tests/release-builder-config.test.ts tests/work-release-scripts.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093257.808471Z-V08.log",
+      "raw_log_sha256": "sha256:59c63ba1fef265d92fe271db03ea306780a2407b18241de2c6e4a08d0e4252f5",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:57.808471Z",
+      "verification_id": "V08"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-14"
+      ],
+      "claim_results": {
+        "CLM-14": "PASS"
+      },
+      "command": "npm --prefix apps/work run guard",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-02/logs/20260910T093259.731279Z-V09.log",
+      "raw_log_sha256": "sha256:fa669db62984f6be41e1118dcd31bc1122bed8cb2b8fcbdfba0982b294dda35a",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T09:32:59.731279Z",
+      "verification_id": "V09"
+    }
+  ],
+  "completion_audit": {
+    "changed": 5,
+    "deferred": 0,
+    "done": 5,
+    "scope_drift": 0,
+    "timestamp": "2026-09-10T09:34:52.200175Z",
+    "total_items": 5,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-10T09:35:46.759565Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:60186008c6d877e7339c6d0bfe245d792fd6e6b0ce77163fe5862131c5435d48",
+    "timestamp": "2026-09-10T09:34:53.846008Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:c1df364a6e7377c56d96f8c148ad312a0adb8aed380908a838889f46b11e4222",
+  "plan": ".cursor/plans/work-v4.1.1-m2-enterprise-registry-build-profile-package-proof.plan.md",
+  "plan_id": "WORK-V4.1.1-REGISTRY-RM-02",
+  "plan_review": {
+    "plan_sha256": "sha256:46a8e4efa3bf57e3e5252fbc15a31e9c7e6ec21d7afb8247671c3b29b84fd50e",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-10T09:34:50.701094Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:60186008c6d877e7339c6d0bfe245d792fd6e6b0ce77163fe5862131c5435d48",
+  "verification_candidate": null,
+  "workspace_base_commit": "e9a84842d0402b766c4b0f63b37c272ba02695be"
+}
