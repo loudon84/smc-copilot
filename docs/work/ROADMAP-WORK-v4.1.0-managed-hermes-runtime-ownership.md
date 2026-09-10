@@ -1,11 +1,11 @@
 ---
 roadmap_id: WORK-MANAGED-HERMES-RUNTIME-V4.1.0
-version: 1.2.1
+version: 1.2.2
 status: ACTIVE
 architecture_decision: docs/work/PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md
-source_revision: PRD-WORK-v2.4@managed-runtime/v4.1.0-ownership-closure
+source_revision: PRD-WORK-v2.4@managed-runtime/v4.1.2-programroot-ownership
 target_branch: work/prd-v4.1
-updated_at: 2026-09-10T07:20:00+08:00
+updated_at: 2026-09-10T18:00:00+08:00
 implementation_plan_required: true
 architecture_approval_note: parent-v2.4-predates-yaml-approved-frontmatter
 ---
@@ -18,7 +18,7 @@ architecture_approval_note: parent-v2.4-predates-yaml-approved-frontmatter
 
 父架构：[`PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md`](PRD-WORK-v2.4-opsi-managed-hermes-runtime-Integration.md)（ADR-01/02/05/07，AC-07/08/09/18）。该文档早于现行 YAML `APPROVED` frontmatter；本 Roadmap 不把它改写成新的 Architecture Decision，只交付其未关闭的 Self-Install / Gateway 监护残留。
 
-Stage PRD 不得把 Skill Run 合同或 `AD-WORK-v4.0.1-STREAMING-DELTA` / `AD-WORK-v4.0.1-SKILL-RUN-TRANSCRIPT-LIVE-SYNC` 当作本项架构出处。
+Stage PRD 不得把 Skill Run 合同或 `AD-WORK-v4.0.1-STREAMING-DELTA` / `AD-WORK-v4.0.1-SKILL-RUN-TRANSCRIPT-LIVE-SYNC` 当作本项架构出处。RM-03 不改 Data Plane Client 边界，只关闭 Windows 听口所有权相对真实 managed process tree 的残余缺口。
 
 ## Delivery Invariants
 
@@ -33,12 +33,14 @@ Stage PRD 不得把 Skill Run 合同或 `AD-WORK-v4.0.1-STREAMING-DELTA` / `AD-W
 |---|---|---|---|---|---|---|---|---|
 | RM-01 | Managed Hermes Runtime Ownership Closure：`apps/work` 仅为 Data Plane Client。无 Self-Install Python Runtime；任何 control owner（含默认 `direct`）都不 start/stop/kill Gateway；Local Chat 单传输连接托管 Gateway；管理 CLI 经绝对路径 `hermes.exe`；Probe 能区分 UNAVAILABLE 与 CONFLICT；`managed-local-v1`（含 `direct`）下 Self-Install UI 不可达。 | - | DONE | AC-01–AC-21 PASS（v1.1.3：AC-20 不含 package-wide typecheck；AC-21 接受同 install-root python launcher）；无 Python/source Runtime 生产残留；无 Work Gateway lifecycle；托管真机 Chat 与 CLI 可用；CONTEXT LIVE 若失败则阻断并单独立 Installer defect，不回退 Python Runtime。 | docs/work/PRD-WORK-v4.1.0-managed-hermes-runtime-ownership-closure.md | .cursor/plans/work-v4.1.0-managed-hermes-runtime-ownership-closure.plan.md | cb562e91 | external-artifact:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json |
 | RM-02 | Managed Hermes Verification Closure：不重写 RM-01 Data Plane Client 实现；以已提交实现 `cb562e91` 为 grounding，收口 governed audit/review/LOCAL+LIVE verification 与 durable evidence；修正听口匹配以识别 managed `python.exe` 托管启动 `hermes.exe gateway`；package-wide typecheck 登记为独立 baseline restoration，不作为本 Item 阻断。 | - | DONE | Completion audit PASS；implementation review PASS；parent LOCAL V01–V03/V06/V07/V09/V11 fresh PASS；listen-match oracle 接受 managed python launcher；LIVE V04/V05/V08/V10/V13 fresh PASS 或按 PRD 明确 BLOCK+defect；durable evidence manifest 存在；RM-01 DONE（Plan=RM-01 canonical Plan、Commit=`cb562e91`、Evidence=`external-artifact:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json`）；RM-02 DONE（Plan=RM-02 Plan、Commit=RM-02 impl commit、Evidence=`smc-evidence:WORK-V4.1.0-RUNTIME-RM-02@sha256:<scope-fingerprint>`）。 | docs/work/PRD-WORK-v4.1.0-managed-hermes-verification-closure.md | .cursor/plans/work-v4.1.0-managed-hermes-verification-closure.plan.md | ee396949 | smc-evidence:WORK-V4.1.0-RUNTIME-RM-02@sha256:e005c940ba3311a6bdec9a172e69b0d992f0d00d6653269ff2dcd70431d143cf |
+| RM-03 | Managed Hermes Verification Boundary Closure：不重开 RM-01 Data Plane Client / Gateway lifecycle；把 Windows 听口所有权从「hermes.exe 或 python 启动 hermes.exe」收口为「监听映像属于 Locator managed ProgramRoot」；foreign 仍 CONFLICT；不 kill、不 start Gateway；管理 CLI 仍走绝对路径 hermes.exe。 | RM-02 | IN_PRD | Windows 托管：health+auth 成功且监听映像在 ProgramRoot 边界内 → READY；ProgramRoot 内 hermes.exe / python.exe / node.exe 均 READY；边界外监听 → CONFLICT 且不 kill；无 Work Gateway start/stop；LAT 与 Probe 合同与 ProgramRoot 边界一致；blocking claims PASS。 | docs/work/PRD-WORK-v4.1.2-managed-hermes-verification-boundary-closure.md | - | - | - |
 
 ## Critical Path
 
 ```text
 RM-01 DONE (cb562e91; evidence via RM-02 external-artifact)
   → RM-02 DONE (ee396949; smc-evidence fingerprint)
+  → RM-03 IN_PRD (ProgramRoot listen-ownership; residual of RM-02 CommandLine/hermes.exe oracle)
 ```
 
 不依赖 Skill-First RM-01–RM-15。不打开 Skill Run streaming / transcript Item。
