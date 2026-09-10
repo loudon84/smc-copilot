@@ -295,30 +295,30 @@ function isCoveredByDbBubbleSplit(
 }
 
 function reconciliationKey(m: ChatMessage): string | null {
-  if ("kind" in m) {
-    switch (m.kind) {
-      case "reasoning":
-        return `reasoning:${normalizeWhitespace(m.text || "").slice(0, 200)}`;
-      case "tool_call":
-        return `tool_call:${m.callId || m.id}`;
-      case "tool_result":
-        return `tool_result:${m.callId || m.id}`;
-      case "skill_run":
-        return `skill_run:${m.clientRequestId}`;
-      case "clarify":
-      case "user":
-      case "assistant":
-        return null;
-      default: {
-        const _exhaustive: never = m;
-        void _exhaustive;
-        return null;
-      }
+  // Bubble rows (optional kind) must not enter the structured-kind switch —
+  // otherwise ChatBubbleMessage remains in the default arm as `never`.
+  if (isBubbleMessage(m)) {
+    if (m.kind === "user" || m.kind === "assistant") return null;
+    if (m.error || m.localOnly) return null;
+    return `${m.role}:${normalizeBubbleContentForMatch(m.content || "").slice(0, 200)}`;
+  }
+  switch (m.kind) {
+    case "reasoning":
+      return `reasoning:${normalizeWhitespace(m.text || "").slice(0, 200)}`;
+    case "tool_call":
+      return `tool_call:${m.callId || m.id}`;
+    case "tool_result":
+      return `tool_result:${m.callId || m.id}`;
+    case "skill_run":
+      return `skill_run:${m.clientRequestId}`;
+    case "clarify":
+      return null;
+    default: {
+      const _exhaustive: never = m;
+      void _exhaustive;
+      return null;
     }
   }
-  const bubble = m as ChatBubbleMessage;
-  if (bubble.error || bubble.localOnly) return null;
-  return `${bubble.role}:${normalizeBubbleContentForMatch(bubble.content || "").slice(0, 200)}`;
 }
 
 function isSyntheticLiveToolMessage(m: ChatMessage): boolean {

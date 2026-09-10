@@ -143,15 +143,6 @@ async function sshDashboardConnectionFromConfig(
   );
 }
 
-function getManagedDashboard(profile?: string): ManagedDashboard | undefined {
-  const key = profileKey(profile);
-  const managed = dashboards.get(key);
-  if (!managed) return undefined;
-  if (managed.proc.exitCode === null && !managed.proc.killed) return managed;
-  dashboards.delete(key);
-  return undefined;
-}
-
 function requestJson(
   url: string,
   token: string,
@@ -267,28 +258,6 @@ export function probeDashboardWebSocket(
     });
     req.end();
   });
-}
-
-async function waitForDashboardReady(
-  connection: DashboardConnection,
-  timeoutMs = 45_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      await requestJson(`${connection.baseUrl}/api/status`, connection.token);
-      return;
-    } catch (err) {
-      lastError = err;
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-  const message =
-    lastError instanceof Error
-      ? lastError.message
-      : "dashboard did not respond";
-  throw new Error(`Timed out waiting for Hermes dashboard: ${message}`);
 }
 
 function dashboardStatusRequiresOAuth(status: unknown): boolean {

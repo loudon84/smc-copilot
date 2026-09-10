@@ -177,6 +177,10 @@ describe("SkillRunService artifact discovery retry", () => {
         },
       }),
       hasConsumerLock: () => true,
+      hasApprovalDecisionBundle: () => true,
+      hasAttachmentBundle: () => true,
+      uploadAttachment: vi.fn().mockRejectedValue(new Error("upload not expected")),
+      decideApproval: vi.fn().mockRejectedValue(new Error("decide not expected")),
       clearCache: vi.fn(),
       dispose: vi.fn(),
     };

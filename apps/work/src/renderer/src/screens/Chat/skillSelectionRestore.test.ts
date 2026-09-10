@@ -93,7 +93,6 @@ describe("isSkillRunCallable", () => {
       isSkillRunCallable({
         ...catalogTool,
         callability: "unsupported",
-        invocationMode: "form-required",
       }),
     ).toBe(false);
   });

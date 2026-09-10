@@ -90,7 +90,7 @@ export async function streamSkillRunArtifactBytes(
       }
       if (res.status === 401 || res.status === 403) {
         throw FilePlatformError.fromCode(
-          "FILE_PERMISSION_DENIED",
+          "FILE_REMOTE_FORBIDDEN",
           "Artifact download forbidden",
         );
       }

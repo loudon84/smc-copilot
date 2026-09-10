@@ -166,8 +166,8 @@ export function upsertSkillRunRemoteArtifact(
   emitFileDomainEvent({
     type: "file:created",
     fileId: file.id,
-    profileId: file.profileId,
-    source: file.source,
+    sessionId: input.sessionId || undefined,
+    role: "agent-output",
   });
 
   return { file, association };

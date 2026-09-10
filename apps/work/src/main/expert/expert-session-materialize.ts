@@ -61,7 +61,8 @@ function upsertSessionCacheRow(
 export function resolveUniqueSessionTitle(
   db: {
     prepare: (sql: string) => {
-      get: (...args: unknown[]) => unknown;
+      // better-sqlite3 Statement.get is param-contravariant; any bindings OK.
+      get: (...args: any[]) => unknown;
     };
   },
   sessionId: string,

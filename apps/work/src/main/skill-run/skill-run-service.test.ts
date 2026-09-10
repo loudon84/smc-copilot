@@ -1024,7 +1024,8 @@ describe("skill-run-service", () => {
     ): SkillRunGatewayClient {
       let emitted = false;
       return createMockGateway({
-        decideApproval,
+        decideApproval:
+          decideApproval as SkillRunGatewayClient["decideApproval"],
         getRunSnapshot: vi.fn().mockResolvedValue({
           runId: "run-xyz-999",
           status: "WAITING_APPROVAL",

@@ -1,9 +1,24 @@
-import { execFileSync } from "node:child_process";
+/**
+ * Ambient Node surfaces for web-project tsc: this file is included by both
+ * tsconfig.web and tsconfig.node. Avoid static `node:` imports so web typecheck
+ * does not require @types/node; runtime still uses real Node via dynamic require.
+ */
+declare const process: { cwd(): string };
+declare function require(id: string): {
+  execFileSync(
+    file: string,
+    args: readonly string[],
+    options: { cwd?: string; encoding: "utf8" },
+  ): string;
+};
+
 import { describe, expect, it } from "vitest";
 import {
   classifyLocalePackageChanges,
   simultaneousLocaleCreationMessage,
 } from "./source-locale-authoring";
+
+const { execFileSync } = require("node:child_process");
 
 function git(args: string[]): string {
   return execFileSync("git", args, {

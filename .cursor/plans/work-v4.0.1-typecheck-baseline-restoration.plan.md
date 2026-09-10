@@ -4,16 +4,16 @@ overview: Restore apps/work package-wide TypeScript typecheck (node+web) to exit
 todos:
   - id: t1-node-typecheck-fixes
     content: "T1 — Node typecheck fixes [C01, C02]"
-    status: pending
+    status: completed
   - id: t2-web-typecheck-fixes
     content: "T2 — Web typecheck fixes [C03]"
-    status: pending
+    status: completed
   - id: t3-durable-captures-evidence
     content: "T3 — Durable captures + evidence [C04.1]"
-    status: pending
+    status: completed
   - id: t4-roadmap-rm-18-done
     content: "T4 — Roadmap RM-18 DONE [C04.2]"
-    status: pending
+    status: completed
 isProject: false
 plan_contract: smc.plan.v3.5
 plan_id: RM-18
@@ -140,7 +140,7 @@ All Verifications are LOCAL-only on ENV-01. No LIVE / FAULT_INJECTION / EXTERNAL
 | V04 | CLM-04, CLM-10 | STATIC | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work run guard', shell=True))"` | guard exits 0 | boundary/i18n/runtime guard regressions fail | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 | V05 | CLM-05, CLM-10 | DOCUMENT_SEMANTIC | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('lat check', cwd='apps/work', shell=True))"` | lat check exits 0 | stale LAT refs fail | REPO_SUMMARY | ENV-01 | NEW_EVIDENCE | yes |
 | V06 | CLM-06, CLM-10 | STATIC | LOCAL | `python -c "import subprocess,sys; from pathlib import Path; files=['apps/work/tsconfig.json','apps/work/tsconfig.node.json','apps/work/tsconfig.web.json','apps/work/tsconfig.web.main-tests.json']; flags=('strict','noUnused','noImplicit'); diffs=[subprocess.check_output(['git','diff','HEAD','--',f], text=True, errors='replace') for f in files if Path(f).is_file()]; bad=any(line.startswith('+') and not line.startswith('+++') and any(f in line for f in flags) and (': false' in line or ':false' in line) for diff in diffs for line in diff.splitlines()); ok_file=Path('apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx').is_file(); sys.exit(1 if bad or not ok_file else 0)"` | no compilerOptions check-flag weaken vs HEAD; SkillRunStatusBar.test remains an in-place file (not deleted to dodge web tsc) | exclude-only or strict/noUnused/noImplicit false additions fail | REPO_SUMMARY | ENV-01 | NEW_EVIDENCE | yes |
-| V07 | CLM-07, CLM-10 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run src/main/files/upsert-skill-run-remote-artifact.test.ts src/main/skill-run/skill-run-contract-parser.test.ts src/main/skill-run/skill-run-service.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx src/renderer/src/screens/Chat/skillSelectionRestore.test.ts src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx src/shared/i18n/source-locale-authoring.test.ts --pool=threads --maxWorkers=1', shell=True))"` | all listed touched tests PASS | any touched-test failure fails | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
+| V07 | CLM-07, CLM-10 | UNIT | LOCAL | `python -c "import subprocess,sys; sys.exit(subprocess.call('npm --prefix apps/work exec -- vitest run src/main/files/upsert-skill-run-remote-artifact.test.ts src/main/skill-run/skill-run-contract-parser.test.ts src/main/skill-run/skill-run-service.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx src/renderer/src/screens/Chat/ChatInput.test.tsx src/renderer/src/screens/Chat/skillSelectionRestore.test.ts src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx src/shared/i18n/source-locale-authoring.test.ts --pool=threads --maxWorkers=1', shell=True))"` | all listed touched tests PASS | any touched-test failure fails | LOCAL_TRANSIENT | ENV-01 | NEW_EVIDENCE | yes |
 | V08 | CLM-08, CLM-09, CLM-10, CLM-11, CLM-12 | STATIC | LOCAL | `python -c "import subprocess,sys; from pathlib import Path; plan='.cursor/plans/work-v4.0.1-typecheck-baseline-restoration.plan.md'; node_cap=Path('docs_agent/evidence/RM-18-typecheck-node-baseline.txt'); web_cap=Path('docs_agent/evidence/RM-18-typecheck-web-baseline.txt'); ok=node_cap.is_file() and web_cap.is_file() and node_cap.stat().st_size>0 and web_cap.stat().st_size>0; ok=ok and subprocess.call([sys.executable,'.agents/skills/smc-plan-delivery/scripts/completion_audit.py','check','--plan',plan])==0; ok=ok and subprocess.call([sys.executable,'.agents/skills/smc-plan-delivery/scripts/review_record.py','check','--plan',plan,'--kind','implementation'])==0; fm=Path(plan).read_text(encoding='utf-8'); ok=ok and 'plan_id: RM-18' in fm and 'commit_policy: post_review' in fm; roadmap=Path('docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md').read_text(encoding='utf-8'); ok=ok and any(line.lstrip().startswith('RM-18 ') or ' RM-18 ' in line for line in roadmap.splitlines()); sys.exit(0 if ok else 1)"` | durable baseline captures present; completion audit FRESH_PASS; implementation review FRESH_PASS; Plan identity RM-18 + post_review; RM-18 roadmap row exists for status close | missing captures/audit/review or Plan identity drift fails | REPO_SUMMARY | ENV-01 | NEW_EVIDENCE | yes |
 
 ## Immediate Read
@@ -178,6 +178,7 @@ All Verifications are LOCAL-only on ENV-01. No LIVE / FAULT_INJECTION / EXTERNAL
 | C02 | `apps/work/src/main/skill-run/skill-run-session-materialize.ts` | PROD | MODIFY | skill-run-session-materialize | T1 | Database prepare typing compiles | Expert / Skill Run / File type drift | no |
 | C03 | `apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx` | TEST | MODIFY | SkillRunStatusBar tests | T2 | no Node fs/path/process dependency under web tsc | Renderer / shared test typing | no |
 | C03 | `apps/work/src/renderer/src/screens/Chat/ChatInput.tsx` | PROD | MODIFY | ChatInput | T2 | AttachmentError-shaped failures | Renderer / shared test typing | no |
+| C03 | `apps/work/src/renderer/src/screens/Chat/ChatInput.test.tsx` | TEST | MODIFY | ChatInput tests | T2 | skill-mode addFiles expectation matches AttachmentError (`code`/`filename`/`detail`) | Renderer / shared test typing | no |
 | C03 | `apps/work/src/renderer/src/screens/Chat/sessionHistory.ts` | PROD | MODIFY | sessionHistory | T2 | bubble message union accumulates without `never` | Renderer / shared test typing | no |
 | C03 | `apps/work/src/renderer/src/screens/Chat/skillSelectionRestore.test.ts` | TEST | MODIFY | skillSelectionRestore tests | T2 | fixture matches callability Pick | Renderer / shared test typing | no |
 | C03 | `apps/work/src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx` | TEST | MODIFY | ConnectionErrorScreen tests | T2 | mocks typed as void handlers | Renderer / shared test typing | no |
@@ -212,7 +213,7 @@ None
 | Todo | Owns Changes | Writes | Reads | Depends On | Parallel Safe |
 |---|---|---|---|---|---|
 | T1 | C01<br>C02 | `apps/work/src/main/dashboard.ts#getManagedDashboard`<br>`apps/work/src/main/hermes-agent-compat.ts#ensureLocalDashboardCompatibility`<br>`apps/work/src/main/hermes.ts#waitForApiServerReady`<br>`apps/work/src/main/expert/expert-gateway-client.ts#joinUrl`<br>`apps/work/src/main/expert/expert-session-materialize.ts`<br>`apps/work/src/main/files/skill-run-artifact-transfer.ts`<br>`apps/work/src/main/files/upsert-skill-run-remote-artifact.ts`<br>`apps/work/src/main/files/upsert-skill-run-remote-artifact.test.ts`<br>`apps/work/src/main/remote-sessions.ts`<br>`apps/work/src/main/session-continuation-store.ts`<br>`apps/work/src/main/skill-run/skill-run-contract-parser.test.ts`<br>`apps/work/src/main/skill-run/skill-run-service.test.ts`<br>`apps/work/src/main/skill-run/skill-run-session-materialize.ts` | `apps/work/tsconfig.node.json` | - | no |
-| T2 | C03 | `apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx`<br>`apps/work/src/renderer/src/screens/Chat/ChatInput.tsx`<br>`apps/work/src/renderer/src/screens/Chat/sessionHistory.ts`<br>`apps/work/src/renderer/src/screens/Chat/skillSelectionRestore.test.ts`<br>`apps/work/src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx`<br>`apps/work/src/shared/i18n/source-locale-authoring.test.ts` | `apps/work/tsconfig.web.json`<br>`apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx` | T1 | no |
+| T2 | C03 | `apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx`<br>`apps/work/src/renderer/src/screens/Chat/ChatInput.tsx`<br>`apps/work/src/renderer/src/screens/Chat/ChatInput.test.tsx`<br>`apps/work/src/renderer/src/screens/Chat/sessionHistory.ts`<br>`apps/work/src/renderer/src/screens/Chat/skillSelectionRestore.test.ts`<br>`apps/work/src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx`<br>`apps/work/src/shared/i18n/source-locale-authoring.test.ts` | `apps/work/tsconfig.web.json`<br>`apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx` | T1 | no |
 | T3 | C04.1 | `docs_agent/evidence/RM-18-typecheck-node-baseline.txt`<br>`docs_agent/evidence/RM-18-typecheck-web-baseline.txt` | `docs_agent/evidence/RM-17-evidence.json` | T2 | no |
 | T4 | C04.2 | `docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md` | `docs_agent/evidence/RM-18-evidence.json`<br>`docs_agent/evidence/RM-18-typecheck-node-baseline.txt`<br>`docs_agent/evidence/RM-18-typecheck-web-baseline.txt` | T3 | no |
 
@@ -273,7 +274,8 @@ Make `npm --prefix apps/work run typecheck:web` exit 0 by fixing renderer/shared
 
 **Changes**
 - Fix `SkillRunStatusBar.test.tsx` and `source-locale-authoring.test.ts` so they compile under the web project without relying on Node typings; prefer mocks/fixtures over Node APIs.
-- Fix `ChatInput.tsx` AttachmentError typing and `sessionHistory.ts` `never` accumulation.
+- Fix `ChatInput.tsx` AttachmentError typing and companion `ChatInput.test.tsx` skill-mode `addFiles` expectation (`code`/`filename`/`detail`).
+- Fix `sessionHistory.ts` `never` accumulation.
 - Fix `skillSelectionRestore.test.ts` and `ConnectionErrorScreen.test.tsx` fixture/mock typing.
 - Forbidden: exclude-only removal of these tests from the web project to silence errors; forbidden: weakening compilerOptions.
 

@@ -148,8 +148,9 @@ describe("ChatInput — skill mode attachments", () => {
 
     expect(errors).toEqual([
       {
-        name: "attachments",
-        message: "skillRun.attachmentsDisabled",
+        code: "unsupported-type",
+        filename: "attachments",
+        detail: "skillRun.attachmentsDisabled",
       },
     ]);
   });

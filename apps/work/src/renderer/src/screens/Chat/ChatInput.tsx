@@ -344,8 +344,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           if (attachmentsDisabled) {
             return Promise.resolve([
               {
-                name: "attachments",
-                message:
+                code: "unsupported-type",
+                filename: "attachments",
+                detail:
                   t("skillRun.attachmentsDisabled") ||
                   "Attachments are disabled in Skill mode.",
               },

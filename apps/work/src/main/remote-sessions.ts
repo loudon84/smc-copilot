@@ -212,6 +212,14 @@ function historyItemSearchText(item: HistoryItem): string {
       return item.text || "";
     case "tool_call":
       return [item.name, item.args].filter(Boolean).join(" ");
+    case "skill_run":
+      return [item.toolName, item.resultText, item.errorMessage]
+        .filter(Boolean)
+        .join(" ");
+    default: {
+      const _exhaustive: never = item;
+      return _exhaustive;
+    }
   }
 }
 

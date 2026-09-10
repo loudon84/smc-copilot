@@ -46,11 +46,11 @@ function renderScreen(
     <ConnectionErrorScreen
       status={probe()}
       error="Gateway unreachable"
-      onReconnect={onReconnect}
-      onSelectHermesHome={onSelectHermesHome}
-      onOpenLogs={vi.fn()}
-      onOpenConnectionSettings={vi.fn()}
-      onQuit={vi.fn()}
+      onReconnect={onReconnect as () => void}
+      onSelectHermesHome={onSelectHermesHome as () => void}
+      onOpenLogs={vi.fn() as () => void}
+      onOpenConnectionSettings={vi.fn() as () => void}
+      onQuit={vi.fn() as () => void}
     />,
   );
   return { onReconnect, onSelectHermesHome };
@@ -85,11 +85,11 @@ describe("ConnectionErrorScreen Self-Install gate", () => {
       <ConnectionErrorScreen
         status={probe()}
         error={null}
-        onReconnect={vi.fn()}
-        onSelectHermesHome={vi.fn()}
-        onOpenLogs={vi.fn()}
-        onOpenConnectionSettings={vi.fn()}
-        onQuit={vi.fn()}
+        onReconnect={vi.fn() as () => void}
+        onSelectHermesHome={vi.fn() as () => void}
+        onOpenLogs={vi.fn() as () => void}
+        onOpenConnectionSettings={vi.fn() as () => void}
+        onQuit={vi.fn() as () => void}
       />,
     );
     await waitFor(() => {

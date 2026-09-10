@@ -1,0 +1,371 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:781b89af8edddf18f37e044284cc0bf2d6ae4fd9e204a41cb70f44598d84e3a3",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "PRD baseline FAIL ~35 node errors on frozen inventory",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "PRD baseline FAIL ~15 web errors on frozen inventory",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "combined typecheck FAIL",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "recent PASS under prior items",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "recent PASS under prior items",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "N/A at PRD",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "N/A at PRD",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "N/A at PRD",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Roadmap RM-18 IN_PRD",
+      "requirement": "AC-09",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "no RM-18 evidence ledger",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V04",
+        "V05",
+        "V06",
+        "V07",
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Plan authored for RM-18 only",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "no prior RM-18 commits",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run typecheck:node'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012353.255231Z-V01.log",
+      "raw_log_sha256": "sha256:158e1f2584ed2efa7e1dab2e463f48a0f5ee2eb7e51a16ae30363eb5eff04c8e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:23:53.255231Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run typecheck:web'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012359.371473Z-V02.log",
+      "raw_log_sha256": "sha256:9e7cef4be28c95f6c8e3aa3f5385823e2e6b65780571f5b6c5cfa8f96d463bcd",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:23:59.371473Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-03",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-03": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run typecheck'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012410.867680Z-V03.log",
+      "raw_log_sha256": "sha256:a893d0632a89530fb3cecf3a68ba9a26f6b439c66f54e164084c00c3e8dff74b",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:24:10.867680Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work run guard'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012427.461114Z-V04.log",
+      "raw_log_sha256": "sha256:8325b8efe8f057101a9803592bbc31ab1355997a00570271a324da409f18904b",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:24:27.461114Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-05",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-05": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'lat check'\"'\"', cwd='\"'\"'apps/work'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012435.499207Z-V05.log",
+      "raw_log_sha256": "sha256:14488f5e2f78de739bc0cf83eec2deed3677512c267a8366781e9ebc016d19cc",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:24:35.499207Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; from pathlib import Path; files=['\"'\"'apps/work/tsconfig.json'\"'\"','\"'\"'apps/work/tsconfig.node.json'\"'\"','\"'\"'apps/work/tsconfig.web.json'\"'\"','\"'\"'apps/work/tsconfig.web.main-tests.json'\"'\"']; flags=('\"'\"'strict'\"'\"','\"'\"'noUnused'\"'\"','\"'\"'noImplicit'\"'\"'); diffs=[subprocess.check_output(['\"'\"'git'\"'\"','\"'\"'diff'\"'\"','\"'\"'HEAD'\"'\"','\"'\"'--'\"'\"',f], text=True, errors='\"'\"'replace'\"'\"') for f in files if Path(f).is_file()]; bad=any(line.startswith('\"'\"'+'\"'\"') and not line.startswith('\"'\"'+++'\"'\"') and any(f in line for f in flags) and ('\"'\"': false'\"'\"' in line or '\"'\"':false'\"'\"' in line) for diff in diffs for line in diff.splitlines()); ok_file=Path('\"'\"'apps/work/src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx'\"'\"').is_file(); sys.exit(1 if bad or not ok_file else 0)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012439.188686Z-V06.log",
+      "raw_log_sha256": "sha256:9f52626862c6f6a69907ff97928925ac054d15f8c131bf84af383ac414d3957d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:24:39.188686Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-07",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-07": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/files/upsert-skill-run-remote-artifact.test.ts src/main/skill-run/skill-run-contract-parser.test.ts src/main/skill-run/skill-run-service.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx src/renderer/src/screens/Chat/ChatInput.test.tsx src/renderer/src/screens/Chat/skillSelectionRestore.test.ts src/renderer/src/screens/ConnectionError/ConnectionErrorScreen.test.tsx src/shared/i18n/source-locale-authoring.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012441.914437Z-V07.log",
+      "raw_log_sha256": "sha256:9b4ebfe91aed041a85940e72e971adb9cd249150e08ee078a5804f03cb2a7b15",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:24:41.914437Z",
+      "verification_id": "V07"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-08",
+        "CLM-09",
+        "CLM-10",
+        "CLM-11",
+        "CLM-12"
+      ],
+      "claim_results": {
+        "CLM-08": "PASS",
+        "CLM-09": "PASS",
+        "CLM-10": "PASS",
+        "CLM-11": "PASS",
+        "CLM-12": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; from pathlib import Path; plan='\"'\"'.cursor/plans/work-v4.0.1-typecheck-baseline-restoration.plan.md'\"'\"'; node_cap=Path('\"'\"'docs_agent/evidence/RM-18-typecheck-node-baseline.txt'\"'\"'); web_cap=Path('\"'\"'docs_agent/evidence/RM-18-typecheck-web-baseline.txt'\"'\"'); ok=node_cap.is_file() and web_cap.is_file() and node_cap.stat().st_size>0 and web_cap.stat().st_size>0; ok=ok and subprocess.call([sys.executable,'\"'\"'.agents/skills/smc-plan-delivery/scripts/completion_audit.py'\"'\"','\"'\"'check'\"'\"','\"'\"'--plan'\"'\"',plan])==0; ok=ok and subprocess.call([sys.executable,'\"'\"'.agents/skills/smc-plan-delivery/scripts/review_record.py'\"'\"','\"'\"'check'\"'\"','\"'\"'--plan'\"'\"',plan,'\"'\"'--kind'\"'\"','\"'\"'implementation'\"'\"'])==0; fm=Path(plan).read_text(encoding='\"'\"'utf-8'\"'\"'); ok=ok and '\"'\"'plan_id: RM-18'\"'\"' in fm and '\"'\"'commit_policy: post_review'\"'\"' in fm; roadmap=Path('\"'\"'docs/work/ROADMAP-WORK-v4.0.1-skill-first-layout-run-integration.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=ok and any(line.lstrip().startswith('\"'\"'RM-18 '\"'\"') or '\"'\"' RM-18 '\"'\"' in line for line in roadmap.splitlines()); sys.exit(0 if ok else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/RM-18/logs/20260910T012736.072804Z-V08.log",
+      "raw_log_sha256": "sha256:d8086c221515158932661fd93c04aeb17cf55e1eb4973d16e3914e31ffe69f56",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T01:27:36.072804Z",
+      "verification_id": "V08"
+    }
+  ],
+  "completion_audit": {
+    "changed": 20,
+    "deferred": 0,
+    "done": 4,
+    "scope_drift": 0,
+    "timestamp": "2026-09-10T01:27:25.756800Z",
+    "total_items": 4,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-10T01:28:46.927545Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:c2d1dce9b4ec6ea8bee580acf32b009179727ed28dd2a018ea56cecc0f69c4b6",
+    "timestamp": "2026-09-10T01:26:58.179677Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:308ac71321056e8492772d8b4067d90dd357b7c5516196e81952c64e534ff6f7",
+  "plan": ".cursor/plans/work-v4.0.1-typecheck-baseline-restoration.plan.md",
+  "plan_id": "RM-18",
+  "plan_review": {
+    "plan_sha256": "sha256:cfd0cd24d9dc03bdb01abd2c7e0141ee3100245380cb752ce009d198f71ab138",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-10T01:26:57.825902Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:c2d1dce9b4ec6ea8bee580acf32b009179727ed28dd2a018ea56cecc0f69c4b6",
+  "verification_candidate": null,
+  "workspace_base_commit": "8c7c9107c1cc01b623e9319a37e6c2722f182957"
+}

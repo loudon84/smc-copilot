@@ -15,7 +15,6 @@ import {
 } from "../auth/ensure-access-token";
 import { getCachedAccessToken } from "../auth/token-store";
 import {
-  AuthorizedBackendTransport,
   AuthorizedBackendTransportError,
   createAuthorizedBackendTransport,
 } from "../auth/authorized-backend-transport";
@@ -125,22 +124,6 @@ function requireAccessToken(): string {
     });
   }
   return token;
-}
-
-function joinUrl(base: string, path: string): string {
-  if (/^https?:\/\//i.test(path)) {
-    const url = new URL(path);
-    const baseUrl = new URL(base);
-    if (url.origin !== baseUrl.origin) {
-      throw new ExpertGatewayError("Cross-origin URL rejected", {
-        status: 400,
-        errorCode: "CROSS_ORIGIN_REJECTED",
-      });
-    }
-    return url.toString();
-  }
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${normalized}`;
 }
 
 async function readJson(res: Response): Promise<unknown> {

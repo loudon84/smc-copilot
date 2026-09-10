@@ -487,6 +487,9 @@ export function continuationItemsToHistory(
       case "expert-run":
         // Restart projection only — not chat history transcript rows.
         break;
+      case "skill-run":
+        // Restart projection only — not chat history transcript rows.
+        break;
       default: {
         const _exhaustive: never = item;
         void _exhaustive;

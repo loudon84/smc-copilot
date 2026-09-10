@@ -3,9 +3,7 @@ import { randomUUID } from "crypto";
 import {
   existsSync,
   readFileSync,
-  writeFileSync,
   appendFileSync,
-  mkdirSync,
 } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -30,7 +28,6 @@ import {
 } from "./ssh-tunnel";
 import {
   pidIsAliveAs,
-  stripAnsi,
   profileHome,
   profilePaths,
   normalizeProfileName,
@@ -38,17 +35,9 @@ import {
 } from "./utils";
 import { getGatewayBaseUrl } from "./runtime/hermes-runtime-paths";
 import { getProfilePort } from "./gateway-ports";
-import { promptSudoPassword, promptSecretValue } from "./gatewayPrompt";
-import { getSecret } from "./secrets";
-import { readModels } from "./models";
 import { providerListSafe } from "./secrets";
-import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
 import { type Attachment, escapeXmlAttr } from "../shared/attachments";
 import { type SessionModelOverride } from "../shared/model-override";
-import {
-  OPENAI_COMPAT_PROVIDERS,
-  customProviderEnvKey,
-} from "../shared/url-key-map";
 import {
   chatToolEventFromPayload,
   chatToolProgressLabel,
@@ -62,19 +51,6 @@ import {
   supportsHermesRunsTransport,
   type HermesApiCapabilities,
 } from "./run-stream";
-import {
-  gatewayCompletionSuffix,
-  gatewayMessageCompleteText,
-  gatewayMessageDelta,
-  gatewayReasoningText,
-  gatewayToolEvent,
-  gatewayUsage,
-  type GatewayEvent,
-} from "./tui-gateway-stream";
-import {
-  hostDerivedEnvKeyForUrl,
-  shouldPruneOpenRouterApiKey,
-} from "./host-derived-env";
 
 /**
  * Resolve which profile a gateway call targets. An explicit profile always
@@ -403,27 +379,6 @@ function isApiServerReady(profile?: string): Promise<boolean> {
     }
   });
 }
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForApiServerReady(
-  timeoutMs = 8000,
-  profile?: string,
-  pollMs = 250,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await isApiServerReady(profile)) return true;
-    await delay(pollMs);
-  }
-  return false;
-}
-
-// ────────────────────────────────────────────────────
-//  Ensure API server is enabled in config
-// ────────────────────────────────────────────────────
 
 function ensureApiServerConfig(profile?: string): void {
   try {
@@ -1695,7 +1650,6 @@ export function stopHealthPolling(): void {
 // (e.g. each keeping its own Telegram bot online), which is the documented
 // hermes model: one gateway per profile, bound to that profile's own port.
 const gatewayProcesses = new Map<string, ChildProcess>();
-const appStartedProfiles = new Set<string>();
 
 export interface GatewayStartResult {
   success: boolean;
@@ -1703,28 +1657,6 @@ export interface GatewayStartResult {
   alreadyRunning?: boolean;
   error?: string;
   logPath?: string;
-}
-
-/**
- * Clear the cached API-server-ready flag, but only when `profile` is the one
- * the desktop currently addresses (the active profile). A *background*
- * profile's gateway dying must not flip the active profile's chat into an
- * unavailable send on its next message.
- */
-function invalidateApiCacheFor(profile?: string): void {
-  if (profileKey(profile) === profileKey(undefined)) {
-    apiServerAvailable = false;
-  }
-}
-
-function gatewayLogPath(profile?: string): string {
-  const logDir = profileHome(resolveProfile(profile));
-  try {
-    mkdirSync(logDir, { recursive: true });
-  } catch {
-    // ignore
-  }
-  return join(logDir, "gateway-stderr.log");
 }
 
 export function buildGatewayEnv(profile?: string): Record<string, string> {
@@ -1926,91 +1858,6 @@ export function testRemoteConnection(
     });
     req.end();
   });
-}
-
-async function waitForApiServerStopped(
-  profile?: string,
-  timeoutMs = 5000,
-  pollMs = 250,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!(await isApiServerReady(profile))) return true;
-    await delay(pollMs);
-  }
-  return false;
-}
-
-function gatewayRestartProfileKey(profile?: string): string {
-  return profileKey(profile);
-}
-
-let gatewayRestartQueueTail: Promise<unknown> = Promise.resolve();
-const gatewayRestartByProfile = new Map<string, Promise<boolean>>();
-
-function markGatewayRestartFailed(profile?: string): void {
-  const key = profileKey(profile);
-  gatewayProcesses.delete(key);
-  appStartedProfiles.delete(key);
-  invalidateApiCacheFor(profile);
-  startHealthPolling();
-}
-
-function restoreGatewayAfterRestartFailure(
-  profile: string | undefined,
-  previousProcess: ChildProcess | null,
-  previousStartedByApp: boolean,
-  previousPidEntry: { path: string; pid: number } | null = null,
-): void {
-  const key = profileKey(profile);
-  if (previousProcess && isChildProcessAlive(previousProcess)) {
-    gatewayProcesses.set(key, previousProcess);
-    if (previousStartedByApp) {
-      appStartedProfiles.add(key);
-    } else {
-      appStartedProfiles.delete(key);
-    }
-    invalidateApiCacheFor(profile);
-    startHealthPolling();
-    return;
-  }
-  if (
-    previousPidEntry &&
-    pidIsAliveAs(previousPidEntry.pid, GATEWAY_IMAGE_PREFIXES)
-  ) {
-    try {
-      writeFileSync(
-        previousPidEntry.path,
-        String(previousPidEntry.pid),
-        "utf-8",
-      );
-    } catch {
-      // best-effort; health polling will still recover API readiness.
-    }
-    gatewayProcesses.delete(key);
-    if (previousStartedByApp) {
-      appStartedProfiles.add(key);
-    } else {
-      appStartedProfiles.delete(key);
-    }
-    invalidateApiCacheFor(profile);
-    startHealthPolling();
-    return;
-  }
-  markGatewayRestartFailed(profile);
-}
-
-async function restartGatewayLocallyOnce(
-  profile?: string,
-  healthTimeoutMs = 30000,
-  healthPollMs = 250,
-  stopTimeoutMs = 5000,
-): Promise<boolean> {
-  void profile;
-  void healthTimeoutMs;
-  void healthPollMs;
-  void stopTimeoutMs;
-  return false;
 }
 
 export function restartGateway(

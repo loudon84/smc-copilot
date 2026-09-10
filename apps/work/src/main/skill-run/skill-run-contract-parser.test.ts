@@ -3,8 +3,6 @@
  * @lat: [[skill-run#Prompt-first Main validation]]
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
