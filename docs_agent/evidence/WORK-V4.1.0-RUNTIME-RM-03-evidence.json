@@ -1,0 +1,380 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:227951234466538750e56b29ceefafa2dd0cf82241e41f0b92e7b117e1f932ef",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-02 AC-05 / HEAD rejects missing CLI path token; live CONFLICT",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-02 hermes.exe direct match",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-02 single foreign CONFLICT",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-02 inspect_failed / no_listener / mixed_listeners",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "REUSE_EVIDENCE",
+      "prior_evidence": "RM-01 `hermes-cli-runner` / path immutability",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "REUSE_EVIDENCE",
+      "prior_evidence": "RM-01/RM-02 guards + IPC refuse",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "`runtime-connection.md` still says hermes.exe listener",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "REUSE_EVIDENCE",
+      "prior_evidence": "check:runtime-adapter-contract",
+      "requirement": "AC-09",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "live health/auth PASS, Probe CONFLICT",
+      "requirement": "AC-10",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "AC-11",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    },
+    {
+      "claim_id": "CLM-14",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "none",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-05",
+        "CLM-11"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-05": "PASS",
+        "CLM-11": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/runtime/gateway-probe.test.ts tests/runtime-adapter.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.0-RUNTIME-RM-03/logs/20260910T110413.276441Z-V01.log",
+      "raw_log_sha256": "sha256:8602911934d7e63f6444bb11c682e0096cf7b46fe9e44bc8cc405d314f1e573c",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T11:04:13.276441Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-04"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-04": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'npm --prefix apps/work exec -- vitest run src/main/runtime/gateway-probe.test.ts tests/runtime-adapter.test.ts --pool=threads --maxWorkers=1'\"'\"', shell=True))'",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.0-RUNTIME-RM-03/logs/20260910T110416.334045Z-V02.log",
+      "raw_log_sha256": "sha256:6792ffdd90bc594d19f5a55366c9309e4f7a47acba3008ab1c6ff38841051f90",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T11:04:16.334045Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-08": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; from pathlib import Path; lat=subprocess.call('\"'\"'lat check'\"'\"', cwd='\"'\"'apps/work'\"'\"', shell=True); txt=Path('\"'\"'apps/work/lat.md/runtime-connection.md'\"'\"').read_text(encoding='\"'\"'utf-8'\"'\"'); ok=('\"'\"'ProgramRoot'\"'\"' in txt or '\"'\"'program root'\"'\"' in txt.lower()) and '\"'\"'managed hermes.exe'\"'\"' not in txt.lower(); sys.exit(0 if lat==0 and ok else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.0-RUNTIME-RM-03/logs/20260910T110419.459869Z-V03.log",
+      "raw_log_sha256": "sha256:b756ae116351bd33aa799205cfa08dbe28f4dcd6776209edabb6bad2400cc34e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T11:04:19.459869Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LIVE",
+      "candidate_id": "sha256:ba3ad21f4a3edd1f9ff998b206e11be02e998f29f0ca10a7b449fed6cc365f85",
+      "claim_ids": [
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-10": "PASS"
+      },
+      "command": "python .smc/runs/WORK-V4.1.0-RUNTIME-RM-03/live_verify.py V04",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.0-RUNTIME-RM-03/logs/20260910T110716.309981Z-V04.log",
+      "raw_log_sha256": "sha256:ea86b8019182cd2d680043b4db20111a90ed2b85e74b478da59b9f5b0689e0ab",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T11:07:16.309981Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS"
+      },
+      "command": "INHERIT:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json#V01",
+      "evidence_action": "REUSE_EVIDENCE",
+      "exit_code": 0,
+      "inherited": true,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": null,
+      "raw_log_sha256": null,
+      "result": "PASS",
+      "source_manifest": "docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json",
+      "source_manifest_sha256": "sha256:8bcbf34c45f2137f6f6277eb52f81ef3eb1478fe4e186ab9e9cb9e19a3d112ef",
+      "source_verification_id": "V01",
+      "timestamp": "2026-09-10T11:03:53.915540Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-07"
+      ],
+      "claim_results": {
+        "CLM-07": "PASS"
+      },
+      "command": "INHERIT:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json#V03",
+      "evidence_action": "REUSE_EVIDENCE",
+      "exit_code": 0,
+      "inherited": true,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": null,
+      "raw_log_sha256": null,
+      "result": "PASS",
+      "source_manifest": "docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json",
+      "source_manifest_sha256": "sha256:8bcbf34c45f2137f6f6277eb52f81ef3eb1478fe4e186ab9e9cb9e19a3d112ef",
+      "source_verification_id": "V03",
+      "timestamp": "2026-09-10T11:03:53.936503Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-09": "PASS"
+      },
+      "command": "INHERIT:docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json#V03",
+      "evidence_action": "REUSE_EVIDENCE",
+      "exit_code": 0,
+      "inherited": true,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": null,
+      "raw_log_sha256": null,
+      "result": "PASS",
+      "source_manifest": "docs_agent/evidence/WORK-V4.1.0-RUNTIME-RM-02-evidence.json",
+      "source_manifest_sha256": "sha256:8bcbf34c45f2137f6f6277eb52f81ef3eb1478fe4e186ab9e9cb9e19a3d112ef",
+      "source_verification_id": "V03",
+      "timestamp": "2026-09-10T11:03:53.928504Z",
+      "verification_id": "V07"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-12",
+        "CLM-13",
+        "CLM-14"
+      ],
+      "claim_results": {
+        "CLM-12": "PASS",
+        "CLM-13": "PASS",
+        "CLM-14": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; from pathlib import Path; plan='\"'\"'.cursor/plans/work-v4.1.2-managed-hermes-verification-boundary-closure.plan.md'\"'\"'; ok=subprocess.call([sys.executable,'\"'\"'.agents/skills/smc-plan-delivery/scripts/completion_audit.py'\"'\"','\"'\"'check'\"'\"','\"'\"'--plan'\"'\"',plan])==0; ok=ok and subprocess.call([sys.executable,'\"'\"'.agents/skills/smc-plan-delivery/scripts/review_record.py'\"'\"','\"'\"'check'\"'\"','\"'\"'--plan'\"'\"',plan,'\"'\"'--kind'\"'\"','\"'\"'implementation'\"'\"'])==0; sys.exit(0 if ok else 1)'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.0-RUNTIME-RM-03/logs/20260910T110727.706092Z-V08.log",
+      "raw_log_sha256": "sha256:2ecb9ff7de41bc9db0d5ae0ed71aafe20a4e0c38967fe2ee2daf92a2c86ba2f2",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T11:07:27.706092Z",
+      "verification_id": "V08"
+    }
+  ],
+  "completion_audit": {
+    "changed": 6,
+    "deferred": 0,
+    "done": 6,
+    "scope_drift": 0,
+    "timestamp": "2026-09-10T11:02:20.409745Z",
+    "total_items": 6,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-10T11:08:37.601537Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:7674d54f7e28fe5970f2f6d0d3b69f297fcdeefc746ec8ee44644c0f2dc90eec",
+    "timestamp": "2026-09-10T11:02:41.612175Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:d9c62e189f7d4c8db4f53d476f5b7157824b1785353ab4bde524591fbee80e5a",
+  "plan": ".cursor/plans/work-v4.1.2-managed-hermes-verification-boundary-closure.plan.md",
+  "plan_id": "WORK-V4.1.0-RUNTIME-RM-03",
+  "plan_review": {
+    "plan_sha256": "sha256:3b56db10884c7c362b31f92aebdc0c64af21c3dd5a28844dac619ce7f2978a4c",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-10T10:53:47.781677Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:7674d54f7e28fe5970f2f6d0d3b69f297fcdeefc746ec8ee44644c0f2dc90eec",
+  "verification_candidate": {
+    "candidate_id": "sha256:ba3ad21f4a3edd1f9ff998b206e11be02e998f29f0ca10a7b449fed6cc365f85",
+    "captured_at": "2026-09-10T11:03:31.754625Z",
+    "plan_id": "WORK-V4.1.0-RUNTIME-RM-03",
+    "schema": "smc.verification.candidate.v1",
+    "scope_fingerprint": "sha256:7674d54f7e28fe5970f2f6d0d3b69f297fcdeefc746ec8ee44644c0f2dc90eec"
+  },
+  "workspace_base_commit": "f08773030dfa0313519fa4223c48c9667b5d6d63"
+}

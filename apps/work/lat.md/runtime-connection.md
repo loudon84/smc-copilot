@@ -38,9 +38,9 @@ Release writes `resources/work-build-info.json` (`smc.work.build.v1`) with versi
 
 ## Gateway probe
 
-[[src/main/runtime/gateway-probe.ts]] performs `GET /health` and authenticated `GET /v1/models`. On Windows, READY also requires listen inspect of the managed `hermes.exe`.
+[[src/main/runtime/gateway-probe.ts]] probes Gateway health and auth. Windows READY requires every listener executable inside the Locator ProgramRoot.
 
-Inspect failure or a foreign owning process is not READY (UNAVAILABLE / `configuration_error` / CONFLICT) and never kills the process.
+Inspect is read-only: CommandLine is not an ownership input, health alone is not READY, and Work never kills the OwningProcess. Failure, no local listener, or a listener outside ProgramRoot is `configuration_error` or CONFLICT.
 
 ## Startup
 

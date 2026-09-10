@@ -16,7 +16,7 @@ import {
   probeGatewayAuthentication,
   probeGatewayHealth,
 } from "./gateway-probe";
-import { getHermesCliPath } from "./hermes-runtime-config";
+import { getHermesProgramRoot } from "./hermes-runtime-config";
 import {
   RUNTIME_ERROR_CODES,
   runtimeErrorMessage,
@@ -39,6 +39,9 @@ function resultFromProbe(
   };
 }
 
+const CONFLICT_OWNERSHIP_MESSAGE =
+  "The process listening on the configured Gateway port is not owned by the managed Hermes ProgramRoot. Repair belongs to the endpoint management service.";
+
 function fail(
   state: HermesRuntimeState,
   code: RuntimeErrorCode | "CONFLICT",
@@ -47,6 +50,7 @@ function fail(
     "state" | "errorCode" | "errorMessage" | "probedAt"
   >,
   message?: string,
+  extras?: Pick<HermesRuntimeProbe, "listenerOwnership" | "listenerExecutable">,
 ): HermesRuntimeProbe {
   return {
     ...base,
@@ -55,10 +59,12 @@ function fail(
     errorMessage:
       message ??
       (code === "CONFLICT"
-        ? "The process listening on the configured Gateway port is not the managed Hermes CLI."
+        ? CONFLICT_OWNERSHIP_MESSAGE
         : runtimeErrorMessage(code)),
     probedAt: Date.now(),
     runtimeContextVerified: false,
+    listenerOwnership: extras?.listenerOwnership ?? "unknown",
+    listenerExecutable: extras?.listenerExecutable,
   };
 }
 
@@ -154,23 +160,36 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
 
   const listen = await inspectGatewayListener(
     loc.endpoint,
-    getHermesCliPath() || loc.executablePath,
+    getHermesProgramRoot(),
   );
   switch (listen.status) {
     case "not_required":
+      return {
+        ...authenticated,
+        state: "ready",
+        probedAt: Date.now(),
+        runtimeContextVerified: false,
+        listenerOwnership: "unknown",
+      };
     case "match":
       return {
         ...authenticated,
         state: "ready",
         probedAt: Date.now(),
-        runtimeContextVerified: listen.status === "match",
+        runtimeContextVerified: true,
+        listenerOwnership: "managed",
+        listenerExecutable: listen.actualPath,
       };
     case "mismatch":
       return fail(
         "conflict",
         "CONFLICT",
         authenticated,
-        "The process listening on the configured Gateway port is not the managed Hermes CLI. Do not stop that process; repair belongs to the endpoint management service.",
+        CONFLICT_OWNERSHIP_MESSAGE,
+        {
+          listenerOwnership: "foreign",
+          listenerExecutable: listen.actualPath,
+        },
       );
     case "no_listener":
       return fail(
@@ -178,6 +197,7 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
         RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
         authenticated,
         "Gateway health succeeded but no local listener was found on the configured port.",
+        { listenerOwnership: "unknown" },
       );
     case "inspect_failed":
       return fail(
@@ -185,6 +205,7 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
         RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
         authenticated,
         `Gateway listen inspect failed: ${listen.reason}`,
+        { listenerOwnership: "unknown" },
       );
     default: {
       const _exhaustive: never = listen;

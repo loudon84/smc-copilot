@@ -6,7 +6,6 @@
 import { execFile } from "child_process";
 import http from "http";
 import https from "https";
-import path from "path";
 import { promisify } from "util";
 import { getApiServerKey } from "../config";
 import {
@@ -17,7 +16,7 @@ import {
 const execFileAsync = promisify(execFile);
 
 export type GatewayListenInspectResult =
-  | { status: "match" }
+  | { status: "match"; actualPath?: string }
   | { status: "mismatch"; actualPath?: string }
   | { status: "no_listener" }
   | { status: "inspect_failed"; reason: string }
@@ -118,64 +117,61 @@ function normalizeExecutablePath(value: string): string {
   return value.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
 }
 
-function managedPythonPathForExpectedCli(expectedExe: string): string {
-  const expectedNorm = path.normalize(expectedExe.trim());
-  const installRoot = path.dirname(path.dirname(expectedNorm));
-  return path.join(installRoot, "python", "python.exe");
-}
-
-function commandLineHasToken(commandLine: string, token: string): boolean {
-  const pattern = new RegExp(`(?:^|[\\s"'])${token}(?:$|[\\s"'])`, "i");
-  return pattern.test(commandLine);
-}
-
-function commandLineContainsExpectedCli(
-  commandLine: string,
-  expectedExe: string,
+export function isInManagedProgramRoot(
+  programRoot: string,
+  executablePath: string,
 ): boolean {
-  const cmd = normalizeExecutablePath(commandLine);
-  const expected = normalizeExecutablePath(expectedExe);
-  if (!expected) return false;
-  return cmd.includes(expected) || cmd.includes(`"${expected}"`);
+  const root = normalizeExecutablePath(programRoot);
+  const actual = normalizeExecutablePath(executablePath);
+  if (!root || !actual) {
+    return false;
+  }
+  if (actual === root) {
+    return true;
+  }
+  const prefix = root.endsWith("\\") ? root : `${root}\\`;
+  return actual.startsWith(prefix);
 }
 
 /**
- * Parent v1.1.3 C05: hermes.exe direct OR same-install-root python.exe
- * launching expected hermes.exe with gateway + run tokens.
+ * Windows listen-match identity: ExecutablePath is inside Locator ProgramRoot.
+ * CommandLine is not an ownership input.
  */
 export function isManagedHermesGatewayProcess(
-  expectedExe: string,
+  programRoot: string,
   listener: GatewayListenerProcess,
-): boolean | "missing_command_line" {
-  const expected = expectedExe.trim();
-  if (!expected || !listener.executablePath?.trim()) {
-    return false;
-  }
-  const expectedNorm = normalizeExecutablePath(expected);
-  const actualNorm = normalizeExecutablePath(listener.executablePath);
-  if (actualNorm === expectedNorm) {
-    return true;
-  }
+): boolean {
+  return isInManagedProgramRoot(programRoot, listener.executablePath);
+}
 
-  const managedPythonNorm = normalizeExecutablePath(
-    managedPythonPathForExpectedCli(expected),
-  );
-  if (actualNorm !== managedPythonNorm) {
-    return false;
+export function evaluateGatewayListeners(
+  programRoot: string,
+  listeners: GatewayListenerProcess[],
+): GatewayListenInspectResult {
+  const root = programRoot.trim();
+  if (!root) {
+    return { status: "inspect_failed", reason: "missing_program_root" };
   }
-
-  const commandLine = listener.commandLine?.trim() ?? "";
-  if (!commandLine) {
-    return "missing_command_line";
+  if (listeners.length === 0) {
+    return { status: "no_listener" };
   }
-  if (
-    !commandLineContainsExpectedCli(commandLine, expected) ||
-    !commandLineHasToken(commandLine, "gateway") ||
-    !commandLineHasToken(commandLine, "run")
-  ) {
-    return false;
+  const owned = listeners.map((listener) => ({
+    listener,
+    inBoundary: isManagedHermesGatewayProcess(root, listener),
+  }));
+  if (owned.every((item) => item.inBoundary)) {
+    return {
+      status: "match",
+      actualPath: owned[0]?.listener.executablePath,
+    };
   }
-  return true;
+  if (listeners.length === 1) {
+    return {
+      status: "mismatch",
+      actualPath: owned[0]?.listener.executablePath,
+    };
+  }
+  return { status: "inspect_failed", reason: "mixed_listeners" };
 }
 
 type ParsedListenerInspect =
@@ -246,7 +242,7 @@ function parseInspectStdout(stdout: string): ParsedListenerInspect {
 /** Read-only Windows listen inspect. Never signals or kills OwningProcess. */
 export async function inspectGatewayListener(
   endpoint: string,
-  expectedExe: string,
+  programRoot: string,
 ): Promise<GatewayListenInspectResult> {
   if (process.platform !== "win32") {
     return { status: "not_required" };
@@ -255,9 +251,9 @@ export async function inspectGatewayListener(
   if (port == null) {
     return { status: "inspect_failed", reason: "invalid_endpoint_port" };
   }
-  const expected = expectedExe.trim();
-  if (!expected) {
-    return { status: "inspect_failed", reason: "missing_expected_executable" };
+  const root = programRoot.trim();
+  if (!root) {
+    return { status: "inspect_failed", reason: "missing_program_root" };
   }
   const script = [
     "$ErrorActionPreference = 'Stop'",
@@ -282,31 +278,7 @@ export async function inspectGatewayListener(
     if (parsed.kind === "error") {
       return { status: "inspect_failed", reason: parsed.error };
     }
-    if (parsed.listeners.length === 0) {
-      return { status: "no_listener" };
-    }
-
-    const evaluations = parsed.listeners.map((listener) => ({
-      listener,
-      result: isManagedHermesGatewayProcess(expected, listener),
-    }));
-
-    if (evaluations.every((item) => item.result === true)) {
-      return { status: "match" };
-    }
-
-    if (parsed.listeners.length > 1) {
-      return { status: "inspect_failed", reason: "mixed_listeners" };
-    }
-
-    const only = evaluations[0];
-    if (only.result === "missing_command_line") {
-      return { status: "inspect_failed", reason: "missing_command_line" };
-    }
-    return {
-      status: "mismatch",
-      actualPath: only.listener.executablePath,
-    };
+    return evaluateGatewayListeners(root, parsed.listeners);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (/ObjectNotFound|no matching|cannot find/i.test(message)) {

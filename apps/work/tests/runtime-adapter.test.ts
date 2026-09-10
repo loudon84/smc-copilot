@@ -229,6 +229,7 @@ describe("LegacyLocalRuntimeAdapter", () => {
     expect(probe.authenticated).toBe(true);
     expect(probe.gatewayHealthy).toBe(true);
     expect(probe.runtimeContextVerified).toBe(true);
+    expect(probe.listenerOwnership).toBe("managed");
   });
 
   it("maps listen mismatch to conflict without becoming ready", async () => {
@@ -251,6 +252,9 @@ describe("LegacyLocalRuntimeAdapter", () => {
     expect(probe.state).toBe("conflict");
     expect(probe.errorCode).toBe("CONFLICT");
     expect(probe.runtimeContextVerified).toBe(false);
+    expect(probe.listenerOwnership).toBe("foreign");
+    expect(probe.listenerExecutable).toBe("C:\\Windows\\System32\\python.exe");
+    expect(probe.errorMessage?.toLowerCase()).not.toContain("stop");
   });
 
   it("maps missing local listener after health to configuration_error", async () => {
@@ -271,6 +275,8 @@ describe("LegacyLocalRuntimeAdapter", () => {
     const probe = await new LegacyLocalRuntimeAdapter().probe();
     expect(probe.state).toBe("configuration_error");
     expect(probe.state).not.toBe("ready");
+    expect(probe.listenerOwnership).toBe("unknown");
+    expect(probe.runtimeContextVerified).toBe(false);
   });
 
   it("maps listen inspect failure to configuration_error, not ready", async () => {
@@ -292,6 +298,8 @@ describe("LegacyLocalRuntimeAdapter", () => {
     const probe = await new LegacyLocalRuntimeAdapter().probe();
     expect(probe.state).toBe("configuration_error");
     expect(probe.errorMessage).toContain("access denied");
+    expect(probe.listenerOwnership).toBe("unknown");
+    expect(probe.listenerOwnership).not.toBe("managed");
   });
 
   it("rejects %LOCALAPPDATA%\\hermes as a managed home even when listen matches", async () => {

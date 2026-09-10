@@ -33,8 +33,10 @@ export interface HermesRuntimeProbe {
   errorCode?: string;
   errorMessage?: string;
   probedAt?: number;
-  /** True only after Windows listen inspect succeeded and matched the managed CLI. */
+  /** True only after Windows listen inspect succeeded and every listener is in ProgramRoot. */
   runtimeContextVerified?: boolean;
+  listenerOwnership?: "managed" | "foreign" | "unknown";
+  listenerExecutable?: string;
 }
 
 export interface HermesRuntimeConnectionResult {
