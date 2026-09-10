@@ -429,6 +429,8 @@ python .agents/skills/smc-plan-delivery/scripts/evidence.py run \
   --plan "$PLAN_PATH" --verification V01 -- <exact command>
 ```
 
+当 Plan 的相对命令属于子项目时，执行器可以用 `--cwd apps/work` 指定仓库内的工作目录；该参数不改变 Plan command 的匹配或账本中的 canonical command。
+
 在 Windows 上，canonical command 仍保持 `npm ...` 等平台中立文本；runner 只在进程启动层显式解析 `.cmd` / `.bat` shim，命令匹配和证据账本继续记录 Plan 原文，不要求业务 Plan 写成 `npm.cmd`。解析后的 shim 直接以 argv 启动，不将 Plan 参数重新解释为 `cmd.exe` shell 语法。
 
 `REUSE_EVIDENCE`：

@@ -85,6 +85,21 @@ def launch_command(command: list[str], *, platform: str | None = None, which=shu
     return command
 
 
+def execution_cwd(root: Path, value: str | None) -> Path:
+    """Resolve an optional repository-relative execution directory safely."""
+    resolved_root = root.resolve()
+    if not value:
+        return resolved_root
+    candidate = (resolved_root / value).resolve()
+    try:
+        candidate.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError("EVIDENCE_CWD_OUTSIDE_REPO") from exc
+    if not candidate.is_dir():
+        raise ValueError("EVIDENCE_CWD_NOT_DIRECTORY")
+    return candidate
+
+
 def _freshness(plan: Path, rec: dict) -> bool:
     ws = workspace_inspect(plan)
     return (
@@ -145,7 +160,7 @@ def _acceptance_claim_results(log: Path, claim_ids: list[str]) -> tuple[bool, di
     return all(results.get(cid) == "PASS" for cid in claim_ids), results, None
 
 
-def run_cmd(plan: Path, vid: str, command: list[str]) -> int:
+def run_cmd(plan: Path, vid: str, command: list[str], cwd: str | None = None) -> int:
     root = find_repo_root(plan); pid = plan_id(plan); rows = verification_rows(plan)
     if vid not in rows:
         print(f"PLAN_VERIFICATION_UNKNOWN: {vid}", file=sys.stderr); return 2
@@ -176,13 +191,17 @@ def run_cmd(plan: Path, vid: str, command: list[str]) -> int:
     ws = workspace_inspect(plan)
     if not ws["pass"]:
         print("EVIDENCE_WORKSPACE_UNSTABLE", file=sys.stderr); return 2
+    try:
+        command_cwd = execution_cwd(root, cwd)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr); return 2
     ts = utc_now(); safe_ts = ts.replace(":", "").replace("-", "")
     logs = root / ".smc" / "evidence" / pid / "logs"; logs.mkdir(parents=True, exist_ok=True)
     log = logs / f"{safe_ts}-{vid}.log"
     with log.open("w", encoding="utf-8", newline="\n") as out:
         os.chmod(log, 0o600)
         out.write(f"# command: {rendered}\n# scope_fingerprint: {ws['scope_fingerprint']}\n# ambient_fingerprint: {ws['ambient_fingerprint']}\n# timestamp: {ts}\n\n")
-        proc = subprocess.Popen(launch_command(command), cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        proc = subprocess.Popen(launch_command(command), cwd=command_cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         assert proc.stdout is not None
         for line in proc.stdout:
             sys.stdout.write(line); out.write(line)
@@ -206,6 +225,7 @@ def run_cmd(plan: Path, vid: str, command: list[str]) -> int:
         "plan_id": pid,
         "verification_id": vid,
         "command": rendered,
+        "execution_cwd": repo_relative_path(command_cwd, root),
         "command_exit_code": command_rc,
         "exit_code": effective_rc,
         "result": "PASS" if effective_rc == 0 else "FAIL",
@@ -344,7 +364,7 @@ def manifest_status(plan: Path, expected_fingerprint: str | None = None, require
 
 def main() -> int:
     ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("run"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--verification", required=True); p.add_argument("command", nargs=argparse.REMAINDER)
+    p = sub.add_parser("run"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--verification", required=True); p.add_argument("--cwd"); p.add_argument("command", nargs=argparse.REMAINDER)
     p = sub.add_parser("check"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--verification"); p.add_argument("--expect-command"); p.add_argument("--all-blocking", action="store_true"); p.add_argument("--json", action="store_true")
     p = sub.add_parser("manifest"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--output", type=Path)
     p = sub.add_parser("manifest-check"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--fingerprint"); p.add_argument("--json", action="store_true")
@@ -352,7 +372,7 @@ def main() -> int:
     if not plan.is_file(): print(f"PLAN_NOT_FOUND: {plan}", file=sys.stderr); return 2
     if args.cmd == "run":
         cmd = args.command[1:] if args.command and args.command[0] == "--" else args.command
-        return run_cmd(plan, args.verification.upper(), cmd)
+        return run_cmd(plan, args.verification.upper(), cmd, args.cwd)
     if args.cmd == "manifest":
         try: path, payload = build_manifest(plan, args.output)
         except (ValueError, RuntimeError) as exc: print(str(exc), file=sys.stderr); return 1

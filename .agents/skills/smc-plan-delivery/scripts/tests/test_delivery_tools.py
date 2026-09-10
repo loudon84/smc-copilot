@@ -391,6 +391,13 @@ class DeliveryToolsTest(unittest.TestCase):
         self.assertEqual(r"C:\\node\\npm.cmd", launch[0])
         self.assertEqual(["exec", "vitest", "--", "run"], launch[1:])
 
+    def test_execution_cwd_is_scoped_to_the_repository(self):
+        component = self.root / "apps/work"
+        component.mkdir(parents=True)
+        self.assertEqual(component.resolve(), evidence.execution_cwd(self.root, "apps/work"))
+        with self.assertRaisesRegex(ValueError, "EVIDENCE_CWD_OUTSIDE_REPO"):
+            evidence.execution_cwd(self.root, "..")
+
     @unittest.skipUnless(sys.platform == "win32", "Windows command shim regression")
     def test_windows_evidence_runner_executes_npm_and_records_canonical_command(self):
         self.plan.write_text(
