@@ -627,7 +627,10 @@ describe("resolveDashboardProviderForModel", () => {
     ).toBe("deepseek");
   });
 
-  it("does not map known built-in endpoints when the dashboard provider lacks the model", () => {
+  it("still maps known built-in endpoints to the brand slug when the live inventory omits the model", () => {
+    // Bare `--provider custom` would bind to the session's current base URL
+    // (often the config.yaml default). Prefer the known brand slug so the
+    // agent resolves the correct endpoint from config.yaml `providers:`.
     expect(
       resolveDashboardProviderForModel(
         "custom",
@@ -643,7 +646,7 @@ describe("resolveDashboardProviderForModel", () => {
           ],
         },
       ),
-    ).toBe("custom");
+    ).toBe("deepseek");
   });
 
   // Regression: `/model hermesone-swift --provider custom` let the agent bind
@@ -671,6 +674,28 @@ describe("resolveDashboardProviderForModel", () => {
               name: "SMC Copilot",
               api_url: "https://inference.hermesone.org/v1/",
               models: [],
+            },
+          ],
+        },
+      ),
+    ).toBe("hermesone");
+  });
+
+  it("resolves the enterprise SMC Copilot URL to hermesone even when live inventory omits the model", () => {
+    expect(
+      resolveDashboardProviderForModel(
+        "custom",
+        "deepseek-v4-flash",
+        "http://llm.superic.com:3900/v1",
+        {
+          provider: "custom",
+          model: "deepseek-v4-pro",
+          providers: [
+            {
+              slug: "custom",
+              name: "OpenAI Compatible",
+              api_url: "https://api.deepseek.com/v1",
+              models: ["deepseek-v4-pro"],
             },
           ],
         },

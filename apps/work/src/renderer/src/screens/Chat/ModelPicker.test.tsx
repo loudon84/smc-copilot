@@ -340,4 +340,51 @@ describe("ModelPicker", () => {
     expect(within(dropdown).queryByText("OWL Alpha")).toBeNull();
     expect(within(dropdown).queryByText("Llama 3")).toBeNull();
   });
+
+  // @lat: [[model-selection#Session model override#Strict chat picker from agent config#Duplicate configured rows collapse]]
+  it("shows a duplicate provider/model/url row only once", () => {
+    const modelGroups: ModelGroup[] = [
+      {
+        provider: "hermesone",
+        providerLabel: "SMC Copilot",
+        models: [
+          {
+            provider: "custom",
+            model: "deepseek-v4-flash",
+            label: "deepseek-v4-flash",
+            baseUrl: "http://llm.superic.com:3900/v1",
+          },
+          {
+            provider: "custom",
+            model: "deepseek-v4-flash",
+            label: "deepseek-v4-flash",
+            baseUrl: "http://llm.superic.com:3900/v1/",
+          },
+          {
+            provider: "custom",
+            model: "deepseek-v4-pro",
+            label: "deepseek-v4-pro",
+            baseUrl: "http://llm.superic.com:3900/v1",
+          },
+          {
+            provider: "custom",
+            model: "deepseek-v4-pro",
+            label: "deepseek-v4-pro",
+            baseUrl: "http://llm.superic.com:3900/v1",
+          },
+        ],
+      },
+    ];
+    const { container } = renderPicker({
+      modelGroups,
+      currentModel: "deepseek-v4-flash",
+      currentProvider: "custom",
+      currentBaseUrl: "http://llm.superic.com:3900/v1",
+    });
+    const dropdown = openPicker(container);
+    const titles = Array.from(
+      dropdown.querySelectorAll(".chat-model-row-title"),
+    ).map((el) => el.textContent);
+    expect(titles).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
+  });
 });

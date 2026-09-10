@@ -7,9 +7,9 @@ import {
   type CustomProviderRecord,
 } from "../shared/custom-providers";
 import {
-  CUSTOM_API_KEY_ENV,
   customProviderEnvKey,
-  expectedEnvKeyForUrl,
+  isDedicatedBrandCustomProvider,
+  isFirstPartyMirroredProvider,
 } from "../shared/url-key-map";
 import {
   listAgentUserProviders,
@@ -117,10 +117,19 @@ function importAgentConfigProviders(profile: string | undefined): void {
     const name = (ap.name || "").trim();
     const baseUrl = (ap.baseUrl || "").trim();
     if (!name || !baseUrl) continue;
-    // First-party brand hosts already have dedicated key cards — skip so we
-    // don't duplicate DeepSeek/etc. as a generic custom card. Still import
-    // when the URL maps only to CUSTOM_API_KEY.
-    if (expectedEnvKeyForUrl(baseUrl) !== CUSTOM_API_KEY_ENV) continue;
+    // First-party brand hosts, names, and the mirrored hermesone slug/key
+    // already have dedicated key cards — skip so we don't duplicate SMC
+    // Copilot/DeepSeek/etc. as a generic custom card. Still import when the
+    // URL maps only to CUSTOM_API_KEY and the row is not the first-party mirror.
+    if (
+      isFirstPartyMirroredProvider({
+        slug: ap.slug,
+        name,
+        baseUrl,
+        keyEnv: ap.keyEnv,
+      })
+    )
+      continue;
 
     upsertCustomProviderRecordOnly(profile, { name, baseUrl });
 
@@ -183,7 +192,12 @@ export function listCustomProviders(profile?: string): CustomProviderRecord[] {
   // entries so gateway model switches can route them by slug.
   mirrorFirstPartyAgentProviders(normalized);
   importAgentConfigProviders(normalized);
-  return readProvidersFile(normalized).providers;
+  // Hide leftover records that duplicate a dedicated brand card (e.g. a
+  // previously imported `SMC Copilot` / host-named `llm.superic.com:3900`
+  // row sitting beside the HERMESONE_API_KEY card).
+  return readProvidersFile(normalized).providers.filter(
+    (p) => !isDedicatedBrandCustomProvider(p.name, p.baseUrl),
+  );
 }
 
 /**

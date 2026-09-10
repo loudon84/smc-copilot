@@ -8097,11 +8097,19 @@ body:has(.shell-vibrant),
   color: var(--text-primary);
 }
 .provider-config-card-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.provider-config-card-models {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
 }
 .provider-config-card-edit {
   color: var(--text-muted);

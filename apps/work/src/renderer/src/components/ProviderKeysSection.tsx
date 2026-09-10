@@ -20,6 +20,7 @@ import {
   CUSTOM_API_KEY_ENV,
   customProviderEnvKey,
   expectedEnvKeyForUrl,
+  isDedicatedBrandCustomProvider,
 } from "../../../shared/url-key-map";
 import { useI18n } from "./useI18n";
 import BrandLogo from "./common/BrandLogo";
@@ -311,9 +312,9 @@ function ProviderModelsManager({
         ) : (
           <div className="provider-models-chips">
             {(showAllModels ? models : models.slice(0, MODELS_COLLAPSED)).map(
-              (m) => (
+              (m, idx) => (
                 <span
-                  key={m.id}
+                  key={`${m.id}:${idx}`}
                   className="provider-model-chip"
                   title={
                     m.contextLength
@@ -392,7 +393,7 @@ function ProviderModelsManager({
                   placeholder={t("providers.models.addModelId")}
                 />
                 <datalist id={listId}>
-                  {discovery.models.map((mm) => (
+                  {[...new Set(discovery.models)].map((mm) => (
                     <option key={mm} value={mm} />
                   ))}
                 </datalist>
@@ -549,6 +550,36 @@ export function ProviderKeysSection({
     () => keyItems.filter((f) => isSet(f.key)),
     [keyItems, isSet],
   );
+
+  // Load the full model library once for card subtitles (URL + models).
+  const [libModels, setLibModels] = useState<LibModel[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async (): Promise<void> => {
+      const all = (await window.hermesAPI.listModels()) as LibModel[];
+      if (!cancelled) setLibModels(all);
+    };
+    void load();
+    const off = window.hermesAPI.onModelLibraryChanged(() => void load());
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, []);
+
+  // Card subtitle for a keyed brand: route base URL + saved models.
+  const keyedCardMeta = useMemo(() => {
+    const map = new Map<string, { baseUrl: string; models: LibModel[] }>();
+    for (const f of configured) {
+      const route = providerRouteForEnvKey(f.key);
+      const models = libModels.filter((m) => {
+        if (route.provider !== "custom") return m.provider === route.provider;
+        return m.provider === "custom" && normUrl(m.baseUrl) === normUrl(route.baseUrl);
+      });
+      map.set(f.key, { baseUrl: route.baseUrl, models });
+    }
+    return map;
+  }, [configured, libModels]);
   const available = useMemo(() => {
     const q = search.trim().toLowerCase();
     // Match both the displayed provider name and the full FieldDef label, so
@@ -574,6 +605,7 @@ export function ProviderKeysSection({
     const list: { name: string; baseUrl: string }[] = [];
     const push = (name: string, baseUrl: string): void => {
       if (!name) return;
+      if (isDedicatedBrandCustomProvider(name, baseUrl)) return;
       const anchor = customProviderEnvKey(name);
       if (seen.has(anchor)) return;
       seen.add(anchor);
@@ -625,8 +657,32 @@ export function ProviderKeysSection({
       seen.add(key);
       list.push({ name: envKeyToName(key), baseUrl: "" });
     }
-    return list;
+    return list.filter(
+      (p) => !isDedicatedBrandCustomProvider(p.name, p.baseUrl),
+    );
   }, [storedProviders, env]);
+
+  // Card-visible custom provider models for the union list.
+  const customProviderModels = useMemo(() => {
+    const map = new Map<string, LibModel[]>();
+    for (const cp of customProviders) {
+      const target = normUrl(cp.baseUrl);
+      map.set(
+        cp.name + cp.baseUrl,
+        libModels.filter((m) => {
+          if (m.provider !== "custom") return false;
+          if (cp.name) {
+            return (
+              m.providerLabel === cp.name ||
+              (!m.providerLabel && normUrl(m.baseUrl) === target)
+            );
+          }
+          return normUrl(m.baseUrl) === target;
+        }),
+      );
+    }
+    return map;
+  }, [customProviders, libModels]);
 
   function openConfig(field: FieldDef): void {
     setPickerOpen(false);
@@ -681,53 +737,68 @@ export function ProviderKeysSection({
     <>
       {/* Configured providers + an Add tile */}
       <div className="provider-keys-grid">
-        {configured.map((field) => (
-          <button
-            key={field.key}
-            type="button"
-            className="provider-config-card"
-            onClick={() => openConfig(field)}
-          >
-            <BrandLogo provider={field.key} size={22} />
-            <span className="provider-config-card-body">
-              <span className="provider-config-card-title">
-                {/* A list of providers, so just the name — the "API Key"
-                    suffix of the FieldDef label is noise here. */}
-                {t(providerNameForEnvKey(field.key) ?? field.label)}
+        {configured.map((field) => {
+          const meta = keyedCardMeta.get(field.key);
+          const baseUrl = meta?.baseUrl || "";
+          const modelNames = [
+            ...new Set((meta?.models ?? []).map((m) => m.model)),
+          ].join(", ");
+          return (
+            <button
+              key={field.key}
+              type="button"
+              className="provider-config-card"
+              onClick={() => openConfig(field)}
+            >
+              <BrandLogo provider={field.key} size={22} />
+              <span className="provider-config-card-body">
+                <span className="provider-config-card-title">
+                  {/* A list of providers, so just the name — the "API Key"
+                      suffix of the FieldDef label is noise here. */}
+                  {t(providerNameForEnvKey(field.key) ?? field.label)}
+                </span>
+                <span className="provider-config-card-sub">
+                  {baseUrl}
+                </span>
+                {modelNames && (
+                  <span className="provider-config-card-models">{modelNames}</span>
+                )}
               </span>
-              <span className="provider-config-card-sub">
-                {visibleKeys.has(field.key)
-                  ? env[field.key]
-                  : "•••••••• key set"}
-              </span>
-            </span>
-            <Pencil
-              className="provider-config-card-edit"
-              size={15}
-              aria-hidden
-            />
-          </button>
-        ))}
+              <Pencil
+                className="provider-config-card-edit"
+                size={15}
+                aria-hidden
+              />
+            </button>
+          );
+        })}
 
-        {customProviders.map((cp) => (
-          <button
-            key={cp.name + cp.baseUrl}
-            type="button"
-            className="provider-config-card"
-            onClick={() => openCustom(cp.name, cp.baseUrl)}
-          >
-            <Globe size={22} aria-hidden />
-            <span className="provider-config-card-body">
-              <span className="provider-config-card-title">{cp.name}</span>
-              <span className="provider-config-card-sub">{cp.baseUrl}</span>
-            </span>
-            <Pencil
-              className="provider-config-card-edit"
-              size={15}
-              aria-hidden
-            />
-          </button>
-        ))}
+        {customProviders.map((cp) => {
+          const models = customProviderModels.get(cp.name + cp.baseUrl) ?? [];
+          const modelNames = [...new Set(models.map((m) => m.model))].join(", ");
+          return (
+            <button
+              key={cp.name + cp.baseUrl}
+              type="button"
+              className="provider-config-card"
+              onClick={() => openCustom(cp.name, cp.baseUrl)}
+            >
+              <Globe size={22} aria-hidden />
+              <span className="provider-config-card-body">
+                <span className="provider-config-card-title">{cp.name}</span>
+                <span className="provider-config-card-sub">{cp.baseUrl}</span>
+                {modelNames && (
+                  <span className="provider-config-card-models">{modelNames}</span>
+                )}
+              </span>
+              <Pencil
+                className="provider-config-card-edit"
+                size={15}
+                aria-hidden
+              />
+            </button>
+          );
+        })}
 
         <button
           type="button"

@@ -15,6 +15,16 @@ The Chat ModelPicker lists **only** models already declared in hermes-agent `con
 
 Dedup key is `provider + model + normalized baseUrl`. The Providers screen still uses `listModels()` / `models.json` for managing the broader library; only the in-chat picker is strict.
 
+### Providers UI models sync into custom_providers
+
+Providers-UI model adds are mirrored into config.yaml `custom_providers:` so the strict chat picker can list them.
+
+[[src/main/models.ts#addModel]] upserts via [[src/main/agent-config-providers.ts#upsertAgentCustomProviderModel]]; `listConfiguredAgentModels` also mirrors any pre-existing `provider: "custom"` library rows **once per profile per process** (not on every picker refresh), so a locked `ProgramData` config.yaml cannot spam EPERM on each IPC list.
+
+### Duplicate configured rows collapse
+
+Identical `provider + model + normalized baseUrl` rows (including trailing-slash variants) render once in the chat picker ([[src/renderer/src/screens/Chat/hooks/useModelConfig.ts]] and [[src/renderer/src/screens/Chat/ModelPicker.tsx]]), so React keys stay unique when config.yaml lists the same model under both `model.default` and `custom_providers:`.
+
 When `desktop.json` connection mode is `remote` but the URL is loopback (`localhost` / `127.0.0.1`), the IPC handler still reads the **local** `config.yaml` — that setup talks to a local gateway while agent config remains on disk. True remote hosts still expose only the dashboard's active model. SSH legacy falls back to [[src/main/ssh-remote.ts#sshGetModelConfig]].
 
 Named custom provider cards on the Providers screen import both the `providers:` dict and the legacy `custom_providers:` list into `providers.json` via [[src/main/providers-store.ts#listCustomProviders]] (hosts that map to a first-party brand key stay on their dedicated card).
@@ -38,6 +48,8 @@ A **Configure** button is pinned at the bottom of the provider rail (below the s
 The override is a `SessionModelOverride` (`{provider, model, baseUrl}`), not a bare model string — because switching across providers must change routing, not only the `model` field.
 
 The picker builds it via [[src/renderer/src/screens/Chat/hooks/useModelConfig.ts#effectiveOverrideBaseUrl]], the same baseUrl rule `selectModel` applies (keep the URL only for `custom`/`ollama-cloud`; clear it for named providers that have a canonical base URL), so the session pick and a persisted save can't drift. It is threaded renderer → preload IPC → main `sendMessage` as `modelOverride`.
+
+Dashboard transport resolves a `custom` + known brand URL (e.g. `http://llm.superic.com:3900/v1`) to the named slug (`hermesone`) before `/model … --provider …`, so the agent does not fall back to bare `custom` (which binds to the session's current base URL). Legacy `/v1` requests also include `provider` / `base_url` when an override is present.
 
 ## Desktop-only persistence
 

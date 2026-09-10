@@ -648,6 +648,12 @@ function sendMessageViaApi(
     stream: true,
     ...(_resumeSessionId ? { session_id: _resumeSessionId } : {}),
   };
+  // Session override routing: Hermes Gateway historically ignored these and
+  // used config.yaml `model.*`, but newer agents honor request-level
+  // provider/base_url. Always send them when an override is present so the
+  // dashboard `/model` path is not the only working route.
+  if (override?.provider) bodyObj.provider = override.provider;
+  if (override?.baseUrl) bodyObj.base_url = override.baseUrl;
   if (reasoningEffort) bodyObj.reasoning_effort = reasoningEffort;
   const body = JSON.stringify(bodyObj);
 
@@ -1039,6 +1045,8 @@ function sendMessageViaRuns(
     input: message,
     conversation_history: apiHistory(history),
   };
+  if (override?.provider) bodyObj.provider = override.provider;
+  if (override?.baseUrl) bodyObj.base_url = override.baseUrl;
   const reasoningEffort = reasoningEffortForProfile(profile);
   if (reasoningEffort) bodyObj.reasoning_effort = reasoningEffort;
   if (sessionId) bodyObj.session_id = sessionId;

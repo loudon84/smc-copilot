@@ -106,7 +106,8 @@ const NAV_GROUP_ORDER: { id: NavGroup; labelKey: string }[] = [
 
 /** Map a `/settings <name>` argument (and legacy anchor names) to a nav id. */
 function resolveSection(name?: string): SettingsSection {
-  const key = (name || "").trim().toLowerCase();
+  // Coerce: banner/onClick handlers must not pass a MouseEvent as `name`.
+  const key = (typeof name === "string" ? name : "").trim().toLowerCase();
   if (key === "hermesagent") return "about";
   // Network merged into Connection — keep the old `/settings network` working.
   if (key === "network") return "connection";

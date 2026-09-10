@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -110,5 +110,50 @@ describe("listConfiguredAgentModels", () => {
       "deepseek-v4-pro",
       "qwen3.7-max",
     ]);
+  });
+
+  // @lat: [[model-selection#Session model override#Strict chat picker from agent config#Providers UI models sync into custom_providers]]
+  it("lists models added via addModel after syncing into custom_providers", async () => {
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      [
+        "model:",
+        '  provider: "custom"',
+        '  default: "deepseek-v4-pro"',
+        '  base_url: "https://api.deepseek.com/v1"',
+        "",
+      ].join("\n"),
+    );
+
+    const models = await freshModels();
+    models.addModel(
+      "deepseek-v4-flash",
+      "custom",
+      "deepseek-v4-flash",
+      "http://llm.superic.com:3900/v1",
+      undefined,
+      "SMC Copilot",
+    );
+    models.addModel(
+      "deepseek-v4-pro",
+      "custom",
+      "deepseek-v4-pro",
+      "http://llm.superic.com:3900/v1",
+      undefined,
+      "SMC Copilot",
+    );
+
+    const configured = models.listConfiguredAgentModels();
+    const enterprise = configured.filter(
+      (m) => m.baseUrl === "http://llm.superic.com:3900/v1",
+    );
+    expect(enterprise.map((m) => m.model).sort()).toEqual([
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+    ]);
+    const yaml = readFileSync(join(testHome, "config.yaml"), "utf-8");
+    expect(yaml).toContain("custom_providers:");
+    expect(yaml).toContain("deepseek-v4-flash");
+    expect(yaml).toContain("deepseek-v4-pro");
   });
 });

@@ -24,7 +24,10 @@ import {
   EyeOff,
   Coins,
 } from "lucide-react";
-import { customProviderEnvKey } from "../../../../shared/url-key-map";
+import {
+  customProviderEnvKey,
+  isDedicatedBrandCustomProvider,
+} from "../../../../shared/url-key-map";
 import type { HermesAccount } from "../../../../shared/account";
 
 /** Preview a stored key as prefix + dots + last 4, so a set key is recognisable
@@ -545,6 +548,7 @@ function Providers({
         labelBaseUrls.set(label, models[0]?.baseUrl ?? "");
     }
     for (const [label, storedBaseUrl] of labelBaseUrls) {
+      if (isDedicatedBrandCustomProvider(label, storedBaseUrl)) continue;
       const keyEnv = customProviderEnvKey(label);
       if (!isSet(keyEnv)) continue;
       const models = byLabel.get(label) ?? [];
@@ -582,7 +586,9 @@ function Providers({
 
   // Model options: saved ids first, then discovered-only ids.
   const pickModelOptions = useMemo<string[]>(() => {
-    const saved = (activeProvider?.models ?? []).map((m) => m.model);
+    const saved = [
+      ...new Set((activeProvider?.models ?? []).map((m) => m.model)),
+    ];
     const set = new Set(saved);
     return [...saved, ...pickDiscovery.models.filter((id) => !set.has(id))];
   }, [activeProvider, pickDiscovery.models]);

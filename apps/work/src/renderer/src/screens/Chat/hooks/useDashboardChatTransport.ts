@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { LOCAL_PRESETS } from "../../../constants";
+import { LOCAL_PRESETS, OPENAI_COMPATIBLE_BASE_URLS } from "../../../constants";
 import {
   isBubbleMessage,
   markActiveTurnFailed,
@@ -298,7 +298,7 @@ function modelIsListedByProvider(
 
 function builtInProviderForCustomBaseUrl(
   requestedBaseUrl: string,
-  requestedModel: string,
+  _requestedModel: string,
   live: ModelOptionsResponse | null | undefined,
 ): string | null {
   const normalizedBaseUrl = normalizeBaseUrl(requestedBaseUrl);
@@ -307,16 +307,22 @@ function builtInProviderForCustomBaseUrl(
   const preset = LOCAL_PRESETS.find(
     (candidate) => normalizeBaseUrl(candidate.baseUrl) === normalizedBaseUrl,
   );
-  if (!preset) return null;
+  const compatId =
+    preset?.id ||
+    Object.entries(OPENAI_COMPATIBLE_BASE_URLS).find(
+      ([, url]) => normalizeBaseUrl(url) === normalizedBaseUrl,
+    )?.[0] ||
+    null;
+  if (!compatId) return null;
 
+  // Prefer the live slug when present; otherwise return the known brand id so
+  // `/model … --provider hermesone` resolves via config.yaml `providers:`
+  // instead of falling through to bare `custom` (which binds to the session's
+  // current base URL — often the config.yaml default endpoint).
   const provider = (live?.providers ?? []).find(
-    (candidate) => candidate.slug === preset.id,
+    (candidate) => candidate.slug === compatId,
   );
-  if (!provider || !modelIsListedByProvider(provider, requestedModel)) {
-    return null;
-  }
-
-  return preset.id;
+  return provider?.slug || compatId;
 }
 
 function modelOptionsSummary(

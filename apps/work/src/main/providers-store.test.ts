@@ -235,6 +235,41 @@ describe("providers store", () => {
     expect(config).toContain('key_env: "HERMESONE_API_KEY"');
   });
 
+  // @lat: [[provider-setup#Provider setup#Agent config sync for named providers#First-party brand cards are not duplicated]]
+  it("hides leftover first-party custom cards that sit beside the SMC Copilot key card", async () => {
+    const { writeFileSync } = await import("fs");
+    writeFileSync(
+      join(mockState.hermesHome, "providers.json"),
+      JSON.stringify({
+        version: 1,
+        providers: [
+          {
+            id: "a",
+            name: "SMC Copilot",
+            baseUrl: "http://llm.superic.com:3900/v1",
+            createdAt: 1,
+          },
+          {
+            id: "b",
+            name: "llm.superic.com:3900",
+            baseUrl: "http://llm.superic.com:3900/v1",
+            createdAt: 2,
+          },
+          {
+            id: "c",
+            name: "faab.ai",
+            baseUrl: "https://api.faab.ai/v1",
+            createdAt: 3,
+          },
+        ],
+      }),
+    );
+    const s = await store();
+    const list = s.listCustomProviders("default");
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe("faab.ai");
+  });
+
   it("does not create a providers: entry without a SMC Copilot key", async () => {
     const s = await store();
     s.listCustomProviders("default");

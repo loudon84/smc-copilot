@@ -95,13 +95,23 @@ export const ModelPicker = memo(function ModelPicker({
   }));
   // Flat model rows carrying their brand + display label for the right pane.
   // Each row keeps its raw provider/baseUrl so selection routing is unchanged.
-  const allRows = filteredGroups.flatMap((g) =>
-    g.models.map((m) => ({
-      ...m,
-      brand: g.provider,
-      providerLabel: g.providerLabel,
-    })),
-  );
+  const allRows = (() => {
+    const rows = filteredGroups.flatMap((g) =>
+      g.models.map((m) => ({
+        ...m,
+        brand: g.provider,
+        providerLabel: g.providerLabel,
+      })),
+    );
+    const seen = new Set<string>();
+    return rows.filter((m) => {
+      const url = (m.baseUrl || "").trim().replace(/\/+$/, "").toLowerCase();
+      const key = `${m.provider}\0${m.model}\0${url}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
   // Ignore a stale brand filter once search narrows it away → fall back to All.
   const activeBrand =
     selectedBrand && railProviders.some((p) => p.brand === selectedBrand)
@@ -205,9 +215,9 @@ export const ModelPicker = memo(function ModelPicker({
                     {allRows.length}
                   </span>
                 </button>
-                {railProviders.map((p) => (
+                {railProviders.map((p, idx) => (
                   <button
-                    key={p.brand}
+                    key={`${p.brand}:${idx}`}
                     type="button"
                     className={`chat-model-rail-item ${activeBrand === p.brand ? "active" : ""}`}
                     onClick={() =>
@@ -240,12 +250,16 @@ export const ModelPicker = memo(function ModelPicker({
                   {t("chat.noModelsMatch")}
                 </div>
               ) : (
-                visibleRows.map((m) => {
+                visibleRows.map((m, idx) => {
                   const isActive = isSelected(m);
+                  const url = (m.baseUrl || "")
+                    .trim()
+                    .replace(/\/+$/, "")
+                    .toLowerCase();
                   return (
                     <button
                       type="button"
-                      key={`${m.provider}:${m.model}:${m.baseUrl}`}
+                      key={`${m.provider}:${m.model}:${url}:${idx}`}
                       className={`chat-model-row ${isActive ? "active" : ""}`}
                       onClick={() => select(m.provider, m.model, m.baseUrl)}
                     >

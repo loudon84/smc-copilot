@@ -77,7 +77,7 @@ export function profilePaths(profile?: unknown): {
  * Liveness check for a PID, distinguishing "doesn't exist" from "exists but
  * we can't open it". `process.kill(pid, 0)` is the POSIX-idiomatic check,
  * but on Windows libuv requests PROCESS_TERMINATE access to issue the kill
- * call �?and a detached subprocess started by a different console (e.g. the
+ * call â€?and a detached subprocess started by a different console (e.g. the
  * Python hermes CLI launching the gateway as `pythonw` with `--replace`)
  * commonly refuses that handle, raising EPERM. EPERM means the process
  * exists; only ESRCH means it doesn't. The previous catch-all `try/catch
@@ -101,7 +101,7 @@ export function pidIsAlive(pid: number): boolean {
  * Return the image (.exe) name of the process at `pid` on Windows, or null
  * if the PID isn't found or the lookup fails. Used as a second-stage check
  * on top of `pidIsAlive` because EPERM from `process.kill` only confirms
- * "some Windows process exists at this PID" �?it doesn't confirm that
+ * "some Windows process exists at this PID" â€?it doesn't confirm that
  * process is ours.
  *
  * Important for the WSL coexistence case: when HERMES_HOME points into WSL
@@ -136,7 +136,7 @@ export function getProcessImageNameWin(pid: number): string | null {
       { encoding: "utf-8", timeout: 500, windowsHide: true },
     );
     // CSV row format: "image.exe","27652","Console","1","45,000 K"
-    // Returns "INFO: No tasks are running�? if the PID doesn't exist.
+    // Returns "INFO: No tasks are runningâ€? if the PID doesn't exist.
     const m = output.match(/^"([^"]+)"/);
     const image = m ? m[1] : null;
     processImageNameCache.set(pid, { image, checkedAt: now });
@@ -154,7 +154,7 @@ export function getProcessImageNameWin(pid: number): string | null {
  * PIDs being checked against the Windows PID space.
  *
  * If we can't read the image name (`tasklist` missing/timeout/etc.),
- * fall back to trusting `pidIsAlive` rather than blocking �?a flaky
+ * fall back to trusting `pidIsAlive` rather than blocking â€?a flaky
  * verification step shouldn't make a healthy gateway look dead.
  */
 export function pidIsAliveAs(
@@ -225,7 +225,26 @@ export function safeWriteFile(filePath: string, content: string): void {
   try {
     writeFileSync(tempPath, content, "utf-8");
     tempWritten = true;
-    renameSync(tempPath, filePath);
+    try {
+      renameSync(tempPath, filePath);
+    } catch (renameErr) {
+      // Windows often returns EPERM/EACCES when renaming over a file that
+      // another process (Hermes gateway, AV, Explorer) still has open. Direct
+      // overwrite usually still works in that case.
+      const code =
+        renameErr && typeof renameErr === "object" && "code" in renameErr
+          ? String((renameErr as NodeJS.ErrnoException).code)
+          : "";
+      if (code !== "EPERM" && code !== "EACCES" && code !== "EEXIST") {
+        throw renameErr;
+      }
+      writeFileSync(filePath, content, "utf-8");
+      try {
+        unlinkSync(tempPath);
+      } catch {
+        // Best-effort cleanup after successful overwrite.
+      }
+    }
   } catch (err) {
     if (tempWritten) {
       try {

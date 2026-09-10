@@ -4,8 +4,16 @@ import { randomUUID } from "crypto";
 import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
 import { safeWriteFile, profilePaths } from "./utils";
 import { hostDerivedEnvKeyForUrl } from "./host-derived-env";
-import { mirrorFirstPartyAgentProviders } from "./agent-config-providers";
-import { customProviderEnvKey } from "../shared/url-key-map";
+import {
+  mirrorFirstPartyAgentProviders,
+  upsertAgentCustomProviderModel,
+  removeAgentCustomProviderModel,
+} from "./agent-config-providers";
+import {
+  CUSTOM_API_KEY_ENV,
+  customProviderEnvKey,
+  expectedEnvKeyForUrl,
+} from "../shared/url-key-map";
 import { getModelConfig } from "./config";
 import DEFAULT_MODELS from "./default-models";
 
@@ -18,7 +26,7 @@ function modelDefsFile(): string {
 }
 
 /**
- * A persisted `models.json` row ù?a pure *attachment* of a model id to a
+ * A persisted `models.json` row ??a pure *attachment* of a model id to a
  * provider/endpoint. Shared metadata (display name default, context window,
  * capabilities) lives once in a {@link ModelDefinition} keyed by `model` id, so
  * the same model id attached to two providers shares one definition instead of
@@ -51,7 +59,7 @@ export interface SavedModelRow {
 export interface SavedModel extends SavedModelRow {
   /** Optional manual context-window override (tokens), sourced from the shared
    *  {@link ModelDefinition}. When set, it's mirrored into config.yaml's
-   *  `model.context_length` on activation ù?fixing the context gauge for
+   *  `model.context_length` on activation ??fixing the context gauge for
    *  providers that don't advertise `context_length` over /models, and driving
    *  the agent's auto-compaction threshold. */
   contextLength?: number;
@@ -65,11 +73,11 @@ export interface SavedModel extends SavedModelRow {
  * Shared, per-model-id metadata. Defined once and merged onto every attachment
  * of that model id, so context window / display name / capabilities are entered
  * a single time and reused across providers. Stored in `model-definitions.json`;
- * local-only (like the per-row context override it replaces ù?the remote/SSH
+ * local-only (like the per-row context override it replaces ??the remote/SSH
  * library paths never carried it).
  */
 export interface ModelDefinition {
-  /** Canonical model id ù?the key. */
+  /** Canonical model id ??the key. */
   model: string;
   /** Preferred display name (used when an attachment row has none). */
   name?: string;
@@ -93,9 +101,9 @@ function normalizeContextLength(value: unknown): number | undefined {
 }
 
 /**
- * Raw persisted attachment rows ù?a plain JSON read with no definition merge.
+ * Raw persisted attachment rows ??a plain JSON read with no definition merge.
  * Writers (`addModel`/`updateModel`/`removeModel`/`seedDefaults`/migration) use
- * this so merged-only fields (`contextLength`, `capabilities`, ù? are never
+ * this so merged-only fields (`contextLength`, `capabilities`, ?? are never
  * written back onto a row. Legacy rows may still carry `contextLength`; it's
  * hoisted out by {@link ensureModelDefinitionsMigrated} and otherwise ignored.
  */
@@ -112,7 +120,7 @@ export function readModelsRaw(): SavedModelRow[] {
  * Public read: raw rows with their matching {@link ModelDefinition} merged on.
  * `contextLength` comes from the definition (source of truth); a row's own
  * `name` is never overwritten (`row.name ?? def.name ?? id`) so the runtime's
- * env-key derivation from `name` stays stable. Read-only ù?no writes here, so it
+ * env-key derivation from `name` stays stable. Read-only ??no writes here, so it
  * is safe on the per-spawn runtime hot path ([[src/main/hermes.ts]] uses the raw
  * store directly and doesn't need the merge, but callers via IPC do).
  */
@@ -210,7 +218,7 @@ export function removeModelDefinition(model: string): boolean {
  * definitions. For each raw row carrying a positive `contextLength`, upsert
  * `defs[row.model]` keeping the larger context window (safer gauge/compaction
  * value) and a first-wins name, then strip `contextLength` off the row. Merges
- * into any existing definitions file and is idempotent ù?after it runs no row
+ * into any existing definitions file and is idempotent ??after it runs no row
  * has `contextLength`, so a re-run hoists nothing.
  */
 export function ensureModelDefinitionsMigrated(): void {
@@ -304,7 +312,7 @@ export function loadCustomProviders(profile?: string): CustomProviderEntry[] {
         };
         inModelsMap = false;
       } else if (current) {
-        // Nested `models:` map ù collect model-id keys (not context_length etc.).
+        // Nested `models:` map ? collect model-id keys (not context_length etc.).
         if (/^\s{2,}models\s*:/.test(line)) {
           inModelsMap = true;
         } else if (inModelsMap) {
@@ -320,7 +328,7 @@ export function loadCustomProviders(profile?: string): CustomProviderEntry[] {
               current.extraModels!.push(id);
             }
           } else if (/^\s{2,}[a-z_]+\s*:/.test(line) && !/^\s{4,}/.test(line)) {
-            // Sibling field at the provider-entry indent ù leave models map.
+            // Sibling field at the provider-entry indent ? leave models map.
             inModelsMap = false;
           }
         }
@@ -328,7 +336,7 @@ export function loadCustomProviders(profile?: string): CustomProviderEntry[] {
         if (!inModelsMap || !/^\s{4,}/.test(line)) {
           const bm = line.match(/^\s*base_url\s*:\s*["']?([^"'\n#]+)["']?/);
           if (bm) current.baseUrl = bm[1].trim();
-          // Exact `model:` only ù not `models:`.
+          // Exact `model:` only ? not `models:`.
           const mm = line.match(/^\s*model\s*:\s*["']?([^"'\n#]+)["']?/);
           if (mm) current.model = mm[1].trim();
           const am = line.match(/^\s*api_key\s*:\s*["']?([^"'\n#]+)["']?/);
@@ -354,7 +362,7 @@ export function loadCustomProviders(profile?: string): CustomProviderEntry[] {
 }
 
 /** Persist a `custom_providers:` entry's API key into the profile `.env`,
- *  under both key names the two engine generations resolve. Additive only ù?
+ *  under both key names the two engine generations resolve. Additive only ??
  *  existing values are never overwritten. */
 function writeCustomProviderEnvKeys(
   profile: string | undefined,
@@ -365,14 +373,14 @@ function writeCustomProviderEnvKeys(
     const { envFile } = profilePaths(profile);
     let envContent = existsSync(envFile) ? readFileSync(envFile, "utf-8") : "";
     // Names to persist for this custom-provider key:
-    //   1. CUSTOM_PROVIDER_<NAME>_KEY ù?the historical desktop
+    //   1. CUSTOM_PROVIDER_<NAME>_KEY ??the historical desktop
     //      contract; the runtime spawn in `hermes.ts` reads it
     //      via the models.json baseUrl match.
     //   2. <VENDOR>_API_KEY when the URL matches a known vendor
-    //      host (e.g. api.deepseek.com ù?DEEPSEEK_API_KEY) ù?
+    //      host (e.g. api.deepseek.com ??DEEPSEEK_API_KEY) ??
     //      required for dual-engine compat: upstream-main's
     //      `_host_derived_api_key()` won't accept the custom-
-    //      prefix form. Old engine (ù?v2026.5.16) doesn't have
+    //      prefix form. Old engine (??v2026.5.16) doesn't have
     //      the host-derive resolver and ignores this extra var,
     //      so writing both is additive and safe.
     // The gateway path in `hermes.ts:startGateway` ingests ALL
@@ -382,7 +390,7 @@ function writeCustomProviderEnvKeys(
     const customPrefixKey = customProviderEnvKey(cp.name);
     const namesToWrite: string[] = [customPrefixKey];
     const hostKey = hostDerivedEnvKeyForUrl(cp.baseUrl);
-    // Don't shadow real OPENAI / ANTHROPIC keys via this path ù?
+    // Don't shadow real OPENAI / ANTHROPIC keys via this path ??
     // those belong to a separately-configured provider, not a
     // custom-provider key. The persistence guard mirrors the
     // runtime guard in `hermes.ts`.
@@ -487,7 +495,7 @@ export function listModels(profile?: string): SavedModel[] {
     seedDefaults(profile);
   } else {
     // Pick up providers/models added to config.yaml from the terminal since
-    // the library was first seeded ù?keeps `hermes` CLI edits and the desktop
+    // the library was first seeded ??keeps `hermes` CLI edits and the desktop
     // library in sync instead of only honoring config.yaml on first run.
     syncAgentConfigModels(profile);
   }
@@ -501,11 +509,17 @@ export function listModels(profile?: string): SavedModel[] {
 
 /**
  * Chat ModelPicker source of truth: only models declared in the profile's
- * hermes-agent `config.yaml` ù `model.default` plus each `custom_providers:`
+ * hermes-agent `config.yaml` ? `model.default` plus each `custom_providers:`
  * entry that has both `model` and `base_url`. Does **not** seed or read
  * `models.json` / DEFAULT_MODELS, and does not pull live discovery catalogs.
+ *
+ * Before reading, mirrors any `provider: "custom"` rows already in models.json
+ * into `custom_providers:` so Providers-UI additions (and pre-existing library
+ * rows) become visible to the strict picker.
  */
 export function listConfiguredAgentModels(profile?: string): SavedModel[] {
+  syncLibraryCustomModelsToAgentConfig(profile);
+
   const norm = (u: string): string =>
     (u || "").trim().replace(/\/+$/, "").toLowerCase();
   const keyOf = (provider: string, model: string, baseUrl: string): string =>
@@ -567,7 +581,7 @@ export function listConfiguredAgentModels(profile?: string): SavedModel[] {
     );
     for (const modelId of modelIds) {
       push({
-        name: modelIds.length > 1 ? `${cp.name} ù ${modelId}` : cp.name,
+        name: modelIds.length > 1 ? `${cp.name} ? ${modelId}` : cp.name,
         provider: cp.provider,
         model: modelId,
         baseUrl: cp.baseUrl,
@@ -590,7 +604,7 @@ export function addModel(
 ): SavedModel {
   const models = readModelsRaw();
 
-  // A context-window override is shared metadata keyed by model id ù?persist it
+  // A context-window override is shared metadata keyed by model id ??persist it
   // to the definition, not onto this attachment row, so every provider serving
   // this model id reuses it.
   const ctx = normalizeContextLength(contextLength);
@@ -606,11 +620,13 @@ export function addModel(
       m.provider === provider &&
       norm(m.baseUrl) === norm(baseUrl),
   );
-  if (existing)
+  if (existing) {
+    syncCustomProviderModelToConfig(existing);
     return {
       ...existing,
       ...(ctx !== undefined ? { contextLength: ctx } : {}),
     };
+  }
 
   const entry: SavedModelRow = {
     id: randomUUID(),
@@ -623,14 +639,92 @@ export function addModel(
   };
   models.push(entry);
   writeModels(models);
+  syncCustomProviderModelToConfig(entry);
   return { ...entry, ...(ctx !== undefined ? { contextLength: ctx } : {}) };
+}
+
+/** Mirror a custom library model into config.yaml `custom_providers:` so the
+ *  strict chat picker can list it. Native (non-custom) providers are skipped ?
+ *  they are already discoverable via agent slug / model.default. */
+function syncCustomProviderModelToConfig(
+  entry: Pick<
+    SavedModelRow,
+    "provider" | "model" | "baseUrl" | "providerLabel"
+  >,
+  profile?: string,
+): void {
+  if (entry.provider !== "custom" || !(entry.baseUrl || "").trim()) return;
+  const label =
+    (entry.providerLabel || "").trim() ||
+    (() => {
+      try {
+        return new URL(entry.baseUrl).host;
+      } catch {
+        return entry.baseUrl;
+      }
+    })();
+  const hostKey = expectedEnvKeyForUrl(entry.baseUrl);
+  const keyEnv =
+    hostKey !== CUSTOM_API_KEY_ENV ? hostKey : customProviderEnvKey(label);
+  try {
+    upsertAgentCustomProviderModel(profile, {
+      name: label,
+      baseUrl: entry.baseUrl,
+      keyEnv,
+      model: entry.model,
+    });
+  } catch (e) {
+    console.error("Failed to sync model into config.yaml custom_providers:", e);
+  }
+}
+
+/** Profiles already attempted for library-to-config mirror this process lifetime. */
+const libraryConfigSyncAttempted = new Set<string>();
+
+/** Push models.json custom rows into config.yaml so the strict picker sees them.
+ *  Runs at most once per profile per process to avoid hammering ProgramData
+ *  (and EPERM noise) on every ModelPicker refresh. Explicit add/remove still
+ *  sync immediately via syncCustomProviderModelToConfig. */
+function syncLibraryCustomModelsToAgentConfig(profile?: string): void {
+  const key = profile || "default";
+  if (libraryConfigSyncAttempted.has(key)) return;
+  libraryConfigSyncAttempted.add(key);
+  if (!existsSync(modelsFile())) return;
+  for (const m of readModelsRaw()) {
+    syncCustomProviderModelToConfig(m, profile);
+  }
 }
 
 export function removeModel(id: string): boolean {
   const models = readModelsRaw();
-  const filtered = models.filter((m) => m.id !== id);
-  if (filtered.length === models.length) return false;
-  writeModels(filtered);
+  const idx = models.findIndex((m) => m.id === id);
+  if (idx === -1) return false;
+  const removed = models[idx];
+  models.splice(idx, 1);
+  writeModels(models);
+  if (removed.provider === "custom" && (removed.baseUrl || "").trim()) {
+    const label =
+      (removed.providerLabel || "").trim() ||
+      (() => {
+        try {
+          return new URL(removed.baseUrl).host;
+        } catch {
+          return removed.baseUrl;
+        }
+      })();
+    try {
+      removeAgentCustomProviderModel(undefined, {
+        name: label,
+        model: removed.model,
+        baseUrl: removed.baseUrl,
+      });
+    } catch (e) {
+      console.error(
+        "Failed to remove model from config.yaml custom_providers:",
+        e,
+      );
+    }
+  }
   return true;
 }
 

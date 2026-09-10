@@ -431,6 +431,276 @@ export function listLegacyCustomProviders(
   return result;
 }
 
+function normUrl(url: string): string {
+  return (url || "").trim().replace(/\/+$/, "").toLowerCase();
+}
+
+interface CustomProviderModelEntry {
+  name: string;
+  baseUrl: string;
+  keyEnv: string;
+  model: string;
+  extraModels: string[];
+  apiMode: string;
+}
+
+/** Parse `custom_providers:` list entries including model ids (for rewrite). */
+function parseCustomProviderModelEntries(
+  content: string,
+): CustomProviderModelEntry[] {
+  const result: CustomProviderModelEntry[] = [];
+  const lines = content.split("\n");
+  let inCustom = false;
+  let current: CustomProviderModelEntry | null = null;
+  let inModelsMap = false;
+
+  const finish = (): void => {
+    if (current && current.name.trim() && current.baseUrl.trim()) {
+      result.push(current);
+    }
+    current = null;
+    inModelsMap = false;
+  };
+
+  for (const line of lines) {
+    if (/^\s*custom_providers\s*:/.test(line)) {
+      inCustom = true;
+      continue;
+    }
+    if (!inCustom) continue;
+    if (/^\s*-\s*name\s*:/.test(line)) {
+      finish();
+      const m = line.match(/name\s*:\s*(.*)$/);
+      current = {
+        name: m ? stripScalar(m[1]) : "",
+        baseUrl: "",
+        keyEnv: "",
+        model: "",
+        extraModels: [],
+        apiMode: "",
+      };
+      inModelsMap = false;
+      continue;
+    }
+    if (
+      /^[a-z]/.test(line) &&
+      !/^\s/.test(line) &&
+      !/^\s*-\s*name/.test(line)
+    ) {
+      finish();
+      inCustom = false;
+      continue;
+    }
+    if (!current) continue;
+    if (/^\s{2,}models\s*:/.test(line)) {
+      inModelsMap = true;
+      continue;
+    }
+    if (inModelsMap) {
+      const modelId = line.match(
+        /^\s{4,}([A-Za-z0-9._:/-]+)\s*:\s*(?:#.*)?$/,
+      );
+      const nestedField = line.match(
+        /^\s{6,}(context_length|max_tokens|api_mode)\s*:/,
+      );
+      if (nestedField) {
+        // still inside a models.<id> body
+      } else if (modelId) {
+        const id = modelId[1].trim();
+        if (id && !current.extraModels.includes(id)) {
+          current.extraModels.push(id);
+        }
+      } else if (/^\s{2,}[a-z_]+\s*:/.test(line) && !/^\s{4,}/.test(line)) {
+        inModelsMap = false;
+      }
+    }
+    if (!inModelsMap || !/^\s{4,}/.test(line)) {
+      const bm = line.match(/^\s*base_url\s*:\s*(.*)$/);
+      if (bm) current.baseUrl = stripScalar(bm[1]);
+      const mm = line.match(/^\s*model\s*:\s*(.*)$/);
+      if (mm) current.model = stripScalar(mm[1]);
+      const kem = line.match(/^\s*key_env\s*:\s*(.*)$/);
+      if (kem) current.keyEnv = stripScalar(kem[1]);
+      const apim = line.match(/^\s*api_mode\s*:\s*(.*)$/);
+      if (apim) current.apiMode = stripScalar(apim[1]);
+    }
+  }
+  finish();
+  return result;
+}
+
+function renderCustomProvidersBlock(
+  entries: CustomProviderModelEntry[],
+): string {
+  if (entries.length === 0) return "";
+  const lines: string[] = ["custom_providers:"];
+  for (const e of entries) {
+    lines.push(`- name: ${yamlQuote(e.name)}`);
+    lines.push(`  base_url: ${yamlQuote(e.baseUrl)}`);
+    if (e.keyEnv) lines.push(`  key_env: ${yamlQuote(e.keyEnv)}`);
+    if (e.apiMode) lines.push(`  api_mode: ${yamlQuote(e.apiMode)}`);
+    if (e.model) lines.push(`  model: ${yamlQuote(e.model)}`);
+    const extras = e.extraModels.filter((m) => m && m !== e.model);
+    if (extras.length > 0) {
+      lines.push("  models:");
+      for (const id of extras) {
+        lines.push(`    ${id}:`);
+      }
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+/** Locate the `custom_providers:` block span (header through last indented body). */
+function findCustomProvidersSpan(
+  content: string,
+): { start: number; end: number } | null {
+  const header = content.match(
+    /^custom_providers[^\S\r\n]*:[^\S\r\n]*(#.*)?\r?\n/m,
+  );
+  if (!header || header.index === undefined) return null;
+  if (header.index > 0 && content[header.index - 1] !== "\n") return null;
+  const start = header.index;
+  let offset = start + header[0].length;
+  const lines = content.slice(offset).split(/(?<=\n)/);
+  let end = offset;
+  for (const line of lines) {
+    const text = line.replace(/\r?\n$/, "");
+    const isBlank = /^\s*$/.test(text);
+    if (!isBlank && !/^[ \t]/.test(text) && !/^\s*-\s/.test(text)) break;
+    end = offset + line.length;
+    offset += line.length;
+  }
+  return { start, end };
+}
+
+function writeCustomProvidersBlock(
+  profile: string | undefined,
+  entries: CustomProviderModelEntry[],
+): void {
+  const { file, content } = readConfig(profile);
+  const block = renderCustomProvidersBlock(entries);
+  const span = findCustomProvidersSpan(content);
+  if (span) {
+    const next =
+      content.slice(0, span.start) + block + content.slice(span.end);
+    // Drop an empty block entirely when no entries remain.
+    if (!block) {
+      safeWriteFile(file, content.slice(0, span.start) + content.slice(span.end));
+      return;
+    }
+    if (next === content) return;
+    safeWriteFile(file, next);
+    return;
+  }
+  if (!block) return;
+  const sep = content === "" || content.endsWith("\n") ? "" : "\n";
+  safeWriteFile(file, `${content}${sep}${block}`);
+}
+
+/**
+ * Upsert a model id into config.yaml `custom_providers:` so the strict chat
+ * ModelPicker ([[src/main/models.ts#listConfiguredAgentModels]]) can see models
+ * added from the Providers UI (which also writes models.json).
+ *
+ * First model for an endpoint becomes `model:`; additional ids land under the
+ * nested `models:` map — matching what `loadCustomProviders` reads.
+ */
+export function upsertAgentCustomProviderModel(
+  profile: string | undefined,
+  input: {
+    name: string;
+    baseUrl: string;
+    keyEnv?: string;
+    model: string;
+    apiMode?: string | null;
+  },
+): void {
+  const name = (input.name || "").trim();
+  const baseUrl = (input.baseUrl || "").trim();
+  const model = (input.model || "").trim();
+  if (!name || !baseUrl || !model) return;
+
+  const { content } = readConfig(profile);
+  const entries = parseCustomProviderModelEntries(content);
+  const targetUrl = normUrl(baseUrl);
+  let entry = entries.find(
+    (e) => e.name === name && normUrl(e.baseUrl) === targetUrl,
+  );
+  if (!entry) {
+    entry = entries.find((e) => e.name === name);
+  }
+  if (!entry) {
+    entries.push({
+      name,
+      baseUrl,
+      keyEnv: (input.keyEnv || "").trim(),
+      model,
+      extraModels: [],
+      apiMode: (input.apiMode || "").trim(),
+    });
+    writeCustomProvidersBlock(profile, entries);
+    return;
+  }
+
+  entry.baseUrl = baseUrl;
+  if (input.keyEnv?.trim()) entry.keyEnv = input.keyEnv.trim();
+  if (input.apiMode) entry.apiMode = input.apiMode.trim();
+  else if (input.apiMode === null) entry.apiMode = "";
+
+  if (entry.model === model || entry.extraModels.includes(model)) {
+    let changed = false;
+    if (entry.baseUrl !== baseUrl) {
+      entry.baseUrl = baseUrl;
+      changed = true;
+    }
+    if (input.keyEnv?.trim() && entry.keyEnv !== input.keyEnv.trim()) {
+      entry.keyEnv = input.keyEnv.trim();
+      changed = true;
+    }
+    if (!changed) return;
+    writeCustomProvidersBlock(profile, entries);
+    return;
+  }
+  if (!entry.model) {
+    entry.model = model;
+  } else if (!entry.extraModels.includes(model)) {
+    entry.extraModels.push(model);
+  }
+  writeCustomProvidersBlock(profile, entries);
+}
+
+/**
+ * Remove a model id from a `custom_providers:` entry. Leaves the entry's
+ * name/base_url/key_env intact when no models remain (provider identity is
+ * owned by the `providers:` dict).
+ */
+export function removeAgentCustomProviderModel(
+  profile: string | undefined,
+  input: { name: string; model: string; baseUrl?: string },
+): void {
+  const name = (input.name || "").trim();
+  const model = (input.model || "").trim();
+  if (!name || !model) return;
+
+  const { content } = readConfig(profile);
+  const entries = parseCustomProviderModelEntries(content);
+  const targetUrl = input.baseUrl ? normUrl(input.baseUrl) : "";
+  const entry = entries.find(
+    (e) =>
+      e.name === name &&
+      (!targetUrl || normUrl(e.baseUrl) === targetUrl),
+  );
+  if (!entry) return;
+
+  if (entry.model === model) {
+    entry.model = entry.extraModels.shift() || "";
+  } else {
+    entry.extraModels = entry.extraModels.filter((m) => m !== model);
+  }
+  writeCustomProvidersBlock(profile, entries);
+}
+
 /**
  * Remove a legacy `custom_providers:` list item by display name. Needed when
  * the user deletes a terminal-added provider from the desktop UI — leaving the

@@ -140,6 +140,39 @@ describe("useModelConfig", () => {
     });
   });
 
+  it("collapses configured models that share provider, id, and base URL", async () => {
+    configuredModels = [
+      {
+        id: "flash-a",
+        name: "deepseek-v4-flash",
+        provider: "custom",
+        model: "deepseek-v4-flash",
+        baseUrl: "http://llm.superic.com:3900/v1",
+        createdAt: 1,
+      },
+      {
+        id: "flash-b",
+        name: "deepseek-v4-flash",
+        provider: "custom",
+        model: "deepseek-v4-flash",
+        baseUrl: "http://llm.superic.com:3900/v1/",
+        createdAt: 2,
+      },
+    ];
+
+    render(<GroupHarness />);
+
+    await waitFor(() => {
+      const groups = JSON.parse(
+        screen.getByTestId("groups").textContent || "[]",
+      );
+      expect(groups).toHaveLength(1);
+      expect(groups[0].models).toEqual([
+        { model: "deepseek-v4-flash", provider: "custom" },
+      ]);
+    });
+  });
+
   it("loads via listConfiguredModels, not the full models.json library", async () => {
     render(<Harness />);
     await waitFor(() => {

@@ -328,6 +328,62 @@ describe("agent-config providers (config.yaml bridge)", () => {
     expect(content).toContain("gateway:");
   });
 
+  // @lat: [[provider-setup#Provider setup#Agent config sync for named providers#Desktop model adds sync into custom_providers]]
+  it("upserts the first model as model: and later ids under models:", async () => {
+    const m = await mod();
+    m.upsertAgentCustomProviderModel("default", {
+      name: "SMC Copilot",
+      baseUrl: "http://llm.superic.com:3900/v1",
+      keyEnv: "HERMESONE_API_KEY",
+      model: "deepseek-v4-flash",
+    });
+    m.upsertAgentCustomProviderModel("default", {
+      name: "SMC Copilot",
+      baseUrl: "http://llm.superic.com:3900/v1",
+      keyEnv: "HERMESONE_API_KEY",
+      model: "deepseek-v4-pro",
+    });
+    const content = readConfig();
+    expect(content).toContain("custom_providers:");
+    expect(content).toContain('name: "SMC Copilot"');
+    expect(content).toContain('base_url: "http://llm.superic.com:3900/v1"');
+    expect(content).toContain('model: "deepseek-v4-flash"');
+    expect(content).toContain("models:");
+    expect(content).toContain("deepseek-v4-pro:");
+    // Idempotent
+    const before = content;
+    m.upsertAgentCustomProviderModel("default", {
+      name: "SMC Copilot",
+      baseUrl: "http://llm.superic.com:3900/v1",
+      keyEnv: "HERMESONE_API_KEY",
+      model: "deepseek-v4-flash",
+    });
+    expect(readConfig()).toBe(before);
+  });
+
+  it("removes a model id from custom_providers without dropping the entry", async () => {
+    const m = await mod();
+    m.upsertAgentCustomProviderModel("default", {
+      name: "SMC Copilot",
+      baseUrl: "http://llm.superic.com:3900/v1",
+      model: "deepseek-v4-flash",
+    });
+    m.upsertAgentCustomProviderModel("default", {
+      name: "SMC Copilot",
+      baseUrl: "http://llm.superic.com:3900/v1",
+      model: "deepseek-v4-pro",
+    });
+    m.removeAgentCustomProviderModel("default", {
+      name: "SMC Copilot",
+      model: "deepseek-v4-flash",
+      baseUrl: "http://llm.superic.com:3900/v1",
+    });
+    const content = readConfig();
+    expect(content).toContain("SMC Copilot");
+    expect(content).toContain('model: "deepseek-v4-pro"');
+    expect(content).not.toContain("deepseek-v4-flash");
+  });
+
   it("slugifies display names the way the agent expects", async () => {
     const m = await mod();
     expect(m.slugifyProviderName("Faab AI")).toBe("faab-ai");

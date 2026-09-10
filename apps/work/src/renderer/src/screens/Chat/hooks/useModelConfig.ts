@@ -44,8 +44,18 @@ interface UseModelConfigResult {
   ) => Promise<void>;
 }
 
+function modelIdentityKey(
+  provider: string,
+  model: string,
+  baseUrl: string,
+): string {
+  const url = (baseUrl || "").trim().replace(/\/+$/, "").toLowerCase();
+  return `${provider}\0${model}\0${url}`;
+}
+
 function groupModelsByProvider(models: SavedModelForPicker[]): ModelGroup[] {
   const groupMap = new Map<string, ModelGroup>();
+  const seenInGroup = new Map<string, Set<string>>();
   for (const m of models) {
     // Group by display brand so OpenAI-compatible providers stored as `custom`
     // (SMC Copilot, Groq, …) show under their own header instead of the generic
@@ -58,7 +68,12 @@ function groupModelsByProvider(models: SavedModelForPicker[]): ModelGroup[] {
         providerLabel: PROVIDERS.labels[brand] || brand,
         models: [],
       });
+      seenInGroup.set(brand, new Set());
     }
+    const identity = modelIdentityKey(m.provider, m.model, m.baseUrl || "");
+    const seen = seenInGroup.get(brand)!;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
     groupMap.get(brand)!.models.push({
       provider: m.provider,
       model: m.model,

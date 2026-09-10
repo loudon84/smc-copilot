@@ -161,26 +161,24 @@ describe("setModelConfig — base_url substitution", () => {
     }
   });
 
-  it("writes default base URLs for explicit local providers", async () => {
-    const provider_to_canonical: Record<string, string> = {
-      lmstudio: "http://localhost:1234/v1",
-      atomicchat: "http://localhost:1337/v1",
-      ollama: "http://localhost:11434/v1",
-      vllm: "http://localhost:8000/v1",
-      llamacpp: "http://localhost:8080/v1",
-    };
+  it("writes an explicit custom base_url into config.yaml model.default", async () => {
+    const configFile = join(TEST_DIR, "config.yaml");
+    const { setModelConfig, getModelConfig } =
+      await importConfigWithHome(TEST_DIR);
 
-    for (const [provider, expected] of Object.entries(provider_to_canonical)) {
-      rmSync(TEST_DIR, { recursive: true, force: true });
-      mkdirSync(TEST_DIR, { recursive: true });
+    setModelConfig(
+      "custom",
+      "deepseek-v4-flash",
+      "http://llm.superic.com:3900/v1",
+    );
 
-      const { setModelConfig, getModelConfig } =
-        await importConfigWithHome(TEST_DIR);
-      setModelConfig(provider, "some-local-model", "");
+    const mc = getModelConfig();
+    expect(mc.provider).toBe("custom");
+    expect(mc.model).toBe("deepseek-v4-flash");
+    expect(mc.baseUrl).toBe("http://llm.superic.com:3900/v1");
 
-      const mc = getModelConfig();
-      expect(mc.provider).toBe(provider);
-      expect(mc.baseUrl).toBe(expected);
-    }
+    const content = readFileSync(configFile, "utf-8");
+    expect(content).toContain('default: "deepseek-v4-flash"');
+    expect(content).toContain('base_url: "http://llm.superic.com:3900/v1"');
   });
 });

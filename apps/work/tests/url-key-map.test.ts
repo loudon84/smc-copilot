@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   URL_KEY_MAP,
   expectedEnvKeyForUrl,
+  isDedicatedBrandCustomProvider,
+  isFirstPartyMirroredProvider,
   isLocalBaseUrl,
   isKnownProviderUrl,
   CUSTOM_API_KEY_ENV,
@@ -34,6 +36,8 @@ describe("URL_KEY_MAP", () => {
       "https://api.mistral.ai/v1": "MISTRAL_API_KEY",
       "https://api.perplexity.ai": "PERPLEXITY_API_KEY",
       "https://api.atlascloud.ai/v1": "ATLASCLOUD_API_KEY",
+      "https://inference.hermesone.org/v1": "HERMESONE_API_KEY",
+      "http://llm.superic.com:3900/v1": "HERMESONE_API_KEY",
     };
     for (const [url, envKey] of Object.entries(expected)) {
       expect(expectedEnvKeyForUrl(url)).toBe(envKey);
@@ -116,6 +120,47 @@ describe("isLocalBaseUrl", () => {
     expect(isLocalBaseUrl("")).toBe(false);
     expect(isLocalBaseUrl(null)).toBe(false);
     expect(isLocalBaseUrl(undefined)).toBe(false);
+  });
+});
+
+describe("isDedicatedBrandCustomProvider", () => {
+  it("treats the enterprise SMC Copilot host as a dedicated brand card", () => {
+    expect(
+      isDedicatedBrandCustomProvider(
+        "llm.superic.com:3900",
+        "http://llm.superic.com:3900/v1",
+      ),
+    ).toBe(true);
+    expect(
+      isDedicatedBrandCustomProvider(
+        "SMC Copilot",
+        "http://llm.superic.com:3900/v1",
+      ),
+    ).toBe(true);
+  });
+
+  it("treats the first-party display name as a dedicated brand even without a URL", () => {
+    expect(isDedicatedBrandCustomProvider("SMC Copilot", "")).toBe(true);
+    expect(isDedicatedBrandCustomProvider("hermesone", "")).toBe(true);
+  });
+
+  it("leaves unrelated custom endpoints on their own cards", () => {
+    expect(
+      isDedicatedBrandCustomProvider("faab.ai", "https://api.faab.ai/v1"),
+    ).toBe(false);
+  });
+});
+
+describe("isFirstPartyMirroredProvider", () => {
+  it("skips the mirrored hermesone slug and HERMESONE_API_KEY", () => {
+    expect(
+      isFirstPartyMirroredProvider({
+        slug: "hermesone",
+        name: "Other",
+        baseUrl: "https://proxy.example.invalid/v1",
+        keyEnv: "HERMESONE_API_KEY",
+      }),
+    ).toBe(true);
   });
 });
 

@@ -23,7 +23,11 @@ export interface UrlKeyMapping {
 }
 
 export const URL_KEY_MAP: ReadonlyArray<UrlKeyMapping> = [
-  { pattern: /inference\.hermesone\.org/i, envKey: "HERMESONE_API_KEY" },
+  // Official console host and the enterprise inference alias share one key.
+  {
+    pattern: /inference\.hermesone\.org|llm\.superic\.com/i,
+    envKey: "HERMESONE_API_KEY",
+  },
   { pattern: /openrouter\.ai/i, envKey: "OPENROUTER_API_KEY" },
   { pattern: /anthropic\.com/i, envKey: "ANTHROPIC_API_KEY" },
   { pattern: /openai\.com/i, envKey: "OPENAI_API_KEY" },
@@ -57,6 +61,40 @@ export function customProviderEnvKey(name: string): string {
     (name || "").replace(/[^A-Za-z0-9]/g, "_").toUpperCase() +
     "_KEY"
   );
+}
+
+/** Display names that belong to a dedicated FieldDef brand card, not a custom card. */
+const FIRST_PARTY_CUSTOM_CARD_NAMES = new Set(["smc copilot", "hermesone"]);
+
+/**
+ * True when a named custom-provider card would duplicate a dedicated
+ * first-party brand card (SMC Copilot, Groq, …). Those hosts and first-party
+ * names stay on the keyed FieldDef card.
+ */
+export function isDedicatedBrandCustomProvider(
+  name: string,
+  baseUrl: string,
+): boolean {
+  if (expectedEnvKeyForUrl(baseUrl) !== CUSTOM_API_KEY_ENV) return true;
+  return FIRST_PARTY_CUSTOM_CARD_NAMES.has(name.trim().toLowerCase());
+}
+
+/**
+ * True when a config.yaml `providers:` / `custom_providers:` row is the
+ * first-party SMC Copilot mirror (slug `hermesone`, `HERMESONE_API_KEY`) or
+ * otherwise belongs on a dedicated brand card. Import must skip these so the
+ * LLM grid does not render a key card beside a custom endpoint card.
+ */
+export function isFirstPartyMirroredProvider(input: {
+  slug?: string;
+  name: string;
+  baseUrl: string;
+  keyEnv?: string;
+}): boolean {
+  if (isDedicatedBrandCustomProvider(input.name, input.baseUrl)) return true;
+  if ((input.keyEnv || "").trim() === "HERMESONE_API_KEY") return true;
+  if ((input.slug || "").trim().toLowerCase() === "hermesone") return true;
+  return false;
 }
 
 /**

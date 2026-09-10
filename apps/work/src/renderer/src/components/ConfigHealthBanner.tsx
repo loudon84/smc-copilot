@@ -209,7 +209,7 @@ export function ConfigHealthBanner({
             <button
               className="config-health-banner-link"
               type="button"
-              onClick={onOpenDiagnose}
+              onClick={() => onOpenDiagnose()}
             >
               {t("diagnose.banner.showDetails")}
             </button>
