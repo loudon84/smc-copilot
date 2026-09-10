@@ -15,6 +15,10 @@ asarUnpack:
 extraResources:
   - from: resources/work-build-info.json
     to: work-build-info.json
+  - from: resources
+    to: .
+    filter:
+      - work-registry-config.json
 win:
   executableName: smc-copilot
   icon: build/icon.ico

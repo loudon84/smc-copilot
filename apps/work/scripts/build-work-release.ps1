@@ -160,6 +160,10 @@ try {
     node (Join-Path $PSScriptRoot "generate-work-build-info.mjs")
   }
   if ($LASTEXITCODE -ne 0) { throw "generate-work-build-info.mjs failed" }
+  Invoke-Step "Prepare Registry build profile" {
+    node (Join-Path $PSScriptRoot "generate-work-registry-config.mjs")
+  }
+  if ($LASTEXITCODE -ne 0) { throw "generate-work-registry-config.mjs failed" }
   Invoke-Step "Install dependencies" { npm ci }
   if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
   Invoke-Step "Run guards" { npm run guard }
@@ -192,6 +196,16 @@ try {
   Invoke-Step "Verify packaged build identity" {
     node $guardScript validate-build-info $buildInfoPath $version $gitCommit
     if ($LASTEXITCODE -ne 0) { throw "Packaged work-build-info.json verification failed" }
+  }
+
+  $registryConfigPath = Join-Path $unpackedResources "work-registry-config.json"
+  Invoke-Step "Verify packaged Registry descriptor" {
+    if ($env:SMC_WORK_REGISTRY_BUILD_PROFILE_FILE) {
+      node $guardScript validate-registry-config $registryConfigPath enterprise $env:SMC_WORK_REGISTRY_BUILD_PROFILE_FILE
+    } else {
+      node $guardScript validate-registry-config $registryConfigPath community
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Packaged Registry descriptor verification failed" }
   }
 
   $signed = Assert-Authenticode -Path $installerPath

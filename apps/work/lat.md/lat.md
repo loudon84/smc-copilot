@@ -20,7 +20,7 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[sidebar-navigation]] — the recent-sessions list under the Chat nav item, capped at five with a "Show more" button that opens the full session list in a modal.
 - [[context-folder]] — the per-session linked working folder, persisted in a desktop-owned state.db table so a re-opened conversation restores its folder.
 - [[main-process]] — the Electron main-process entrypoint, app lifecycle modules, and centralized IPC registry.
-- [[registry-endpoint-configuration]] — Main-owned complete, source-aware Discover Registry descriptor resolution; enterprise package generation and proof remain in RM-02.
+- [[registry-endpoint-configuration]] — Main-owned complete, source-aware Discover Registry descriptor resolution with deterministic enterprise build-profile packaging and Community absence proof.
 - [[remote-dashboard-oauth]] — direct Remote dashboard browser authentication, main-process cookie isolation, and single-use WebSocket ticket handling.
 - [[provider-setup]] — the first-run provider picker; its top grid mirrors the agent's native `CANONICAL_PROVIDERS` while OpenAI-compatible endpoints route through the Local presets.
 - [[hermes-account-login]] — desktop sign-in to a Hermes account via the RFC 8628 device grant; secure token storage, IPC, and the Providers-screen entry point.

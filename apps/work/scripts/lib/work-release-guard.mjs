@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
 import { basename, join } from "path";
+import { normalizeRegistryBuildProfile } from "./work-registry-build-profile.mjs";
 
 export const RELEASE_MANIFEST_SCHEMA = "smc.work.release.v1";
 export const PRODUCTION_UPDATE_HOST = "release.superic.com";
@@ -25,7 +26,7 @@ export function getRequiredReleaseFiles(version) {
 }
 
 export function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
+  return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
 }
 
 export function readPackageVersion(packageJsonPath) {
@@ -91,6 +92,32 @@ export function assertPackagedAppUpdateYml(ymlPath, expectedUrl = PRODUCTION_UPD
 }
 
 export const WORK_BUILD_INFO_SCHEMA = "smc.work.build.v1";
+
+export function assertPackagedRegistryConfig(path, expectedMode, expectedDescriptor) {
+  if (expectedMode === "community") {
+    if (existsSync(path)) {
+      throw new Error("Packaged Registry descriptor must be absent for Community mode");
+    }
+    return;
+  }
+  if (expectedMode !== "enterprise") {
+    throw new Error("Packaged Registry descriptor is invalid");
+  }
+
+  try {
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      throw new Error("missing");
+    }
+    const actual = normalizeRegistryBuildProfile(readJson(path));
+    const expected = normalizeRegistryBuildProfile(expectedDescriptor);
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error("mismatch");
+    }
+    return actual;
+  } catch {
+    throw new Error("Packaged Registry descriptor is invalid");
+  }
+}
 
 export function assertWorkBuildInfo(path, expectedVersion, expectedCommit) {
   if (!existsSync(path) || !statSync(path).isFile()) {
@@ -274,6 +301,23 @@ function main() {
       throw new Error("Usage: validate-build-info <path> <version> [gitCommit]");
     }
     assertWorkBuildInfo(infoPath, version, gitCommit ?? "");
+    return;
+  }
+
+  if (command === "validate-registry-config") {
+    const [configPath, mode, profilePath] = args;
+    if (!configPath || !mode || (mode === "enterprise" && !profilePath)) {
+      throw new Error("Usage: validate-registry-config <path> <enterprise|community> [profile]");
+    }
+    let expectedDescriptor;
+    if (mode === "enterprise") {
+      try {
+        expectedDescriptor = normalizeRegistryBuildProfile(readJson(profilePath));
+      } catch {
+        throw new Error("Registry build profile is invalid");
+      }
+    }
+    assertPackagedRegistryConfig(configPath, mode, expectedDescriptor);
     return;
   }
 

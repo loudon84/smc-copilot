@@ -8,10 +8,12 @@ import {
   assertPackagedAppUpdateYml,
   assertReleaseArtifacts,
   assertReleaseDirectoryAbsent,
+  assertPackagedRegistryConfig,
   assertWorkBuildInfo,
   buildReleaseManifest,
   getBlockmapName,
   getInstallerName,
+  readJson,
   sha512FileBase64,
   validateUpdateUrl,
   verifySha256Sums,
@@ -44,6 +46,38 @@ afterEach(() => {
 });
 
 describe("work release guard helpers", () => {
+  it("reads UTF-8 BOM JSON package inputs", () => {
+    testDir = mkdtempSync(join(tmpdir(), "work-release-bom-"));
+    const jsonPath = join(testDir, "profile.json");
+    writeFileSync(jsonPath, "\uFEFF{\"schemaVersion\":1}");
+    expect(readJson(jsonPath)).toEqual({ schemaVersion: 1 });
+  });
+
+  it("requires the selected Registry descriptor in enterprise packages and omits it in Community", () => {
+    testDir = mkdtempSync(join(tmpdir(), "work-registry-package-"));
+    const configPath = join(testDir, "work-registry-config.json");
+    const descriptor = {
+      schemaVersion: 1,
+      registryId: "enterprise-registry",
+      indexUrl: "https://registry.example.invalid/index.json",
+      modelsUrl: "https://registry.example.invalid/models.json",
+      contentBaseUrl: "https://registry.example.invalid/content",
+      treeUrl: "https://registry.example.invalid/tree",
+      webBaseUrl: "https://registry.example.invalid/web",
+    };
+
+    expect(() => assertPackagedRegistryConfig(configPath, "enterprise", descriptor)).toThrow(
+      /Packaged Registry descriptor is invalid/,
+    );
+    writeFileSync(configPath, JSON.stringify(descriptor));
+    expect(assertPackagedRegistryConfig(configPath, "enterprise", descriptor)).toEqual(descriptor);
+    expect(() => assertPackagedRegistryConfig(configPath, "community")).toThrow(
+      /must be absent/,
+    );
+    rmSync(configPath);
+    expect(assertPackagedRegistryConfig(configPath, "community")).toBeUndefined();
+  });
+
   it("accepts only the production HTTPS stable update URL", () => {
     expect(validateUpdateUrl(PRODUCTION_UPDATE_URL)).toBe(PRODUCTION_UPDATE_URL);
     expect(() => validateUpdateUrl("http://release.superic.com/work/stable/")).toThrow(

@@ -42,6 +42,12 @@ describe("work v2.2 builder configuration", () => {
     expect(BUILDER).toContain("to: work-build-info.json");
   });
 
+  it("conditionally includes only the generated Registry descriptor resource", () => {
+    expect(BUILDER).toMatch(
+      /from: resources\s*\n\s*to: \.\s*\n\s*filter:\s*\n\s*- work-registry-config\.json/,
+    );
+  });
+
   it("uses only the generic stable provider for production updates", () => {
     expect(BUILDER).toContain("provider: generic");
     expect(BUILDER).toContain("url: ${env.SMC_WORK_UPDATE_URL}");
@@ -51,7 +57,8 @@ describe("work v2.2 builder configuration", () => {
   });
 
   it("pins Windows production packaging to NSIS without a default portable target", () => {
-    expect(BUILDER).toMatch(/win:\s*\n\s+executableName: smc-copilot\s*\n\s+target:\s*\n\s+- nsis/);
+    expect(BUILDER).toMatch(/win:\s*\n\s+executableName: smc-copilot/);
+    expect(BUILDER).toMatch(/win:[\s\S]*?target:\s*\n\s+- nsis/);
     expect(BUILDER).not.toMatch(/win:\s*[\s\S]*-\s+portable/);
     expect(BUILDER).toContain("oneClick: false");
     expect(BUILDER).toContain("perMachine: true");
@@ -104,8 +111,10 @@ describe("work v2.2 builder configuration", () => {
     expect(buildScript).toContain("ReleaseNotesPath");
     expect(buildScript).toContain("Import-DotEnvFile");
     expect(buildScript).toContain("generate-work-build-info.mjs");
+    expect(buildScript).toContain("generate-work-registry-config.mjs");
     expect(buildScript).toContain("run-electron-builder.mjs");
     expect(buildScript).toContain("validate-build-info");
+    expect(buildScript).toContain("validate-registry-config");
     expect(buildScript).toContain("Add-ReleaseNotesToLatestYml");
     expect(buildScript).toContain("validate-app-update-yml");
     expect(buildScript).toContain("validate-sha512");
