@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "registryId": "package-proof-registry",
+  "indexUrl": "https://registry.example.invalid/index.json",
+  "modelsUrl": "https://registry.example.invalid/models.json",
+  "contentBaseUrl": "https://registry.example.invalid/content",
+  "treeUrl": "https://registry.example.invalid/tree",
+  "webBaseUrl": "https://registry.example.invalid/web"
+}
