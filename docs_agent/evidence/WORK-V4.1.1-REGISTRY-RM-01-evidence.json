@@ -1,0 +1,398 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:91586d22f7f981012dbdacd426ded2d90987bfbfa502a18517594b0eb7ad033d",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Fixed public Registry implementation",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No resolver",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No validator",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Shared GitHub constants",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Free-form/empty fallback",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Unkeyed module caches",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Current IPC/Renderer",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V06",
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No current event",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-18 typecheck evidence",
+      "requirement": "AC-09",
+      "result": "PASS",
+      "verification_ids": [
+        "V04",
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Approved stage split",
+      "requirement": "AC-10",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Approved target-only LAT node",
+      "requirement": "AC-11",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Plan identity/ledger",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V03",
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "PRD baseline",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-14",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "SMC contract",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-15",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-01 IN_PRD / RM-02 BACKLOG",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-16",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Architecture v1.0.1",
+      "requirement": "DOD-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-08",
+        "CLM-13"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-08": "PASS",
+        "CLM-13": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run src/main/registry.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050742.494194Z-V01.log",
+      "raw_log_sha256": "sha256:dbdd5f067893dd45933ecd22cb8d0a78c6e0038654824f4d375979ac2d06cb6a",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:07:42.494194Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-05",
+        "CLM-06",
+        "CLM-08",
+        "CLM-13"
+      ],
+      "claim_results": {
+        "CLM-05": "PASS",
+        "CLM-06": "PASS",
+        "CLM-08": "PASS",
+        "CLM-13": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run src/main/registry.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050755.269575Z-V02.log",
+      "raw_log_sha256": "sha256:e327eea86cbe8235dd1b3ec06a2b040bdbf8ad3bb883e4093909179d2fff7629",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:07:55.269575Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-12",
+        "CLM-13",
+        "CLM-16"
+      ],
+      "claim_results": {
+        "CLM-12": "PASS",
+        "CLM-13": "PASS",
+        "CLM-16": "PASS"
+      },
+      "command": "npm --prefix apps/work run guard",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050807.197796Z-V03.log",
+      "raw_log_sha256": "sha256:edeae479a6d3b8ca1325569803fa954cb247791e2c7350928454c9c2c9f75ef5",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:08:07.197796Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-09": "PASS"
+      },
+      "command": "npm --prefix apps/work run typecheck",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050826.131755Z-V04.log",
+      "raw_log_sha256": "sha256:ed524db556f9fee6ee7a9a72cf56a940a11937da0f35ceae0515c4ddf3060c63",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:08:26.131755Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-11",
+        "CLM-12",
+        "CLM-13",
+        "CLM-14",
+        "CLM-15"
+      ],
+      "claim_results": {
+        "CLM-11": "PASS",
+        "CLM-12": "PASS",
+        "CLM-13": "PASS",
+        "CLM-14": "PASS",
+        "CLM-15": "PASS"
+      },
+      "command": "python -c 'import subprocess,sys; sys.exit(subprocess.call('\"'\"'lat check'\"'\"', cwd='\"'\"'apps/work'\"'\"', shell=True))'",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "REPO_SUMMARY",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050849.737701Z-V05.log",
+      "raw_log_sha256": "sha256:3789f2f3c4653df5fab25c99a9c8ef0a554787f56f583736892b4242836b4ba0",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:08:49.737701Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-04",
+        "CLM-07"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-04": "PASS",
+        "CLM-07": "PASS"
+      },
+      "command": "npm --prefix apps/work exec -- vitest run src/main/registry.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050900.502819Z-V06.log",
+      "raw_log_sha256": "sha256:18a4866a189e60079e5e4c3b1065de82a8028e930d5c64c228897a23de658225",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:09:00.502819Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-07",
+        "CLM-09",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-07": "PASS",
+        "CLM-09": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "npm --prefix apps/work run guard",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-V4.1.1-REGISTRY-RM-01/logs/20260910T050912.385533Z-V07.log",
+      "raw_log_sha256": "sha256:d3f39ac7c1d201a5c4b4270d703aac4df5f2452897f7fe0308b406ddecbf0f9e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-10T05:09:12.385533Z",
+      "verification_id": "V07"
+    }
+  ],
+  "completion_audit": {
+    "changed": 5,
+    "deferred": 0,
+    "done": 2,
+    "scope_drift": 0,
+    "timestamp": "2026-09-10T04:52:18.864480Z",
+    "total_items": 2,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-10T05:12:20.853283Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:bc43e6d0baf3b372c389b7d5a9521613fc1b69d9f9249ef3a1c132c98e5306e0",
+    "timestamp": "2026-09-10T04:52:33.346513Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:167e30beb79808be10de3861e31ecf68622ad7520096b399cf6fcb0bdb511a90",
+  "plan": ".cursor/plans/work-v4.1.1-m1-registry-descriptor-main-consumer.plan.md",
+  "plan_id": "WORK-V4.1.1-REGISTRY-RM-01",
+  "plan_review": {
+    "plan_sha256": "sha256:e99bfb8e2104abbaa7c6c566bed7d6928335f5d61d1135421b77d2a7bb6efce9",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-10T02:59:28.315210Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:bc43e6d0baf3b372c389b7d5a9521613fc1b69d9f9249ef3a1c132c98e5306e0",
+  "verification_candidate": null,
+  "workspace_base_commit": "1c98d888c618ab8e8e86c928c5d8f83d8a58d2cf"
+}

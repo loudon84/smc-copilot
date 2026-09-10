@@ -1,18 +1,24 @@
 # Registry Endpoint Configuration
 
-The approved v4.1.1 architecture will make the whole Discover Registry use one validated endpoint descriptor; this is a target state and is not implemented until its Roadmap items are delivered.
+The Discover Registry resolves one validated endpoint descriptor in Main so catalog, models, content, tree, homepage, and optional icons retain one source identity.
 
 ## Current Owner
 
 Main remains the single Registry network, cache, detail, and install owner.
 
-Today [[src/main/registry.ts#fetchRegistry]], [[src/main/registry.ts#fetchModelRegistry]], and [[src/main/registry.ts#installRegistryItem]] share GitHub-specific module constants. Renderer consumers use the existing Registry IPC and do not own endpoint selection.
+[[src/main/registry.ts#fetchRegistry]], [[src/main/registry.ts#fetchModelRegistry]], [[src/main/registry.ts#fetchRegistryDetail]], and [[src/main/registry.ts#installRegistryItem]] resolve and consume the same descriptor. Renderer consumers retain the existing Registry IPC and never own endpoint selection.
 
-## Approved Target
+## Descriptor and Source Resolution
 
-One complete descriptor will atomically identify catalog, models, content, tree, web, and optional icon endpoints.
+One complete descriptor atomically identifies catalog, models, content, tree, web, and optional icon endpoints.
 
-The selected source order is packaged build descriptor, then an explicit Main-only runtime descriptor, then the public default. A present but invalid source fails closed; fields are never merged across sources, and all caches are scoped to the descriptor identity.
+The selected source order is packaged `work-registry-config.json`, then the explicit Main-only `HERMES_SKILL_REGISTRY_CONFIG_FILE`, then the public default. A present but invalid source returns `SKILL_REGISTRY_CONFIG_INVALID` before any Registry request; fields are never merged across sources, and `HERMES_SKILL_REGISTRY_URL` is ignored.
+
+## Transport, Errors, and Cache
+
+Descriptor endpoints are validated before use and content paths cannot escape `contentBaseUrl`.
+
+Catalog, model, detail, tree, and download flows derive their URLs from the selected descriptor. Main does not forward `GITHUB_TOKEN`/`GH_TOKEN` or provider-specific request headers. Unavailable selected endpoints return sanitized `SKILL_REGISTRY_UNAVAILABLE` errors, and catalog/model/tree caches are bound to descriptor identity; [[src/main/registry.ts#__resetRegistryForTests]] clears the resolution and all three caches together for deterministic tests.
 
 ## Ownership Boundary
 
@@ -24,4 +30,4 @@ The runtime descriptor documented by [[runtime-connection#Runtime Descriptor]] c
 
 Runtime descriptor consumption and enterprise packaging are separate governed stages.
 
-RM-01 owns the descriptor contract, source resolution, fail-closed behavior, unified Registry consumption, and cache identity. RM-02 later owns enterprise build-profile generation and final package proof; neither stage changes Hermes Agent/CLI, Registry governance, authentication, or Skill Run contracts.
+RM-01 implements descriptor consumption, source resolution, fail-closed behavior, unified Registry consumption, and cache identity. RM-02 still owns enterprise build-profile generation and final package proof; neither stage changes Hermes Agent/CLI, Registry governance, authentication, or Skill Run contracts.

@@ -6,6 +6,10 @@
 
 export type RegistryKind = "skills" | "mcps" | "agents" | "workflows";
 
+export type RegistryErrorCode =
+  | "SKILL_REGISTRY_CONFIG_INVALID"
+  | "SKILL_REGISTRY_UNAVAILABLE";
+
 export interface RegistryItem {
   /** Stable identifier, unique within its kind. */
   id: string;
@@ -31,6 +35,8 @@ export interface RegistryCatalog {
   mcps: RegistryItem[];
   agents: RegistryItem[];
   workflows: RegistryItem[];
+  error?: string;
+  errorCode?: RegistryErrorCode;
 }
 
 export interface InstalledRegistry {
@@ -57,6 +63,8 @@ export interface RegistryDetail {
   markdown?: string;
   description?: string;
   rows?: RegistryDetailRow[];
+  error?: string;
+  errorCode?: RegistryErrorCode;
 }
 
 /**
@@ -91,4 +99,5 @@ export interface ModelRegistry {
   modelCount?: number;
   providers: RegistryModelProvider[];
   error?: string;
+  errorCode?: RegistryErrorCode;
 }
