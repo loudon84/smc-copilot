@@ -380,6 +380,35 @@ class DeliveryToolsTest(unittest.TestCase):
         self.assertEqual(2, rc)
         self.assertEqual("MISSING", evidence.current_status(self.plan, "V01")[0])
 
+    def test_windows_cmd_shim_preserves_canonical_plan_command(self):
+        # Windows CreateProcess does not resolve npm -> npm.cmd like a shell.
+        # The launcher adapts only execution; evidence still records `npm`.
+        launch = evidence.launch_command(
+            ["npm", "exec", "vitest", "--", "run"],
+            platform="nt",
+            which=lambda _: r"C:\\node\\npm.cmd",
+        )
+        self.assertEqual(r"C:\\node\\npm.cmd", launch[0])
+        self.assertEqual(["exec", "vitest", "--", "run"], launch[1:])
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows command shim regression")
+    def test_windows_evidence_runner_executes_npm_and_records_canonical_command(self):
+        self.plan.write_text(
+            self.plan.read_text(encoding="utf-8").replace(
+                '`python -c "print(\'ok\')"`',
+                "`npm --version`",
+            ),
+            encoding="utf-8",
+        )
+        self.init_workspace()
+
+        rc = evidence.run_cmd(self.plan, "V01", ["npm", "--version"])
+
+        self.assertEqual(0, rc)
+        status, record = evidence.current_status(self.plan, "V01")
+        self.assertEqual("FRESH", status)
+        self.assertEqual("npm --version", record["command"])
+
     def test_evidence_scope_freshness(self):
         # @lat: [[ges-tests#GES Tests#Proof freshness#Evidence freshness is scope-bound]]
         self.init_workspace(); self.implement()

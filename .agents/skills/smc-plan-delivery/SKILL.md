@@ -1,7 +1,7 @@
 ---
 name: smc-plan-delivery
 description: SMC canonical Plan 后半程唯一交付编排器。v1.2 在 v1.1 scoped workspace/context 基础上增加 Generic Domain Provider hooks；Domain Pack 只在 engineering/review/verification 阶段扩展能力，不拥有 Delivery state。
-version: 1.2.0
+version: 1.2.1
 ---
 
 # SMC Plan Delivery v1.2
@@ -428,6 +428,8 @@ candidate provenance
 python .agents/skills/smc-plan-delivery/scripts/evidence.py run \
   --plan "$PLAN_PATH" --verification V01 -- <exact command>
 ```
+
+在 Windows 上，canonical command 仍保持 `npm ...` 等平台中立文本；runner 只在进程启动层显式解析 `.cmd` / `.bat` shim，命令匹配和证据账本继续记录 Plan 原文，不要求业务 Plan 写成 `npm.cmd`。解析后的 shim 直接以 argv 启动，不将 Plan 参数重新解释为 `cmd.exe` shell 语法。
 
 `REUSE_EVIDENCE`：
 

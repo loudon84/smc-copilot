@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +60,29 @@ def expected_plan_command(plan: Path, vid: str) -> str | None:
     if not raw: return None
     try: return shlex.join(shlex.split(raw))
     except ValueError: return raw
+
+
+def launch_command(command: list[str], *, platform: str | None = None, which=shutil.which) -> list[str]:
+    """Return the platform launch argv without changing recorded Plan syntax.
+
+    A canonical Plan command such as ``npm exec`` is intentionally shell-neutral.
+    On Windows, CreateProcess cannot resolve an extensionless command name to a
+    ``.cmd`` / ``.bat`` shim. Resolve the shim explicitly while retaining the
+    original argv for command-matching and evidence records.  Avoid adding a
+    ``cmd.exe /c`` parsing layer: Plan arguments must remain process arguments,
+    rather than becoming shell syntax.
+    """
+    if not command or (platform or os.name) != "nt":
+        return command
+    executable = command[0]
+    resolved = which(executable)
+    suffix = Path(resolved).suffix.lower() if resolved else ""
+    if suffix in {".cmd", ".bat"}:
+        return [resolved, *command[1:]]
+    shim = which(f"{executable}.cmd") or which(f"{executable}.bat")
+    if shim and Path(shim).suffix.lower() in {".cmd", ".bat"}:
+        return [shim, *command[1:]]
+    return command
 
 
 def _freshness(plan: Path, rec: dict) -> bool:
@@ -158,7 +182,7 @@ def run_cmd(plan: Path, vid: str, command: list[str]) -> int:
     with log.open("w", encoding="utf-8", newline="\n") as out:
         os.chmod(log, 0o600)
         out.write(f"# command: {rendered}\n# scope_fingerprint: {ws['scope_fingerprint']}\n# ambient_fingerprint: {ws['ambient_fingerprint']}\n# timestamp: {ts}\n\n")
-        proc = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        proc = subprocess.Popen(launch_command(command), cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         assert proc.stdout is not None
         for line in proc.stdout:
             sys.stdout.write(line); out.write(line)
