@@ -66,6 +66,8 @@ function session(overrides: Partial<CachedSession> = {}): CachedSession {
     messageCount: 1,
     model: "test-model",
     contextFolder: null,
+    sessionKind: "chat",
+    executionProvider: "hermes-chat",
     ...overrides,
   };
 }

@@ -14,6 +14,10 @@ import {
   sessionTitleFromUserMessage,
   upsertCachedSession,
 } from "../session-cache";
+import {
+  createSessionScope,
+  ensureSkillRunSessionMetadata,
+} from "../session-metadata-store";
 
 const SESSION_SOURCE = "api_server";
 
@@ -70,6 +74,8 @@ function upsertSessionCacheRow(
     messageCount,
     model: "",
     contextFolder: null,
+    sessionKind: "work",
+    executionProvider: "skill-run",
   });
 }
 
@@ -97,8 +103,7 @@ export function materializeSkillRunSessionTranscript(
 
   const db = getDbConnection(false);
   if (!db) {
-    upsertSessionCacheRow(sessionId, desiredTitle, nowSec, 2);
-    return { sessionId, title: desiredTitle, wroteMessages: false, cacheOnly: true };
+    return null;
   }
 
   let wroteMessages = false;
@@ -143,6 +148,13 @@ export function materializeSkillRunSessionTranscript(
         throw new Error(`session row missing after upsert: ${sessionId}`);
       }
 
+      const profileId = projection.profileId?.trim() || "default";
+      ensureSkillRunSessionMetadata(db, {
+        sessionScope: createSessionScope(`local|${profileId}`),
+        profileId,
+        sessionId,
+      });
+
       if (!existingUser) {
         db.prepare(
           `INSERT INTO messages (
@@ -177,17 +189,8 @@ export function materializeSkillRunSessionTranscript(
     });
     tx();
   } catch (err) {
-    console.warn(
-      "[skill-run] materialize transcript error; falling back to cache",
-      err,
-    );
-    upsertSessionCacheRow(sessionId, desiredTitle, nowSec, 2);
-    return {
-      sessionId,
-      title: desiredTitle,
-      wroteMessages: false,
-      cacheOnly: true,
-    };
+    console.warn("[skill-run] materialize transcript error; formal Work cache omitted", err);
+    return null;
   }
 
   const countRow = db

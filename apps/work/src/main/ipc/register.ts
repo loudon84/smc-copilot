@@ -1586,6 +1586,9 @@ export function registerIpcHandlers(context: IpcContext): void {
             }
           },
           onSessionStarted: (sessionId) => {
+            // Cache sync is Main-owned; it writes the durable Chat classification
+            // before this session becomes visible to Renderer listeners.
+            syncSessionCache();
             safeSend("chat-session-started", sessionId);
           },
           onError: (error) => {
@@ -2396,7 +2399,7 @@ export function registerIpcHandlers(context: IpcContext): void {
         return withSshDashboardSessions(
           conn,
           (config) => remoteListCachedSessions(config, limit, offset),
-          () => sshListCachedSessions(conn.ssh, limit, offset),
+          () => sshListCachedSessions(conn.ssh, limit, offset, activeSshProfile()),
           activeSshProfile(),
         );
       return listCachedSessions(limit, offset);
@@ -2409,7 +2412,7 @@ export function registerIpcHandlers(context: IpcContext): void {
       return withSshDashboardSessions(
         conn,
         (config) => remoteListCachedSessions(config, 50),
-        () => sshListCachedSessions(conn.ssh, 50),
+        () => sshListCachedSessions(conn.ssh, 50, 0, activeSshProfile()),
         activeSshProfile(),
       );
     try {

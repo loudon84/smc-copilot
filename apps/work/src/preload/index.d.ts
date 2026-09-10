@@ -789,6 +789,8 @@ interface HermesAPI {
       messageCount: number;
       model: string;
       contextFolder: string | null;
+      sessionKind: "chat" | "work";
+      executionProvider: "hermes-chat" | "skill-run";
     }>
   >;
   syncSessionCache: () => Promise<
@@ -800,6 +802,8 @@ interface HermesAPI {
       messageCount: number;
       model: string;
       contextFolder: string | null;
+      sessionKind: "chat" | "work";
+      executionProvider: "hermes-chat" | "skill-run";
     }>
   >;
   onSessionCacheChanged: (

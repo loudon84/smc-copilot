@@ -1082,6 +1082,8 @@ const hermesAPI = {
       messageCount: number;
       model: string;
       contextFolder: string | null;
+      sessionKind: "chat" | "work";
+      executionProvider: "hermes-chat" | "skill-run";
     }>
   > => ipcRenderer.invoke("list-cached-sessions", limit, offset),
 
@@ -1094,6 +1096,8 @@ const hermesAPI = {
       messageCount: number;
       model: string;
       contextFolder: string | null;
+      sessionKind: "chat" | "work";
+      executionProvider: "hermes-chat" | "skill-run";
     }>
   > => ipcRenderer.invoke("sync-session-cache"),
 

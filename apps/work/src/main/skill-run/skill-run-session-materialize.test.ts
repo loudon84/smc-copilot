@@ -157,6 +157,8 @@ class FakeDb {
   messages: MessageRow[] = [];
   nextMessageId = 1;
 
+  exec(): void {}
+
   prepare(sql: string): FakeStmt {
     return new FakeStmt(this, sql);
   }
@@ -262,15 +264,15 @@ describe("skill-run-session-materialize", () => {
     expect(mockDb.messages[0]?.content).toBe("请分析客户画像");
   });
 
-  it("falls back to cache when DB is missing or throws", () => {
+  it("fails closed without a formal Work cache row when DB is missing or throws", () => {
     vi.mocked(upsertCachedSession).mockClear();
     mockDb = null;
     const missing = materializeSkillRunSessionTranscript(
       projection(),
       "cache-only prompt",
     );
-    expect(missing).toMatchObject({ cacheOnly: true, wroteMessages: false });
-    expect(upsertCachedSession).toHaveBeenCalled();
+    expect(missing).toBeNull();
+    expect(upsertCachedSession).not.toHaveBeenCalled();
 
     mockDb = new FakeDb();
     mockDb.transaction = () => {
@@ -281,7 +283,7 @@ describe("skill-run-session-materialize", () => {
       projection(),
       "db-failure prompt",
     );
-    expect(failed).toMatchObject({ cacheOnly: true, wroteMessages: false });
-    expect(upsertCachedSession).toHaveBeenCalled();
+    expect(failed).toBeNull();
+    expect(upsertCachedSession).not.toHaveBeenCalled();
   });
 });

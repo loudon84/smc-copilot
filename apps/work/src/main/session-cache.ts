@@ -12,6 +12,12 @@ import { getAppLocale } from "./locale";
 import { getDbConnection } from "./db";
 import { getSessionContextFolders } from "./session-context-folder-store";
 import {
+  createSessionScope,
+  ensureChatSessionMetadata,
+  isSessionClassification,
+  type SessionClassification,
+} from "./session-metadata-store";
+import {
   isSessionCacheChangedEvent,
   type SessionCacheChangedEvent,
   type SessionCacheChangedListener,
@@ -32,7 +38,7 @@ function cacheFilePath(): string {
   );
 }
 
-export interface CachedSession {
+export interface CachedSession extends SessionClassification {
   id: string;
   title: string;
   startedAt: number;
@@ -41,6 +47,9 @@ export interface CachedSession {
   model: string;
   contextFolder: string | null;
 }
+
+type CachedSessionInput = Omit<CachedSession, keyof SessionClassification> &
+  Partial<SessionClassification>;
 
 interface CacheData {
   sessions: CachedSession[];
@@ -91,7 +100,7 @@ function readCache(): CacheData {
     return {
       lastSync: typeof parsed.lastSync === "number" ? parsed.lastSync : 0,
       sessions: Array.isArray(parsed.sessions)
-        ? parsed.sessions.map((s) => ({
+        ? parsed.sessions.filter(isSessionClassification).map((s) => ({
             ...s,
             contextFolder:
               typeof s.contextFolder === "string" ? s.contextFolder : null,
@@ -145,7 +154,20 @@ function writeCache(data: CacheData): boolean {
 }
 
 function getDb(): Database.Database | null {
-  return getDbConnection(true);
+  return getDbConnection(false);
+}
+
+function localChatClassification(db: Database.Database, sessionId: string): SessionClassification | null {
+  try {
+    const profileId = getActiveProfileNameSync().trim() || "default";
+    return ensureChatSessionMetadata(db, {
+      sessionScope: createSessionScope(`local|${profileId}`),
+      profileId,
+      sessionId,
+    });
+  } catch {
+    return null;
+  }
 }
 
 // Attach each session's linked folder in a single batched store read, so a
@@ -197,11 +219,15 @@ export function syncSessionCache(): CachedSession[] {
     const refreshedIds = new Set<string>();
     for (const row of rows) {
       refreshedIds.add(row.id);
+      const classification = localChatClassification(db, row.id);
+      if (!classification) continue;
       const existing = existingById.get(row.id);
       if (existing) {
         existing.messageCount = row.message_count;
         if (row.model) existing.model = row.model;
         if (row.title) existing.title = row.title;
+        existing.sessionKind = classification.sessionKind;
+        existing.executionProvider = classification.executionProvider;
         continue;
       }
 
@@ -230,6 +256,7 @@ export function syncSessionCache(): CachedSession[] {
         source: row.source,
         messageCount: row.message_count,
         model: row.model || "",
+        ...classification,
         // Filled in below by the single batched `attachContextFolders` pass
         // over the merged set, so we don't query the store once per new row.
         contextFolder: null,
@@ -347,9 +374,10 @@ export function removeSessionFromCache(sessionId: string): void {
 
 /**
  * Upsert one row into the fast-path sessions.json cache so the sidebar can
- * show a newly materialized Expert session before the next full DB sync.
+ * show a newly materialized classified session before the next full DB sync.
  */
-export function upsertCachedSession(session: CachedSession): void {
+export function upsertCachedSession(session: CachedSessionInput): void {
+  if (!isSessionClassification(session)) return;
   const cache = readCache();
   const idx = cache.sessions.findIndex((s) => s.id === session.id);
   const reason: SessionCacheChangedReason = idx >= 0 ? "updated" : "created";

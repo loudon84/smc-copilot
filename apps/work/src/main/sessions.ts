@@ -27,6 +27,8 @@ import {
 } from "./session-continuation-store";
 import { deleteSessionContextFolderForSession } from "./session-context-folder-store";
 import { deleteSessionModelOverrideForSession } from "./session-model-override-store";
+import { createSessionScope, deleteSessionMetadataForSession } from "./session-metadata-store";
+import { getActiveProfileNameSync } from "./utils";
 import {
   deleteSkillRunTranscriptForSession,
   listSkillRunTranscriptForSession,
@@ -950,6 +952,12 @@ export function deleteSessionRows(db: Database.Database, sessionId: string): num
     ).run(sessionId);
   }
   deleteSessionContextFolderForSession(db, sessionId);
+  const profileId = getActiveProfileNameSync().trim() || "default";
+  deleteSessionMetadataForSession(db, {
+    sessionScope: createSessionScope(`local|${profileId}`),
+    profileId,
+    sessionId,
+  });
   deleteSessionModelOverrideForSession(db, sessionId);
   db.prepare("DELETE FROM messages WHERE session_id = ?").run(sessionId);
   const result = db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);

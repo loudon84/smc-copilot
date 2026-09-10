@@ -138,6 +138,16 @@ Sidebar live-sync is cache-only: a sanitized `{sessionId, reason}` event trigger
 
 Enumerated `assistant.delta` mapping is documented under M6h. This slice does not implement Provider edit, Hermes `tool_calls` reuse, clarify response, or Artifact transport rewrite.
 
+## RM-01 Session metadata foundation
+
+[[src/main/session-metadata-store.ts]] is the Main-only durable classifier for original Chat (`chat/hermes-chat`) and accepted Skill Run (`work/skill-run`).
+
+It keys rows by opaque SHA-256 `sessionScope` plus profile and session IDs, so trusted connection descriptors are neither persisted in this index nor emitted to cache/Renderer. It rejects partial, cross-paired, third-provider, Expert, and HermesTask values; trusted Chat repair preserves an accepted Skill Run row.
+
+[[src/main/session-cache.ts]], Remote Dashboard, and SSH publish only classified rows after Main can retain the Chat pair; a missing or unavailable metadata DB fails closed. [[src/main/sessions.ts#deleteSessionRows]] removes metadata in the authoritative delete transaction before cache cleanup.
+
+[[src/main/skill-run/skill-run-session-materialize.ts#materializeSkillRunSessionTranscript]] writes `work/skill-run` inside the existing materialization transaction after the accepted-run predicate. Missing DB or metadata failure leaves no formal Work cache row; it does not reclassify activity as Chat.
+
 ## M6g Streaming delta contract import
 
 Work imported immutable `SKILL-RUN-CONTRACT` v1.5.0. Tag `skill-run-contract-v1.5.0` pins `3a7fa5ac32017d41f7191b8221c861b93d7e7f32`.

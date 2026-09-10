@@ -3,6 +3,13 @@ import https from "https";
 import type { ConnectionConfig } from "./config";
 import { requestRemoteOAuthJson } from "./remote-oauth";
 import type { CachedSession } from "./session-cache";
+import { getDbConnection } from "./db";
+import {
+  createSessionScope,
+  deleteSessionMetadataForSession,
+  ensureChatSessionMetadata,
+  type SessionClassification,
+} from "./session-metadata-store";
 import {
   extractLeadingVisionImageFallback,
   stripTrailingImagePlaceholders,
@@ -270,8 +277,41 @@ function normalizeSessionSummary(row: RemoteRecord): SessionSummary {
   };
 }
 
-function normalizeCachedSession(row: RemoteRecord): CachedSession {
+function remoteChatClassification(config: RemoteSessionConfig, sessionId: string): SessionClassification | null {
+  const db = getDbConnection(false);
+  if (!db) return null;
+  try {
+    const profileId = config.profile?.trim() || "default";
+    return ensureChatSessionMetadata(db, {
+      sessionScope: createSessionScope(`remote|${normalizeRemoteDashboardBaseUrl(config.remoteUrl)}`),
+      profileId,
+      sessionId,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function deleteRemoteChatMetadata(config: RemoteSessionConfig, sessionId: string): void {
+  const db = getDbConnection(false);
+  if (!db) return;
+  try {
+    const profileId = config.profile?.trim() || "default";
+    deleteSessionMetadataForSession(db, {
+      sessionScope: createSessionScope(`remote|${normalizeRemoteDashboardBaseUrl(config.remoteUrl)}`),
+      profileId,
+      sessionId,
+    });
+  } catch {
+    // The authoritative remote deletion has succeeded; a stale local index is
+    // fail-closed on its next projection and can never recreate the session.
+  }
+}
+
+function normalizeCachedSession(config: RemoteSessionConfig, row: RemoteRecord): CachedSession | null {
   const summary = normalizeSessionSummary(row);
+  const classification = remoteChatClassification(config, summary.id);
+  if (!summary.id || !classification) return null;
   return {
     id: summary.id,
     title: summary.title ?? sessionTitle(row, summary.id),
@@ -280,6 +320,7 @@ function normalizeCachedSession(row: RemoteRecord): CachedSession {
     messageCount: summary.messageCount,
     model: summary.model,
     contextFolder: null,
+    ...classification,
   };
 }
 
@@ -322,7 +363,9 @@ export async function remoteListCachedSessions(
   offset = 0,
 ): Promise<CachedSession[]> {
   const response = await remoteSessionListPage(config, limit, offset);
-  return sessionsFromResponse(response).map(normalizeCachedSession);
+  return sessionsFromResponse(response)
+    .map((row) => normalizeCachedSession(config, row))
+    .filter((row): row is CachedSession => row !== null);
 }
 
 export async function remoteSearchSessions(
@@ -599,6 +642,7 @@ export async function remoteDeleteSession(
       method: "DELETE",
     },
   );
+  deleteRemoteChatMetadata(config, sessionId);
 }
 
 export interface RemoteDeleteSessionsResult {

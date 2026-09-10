@@ -20,6 +20,8 @@ import {
 import type { MemoryInfo } from "./memory";
 import type { HistoryItem, SessionSummary, SearchResult } from "./sessions";
 import type { CachedSession } from "./session-cache";
+import { getDbConnection } from "./db";
+import { createSessionScope, ensureChatSessionMetadata } from "./session-metadata-store";
 import type { Attachment } from "../shared/attachments";
 import { isImageMime, MAX_IMAGE_BYTES } from "../shared/attachments";
 import type { ToolsetInfo } from "./tools";
@@ -3223,10 +3225,20 @@ export async function sshListCachedSessions(
   config: SshConfig,
   limit = 50,
   offset = 0,
+  profileId = "default",
 ): Promise<CachedSession[]> {
   void offset;
   const sessions = await sshListSessions(config, limit, 0);
-  return sessions.map((s) => ({
+  const db = getDbConnection(false);
+  if (!db) return [];
+  return sessions.flatMap((s) => {
+    try {
+      const classification = ensureChatSessionMetadata(db, {
+        sessionScope: createSessionScope(`ssh|${config.username}|${config.host}|${config.port}|${config.remotePort}`),
+        profileId: profileId.trim() || "default",
+        sessionId: s.id,
+      });
+      return [{
     id: s.id,
     title: s.title || s.id,
     startedAt: s.startedAt,
@@ -3234,7 +3246,12 @@ export async function sshListCachedSessions(
     messageCount: s.messageCount,
     model: s.model,
     contextFolder: null,
-  }));
+        ...classification,
+      }];
+    } catch {
+      return [];
+    }
+  });
 }
 
 // ── Doctor / diagnostics ──────────────────────────────────────────────────────
