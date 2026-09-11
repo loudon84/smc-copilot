@@ -208,6 +208,7 @@ import {
 import {
   syncSessionCache,
   listCachedSessions,
+  recordVisibleChatSession,
   updateSessionTitle,
   subscribeSessionCacheChanged,
 } from "../session-cache";
@@ -1546,10 +1547,9 @@ export function registerIpcHandlers(context: IpcContext): void {
           },
           onDone: (sessionId) => {
             activeRuns.delete(chatRunId);
-            // A fresh gateway session can become durable after its first
-            // visible stream event. Retry the targeted sync on successful
-            // completion so the Sidebar receives the cache hint only once the
-            // classified row is actually present.
+            // Reconcile a locally materialized visible Chat row after a
+            // successful turn, once the gateway may have written its durable
+            // state.db metadata.
             if (sessionId) {
               syncSessionCache({ announceSessionId: sessionId });
             }
@@ -1593,9 +1593,11 @@ export function registerIpcHandlers(context: IpcContext): void {
             }
           },
           onSessionStarted: (sessionId) => {
-            // Cache sync is Main-owned; it writes the durable Chat classification
-            // before this session becomes visible to Renderer listeners.
-            syncSessionCache({ announceSessionId: sessionId });
+            // A visible Chat turn earns a local, classified sidebar row even
+            // before the gateway writes its state.db row. The following sync
+            // reconciles it with gateway metadata when that row is available.
+            recordVisibleChatSession(sessionId, message);
+            syncSessionCache();
             safeSend("chat-session-started", sessionId);
           },
           onError: (error) => {

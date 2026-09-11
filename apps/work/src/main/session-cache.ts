@@ -46,6 +46,9 @@ export interface CachedSession extends SessionClassification {
   messageCount: number;
   model: string;
   contextFolder: string | null;
+  /** A visible original Chat turn exists, but the gateway has not yet written
+   * its session row to state.db. The next matching DB sync clears this flag. */
+  locallyMaterialized?: boolean;
 }
 
 type CachedSessionInput = Omit<CachedSession, keyof SessionClassification> &
@@ -104,6 +107,9 @@ function readCache(): CacheData {
             ...s,
             contextFolder:
               typeof s.contextFolder === "string" ? s.contextFolder : null,
+            ...(s.locallyMaterialized === true
+              ? { locallyMaterialized: true }
+              : {}),
           }))
         : [],
     };
@@ -264,6 +270,7 @@ export function syncSessionCache(
         if (row.title) existing.title = row.title;
         existing.sessionKind = classification.sessionKind;
         existing.executionProvider = classification.executionProvider;
+        delete existing.locallyMaterialized;
         continue;
       }
 
@@ -308,6 +315,7 @@ export function syncSessionCache(
     // clause), and skipped entirely on a first sync since cache.sessions
     // is empty.
     const staleIds = cache.sessions
+      .filter((s) => !s.locallyMaterialized)
       .map((s) => s.id)
       .filter((id) => !refreshedIds.has(id));
     if (staleIds.length > 0) {
@@ -327,7 +335,10 @@ export function syncSessionCache(
         for (const r of refreshed) countsById.set(r.id, r.message_count);
       }
       cache.sessions = cache.sessions.filter(
-        (s) => refreshedIds.has(s.id) || countsById.has(s.id),
+        (s) =>
+          s.locallyMaterialized ||
+          refreshedIds.has(s.id) ||
+          countsById.has(s.id),
       );
       for (const s of cache.sessions) {
         const fresh = countsById.get(s.id);
@@ -453,4 +464,31 @@ export function upsertCachedSession(session: CachedSessionInput): void {
   if (writeCache(cache)) {
     emitSessionCacheChanged(session.id, reason);
   }
+}
+
+/**
+ * Create a classified Chat sidebar row after the user has already seen Chat
+ * activity, even when the gateway has not persisted its state.db row yet.
+ * This local marker is retained through DB cache refreshes and is cleared once
+ * the matching gateway row is observed.
+ */
+export function recordVisibleChatSession(sessionId: string, prompt: string): void {
+  const id = sessionId.trim();
+  if (!id) return;
+  // Resumed sessions announce immediately. Keep their durable cache row and
+  // title intact; this fallback is exclusively for a fresh session missing
+  // from the gateway-backed cache.
+  if (readCache().sessions.some((session) => session.id === id)) return;
+  upsertCachedSession({
+    id,
+    title: sessionTitleFromUserMessage(prompt),
+    startedAt: Math.floor(Date.now() / 1000),
+    source: "api_server",
+    messageCount: 1,
+    model: "",
+    contextFolder: null,
+    sessionKind: "chat",
+    executionProvider: "hermes-chat",
+    locallyMaterialized: true,
+  });
 }

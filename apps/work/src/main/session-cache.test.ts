@@ -195,6 +195,65 @@ describe("session-cache mutation events", () => {
     ]);
   });
 
+  it("materializes visible original Chat activity into the cache without a gateway session row", async () => {
+    const cache = await import("./session-cache");
+    const received: unknown[] = [];
+    cache.subscribeSessionCacheChanged((event) => received.push(event));
+
+    cache.recordVisibleChatSession("desk-visible-chat", "Report gateway status");
+
+    expect(cache.listCachedSessions()).toEqual([
+      expect.objectContaining({
+        id: "desk-visible-chat",
+        title: "Report gateway status",
+        sessionKind: "chat",
+        executionProvider: "hermes-chat",
+        locallyMaterialized: true,
+      }),
+    ]);
+    expect(received).toEqual([
+      { sessionId: "desk-visible-chat", reason: "created" },
+    ]);
+  });
+
+  it("keeps visible original Chat activity when a later full sync has no gateway session row", async () => {
+    const cache = await import("./session-cache");
+    cache.recordVisibleChatSession("desk-not-in-gateway", "Check current status");
+    harness.db = {
+      prepare: () => ({
+        all: () => [],
+        get: () => undefined,
+      }),
+    };
+
+    cache.syncSessionCache();
+
+    expect(cache.listCachedSessions()).toEqual([
+      expect.objectContaining({
+        id: "desk-not-in-gateway",
+        locallyMaterialized: true,
+      }),
+    ]);
+  });
+
+  it("does not replace an existing Chat row when a resumed session is announced", async () => {
+    const cache = await import("./session-cache");
+    cache.upsertCachedSession(
+      session({ id: "sess-resumed", title: "Existing conversation" }),
+    );
+
+    cache.recordVisibleChatSession("sess-resumed", "A newer prompt");
+
+    const [resumed] = cache.listCachedSessions();
+    expect(resumed).toEqual(
+      expect.objectContaining({
+        id: "sess-resumed",
+        title: "Existing conversation",
+      }),
+    );
+    expect(resumed).not.toHaveProperty("locallyMaterialized");
+  });
+
   it("reports a targeted sync whose Chat session is not yet in the active database", async () => {
     const cache = await import("./session-cache");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
