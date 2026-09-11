@@ -38,6 +38,8 @@ The sidebar keeps Main-owned Chat and Skill Run rows in one list, with Pinned an
 
 When a fresh original Chat first becomes visible, Main performs its normal classification/cache sync and emits one targeted sanitized cache-change hint only after that Session is written. Successful completion repeats that targeted sync because a gateway can persist the durable row after its first visible stream event. Generic full cache syncs remain quiet, so background refreshes do not create event churn; the targeted hint is what lets an already-open sidebar add the new Chat history row immediately.
 
+If a targeted sync cannot publish its announced Session, [[src/main/session-cache.ts#syncSessionCache]] writes one safe terminal diagnostic: `[session-cache] announced session missing after sync` with only the opaque Session ID and a fixed stage (`database-unavailable`, `session-not-found`, `cache-write-failed`, or `sync-failed`). It intentionally excludes prompts, provider payloads, filesystem paths, credentials, and raw database errors.
+
 ## Row context menu
 
 Each sidebar session row exposes a ChatGPT-style options menu — Pin, Rename, Move to project, and Delete — opened from a hover-revealed `…` button or by right-clicking the row.

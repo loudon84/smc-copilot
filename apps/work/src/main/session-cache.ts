@@ -190,6 +190,23 @@ export interface SyncSessionCacheOptions {
   announceSessionId?: string;
 }
 
+function reportAnnouncedSessionMissing(
+  sessionId: string,
+  stage:
+    | "database-unavailable"
+    | "session-not-found"
+    | "cache-write-failed"
+    | "sync-failed",
+): void {
+  // Deliberately keep this diagnostic to the opaque local session ID and a
+  // fixed stage code. It must never expose prompts, provider events, paths,
+  // credentials, or the underlying database error.
+  console.warn("[session-cache] announced session missing after sync", {
+    sessionId,
+    stage,
+  });
+}
+
 // Sync from hermes DB to local cache — only fetches new/updated sessions
 export function syncSessionCache(
   options: SyncSessionCacheOptions = {},
@@ -200,7 +217,12 @@ export function syncSessionCache(
     ? cache.sessions.some((session) => session.id === announcedSessionId)
     : false;
   const db = getDb();
-  if (!db) return cache.sessions;
+  if (!db) {
+    if (announcedSessionId) {
+      reportAnnouncedSessionMissing(announcedSessionId, "database-unavailable");
+    }
+    return cache.sessions;
+  }
 
   try {
     const lastSync = cache.sessions.length === 0 ? 0 : cache.lastSync;
@@ -327,7 +349,11 @@ export function syncSessionCache(
       sessions: allSessions,
       lastSync: Math.floor(Date.now() / 1000),
     };
-    if (writeCache(updated) && announcedSessionId) {
+    const wroteCache = writeCache(updated);
+    if (!wroteCache && announcedSessionId) {
+      reportAnnouncedSessionMissing(announcedSessionId, "cache-write-failed");
+    }
+    if (wroteCache && announcedSessionId) {
       const isCached = updated.sessions.some(
         (session) => session.id === announcedSessionId,
       );
@@ -336,10 +362,15 @@ export function syncSessionCache(
           announcedSessionId,
           wasCached ? "updated" : "created",
         );
+      } else {
+        reportAnnouncedSessionMissing(announcedSessionId, "session-not-found");
       }
     }
     return updated.sessions;
   } catch {
+    if (announcedSessionId) {
+      reportAnnouncedSessionMissing(announcedSessionId, "sync-failed");
+    }
     return cache.sessions;
   }
 }

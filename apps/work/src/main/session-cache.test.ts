@@ -195,6 +195,75 @@ describe("session-cache mutation events", () => {
     ]);
   });
 
+  it("reports a targeted sync whose Chat session is not yet in the active database", async () => {
+    const cache = await import("./session-cache");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      cache.syncSessionCache({ announceSessionId: "desk-not-durable-yet" });
+
+      expect(warn).toHaveBeenCalledWith(
+        "[session-cache] announced session missing after sync",
+        { sessionId: "desk-not-durable-yet", stage: "database-unavailable" },
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("reports a targeted sync whose database has not persisted its session row", async () => {
+    const cache = await import("./session-cache");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    harness.db = {
+      prepare: () => ({
+        all: () => [],
+        get: () => undefined,
+      }),
+    };
+
+    try {
+      cache.syncSessionCache({ announceSessionId: "desk-row-not-found-yet" });
+
+      expect(warn).toHaveBeenCalledWith(
+        "[session-cache] announced session missing after sync",
+        { sessionId: "desk-row-not-found-yet", stage: "session-not-found" },
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("reports a targeted sync whose cache write fails", async () => {
+    const cache = await import("./session-cache");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    harness.writeShouldFail = true;
+    harness.db = {
+      prepare: () => ({
+        all: () => [
+          {
+            id: "desk-cache-write-failed",
+            started_at: 1_700_000_001,
+            source: "api_server",
+            message_count: 1,
+            model: "test-model",
+            title: "Fresh chat",
+          },
+        ],
+        get: () => undefined,
+      }),
+    };
+
+    try {
+      cache.syncSessionCache({ announceSessionId: "desk-cache-write-failed" });
+
+      expect(warn).toHaveBeenCalledWith(
+        "[session-cache] announced session missing after sync",
+        { sessionId: "desk-cache-write-failed", stage: "cache-write-failed" },
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("unsubscribe stops further events", async () => {
     const cache = await import("./session-cache");
     const received: unknown[] = [];
