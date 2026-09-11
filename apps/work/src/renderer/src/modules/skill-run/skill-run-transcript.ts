@@ -17,38 +17,11 @@ import type {
   ChatBubbleMessage,
   ChatMessage,
   ReasoningMessage,
-  SkillRunMessage,
   ToolCallMessage,
 } from "../../screens/Chat/types";
 
 export const skillRunUserMessageId = skillRunNativeUserMessageId;
 export const compactSkillRunActivities = compactSkillRunActivityItems;
-
-export function skillRunCardMessageId(clientRequestId: string): string {
-  return `skill-run:${clientRequestId}`;
-}
-
-export function projectionToSkillRunMessage(
-  projection: SkillRunProjection,
-): SkillRunMessage {
-  return {
-    id: skillRunCardMessageId(projection.clientRequestId),
-    kind: "skill_run",
-    role: "agent",
-    clientRequestId: projection.clientRequestId,
-    providerRunId: projection.providerRunId,
-    toolName: projection.toolName,
-    phase: projection.phase,
-    displayStage: projection.displayStage,
-    activities: compactSkillRunActivityItems(projection.activities ?? []),
-    resultText: projection.text,
-    errorCode: projection.errorCode,
-    errorMessage: projection.errorMessage,
-    pending: !isSkillRunTerminalPhase(projection.phase),
-    auditComplete: true,
-    artifactFileIds: (projection.artifacts ?? []).map((item) => item.id),
-  };
-}
 
 export function createOptimisticSkillRunTurn(input: {
   prompt: string;
@@ -73,22 +46,10 @@ export function createOptimisticSkillRunTurn(input: {
   return [user, assistant];
 }
 
-function isSkillRunCard(
-  message: ChatMessage,
-  clientRequestId: string,
-): message is SkillRunMessage {
-  return (
-    "kind" in message &&
-    message.kind === "skill_run" &&
-    message.clientRequestId === clientRequestId
-  );
-}
-
 export function ownsSkillRunTurnMessage(
   message: ChatMessage,
   clientRequestId: string,
 ): boolean {
-  if (isSkillRunCard(message, clientRequestId)) return true;
   const id = message.id;
   return (
     id === skillRunNativeUserMessageId(clientRequestId) ||
@@ -170,34 +131,6 @@ function assistantFromProjection(
   };
 }
 
-export function patchSkillRunCard(
-  messages: ReadonlyArray<ChatMessage>,
-  clientRequestId: string,
-  patch: Partial<SkillRunMessage>,
-): ChatMessage[] {
-  return messages.map((message) => {
-    if (isSkillRunCard(message, clientRequestId)) {
-      return { ...message, ...patch, id: message.id, clientRequestId };
-    }
-    return message;
-  });
-}
-
-export function upsertSkillRunCard(
-  messages: ReadonlyArray<ChatMessage>,
-  card: SkillRunMessage,
-): ChatMessage[] {
-  let replaced = false;
-  const next = messages.map((message) => {
-    if (isSkillRunCard(message, card.clientRequestId)) {
-      replaced = true;
-      return card;
-    }
-    return message;
-  });
-  return replaced ? next : [...next, card];
-}
-
 function replaceSkillRunTurn(
   messages: ReadonlyArray<ChatMessage>,
   clientRequestId: string,
@@ -262,14 +195,6 @@ export function rejectSkillRunCard(
   clientRequestId: string,
   errorMessage: string,
 ): ChatMessage[] {
-  if (messages.some((message) => isSkillRunCard(message, clientRequestId))) {
-    return patchSkillRunCard(messages, clientRequestId, {
-      phase: "failed",
-      displayStage: "Skill execution failed",
-      errorMessage,
-      pending: false,
-    });
-  }
   const existingAssistant = messages.find(
     (message) =>
       message.id === skillRunNativeAssistantMessageId(clientRequestId),

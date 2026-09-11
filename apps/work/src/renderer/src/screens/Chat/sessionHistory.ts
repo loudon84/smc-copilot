@@ -6,11 +6,6 @@ import {
 } from "./chatMessages";
 import { isLossyChunkCopy } from "./lossyText";
 import type { ActiveTurn, ChatMessage, ChatBubbleMessage } from "./types";
-import {
-  isSkillRunTerminalPhase,
-  type SkillRunActivityItem,
-  type SkillRunLocalPhase,
-} from "../../../../shared/skill-run";
 
 /**
  * Shape of one row from the main process's `getSessionMessages` IPC.
@@ -24,6 +19,7 @@ export type DbHistoryItem =
       content?: string;
       timestamp?: number;
       attachments?: Attachment[];
+      platformMessageId?: string;
     }
   | {
       kind: "assistant";
@@ -32,11 +28,13 @@ export type DbHistoryItem =
       error?: string;
       timestamp?: number;
       attachments?: Attachment[];
+      platformMessageId?: string;
     }
   | {
       kind: "reasoning";
       id: number;
       text?: string;
+      platformMessageId?: string;
     }
   | {
       kind: "tool_call";
@@ -44,6 +42,7 @@ export type DbHistoryItem =
       callId?: string;
       name?: string;
       args?: string;
+      platformMessageId?: string;
     }
   | {
       kind: "tool_result";
@@ -52,21 +51,6 @@ export type DbHistoryItem =
       name?: string;
       content?: string;
       attachments?: Attachment[];
-    }
-  | {
-      kind: "skill_run";
-      id: number;
-      clientRequestId: string;
-      providerRunId?: string | null;
-      toolName: string;
-      phase: SkillRunLocalPhase;
-      displayStage: string;
-      activities: SkillRunActivityItem[];
-      resultText?: string;
-      errorCode?: string;
-      errorMessage?: string;
-      timestamp?: number;
-      auditComplete?: boolean;
     };
 
 /**
@@ -92,7 +76,7 @@ export function dbItemsToChatMessages(
       switch (it.kind) {
         case "user":
           return {
-            id: `db-${it.id}`,
+            id: it.platformMessageId || `db-${it.id}`,
             role: "user",
             content: it.content || "",
             ...(typeof it.timestamp === "number"
@@ -104,7 +88,7 @@ export function dbItemsToChatMessages(
           };
         case "assistant":
           return {
-            id: `db-${it.id}`,
+            id: it.platformMessageId || `db-${it.id}`,
             role: "agent",
             content: it.content || "",
             ...(typeof it.timestamp === "number"
@@ -117,14 +101,14 @@ export function dbItemsToChatMessages(
           };
         case "reasoning":
           return {
-            id: `db-r-${it.id}`,
+            id: it.platformMessageId || `db-r-${it.id}`,
             kind: "reasoning",
             role: "agent",
             text: it.text || "",
           };
         case "tool_call":
           return {
-            id: `db-tc-${it.id}-${it.callId || "x"}`,
+            id: it.platformMessageId || `db-tc-${it.id}-${it.callId || "x"}`,
             kind: "tool_call",
             role: "agent",
             callId: it.callId || "",
@@ -142,26 +126,6 @@ export function dbItemsToChatMessages(
             ...(it.attachments && it.attachments.length > 0
               ? { attachments: it.attachments }
               : {}),
-          };
-        case "skill_run":
-          return {
-            id: `skill-run:${it.clientRequestId}`,
-            kind: "skill_run",
-            role: "agent",
-            clientRequestId: it.clientRequestId,
-            providerRunId: it.providerRunId,
-            toolName: it.toolName,
-            phase: it.phase,
-            displayStage: it.displayStage,
-            activities: it.activities,
-            resultText: it.resultText,
-            errorCode: it.errorCode,
-            errorMessage: it.errorMessage,
-            pending: !isSkillRunTerminalPhase(it.phase),
-            ...(typeof it.timestamp === "number"
-              ? { timestamp: it.timestamp }
-              : {}),
-            auditComplete: it.auditComplete,
           };
         default: {
           const _exhaustive: never = it;
@@ -309,8 +273,6 @@ function reconciliationKey(m: ChatMessage): string | null {
       return `tool_call:${m.callId || m.id}`;
     case "tool_result":
       return `tool_result:${m.callId || m.id}`;
-    case "skill_run":
-      return `skill_run:${m.clientRequestId}`;
     case "clarify":
       return null;
     default: {

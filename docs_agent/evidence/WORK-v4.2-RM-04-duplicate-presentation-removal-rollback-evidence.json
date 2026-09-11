@@ -1,0 +1,284 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:64086de69662686baca0f322180047e68427fce165054fcde1ec4b386457c0f2",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-03 Native projection delivery evidence.",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-03 delivery evidence.",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing status-bar tests.",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing status-bar IPC tests.",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01/RM-02 durable identity evidence plus feature-mode start gate.",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "APPROVED AD and RM-03 evidence.",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-03 still keeps rollback card tests.",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Status-bar tests currently require the activity list.",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Feature-mode start-disabled tests do not assert metadata/file survival.",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-03 targeted rerun suite.",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No RM-04 manifest.",
+      "requirement": "DOD-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-02",
+        "CLM-07"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-02": "PASS",
+        "CLM-07": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/modules/skill-run/skill-run-transcript.test.ts src/renderer/src/screens/Chat/Chat.skill-run-transcript.test.tsx src/renderer/src/screens/Chat/sessionHistory.test.ts src/main/sessions-skill-run-history.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-04-duplicate-presentation-removal-rollback/logs/20260911T035917.465786Z-V01.log",
+      "raw_log_sha256": "sha256:f2641887a152eef418ae2d0061153766fc7fed85b0de2545f5512876c10c123d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T03:59:17.465786Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-03",
+        "CLM-04",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-03": "PASS",
+        "CLM-04": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-04-duplicate-presentation-removal-rollback/logs/20260911T035932.912414Z-V02.log",
+      "raw_log_sha256": "sha256:fbc5b4385e58e8f6cb177fbe49dca3511bcdf57202ba2bd593139bba0c7af61e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T03:59:32.912414Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-05",
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-05": "PASS",
+        "CLM-09": "PASS"
+      },
+      "command": "npm exec vitest -- run src/main/skill-run/feature-mode-store.test.ts src/main/session-metadata-store.test.ts src/main/skill-run/skill-run-service.test.ts src/main/skill-run/skill-run-transcript-store.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-04-duplicate-presentation-removal-rollback/logs/20260911T035937.065219Z-V03.log",
+      "raw_log_sha256": "sha256:ff58c4404f023f5ed88880ada7a27e2cd4d9a84bdbd970ec56fe9c389aa528fa",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T03:59:37.065219Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/modules/skill-run/skill-run-transcript.test.ts src/main/skill-run/skill-run-service.test.ts src/main/skill-run/skill-run-transcript-store.test.ts src/main/skill-run/skill-run-session-materialize.test.ts src/renderer/src/screens/Chat/sessionHistory.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-04-duplicate-presentation-removal-rollback/logs/20260911T035949.934256Z-V04.log",
+      "raw_log_sha256": "sha256:00ed64720b2b81e4643a334c3508f8668e5fb43da2946f3da21e06fb856d2d1d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T03:59:49.934256Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-06",
+        "CLM-11"
+      ],
+      "claim_results": {
+        "CLM-06": "PASS",
+        "CLM-11": "PASS"
+      },
+      "command": "npm run guard",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-04-duplicate-presentation-removal-rollback/logs/20260911T040008.414338Z-V05.log",
+      "raw_log_sha256": "sha256:2d6f8d7a8f26d75ae9931fc8f6120dbfc59d902913067a329e09038e09f6d85a",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T04:00:08.414338Z",
+      "verification_id": "V05"
+    }
+  ],
+  "completion_audit": {
+    "changed": 18,
+    "deferred": 0,
+    "done": 3,
+    "scope_drift": 0,
+    "timestamp": "2026-09-11T03:58:51.311403Z",
+    "total_items": 3,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-11T04:01:05.355867Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:30157463f4e3b8b381aedd84000fd8fb45128e2cd730ebeb070a69bc9ba459d5",
+    "timestamp": "2026-09-11T03:58:53.333802Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:93ac1e67b836baddb543e1e6e233e3b8bef9f68e2e17a2d37a6d961fac2d66ba",
+  "plan": ".cursor/plans/work-v4.2-rm-04-duplicate-presentation-removal-rollback.plan.md",
+  "plan_id": "WORK-v4.2-RM-04-duplicate-presentation-removal-rollback",
+  "plan_review": {
+    "plan_sha256": "sha256:62b7748f66aaadc6dab184874e7a1380f45c417dffd998194f8ac797ae328544",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-11T03:44:50.567989Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:30157463f4e3b8b381aedd84000fd8fb45128e2cd730ebeb070a69bc9ba459d5",
+  "verification_candidate": {
+    "candidate_id": "sha256:ab41c94f1bc2f15fa1a2260b0ce8c166f7ec08ace0ad44cc486d46aaaf9424c5",
+    "captured_at": "2026-09-11T03:58:57.659432Z",
+    "plan_id": "WORK-v4.2-RM-04-duplicate-presentation-removal-rollback",
+    "schema": "smc.verification.candidate.v1",
+    "scope_fingerprint": "sha256:30157463f4e3b8b381aedd84000fd8fb45128e2cd730ebeb070a69bc9ba459d5"
+  },
+  "workspace_base_commit": "a3fccb9f31514a9871d8995dac8ece0bde364140"
+}

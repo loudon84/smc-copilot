@@ -149,10 +149,18 @@ describe("skill-run-service", () => {
 
   it("fails closed on start when feature mode is not skill-first", async () => {
     const gateway = createMockGateway();
+    const persistContinuation = vi.fn();
+    const persistSanitizedRun = vi.fn();
+    const persistSanitizedActivity = vi.fn();
+    const onUpsertArtifact = vi.fn();
     const service = trackService(
       createSkillRunService({
         gatewayClient: gateway,
         getFeatureMode: () => "expert-compat",
+        onPersistContinuation: persistContinuation,
+        onPersistSanitizedRun: persistSanitizedRun,
+        onPersistSanitizedActivity: persistSanitizedActivity,
+        onUpsertArtifact,
       }),
     );
     const result = await service.start({
@@ -167,14 +175,26 @@ describe("skill-run-service", () => {
       expect(result.errorCode).toBe("START_DISABLED_FEATURE_MODE");
     }
     expect(gateway.callSkill).not.toHaveBeenCalled();
+    expect(persistContinuation).not.toHaveBeenCalled();
+    expect(persistSanitizedRun).not.toHaveBeenCalled();
+    expect(persistSanitizedActivity).not.toHaveBeenCalled();
+    expect(onUpsertArtifact).not.toHaveBeenCalled();
   });
 
   it("fails closed on start when feature mode is local-only and does not fall back to Expert", async () => {
     const gateway = createMockGateway();
+    const persistContinuation = vi.fn();
+    const persistSanitizedRun = vi.fn();
+    const persistSanitizedActivity = vi.fn();
+    const onUpsertArtifact = vi.fn();
     const service = trackService(
       createSkillRunService({
         gatewayClient: gateway,
         getFeatureMode: () => "local-only",
+        onPersistContinuation: persistContinuation,
+        onPersistSanitizedRun: persistSanitizedRun,
+        onPersistSanitizedActivity: persistSanitizedActivity,
+        onUpsertArtifact,
       }),
     );
     const result = await service.start({
@@ -189,6 +209,10 @@ describe("skill-run-service", () => {
       expect(result.errorCode).toBe("START_DISABLED_FEATURE_MODE");
     }
     expect(gateway.callSkill).not.toHaveBeenCalled();
+    expect(persistContinuation).not.toHaveBeenCalled();
+    expect(persistSanitizedRun).not.toHaveBeenCalled();
+    expect(persistSanitizedActivity).not.toHaveBeenCalled();
+    expect(onUpsertArtifact).not.toHaveBeenCalled();
   });
 
   it("fails closed on start when no consumer lock exists with START_DISABLED_NO_LOCK", async () => {

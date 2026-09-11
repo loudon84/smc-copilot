@@ -357,16 +357,10 @@ describe("Chat skill-run transcript", () => {
         content: "same prompt",
       },
       {
-        id: "skill-run:req-a1",
-        kind: "skill_run",
+        id: "skill-run:req-a1:assistant",
+        kind: "assistant",
         role: "agent",
-        clientRequestId: "req-a1",
-        toolName: "writer",
-        phase: "succeeded",
-        displayStage: "Skill completed successfully",
-        activities: [],
-        pending: false,
-        resultText: "done",
+        content: "done",
       },
     ];
     render(

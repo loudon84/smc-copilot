@@ -212,29 +212,4 @@ describe("skill-run-transcript adapter", () => {
       content: "which file?",
     });
   });
-
-  it("keeps a rollback skill_run card when reject finds one", () => {
-    const rejected = rejectSkillRunCard(
-      [
-        {
-          id: "skill-run:req-roll",
-          kind: "skill_run",
-          role: "agent",
-          clientRequestId: "req-roll",
-          toolName: "writer",
-          phase: "pending-submit",
-          displayStage: "Submitting skill request...",
-          activities: [],
-          pending: true,
-        },
-      ],
-      "req-roll",
-      "denied",
-    );
-    expect(rejected[0]).toMatchObject({
-      kind: "skill_run",
-      phase: "failed",
-      errorMessage: "denied",
-    });
-  });
 });

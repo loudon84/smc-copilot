@@ -1,5 +1,7 @@
 import type Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { existsSync, mkdirSync, rmSync } from "fs";
+import { join } from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHAT_SESSION_CLASSIFICATION,
   SKILL_RUN_SESSION_CLASSIFICATION,
@@ -10,6 +12,16 @@ import {
   isSessionClassification,
   upsertSessionMetadata,
 } from "./session-metadata-store";
+import { setSkillRunFeatureMode } from "./skill-run/feature-mode-store";
+
+const USER_DATA = "E:/tmp/work-session-metadata-feature-mode-test";
+const STORE_FILE = join(USER_DATA, "skill-run-feature-mode.json");
+
+vi.mock("electron", () => ({
+  app: {
+    getPath: () => "E:/tmp/work-session-metadata-feature-mode-test",
+  },
+}));
 
 type MetadataRow = {
   session_scope: string;
@@ -64,6 +76,19 @@ function openDb(): { db: Database.Database; raw: MetadataDb } {
 }
 
 describe("session metadata classification", () => {
+  beforeEach(() => {
+    mkdirSync(USER_DATA, { recursive: true });
+    if (existsSync(STORE_FILE)) {
+      rmSync(STORE_FILE);
+    }
+  });
+
+  afterEach(() => {
+    if (existsSync(STORE_FILE)) {
+      rmSync(STORE_FILE);
+    }
+  });
+
   it("accepts exactly the original Chat and accepted Skill Run pairs", () => {
     expect(isSessionClassification(CHAT_SESSION_CLASSIFICATION)).toBe(true);
     expect(isSessionClassification(SKILL_RUN_SESSION_CLASSIFICATION)).toBe(true);
@@ -98,5 +123,26 @@ describe("session metadata classification", () => {
     upsertSessionMetadata(db, { sessionScope: createSessionScope(descriptor), profileId: "default", sessionId: "s-1" }, CHAT_SESSION_CLASSIFICATION);
     expect(JSON.stringify(raw.rows())).not.toContain("example.test");
     expect(JSON.stringify(raw.rows())).not.toContain("do-not-store");
+  });
+
+  it("keeps accepted work/skill-run classification after feature-mode rollback and re-enable", () => {
+    const { db } = openDb();
+    const identity = {
+      sessionScope: createSessionScope("local|default"),
+      profileId: "default",
+      sessionId: "s-rollback",
+    };
+    expect(ensureSkillRunSessionMetadata(db, identity)).toMatchObject(
+      SKILL_RUN_SESSION_CLASSIFICATION,
+    );
+    setSkillRunFeatureMode("expert-compat");
+    setSkillRunFeatureMode("local-only");
+    expect(getSessionMetadata(db, identity)).toMatchObject(
+      SKILL_RUN_SESSION_CLASSIFICATION,
+    );
+    setSkillRunFeatureMode("skill-first");
+    expect(getSessionMetadata(db, identity)).toMatchObject(
+      SKILL_RUN_SESSION_CLASSIFICATION,
+    );
   });
 });

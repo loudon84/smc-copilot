@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 
 const USER_DATA = "E:/tmp/work-skill-run-mode-test";
@@ -72,5 +72,26 @@ describe("feature-mode-store", () => {
   it("lets setSkillRunFeatureMode persist a rollback mode", () => {
     setSkillRunFeatureMode("expert-compat");
     expect(getSkillRunFeatureMode()).toBe("expert-compat");
+  });
+
+  it("persists only the mode file and does not delete session, transcript, or file sentinels", () => {
+    const sessionStore = join(USER_DATA, "sessions.sqlite");
+    const transcriptStore = join(USER_DATA, "skill-run-transcript.sqlite");
+    const managedFiles = join(USER_DATA, "managed-files.sqlite");
+    writeFileSync(sessionStore, "session-keep", "utf-8");
+    writeFileSync(transcriptStore, "transcript-keep", "utf-8");
+    writeFileSync(managedFiles, "files-keep", "utf-8");
+
+    setSkillRunFeatureMode("expert-compat");
+    setSkillRunFeatureMode("local-only");
+    setSkillRunFeatureMode("skill-first");
+
+    expect(existsSync(STORE_FILE)).toBe(true);
+    expect(JSON.parse(readFileSync(STORE_FILE, "utf-8"))).toMatchObject({
+      mode: "skill-first",
+    });
+    expect(readFileSync(sessionStore, "utf-8")).toBe("session-keep");
+    expect(readFileSync(transcriptStore, "utf-8")).toBe("transcript-keep");
+    expect(readFileSync(managedFiles, "utf-8")).toBe("files-keep");
   });
 });

@@ -1,31 +1,11 @@
 import React, { useTransition } from "react";
 import { Loader2, CheckCircle2, XCircle, StopCircle, RotateCcw } from "lucide-react";
-import type { SkillRunActivityItem, SkillRunProjection } from "../../../../shared/skill-run";
+import type { SkillRunProjection } from "../../../../shared/skill-run";
 import { useTranslation } from "react-i18next";
 
 interface SkillRunStatusBarProps {
   projection: SkillRunProjection;
   onCancel?: () => void;
-}
-
-function activityCopy(
-  item: SkillRunActivityItem,
-  t: (key: string, fallback: string) => string,
-): string {
-  switch (item.kind) {
-    case "reasoning.summary":
-      return `${t("skillRun.activityReasoning", "Reasoning")}: ${item.summary ?? ""}`;
-    case "tool.call":
-      return `${t("skillRun.activityTool", "Tool")} ${item.toolName ?? ""} (${item.status ?? ""})`;
-    case "clarify.requested":
-      return `${t("skillRun.activityClarify", "Clarification")}: ${item.question ?? ""}`;
-    case "approval.requested":
-      return `${t("skillRun.activityApproval", "Approval requested")}: ${item.summary ?? ""}`;
-    default: {
-      const exhaustive: never = item.kind;
-      return exhaustive;
-    }
-  }
 }
 
 export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
@@ -151,26 +131,6 @@ export const SkillRunStatusBar: React.FC<SkillRunStatusBarProps> = ({
           ) : null}
         </div>
       </div>
-
-      {activities.length > 0 ? (
-        <ul
-          aria-label={t("skillRun.activityList", "Skill run activity")}
-          className="mt-1 space-y-1 px-4 py-2 border rounded-lg bg-muted/20 text-xs text-muted-foreground"
-        >
-          {activities.map((item) => (
-            <li key={item.eventId} className="min-w-0">
-              <span className="block truncate">{activityCopy(item, t)}</span>
-              {item.kind === "clarify.requested" && item.options && item.options.length > 0 ? (
-                <ul className="mt-1 ml-3 list-disc">
-                  {item.options.map((option, index) => (
-                    <li key={`${item.eventId}-opt-${index}`}>{option}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 };

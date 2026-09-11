@@ -4,10 +4,6 @@ export type {
 } from "../../../../shared/attachments";
 
 import type { Attachment } from "../../../../shared/attachments";
-import type {
-  SkillRunActivityItem,
-  SkillRunLocalPhase,
-} from "../../../../shared/skill-run";
 
 /**
  * Visible chat bubble (user or assistant). Used for live streaming and as
@@ -84,32 +80,12 @@ export interface ClarifyMessage {
   resolved?: boolean;
 }
 
-export interface SkillRunMessage {
-  id: string;
-  kind: "skill_run";
-  role: "agent";
-  clientRequestId: string;
-  providerRunId?: string | null;
-  toolName: string;
-  phase: SkillRunLocalPhase;
-  displayStage: string;
-  activities: SkillRunActivityItem[];
-  resultText?: string;
-  errorCode?: string;
-  errorMessage?: string;
-  pending: boolean;
-  timestamp?: number;
-  auditComplete?: boolean;
-  artifactFileIds?: string[];
-}
-
 export type ChatMessage =
   | ChatBubbleMessage
   | ReasoningMessage
   | ToolCallMessage
   | ToolResultMessage
-  | ClarifyMessage
-  | SkillRunMessage;
+  | ClarifyMessage;
 
 export interface ActiveTurn {
   turnId: string;

@@ -6,7 +6,6 @@ import {
   projectSkillRunActivitiesToNativeRows,
   type SkillRunActivityItem,
   type SkillRunContinuationItem,
-  type SkillRunLocalPhase,
   type SkillRunNativeActivityRow,
 } from "../shared/skill-run";
 import { clearStagedAttachments } from "./attachment-staging";
@@ -96,6 +95,7 @@ export type HistoryItem =
       assistantId: number;
       text: string;
       timestamp: number;
+      platformMessageId?: string;
     }
   | {
       kind: "tool_call";
@@ -105,6 +105,7 @@ export type HistoryItem =
       name: string;
       args: string; // pretty-printed JSON when possible, otherwise raw
       timestamp: number;
+      platformMessageId?: string;
     }
   | {
       kind: "tool_result";
@@ -114,21 +115,6 @@ export type HistoryItem =
       content: string;
       timestamp: number;
       attachments?: Attachment[];
-    }
-  | {
-      kind: "skill_run";
-      id: number;
-      clientRequestId: string;
-      providerRunId?: string | null;
-      toolName: string;
-      phase: SkillRunLocalPhase;
-      displayStage: string;
-      activities: SkillRunActivityItem[];
-      resultText?: string;
-      errorCode?: string;
-      errorMessage?: string;
-      timestamp: number;
-      auditComplete?: boolean;
     };
 
 interface DecodedContent {
@@ -731,43 +717,44 @@ function skillRunHistoryId(clientRequestId: string): number {
   return SKILL_RUN_HISTORY_ID_BASE - Math.abs(hash % 99_999_999);
 }
 
-function toSkillRunHistoryItem(
+function nativeAssistantFromRun(
   run: SkillRunTranscriptRunRow,
-  activities: SkillRunActivityItem[],
-): Extract<HistoryItem, { kind: "skill_run" }> {
+  timestamp: number,
+): Extract<HistoryItem, { kind: "assistant" }> {
+  const ids = skillRunTranscriptBubbleIds(run.clientRequestId);
   return {
-    kind: "skill_run",
+    kind: "assistant",
     id: skillRunHistoryId(run.clientRequestId),
-    clientRequestId: run.clientRequestId,
-    providerRunId: run.providerRunId,
-    toolName: run.toolName,
-    phase: run.phase,
-    displayStage: run.displayStage,
-    activities,
-    resultText: run.text,
-    errorCode: run.errorCode,
-    errorMessage: run.errorMessage,
-    timestamp: isoToEpochSeconds(run.createdAt) || isoToEpochSeconds(run.updatedAt),
-    auditComplete: run.auditComplete,
+    content: run.text ?? "",
+    error: run.errorMessage,
+    timestamp,
+    platformMessageId: ids.assistant,
   };
 }
 
-function continuationRunToHistoryItem(
+function nativeAssistantFromContinuation(
   item: SkillRunContinuationItem,
-): Extract<HistoryItem, { kind: "skill_run" }> {
+): Extract<HistoryItem, { kind: "assistant" }> {
+  const ids = skillRunTranscriptBubbleIds(item.clientRequestId);
   return {
-    kind: "skill_run",
+    kind: "assistant",
     id: skillRunHistoryId(item.clientRequestId),
-    clientRequestId: item.clientRequestId,
-    providerRunId: item.providerRunId,
-    toolName: item.toolName,
-    phase: item.phase,
-    displayStage: item.phase,
-    activities: [],
-    resultText: item.text,
+    content: item.text ?? "",
     timestamp: isoToEpochSeconds(item.updatedAt),
-    auditComplete: false,
+    platformMessageId: ids.assistant,
   };
+}
+
+function hasNativeTurn(
+  items: HistoryItem[],
+  clientRequestId: string,
+): boolean {
+  const ids = skillRunTranscriptBubbleIds(clientRequestId);
+  return items.some(
+    (item) =>
+      (item.kind === "user" && item.platformMessageId === ids.user) ||
+      (item.kind === "assistant" && item.platformMessageId === ids.assistant),
+  );
 }
 
 function nativeActivityToHistoryItem(
@@ -784,6 +771,7 @@ function nativeActivityToHistoryItem(
         assistantId,
         text: row.summary ?? "",
         timestamp,
+        platformMessageId: row.id,
       };
     case "tool_call":
       return {
@@ -794,6 +782,7 @@ function nativeActivityToHistoryItem(
         name: row.toolName ?? "tool",
         args: "",
         timestamp,
+        platformMessageId: row.id,
       };
     case "notice":
       return {
@@ -819,18 +808,29 @@ function expandCompleteSkillRun(
   const userIndex = items.findIndex(
     (item) => item.kind === "user" && item.platformMessageId === ids.user,
   );
+  const timestamp =
+    userIndex >= 0 && items[userIndex]?.kind === "user"
+      ? items[userIndex].timestamp
+      : isoToEpochSeconds(run.createdAt) || isoToEpochSeconds(run.updatedAt);
   if (userIndex < 0) {
-    return [...items, toSkillRunHistoryItem(run, activities)];
+    const resultAssistant = nativeAssistantFromRun(run, timestamp);
+    const activityItems = projectSkillRunActivitiesToNativeRows(
+      run.clientRequestId,
+      activities,
+    ).map((row) =>
+      nativeActivityToHistoryItem(row, resultAssistant.id, timestamp),
+    );
+    return [...items, ...activityItems, resultAssistant];
   }
 
   const assistantIndex = items.findIndex(
     (item) =>
       item.kind === "assistant" && item.platformMessageId === ids.assistant,
   );
-  const user = items[userIndex];
-  const timestamp = user.kind === "user" ? user.timestamp : 0;
   const assistantId =
-    assistantIndex >= 0 ? items[assistantIndex]?.id ?? skillRunHistoryId(run.clientRequestId) : skillRunHistoryId(run.clientRequestId);
+    assistantIndex >= 0
+      ? (items[assistantIndex]?.id ?? skillRunHistoryId(run.clientRequestId))
+      : skillRunHistoryId(run.clientRequestId);
   const resultAssistant: Extract<HistoryItem, { kind: "assistant" }> =
     assistantIndex >= 0 && items[assistantIndex]?.kind === "assistant"
       ? {
@@ -882,17 +882,8 @@ export function mergeSkillRunTranscriptIntoHistory(
 
   const completeRuns = batch.runs.filter((run) => run.auditComplete);
   const incompleteRuns = batch.runs.filter((run) => !run.auditComplete);
-  const incompleteAssistantIds = new Set(
-    incompleteRuns.map(
-      (run) => skillRunTranscriptBubbleIds(run.clientRequestId).assistant,
-    ),
-  );
-  const kept = items.filter((item) => {
-    if (item.kind !== "assistant" || !item.platformMessageId) return true;
-    return !incompleteAssistantIds.has(item.platformMessageId);
-  });
 
-  let expanded = kept;
+  let expanded = items;
   for (const run of completeRuns) {
     expanded = expandCompleteSkillRun(
       expanded,
@@ -901,17 +892,22 @@ export function mergeSkillRunTranscriptIntoHistory(
     );
   }
 
-  const skillItems: HistoryItem[] = incompleteRuns.map((run) =>
-    toSkillRunHistoryItem(run, activitiesByRequest.get(run.clientRequestId) ?? []),
-  );
+  const extras: HistoryItem[] = [];
+  for (const run of incompleteRuns) {
+    if (hasNativeTurn(expanded, run.clientRequestId)) continue;
+    const timestamp =
+      isoToEpochSeconds(run.createdAt) || isoToEpochSeconds(run.updatedAt);
+    extras.push(nativeAssistantFromRun(run, timestamp));
+  }
 
   for (const continuation of continuationRuns) {
     if (runsByRequest.has(continuation.clientRequestId)) continue;
     if (isSkillRunTerminalPhase(continuation.phase)) continue;
-    skillItems.push(continuationRunToHistoryItem(continuation));
+    if (hasNativeTurn(expanded, continuation.clientRequestId)) continue;
+    extras.push(nativeAssistantFromContinuation(continuation));
   }
 
-  return [...continuationPrefix, ...expanded, ...skillItems];
+  return [...continuationPrefix, ...expanded, ...extras];
 }
 
 function loadSessionMessageRows(

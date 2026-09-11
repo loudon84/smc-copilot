@@ -82,7 +82,7 @@ describe("SkillRunStatusBar", () => {
     expect(surface).toContain("SkillRunStatusBar");
   });
 
-  it("renders read-only activity kinds under the compact phase row", async () => {
+  it("keeps compact controls without repeating Native activity history", async () => {
     render(
       <SkillRunStatusBar
         projection={projection({
@@ -119,12 +119,11 @@ describe("SkillRunStatusBar", () => {
       />,
     );
     expect(screen.getByText("writer.article: Waiting for approval...")).toBeTruthy();
-    expect(screen.getByText("Reasoning: checked docs")).toBeTruthy();
-    expect(screen.getByText("Tool search (started)")).toBeTruthy();
-    expect(screen.getByText("Clarification: which file?")).toBeTruthy();
-    expect(screen.getByText("a")).toBeTruthy();
-    expect(screen.getByText("b")).toBeTruthy();
-    expect(screen.getByText("Approval requested: delete file")).toBeTruthy();
+    expect(screen.queryByLabelText("Skill run activity")).toBeNull();
+    expect(screen.queryByText("Reasoning: checked docs")).toBeNull();
+    expect(screen.queryByText("Tool search (started)")).toBeNull();
+    expect(screen.queryByText("Clarification: which file?")).toBeNull();
+    expect(screen.queryByText("Approval requested: delete file")).toBeNull();
     expect(screen.getByText("Cancel")).toBeTruthy();
     expect(screen.getByText("Allow")).toBeTruthy();
     expect(screen.getByText("Deny")).toBeTruthy();
@@ -166,7 +165,7 @@ describe("SkillRunStatusBar", () => {
         onCancel={vi.fn()}
       />,
     );
-    expect(screen.getByText("Approval requested: delete file")).toBeTruthy();
+    expect(screen.queryByText("Approval requested: delete file")).toBeNull();
     expect(screen.getByText("Cancel")).toBeTruthy();
     expect(screen.queryByText("Allow")).toBeNull();
     expect(screen.queryByText("Deny")).toBeNull();

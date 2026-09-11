@@ -105,7 +105,6 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
       }),
       legacy,
     ]);
-    expect(merged.filter((item) => item.kind === "skill_run")).toHaveLength(0);
     expect(merged.map((item) => item.kind)).toEqual([
       "user",
       "reasoning",
@@ -155,7 +154,6 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
       skillRunTranscriptBubbleIds("req-a2").user,
       skillRunTranscriptBubbleIds("req-b").user,
     ]);
-    expect(merged.filter((item) => item.kind === "skill_run")).toHaveLength(0);
     const reasoning = merged.filter((item) => item.kind === "reasoning");
     expect(reasoning).toHaveLength(100);
     expect(reasoning[99]).toMatchObject({ text: "step 99" });
@@ -180,21 +178,20 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
       { runs: [run({ clientRequestId: "req-live", phase: "running" })], activities: [] },
       [continuation],
     );
-    expect(withSidecar.filter((item) => item.kind === "skill_run")).toHaveLength(
-      1,
-    );
+    expect(withSidecar.map((item) => item.kind)).toEqual(["assistant"]);
+    expect(withSidecar[0]).toMatchObject({
+      platformMessageId: skillRunTranscriptBubbleIds("req-live").assistant,
+      content: "done",
+    });
 
     const withoutSidecar = mergeSkillRunTranscriptIntoHistory(
       [],
       { runs: [], activities: [] },
       [continuation],
     );
-    expect(
-      withoutSidecar.filter((item) => item.kind === "skill_run"),
-    ).toHaveLength(1);
+    expect(withoutSidecar.map((item) => item.kind)).toEqual(["assistant"]);
     expect(withoutSidecar[0]).toMatchObject({
-      clientRequestId: "req-live",
-      auditComplete: false,
+      platformMessageId: skillRunTranscriptBubbleIds("req-live").assistant,
     });
   });
 
@@ -213,9 +210,17 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
         activities: [],
       },
     );
-    expect(merged.filter((item) => item.kind === "assistant")).toHaveLength(1);
-    expect(merged.find((item) => item.kind === "skill_run")).toMatchObject({
-      auditComplete: false,
+    expect(merged.filter((item) => item.kind === "assistant")).toHaveLength(2);
+    expect(
+      merged.find(
+        (item) =>
+          item.kind === "assistant" &&
+          item.platformMessageId ===
+            skillRunTranscriptBubbleIds("req-a").assistant,
+      ),
+    ).toMatchObject({ content: "done" });
+    expect(merged[0]).toMatchObject({
+      content: "[Skill completed successfully: writer]",
     });
   });
 

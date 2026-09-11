@@ -1,62 +1,68 @@
 import { describe, expect, it } from "vitest";
 import { dbItemsToChatMessages, type DbHistoryItem } from "./sessionHistory";
+import { skillRunNativeAssistantMessageId, skillRunNativeUserMessageId } from "../../../../shared/skill-run";
 
-describe("dbItemsToChatMessages skill_run mapping", () => {
-  it("maps a sidecar history item to the Skill Chat variant without Prompt", () => {
-    const item: DbHistoryItem = {
-      kind: "skill_run",
-      id: -1,
-      clientRequestId: "req-1",
-      providerRunId: "task-1",
-      toolName: "writer",
-      phase: "succeeded",
-      displayStage: "Skill completed",
-      activities: [
-        { eventId: "evt-1", kind: "reasoning.summary", summary: "thinking" },
-      ],
-      resultText: "done",
-      timestamp: 1_700_000_000,
-      auditComplete: true,
-    };
-    const mapped = dbItemsToChatMessages([item]);
-    expect(mapped).toEqual([
-      expect.objectContaining({
-        id: "skill-run:req-1",
-        kind: "skill_run",
-        role: "agent",
-        clientRequestId: "req-1",
-        toolName: "writer",
-        pending: false,
-        resultText: "done",
-      }),
+describe("dbItemsToChatMessages Native Skill Run mapping", () => {
+  it("maps sidecar Native rows with platformMessageId and omits Prompt", () => {
+    const items: DbHistoryItem[] = [
+      {
+        kind: "user",
+        id: 1,
+        content: "full user text",
+        timestamp: 1_700_000_000,
+        platformMessageId: skillRunNativeUserMessageId("req-1"),
+      },
+      {
+        kind: "reasoning",
+        id: -1,
+        text: "thinking",
+        platformMessageId: "skill-run:req-1:activity:evt-1",
+      },
+      {
+        kind: "assistant",
+        id: 2,
+        content: "done",
+        timestamp: 1_700_000_001,
+        platformMessageId: skillRunNativeAssistantMessageId("req-1"),
+      },
+    ];
+    const mapped = dbItemsToChatMessages(items);
+    expect(mapped.map((row) => row.id)).toEqual([
+      skillRunNativeUserMessageId("req-1"),
+      "skill-run:req-1:activity:evt-1",
+      skillRunNativeAssistantMessageId("req-1"),
     ]);
+    expect(mapped[2]).toMatchObject({
+      role: "agent",
+      content: "done",
+    });
     expect(JSON.stringify(mapped)).not.toMatch(/prompt/i);
   });
 
-  it("keeps legacy bubbles and marks incomplete runs pending when not terminal", () => {
+  it("keeps legacy bubbles and does not invent a skill_run card for incomplete Native assistants", () => {
     const mapped = dbItemsToChatMessages([
       { kind: "user", id: 1, content: "hello", timestamp: 1 },
       { kind: "assistant", id: 2, content: "legacy answer", timestamp: 2 },
       {
-        kind: "skill_run",
-        id: -2,
-        clientRequestId: "req-live",
-        toolName: "writer",
-        phase: "running",
-        displayStage: "Executing skill...",
-        activities: [],
-        auditComplete: false,
+        kind: "assistant",
+        id: 3,
+        content: "",
+        error: "still running",
+        timestamp: 3,
+        platformMessageId: skillRunNativeAssistantMessageId("req-live"),
       },
     ]);
     expect(mapped.map((row) => ("kind" in row ? row.kind : row.role))).toEqual([
       "user",
       "agent",
-      "skill_run",
+      "agent",
     ]);
     expect(mapped[2]).toMatchObject({
-      kind: "skill_run",
-      pending: true,
-      auditComplete: false,
+      id: skillRunNativeAssistantMessageId("req-live"),
+      error: "still running",
     });
+    expect(mapped.some((row) => "kind" in row && row.kind === "clarify")).toBe(
+      false,
+    );
   });
 });
