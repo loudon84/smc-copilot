@@ -91,26 +91,31 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
     );
     expect(merged.filter((item) => item.kind === "user")).toHaveLength(1);
     expect(
-      merged.filter(
+      merged.find(
         (item) =>
           item.kind === "assistant" &&
           item.platformMessageId ===
             skillRunTranscriptBubbleIds("req-a").assistant,
       ),
-    ).toHaveLength(0);
+    ).toMatchObject({ content: "done" });
     expect(merged.filter((item) => item.kind === "assistant")).toEqual([
+      expect.objectContaining({
+        platformMessageId: skillRunTranscriptBubbleIds("req-a").assistant,
+        content: "done",
+      }),
       legacy,
     ]);
-    const skill = merged.find((item) => item.kind === "skill_run");
-    expect(skill).toMatchObject({
-      kind: "skill_run",
-      clientRequestId: "req-a",
-      resultText: "done",
-    });
-    expect(JSON.stringify(skill)).not.toMatch(/full prompt must not appear/);
+    expect(merged.filter((item) => item.kind === "skill_run")).toHaveLength(0);
+    expect(merged.map((item) => item.kind)).toEqual([
+      "user",
+      "reasoning",
+      "assistant",
+      "assistant",
+    ]);
+    expect(JSON.stringify(merged)).not.toMatch(/full prompt must not appear/);
   });
 
-  it("keeps A/A/B as three cards and 100 ordered activities on one request", () => {
+  it("keeps A/A/B as distinct Native turns and 100 ordered activities on one request", () => {
     const activities = Array.from({ length: 100 }, (_, index) =>
       activity({
         eventId: `evt-${index}`,
@@ -140,17 +145,20 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
         })),
       },
     );
-    const skills = merged.filter((item) => item.kind === "skill_run");
-    expect(skills.map((item) => item.clientRequestId)).toEqual([
-      "req-a1",
-      "req-a2",
-      "req-b",
+    const users = merged.filter((item) => item.kind === "user");
+    expect(
+      users.map((item) =>
+        item.kind === "user" ? item.platformMessageId : "",
+      ),
+    ).toEqual([
+      skillRunTranscriptBubbleIds("req-a1").user,
+      skillRunTranscriptBubbleIds("req-a2").user,
+      skillRunTranscriptBubbleIds("req-b").user,
     ]);
-    const first = skills[0];
-    expect(first.kind === "skill_run" && first.activities).toHaveLength(100);
-    expect(first.kind === "skill_run" && first.activities[99]?.eventId).toBe(
-      "evt-99",
-    );
+    expect(merged.filter((item) => item.kind === "skill_run")).toHaveLength(0);
+    const reasoning = merged.filter((item) => item.kind === "reasoning");
+    expect(reasoning).toHaveLength(100);
+    expect(reasoning[99]).toMatchObject({ text: "step 99" });
   });
 
   it("drops continuation when sidecar exists and keeps one non-terminal continuation otherwise", () => {
@@ -209,6 +217,40 @@ describe("mergeSkillRunTranscriptIntoHistory", () => {
     expect(merged.find((item) => item.kind === "skill_run")).toMatchObject({
       auditComplete: false,
     });
+  });
+
+  it("keeps prompt/execution/result order when adjacent Chat timestamps are reversed", () => {
+    const laterChat: HistoryItem = {
+      kind: "user",
+      id: 80,
+      content: "later chat",
+      timestamp: 50,
+    };
+    const merged = mergeSkillRunTranscriptIntoHistory(
+      [
+        laterChat,
+        userItem("req-a", 9_999),
+        assistantFallback("req-a", 1),
+      ],
+      {
+        runs: [run()],
+        activities: [
+          activity({ kind: "tool.call", callId: "call-1", toolName: "search", status: "completed", ordinal: 1 }),
+        ],
+      },
+    );
+    expect(merged.map((item) => item.kind)).toEqual([
+      "user",
+      "user",
+      "tool_call",
+      "assistant",
+    ]);
+    expect(merged[0]).toMatchObject({ content: "later chat" });
+    expect(merged[1]).toMatchObject({
+      platformMessageId: skillRunTranscriptBubbleIds("req-a").user,
+    });
+    expect(merged[2]).toMatchObject({ kind: "tool_call", name: "search", args: "" });
+    expect(merged[3]).toMatchObject({ content: "done" });
   });
 });
 

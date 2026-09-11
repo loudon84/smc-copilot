@@ -495,7 +495,11 @@ export function createSkillRunService(
         markPersistenceGap(run, "activity", item.eventId);
       }
     }
-    return appendSanitizedActivity(run.projection.activities, item);
+    const projectionItem: SkillRunActivityItem = {
+      ...item,
+      ordinal: record.ordinal,
+    };
+    return appendSanitizedActivity(run.projection.activities, projectionItem);
   }
 
   function hasActiveNonTerminalRun(sessionId: string): boolean {

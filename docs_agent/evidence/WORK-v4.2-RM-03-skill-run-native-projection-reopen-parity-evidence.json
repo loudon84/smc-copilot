@@ -1,0 +1,287 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:64086de69662686baca0f322180047e68427fce165054fcde1ec4b386457c0f2",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing skill-run-transcript and Chat transcript tests.",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing Main dedupe and durable activity tests.",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing Skill Run service tests.",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing sessions Skill Run history tests.",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing sessions Skill Run history tests.",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "APPROVED AD, RM-01/RM-02 evidence, existing subsystem tests.",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing parser/transcript-store forbidden-field checks.",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "APPROVED AD and RM-02 scope evidence.",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No RM-03 Native proof.",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Current timestamp-merge tests.",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing service/store/materialize/sessionHistory tests.",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing card tests.",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No RM-03 manifest.",
+      "requirement": "DOD-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-08",
+        "CLM-09",
+        "CLM-12"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-08": "PASS",
+        "CLM-09": "PASS",
+        "CLM-12": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/modules/skill-run/skill-run-transcript.test.ts src/renderer/src/screens/Chat/Chat.skill-run-transcript.test.tsx --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-03-skill-run-native-projection-reopen-parity/logs/20260911T023849.225270Z-V01.log",
+      "raw_log_sha256": "sha256:493d000c9139aec6be991beab8f5b1913d42e026c375c4cefd1ae7ace12534cb",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T02:38:49.225270Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-05",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-05": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "npm exec vitest -- run src/main/sessions-skill-run-history.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-03-skill-run-native-projection-reopen-parity/logs/20260911T023906.869623Z-V02.log",
+      "raw_log_sha256": "sha256:e935432d0eff9b8a52ea54b14b0d7a9d87ae7b8c5adc85a4c351a6cfa50dcea6",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T02:39:06.869623Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-06",
+        "CLM-07",
+        "CLM-11"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-06": "PASS",
+        "CLM-07": "PASS",
+        "CLM-11": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/modules/skill-run/skill-run-transcript.test.ts src/main/skill-run/skill-run-service.test.ts src/main/skill-run/skill-run-transcript-store.test.ts src/main/skill-run/skill-run-session-materialize.test.ts src/renderer/src/screens/Chat/sessionHistory.test.ts src/renderer/src/modules/skill-run/SkillRunStatusBar.test.tsx --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-03-skill-run-native-projection-reopen-parity/logs/20260911T023922.616964Z-V03.log",
+      "raw_log_sha256": "sha256:f0813fa5a26f8795c8fce602bb0f94738f9a1386f3a263cc8ec9e31983c891a0",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T02:39:22.616964Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-08",
+        "CLM-13"
+      ],
+      "claim_results": {
+        "CLM-08": "PASS",
+        "CLM-13": "PASS"
+      },
+      "command": "npm run guard",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-03-skill-run-native-projection-reopen-parity/logs/20260911T023952.860233Z-V04.log",
+      "raw_log_sha256": "sha256:43d2924e6f47fdf9b9b40e672ba43e3610bccf56d3faa44128a3274b96f14787",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T02:39:52.860233Z",
+      "verification_id": "V04"
+    }
+  ],
+  "completion_audit": {
+    "changed": 10,
+    "deferred": 0,
+    "done": 3,
+    "scope_drift": 0,
+    "timestamp": "2026-09-11T02:32:30.369723Z",
+    "total_items": 3,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-11T02:41:26.241174Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:5e4430959c27c0e9b4c80528b9a0a14bf29636b405c0a4a5585b41d3525c3b23",
+    "timestamp": "2026-09-11T02:38:31.705037Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:aba86d07f8a43eebb22c0e2b6e15088d2157c04922dce2033ca16f862892525d",
+  "plan": ".cursor/plans/work-v4.2-rm-03-skill-run-native-projection-reopen-parity.plan.md",
+  "plan_id": "WORK-v4.2-RM-03-skill-run-native-projection-reopen-parity",
+  "plan_review": {
+    "plan_sha256": "sha256:4d2bff7f2482239bb420146041a1371d7a5e4b72cc9b299eef4a0f09e3b5a8b4",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-11T02:15:01.898833Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:5e4430959c27c0e9b4c80528b9a0a14bf29636b405c0a4a5585b41d3525c3b23",
+  "verification_candidate": {
+    "candidate_id": "sha256:bad9fc9571c1943801781f371068763131d5023dfecc53a612c1a4520fe73472",
+    "captured_at": "2026-09-11T02:38:35.885921Z",
+    "plan_id": "WORK-v4.2-RM-03-skill-run-native-projection-reopen-parity",
+    "schema": "smc.verification.candidate.v1",
+    "scope_fingerprint": "sha256:5e4430959c27c0e9b4c80528b9a0a14bf29636b405c0a4a5585b41d3525c3b23"
+  },
+  "workspace_base_commit": "f876e4098c8c1dd655da48c2309eba130ee8be39"
+}

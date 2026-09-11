@@ -11,6 +11,7 @@ import { bindPromptFirstTool } from "./skill-run-contract-parser";
 import { createSkillRunService, type SkillRunService } from "./skill-run-service";
 import {
   SKILL_RUN_IPC_CHANNELS,
+  projectSkillRunActivitiesToNativeRows,
   type SkillCatalogToolItem,
   type SkillRunProjection,
 } from "../../shared/skill-run";
@@ -775,14 +776,32 @@ describe("skill-run-service", () => {
       "clarify.requested",
       "approval.requested",
     ]);
+    expect(terminal?.activities?.map((item) => item.ordinal)).toEqual([1, 2, 3, 4]);
     expect(terminal?.activities?.[1]).toEqual({
       eventId: "evt-2",
       kind: "tool.call",
       toolName: "search",
       callId: "call-1",
       status: "started",
+      ordinal: 2,
+    });
+    const nativeRows = projectSkillRunActivitiesToNativeRows(
+      "req-activity-1",
+      terminal?.activities ?? [],
+    );
+    expect(nativeRows.map((row) => row.kind)).toEqual([
+      "reasoning",
+      "tool_call",
+      "notice",
+      "notice",
+    ]);
+    expect(nativeRows[1]).toMatchObject({
+      id: "skill-run:req-activity-1:tool:call-1",
+      ordinal: 2,
+      callId: "call-1",
     });
     expect(JSON.stringify(terminal?.activities)).not.toContain("arguments");
+    expect(JSON.stringify(nativeRows)).not.toContain("arguments");
     expect(Object.keys(SKILL_RUN_IPC_CHANNELS)).toEqual(
       expect.arrayContaining([
         "START",
@@ -793,6 +812,64 @@ describe("skill-run-service", () => {
     expect(Object.values(SKILL_RUN_IPC_CHANNELS)).not.toEqual(
       expect.arrayContaining([expect.stringContaining("activity")]),
     );
+  });
+
+  it("keeps one Native tool row identity across started to completed", () => {
+    const rows = projectSkillRunActivitiesToNativeRows("req-tool-lifecycle", [
+      {
+        eventId: "evt-reason",
+        kind: "reasoning.summary",
+        summary: "think",
+        ordinal: 1,
+      },
+      {
+        eventId: "evt-tool-start",
+        kind: "tool.call",
+        toolName: "search",
+        callId: "call-9",
+        status: "started",
+        ordinal: 2,
+      },
+      {
+        eventId: "evt-tool-done",
+        kind: "tool.call",
+        toolName: "search",
+        callId: "call-9",
+        status: "completed",
+        ordinal: 3,
+      },
+      {
+        eventId: "evt-notice",
+        kind: "clarify.requested",
+        question: "which file?",
+        ordinal: 4,
+      },
+    ]);
+    expect(rows).toEqual([
+      {
+        id: "skill-run:req-tool-lifecycle:activity:evt-reason",
+        kind: "reasoning",
+        ordinal: 1,
+        eventId: "evt-reason",
+        summary: "think",
+      },
+      {
+        id: "skill-run:req-tool-lifecycle:tool:call-9",
+        kind: "tool_call",
+        ordinal: 2,
+        eventId: "evt-tool-done",
+        callId: "call-9",
+        toolName: "search",
+        status: "completed",
+      },
+      {
+        id: "skill-run:req-tool-lifecycle:activity:evt-notice",
+        kind: "notice",
+        ordinal: 4,
+        eventId: "evt-notice",
+        question: "which file?",
+      },
+    ]);
   });
 
   it("sets waiting-approval from approval.requested and does not rewind a succeeded run", async () => {
@@ -1569,6 +1646,14 @@ describe("skill-run-service", () => {
     expect(persisted[99]).toEqual({ eventId: "evt-persist-100", ordinal: 100 });
     expect(persisted.some((item) => item.eventId === "evt-raw-skip")).toBe(false);
     expect(terminal?.activities).toHaveLength(32);
+    expect(terminal?.activities?.[0]).toMatchObject({
+      eventId: "evt-persist-69",
+      ordinal: 69,
+    });
+    expect(terminal?.activities?.[31]).toMatchObject({
+      eventId: "evt-persist-100",
+      ordinal: 100,
+    });
     expect(JSON.stringify(terminal)).not.toContain("x".repeat(160));
     expect(runSnapshots.some((row) => row.prompt === longPrompt)).toBe(true);
     expect(runSnapshots.some((row) => row.phase === "succeeded")).toBe(true);

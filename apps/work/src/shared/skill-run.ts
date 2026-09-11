@@ -115,6 +115,8 @@ export type SkillRunToolCallStatus = "started" | "completed" | "failed";
 export interface SkillRunActivityItem {
   eventId: string;
   kind: SkillRunActivityKind;
+  /** Durable sidecar ordinal copied onto the live projection. */
+  ordinal?: number;
   summary?: string;
   toolName?: string;
   callId?: string;
@@ -122,6 +124,121 @@ export interface SkillRunActivityItem {
   question?: string;
   options?: string[];
   approvalId?: string;
+}
+
+export type SkillRunNativeRowKind = "reasoning" | "tool_call" | "notice";
+
+/** Shared Native-row derivation. Main and Renderer map this DTO onto HistoryItem / ChatMessage. */
+export interface SkillRunNativeActivityRow {
+  id: string;
+  kind: SkillRunNativeRowKind;
+  ordinal: number;
+  eventId: string;
+  callId?: string;
+  toolName?: string;
+  status?: SkillRunToolCallStatus;
+  summary?: string;
+  question?: string;
+}
+
+export function skillRunNativeUserMessageId(clientRequestId: string): string {
+  return `skill-run:${clientRequestId}:user`;
+}
+
+export function skillRunNativeAssistantMessageId(clientRequestId: string): string {
+  return `skill-run:${clientRequestId}:assistant`;
+}
+
+export function skillRunNativeActivityRowId(
+  clientRequestId: string,
+  item: Pick<SkillRunActivityItem, "kind" | "eventId" | "callId">,
+): string {
+  if (item.kind === "tool.call" && item.callId) {
+    return `skill-run:${clientRequestId}:tool:${item.callId}`;
+  }
+  return `skill-run:${clientRequestId}:activity:${item.eventId}`;
+}
+
+function activityOrdinal(item: SkillRunActivityItem): number {
+  return typeof item.ordinal === "number" ? item.ordinal : Number.MAX_SAFE_INTEGER;
+}
+
+function rankToolStatus(status: SkillRunToolCallStatus | undefined): number {
+  if (status === "failed") return 3;
+  if (status === "completed") return 2;
+  if (status === "started") return 1;
+  return 0;
+}
+
+export function compactSkillRunActivityItems(
+  items: ReadonlyArray<SkillRunActivityItem>,
+): SkillRunActivityItem[] {
+  const byEventId = new Map<string, SkillRunActivityItem>();
+  for (const item of items) {
+    if (!byEventId.has(item.eventId)) {
+      byEventId.set(item.eventId, item);
+    }
+  }
+  const ordered = Array.from(byEventId.values()).sort(
+    (left, right) => activityOrdinal(left) - activityOrdinal(right) || left.eventId.localeCompare(right.eventId),
+  );
+  const output: SkillRunActivityItem[] = [];
+  const toolIndexByCall = new Map<string, number>();
+  for (const item of ordered) {
+    if (item.kind === "tool.call" && item.callId) {
+      const existing = toolIndexByCall.get(item.callId);
+      if (existing === undefined) {
+        toolIndexByCall.set(item.callId, output.length);
+        output.push(item);
+        continue;
+      }
+      if (rankToolStatus(item.status) >= rankToolStatus(output[existing]?.status)) {
+        output[existing] = {
+          ...item,
+          ordinal: output[existing]?.ordinal ?? item.ordinal,
+        };
+      }
+      continue;
+    }
+    output.push(item);
+  }
+  return output;
+}
+
+function nativeKindForActivity(kind: SkillRunActivityKind): SkillRunNativeRowKind {
+  switch (kind) {
+    case "reasoning.summary":
+      return "reasoning";
+    case "tool.call":
+      return "tool_call";
+    case "clarify.requested":
+    case "approval.requested":
+      return "notice";
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
+
+export function projectSkillRunActivitiesToNativeRows(
+  clientRequestId: string,
+  activities: ReadonlyArray<SkillRunActivityItem>,
+): SkillRunNativeActivityRow[] {
+  return compactSkillRunActivityItems(activities).map((item) => {
+    const row: SkillRunNativeActivityRow = {
+      id: skillRunNativeActivityRowId(clientRequestId, item),
+      kind: nativeKindForActivity(item.kind),
+      ordinal: activityOrdinal(item),
+      eventId: item.eventId,
+    };
+    if (item.callId) row.callId = item.callId;
+    if (item.toolName) row.toolName = item.toolName;
+    if (item.status) row.status = item.status;
+    if (item.summary) row.summary = item.summary;
+    if (item.question) row.question = item.question;
+    return row;
+  });
 }
 
 export interface SkillRunProjection {

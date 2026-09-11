@@ -1,12 +1,14 @@
 import Database from "better-sqlite3";
 import type { Attachment } from "../shared/attachments";
 import { isImageMime } from "../shared/attachments";
-import type {
-  SkillRunActivityItem,
-  SkillRunContinuationItem,
-  SkillRunLocalPhase,
+import {
+  isSkillRunTerminalPhase,
+  projectSkillRunActivitiesToNativeRows,
+  type SkillRunActivityItem,
+  type SkillRunContinuationItem,
+  type SkillRunLocalPhase,
+  type SkillRunNativeActivityRow,
 } from "../shared/skill-run";
-import { isSkillRunTerminalPhase } from "../shared/skill-run";
 import { clearStagedAttachments } from "./attachment-staging";
 import { removeSessionFromCache } from "./session-cache";
 import { getDbConnection } from "./db";
@@ -768,15 +770,97 @@ function continuationRunToHistoryItem(
   };
 }
 
-function historySortKey(item: HistoryItem): [number, number, string] {
-  const timestamp = item.timestamp;
-  if (item.kind === "skill_run") {
-    return [timestamp, 1, item.clientRequestId];
+function nativeActivityToHistoryItem(
+  row: SkillRunNativeActivityRow,
+  assistantId: number,
+  timestamp: number,
+): HistoryItem {
+  const id = skillRunHistoryId(row.id);
+  switch (row.kind) {
+    case "reasoning":
+      return {
+        kind: "reasoning",
+        id,
+        assistantId,
+        text: row.summary ?? "",
+        timestamp,
+      };
+    case "tool_call":
+      return {
+        kind: "tool_call",
+        id,
+        assistantId,
+        callId: row.callId ?? row.eventId,
+        name: row.toolName ?? "tool",
+        args: "",
+        timestamp,
+      };
+    case "notice":
+      return {
+        kind: "assistant",
+        id,
+        content: row.question ?? row.summary ?? "Skill run needs input",
+        timestamp,
+        platformMessageId: row.id,
+      };
+    default: {
+      const exhaustive: never = row.kind;
+      return exhaustive;
+    }
   }
-  if (item.kind === "user") {
-    return [timestamp, 0, item.platformMessageId ?? String(item.id)];
+}
+
+function expandCompleteSkillRun(
+  items: HistoryItem[],
+  run: SkillRunTranscriptRunRow,
+  activities: SkillRunActivityItem[],
+): HistoryItem[] {
+  const ids = skillRunTranscriptBubbleIds(run.clientRequestId);
+  const userIndex = items.findIndex(
+    (item) => item.kind === "user" && item.platformMessageId === ids.user,
+  );
+  if (userIndex < 0) {
+    return [...items, toSkillRunHistoryItem(run, activities)];
   }
-  return [timestamp, 2, String(item.id)];
+
+  const assistantIndex = items.findIndex(
+    (item) =>
+      item.kind === "assistant" && item.platformMessageId === ids.assistant,
+  );
+  const user = items[userIndex];
+  const timestamp = user.kind === "user" ? user.timestamp : 0;
+  const assistantId =
+    assistantIndex >= 0 ? items[assistantIndex]?.id ?? skillRunHistoryId(run.clientRequestId) : skillRunHistoryId(run.clientRequestId);
+  const resultAssistant: Extract<HistoryItem, { kind: "assistant" }> =
+    assistantIndex >= 0 && items[assistantIndex]?.kind === "assistant"
+      ? {
+          ...items[assistantIndex],
+          content: run.text ?? items[assistantIndex].content,
+          error: run.errorMessage,
+        }
+      : {
+          kind: "assistant",
+          id: assistantId,
+          content: run.text ?? "",
+          error: run.errorMessage,
+          timestamp,
+          platformMessageId: ids.assistant,
+        };
+  const activityItems = projectSkillRunActivitiesToNativeRows(
+    run.clientRequestId,
+    activities,
+  ).map((row) => nativeActivityToHistoryItem(row, resultAssistant.id, timestamp));
+
+  const withoutAssistant = items.filter((_, index) => index !== assistantIndex);
+  const nextUserIndex = withoutAssistant.findIndex(
+    (item) => item.kind === "user" && item.platformMessageId === ids.user,
+  );
+  return [
+    ...withoutAssistant.slice(0, nextUserIndex + 1),
+    ...activityItems,
+    resultAssistant,
+    ...withoutAssistant.slice(nextUserIndex + 1),
+  ];
 }
 
 /** Merge sidecar Skill runs with messages/overlays/continuation. Pure for tests. */
@@ -796,17 +880,28 @@ export function mergeSkillRunTranscriptIntoHistory(
     activitiesByRequest.set(activity.clientRequestId, list);
   }
 
-  const fallbackAssistantIds = new Set(
-    batch.runs.map(
+  const completeRuns = batch.runs.filter((run) => run.auditComplete);
+  const incompleteRuns = batch.runs.filter((run) => !run.auditComplete);
+  const incompleteAssistantIds = new Set(
+    incompleteRuns.map(
       (run) => skillRunTranscriptBubbleIds(run.clientRequestId).assistant,
     ),
   );
   const kept = items.filter((item) => {
     if (item.kind !== "assistant" || !item.platformMessageId) return true;
-    return !fallbackAssistantIds.has(item.platformMessageId);
+    return !incompleteAssistantIds.has(item.platformMessageId);
   });
 
-  const skillItems: HistoryItem[] = batch.runs.map((run) =>
+  let expanded = kept;
+  for (const run of completeRuns) {
+    expanded = expandCompleteSkillRun(
+      expanded,
+      run,
+      activitiesByRequest.get(run.clientRequestId) ?? [],
+    );
+  }
+
+  const skillItems: HistoryItem[] = incompleteRuns.map((run) =>
     toSkillRunHistoryItem(run, activitiesByRequest.get(run.clientRequestId) ?? []),
   );
 
@@ -816,14 +911,7 @@ export function mergeSkillRunTranscriptIntoHistory(
     skillItems.push(continuationRunToHistoryItem(continuation));
   }
 
-  const merged = [...continuationPrefix, ...kept, ...skillItems];
-  return merged.sort((a, b) => {
-    const ka = historySortKey(a);
-    const kb = historySortKey(b);
-    if (ka[0] !== kb[0]) return ka[0] - kb[0];
-    if (ka[1] !== kb[1]) return ka[1] - kb[1];
-    return ka[2].localeCompare(kb[2]);
-  });
+  return [...continuationPrefix, ...expanded, ...skillItems];
 }
 
 function loadSessionMessageRows(

@@ -311,7 +311,7 @@ describe("Chat skill-run transcript", () => {
     vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   });
 
-  it("shows user prompt and pending card before Main start resolves, then reject patches the same card", async () => {
+  it("shows user prompt and pending Native assistant before Main start resolves, then reject patches the same assistant", async () => {
     let resolveStart!: (value: { accepted: false; message: string }) => void;
     const start = vi.fn(
       () =>
@@ -330,31 +330,25 @@ describe("Chat skill-run transcript", () => {
     await screen.findByText("Writer");
     fireEvent.click(screen.getByText("send-skill"));
     expect(await screen.findByText("Write the weekly report now")).toBeTruthy();
-    expect(
-      document.querySelector(
-        '.skill-run-transcript-card[data-phase="pending-submit"]',
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByText("Submitting skill request...")).toBeTruthy();
+    expect(document.querySelectorAll(".skill-run-transcript-card")).toHaveLength(
+      0,
+    );
     expect(start).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       resolveStart({ accepted: false, message: "Skill run rejected" });
     });
     await waitFor(() => {
-      expect(
-        document.querySelector(
-          '.skill-run-transcript-card[data-phase="failed"]',
-        ),
-      ).toBeTruthy();
+      expect(screen.getByRole("alert")).toHaveTextContent("Skill run rejected");
     });
-    expect(screen.getByText("Skill run rejected")).toBeTruthy();
     expect(screen.getAllByText("Write the weekly report now")).toHaveLength(1);
     expect(document.querySelectorAll(".skill-run-transcript-card")).toHaveLength(
-      1,
+      0,
     );
   });
 
-  it("upserts live A/A/B and history onto one card per request without duplicating Prompt", async () => {
+  it("upserts live A/A/B onto Native rows without a card or duplicated Prompt", async () => {
     installHermes(vi.fn(async () => ({ accepted: true })));
     const history: ChatMessage[] = [
       {
@@ -385,9 +379,6 @@ describe("Chat skill-run transcript", () => {
     );
     await screen.findByText("Writer");
     expect(screen.getAllByText("same prompt")).toHaveLength(1);
-    expect(document.querySelectorAll(".skill-run-transcript-card")).toHaveLength(
-      1,
-    );
 
     act(() => {
       upsertSkillRunProjection(
@@ -413,10 +404,11 @@ describe("Chat skill-run transcript", () => {
       );
     });
     await waitFor(() => {
-      expect(document.querySelectorAll(".skill-run-transcript-card")).toHaveLength(
-        3,
-      );
+      expect(screen.getByText("done")).toBeTruthy();
     });
     expect(screen.getAllByText("same prompt")).toHaveLength(1);
+    expect(document.querySelectorAll(".skill-run-transcript-card")).toHaveLength(
+      0,
+    );
   });
 });

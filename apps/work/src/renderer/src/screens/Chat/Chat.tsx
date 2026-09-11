@@ -67,6 +67,7 @@ import {
   applySkillRunProjectionsToMessages,
   createOptimisticSkillRunTurn,
   rejectSkillRunCard,
+  skillRunUserMessageId,
 } from "../../modules/skill-run/skill-run-transcript";
 import "../../modules/skill-run/skill-run.css";
 import type {
@@ -1355,9 +1356,7 @@ function Chat({
         if (
           prev.some(
             (message) =>
-              "kind" in message &&
-              message.kind === "skill_run" &&
-              message.clientRequestId === request.clientRequestId,
+              message.id === skillRunUserMessageId(request.clientRequestId),
           )
         ) {
           return prev;
