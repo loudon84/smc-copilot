@@ -36,6 +36,8 @@ The sidebar keeps Main-owned Chat and Skill Run rows in one list, with Pinned an
 
 [[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx#normalizeRows]] accepts a cache row for classified history only when the pair is exactly `chat`/`hermes-chat` or `work`/`skill-run`. Missing, partial, cross-paired, unknown, and third-class values are omitted and never defaulted to Chat. [[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx#groupSessionsByWorkspace]] then partitions remaining unpinned rows into Chat history or Work history so each Session ID has one destination. An already-open sidebar applies that grouping when the existing sanitized cache-change hint arrives; that path rereads the loaded cache window and does not call a Main DB sync.
 
+When a fresh original Chat first becomes visible, Main performs its normal classification/cache sync and emits one targeted sanitized cache-change hint only after that Session is written. Successful completion repeats that targeted sync because a gateway can persist the durable row after its first visible stream event. Generic full cache syncs remain quiet, so background refreshes do not create event churn; the targeted hint is what lets an already-open sidebar add the new Chat history row immediately.
+
 ## Row context menu
 
 Each sidebar session row exposes a ChatGPT-style options menu — Pin, Rename, Move to project, and Delete — opened from a hover-revealed `…` button or by right-clicking the row.

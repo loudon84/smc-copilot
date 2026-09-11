@@ -182,9 +182,23 @@ function attachContextFolders(sessions: CachedSession[]): CachedSession[] {
   }));
 }
 
+export interface SyncSessionCacheOptions {
+  /**
+   * Emit one sanitized cache-change hint only after this known Session is
+   * durably written to the cache. Generic full syncs deliberately stay quiet.
+   */
+  announceSessionId?: string;
+}
+
 // Sync from hermes DB to local cache — only fetches new/updated sessions
-export function syncSessionCache(): CachedSession[] {
+export function syncSessionCache(
+  options: SyncSessionCacheOptions = {},
+): CachedSession[] {
   const cache = readCache();
+  const announcedSessionId = options.announceSessionId?.trim() ?? "";
+  const wasCached = announcedSessionId
+    ? cache.sessions.some((session) => session.id === announcedSessionId)
+    : false;
   const db = getDb();
   if (!db) return cache.sessions;
 
@@ -313,7 +327,17 @@ export function syncSessionCache(): CachedSession[] {
       sessions: allSessions,
       lastSync: Math.floor(Date.now() / 1000),
     };
-    writeCache(updated);
+    if (writeCache(updated) && announcedSessionId) {
+      const isCached = updated.sessions.some(
+        (session) => session.id === announcedSessionId,
+      );
+      if (isCached) {
+        emitSessionCacheChanged(
+          announcedSessionId,
+          wasCached ? "updated" : "created",
+        );
+      }
+    }
     return updated.sessions;
   } catch {
     return cache.sessions;

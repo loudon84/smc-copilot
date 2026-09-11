@@ -40,6 +40,20 @@ vi.mock("./session-context-folder-store", () => ({
   getSessionContextFolders: () => new Map(),
 }));
 
+vi.mock("./session-metadata-store", () => ({
+  createSessionScope: (value: string) => value,
+  ensureChatSessionMetadata: () => ({
+    sessionKind: "chat",
+    executionProvider: "hermes-chat",
+  }),
+  isSessionClassification: (value: unknown) =>
+    typeof value === "object" &&
+    value !== null &&
+    (value as { sessionKind?: unknown }).sessionKind === "chat" &&
+    (value as { executionProvider?: unknown }).executionProvider ===
+      "hermes-chat",
+}));
+
 vi.mock("../shared/i18n", () => ({
   t: (key: string) => key,
 }));
@@ -150,6 +164,35 @@ describe("session-cache mutation events", () => {
     };
     cache.syncSessionCache();
     expect(received).toEqual([]);
+  });
+
+  it("announces a classified Chat session after the targeted startup sync writes it", async () => {
+    const cache = await import("./session-cache");
+    const received: unknown[] = [];
+    cache.subscribeSessionCacheChanged((event) => {
+      received.push(event);
+    });
+    harness.db = {
+      prepare: () => ({
+        all: () => [
+          {
+            id: "desk-fresh-chat",
+            started_at: 1_700_000_001,
+            source: "api_server",
+            message_count: 1,
+            model: "test-model",
+            title: "Fresh chat",
+          },
+        ],
+        get: () => undefined,
+      }),
+    };
+
+    cache.syncSessionCache({ announceSessionId: "desk-fresh-chat" });
+
+    expect(received).toEqual([
+      { sessionId: "desk-fresh-chat", reason: "created" },
+    ]);
   });
 
   it("unsubscribe stops further events", async () => {

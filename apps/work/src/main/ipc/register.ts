@@ -1546,6 +1546,13 @@ export function registerIpcHandlers(context: IpcContext): void {
           },
           onDone: (sessionId) => {
             activeRuns.delete(chatRunId);
+            // A fresh gateway session can become durable after its first
+            // visible stream event. Retry the targeted sync on successful
+            // completion so the Sidebar receives the cache hint only once the
+            // classified row is actually present.
+            if (sessionId) {
+              syncSessionCache({ announceSessionId: sessionId });
+            }
             try {
               persistPromptImageAttachments(sessionId, message, attachments);
             } catch (err) {
@@ -1588,7 +1595,7 @@ export function registerIpcHandlers(context: IpcContext): void {
           onSessionStarted: (sessionId) => {
             // Cache sync is Main-owned; it writes the durable Chat classification
             // before this session becomes visible to Renderer listeners.
-            syncSessionCache();
+            syncSessionCache({ announceSessionId: sessionId });
             safeSend("chat-session-started", sessionId);
           },
           onError: (error) => {
