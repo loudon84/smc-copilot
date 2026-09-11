@@ -29,6 +29,25 @@ interface RecentSession {
   id: string;
   title: string;
   contextFolder?: string | null;
+  sessionKind: "chat" | "work";
+  executionProvider: "hermes-chat" | "skill-run";
+}
+
+type CacheSessionInput = {
+  id: string;
+  title: string;
+  contextFolder?: string | null;
+  sessionKind?: unknown;
+  executionProvider?: unknown;
+};
+
+function isExactHistoryPair(
+  row: CacheSessionInput,
+): row is RecentSession {
+  return (
+    (row.sessionKind === "chat" && row.executionProvider === "hermes-chat") ||
+    (row.sessionKind === "work" && row.executionProvider === "skill-run")
+  );
 }
 
 // ChatGPT-style paged conversation list under the pinned app navigation.
@@ -45,6 +64,7 @@ const REFRESH_THROTTLE_MS = 5_000;
 const INFINITE_SCROLL_THRESHOLD_PX = 180;
 const PROJECTS_OPEN_KEY = "hermes.sidebar.projectsOpen";
 const CHATS_OPEN_KEY = "hermes.sidebar.chatsOpen";
+const WORK_OPEN_KEY = "hermes.sidebar.workOpen";
 const FOLDERS_CLOSED_KEY = "hermes.sidebar.closedProjectFolders";
 const PINNED_OPEN_KEY = "hermes.sidebar.pinnedOpen";
 // Pinned session ids live in localStorage like the disclosure state — pinning
@@ -101,7 +121,9 @@ function sameSessions(a: RecentSession[], b: RecentSession[]): boolean {
     if (
       a[i].id !== b[i].id ||
       a[i].title !== b[i].title ||
-      (a[i].contextFolder ?? null) !== (b[i].contextFolder ?? null)
+      (a[i].contextFolder ?? null) !== (b[i].contextFolder ?? null) ||
+      a[i].sessionKind !== b[i].sessionKind ||
+      a[i].executionProvider !== b[i].executionProvider
     ) {
       return false;
     }
@@ -121,19 +143,33 @@ function groupSessionsByWorkspace(sessions: RecentSession[]): {
     sessions: RecentSession[];
   }>;
   chats: RecentSession[];
+  work: RecentSession[];
 } {
   const projects = new Map<string, RecentSession[]>();
   const chats: RecentSession[] = [];
+  const work: RecentSession[] = [];
 
   for (const session of sessions) {
     const contextFolder = session.contextFolder?.trim();
-    if (!contextFolder) {
+    if (contextFolder) {
+      const existing = projects.get(contextFolder);
+      if (existing) existing.push(session);
+      else projects.set(contextFolder, [session]);
+      continue;
+    }
+    if (
+      session.sessionKind === "chat" &&
+      session.executionProvider === "hermes-chat"
+    ) {
       chats.push(session);
       continue;
     }
-    const existing = projects.get(contextFolder);
-    if (existing) existing.push(session);
-    else projects.set(contextFolder, [session]);
+    if (
+      session.sessionKind === "work" &&
+      session.executionProvider === "skill-run"
+    ) {
+      work.push(session);
+    }
   }
 
   return {
@@ -143,7 +179,24 @@ function groupSessionsByWorkspace(sessions: RecentSession[]): {
       sessions: list,
     })),
     chats,
+    work,
   };
+}
+
+function normalizeRows(
+  list: CacheSessionInput[],
+  limit = RECENT_SESSIONS_PAGE_SIZE,
+): RecentSession[] {
+  return list
+    .filter(isExactHistoryPair)
+    .slice(0, limit)
+    .map(({ id, title, contextFolder, sessionKind, executionProvider }) => ({
+      id,
+      title,
+      contextFolder: contextFolder ?? null,
+      sessionKind,
+      executionProvider,
+    }));
 }
 
 /**
@@ -193,6 +246,9 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
   const [chatsOpen, setChatsOpen] = useState(() =>
     readStoredOpen(CHATS_OPEN_KEY),
   );
+  const [workOpen, setWorkOpen] = useState(() =>
+    readStoredOpen(WORK_OPEN_KEY),
+  );
   const [closedProjectFolders, setClosedProjectFolders] = useState<Set<string>>(
     () => readStoredClosedFolders(),
   );
@@ -233,48 +289,16 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
     storePinned(pinnedIds);
   }, [pinnedIds]);
 
-  const normalizeRows = useCallback(
-    (
-      list: Array<{
-        id: string;
-        title: string;
-        contextFolder?: string | null;
-      }>,
-      limit = RECENT_SESSIONS_PAGE_SIZE,
-    ): RecentSession[] =>
-      list.slice(0, limit).map(({ id, title, contextFolder }) => ({
-        id,
-        title,
-        contextFolder: contextFolder ?? null,
-      })),
-    [],
-  );
-
-  const applyFirstPage = useCallback(
-    (
-      list: Array<{
-        id: string;
-        title: string;
-        contextFolder?: string | null;
-      }>,
-    ): void => {
-      setHasMore(list.length > RECENT_SESSIONS_PAGE_SIZE);
-      const next = normalizeRows(list);
-      // Skip the state update (and re-render) when nothing changed — the
-      // common case for periodic refreshes.
-      setSessions((prev) => (sameSessions(prev, next) ? prev : next));
-    },
-    [normalizeRows],
-  );
+  const applyFirstPage = useCallback((list: CacheSessionInput[]): void => {
+    setHasMore(list.length > RECENT_SESSIONS_PAGE_SIZE);
+    const next = normalizeRows(list);
+    // Skip the state update (and re-render) when nothing changed — the
+    // common case for periodic refreshes.
+    setSessions((prev) => (sameSessions(prev, next) ? prev : next));
+  }, []);
 
   const applyLoadedWindow = useCallback(
-    (
-      list: Array<{
-        id: string;
-        title: string;
-        contextFolder?: string | null;
-      }>,
-    ): void => {
+    (list: CacheSessionInput[]): void => {
       const loadedLimit = Math.max(
         RECENT_SESSIONS_PAGE_SIZE,
         sessionsRef.current.length,
@@ -283,17 +307,11 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
       const next = normalizeRows(list, loadedLimit);
       setSessions((prev) => (sameSessions(prev, next) ? prev : next));
     },
-    [normalizeRows],
+    [],
   );
 
   const appendPage = useCallback(
-    (
-      list: Array<{
-        id: string;
-        title: string;
-        contextFolder?: string | null;
-      }>,
-    ): void => {
+    (list: CacheSessionInput[]): void => {
       setHasMore(list.length > RECENT_SESSIONS_PAGE_SIZE);
       const page = normalizeRows(list);
       if (page.length === 0) return;
@@ -306,7 +324,7 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
         return sameSessions(prev, next) ? prev : next;
       });
     },
-    [normalizeRows],
+    [],
   );
 
   const refresh = useCallback(
@@ -344,11 +362,11 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
 
   const maybeLoadNextPage = useCallback((): void => {
     const root = scrollRootRef.current;
-    if (!projectsOpen && !chatsOpen) return;
+    if (!projectsOpen && !chatsOpen && !workOpen) return;
     if (!root || !hasMoreRef.current || loadingMoreRef.current) return;
     const remaining = root.scrollHeight - root.scrollTop - root.clientHeight;
     if (remaining <= INFINITE_SCROLL_THRESHOLD_PX) void loadNextPage();
-  }, [chatsOpen, loadNextPage, projectsOpen, scrollRootRef]);
+  }, [chatsOpen, loadNextPage, projectsOpen, scrollRootRef, workOpen]);
 
   // Initial load when the section opens: paint from the JSON cache
   // immediately (no DB access), then sync once for anything new.
@@ -483,7 +501,7 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
     () => sessions.filter((s) => pinnedIds.has(s.id)),
     [sessions, pinnedIds],
   );
-  const { projectGroups, chats } = useMemo(
+  const { projectGroups, chats, work } = useMemo(
     () =>
       groupSessionsByWorkspace(sessions.filter((s) => !pinnedIds.has(s.id))),
     [sessions, pinnedIds],
@@ -659,6 +677,18 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
       const next = !prev;
       try {
         localStorage.setItem(CHATS_OPEN_KEY, String(next));
+      } catch {
+        /* ignore persistence failures */
+      }
+      return next;
+    });
+  };
+
+  const toggleWork = (): void => {
+    setWorkOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(WORK_OPEN_KEY, String(next));
       } catch {
         /* ignore persistence failures */
       }
@@ -900,7 +930,7 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
             aria-expanded={chatsOpen}
             tabIndex={expanded ? 0 : -1}
           >
-            <span>{t("navigation.chats")}</span>
+            <span>{t("navigation.chatHistory")}</span>
             {chatsOpen ? (
               <ChevronDown
                 className="sidebar-recent-disclosure-icon"
@@ -929,6 +959,39 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
             </div>
           </div>
         </div>
+        {work.length > 0 && (
+          <div className="sidebar-recent-section">
+            <button
+              type="button"
+              className="sidebar-recent-section-toggle"
+              onClick={toggleWork}
+              aria-expanded={workOpen}
+              tabIndex={expanded ? 0 : -1}
+            >
+              <span>{t("navigation.workHistory")}</span>
+              {workOpen ? (
+                <ChevronDown
+                  className="sidebar-recent-disclosure-icon"
+                  size={13}
+                />
+              ) : (
+                <ChevronRight
+                  className="sidebar-recent-disclosure-icon"
+                  size={13}
+                />
+              )}
+            </button>
+            <div
+              className={`sidebar-recent-collapse ${workOpen ? "expanded" : ""}`}
+            >
+              <div className="sidebar-recent-collapse-inner">
+                {work.map((s) =>
+                  renderSessionButton(s, false, expanded && workOpen),
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {loadingMore && (
           <div className="sidebar-recent-loading" aria-live="polite">
             <Loader

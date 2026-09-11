@@ -11,6 +11,8 @@ export default {
   projects: "Projects",
   skills: "Skills",
   chats: "Chats",
+  chatHistory: "Chat history",
+  workHistory: "Work history",
   pinned: "Pinned",
   noChats: "No chats",
   soul: "Persona",

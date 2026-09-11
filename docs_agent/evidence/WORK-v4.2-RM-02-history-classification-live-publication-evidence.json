@@ -1,0 +1,251 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:64086de69662686baca0f322180047e68427fce165054fcde1ec4b386457c0f2",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 V01/V05 manifest.",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing Sidebar grouping tests.",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing project grouping.",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing cache-event test, RM-01 evidence.",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Existing focused tests.",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Approved AD and RM-01 pair contract.",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 manifest and owner anchors.",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Source-locale checker.",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No RM-02 proof.",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 V02/V03.",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Approved AD.",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No RM-02 manifest.",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-06",
+        "CLM-09"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-06": "PASS",
+        "CLM-09": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/screens/Layout/SidebarRecentSessions.test.tsx --pool=threads --maxWorkers=1",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-02-history-classification-live-publication/logs/20260911T012208.740099Z-V01.log",
+      "raw_log_sha256": "sha256:8ebe1414742c6c3a39ee06090df492f5107db85db1926537e54a144fa3bb92bf",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T01:22:08.740099Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-04",
+        "CLM-05",
+        "CLM-07",
+        "CLM-08",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-04": "PASS",
+        "CLM-05": "PASS",
+        "CLM-07": "PASS",
+        "CLM-08": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "npm exec vitest -- run src/renderer/src/screens/Layout/SidebarRecentSessions.test.tsx src/main/session-cache.test.ts src/main/skill-run/skill-run-session-materialize.test.ts --pool=threads --maxWorkers=1",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-02-history-classification-live-publication/logs/20260911T012223.320064Z-V02.log",
+      "raw_log_sha256": "sha256:589b1196d79c94b9612ac42e84d39240bb034c7502f3cc6bff790ff55fb48918",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T01:22:23.320064Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-11",
+        "CLM-12"
+      ],
+      "claim_results": {
+        "CLM-11": "PASS",
+        "CLM-12": "PASS"
+      },
+      "command": "npm run guard",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-v4.2-RM-02-history-classification-live-publication/logs/20260911T012236.677691Z-V03.log",
+      "raw_log_sha256": "sha256:ef978a99c5c447714c6ecfb9d4d79673ad55372ee8fd6c81a7d376cd3e81f484",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-11T01:22:36.677691Z",
+      "verification_id": "V03"
+    }
+  ],
+  "completion_audit": {
+    "changed": 4,
+    "deferred": 0,
+    "done": 5,
+    "scope_drift": 0,
+    "timestamp": "2026-09-11T01:20:21.052248Z",
+    "total_items": 5,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-11T01:23:30.069478Z",
+  "implementation_review": {
+    "reviewer": "code-review-and-quality",
+    "scope_fingerprint": "sha256:4d42d0e913d8e4ce3f7b76008c6c7442a0f594681280b3c0cc083f5654dc3e31",
+    "timestamp": "2026-09-11T01:21:21.058295Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:0931fc23f114f90cf731f158253ba089a3c7db7b6b22875d935231985d54fe03",
+  "plan": ".cursor/plans/work-v4.2-rm-02-history-classification-live-publication.plan.md",
+  "plan_id": "WORK-v4.2-RM-02-history-classification-live-publication",
+  "plan_review": {
+    "plan_sha256": "sha256:640f23e9205f80d4a9f04059ead9e91415881e7f79f11353c2faecb68cf628a3",
+    "reviewer": "smc-plan-review",
+    "timestamp": "2026-09-11T01:10:01.175285Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:4d42d0e913d8e4ce3f7b76008c6c7442a0f594681280b3c0cc083f5654dc3e31",
+  "verification_candidate": {
+    "candidate_id": "sha256:c4704bb32a20379cd1c3fdfb02be37411f8043685eeb3ec69ad82fcc2c802d60",
+    "captured_at": "2026-09-11T01:21:39.816287Z",
+    "plan_id": "WORK-v4.2-RM-02-history-classification-live-publication",
+    "schema": "smc.verification.candidate.v1",
+    "scope_fingerprint": "sha256:4d42d0e913d8e4ce3f7b76008c6c7442a0f594681280b3c0cc083f5654dc3e31"
+  },
+  "workspace_base_commit": "cfbd8d44f86ed511cb2f811c55630c0f969650ea"
+}

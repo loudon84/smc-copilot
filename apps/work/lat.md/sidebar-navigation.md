@@ -24,11 +24,17 @@ The native sidebar scrollbar is hidden to avoid layout shifts. [[src/renderer/sr
 
 Workspace-linked conversations are grouped under project rows so repository chats stay together without hiding ordinary chats.
 
-[[src/main/session-cache.ts#syncSessionCache]] attaches each row's context folder in one batched [[src/main/session-context-folder-store.ts#getSessionContextFolders]] read and persists `contextFolder` into the `sessions.json` cache. [[src/main/session-cache.ts#listCachedSessions]] stays a DB-free cache read — it returns the persisted `contextFolder` without re-querying the store. The sidebar groups rows with a `contextFolder` under a Projects section by folder basename, while rows without one remain under Chats.
+[[src/main/session-cache.ts#syncSessionCache]] attaches each row's context folder in one batched [[src/main/session-context-folder-store.ts#getSessionContextFolders]] read and persists `contextFolder` into the `sessions.json` cache. [[src/main/session-cache.ts#listCachedSessions]] stays a DB-free cache read — it returns the persisted `contextFolder` without re-querying the store. The sidebar groups rows with a `contextFolder` under a Projects section by folder basename. `contextFolder` never changes the Main-owned classification pair.
 
 When [[src/renderer/src/screens/Chat/Chat.tsx#Chat]] saves a session context folder, it emits a renderer event that [[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx]] uses to force-refresh the cache. This keeps project grouping visible immediately after a workspace is linked.
 
-Projects and Chats are top-level collapsible sections, and each project folder can also be expanded or collapsed. [[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx]] persists those disclosure states in `localStorage`; the sidebar CSS keeps section and folder rows on the same left rail, keeps disclosure arrows right-aligned, animates each disclosure with grid-row transitions, and removes hidden rows from keyboard tab order.
+Projects, Chat history, and Work history are top-level collapsible sections, and each project folder can also be expanded or collapsed. [[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx]] persists those disclosure states in `localStorage`; the sidebar CSS keeps section and folder rows on the same left rail, keeps disclosure arrows right-aligned, animates each disclosure with grid-row transitions, and removes hidden rows from keyboard tab order.
+
+## Classified Chat and Work history
+
+The sidebar keeps Main-owned Chat and Skill Run rows in one list, with Pinned and Projects first, then Chat history and Work history.
+
+[[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx#normalizeRows]] accepts a cache row for classified history only when the pair is exactly `chat`/`hermes-chat` or `work`/`skill-run`. Missing, partial, cross-paired, unknown, and third-class values are omitted and never defaulted to Chat. [[src/renderer/src/screens/Layout/SidebarRecentSessions.tsx#groupSessionsByWorkspace]] then partitions remaining unpinned rows into Chat history or Work history so each Session ID has one destination. An already-open sidebar applies that grouping when the existing sanitized cache-change hint arrives; that path rereads the loaded cache window and does not call a Main DB sync.
 
 ## Row context menu
 

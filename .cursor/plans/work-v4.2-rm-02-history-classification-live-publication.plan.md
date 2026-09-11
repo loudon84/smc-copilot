@@ -4,7 +4,7 @@ overview: Present Main-owned Chat and Skill Run classifications in the existing 
 todos:
   - id: t1-classified-sidebar-history
     content: "T1 — Consume explicit Session classification in the existing Sidebar history [C01, C02, C03, C04, C05]"
-    status: pending
+    status: completed
 isProject: false
 plan_contract: smc.plan.v3.5
 plan_id: WORK-v4.2-RM-02-history-classification-live-publication
