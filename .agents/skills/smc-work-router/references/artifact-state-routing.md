@@ -41,6 +41,6 @@ v4.4A 保持 compatibility-first：分类只决定“是否需要进入 governed
 
 Do not route Plan directly from author to implementation engine in governed work.
 
-## v4.4A Compatibility Boundary
+## v5.0.8 LEAN Plan Contract Boundary
 
-This release does **not** add a second Plan owner or a `bounded` Plan contract. A governed task that already has Architecture/Roadmap/PRD/Plan state remains on the canonical pipeline. Lean governed BOUNDED delivery requires a later explicit Plan Contract migration and validator compatibility work.
+This release does **not** add a second Plan owner or a parallel `smc.ges.lean-plan.v1` schema. A governed task that already has Architecture/Roadmap/PRD/Plan state remains on the canonical pipeline. BOUNDED work uses the existing `smc.plan.v3.7` contract with `governance_profile: LEAN` to reduce upstream material depth; `smc-plan-delivery` whole-diff review, verification, evidence freshness, commit gates, and Roadmap DONE remain mandatory for LEAN and FULL alike.

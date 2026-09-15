@@ -34,8 +34,14 @@ def resolve_work_scope(
     ux_role: str | None = None,
     action_cluster: str | None = None,
     ensure_baselines: bool = True,
+    work_item_id: str | None = None,
+    include_context_budget: bool = False,
 ) -> dict[str, Any]:
-    """Resolve work scope, governance tip, target apps, local context, token budget."""
+    """Resolve work scope, governance tip, target apps, local context, token budget.
+
+    When include_context_budget is True, also attach smc.ges.context-budget.v1
+    alongside (not replacing) the legacy token_budget field.
+    """
     root = Path(repo).resolve()
     profile = _norm_profile(governance_profile)
     registry = load_registry(root) or discover(root)
@@ -66,7 +72,7 @@ def resolve_work_scope(
         }
 
     tip = "FULL" if profile == "FULL" else "LEAN"
-    return {
+    result: dict[str, Any] = {
         "schema": SCHEMA,
         "repo": str(root),
         "governance_tip": tip,
@@ -77,6 +83,15 @@ def resolve_work_scope(
         "token_budget": budget_for(profile),
         "apps_registry_schema": registry.get("schema"),
     }
+    if include_context_budget:
+        from budget_controller import decide_budget  # noqa: E402
+
+        result["context_budget"] = decide_budget(
+            work_item_id=work_item_id or "work-scope",
+            repo_identity=str(root),
+            governance_profile=profile,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

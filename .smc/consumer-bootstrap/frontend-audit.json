@@ -8,7 +8,7 @@
     ".agents/ges/frontend/apps/work/",
     ".agents/ges/frontend/shared/shared-ui-registry.json"
   ],
-  "audited_at": "2026-09-15T03:59:52Z",
+  "audited_at": "2026-09-15T10:39:38Z",
   "claims": {
     "frontend_context": "GES_NATIVE"
   },

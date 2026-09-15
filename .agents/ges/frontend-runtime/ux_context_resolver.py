@@ -229,11 +229,17 @@ def _infer_ux_role(path: Path, rel: str) -> str | None:
             return "identity_control"
     if "setting" in name:
         return "settings"
-    if "nav" in name or "sidebar" in name:
+    # Avoid substring false positives (e.g. "unavailable" contains "nav")
+    if re.search(r"(^|[^a-z])(nav|navbar|navigation)([^a-z]|$)", name) or "sidebar" in name:
         return "navigation"
     if "header" in name:
         return "chrome"
     return None
+
+
+def _ui_surface_paths(paths: list[Path]) -> list[Path]:
+    """Surface/layout inference only uses UI source files, never .ts helpers."""
+    return [p for p in paths if p.suffix.lower() in {".tsx", ".jsx", ".vue"}]
 
 
 def _visual_position(rel: str, name: str) -> str:
@@ -257,7 +263,7 @@ def _scan_surfaces(
 ) -> list[dict[str, Any]]:
     surfaces: list[dict[str, Any]] = []
     layout_owner: str | None = None
-    for path in _iter_boundary_files(repo, allowed_roots, forbidden_roots):
+    for path in _ui_surface_paths(_iter_boundary_files(repo, allowed_roots, forbidden_roots)):
         rel = _norm(str(path.relative_to(repo)))
         if re.match(r"layout.*\.(tsx|jsx|vue)$", path.name, re.I):
             layout_owner = rel
@@ -330,7 +336,7 @@ def _scan_layouts(
 ) -> dict[str, Any]:
     regions: dict[str, Any] = {}
     owner = None
-    for path in _iter_boundary_files(repo, allowed_roots, forbidden_roots):
+    for path in _ui_surface_paths(_iter_boundary_files(repo, allowed_roots, forbidden_roots)):
         rel = _norm(str(path.relative_to(repo)))
         if re.match(r"layout.*\.(tsx|jsx|vue)$", path.name, re.I):
             owner = rel

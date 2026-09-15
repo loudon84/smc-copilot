@@ -90,6 +90,61 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(out["governance_profile"], "NONE")
         self.assertTrue(out["effective_research_only"])
 
+    def test_retained_production_change_never_spike(self):
+        # @lat: [[adaptive-governance-context-v508#Acceptance G51–G60#G53 Production Text Never Spike]]
+        f = self.pure_research()
+        f["retained_production_change"] = True
+        out = route(f)
+        self.assertNotEqual(out["work_class"], "SPIKE")
+        self.assertNotEqual(out["governance_profile"], "NONE")
+
+    def test_feature_complexity_derived_deterministic(self):
+        # @lat: [[adaptive-governance-context-v508#Acceptance G51–G60#G51 Deterministic Complexity Receipt]]
+        from work_router import derive_feature_complexity
+
+        routed = route(self.facts())
+        scope = {
+            "schema": "smc.ges.feature-scope.v1",
+            "app_id": "work",
+            "surface_id": "work:sidebar.footer.identity",
+            "layout_owner": "apps/work/src/Layout.tsx",
+            "decision": "EXTEND",
+            "ok": True,
+        }
+        a = derive_feature_complexity(routed, work_item_id="wi-1", feature_scope=scope)
+        b = derive_feature_complexity(routed, work_item_id="wi-1", feature_scope=scope)
+        self.assertEqual(a["schema"], "smc.ges.feature-complexity.v1")
+        self.assertEqual(a["work_route_digest"], b["work_route_digest"])
+        self.assertEqual(a["feature_scope_digest"], b["feature_scope_digest"])
+        self.assertEqual(a["work_class"], routed["work_class"])
+        self.assertEqual(a["governance_profile"], routed["governance_profile"])
+        self.assertNotIn("error", a)
+
+    def test_claimed_scope_missing_is_invalid(self):
+        from work_router import derive_feature_complexity
+
+        routed = route(self.facts())
+        out = derive_feature_complexity(
+            routed, work_item_id="wi-2", feature_scope=None, claimed_app_or_surface=True
+        )
+        self.assertEqual(out.get("error"), "FEATURE_SCOPE_INVALID")
+        self.assertEqual(out["governance_profile"], "FULL")
+
+    def test_classification_downgrade_denied_when_frozen(self):
+        # @lat: [[adaptive-governance-context-v508#Acceptance G51–G60#G54 Downgrade Denied]]
+        import tempfile
+        from pathlib import Path
+
+        import classification_state as cs
+
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            cs.apply_profile(repo, "wi-freeze", "FULL")
+            cs.freeze(repo, "wi-freeze")
+            with self.assertRaises(ValueError) as ctx:
+                cs.apply_profile(repo, "wi-freeze", "LEAN")
+            self.assertEqual(str(ctx.exception), "CLASSIFICATION_DOWNGRADE_DENIED")
+
 
 if __name__ == "__main__":
     unittest.main()

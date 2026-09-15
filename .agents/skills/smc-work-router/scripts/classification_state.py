@@ -72,7 +72,11 @@ def can_transition(current_profile: str | None, new_profile: str, state: str) ->
     # Downgrade
     if state == "PROVISIONAL":
         return True, "CLASSIFICATION_CORRECTION"
-    return False, "CLASSIFICATION_DOWNGRADE_FORBIDDEN"
+    return False, "CLASSIFICATION_DOWNGRADE_DENIED"
+
+
+# Alias retained for one release (v5.0.8 C31).
+CLASSIFICATION_DOWNGRADE_FORBIDDEN = "CLASSIFICATION_DOWNGRADE_DENIED"
 
 
 def apply_profile(

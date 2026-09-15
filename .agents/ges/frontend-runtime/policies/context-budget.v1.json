@@ -1,0 +1,122 @@
+{
+  "schema": "smc.ges.context-budget-policy.v1",
+  "policy_version": "1.0.0",
+  "profiles": {
+    "NONE": {
+      "phases": [
+        {
+          "name": "routing",
+          "max_files": 8,
+          "max_source_capsules": 4,
+          "max_context_tokens": 4000,
+          "max_model_tier": "STANDARD",
+          "independent_review": false
+        }
+      ]
+    },
+    "LEAN": {
+      "phases": [
+        {
+          "name": "routing",
+          "max_files": 12,
+          "max_source_capsules": 8,
+          "max_context_tokens": 8000,
+          "max_model_tier": "STANDARD",
+          "independent_review": false
+        },
+        {
+          "name": "grounding",
+          "max_files": 20,
+          "max_source_capsules": 12,
+          "max_context_tokens": 16000,
+          "max_model_tier": "STANDARD",
+          "independent_review": false
+        },
+        {
+          "name": "planning",
+          "max_files": 24,
+          "max_source_capsules": 16,
+          "max_context_tokens": 20000,
+          "max_model_tier": "STANDARD",
+          "independent_review": false
+        },
+        {
+          "name": "implementation",
+          "max_files": 30,
+          "max_source_capsules": 20,
+          "max_context_tokens": 24000,
+          "max_model_tier": "STANDARD",
+          "independent_review": false
+        },
+        {
+          "name": "review",
+          "max_files": 40,
+          "max_source_capsules": 24,
+          "max_context_tokens": 32000,
+          "max_model_tier": "STANDARD",
+          "independent_review": true
+        },
+        {
+          "name": "final_verification",
+          "max_files": 40,
+          "max_source_capsules": 24,
+          "max_context_tokens": 32000,
+          "max_model_tier": "STANDARD",
+          "independent_review": true
+        }
+      ]
+    },
+    "FULL": {
+      "phases": [
+        {
+          "name": "routing",
+          "max_files": 30,
+          "max_source_capsules": 20,
+          "max_context_tokens": 20000,
+          "max_model_tier": "REASONING",
+          "independent_review": false
+        },
+        {
+          "name": "grounding",
+          "max_files": 60,
+          "max_source_capsules": 40,
+          "max_context_tokens": 48000,
+          "max_model_tier": "REASONING",
+          "independent_review": false
+        },
+        {
+          "name": "planning",
+          "max_files": 80,
+          "max_source_capsules": 48,
+          "max_context_tokens": 64000,
+          "max_model_tier": "REASONING",
+          "independent_review": false
+        },
+        {
+          "name": "implementation",
+          "max_files": 100,
+          "max_source_capsules": 60,
+          "max_context_tokens": 80000,
+          "max_model_tier": "REASONING",
+          "independent_review": false
+        },
+        {
+          "name": "review",
+          "max_files": 120,
+          "max_source_capsules": 80,
+          "max_context_tokens": 96000,
+          "max_model_tier": "REASONING",
+          "independent_review": true
+        },
+        {
+          "name": "final_verification",
+          "max_files": 120,
+          "max_source_capsules": 80,
+          "max_context_tokens": 96000,
+          "max_model_tier": "REASONING",
+          "independent_review": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "backup_id": "64c9a2273f5a429fba1fda8e0cc2600c",
+  "bundle": "5.0.0",
+  "domains": {
+    "backend": {
+      "sha256": "",
+      "version": "2.2.0"
+    },
+    "frontend": {
+      "sha256": "",
+      "version": "2.2.0"
+    },
+    "ops": {
+      "sha256": "",
+      "version": "2.2.0"
+    }
+  },
+  "finalized_at": "2026-09-15T10:23:51Z",
+  "install_id": "64c9a2273f5a429fba1fda8e0cc2600c",
+  "managed_file_set_sha256": "sha256:a3bd0e2312569aab55c3307adbe6ebb156c27fc7977a8ac5b86b45b1080fb31e",
+  "policy_digest": "sha256:b4892123cee54fb1722703d1de914dc002c3bb5692c8d7ee35acc478ab8145bf",
+  "profile": {
+    "id": "generic",
+    "sha256": "d69743486151e400a1aa45f07952e7be09396808e249beac843bb948da23b760",
+    "version": "2.0.0"
+  },
+  "release_identity": {
+    "installer_sha256": "23d0a029e651da74c140b6c82aee3ecc6e74d1e6e8fa112952e39847e89ded9e",
+    "note": "INSTALL_SOURCE_DIRTY_NOT_RELEASE_ELIGIBLE",
+    "package_file_count": 350,
+    "package_manifest_sha256": "d8a9a4436dd202c5d7ebc7fab403c327783c03372410b6640b7d22b917ba9bed",
+    "release_eligible": false,
+    "source_commit": "e9ae7d4c972aa5d49483c9a095168bf81bfa70c8",
+    "source_tree_dirty": true
+  },
+  "schema": "smc.ges.install-receipt.v1",
+  "stale_reconciliation": {
+    "blocked": [],
+    "deleted": [
+      ".agents/ges/domain-packs/backend/activation.json",
+      ".agents/ges/domain-packs/backend/pack.json",
+      ".agents/ges/domain-packs/backend/policy-lock.json",
+      ".agents/ges/domain-packs/frontend/README.md",
+      ".agents/ges/domain-packs/frontend/activation.json",
+      ".agents/ges/domain-packs/frontend/pack.json",
+      ".agents/ges/domain-packs/frontend/policy-lock.json",
+      ".agents/ges/domain-packs/frontend/upstream-sources.md",
+      ".agents/ges/domain-packs/ops/activation.json",
+      ".agents/ges/domain-packs/ops/pack.json",
+      ".agents/ges/domain-packs/ops/policy-lock.json",
+      ".agents/ges/domain-packs/registry.json",
+      ".agents/ges/profile.json",
+      ".cursor/skills/smc-backend-engineering/SKILL.md",
+      ".cursor/skills/smc-backend-preplan/SKILL.md",
+      ".cursor/skills/smc-backend-preplan/scripts/selftest.py",
+      ".cursor/skills/smc-backend-preplan/scripts/validate_prd_intent.py",
+      ".cursor/skills/smc-backend-review/SKILL.md",
+      ".cursor/skills/smc-backend-review/scripts/validate_plan_extension.py",
+      ".cursor/skills/smc-backend-verification/SKILL.md",
+      ".cursor/skills/smc-frontend-engineering/SKILL.md",
+      ".cursor/skills/smc-frontend-engineering/references/accessibility.md",
+      ".cursor/skills/smc-frontend-engineering/references/design-system.md",
+      ".cursor/skills/smc-frontend-engineering/references/frontend-testing.md",
+      ".cursor/skills/smc-frontend-engineering/references/interaction-states.md",
+      ".cursor/skills/smc-frontend-engineering/references/motion.md",
+      ".cursor/skills/smc-frontend-engineering/references/react-composition.md",
+      ".cursor/skills/smc-frontend-engineering/references/rendering-performance.md",
+      ".cursor/skills/smc-frontend-engineering/references/state-and-effects.md",
+      ".cursor/skills/smc-frontend-preplan/SKILL.md",
+      ".cursor/skills/smc-frontend-preplan/scripts/selftest.py",
+      ".cursor/skills/smc-frontend-preplan/scripts/validate_prd_intent.py",
+      ".cursor/skills/smc-frontend-review/SKILL.md",
+      ".cursor/skills/smc-frontend-review/scripts/selftest.py",
+      ".cursor/skills/smc-frontend-review/scripts/validate_plan_extension.py",
+      ".cursor/skills/smc-frontend-visual-verification/SKILL.md",
+      ".cursor/skills/smc-frontend-visual-verification/scripts/preflight.py",
+      ".cursor/skills/smc-ops-engineering/SKILL.md",
+      ".cursor/skills/smc-ops-preplan/SKILL.md",
+      ".cursor/skills/smc-ops-preplan/scripts/selftest.py",
+      ".cursor/skills/smc-ops-preplan/scripts/validate_prd_intent.py",
+      ".cursor/skills/smc-ops-review/SKILL.md",
+      ".cursor/skills/smc-ops-review/scripts/validate_plan_extension.py",
+      ".cursor/skills/smc-ops-verification/SKILL.md"
+    ]
+  },
+  "validation": {
+    "commands_digest": "sha256:aad4c750609fb8d730b0893822ac7cf3b0abc880b53219fbe63c05cdad5743b5",
+    "status": "PASS"
+  }
+}

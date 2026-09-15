@@ -1,20 +1,17 @@
 {
-  "analyzed_at": "2026-09-15T02:44:31Z",
+  "analyzed_at": "2026-09-15T10:48:05Z",
   "audit_schema": "smc.ges.consumer-audit.v1",
   "claims": {
     "frontend_context": "GES_NATIVE",
     "ges": "GES_NATIVE",
     "spec_kit_provider": "NATIVE_ONLY",
-    "spec_kit_scaffold": "UNAVAILABLE",
+    "spec_kit_scaffold": "ADAPTER_READY",
     "superpowers_pinned": "UPSTREAM_PINNED",
     "superpowers_shims": "GES_NATIVE"
   },
   "codes": [
     "SPEC_KIT_PROVIDER_UNAVAILABLE",
-    "LAYER_MISSING:spec_kit",
-    "SUPERPOWERS_CAPABILITY_GAP",
-    "LAYER_PARTIAL:superpowers",
-    "CONSUMER_GAP_PRESENT"
+    "CONSUMER_GAP_NONE"
   ],
   "layers": {
     "frontend_context": {
@@ -32,32 +29,24 @@
       "verdict": "PASS"
     },
     "spec_kit": {
-      "missing": [
-        "spec_kit.specify.constitution.md",
-        "spec_kit.specify.templates",
-        "spec_kit.specify.scripts",
-        "spec_kit.specify.specs.README.md"
-      ],
+      "missing": [],
       "notes": [
         "provider_status=UNAVAILABLE",
         "integration_status=NATIVE_ONLY"
       ],
-      "present": 0,
+      "present": 4,
       "total": 4,
-      "verdict": "MISSING"
+      "verdict": "PASS"
     },
     "superpowers": {
-      "missing": [
-        "superpowers.shim.writing-plans",
-        "superpowers.shim.finishing-branch"
-      ],
+      "missing": [],
       "notes": [],
-      "present": 6,
+      "present": 8,
       "total": 8,
-      "verdict": "PARTIAL"
+      "verdict": "PASS"
     }
   },
-  "ok": false,
+  "ok": true,
   "project": "E:\\git\\smc-copilot",
   "schema": "smc.ges.consumer-gap.v1"
 }

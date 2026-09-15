@@ -799,6 +799,22 @@
       "path": "apps/work/src/renderer/src/screens/Kanban/Kanban.tsx"
     },
     {
+      "name": "knowledge-route-descriptor",
+      "path": "apps/work/src/renderer/src/screens/Knowledge/knowledge-route-descriptor.ts"
+    },
+    {
+      "name": "knowledge-route-scope",
+      "path": "apps/work/src/renderer/src/screens/Knowledge/knowledge-route-scope.ts"
+    },
+    {
+      "name": "KnowledgePages",
+      "path": "apps/work/src/renderer/src/screens/Knowledge/KnowledgePages.tsx"
+    },
+    {
+      "name": "KnowledgeView",
+      "path": "apps/work/src/renderer/src/screens/Knowledge/KnowledgeView.tsx"
+    },
+    {
       "name": "ActiveSessionsBar",
       "path": "apps/work/src/renderer/src/screens/Layout/ActiveSessionsBar.tsx"
     },

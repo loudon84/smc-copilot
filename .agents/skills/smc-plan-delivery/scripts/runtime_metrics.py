@@ -51,6 +51,17 @@ V2_OPTIONAL = (
     "engineering_method",
     "review_mode",
     "tdd_mode",
+    # v5.0.8 adaptive governance / context budget (digests and counters only)
+    "work_route_digest",
+    "policy_digest",
+    "phase",
+    "phase_allocated_tokens",
+    "phase_actual_tokens",
+    "context_cache_hits",
+    "context_cache_misses",
+    "context_cache_stale",
+    "budget_upgrade_reason",
+    "budget_block_reason",
 )
 
 
@@ -73,6 +84,9 @@ def _append(plan: Path, event: dict) -> Path:
 
 def dispatch(plan: Path, **fields) -> Path:
     # @lat: [[frontend-context#Telemetry v2]]
+    for key in FORBIDDEN:
+        if key in fields:
+            raise ValueError("TELEMETRY_SCHEMA_INVALID: forbidden field " + key)
     did = fields.get("dispatch_id") or uuid.uuid4().hex
     payload = {
         "kind": "dispatch",
@@ -104,6 +118,9 @@ def dispatch(plan: Path, **fields) -> Path:
 
 
 def result(plan: Path, **fields) -> Path:
+    for key in FORBIDDEN:
+        if key in fields:
+            raise ValueError("TELEMETRY_SCHEMA_INVALID: forbidden field " + key)
     payload = {"kind": "result", **fields}
     if "dispatch_id" not in payload:
         raise ValueError("TELEMETRY_REQUIRED_FIELD_MISSING: dispatch_id")
@@ -241,6 +258,37 @@ def summarize(plan: Path) -> dict:
     context_files_read = sum(int(e.get("context_files_read") or 0) for e in events)
     unique_context_files = sum(int(e.get("unique_context_files") or 0) for e in events)
     repeated_context_reads = sum(int(e.get("repeated_context_reads") or 0) for e in events)
+    # @lat: [[adaptive-governance-context-v508#Acceptance G51–G60#G60 Telemetry Redacted]]
+    budget_fields = {
+        "work_route_digest": next((e.get("work_route_digest") for e in events if e.get("work_route_digest")), None),
+        "policy_digest": next((e.get("policy_digest") for e in events if e.get("policy_digest")), None),
+        "phase_allocated_tokens": sum(int(e.get("phase_allocated_tokens") or 0) for e in events),
+        "phase_actual_tokens": sum(int(e.get("phase_actual_tokens") or 0) for e in events),
+        "context_cache_hits": sum(int(e.get("context_cache_hits") or 0) for e in events),
+        "context_cache_misses": sum(int(e.get("context_cache_misses") or 0) for e in events),
+        "context_cache_stale": sum(int(e.get("context_cache_stale") or 0) for e in events),
+        "budget_upgrade_reason": next(
+            (e.get("budget_upgrade_reason") for e in events if e.get("budget_upgrade_reason")), None
+        ),
+        "budget_block_reason": next(
+            (e.get("budget_block_reason") for e in events if e.get("budget_block_reason")), None
+        ),
+    }
+    # Refuse to surface forbidden content fields even if a buggy writer appended them.
+    for e in events:
+        for key in FORBIDDEN:
+            if key in e:
+                return {
+                    "schema": COMPLETENESS_SCHEMA,
+                    "complete": False,
+                    "status": "TELEMETRY_INCOMPLETE",
+                    "code": "TELEMETRY_SCHEMA_INVALID",
+                    "detail": f"forbidden field {key}",
+                    "events": len(events),
+                    "cost_buckets": cost_buckets,
+                    **totals,
+                    **budget_fields,
+                }
     if kinds <= {"cache-hit", "cache-miss", "reviewer-seat"} or not dispatches:
         return {
             "schema": COMPLETENESS_SCHEMA,
@@ -250,6 +298,7 @@ def summarize(plan: Path) -> dict:
             "events": len(events),
             "cost_buckets": cost_buckets,
             **totals,
+            **budget_fields,
         }
     if errors:
         return {
@@ -261,6 +310,7 @@ def summarize(plan: Path) -> dict:
             "events": len(events),
             "cost_buckets": cost_buckets,
             **totals,
+            **budget_fields,
         }
     return {
         "schema": COMPLETENESS_SCHEMA,
@@ -273,6 +323,7 @@ def summarize(plan: Path) -> dict:
         "unique_context_files": unique_context_files,
         "repeated_context_reads": repeated_context_reads,
         **totals,
+        **budget_fields,
     }
 
 

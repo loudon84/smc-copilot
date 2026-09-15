@@ -1,7 +1,7 @@
 # Consumer Validation
 
 - Project: `E:\git\smc-copilot`
-- Validated at: `2026-09-15T04:00:27Z`
+- Validated at: `2026-09-15T10:48:10Z`
 - Code: `CONSUMER_VALIDATION_PASS`
 
 ## Checks
@@ -12,7 +12,7 @@
 - [PASS] **Spec -> Plan handoff** — spec-superpower-ges.json + smc-prd-grounding
 - [PASS] **Plan -> Delivery** — validator + delivery self-test entrypoints
 - [PASS] **Evidence** — .agents/skills/smc-plan-delivery/scripts/evidence.py
-- [PASS] **Release Governance** — fs-proof bundle=5.0.0 slices=['5.0.6', '5.0.7'] commit=91558832633214b63ee1a54521ef13ef7c04f339 release_eligible=False + governance-policy.json
+- [PASS] **Release Governance** — fs-proof bundle=5.0.0 slices=['5.0.6', '5.0.7'] commit=dee107e423317ca79a4eef1bfec9938f3d8592c5 release_eligible=True + governance-policy.json
 - [PASS] **Frontend Application Registry** — registry=True adoption=ENFORCED
 - [PASS] **Stack Adapter availability** — .agents/ges/frontend-adapters (consumer-installed)
 - [PASS] **Per-App baseline health** — 3 initialized app baseline(s) present

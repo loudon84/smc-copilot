@@ -6,6 +6,7 @@ forces FULL. Keyword presence alone never upgrades governance.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -323,9 +324,13 @@ def route_bound(
     previous: str | None = None,
     *,
     caller_facts: dict[str, Any] | None = None,
+    feature_scope: dict[str, Any] | None = None,
+    claimed_app_or_surface: bool = False,
+    work_item_id: str = "",
 ) -> dict[str, Any]:
     """Production entry: requires verified work-facts envelope + repo."""
     # @lat: [[safety-runtime-closure-v503]]
+    # @lat: [[adaptive-governance-context-v508#分类与升级]]
     from work_facts import conservative_merge, envelope_facts
 
     if repo is None:
@@ -346,12 +351,19 @@ def route_bound(
         if "WORK_FACTS_REPO_REQUIRED" not in out["reasons"]:
             out["reasons"] = ["WORK_FACTS_REPO_REQUIRED", *out["reasons"]]
             out["reason_codes"] = list(dict.fromkeys(out["reasons"]))
+        if work_item_id:
+            out["feature_complexity"] = derive_feature_complexity(
+                out,
+                work_item_id=work_item_id,
+                feature_scope=feature_scope,
+                claimed_app_or_surface=claimed_app_or_surface,
+            )
         return out
 
     repo = Path(repo).resolve()
     base = dict(caller_facts or {})
     merged, decisions = conservative_merge(base, envelope_facts(envelope))
-    return route(
+    out = route(
         merged,
         previous,
         work_facts=envelope,
@@ -359,6 +371,125 @@ def route_bound(
         repo=repo,
         merge_decisions=decisions,
     )
+    if work_item_id or feature_scope is not None or claimed_app_or_surface:
+        out["feature_complexity"] = derive_feature_complexity(
+            out,
+            work_item_id=work_item_id or "unspecified",
+            feature_scope=feature_scope,
+            claimed_app_or_surface=claimed_app_or_surface,
+        )
+        # Scope invalid must not leave a LEAN permit on the route.
+        if out["feature_complexity"].get("error") == "FEATURE_SCOPE_INVALID":
+            if out.get("governance_profile") == "LEAN":
+                out["governance_profile"] = "FULL"
+                out["work_class"] = "ARCHITECTURAL"
+                out["reasons"] = list(out.get("reasons") or []) + ["FEATURE_SCOPE_INVALID"]
+                out["reason_codes"] = list(dict.fromkeys(out["reasons"]))
+                out["feature_complexity"] = derive_feature_complexity(
+                    out,
+                    work_item_id=work_item_id or "unspecified",
+                    feature_scope=feature_scope,
+                    claimed_app_or_surface=claimed_app_or_surface,
+                )
+    return out
+
+
+def _canonical_digest(payload: Any) -> str:
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def _utc_now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# @lat: [[adaptive-governance-context-v508#单一权威边界]]
+def derive_feature_complexity(
+    route_result: dict[str, Any],
+    *,
+    work_item_id: str,
+    feature_scope: dict[str, Any] | None = None,
+    claimed_app_or_surface: bool = False,
+) -> dict[str, Any]:
+    """Derive smc.ges.feature-complexity.v1 from an existing work-route.v3 (never reclassifies)."""
+    if not work_item_id or not str(work_item_id).strip():
+        raise ValueError("WORK_ITEM_ID_REQUIRED")
+    if not isinstance(route_result, dict) or route_result.get("schema") != "smc.ges.work-route.v3":
+        raise ValueError("WORK_ROUTE_REQUIRED")
+
+    reasons = list(route_result.get("reason_codes") or route_result.get("reasons") or [])
+    error: str | None = None
+    scope_digest: str | None = None
+
+    if feature_scope is not None:
+        if not isinstance(feature_scope, dict) or feature_scope.get("schema") != "smc.ges.feature-scope.v1":
+            error = "FEATURE_SCOPE_INVALID"
+            reasons = list(dict.fromkeys([*reasons, error]))
+        elif feature_scope.get("ok") is False:
+            error = "FEATURE_SCOPE_INVALID"
+            reasons = list(dict.fromkeys([*reasons, error]))
+        else:
+            scope_digest = _canonical_digest(
+                {
+                    "schema": feature_scope.get("schema"),
+                    "app_id": feature_scope.get("app_id"),
+                    "surface_id": feature_scope.get("surface_id"),
+                    "layout_owner": feature_scope.get("layout_owner"),
+                    "decision": feature_scope.get("decision"),
+                }
+            )
+    elif claimed_app_or_surface:
+        error = "FEATURE_SCOPE_INVALID"
+        reasons = list(dict.fromkeys([*reasons, error]))
+
+    auth = str(route_result.get("authority_status") or "")
+    # Only fail closed for bound-path verification failures, not unbound library routing.
+    if auth in {"STALE", "CONFLICT", "INVALID"} or (
+        auth == "UNBOUND" and route_result.get("facts_digest")
+    ):
+        if route_result.get("governance_profile") in {"LEAN", "NONE"}:
+            error = error or "WORK_FACTS_UNVERIFIED"
+            reasons = list(dict.fromkeys([*reasons, "WORK_FACTS_UNVERIFIED"]))
+
+    facts_digest = route_result.get("facts_digest")
+    if facts_digest and not str(facts_digest).startswith("sha256:"):
+        facts_digest = f"sha256:{facts_digest}"
+
+    route_digest = _canonical_digest(
+        {
+            "schema": route_result.get("schema"),
+            "work_class": route_result.get("work_class"),
+            "governance_profile": route_result.get("governance_profile"),
+            "facts_digest": facts_digest,
+            "authority_status": route_result.get("authority_status"),
+            "reason_codes": route_result.get("reason_codes") or route_result.get("reasons") or [],
+        }
+    )
+
+    out: dict[str, Any] = {
+        "schema": "smc.ges.feature-complexity.v1",
+        "work_item_id": str(work_item_id).strip(),
+        "repo_identity": route_result.get("repo_identity"),
+        "work_facts_digest": facts_digest,
+        "work_route_schema": "smc.ges.work-route.v3",
+        "work_route_digest": route_digest,
+        "feature_scope_digest": scope_digest,
+        "work_class": route_result.get("work_class"),
+        "governance_profile": route_result.get("governance_profile"),
+        "classification_state": "PROVISIONAL",
+        "reasons": reasons,
+        "generated_at": _utc_now(),
+    }
+    if error:
+        out["error"] = error
+        # Invalid scope / unverified facts never authorize LEAN on the receipt.
+        if out.get("governance_profile") == "LEAN":
+            out["governance_profile"] = "FULL"
+            out["work_class"] = "ARCHITECTURAL"
+            out["reasons"] = list(dict.fromkeys([*out["reasons"], error]))
+    return out
 
 
 def main() -> None:

@@ -1,20 +1,14 @@
 # Consumer Audit Report
 
 - Project: `E:\git\smc-copilot`
-- Audited at: `2026-09-15T02:44:31Z`
-- Overall: `GAPS`
+- Audited at: `2026-09-15T10:48:05Z`
+- Overall: `PASS`
 
 ## Layers
 
 - **ges**: `PASS` (26/26)
-- **spec_kit**: `MISSING` (0/4)
-  - missing: `spec_kit.specify.constitution.md`
-  - missing: `spec_kit.specify.templates`
-  - missing: `spec_kit.specify.scripts`
-  - missing: `spec_kit.specify.specs.README.md`
-- **superpowers**: `PARTIAL` (6/8)
-  - missing: `superpowers.shim.writing-plans`
-  - missing: `superpowers.shim.finishing-branch`
+- **spec_kit**: `PASS` (4/4)
+- **superpowers**: `PASS` (8/8)
 - **frontend_context**: `PASS` (1/1)
 
 ## Claims
@@ -22,7 +16,7 @@
 - `frontend_context`: `GES_NATIVE`
 - `ges`: `GES_NATIVE`
 - `spec_kit_provider`: `NATIVE_ONLY`
-- `spec_kit_scaffold`: `UNAVAILABLE`
+- `spec_kit_scaffold`: `ADAPTER_READY`
 - `superpowers_pinned`: `UPSTREAM_PINNED`
 - `superpowers_shims`: `GES_NATIVE`
 
@@ -55,12 +49,12 @@
 - [PASS] `ges.managed.using-superpowers` → `.agents/skills/using-superpowers/SKILL.md`
 - [PASS] `ges.consumer_required.code-review-and-quality` → `.agents/skills/code-review-and-quality/SKILL.md`
 - [PASS] `ges.consumer_required.verification-before-completion` → `.agents/skills/verification-before-completion/SKILL.md`
-- [MISS] `spec_kit.specify.constitution.md` → `.specify/constitution.md`
-- [MISS] `spec_kit.specify.templates` → `.specify/templates`
+- [PASS] `spec_kit.specify.constitution.md` → `.specify/constitution.md`
+- [PASS] `spec_kit.specify.templates` → `.specify/templates`
   - directory
-- [MISS] `spec_kit.specify.scripts` → `.specify/scripts`
+- [PASS] `spec_kit.specify.scripts` → `.specify/scripts`
   - directory
-- [MISS] `spec_kit.specify.specs.README.md` → `.specify/specs/README.md`
+- [PASS] `spec_kit.specify.specs.README.md` → `.specify/specs/README.md`
 - [PASS] `spec_kit.probe` → `integrations/spec-kit/probe.py`
   - {"code": "SPEC_KIT_UNAVAILABLE", "integration_status": "NATIVE_ONLY", "provider_status": "UNAVAILABLE"}
 - [PASS] `superpowers.pinned.executing-plans` → `.agents/skills/executing-plans/SKILL.md`
@@ -69,7 +63,7 @@
 - [PASS] `superpowers.pinned.systematic-debugging` → `.agents/skills/systematic-debugging/SKILL.md`
 - [PASS] `superpowers.pinned.verification-before-completion` → `.agents/skills/verification-before-completion/SKILL.md`
 - [PASS] `superpowers.shim.brainstorming` → `.agents/skills/brainstorming/SKILL.md`
-- [MISS] `superpowers.shim.writing-plans` → `.agents/skills/writing-plans/SKILL.md`
-- [MISS] `superpowers.shim.finishing-branch` → `.agents/skills/finishing-branch/SKILL.md`
+- [PASS] `superpowers.shim.writing-plans` → `.agents/skills/writing-plans/SKILL.md`
+- [PASS] `superpowers.shim.finishing-branch` → `.agents/skills/finishing-branch/SKILL.md`
 - [PASS] `frontend_context.apps_registry` → `.agents/ges/frontend/apps-registry.json`
-  - adoption_mode=OBSERVE
+  - adoption_mode=ENFORCED

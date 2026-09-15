@@ -14,7 +14,7 @@
     "adoption": ".agents/ges/frontend/adoption-mode.json",
     "calibration": ".agents/ges/frontend/calibration-status.json",
     "lock": ".smc/ges-install-lock.json",
-    "receipt_full": ".smc/ges-install-receipts/bc0dba98729b465fb7b5e0c20f9fd28a.json",
+    "receipt_full": ".smc/ges-install-receipts/f305f7690c1d426e8da716224494c81f.json",
     "receipt_pointer": ".smc/ges-install-receipt.json"
   },
   "present": {
@@ -25,15 +25,15 @@
     "receipt_full": true,
     "receipt_pointer": true
   },
-  "probed_at": "2026-09-15T03:44:14Z",
+  "probed_at": "2026-09-15T10:41:45Z",
   "project": "E:\\git\\smc-copilot",
   "release_identity": {
     "note": null,
-    "package_file_count": 347,
-    "package_manifest_sha256": "3aeeff00083b0210d77a75a649d4a30f5b21b55cd22e27e0409ccef5e2229abf",
-    "release_eligible": false,
-    "source_commit": "91558832633214b63ee1a54521ef13ef7c04f339",
-    "source_tree_dirty": true
+    "package_file_count": 350,
+    "package_manifest_sha256": "d8a9a4436dd202c5d7ebc7fab403c327783c03372410b6640b7d22b917ba9bed",
+    "release_eligible": true,
+    "source_commit": "dee107e423317ca79a4eef1bfec9938f3d8592c5",
+    "source_tree_dirty": false
   },
   "scan_hints": [
     "Read .smc/ges-install-lock.json and .smc/ges-install-receipt.json from the filesystem; do not require them to be git-tracked.",
@@ -52,6 +52,6 @@
       "5.0.7"
     ],
     "ok_to_claim_bundle": "5.0.0",
-    "release_attestation_ok": false
+    "release_attestation_ok": true
   }
 }

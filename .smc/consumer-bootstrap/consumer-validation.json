@@ -31,7 +31,7 @@
       "verdict": "PASS"
     },
     {
-      "detail": "fs-proof bundle=5.0.0 slices=['5.0.6', '5.0.7'] commit=91558832633214b63ee1a54521ef13ef7c04f339 release_eligible=False + governance-policy.json",
+      "detail": "fs-proof bundle=5.0.0 slices=['5.0.6', '5.0.7'] commit=dee107e423317ca79a4eef1bfec9938f3d8592c5 release_eligible=True + governance-policy.json",
       "id": "Release Governance",
       "verdict": "PASS"
     },
@@ -103,5 +103,5 @@
   "ok": true,
   "project": "E:\\git\\smc-copilot",
   "schema": "smc.ges.consumer-validation.v1",
-  "validated_at": "2026-09-15T04:00:27Z"
+  "validated_at": "2026-09-15T10:48:10Z"
 }

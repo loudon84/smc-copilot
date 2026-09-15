@@ -14,9 +14,9 @@
       "version": "2.2.0"
     }
   },
-  "install_receipt_path": ".smc/ges-install-receipts/bc0dba98729b465fb7b5e0c20f9fd28a.json",
-  "install_receipt_sha256": "sha256:bc78bce4dada9de05392d2f2af1e8211726cb9a1c35624700c928cefb82bf85b",
-  "installed_at": "2026-09-15T03:35:26Z",
+  "install_receipt_path": ".smc/ges-install-receipts/f305f7690c1d426e8da716224494c81f.json",
+  "install_receipt_sha256": "sha256:adf2cfc7d9e73625897dc6674a2c0781451c35988de4e8780342bb58631e46d1",
+  "installed_at": "2026-09-15T10:37:07Z",
   "owned_files": [
     {
       "installed_sha256": "a093f43a0023fb6795b79e6c1c39b4458cc2fa948abfb19e5791be89f2f45dc3",
@@ -127,12 +127,20 @@
       "path": ".agents/ges/frontend-runtime/__init__.py"
     },
     {
-      "installed_sha256": "969ee4b74f1f4305ace7aa0e3bfb8d0addd91feec84c3b685326c9b5178d44a9",
+      "installed_sha256": "cda5b27f0000a6172f384f8c60b106933b27ab8b29e0607de3a4e16b95ed6a47",
+      "path": ".agents/ges/frontend-runtime/budget_controller.py"
+    },
+    {
+      "installed_sha256": "7f27572a0835e8459e749fdde0dfe4f32d52ebe8b5d10815165299ff99a10b95",
       "path": ".agents/ges/frontend-runtime/context_cache.py"
     },
     {
       "installed_sha256": "3a945c4f707a973c65be7ed8311b83a4df7e834ef7f12ec3c820d7f14874a7f9",
       "path": ".agents/ges/frontend-runtime/frontend_app_registry.py"
+    },
+    {
+      "installed_sha256": "41891cd400a8dd407714caa37541ea4bf082bc9913a1172c5f554780633ed924",
+      "path": ".agents/ges/frontend-runtime/policies/context-budget.v1.json"
     },
     {
       "installed_sha256": "0adef76361c00be2176cfccc230c5f1818aa0be930f0c197429178119cf4a248",
@@ -175,11 +183,11 @@
       "path": ".agents/ges/frontend-runtime/token_budget.py"
     },
     {
-      "installed_sha256": "12ab918b99933b41ff8ec36f03e50c4c1d8ee7f14096ef87be6e02930488d5a0",
+      "installed_sha256": "f7a9273cff8d52a20cd7296caa3690f36874af6555fcd0bdc5bb4b5949cfe633",
       "path": ".agents/ges/frontend-runtime/ux_context_resolver.py"
     },
     {
-      "installed_sha256": "70a5343525d2abb5cea85199e15aab87183d8f77411c1d129d01bb5eee714304",
+      "installed_sha256": "cc3948fa6e138f8ac47510e2eeeb4761a02438feac52d641bdb9389a67385b40",
       "path": ".agents/ges/frontend-runtime/work_scope.py"
     },
     {
@@ -459,7 +467,7 @@
       "path": ".agents/skills/smc-plan-delivery/scripts/run_selftest.py"
     },
     {
-      "installed_sha256": "084d800da235aea7b56f9e26a87949e5942ad765db708bb7824427d419997aa0",
+      "installed_sha256": "b984fa1678ab7465660799a28f7a4304a6beafdd25cd11e7b3d2ec6c6717b67a",
       "path": ".agents/skills/smc-plan-delivery/scripts/runtime_metrics.py"
     },
     {
@@ -671,7 +679,7 @@
       "path": ".agents/skills/smc-work-router/SKILL.md"
     },
     {
-      "installed_sha256": "385347e4bf6b3f3d2346534a60aa28fa9183b01d3e1cf5cb5a30498b13f03661",
+      "installed_sha256": "4c64f81e99624069c9cb75c0fbf0031c63f4ab45ec82056225ba1227bc12d8eb",
       "path": ".agents/skills/smc-work-router/references/artifact-state-routing.md"
     },
     {
@@ -687,7 +695,7 @@
       "path": ".agents/skills/smc-work-router/references/work-routing-contract.md"
     },
     {
-      "installed_sha256": "dbd355a4052a0ce6e0f16824ce4775ba057f458fa450a5784610279684002fab",
+      "installed_sha256": "d07e3f23255ee8616db20b486eeb27fb383ebe6df5626bc38f7faa159de4cae2",
       "path": ".agents/skills/smc-work-router/scripts/classification_state.py"
     },
     {
@@ -703,7 +711,7 @@
       "path": ".agents/skills/smc-work-router/scripts/test_work_facts.py"
     },
     {
-      "installed_sha256": "f8699fb4449a0d418685c8c9f70090a3acd419a6ba75907302f1c3866360da17",
+      "installed_sha256": "2d1dabdaea922ddb648cabbdecdae45629a773418c0459142d2abd719fc1e87d",
       "path": ".agents/skills/smc-work-router/scripts/test_work_router.py"
     },
     {
@@ -715,7 +723,7 @@
       "path": ".agents/skills/smc-work-router/scripts/work_facts.py"
     },
     {
-      "installed_sha256": "21308aa16d589dc6593106aaa2aa51a70322568dfc5a64c037d9e57d8cfd74ae",
+      "installed_sha256": "976233bd40b12a717782ba27c6f2972a6e996c4e11403ca15812723fab250d04",
       "path": ".agents/skills/smc-work-router/scripts/work_router.py"
     },
     {
@@ -727,7 +735,7 @@
       "path": ".agents/skills/using-superpowers/SKILL.md"
     },
     {
-      "installed_sha256": "385347e4bf6b3f3d2346534a60aa28fa9183b01d3e1cf5cb5a30498b13f03661",
+      "installed_sha256": "4c64f81e99624069c9cb75c0fbf0031c63f4ab45ec82056225ba1227bc12d8eb",
       "path": ".agents/skills/using-superpowers/references/artifact-state-routing.md"
     },
     {
@@ -907,11 +915,11 @@
   },
   "release_identity": {
     "installer_sha256": "23d0a029e651da74c140b6c82aee3ecc6e74d1e6e8fa112952e39847e89ded9e",
-    "package_file_count": 347,
-    "package_manifest_sha256": "3aeeff00083b0210d77a75a649d4a30f5b21b55cd22e27e0409ccef5e2229abf",
-    "release_eligible": false,
-    "source_commit": "91558832633214b63ee1a54521ef13ef7c04f339",
-    "source_tree_dirty": true
+    "package_file_count": 350,
+    "package_manifest_sha256": "d8a9a4436dd202c5d7ebc7fab403c327783c03372410b6640b7d22b917ba9bed",
+    "release_eligible": true,
+    "source_commit": "dee107e423317ca79a4eef1bfec9938f3d8592c5",
+    "source_tree_dirty": false
   },
   "schema": "smc.ges.install-lock.v2"
 }

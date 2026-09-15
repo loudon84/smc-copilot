@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-09-15T02:44:31Z",
+  "audited_at": "2026-09-15T10:48:05Z",
   "checks": [
     {
       "detail": "schema=smc.ges.install-lock.v2",
@@ -188,28 +188,28 @@
       "id": "spec_kit.specify.constitution.md",
       "layer": "spec_kit",
       "path": ".specify/constitution.md",
-      "present": false
+      "present": true
     },
     {
       "detail": "directory",
       "id": "spec_kit.specify.templates",
       "layer": "spec_kit",
       "path": ".specify/templates",
-      "present": false
+      "present": true
     },
     {
       "detail": "directory",
       "id": "spec_kit.specify.scripts",
       "layer": "spec_kit",
       "path": ".specify/scripts",
-      "present": false
+      "present": true
     },
     {
       "detail": "",
       "id": "spec_kit.specify.specs.README.md",
       "layer": "spec_kit",
       "path": ".specify/specs/README.md",
-      "present": false
+      "present": true
     },
     {
       "detail": "{\"code\": \"SPEC_KIT_UNAVAILABLE\", \"integration_status\": \"NATIVE_ONLY\", \"provider_status\": \"UNAVAILABLE\"}",
@@ -265,17 +265,17 @@
       "id": "superpowers.shim.writing-plans",
       "layer": "superpowers",
       "path": ".agents/skills/writing-plans/SKILL.md",
-      "present": false
+      "present": true
     },
     {
       "detail": "",
       "id": "superpowers.shim.finishing-branch",
       "layer": "superpowers",
       "path": ".agents/skills/finishing-branch/SKILL.md",
-      "present": false
+      "present": true
     },
     {
-      "detail": "adoption_mode=OBSERVE",
+      "detail": "adoption_mode=ENFORCED",
       "id": "frontend_context.apps_registry",
       "layer": "frontend_context",
       "path": ".agents/ges/frontend/apps-registry.json",
@@ -286,15 +286,15 @@
     "frontend_context": "GES_NATIVE",
     "ges": "GES_NATIVE",
     "spec_kit_provider": "NATIVE_ONLY",
-    "spec_kit_scaffold": "UNAVAILABLE",
+    "spec_kit_scaffold": "ADAPTER_READY",
     "superpowers_pinned": "UPSTREAM_PINNED",
     "superpowers_shims": "GES_NATIVE"
   },
   "layers": {
     "frontend_context": {
-      "adoption_mode": "OBSERVE",
+      "adoption_mode": "ENFORCED",
       "missing": [],
-      "optional": true,
+      "optional": false,
       "present": 1,
       "total": 1,
       "verdict": "PASS"
@@ -307,32 +307,24 @@
     },
     "spec_kit": {
       "integration_status": "NATIVE_ONLY",
-      "missing": [
-        "spec_kit.specify.constitution.md",
-        "spec_kit.specify.templates",
-        "spec_kit.specify.scripts",
-        "spec_kit.specify.specs.README.md"
-      ],
-      "present": 0,
+      "missing": [],
+      "present": 4,
       "provider_status": "UNAVAILABLE",
       "total": 4,
-      "verdict": "MISSING"
+      "verdict": "PASS"
     },
     "superpowers": {
-      "missing": [
-        "superpowers.shim.writing-plans",
-        "superpowers.shim.finishing-branch"
-      ],
-      "present": 6,
+      "missing": [],
+      "present": 8,
       "total": 8,
-      "verdict": "PARTIAL"
+      "verdict": "PASS"
     }
   },
-  "ok": false,
+  "ok": true,
   "probe": {
     "code": "SPEC_KIT_UNAVAILABLE",
     "integration_status": "NATIVE_ONLY",
-    "probed_at": "2026-09-15T02:44:31Z",
+    "probed_at": "2026-09-15T10:48:05Z",
     "provider": "spec-kit",
     "provider_status": "UNAVAILABLE"
   },
