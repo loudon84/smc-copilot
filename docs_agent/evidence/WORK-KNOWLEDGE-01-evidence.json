@@ -1,0 +1,430 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:a3616c910763180d3cb92d2a849c3ff85db2486b95c541cb40c2c30f8db6e932",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Layout `visitedViews` / `paneStyle` / Chat display gating at `fa02f4c`",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "Layout `goTo` and `navigation:goto` at `fa02f4c`",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Knowledge TanStack Memory Router in `apps/knowledge/src/utils/routes.ts`",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Knowledge `useUploadJobs` 1s refetch and Renderer timer upload",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V03",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Knowledge `useUploadJobs` 1s refetch",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V02",
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "FileJobQueue local parse only",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "FileJobQueue local parse only",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "desktopAuth` public state plus Layout `activeProfile",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Knowledge features/routes; GES forbidden_roots",
+      "requirement": "AC-09",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "FileAssociation refs and Chat import at `fa02f4c`",
+      "requirement": "AC-10",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "`RemoteKnowledgeRepository` unimplemented; mock is Knowledge default",
+      "requirement": "AC-11",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "GES app-profile forbidden_roots",
+      "requirement": "AC-12",
+      "result": "PASS",
+      "verification_ids": [
+        "V05",
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Stage PRD claim ledger",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-14",
+      "evidence_action": "REUSE_EVIDENCE",
+      "prior_evidence": "docs/work/reviews/prd-work-knowledge-01-independent-view-v1.3.0-closure-review.md` plus PRD `status: APPROVED",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-15",
+      "evidence_action": "REUSE_EVIDENCE",
+      "prior_evidence": "`docs/work/AD-WORK-KNOWLEDGE-v1.0-independent-view.md` `status: APPROVED`; `docs/work/ROADMAP-WORK-KNOWLEDGE-v1.0-independent-view.md` RM-01 IN_PRD",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-16",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing `apps/work` `npm test` / `typecheck` / `guard`",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-17",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Knowledge demo defaults to mock",
+      "requirement": "DOD-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-02"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-02": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false tests/layout-knowledge-view.test.ts",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-01/logs/20260915T091501.843053Z-V01.log",
+      "raw_log_sha256": "sha256:4f555cffcf87db5d8070ebd9ffeb3887c9211cd2991f6d21ad07b2008132c9c3",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T09:15:01.843053Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-03",
+        "CLM-05"
+      ],
+      "claim_results": {
+        "CLM-03": "PASS",
+        "CLM-05": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false tests/knowledge-route-scope.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-01/logs/20260915T091506.480651Z-V02.log",
+      "raw_log_sha256": "sha256:a5a5cc0981beb5ec5ceec91dda721494dadb67df6d38825195738e8364001062",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T09:15:06.480651Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-05",
+        "CLM-06",
+        "CLM-07",
+        "CLM-08"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-05": "PASS",
+        "CLM-06": "PASS",
+        "CLM-07": "PASS",
+        "CLM-08": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/knowledge/knowledge-upload-job-coordinator.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-01/logs/20260915T091510.930195Z-V03.log",
+      "raw_log_sha256": "sha256:9bbff08285ca92e7bb7fa56fbf5e207865fa34bd2ba9c9326ed7aef3cc157339",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T09:15:10.930195Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-10"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-10": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/files/file-import-knowledge-job.test.ts src/main/files/file-association-store.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-01/logs/20260915T091514.600347Z-V04.log",
+      "raw_log_sha256": "sha256:c574a952cdd47eb258454e02315b0ee40c93cd706f1543da1d3df60f4a39c94e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T09:15:14.600347Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-09",
+        "CLM-11",
+        "CLM-12",
+        "CLM-17"
+      ],
+      "claim_results": {
+        "CLM-09": "PASS",
+        "CLM-11": "PASS",
+        "CLM-12": "PASS",
+        "CLM-17": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false tests/knowledge-fail-closed.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-01/logs/20260915T091520.528536Z-V05.log",
+      "raw_log_sha256": "sha256:57426ba10825c09cd3f69bfdd061fbc00f70e74ebbef3179aee8d173f9bae023",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T09:15:20.528536Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-12",
+        "CLM-13",
+        "CLM-16"
+      ],
+      "claim_results": {
+        "CLM-12": "PASS",
+        "CLM-13": "PASS",
+        "CLM-16": "PASS"
+      },
+      "command": "npm --prefix apps/work run typecheck '&&' npm --prefix apps/work run guard '&&' npm --prefix apps/work test -- --passWithNoTests=false tests/layout-knowledge-view.test.ts tests/knowledge-route-scope.test.ts tests/knowledge-fail-closed.test.ts src/main/knowledge/knowledge-upload-job-coordinator.test.ts src/main/files/file-import-knowledge-job.test.ts src/main/files/file-association-store.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-01/logs/20260915T091526.359205Z-V06.log",
+      "raw_log_sha256": "sha256:642ca3bf72cab11f12a5bad3c0d309fb7ad46d757fbd301ee8a4c89b8def371e",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T09:15:26.359205Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-14",
+        "CLM-15"
+      ],
+      "claim_results": {
+        "CLM-14": "PASS",
+        "CLM-15": "PASS"
+      },
+      "command": "INHERIT:docs_agent/evidence/WORK-KNOWLEDGE-01-docs-approval-evidence.json#V-DOCS",
+      "evidence_action": "REUSE_EVIDENCE",
+      "exit_code": 0,
+      "inherited": true,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": null,
+      "raw_log_sha256": null,
+      "result": "PASS",
+      "source_manifest": "docs_agent/evidence/WORK-KNOWLEDGE-01-docs-approval-evidence.json",
+      "source_manifest_sha256": "sha256:cdad03faf156b9a7363a524497d54edd81187855cd0ed8e6e7396b3425a8df8e",
+      "source_verification_id": "V-DOCS",
+      "timestamp": "2026-09-15T09:15:00.201653Z",
+      "verification_id": "V07"
+    }
+  ],
+  "completion_audit": {
+    "changed": 0,
+    "deferred": 0,
+    "done": 5,
+    "scope_drift": 0,
+    "timestamp": "2026-09-15T09:14:35.935745Z",
+    "total_items": 5,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-15T09:17:08.282483Z",
+  "implementation_review": {
+    "reviewer": "delivery-controller",
+    "scope_fingerprint": "sha256:77d76d3c0d6c3b9e9f604f765a8f4b24444df87f7af030b35c88704694a8c8fd",
+    "timestamp": "2026-09-15T09:14:36.289523Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:e7786490914e50c0c7e625af02e02afafa0cc6ef2be15009fbc24e476a858562",
+  "plan": ".cursor/plans/work-knowledge-01-independent-view.plan.md",
+  "plan_id": "WORK-KNOWLEDGE-01",
+  "plan_review": {
+    "plan_sha256": "sha256:df02aeba25551442928a04d9ac07f90f7ff0c9883cfbd4bfdc973b39464ead83",
+    "reviewer": "independent-plan-review",
+    "timestamp": "2026-09-15T06:46:25.931133Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:77d76d3c0d6c3b9e9f604f765a8f4b24444df87f7af030b35c88704694a8c8fd",
+  "test_assets": [
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK01-LAYOUT",
+      "content_sha256": "sha256:952afba4df329fdefb6b0ffb09b52c107a628b18bfefddb0552b7ba3d3634335",
+      "manifest": "docs_agent/test-assets/TA-WK01-LAYOUT.json"
+    },
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK01-ROUTE",
+      "content_sha256": "sha256:b717581663e9e35f484941809f76895774d5b5b47306245ac8667267ddb67f25",
+      "manifest": "docs_agent/test-assets/TA-WK01-ROUTE.json"
+    },
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK01-JOB",
+      "content_sha256": "sha256:b84c9fea1a94df6be4e99e3c4341643c1aa0ef330796614a927202420a2c55d9",
+      "manifest": "docs_agent/test-assets/TA-WK01-JOB.json"
+    },
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK01-IMPORT",
+      "content_sha256": "sha256:b0177539266bffaa952b05c38795dedc08b2d62e0588982e722524621f5575ed",
+      "manifest": "docs_agent/test-assets/TA-WK01-IMPORT.json"
+    },
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK01-CLOSED",
+      "content_sha256": "sha256:ebce182122e0f339c85baeb5f35788bc94e61304e04b9dcd82f5b6b1ea0b4daf",
+      "manifest": "docs_agent/test-assets/TA-WK01-CLOSED.json"
+    }
+  ],
+  "verification_candidate": null,
+  "workspace_base_commit": "33e43c6cbdfa94a13936bd79d5da341af0af4058"
+}

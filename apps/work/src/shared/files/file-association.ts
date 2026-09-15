@@ -15,6 +15,8 @@ export interface FileAssociation {
   fileId: string;
   profileId: string;
   sessionId?: string;
+  /** Knowledge Upload Job consumer; mutually exclusive with sessionId on import. */
+  knowledgeJobId?: string;
   messageId?: string;
   taskId?: string;
   role: FileAssociationRole;

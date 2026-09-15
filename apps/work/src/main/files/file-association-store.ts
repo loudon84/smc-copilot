@@ -111,6 +111,7 @@ function migrateSchema(db: DbHandle): void {
   ensureManagedFileRemoteColumns(db);
   migrateLocalHashIndex(db);
   ensureRemoteIdentityIndex(db);
+  ensureAssociationKnowledgeJobColumn(db);
   ensureAssociationIdempotencyIndex(db);
 
   try {
@@ -197,11 +198,23 @@ function ensureRemoteIdentityIndex(db: DbHandle): void {
   `);
 }
 
+function ensureAssociationKnowledgeJobColumn(db: DbHandle): void {
+  const cols = tableColumns(db, "file_associations");
+  if (!cols.has("knowledge_job_id")) {
+    db.exec(`ALTER TABLE file_associations ADD COLUMN knowledge_job_id TEXT`);
+  }
+}
+
 function ensureAssociationIdempotencyIndex(db: DbHandle): void {
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_file_associations_session_file_role
       ON file_associations(profile_id, session_id, file_id, role)
       WHERE session_id IS NOT NULL
+  `);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_file_associations_knowledge_job_file_role
+      ON file_associations(profile_id, knowledge_job_id, file_id, role)
+      WHERE knowledge_job_id IS NOT NULL
   `);
 }
 
@@ -299,6 +312,8 @@ function rowToAssociation(row: Record<string, unknown>): FileAssociation {
     fileId: String(row.file_id),
     profileId: String(row.profile_id),
     sessionId: row.session_id != null ? String(row.session_id) : undefined,
+    knowledgeJobId:
+      row.knowledge_job_id != null ? String(row.knowledge_job_id) : undefined,
     messageId: row.message_id != null ? String(row.message_id) : undefined,
     taskId: row.task_id != null ? String(row.task_id) : undefined,
     role: row.role as FileAssociation["role"],
@@ -514,16 +529,26 @@ export function insertAssociation(assoc: FileAssociation): void {
     });
     if (existing) return;
   }
+  if (assoc.knowledgeJobId) {
+    const existing = findAssociation({
+      profileId,
+      fileId: assoc.fileId,
+      knowledgeJobId: assoc.knowledgeJobId,
+      role: assoc.role,
+    });
+    if (existing) return;
+  }
   const db = openFileIndexDb(profileId === "default" ? undefined : profileId);
   db.prepare(
     `INSERT INTO file_associations (
-      id, file_id, profile_id, session_id, message_id, task_id, role, ordinal, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, file_id, profile_id, session_id, knowledge_job_id, message_id, task_id, role, ordinal, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     assoc.id,
     assoc.fileId,
     profileId,
     assoc.sessionId ?? null,
+    assoc.knowledgeJobId ?? null,
     assoc.messageId ?? null,
     assoc.taskId ?? null,
     assoc.role,
@@ -558,11 +583,12 @@ export function countAssociations(
   return Number(row?.n) || 0;
 }
 
-/** Find an existing association matching session/file/role (optional message). */
+/** Find an existing association matching session or knowledge job / file / role. */
 export function findAssociation(opts: {
   profileId: string;
   fileId: string;
   sessionId?: string;
+  knowledgeJobId?: string;
   messageId?: string;
   role: FileAssociation["role"];
 }): FileAssociation | null {
@@ -578,9 +604,17 @@ export function findAssociation(opts: {
   const match = rows.find((row) => {
     const sessionId =
       row.session_id != null ? String(row.session_id) : undefined;
+    const knowledgeJobId =
+      row.knowledge_job_id != null ? String(row.knowledge_job_id) : undefined;
     const messageId =
       row.message_id != null ? String(row.message_id) : undefined;
     if (opts.sessionId !== undefined && sessionId !== opts.sessionId) {
+      return false;
+    }
+    if (
+      opts.knowledgeJobId !== undefined &&
+      knowledgeJobId !== opts.knowledgeJobId
+    ) {
       return false;
     }
     if (opts.messageId !== undefined && messageId !== opts.messageId) {

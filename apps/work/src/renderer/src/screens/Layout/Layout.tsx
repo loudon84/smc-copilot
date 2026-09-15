@@ -32,6 +32,7 @@ import Office from "../Office/Office";
 import Providers from "../Providers/Providers";
 import Schedules from "../Schedules/Schedules";
 import Kanban from "../Kanban/Kanban";
+import KnowledgeView from "../Knowledge/KnowledgeView";
 import RemoteNotice from "../../components/RemoteNotice";
 import { useSettingsModal } from "../../components/settings/SettingsModalContext";
 import {
@@ -43,6 +44,7 @@ import {
   KeyRound,
   Timer,
   Kanban as KanbanIcon,
+  Database,
   Download,
   PanelLeftClose,
   PanelLeftOpen,
@@ -64,6 +66,7 @@ type View =
   | "tools"
   | "schedules"
   | "kanban"
+  | "knowledge"
   | "gateway";
 
 const PINNED_NAV_ITEMS: { view: View; icon: LucideIcon; labelKey: string }[] = [
@@ -72,6 +75,7 @@ const PINNED_NAV_ITEMS: { view: View; icon: LucideIcon; labelKey: string }[] = [
   // "Manage profiles" action rather than a top-level nav item.
   // { view: "office", icon: Building, labelKey: "navigation.office" },
   { view: "kanban", icon: KanbanIcon, labelKey: "navigation.kanban" },
+  { view: "knowledge", icon: Database, labelKey: "navigation.knowledge" },
   // "skills" lives under the Discover tab (installed + community), so it's no
   // longer a top-level nav item.
   { view: "schedules", icon: Timer, labelKey: "navigation.schedules" },
@@ -980,6 +984,12 @@ function Layout(): React.JSX.Element {
               ) : (
                 <Kanban profile={activeProfile} visible={view === "kanban"} />
               )}
+            </div>
+          )}
+
+          {visitedViews.has("knowledge") && (
+            <div style={paneStyle("knowledge")}>
+              <KnowledgeView active={view === "knowledge"} />
             </div>
           )}
 

@@ -4,19 +4,19 @@ overview: Grounded implementation plan to add Knowledge as a Work Layout indepen
 todos:
   - id: t1-knowledge-layout
     content: "T1 — Add Knowledge View to Work Layout [C01]"
-    status: pending
+    status: completed
   - id: t2-knowledge-module-routing
     content: "T2 — Knowledge module root, route descriptor, and host-instantiated scope [C02, C03, C04, C05]"
-    status: pending
+    status: completed
   - id: t3-knowledge-fail-closed-pages
     content: "T3 — Fail-closed Knowledge pages without mock repository or fake upload [C06, C10, C13]"
-    status: pending
+    status: completed
   - id: t4-knowledge-job-ipc
     content: "T4 — Main Knowledge Upload Job Coordinator, capability probe, and sanitized IPC [C07, C09, C11]"
-    status: pending
+    status: completed
   - id: t5-knowledge-file-import
     content: "T5 — Knowledge Job file-import consumer without forging Chat sessionId [C08]"
-    status: pending
+    status: completed
 isProject: false
 plan_contract: smc.plan.v3.7
 plan_id: WORK-KNOWLEDGE-01

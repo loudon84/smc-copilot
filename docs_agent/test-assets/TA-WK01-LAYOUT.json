@@ -1,0 +1,12 @@
+{
+  "asset_id": "TA-WK01-LAYOUT",
+  "capabilities": [
+    "vitest"
+  ],
+  "content_sha256": "sha256:952afba4df329fdefb6b0ffb09b52c107a628b18bfefddb0552b7ba3d3634335",
+  "kind": "TEST",
+  "path": "apps/work/tests/layout-knowledge-view.test.ts",
+  "schema": "smc.test-asset.v1",
+  "status": "ACTIVE",
+  "updated_at": "2026-09-15T08:16:56.086524Z"
+}

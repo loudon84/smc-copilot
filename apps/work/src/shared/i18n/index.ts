@@ -33,6 +33,7 @@ import constantsEn from "./locales/en/constants";
 import kanbanEn from "./locales/en/kanban";
 import diagnoseEn from "./locales/en/diagnose";
 import skillRunEn from "./locales/en/skillRun";
+import knowledgeEn from "./locales/en/knowledge";
 import commonHe from "./locales/he/common";
 import navigationHe from "./locales/he/navigation";
 import discoverHe from "./locales/he/discover";
@@ -298,6 +299,7 @@ export const resources = {
       kanban: kanbanEn,
       diagnose: diagnoseEn,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   he: {
@@ -326,6 +328,7 @@ export const resources = {
       kanban: kanbanHe,
       diagnose: diagnoseHe,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   pl: {
@@ -352,6 +355,7 @@ export const resources = {
       constants: constantsPl,
       kanban: kanbanPl,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   es: {
@@ -379,6 +383,7 @@ export const resources = {
       kanban: kanbanEs,
       diagnose: diagnoseEs,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   id: {
@@ -404,6 +409,7 @@ export const resources = {
       install: installId,
       constants: constantsId,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   "zh-CN": {
@@ -456,6 +462,7 @@ export const resources = {
       constants: constantsZhTw,
       kanban: kanbanZhTw,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   "pt-BR": {
@@ -481,6 +488,7 @@ export const resources = {
       install: installPt,
       constants: constantsPt,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   "pt-PT": {
@@ -508,6 +516,7 @@ export const resources = {
       kanban: kanbanPtPt,
       diagnose: diagnosePtPt,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   ja: {
@@ -533,6 +542,7 @@ export const resources = {
       install: installJa,
       constants: constantsJa,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   tr: {
@@ -561,6 +571,7 @@ export const resources = {
       kanban: kanbanTr,
       diagnose: diagnoseTr,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
   ar: {
@@ -589,6 +600,7 @@ export const resources = {
       kanban: kanbanAr,
       diagnose: diagnoseAr,
       skillRun: skillRunEn,
+      knowledge: knowledgeEn,
     },
   },
 } satisfies Resource;

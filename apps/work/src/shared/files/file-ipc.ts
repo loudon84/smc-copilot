@@ -27,7 +27,16 @@ export interface FilePickerOptions {
 
 export interface FileImportContext {
   profile?: string;
-  sessionId: string;
+  /**
+   * Chat consumer key. Exactly one of `sessionId` or `knowledgeJobId` must be set.
+   * Knowledge must not forge a Chat session id.
+   */
+  sessionId?: string;
+  /**
+   * Knowledge Upload Job consumer key. Main resolves the Job before any
+   * File Platform write and binds profile-keyed writes to Job `workProfileId`.
+   */
+  knowledgeJobId?: string;
   mode: FileTransportMode;
   source: "picker" | "drag-drop" | "clipboard";
 }

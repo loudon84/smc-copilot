@@ -1,0 +1,12 @@
+{
+  "asset_id": "TA-WK01-IMPORT",
+  "capabilities": [
+    "vitest"
+  ],
+  "content_sha256": "sha256:b0177539266bffaa952b05c38795dedc08b2d62e0588982e722524621f5575ed",
+  "kind": "TEST",
+  "path": "apps/work/src/main/files/file-import-knowledge-job.test.ts",
+  "schema": "smc.test-asset.v1",
+  "status": "ACTIVE",
+  "updated_at": "2026-09-15T08:16:56.086524Z"
+}

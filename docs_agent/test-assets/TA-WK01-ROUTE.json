@@ -1,0 +1,12 @@
+{
+  "asset_id": "TA-WK01-ROUTE",
+  "capabilities": [
+    "vitest"
+  ],
+  "content_sha256": "sha256:b717581663e9e35f484941809f76895774d5b5b47306245ac8667267ddb67f25",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-route-scope.test.ts",
+  "schema": "smc.test-asset.v1",
+  "status": "ACTIVE",
+  "updated_at": "2026-09-15T08:16:56.086524Z"
+}

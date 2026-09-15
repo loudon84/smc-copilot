@@ -22,6 +22,7 @@ import type {
 } from "../../shared/session-continuation";
 import { stageAttachment, clearStagedAttachments } from "../attachment-staging";
 import { registerFilesIpcHandlers } from "../files";
+import { registerKnowledgeJobIpcHandlers } from "../knowledge/register-knowledge-job-ipc";
 import { persistPromptImageAttachments } from "../session-attachment-store";
 import { persistManagedMessageAssociations } from "../files/persist-managed-message-associations";
 import { composeWireMessageWithSessionContext } from "../files/compose-wire-session-context";
@@ -1738,6 +1739,9 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   // File Platform �?typed hermesAPI.files surface (Phase 0+).
   registerFilesIpcHandlers(ipcMain);
+
+  // Knowledge Upload Jobs — typed hermesAPI.knowledgeJobs surface.
+  registerKnowledgeJobIpcHandlers(ipcMain);
 
   // Model discovery �?fetch the provider's /v1/models for autocomplete.
   ipcMain.handle(

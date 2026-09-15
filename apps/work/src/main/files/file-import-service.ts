@@ -9,10 +9,17 @@ import {
   makeFileError,
   type ClipboardFileInput,
   type FileAssociation,
+  type FileError,
   type FileImportContext,
   type FileImportResult,
   type ManagedFile,
 } from "../../shared/files";
+import type { KnowledgeJobSnapshot } from "../../shared/knowledge/knowledge-job-ipc";
+import {
+  getKnowledgeUploadJobCoordinator,
+  KnowledgeJobNotFoundError,
+  KnowledgeJobPartitionDeniedError,
+} from "../knowledge/knowledge-upload-job-coordinator";
 import { readDesktopFilesConfig } from "./file-config";
 import {
   assertImportAllowed,
@@ -43,17 +50,113 @@ function profileOrDefault(profile?: string): string {
   return normalizeProfileId(profile);
 }
 
+function trimmed(value?: string): string {
+  return value?.trim() ?? "";
+}
+
+type ResolvedImportConsumer =
+  | {
+      kind: "chat";
+      sessionId: string;
+      /** Renderer profile KEEP for Chat path. */
+      profileKey: string | undefined;
+      profileId: string;
+    }
+  | {
+      kind: "knowledge";
+      knowledgeJobId: string;
+      job: KnowledgeJobSnapshot;
+      /** Always Job workProfileId — never Renderer context.profile. */
+      profileKey: string;
+      profileId: string;
+    };
+
+function sanitizeKnowledgeLookupError(err: unknown): FileError {
+  if (err instanceof KnowledgeJobNotFoundError) {
+    return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", "KNOWLEDGE_JOB_NOT_FOUND");
+  }
+  if (err instanceof KnowledgeJobPartitionDeniedError) {
+    return makeFileError("PROFILE_MISMATCH", "KNOWLEDGE_JOB_PARTITION_DENIED");
+  }
+  if (err instanceof Error) {
+    const code = err.message.split(/\s/)[0] ?? "";
+    if (code === "KNOWLEDGE_JOB_NOT_FOUND") {
+      return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", "KNOWLEDGE_JOB_NOT_FOUND");
+    }
+    if (code === "KNOWLEDGE_JOB_PARTITION_DENIED") {
+      return makeFileError("PROFILE_MISMATCH", "KNOWLEDGE_JOB_PARTITION_DENIED");
+    }
+    if (code === "KNOWLEDGE_JOB_COORDINATOR_UNCONFIGURED") {
+      return makeFileError(
+        "FILE_ASSOCIATION_SAVE_FAILED",
+        "KNOWLEDGE_JOB_COORDINATOR_UNCONFIGURED",
+      );
+    }
+  }
+  return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", "KNOWLEDGE_JOB_ERROR");
+}
+
+/**
+ * Resolve Chat vs Knowledge consumer. Knowledge Job lookup happens here —
+ * before any File Platform write — via T4 `getSnapshot` (getJobById + partition).
+ */
+function resolveImportConsumer(
+  context: FileImportContext,
+): ResolvedImportConsumer | { error: FileError } {
+  const sessionId = trimmed(context.sessionId);
+  const knowledgeJobId = trimmed(context.knowledgeJobId);
+  const hasSession = sessionId.length > 0;
+  const hasJob = knowledgeJobId.length > 0;
+
+  if (hasSession === hasJob) {
+    return {
+      error: makeFileError(
+        "FILE_ASSOCIATION_SAVE_FAILED",
+        "INVALID_FILE_IMPORT_CONTEXT",
+      ),
+    };
+  }
+
+  if (hasJob) {
+    try {
+      const job = getKnowledgeUploadJobCoordinator().getSnapshot(knowledgeJobId);
+      const profileKey = job.partition.workProfileId;
+      return {
+        kind: "knowledge",
+        knowledgeJobId,
+        job,
+        profileKey,
+        profileId: profileOrDefault(profileKey),
+      };
+    } catch (err) {
+      return { error: sanitizeKnowledgeLookupError(err) };
+    }
+  }
+
+  return {
+    kind: "chat",
+    sessionId,
+    profileKey: context.profile,
+    profileId: profileOrDefault(context.profile),
+  };
+}
+
 export async function importOnePath(
   filePath: string,
   context: FileImportContext,
 ): Promise<FileImportResult> {
-  const profileId = profileOrDefault(context.profile);
-  const config = readDesktopFilesConfig(context.profile);
+  const resolved = resolveImportConsumer(context);
+  if ("error" in resolved) {
+    return { ok: false, error: resolved.error };
+  }
+
+  const { profileId, profileKey } = resolved;
+  const config = readDesktopFilesConfig(profileKey);
 
   let canonical: string;
   try {
-    const resolved = await defaultFilePathPolicy.resolveAndValidate(filePath);
-    canonical = resolved.realPath;
+    const pathResolved = await defaultFilePathPolicy.resolveAndValidate(filePath);
+    canonical = pathResolved.realPath;
   } catch (err) {
     const fe =
       err instanceof FilePlatformError
@@ -83,7 +186,7 @@ export async function importOnePath(
 
   if (shouldCopy && !managedPath) {
     try {
-      managedPath = await storeManagedCopy(canonical, hash, context.profile);
+      managedPath = await storeManagedCopy(canonical, hash, profileKey);
     } catch (err) {
       const fe =
         err instanceof FilePlatformError
@@ -128,17 +231,28 @@ export async function importOnePath(
       };
 
   upsertManagedFile(file);
-  scheduleParseAfterImport(context.profile, file.id);
+  scheduleParseAfterImport(profileKey, file.id);
 
-  const assoc: FileAssociation = {
-    id: randomUUID(),
-    fileId: file.id,
-    profileId,
-    sessionId: context.sessionId,
-    role: "prompt-attachment",
-    ordinal: 0,
-    createdAt: ts,
-  };
+  const assoc: FileAssociation =
+    resolved.kind === "knowledge"
+      ? {
+          id: randomUUID(),
+          fileId: file.id,
+          profileId,
+          knowledgeJobId: resolved.knowledgeJobId,
+          role: "prompt-attachment",
+          ordinal: 0,
+          createdAt: ts,
+        }
+      : {
+          id: randomUUID(),
+          fileId: file.id,
+          profileId,
+          sessionId: resolved.sessionId,
+          role: "prompt-attachment",
+          ordinal: 0,
+          createdAt: ts,
+        };
   insertAssociation(assoc);
 
   return {
@@ -154,6 +268,27 @@ export async function stageClipboardImport(
   input: ClipboardFileInput,
   context: FileImportContext,
 ): Promise<FileImportResult> {
+  if (trimmed(context.knowledgeJobId)) {
+    return {
+      ok: false,
+      error: makeFileError(
+        "FILE_ASSOCIATION_SAVE_FAILED",
+        "KNOWLEDGE_CLIPBOARD_UNSUPPORTED",
+      ),
+    };
+  }
+
+  const sessionId = trimmed(context.sessionId);
+  if (!sessionId) {
+    return {
+      ok: false,
+      error: makeFileError(
+        "FILE_ASSOCIATION_SAVE_FAILED",
+        "SESSION_ID_REQUIRED",
+      ),
+    };
+  }
+
   const profileId = profileOrDefault(context.profile);
   const config = readDesktopFilesConfig(context.profile);
   const filename =
@@ -174,7 +309,7 @@ export async function stageClipboardImport(
 
   let stagedPath: string;
   try {
-    stagedPath = stageClipboardBytes(context.sessionId, filename, base64);
+    stagedPath = stageClipboardBytes(sessionId, filename, base64);
   } catch (err) {
     return {
       ok: false,
@@ -242,7 +377,7 @@ export async function stageClipboardImport(
     id: randomUUID(),
     fileId: file.id,
     profileId,
-    sessionId: context.sessionId,
+    sessionId,
     role: "prompt-attachment",
     ordinal: 0,
     createdAt: ts,

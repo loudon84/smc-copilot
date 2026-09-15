@@ -20,6 +20,7 @@ export default {
   tools: "Capabilities",
   schedules: "Schedules",
   kanban: "Kanban",
+  knowledge: "Knowledge",
   gateway: "Gateway",
   settings: "Settings",
   collapseSidebar: "Collapse sidebar",
