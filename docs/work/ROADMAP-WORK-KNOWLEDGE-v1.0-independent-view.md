@@ -1,11 +1,11 @@
 ---
 roadmap_id: ROADMAP-WORK-KNOWLEDGE-v1.0-INDEPENDENT-VIEW
-version: 1.2.1
+version: 1.2.3
 status: ACTIVE
 architecture_decision: docs/work/AD-WORK-KNOWLEDGE-v1.1-mock-mode.md
 source_revision: AD-WORK-KNOWLEDGE-v1.1-MOCK-MODE@1.1.0
 target_branch: work/prd-v5.1
-updated_at: 2026-09-15T14:29:32.927099Z
+updated_at: 2026-09-15T23:45:00+08:00
 implementation_plan_required: true
 ---
 
@@ -33,5 +33,5 @@ This Roadmap delivers the approved Knowledge integration foundation and the v1.1
 |---|---|---|---|---|---|---|---|---|
 | RM-01 | Knowledge is a retained Work Layout View with module-state routing, Main-owned upload jobs, Knowledge Job file association, identity partition, and fail-closed upload plus entity reads when no real provider exists. | - | DONE | Home/Bases/Sets/Documents/Uploads/Chat pages are reachable inside the Knowledge View without a window URL router; hiding the View keeps Chat Run unchanged and does not own Job execution; import never forges a Chat sessionId; no provider yields unavailable/empty rather than mock lists, mock Q&A, fake progress or fake completed; Chat/Skill Run/Settings behaviour is unchanged; Work does not runtime-import apps/knowledge. | docs/work/PRD-WORK-KNOWLEDGE-v1.0-independent-view-integration.md | .cursor/plans/work-knowledge-01-independent-view.plan.md | ac83fcd450e1adce7767d803648977a1adbb3d72 | docs_agent/evidence/WORK-KNOWLEDGE-01-evidence.json |
 | RM-03 | Work Knowledge exposes an explicit Main-owned Mock Mode foundation (AD stage RM-MOCK-01): mode controller, provider facade, mock namespace, mode-discriminated Job contract with progress/completed, persistent mock executor, File association isolation, visible mode badge, and no silent fallback. | RM-01 | DONE | Main holds `dataMode`; Renderer cannot override or fallback; mock and provider namespaces are isolated; legacy Jobs are `legacy-unclassified` and never default into mock; mock Jobs recover across View hide/reload/restart without a Renderer timer; release/mock entry requires `mode=mock` and `allowSyntheticData=true`; provider mode remains fail-closed. | docs/work/PRD-WORK-KNOWLEDGE-v1.1-RM-MOCK-01-mock-mode-foundation.md | .cursor/plans/work-knowledge-mock-01-mock-mode-foundation.plan.md | c371524453fbe5de7bb449a5f6e0f0ef8be77657 | docs_agent/evidence/WORK-KNOWLEDGE-MOCK-01-evidence.json |
-| RM-04 | Home, Bases, Sets, Documents, Uploads, and Knowledge Chat are Work-native and operable on explicit mock data, excluding Profile and source Shell/Router/UI kit (AD stage RM-MOCK-02). | RM-03 | BACKLOG | Six page domains match the approved information architecture; mock-mode mutations and Q&A work through the facade; provider mode stays unavailable/disabled; Profile/Preferences independent pages are absent; no runtime import of `apps/knowledge`. | docs/work/PRD-WORK-KNOWLEDGE-v1.1-RM-MOCK-02-page-feature-migration.md | - | - | - |
+| RM-04 | Home, Bases, Sets, Documents, Uploads, and Knowledge Chat are Work-native and operable on explicit mock data, excluding Profile and source Shell/Router/UI kit (AD stage RM-MOCK-02). | RM-03 | DONE | Six page domains match the approved information architecture; mock-mode mutations and Q&A work through the facade; provider mode stays unavailable/disabled; Profile/Preferences independent pages are absent; no runtime import of `apps/knowledge`. | docs/work/PRD-WORK-KNOWLEDGE-v1.1-RM-MOCK-02-page-feature-migration.md | .cursor/plans/work-knowledge-ui-01-page-feature-migration.plan.md | 5130b330838d749d719b590a70d280be97282bff | docs_agent/evidence/WORK-KNOWLEDGE-UI-01-evidence.json |
 | RM-02 | A real Knowledge provider completes end-to-end upload and entity read success through the same Main Job Owner and Provider Facade. | RM-01, RM-03 | BACKLOG | Requires its own Stage PRD; Remote Adapter replaces the mock adapter under the same facade; provider mode end-to-end success is blocking; default-mode and mock retention/retirement are explicit decisions. | - | - | - | - |
