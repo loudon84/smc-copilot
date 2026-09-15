@@ -19,6 +19,7 @@ import type {
   ReasoningMessage,
   ToolCallMessage,
 } from "../../screens/Chat/types";
+import { sharedI18n } from "../../../../shared/i18n";
 
 export const skillRunUserMessageId = skillRunNativeUserMessageId;
 export const compactSkillRunActivities = compactSkillRunActivityItems;
@@ -107,20 +108,19 @@ function nativeRowToMessage(row: SkillRunNativeActivityRow): ChatMessage {
   }
 }
 
+// @lat: [[skill-run#M6j Session UX and terminal Result closure]]
 function assistantFromProjection(
   projection: SkillRunProjection,
-  existing?: ChatMessage,
 ): ChatBubbleMessage {
-  const prior =
-    existing && (!("kind" in existing) || existing.kind === "assistant")
-      ? (existing as ChatBubbleMessage)
-      : undefined;
   const sealed = isSkillRunTerminalPhase(projection.phase);
-  const content =
-    projection.text ||
-    (sealed ? "" : projection.displayStage) ||
-    prior?.content ||
-    "";
+  const emptySuccess = projection.phase === "succeeded" && !projection.errorMessage;
+  const content = projection.text?.trim()
+    ? projection.text
+    : emptySuccess
+      ? sharedI18n.t("skillRun.completedWithoutText")
+      : projection.errorMessage
+        ? ""
+        : projection.displayStage;
   return {
     id: skillRunNativeAssistantMessageId(projection.clientRequestId),
     kind: "assistant",
@@ -164,10 +164,6 @@ export function applySkillRunProjectionsToMessages(
     const existingUser = next.find(
       (message) => message.id === skillRunNativeUserMessageId(clientRequestId),
     );
-    const existingAssistant = next.find(
-      (message) =>
-        message.id === skillRunNativeAssistantMessageId(clientRequestId),
-    );
     const user: ChatBubbleMessage = {
       id: skillRunNativeUserMessageId(clientRequestId),
       kind: "user",
@@ -183,7 +179,7 @@ export function applySkillRunProjectionsToMessages(
         clientRequestId,
         projection.activities ?? [],
       ).map(nativeRowToMessage),
-      assistantFromProjection(projection, existingAssistant),
+      assistantFromProjection(projection),
     ];
     next = replaceSkillRunTurn(next, clientRequestId, turn);
   }

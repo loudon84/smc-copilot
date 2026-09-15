@@ -295,6 +295,26 @@ function installHermes(start: ReturnType<typeof vi.fn>): void {
 }
 
 describe("Chat skill-run transcript", () => {
+  // @lat: [[skill-run#M6i Skill transcript and Session live-sync]]
+  it("renders remote activity and replaces the pending row with the final report", async () => {
+    installHermes(vi.fn(async () => ({ accepted: true })));
+    render(<Chat runId="run-response" executionMode="skill-run" initialSessionId="session-live" />);
+    await screen.findByText("Writer");
+    act(() => upsertSkillRunProjection(projection()));
+    expect(await screen.findByText("Executing skill...")).toBeTruthy();
+    const activities: NonNullable<SkillRunProjection["activities"]> = [
+      { eventId: "reason-1", ordinal: 1, kind: "reasoning.summary", summary: "Checked company sources" },
+      { eventId: "tool-1", ordinal: 2, kind: "tool.call", toolName: "search", callId: "call-1", status: "completed" },
+    ];
+    act(() => upsertSkillRunProjection(projection({ activities, text: "Company analysis in progress" })));
+    expect(await screen.findByText("Checked company sources")).toBeTruthy();
+    expect(await screen.findByText("Company analysis in progress")).toBeTruthy();
+    act(() => upsertSkillRunProjection(projection({ activities, phase: "succeeded", displayStage: "Skill completed successfully", text: "Final company report: verified findings" })));
+    expect(await screen.findByText("Final company report: verified findings")).toBeTruthy();
+    expect(screen.queryByText("Executing skill...")).toBeNull();
+    expect(screen.queryByText("Company analysis in progress")).toBeNull();
+  });
+
   afterEach(() => {
     cleanup();
     resetSkillRunStoreForTests();

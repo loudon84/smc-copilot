@@ -115,6 +115,82 @@ const skillFirstOptions = {
 };
 
 describe("skill-run-service", () => {
+  // @lat: [[skill-run#M6j Session UX and terminal Result closure]]
+  it("preserves text arriving while the poll-first Result request is pending", async () => {
+    let resolveResult!: (value: { runId: string; status: string; text: null }) => void;
+    let resolveSnapshot!: (value: { runId: string; status: string }) => void;
+    let stream!: ReadableStreamDefaultController<Uint8Array>;
+    const gateway = createMockGateway({
+      getRunSnapshot: vi.fn(() => new Promise<{ runId: string; status: string }>((resolve) => { resolveSnapshot = resolve; })),
+      getRunResult: vi.fn(() => new Promise<{ runId: string; status: string; text: null }>((resolve) => { resolveResult = resolve; })),
+      openEventStream: vi.fn().mockResolvedValue(new Response(new ReadableStream({
+        start(controller) {
+          stream = controller;
+          controller.enqueue(encodeSseEvents([{ eventType: "assistant.message", id: "early-text", data: { event_type: "assistant.message", payload: { text: "Partial report" } } }]));
+        },
+      }))),
+    });
+    const service = trackService(createSkillRunService({ gatewayClient: gateway, ...skillFirstOptions }));
+    await service.start({ toolName: "calculator", prompt: "Analyze", clientRequestId: "req-result-race", sessionId: "session-result-race", profileId: "default" });
+    await waitForProjection(service, "req-result-race", (p) => p.text === "Partial report");
+    resolveSnapshot({ runId: "run-xyz-999", status: "COMPLETED" });
+    await Promise.resolve();
+    stream.enqueue(encodeSseEvents([{ eventType: "assistant.message", id: "late-text", data: { event_type: "assistant.message", payload: { text: "Late full report" } } }]));
+    await waitForProjection(service, "req-result-race", (p) => p.text === "Late full report");
+    resolveResult({ runId: "run-xyz-999", status: "COMPLETED", text: null });
+    const terminal = await waitForProjection(service, "req-result-race", (p) => p.phase === "succeeded");
+    expect(terminal?.text).toBe("Late full report");
+  });
+
+  it("bounds reconnects when the backend repeatedly closes an empty SSE body", async () => {
+    const gateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({ runId: "run-xyz-999", status: "RUNNING" }),
+      openEventStream: vi.fn().mockResolvedValue(sseBodyFromChunks([])),
+    });
+    const sleep = vi.fn(async () => {
+      // Bound even a broken implementation so the regression cannot busy-loop.
+      if (sleep.mock.calls.length > 3) throw new Error("unexpected reconnect");
+    });
+    // Also stop an implementation which never invokes backoff on EOF.
+    vi.mocked(gateway.openEventStream).mockImplementation(async () => {
+      if (vi.mocked(gateway.openEventStream).mock.calls.length > 4) {
+        throw new Error("too many empty streams");
+      }
+      return sseBodyFromChunks([]) as unknown as Response;
+    });
+    const service = trackService(createSkillRunService({ gatewayClient: gateway, ...skillFirstOptions, sleep }));
+    await service.start({ toolName: "calculator", prompt: "Analyze", clientRequestId: "req-empty-stream", sessionId: "session-empty-stream", profileId: "default" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(gateway.openEventStream).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(service.getProjection("req-empty-stream")?.phase).toBe("running");
+  });
+
+  it.each(["\n", "\r\n"])("receives activity and final text over fragmented SSE with %j line endings", async (newline) => {
+    const events = [
+      loadBundleFixture("run-event-reasoning-summary.json"),
+      loadBundleFixture("run-event-tool-call.json"),
+      { event_id: "answer", event_type: "assistant.message", payload: { text: "Company analysis report" } },
+      { event_id: "done", event_type: "run.completed", payload: {} },
+    ];
+    const wire = events.map((event) =>
+      `id: ${event.event_id}${newline}event: ${event.event_type}${newline}data: ${JSON.stringify(event)}${newline}${newline}`,
+    ).join("");
+    // Split across every byte, including CR/LF and UTF-8 boundaries.
+    const chunks = Array.from(new TextEncoder().encode(wire), (byte) => new Uint8Array([byte]));
+    const gateway = createMockGateway({
+      getRunSnapshot: vi.fn().mockResolvedValue({ runId: "run-xyz-999", status: "RUNNING" }),
+      openEventStream: vi.fn()
+        .mockResolvedValueOnce(sseBodyFromChunks(chunks))
+        .mockResolvedValue(new Response(new ReadableStream())),
+    });
+    const service = trackService(createSkillRunService({ gatewayClient: gateway, ...skillFirstOptions }));
+    await service.start({ toolName: "calculator", prompt: "Analyze company", clientRequestId: "req-framing", sessionId: "session-framing", profileId: "default" });
+    const terminal = await waitForProjection(service, "req-framing", (p) => p.phase === "succeeded");
+    expect(terminal).toMatchObject({ phase: "succeeded", text: "Company analysis report" });
+    expect(terminal?.activities?.map((item) => item.kind)).toEqual(["reasoning.summary", "tool.call"]);
+  });
+
   it("rejects a conflicting accepted session tool before calling the Provider", async () => {
     const gateway = createMockGateway();
     const service = trackService(createSkillRunService({

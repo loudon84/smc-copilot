@@ -30,6 +30,25 @@ function projection(
 }
 
 describe("skill-run-transcript adapter", () => {
+  // @lat: [[skill-run#M6j Session UX and terminal Result closure]]
+  it("replaces a running placeholder when success has no text report", () => {
+    const running = applySkillRunProjectionsToMessages([], [projection()]);
+    const completed = applySkillRunProjectionsToMessages(running, [projection({ phase: "succeeded", displayStage: "Skill completed successfully" })]);
+    expect(completed[1]).toMatchObject({ content: "Skill completed without a text report.", pending: false });
+  });
+
+  it("does not retain a running placeholder after cancellation or result retrieval failure", () => {
+    const running = applySkillRunProjectionsToMessages([], [projection()]);
+    for (const terminal of [
+      projection({ phase: "cancelled", displayStage: "Skill execution cancelled" }),
+      projection({ phase: "succeeded", errorCode: "RESULT_RETRIEVAL_FAILED", errorMessage: "Result is temporarily unavailable" }),
+    ]) {
+      const [ , assistant] = applySkillRunProjectionsToMessages(running, [terminal]);
+      expect(assistant).not.toMatchObject({ content: "Executing skill..." });
+      expect(assistant).toMatchObject({ pending: false });
+    }
+  });
+
   it("creates Native user and pending assistant anchors without a card", () => {
     const [user, assistant] = createOptimisticSkillRunTurn({
       prompt: "Please write a report",
@@ -62,18 +81,14 @@ describe("skill-run-transcript adapter", () => {
       error: "denied",
       pending: false,
     });
-    expect(rejected.some((item) => "kind" in item && item.kind === "skill_run")).toBe(
-      false,
-    );
+    expect(rejected).not.toEqual(expect.arrayContaining([expect.objectContaining({ kind: "skill_run" })]));
 
     const live = applySkillRunProjectionsToMessages([], [
       projection({ clientRequestId: "req-a1" }),
       projection({ clientRequestId: "req-a2" }),
       projection({ clientRequestId: "req-b", toolName: "other" }),
     ]);
-    expect(live.some((item) => "kind" in item && item.kind === "skill_run")).toBe(
-      false,
-    );
+    expect(live).not.toEqual(expect.arrayContaining([expect.objectContaining({ kind: "skill_run" })]));
     expect(
       live.filter((item) => item.role === "user").map((item) => item.id),
     ).toEqual([
@@ -104,9 +119,7 @@ describe("skill-run-transcript adapter", () => {
         }),
       ],
     );
-    expect(merged.some((item) => "kind" in item && item.kind === "skill_run")).toBe(
-      false,
-    );
+    expect(merged).not.toEqual(expect.arrayContaining([expect.objectContaining({ kind: "skill_run" })]));
     expect(
       merged.filter((item) => item.role === "user").map((item) => item.id),
     ).toEqual([

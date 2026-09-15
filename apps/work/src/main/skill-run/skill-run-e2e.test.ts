@@ -209,6 +209,7 @@ function countToolsCall(fetchImpl: ReturnType<typeof vi.fn>): number {
 
 type FixtureMode =
   | "happy"
+  | "native-crlf"
   | "unauthorized"
   | "unpublish"
   | "reconnect"
@@ -298,6 +299,20 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
       sseAttempts += 1;
       const lastEventId = headerValue(init, "Last-Event-ID");
       if (lastEventId) lastEventIdsSeen.push(lastEventId);
+
+      if (mode === "native-crlf") {
+        const events = [
+          { event_type: "reasoning.summary", payload: { summary: "Checked company sources" } },
+          { event_type: "tool.call", payload: { tool_name: "search", call_id: "call-search", status: "completed" } },
+          ...["Company", "", " ", "analysis", "\n\n", "ready"].map((delta, index) => ({
+            event_type: "assistant.delta", payload: { message_id: "msg-report", delta_seq: index + 1, delta },
+          })),
+          { event_type: "run.completed", payload: {} },
+        ];
+        return sseResponse(events.map((event, index) =>
+          sseChunk(event.event_type, { ...event, event_id: `native-${index}`, event_seq: index + 1 }, `native-${index}`).replace(/\n/g, "\r\n"),
+        ));
+      }
 
       if (mode === "cancel" || mode === "hanging-sse") {
         return hangingSseResponse(init?.signal ?? undefined);
@@ -414,6 +429,17 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
       return new Response(null, { status: 204 });
     }
 
+    if (urlStr.includes("/api/v1/runs/") && urlStr.endsWith("/result") && method === "GET") {
+      const match = /\/api\/v1\/runs\/([^/?]+)\/result/.exec(urlStr);
+      const text = mode === "hanging-sse" ? "poll result"
+        : mode === "reconnect" ? "reconnected done"
+          : mode === "unknown-event" ? "completed after unknown"
+            : "fixture result text";
+      return new Response(JSON.stringify({ run_id: match?.[1], status: "COMPLETED", text }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      });
+    }
+
     if (urlStr.includes("/api/v1/runs/") && method === "GET") {
       const match = /\/api\/v1\/runs\/([^/?]+)/.exec(urlStr);
       const runId = match ? decodeURIComponent(match[1]) : "poll-run";
@@ -422,7 +448,6 @@ function createFixtureFetch(mode: FixtureMode): FixtureState {
           JSON.stringify({
             run_id: runId,
             status: "succeeded",
-            result_text: "poll result",
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -480,6 +505,22 @@ function createServiceFromFetch(
 }
 
 describe("skill-run e2e fixture", () => {
+  // @lat: [[skill-run#M6h Streaming delta mapping]]
+  it("delivers CRLF runtime activity, exact deltas, and authoritative Result text", async () => {
+    const fixture = createFixtureFetch("native-crlf");
+    const service = createServiceFromFetch(fixture.fetchImpl as unknown as typeof fetch);
+    const texts: string[] = [];
+    service.subscribe((projection) => { if (projection.text) texts.push(projection.text); });
+    await service.start({ toolName: "writer.article", prompt: "Analyze company", clientRequestId: "e2e-native", sessionId: "session-native", profileId: "default" });
+    const terminal = await waitForProjection(service, "e2e-native", (projection) => projection.phase === "succeeded");
+    expect(terminal.activities?.map((item) => item.kind)).toEqual(["reasoning.summary", "tool.call"]);
+    expect(texts).toContain("Company analysis\n\nready");
+    expect(terminal.text).toBe("fixture result text");
+    expect(terminal.errorCode).toBeUndefined();
+    expect(countToolsCall(fixture.fetchImpl)).toBe(1);
+    expect(fixture.fetchImpl.mock.calls.some(([url]) => String(url).endsWith("/api/v1/runs/run-e2e-native/result"))).toBe(true);
+  });
+
   it("happy path: catalog → start → SSE → artifacts → rehydrate without second tools/call", async () => {
     const fixture = createFixtureFetch("happy");
     const upserts: Array<{ runId: string; artifactId: string }> = [];

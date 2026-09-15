@@ -1,6 +1,5 @@
 /**
  * Skill Run contract parser — classification matrix and bind invariant.
- * @lat: [[skill-run#Prompt-first Main validation]]
  */
 
 import { existsSync, readFileSync } from "fs";
@@ -57,6 +56,7 @@ describe("normalizeSkillToolDescriptor", () => {
   });
 });
 
+// @lat: [[skill-run#Checkpoint C Scope & Boundaries]]
 describe("classifySkillInvocation matrix", () => {
   it("classifies chat + prompt as prompt-first", () => {
     const result = classifySkillInvocation({
@@ -561,6 +561,13 @@ function loadBundleFixture(name: string): Record<string, unknown> {
 }
 
 describe("parseSkillRunEvent enumerated activity mapping", () => {
+  // @lat: [[skill-run#M6h Streaming delta mapping]]
+  it("keeps control progress in stage rather than publishing it as report text", () => {
+    const parsed = parseSkillRunEvent("run.progress", loadBundleFixture("run-event-control-progress.json"));
+    expect(parsed.text).toBeUndefined();
+    expect(parsed.displayStage).toBe("preparing hermes");
+  });
+
   it("maps Bundle reasoning.summary fixture to sanitized activity", () => {
     const fixture = loadBundleFixture("run-event-reasoning-summary.json");
     const parsed = parseSkillRunEvent("reasoning.summary", fixture);
@@ -748,6 +755,15 @@ function loadV15Fixture(name: string): Record<string, unknown> {
 describe("parseSkillRunEvent enumerated assistant.delta mapping", () => {
   beforeEach(() => {
     vi.mocked(hasSkillRunStreamingDeltaBundle).mockReturnValue(true);
+  });
+
+  it.each(["", " ", "\n\n", " leading and trailing ", "long ".repeat(150)])("preserves exact assistant delta content %j", (delta) => {
+    const parsed = parseSkillRunEvent("assistant.delta", {
+      event_type: "assistant.delta",
+      payload: { message_id: "msg-1", delta_seq: 1, delta },
+    });
+    expect(parsed.deltaText).toBe(delta);
+    expect(parsed.rawUnknown).toBeUndefined();
   });
 
   it("maps v1.5 assistant.delta fixture to sanitized fields without text or activity", () => {

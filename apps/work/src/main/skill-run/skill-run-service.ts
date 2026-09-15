@@ -371,6 +371,7 @@ export function createSkillRunService(
     return next;
   }
 
+  // @lat: [[skill-run#M6j Session UX and terminal Result closure]]
   function resolveSuccessfulTerminal(
     run: ActiveRun,
     runId: string,
@@ -379,7 +380,7 @@ export function createSkillRunService(
     if (run.successfulTerminal) return run.successfulTerminal;
     run.successfulTerminal = (async () => {
       if (run.terminalConfirmed || disposed) return;
-      let text = run.projection.text;
+      let text: string | undefined;
       let errorCode: string | undefined;
       let errorMessage: string | undefined;
       try {
@@ -395,6 +396,7 @@ export function createSkillRunService(
         errorMessage = "Result is temporarily unavailable";
       }
       if (run.terminalConfirmed || disposed) return;
+      text ??= hints.text?.trim() ? hints.text : run.projection.text;
       finalizeTerminal(run, {
         ...hints,
         providerRunId: runId,
@@ -674,7 +676,6 @@ export function createSkillRunService(
           throw new Error(`SSE stream failed: ${res.status}`);
         }
 
-        reconnectAttempts = 0;
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -683,7 +684,8 @@ export function createSkillRunService(
           const { value, done } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n\n");
+          // @lat: [[skill-run#M6h Streaming delta mapping]]
+          const parts = buffer.split(/\r?\n\r?\n/);
           buffer = parts.pop() ?? "";
 
           for (const part of parts) {
@@ -714,6 +716,7 @@ export function createSkillRunService(
             }
 
             if (!event.rawUnknown) {
+              reconnectAttempts = 0;
               const patch: Partial<SkillRunProjection> = {
                 lastEventId: event.eventId ?? run.projection.lastEventId,
                 eventSeq: event.eventSeq ?? run.projection.eventSeq + 1,
@@ -723,7 +726,7 @@ export function createSkillRunService(
               if (
                 event.messageId &&
                 event.deltaSeq != null &&
-                event.deltaText
+                event.deltaText !== undefined
               ) {
                 let buffer = run.deltaBuffers.get(event.messageId);
                 if (!buffer) {
@@ -785,6 +788,9 @@ export function createSkillRunService(
               updateProjection(run, patch);
             }
           }
+        }
+        if (!run.terminalConfirmed && !disposed) {
+          throw new Error("Skill Run event stream ended before terminal status");
         }
       } catch (err) {
         if (run.terminalConfirmed || disposed) return;

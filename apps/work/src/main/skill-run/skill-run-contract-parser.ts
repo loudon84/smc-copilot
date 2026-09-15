@@ -541,6 +541,7 @@ export function parseSkillRunStatusToPhase(status: string): SkillRunLocalPhase {
   }
 }
 
+// @lat: [[skill-run#M6h Streaming delta mapping]]
 export function parseSkillRunEvent(
   eventType: string,
   payload: Record<string, unknown>,
@@ -579,15 +580,10 @@ export function parseSkillRunEvent(
         eventId,
         eventSeq,
         phase: "running",
-        displayStage: "Executing skill...",
-        text:
-          typeof inner.message === "string"
-            ? inner.message
-            : typeof inner.text === "string"
-              ? inner.text
-              : typeof payload.message === "string"
-                ? payload.message
-                : undefined,
+        displayStage:
+          clipDisplayString(inner.message) ||
+          clipDisplayString(inner.stage) ||
+          "Executing skill...",
       };
 
     case "run.waiting_approval":
@@ -660,8 +656,8 @@ export function parseSkillRunEvent(
         return unknownEvent(eventId, eventSeq);
       }
       const messageId = clipDisplayString(inner.message_id);
-      const deltaText = clipDisplayString(inner.delta);
-      if (!messageId || !isDeltaSeq(inner.delta_seq) || !deltaText) {
+      const deltaText = typeof inner.delta === "string" ? inner.delta : undefined;
+      if (!messageId || !isDeltaSeq(inner.delta_seq) || deltaText === undefined) {
         return unknownEvent(eventId, eventSeq);
       }
       return {
