@@ -62,8 +62,10 @@ from tools.release.hermes.windows_runtime import (  # noqa: E402
     _promote_runtime_root,
     build_windows_runtime,
 )
+from tools.release.hermes.windows_runtime_pins import requires_ranges  # noqa: E402
+
 DEFAULT_PROFILE = ROOT / "release" / "hermes-runtime-profiles.yaml"
-DEFAULT_REQUIRES = {"python": ">=3.12,<3.13", "node": ">=22.22,<23"}
+DEFAULT_REQUIRES = requires_ranges()
 
 
 def sha256_file(path: Path) -> str:

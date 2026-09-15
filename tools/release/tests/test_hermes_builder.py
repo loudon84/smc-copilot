@@ -29,6 +29,7 @@ from tools.release.hermes.source_metadata import freeze_source
 from tools.release.hermes.verify_runtime import verify_bundle_tree, verify_bundle_zip
 from tools.release.hermes.windows_runtime import (
     NODE_MIN_SAFE_VERSION,
+    NODE_VERSION,
     SQLITE_MIN_SAFE_VERSION,
     _install_windows_console_hook,
     assert_pe_amd64,
@@ -36,6 +37,8 @@ from tools.release.hermes.windows_runtime import (
     parse_version_tuple,
     sha3_256_file,
 )
+from tools.release.hermes.windows_runtime_pins import load_windows_runtime_pins
+from tools.release.simple_yaml import load_yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 PROFILES = ROOT / "release" / "hermes-runtime-profiles.yaml"
@@ -104,11 +107,11 @@ def _runtime_archives(tmp_path: Path) -> tuple[Path, Path, Path]:
     python_root.mkdir()
     (python_root / "python.exe").write_bytes(_pe_amd64())
     (python_root / "python312._pth").write_text("python312.zip\n.\n", encoding="ascii")
-    node_root = tmp_path / "node-v22.22.0-win-x64"
+    node_root = tmp_path / f"node-v{NODE_VERSION}-win-x64"
     node_root.mkdir()
     (node_root / "node.exe").write_bytes(_pe_amd64())
-    (node_root / "npm.cmd").write_text("@echo 10.9.4\n", encoding="ascii")
-    (node_root / "npx.cmd").write_text("@echo 10.9.4\n", encoding="ascii")
+    (node_root / "npm.cmd").write_text("@echo 11.19.0\n", encoding="ascii")
+    (node_root / "npx.cmd").write_text("@echo 11.19.0\n", encoding="ascii")
     # Stub sqlite DLL archive
     sqlite_dir = tmp_path / "sqlite-dll"
     sqlite_dir.mkdir()
@@ -116,7 +119,7 @@ def _runtime_archives(tmp_path: Path) -> tuple[Path, Path, Path]:
     sqlite_zip = _zip_tree(sqlite_dir, tmp_path / "sqlite-dll-win-x64-3530400.zip")
     return (
         _zip_tree(python_root, tmp_path / "python-3.12.8-embed-amd64.zip"),
-        _zip_tree(node_root, tmp_path / "node-v22.22.0-win-x64.zip"),
+        _zip_tree(node_root, tmp_path / f"node-v{NODE_VERSION}-win-x64.zip"),
         sqlite_zip,
     )
 
@@ -549,7 +552,7 @@ def test_windows_runtime_builder(tmp_path: Path):
     meta = json.loads((tree / "runtime" / "windows-runtime.json").read_text(encoding="utf-8"))
     assert meta["schema"] == "smc.hermes.windows-runtime.v2"
     assert meta["sqlite"]
-    assert meta["node"] == "22.22.0"
+    assert meta["node"] == NODE_VERSION
     assert (tree / "config" / "managed.defaults.yaml").is_file()
 
 
@@ -611,9 +614,24 @@ def test_sqlite_version_gate_constants():
 
 
 def test_node_version_gate_constants():
-    assert NODE_MIN_SAFE_VERSION == (22, 22, 0)
-    assert parse_version_tuple("22.22.0") >= NODE_MIN_SAFE_VERSION
-    assert parse_version_tuple("22.11.0") < NODE_MIN_SAFE_VERSION
+    pins = load_windows_runtime_pins()
+    assert NODE_VERSION == pins["node"]["version"] == "24.21.0"
+    assert NODE_MIN_SAFE_VERSION == parse_version_tuple(str(pins["node"]["minSafe"]))
+    assert NODE_MIN_SAFE_VERSION == (24, 11, 0)
+    assert parse_version_tuple("24.21.0") >= NODE_MIN_SAFE_VERSION
+    assert parse_version_tuple("24.10.0") < NODE_MIN_SAFE_VERSION
+    client = load_yaml(ROOT / "release" / "client-release.yaml")
+    assert client["clientRuntime"]["node"]["version"] == pins["node"]["version"]
+    assert client["clientRuntime"]["node"]["range"] == pins["node"]["range"]
+
+
+def test_windows_runtime_pins_reject_unpinned_node(tmp_path: Path):
+    src = ROOT / "release" / "hermes-windows-runtime.yaml"
+    bad = tmp_path / "hermes-windows-runtime.yaml"
+    text = src.read_text(encoding="utf-8").replace('version: "24.21.0"', 'version: "latest"', 1)
+    bad.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="forbidden node.version"):
+        load_windows_runtime_pins(bad)
 
 
 def test_sqlite_archive_integrity(tmp_path: Path):

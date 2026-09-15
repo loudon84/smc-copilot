@@ -18,6 +18,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 from zipfile import ZIP_STORED, ZipFile
 
+from tools.release.hermes.windows_runtime_pins import load_windows_runtime_pins, parse_version_tuple
+
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_ROOT = ROOT / "infra" / "windows" / "hermes-agent" / "scripts"
 ENDPOINT_SCRIPTS = (
@@ -27,24 +29,21 @@ ENDPOINT_SCRIPTS = (
     "managed_config_apply.py",
 )
 
-PYTHON_VERSION = "3.12.8"
-NODE_VERSION = "22.22.0"
-PYTHON_EMBED_URL = f"https://www.python.org/ftp/python/{PYTHON_VERSION}/python-{PYTHON_VERSION}-embed-amd64.zip"
-PYTHON_EMBED_SHA256 = "8d3f33be9eb810f23c102f08475af2854e50484b8e4e06275e937be61ce3d2fb"
-NODE_DIST_URL = f"https://nodejs.org/dist/v{NODE_VERSION}/node-v{NODE_VERSION}-win-x64.zip"
-NODE_DIST_SHA256 = "c97fa376d2becdc8863fcd3ca2dd9a83a9f3468ee7ccf7a6d076ec66a645c77a"
+_PINS = load_windows_runtime_pins()
+PYTHON_VERSION = str(_PINS["python"]["version"])
+PYTHON_EMBED_URL = str(_PINS["python"]["archiveUrl"])
+PYTHON_EMBED_SHA256 = str(_PINS["python"]["sha256"])
+NODE_VERSION = str(_PINS["node"]["version"])
+NODE_DIST_URL = str(_PINS["node"]["archiveUrl"])
+NODE_DIST_SHA256 = str(_PINS["node"]["sha256"])
+NODE_MIN_SAFE_VERSION = parse_version_tuple(str(_PINS["node"]["minSafe"]))
+SQLITE_VERSION = str(_PINS["sqlite"]["version"])
+SQLITE_DLL_URL = str(_PINS["sqlite"]["archiveUrl"])
+SQLITE_DLL_MIRROR_URLS = tuple(str(item) for item in _PINS["sqlite"]["mirrors"])
+SQLITE_DLL_SHA3_256 = str(_PINS["sqlite"]["sha3_256"])
+SQLITE_MIN_SAFE_VERSION = parse_version_tuple(str(_PINS["sqlite"]["minSafe"]))
 WINDOWS_VT_HOOK = Path(__file__).with_name("smc_windows_vt.py")
 WINDOWS_VT_PTH_NAME = "zz_smc_windows_vt.pth"
-
-SQLITE_VERSION = "3.53.4"
-SQLITE_DLL_URL = "https://www3.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip"
-SQLITE_DLL_MIRROR_URLS = (
-    SQLITE_DLL_URL,
-    "https://www.sqlite.org/2026/sqlite-dll-win-x64-3530400.zip",
-)
-SQLITE_DLL_SHA3_256 = "deddee963c810d1eeac3ce5e15c7c41da21a1c54d7a39cf54fbf577d2f50de3a"
-SQLITE_MIN_SAFE_VERSION = (3, 51, 3)
-NODE_MIN_SAFE_VERSION = (22, 22, 0)
 
 PE_AMD64 = 0x8664
 DOWNLOAD_ATTEMPTS = 4
@@ -59,10 +58,6 @@ def sha256_file(path: Path) -> str:
 
 def sha3_256_file(path: Path) -> str:
     return hashlib.sha3_256(path.read_bytes()).hexdigest()
-
-
-def parse_version_tuple(version_str: str) -> tuple[int, ...]:
-    return tuple(int(x) for x in version_str.split("."))
 
 
 def assert_pe_amd64(path: Path) -> None:

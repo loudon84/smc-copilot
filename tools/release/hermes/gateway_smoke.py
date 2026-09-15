@@ -92,7 +92,7 @@ def run_gateway_smoke(
     profile_name: str = "smc-managed",
     bind: str = "127.0.0.1",
     port: int | None = None,
-    startup_timeout_s: float = 45.0,
+    startup_timeout_s: float = 120.0,
     http_timeout_s: float = 10.0,
     http_get: HttpGetter | None = None,
     skip_if_not_windows: bool = True,

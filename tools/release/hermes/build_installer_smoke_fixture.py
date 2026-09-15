@@ -23,7 +23,7 @@ from tools.release.hermes.release_v2 import (  # noqa: E402
     zip_release_tree,
 )
 from tools.release.hermes.runtime_profile import load_profiles, resolve_profile  # noqa: E402
-from tools.release.hermes.windows_runtime import write_hermes_launcher  # noqa: E402
+from tools.release.hermes.windows_runtime import NODE_VERSION, write_hermes_launcher  # noqa: E402
 
 
 def _pe_amd64() -> bytes:
@@ -119,7 +119,7 @@ def build_fixture(dest: Path, *, release_version: str = "0.22.0-smc.1") -> None:
             {
                 "schema": "smc.hermes.windows-runtime.v2",
                 "python": "3.12.8",
-                "node": "22.22.0",
+                "node": NODE_VERSION,
                 "sqlite": "3.53.4",
             }
         )
