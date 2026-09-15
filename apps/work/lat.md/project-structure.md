@@ -32,3 +32,5 @@ Vitest is configured in [[vitest.config.ts]] to collect `src/**/*.test.ts(x)` an
 ## Documentation navigation
 
 Use this document for structural orientation, then navigate to the smallest feature document that owns the behavior being changed. Do not treat legacy reference trees, generated outputs, or archived planning material as implementation sources.
+
+Agent `lat hook` Stop / UserPromptSubmit auto-runs are disabled for Work (`apps/work/.cursor/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`). Run `lat search` / `lat check` only when product docs or code change, not on every prompt.

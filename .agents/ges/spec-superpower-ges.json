@@ -1,0 +1,25 @@
+{
+  "schema": "smc.ges.spec-superpower-ges.v1",
+  "spec_kit": {
+    "output": "prd",
+    "claim": "ADAPTER_READY"
+  },
+  "handoff": {
+    "spec_to_superpower": {
+      "enabled": true,
+      "note": "Spec Kit UX proposals remain proposals under .smc/runs; Superpowers/GES_NATIVE methods execute under Delivery ownership."
+    },
+    "plan_to_ges": {
+      "enabled": true,
+      "plan_contract": "smc.plan.v3.7"
+    }
+  },
+  "ges": {
+    "validation": {
+      "required": true
+    },
+    "release_gate": {
+      "required": true
+    }
+  }
+}

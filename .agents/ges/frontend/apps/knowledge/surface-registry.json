@@ -1,0 +1,77 @@
+{
+  "schema": "smc.ges.surface-registry.v1",
+  "app_id": "knowledge",
+  "surfaces": [
+    {
+      "surface_id": "knowledge:header.chrome",
+      "app_id": "knowledge",
+      "ux_role": "chrome",
+      "business_entities": [],
+      "owner": "apps/knowledge/src/components/common/page-header.tsx",
+      "layout_owner": null,
+      "visual_position": "header",
+      "actions": [],
+      "action_cluster": "chrome",
+      "reuse_priority": "MEDIUM",
+      "status": "FRESH"
+    },
+    {
+      "surface_id": "knowledge:sidebar.identity",
+      "app_id": "knowledge",
+      "ux_role": "identity_control",
+      "business_entities": [],
+      "owner": "apps/knowledge/src/components/layout/app-sidebar.tsx",
+      "layout_owner": null,
+      "visual_position": "sidebar",
+      "actions": [
+        "show_identity",
+        "switch_profile"
+      ],
+      "action_cluster": "identity",
+      "reuse_priority": "HIGH",
+      "status": "FRESH"
+    },
+    {
+      "surface_id": "knowledge:app-shell.navigation",
+      "app_id": "knowledge",
+      "ux_role": "navigation",
+      "business_entities": [],
+      "owner": "apps/knowledge/src/components/layout/nav-group.tsx",
+      "layout_owner": null,
+      "visual_position": "app-shell",
+      "actions": [],
+      "action_cluster": "navigation",
+      "reuse_priority": "MEDIUM",
+      "status": "FRESH"
+    },
+    {
+      "surface_id": "knowledge:workspace.navigation",
+      "app_id": "knowledge",
+      "ux_role": "navigation",
+      "business_entities": [],
+      "owner": "apps/knowledge/src/components/ui/navigation-menu.tsx",
+      "layout_owner": null,
+      "visual_position": "workspace",
+      "actions": [],
+      "action_cluster": "navigation",
+      "reuse_priority": "MEDIUM",
+      "status": "FRESH"
+    },
+    {
+      "surface_id": "knowledge:workspace.identity",
+      "app_id": "knowledge",
+      "ux_role": "identity_control",
+      "business_entities": [],
+      "owner": "apps/knowledge/src/routes/profile.tsx",
+      "layout_owner": "apps/knowledge/src/features/profile/profile-page.tsx",
+      "visual_position": "workspace",
+      "actions": [
+        "show_identity",
+        "switch_profile"
+      ],
+      "action_cluster": "identity",
+      "reuse_priority": "HIGH",
+      "status": "FRESH"
+    }
+  ]
+}

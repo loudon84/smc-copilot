@@ -1,0 +1,3 @@
+feat(work): import Skill Run v1.5.0 streaming-delta contract
+
+Lock the published Provider bundle offline so Work can prove v1.5 eligibility without mapping delta into parser or UI.

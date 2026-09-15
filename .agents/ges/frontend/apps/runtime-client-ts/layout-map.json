@@ -1,0 +1,10 @@
+{
+  "schema": "smc.ges.layout-map.v1",
+  "app_id": "runtime-client-ts",
+  "layouts": {
+    "app-shell": {
+      "owner": null,
+      "regions": {}
+    }
+  }
+}

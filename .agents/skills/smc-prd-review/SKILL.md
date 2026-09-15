@@ -1,7 +1,7 @@
 ---
 name: smc-prd-review
 description: Stage PRD Architecture Gate。initial 一次性审 Scope/Existing Capability/Production Ownership/Classification/Boundary/Behaviour->AC；closure 只关闭旧 Finding。复用 source_revision + grounded_commit，禁止以独立审查为名重复 discovery。
-version: 4.0.0
+version: 5.0.0
 disable-model-invocation: true
 ---
 
@@ -53,3 +53,7 @@ Review 不修改 PRD。PASS -> `smc-prd-converge`; REVISE -> `smc-prd-grounding 
 ## Artifact Commit Gate
 
 Review 产出 finding 文档或备注时，PRD 仍处于 `REVIEW_REQUIRED`：**禁止 git commit**。待 `smc-prd-converge` 将 status 置为 `APPROVED` 后再按 converge 闸门提交。
+
+## Governance profile and clarification
+
+Run prd_profile.py scan on the canonical PRD before review. LEAN retains scope, existing owner, capability, behaviour/AC, deterministic verification and risk escalation checks; FULL retains all existing gates. Open blocking findings must be closed explicitly, regardless of profile. Domain preplan decisions must be complete before approval. Return FULL_REQUIRED for new ownership, boundary, migration, dependency or lifecycle semantics. Never downgrade FULL to LEAN within a work item.

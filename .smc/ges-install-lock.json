@@ -1,0 +1,917 @@
+{
+  "bundle": "5.0.0",
+  "domains": {
+    "backend": {
+      "sha256": "e30b715b6ce81c9f74dc9fe520484909887ef8f3ee5bb5c63a360aca528aa13e",
+      "version": "2.2.0"
+    },
+    "frontend": {
+      "sha256": "c0331cc25d4e5071bc155a97dc3e87c8f95d6fec2ef57794acd3973096d36d32",
+      "version": "2.2.0"
+    },
+    "ops": {
+      "sha256": "ae6e6b46fdba8153eef6677d395acf494e66bb25595fa4ee0a427a5aadfc5fc3",
+      "version": "2.2.0"
+    }
+  },
+  "install_receipt_path": ".smc/ges-install-receipts/bc0dba98729b465fb7b5e0c20f9fd28a.json",
+  "install_receipt_sha256": "sha256:bc78bce4dada9de05392d2f2af1e8211726cb9a1c35624700c928cefb82bf85b",
+  "installed_at": "2026-09-15T03:35:26Z",
+  "owned_files": [
+    {
+      "installed_sha256": "a093f43a0023fb6795b79e6c1c39b4458cc2fa948abfb19e5791be89f2f45dc3",
+      "path": ".agents/ges/domain-packs/backend/activation.json"
+    },
+    {
+      "installed_sha256": "e30b715b6ce81c9f74dc9fe520484909887ef8f3ee5bb5c63a360aca528aa13e",
+      "path": ".agents/ges/domain-packs/backend/pack.json"
+    },
+    {
+      "installed_sha256": "c72e9e78ab8bbda05ef923afa324f12239eb271f4e594cd16d004a4bdd35f447",
+      "path": ".agents/ges/domain-packs/backend/policy-lock.json"
+    },
+    {
+      "installed_sha256": "48c53aff18321717d7f12383827781640344a5d4bbb0fb0009f74ae10f984b20",
+      "path": ".agents/ges/domain-packs/frontend/README.md"
+    },
+    {
+      "installed_sha256": "e383ab704592ef02a748c358461bc289575d2687297a8f0bc91389f460b77526",
+      "path": ".agents/ges/domain-packs/frontend/activation.json"
+    },
+    {
+      "installed_sha256": "c0331cc25d4e5071bc155a97dc3e87c8f95d6fec2ef57794acd3973096d36d32",
+      "path": ".agents/ges/domain-packs/frontend/pack.json"
+    },
+    {
+      "installed_sha256": "1af0375df5dee066a40497b4326df37fa621ce54ca71f299539daf356fcb21c8",
+      "path": ".agents/ges/domain-packs/frontend/policy-lock.json"
+    },
+    {
+      "installed_sha256": "e7a157e32b0e49ccbf2c332d5ef1fb0e5553d6c41c3f64758b83474e8f6e16d7",
+      "path": ".agents/ges/domain-packs/frontend/upstream-sources.md"
+    },
+    {
+      "installed_sha256": "2705864fed909a0ab3a57e4922ee6079eb615de37b94556dc4b260972a91d69b",
+      "path": ".agents/ges/domain-packs/ops/activation.json"
+    },
+    {
+      "installed_sha256": "ae6e6b46fdba8153eef6677d395acf494e66bb25595fa4ee0a427a5aadfc5fc3",
+      "path": ".agents/ges/domain-packs/ops/pack.json"
+    },
+    {
+      "installed_sha256": "f480704732c57e66c370e883071937f89c0afd6406c2cc9eb3f60bd55e9ca134",
+      "path": ".agents/ges/domain-packs/ops/policy-lock.json"
+    },
+    {
+      "installed_sha256": "6d42fea4f9b25e6134dbd96c6879f5fcb891a25a2108a464bf42bf9b50e2d6cc",
+      "path": ".agents/ges/domain-packs/registry.json"
+    },
+    {
+      "installed_sha256": "bcc43f46955d4ea2e0dc0f302ccf45958ff147a77ad0221a8db66613c41d79da",
+      "path": ".agents/ges/domain-runtime/README.md"
+    },
+    {
+      "installed_sha256": "cd4b0212557ea642691a69685b1bfd53993bd3268fdcde842c514442610d49df",
+      "path": ".agents/ges/domain-runtime/domain_intent.py"
+    },
+    {
+      "installed_sha256": "2ad293b9c37fb0a287f3bb698fa14ec746ff92e43bcc74ba930ec1ddb0506c66",
+      "path": ".agents/ges/domain-runtime/domain_runtime.py"
+    },
+    {
+      "installed_sha256": "f122db94e6ea76bb41dfdf42339a8fefe1c04d443650168b0a3d626ffcdf3f90",
+      "path": ".agents/ges/domain-runtime/domain_table.py"
+    },
+    {
+      "installed_sha256": "952be04957cdf2ed7efb4186e43c2c40cd4d8ff1066f5e4b5123fab97752b224",
+      "path": ".agents/ges/domain-runtime/risk_signals.py"
+    },
+    {
+      "installed_sha256": "3680c314aba61a9ea0647f6bd0b7cc6e48da19fc01fd54a6717078c7fb882a1b",
+      "path": ".agents/ges/domain-runtime/test_domain_runtime.py"
+    },
+    {
+      "installed_sha256": "6d82c25f3af98f850e611aa6d506055bb5960732e5e2421c2ab4b5f26055cb2a",
+      "path": ".agents/ges/domain-runtime/test_risk_signals.py"
+    },
+    {
+      "installed_sha256": "886aea10cb5b0f6e8e65c5550175b521636984c8d889596457d1c3de47e9f35c",
+      "path": ".agents/ges/frontend-adapters/generic/adapter.json"
+    },
+    {
+      "installed_sha256": "4f601ec7550e39d0cd8958c83d5a23db738dcfb58f345a6512d98e6a9aba3fd3",
+      "path": ".agents/ges/frontend-adapters/nextjs/adapter.json"
+    },
+    {
+      "installed_sha256": "95bc7382c036204d08ae517ba1da7c90d9c89f119440b63bf2d82694bed47c0b",
+      "path": ".agents/ges/frontend-adapters/nuxt/adapter.json"
+    },
+    {
+      "installed_sha256": "bee5af40d7b9150030531888704ae045c12e7d5979bb96c1819d7b8f127f85f5",
+      "path": ".agents/ges/frontend-adapters/react-electron/adapter.json"
+    },
+    {
+      "installed_sha256": "449c5650eb57b3c444de49be4dc6705c93fc09e81943d77addeb87f32d3c89f6",
+      "path": ".agents/ges/frontend-adapters/react-native/adapter.json"
+    },
+    {
+      "installed_sha256": "a03671d0ab2fe2557f165048758cf2202af2ef9b2376340978001a3cd7bb4ad8",
+      "path": ".agents/ges/frontend-adapters/react-web/adapter.json"
+    },
+    {
+      "installed_sha256": "10dd1efe1fc0baf9e9e16fca8cde8170e189f8989cf4c1f1e75565109be0c70f",
+      "path": ".agents/ges/frontend-adapters/vue3-web/adapter.json"
+    },
+    {
+      "installed_sha256": "55d56b33a814948aea4134ee06a9edc670626402df32d33fb517257d92478f5a",
+      "path": ".agents/ges/frontend-runtime/__init__.py"
+    },
+    {
+      "installed_sha256": "969ee4b74f1f4305ace7aa0e3bfb8d0addd91feec84c3b685326c9b5178d44a9",
+      "path": ".agents/ges/frontend-runtime/context_cache.py"
+    },
+    {
+      "installed_sha256": "3a945c4f707a973c65be7ed8311b83a4df7e834ef7f12ec3c820d7f14874a7f9",
+      "path": ".agents/ges/frontend-runtime/frontend_app_registry.py"
+    },
+    {
+      "installed_sha256": "0adef76361c00be2176cfccc230c5f1818aa0be930f0c197429178119cf4a248",
+      "path": ".agents/ges/frontend-runtime/schemas/feature-scope.v1.json"
+    },
+    {
+      "installed_sha256": "b33f279033c0e0dd604fb2b15cf32b0a431672b624a856d1cd59580b64341102",
+      "path": ".agents/ges/frontend-runtime/schemas/frontend-app-registry.v1.json"
+    },
+    {
+      "installed_sha256": "1eec325c1c00356b1bd0c271ecf6a59f58806aa00ca5be9c0495163e119ef451",
+      "path": ".agents/ges/frontend-runtime/schemas/frontend-app-registry.v2.json"
+    },
+    {
+      "installed_sha256": "ee8caf355d6a037966c6021fb944e3461e07a0e936670b73a4919d1787016173",
+      "path": ".agents/ges/frontend-runtime/schemas/per-app-baseline.v1.json"
+    },
+    {
+      "installed_sha256": "882fe88e33072865c83d06c9055b66e9e82021bb1b62c475569042d835d1a6b3",
+      "path": ".agents/ges/frontend-runtime/schemas/shared-ui-registry.v1.json"
+    },
+    {
+      "installed_sha256": "2bda82dd35c7c8448a464ce8e5684c6d356a03cfb7fcda0cd8a0578d29c41df2",
+      "path": ".agents/ges/frontend-runtime/schemas/surface-registry.v1.json"
+    },
+    {
+      "installed_sha256": "0994be15ee78853f782aaad1190db62672b35e55a53d48731559200c3cde3418",
+      "path": ".agents/ges/frontend-runtime/schemas/visual-intent.v1.json"
+    },
+    {
+      "installed_sha256": "452ae6ae10a61c5b4631b93a1aaec5f17967eb5231d356f70b5b297b41d2b0f3",
+      "path": ".agents/ges/frontend-runtime/schemas/work-scope.v1.json"
+    },
+    {
+      "installed_sha256": "9a7907dc64a5f2be9057cd718467bc1feb49d61a96119bbfe4ad4fd87ef6cf09",
+      "path": ".agents/ges/frontend-runtime/stack_classifier.py"
+    },
+    {
+      "installed_sha256": "aab94584e0df4ab5f42089d96ea309bfbd3e35a9136fb4f63258cd3778f8c792",
+      "path": ".agents/ges/frontend-runtime/token_budget.py"
+    },
+    {
+      "installed_sha256": "12ab918b99933b41ff8ec36f03e50c4c1d8ee7f14096ef87be6e02930488d5a0",
+      "path": ".agents/ges/frontend-runtime/ux_context_resolver.py"
+    },
+    {
+      "installed_sha256": "70a5343525d2abb5cea85199e15aab87183d8f77411c1d129d01bb5eee714304",
+      "path": ".agents/ges/frontend-runtime/work_scope.py"
+    },
+    {
+      "installed_sha256": "7b2a1d31cdc9b6e0a94855e1b1887569d0c244af31a1685b749a056d3ec2669c",
+      "path": ".agents/ges/profile.json"
+    },
+    {
+      "installed_sha256": "3cde56c2a4ccfb30d8c9ccceecc5c90b8574c5e2ebfdb6d9749292d7c12d43d1",
+      "path": ".agents/skills/executing-plans/SKILL.md"
+    },
+    {
+      "installed_sha256": "1a16b507906488b35bd1147eeab34a91f1c22325537735e92a5b0eaa2e4ec722",
+      "path": ".agents/skills/smc-architecture-decision/SKILL.md"
+    },
+    {
+      "installed_sha256": "fc3d9075346d6eb49d477ad675d1e52fc8ed7f3c60eca4525c8e4ea97a96905e",
+      "path": ".agents/skills/smc-architecture-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "7fe083a46bfe94f76891f89df4dafd049cf067c7a80c0f369149676320b53e90",
+      "path": ".agents/skills/smc-backend-engineering/SKILL.md"
+    },
+    {
+      "installed_sha256": "9c809c9a157de825372cd67e3cdae533740eede9c8bb62290b1a1a09a1d6c07c",
+      "path": ".agents/skills/smc-backend-preplan/SKILL.md"
+    },
+    {
+      "installed_sha256": "c8b739dfd77af364b3bf81de59577a61250e2e52b6dcc1b57aad49e8443edf4f",
+      "path": ".agents/skills/smc-backend-preplan/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "f5695b9ef27cf53dce895c210b21387fd9ecaa64074e78664191faa217529448",
+      "path": ".agents/skills/smc-backend-preplan/scripts/validate_prd_intent.py"
+    },
+    {
+      "installed_sha256": "f502a0015f4f6978d2b9ecc39f4bebd844d3c380604cb36184dd695c66eb526f",
+      "path": ".agents/skills/smc-backend-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "91057992ec1eeed59ba9c7b431f839fba0c13d8aaacd6cc1fbaa41c470c60b46",
+      "path": ".agents/skills/smc-backend-review/scripts/validate_plan_extension.py"
+    },
+    {
+      "installed_sha256": "37f0798ff08c6f8831d83c565b8461c84a163e1b975004e266d7e1cd4376f5a7",
+      "path": ".agents/skills/smc-backend-verification/SKILL.md"
+    },
+    {
+      "installed_sha256": "d0d5fe4a369fc2d46300f838e1ad7fcbaeb7bbf245d63105c7e4ef2d8fcfd519",
+      "path": ".agents/skills/smc-frontend-engineering/SKILL.md"
+    },
+    {
+      "installed_sha256": "bfdfa7fa14700df1c71b6670eb703cf485b811078b30b147cdb7fb64731c8382",
+      "path": ".agents/skills/smc-frontend-engineering/references/accessibility.md"
+    },
+    {
+      "installed_sha256": "cdd9f24f2738eb8ce5c55098bf02bd34d799f4c785dbf06a305e49d26009dacd",
+      "path": ".agents/skills/smc-frontend-engineering/references/design-system.md"
+    },
+    {
+      "installed_sha256": "5c22fffd3bccd370d0cfa08b5d72ec375e722c8b73cd2ecd1af155c113df9d3f",
+      "path": ".agents/skills/smc-frontend-engineering/references/frontend-testing.md"
+    },
+    {
+      "installed_sha256": "864ee41c7f28f1e351db0486608342a193f667ddd6f4655957bb05daee4f0c72",
+      "path": ".agents/skills/smc-frontend-engineering/references/interaction-states.md"
+    },
+    {
+      "installed_sha256": "7eae8f990a8b2983b4ad39b35596f209ad43d055d4b4bcdb22ebad9c183353f0",
+      "path": ".agents/skills/smc-frontend-engineering/references/motion.md"
+    },
+    {
+      "installed_sha256": "fcb66b278696e08152aa2e541d03aee0b11389fcc3f028651a65f4c72dadf54e",
+      "path": ".agents/skills/smc-frontend-engineering/references/react-composition.md"
+    },
+    {
+      "installed_sha256": "439d0b2b9f3ef554a396f267f78df1d6c76687d128a084285cb69741e9135725",
+      "path": ".agents/skills/smc-frontend-engineering/references/rendering-performance.md"
+    },
+    {
+      "installed_sha256": "87f3785201cbd0bd2d73d3db1a6d61c956be5a622392f574d22380103e29a0eb",
+      "path": ".agents/skills/smc-frontend-engineering/references/state-and-effects.md"
+    },
+    {
+      "installed_sha256": "9b0335cb0b7a2148626c7c9613a0f936e490ceee39b5f6216a6b1ce4f3cff6f1",
+      "path": ".agents/skills/smc-frontend-preplan/SKILL.md"
+    },
+    {
+      "installed_sha256": "7b11f18a2c7ba036947c1734346a47bd14d43367766d85983ea2ce6eb01dcff0",
+      "path": ".agents/skills/smc-frontend-preplan/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "00c38835ea5c056ea42b134fa86cf39ac966d823544cb23be9eacce9836028dc",
+      "path": ".agents/skills/smc-frontend-preplan/scripts/validate_prd_intent.py"
+    },
+    {
+      "installed_sha256": "a1c7e32c6cf77504ed861ec6c90a33ad9dd700d46d4c28448b65100cc9e88377",
+      "path": ".agents/skills/smc-frontend-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "c200bc4f86c0ec1d9c352cb8b8a8c1653b5149abeb8d1165800c6239bcea49a4",
+      "path": ".agents/skills/smc-frontend-review/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "cef52a6aad8f331d88ab788002d09ec97d13a43ea8eaa223f038e40b5387856e",
+      "path": ".agents/skills/smc-frontend-review/scripts/validate_plan_extension.py"
+    },
+    {
+      "installed_sha256": "8e65cce37f1e06ffbf64ba2b128f76e7d3b4700f945b0c6e89f326bddb4aacde",
+      "path": ".agents/skills/smc-frontend-visual-verification/SKILL.md"
+    },
+    {
+      "installed_sha256": "f6db87536f4be3aba34ffec9dc25f6423cb39367314443b5adb640a61ae6e69a",
+      "path": ".agents/skills/smc-frontend-visual-verification/scripts/preflight.py"
+    },
+    {
+      "installed_sha256": "a0d674003dcb6c5fe078d1888750e28c96f5281866f2c96e0376a2ba06aa22a3",
+      "path": ".agents/skills/smc-ops-engineering/SKILL.md"
+    },
+    {
+      "installed_sha256": "d207b3072fd307c784552767d9182528b0bd7b00c92582900c94b58d466bd745",
+      "path": ".agents/skills/smc-ops-preplan/SKILL.md"
+    },
+    {
+      "installed_sha256": "e645efe9ccbe381a632ab388506fe1d91acb801b1ebb3e8f75351c9f88500622",
+      "path": ".agents/skills/smc-ops-preplan/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "1e2769c77843de953551a836051ba788f4b1a663bad318ce2033191372e453c2",
+      "path": ".agents/skills/smc-ops-preplan/scripts/validate_prd_intent.py"
+    },
+    {
+      "installed_sha256": "ae8d113b209294ae5066eb3e207515e9e35f5fe69f969f9051c524e0d7d1c7fd",
+      "path": ".agents/skills/smc-ops-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "a8c4cb36b9d0a5d9ebf9475fbe80c75ead985d35353bfd121e394a116e2e3b49",
+      "path": ".agents/skills/smc-ops-review/scripts/validate_plan_extension.py"
+    },
+    {
+      "installed_sha256": "473f8901c3c827e9a4717da8e5859b120065dec37a0b48a9f7f649492d4bf9e9",
+      "path": ".agents/skills/smc-ops-verification/SKILL.md"
+    },
+    {
+      "installed_sha256": "b60cafa79b2654e086e06f8aad531bce372245fcf70ed33a8990d0441552728e",
+      "path": ".agents/skills/smc-plan-delivery/SKILL.md"
+    },
+    {
+      "installed_sha256": "ad4957f1f6cfa713ee91b9f2316272b5ab3cae325aa4f26a58e1f9d0ea40cd27",
+      "path": ".agents/skills/smc-plan-delivery/references/acceptance-governance-contract.md"
+    },
+    {
+      "installed_sha256": "5ab56df318f2b82d281c6e7ee8267a26ac1418432c21b71ee8619aa86abc925a",
+      "path": ".agents/skills/smc-plan-delivery/references/completion-audit-contract.md"
+    },
+    {
+      "installed_sha256": "6a7d534658839fa1616d5d4ef2590f6ae7c87e2a703ced6b1520e477fec54a19",
+      "path": ".agents/skills/smc-plan-delivery/references/delivery-state-machine.md"
+    },
+    {
+      "installed_sha256": "23004791836aa3885cdcb4ac8b013601cb26d28ac1d72384742081bca0e5efe3",
+      "path": ".agents/skills/smc-plan-delivery/references/engineering-method-contract-v2.md"
+    },
+    {
+      "installed_sha256": "894c9852b124fa4c451d60e14866ea11005a9d245b400d6e21f4cdbe2da707b8",
+      "path": ".agents/skills/smc-plan-delivery/references/engineering-method-contract.md"
+    },
+    {
+      "installed_sha256": "9040111e77b15aedcc6f2377f587c8891017bac976723855876fa17932fd9cff",
+      "path": ".agents/skills/smc-plan-delivery/references/evidence-contract.md"
+    },
+    {
+      "installed_sha256": "ff2b4a0898a566a474824537e3b28439895f952dece4bc12d485d1c9c2c8db7d",
+      "path": ".agents/skills/smc-plan-delivery/references/execution-context-contract.md"
+    },
+    {
+      "installed_sha256": "5ad07e9e9ba07f232360849e477f7871dbd64f1cbb91dec685356cabe0a8eeb4",
+      "path": ".agents/skills/smc-plan-delivery/references/harness-telemetry-contract.md"
+    },
+    {
+      "installed_sha256": "5c587367f1e45437649003c790987c71be2241aba5b64966a6ebddcb463d4d3f",
+      "path": ".agents/skills/smc-plan-delivery/references/method-provider-contract.md"
+    },
+    {
+      "installed_sha256": "8aed7d3361a34cdbb2f99813bd116d69a1f27e2d217ef199dac75c1ffa8bd984",
+      "path": ".agents/skills/smc-plan-delivery/references/recovery-contract.md"
+    },
+    {
+      "installed_sha256": "e57a6e531def1658377820cc94ca27814e445e0c0fa2c594170559da2bab8cd8",
+      "path": ".agents/skills/smc-plan-delivery/references/review-contract.md"
+    },
+    {
+      "installed_sha256": "2714d234be3f1e77b7904428cc1390bdcf32772c0d7d19ab42f5f591eb7ecc96",
+      "path": ".agents/skills/smc-plan-delivery/references/systematic-debugging.md"
+    },
+    {
+      "installed_sha256": "0b2cb9bf937d4842a4d3b9ffd9e51d6fa088bd377835a61cb6870db857c7742b",
+      "path": ".agents/skills/smc-plan-delivery/references/tdd-method.md"
+    },
+    {
+      "installed_sha256": "2d6a3d1ec122f319184188bcfb56164dfa7f4984fcd9ed7be624671e8242c89d",
+      "path": ".agents/skills/smc-plan-delivery/references/test-asset-contract.md"
+    },
+    {
+      "installed_sha256": "c5783fbf6d74e0975c441217107d0e2d39243c27e39983f99197a51583370f60",
+      "path": ".agents/skills/smc-plan-delivery/references/workspace-contract.md"
+    },
+    {
+      "installed_sha256": "78fdeb18dd449b210e83036a486d9f1e57305dbe0781f0cbfb5b764cada95659",
+      "path": ".agents/skills/smc-plan-delivery/scripts/acceptance.py"
+    },
+    {
+      "installed_sha256": "b44c6aacfbda8761893dea85774c562ca720e40611501da6cb46ac3789ede982",
+      "path": ".agents/skills/smc-plan-delivery/scripts/commit_guard.py"
+    },
+    {
+      "installed_sha256": "eb3398d19871dc4c9b62e4766570c43009553986dfe704e512d9facc778a6866",
+      "path": ".agents/skills/smc-plan-delivery/scripts/common.py"
+    },
+    {
+      "installed_sha256": "efdc817fd0cd38eb10ce99fdaa26a341f5c76cff2b9c41ed4ad9a4b617923d0a",
+      "path": ".agents/skills/smc-plan-delivery/scripts/completion_audit.py"
+    },
+    {
+      "installed_sha256": "e8aa9d446da2c4fd15689f762b0b780a3437a6ddb92984b6ee5618cd671416a6",
+      "path": ".agents/skills/smc-plan-delivery/scripts/contract_resolver.py"
+    },
+    {
+      "installed_sha256": "3036e40b308778487fb720ba34bd83fdf75fe60b19d5fe9324c4ea2331122ba4",
+      "path": ".agents/skills/smc-plan-delivery/scripts/delivery_state.py"
+    },
+    {
+      "installed_sha256": "a435d36420b197e98adb97bf03d65945e37652b86a8c8047228e0c32026c87ba",
+      "path": ".agents/skills/smc-plan-delivery/scripts/domain_hooks.py"
+    },
+    {
+      "installed_sha256": "5e8a9a419c68ee4e1f274c7420de55e2d8ffa7ca717591be60796533df5a5076",
+      "path": ".agents/skills/smc-plan-delivery/scripts/engineering_method.py"
+    },
+    {
+      "installed_sha256": "dd39e8e77b1ea858aacd2ebb2a3dd81b07f95f3296c189795b6e11e9c6109212",
+      "path": ".agents/skills/smc-plan-delivery/scripts/engineering_method_v1.py"
+    },
+    {
+      "installed_sha256": "e21290e9e9b2691208c24ab85dc91f6e00674b40574fe422b93b1dd774a6b5de",
+      "path": ".agents/skills/smc-plan-delivery/scripts/evidence.py"
+    },
+    {
+      "installed_sha256": "ee0e759295287618cee66cfc751070c401decfd8df84460119bfb06f713479c2",
+      "path": ".agents/skills/smc-plan-delivery/scripts/execution_context.py"
+    },
+    {
+      "installed_sha256": "26d14d3e5d19aaf4c78db6777c8edd49f027e2fa95e8d846108382bed5ba4d95",
+      "path": ".agents/skills/smc-plan-delivery/scripts/migrate_legacy_plan.py"
+    },
+    {
+      "installed_sha256": "a96bc3b59918afd2d0454940689313be77c09216dc6819965fd229ad725fef6c",
+      "path": ".agents/skills/smc-plan-delivery/scripts/plan_state.py"
+    },
+    {
+      "installed_sha256": "c916bf1a3a706511095f1bba49b52d40b14e8af6016abb5fa16b991f53b113f1",
+      "path": ".agents/skills/smc-plan-delivery/scripts/readiness.py"
+    },
+    {
+      "installed_sha256": "47ab043242c61a948973408e5c5fd70d1f5315e25e72c4d076f6ff34ae7e25ce",
+      "path": ".agents/skills/smc-plan-delivery/scripts/residual_gap.py"
+    },
+    {
+      "installed_sha256": "1c26b4696c59d30974b8ca077cd0964aab7ebddcb998fb9aa53f814af99a9927",
+      "path": ".agents/skills/smc-plan-delivery/scripts/resolve_plan.py"
+    },
+    {
+      "installed_sha256": "ad067e1b7f4bbe9d016b8af68fcdea566cf0c4ae07615256fd281beb24b9fe9a",
+      "path": ".agents/skills/smc-plan-delivery/scripts/review_record.py"
+    },
+    {
+      "installed_sha256": "e3db3d1f7d560b5cd13d078c7648d2c4187d018e228310a30079ac2f8ca10e4b",
+      "path": ".agents/skills/smc-plan-delivery/scripts/run_selftest.py"
+    },
+    {
+      "installed_sha256": "084d800da235aea7b56f9e26a87949e5942ad765db708bb7824427d419997aa0",
+      "path": ".agents/skills/smc-plan-delivery/scripts/runtime_metrics.py"
+    },
+    {
+      "installed_sha256": "3f3ac48a0555761ab062e10815d57e16b2cc9c68d532d5e3483e28196a9db7c4",
+      "path": ".agents/skills/smc-plan-delivery/scripts/source_context.py"
+    },
+    {
+      "installed_sha256": "9ffb82b2e7ab0ce7574212a166c4ddcc876a640fc744febf63b09d36b183cf95",
+      "path": ".agents/skills/smc-plan-delivery/scripts/test_assets.py"
+    },
+    {
+      "installed_sha256": "3ee657c2d455c7f268b5c804f808b3609d70b7f95f5179bc717470ae1982bc6c",
+      "path": ".agents/skills/smc-plan-delivery/scripts/test_context_artifacts.py"
+    },
+    {
+      "installed_sha256": "4dbce1a4945e7ed43dbd1ad4d50406dd2d5557e16c0f99f34fefbcd5d32005da",
+      "path": ".agents/skills/smc-plan-delivery/scripts/test_engineering_method.py"
+    },
+    {
+      "installed_sha256": "60c297d3a72cc45793f3d055f1bca040665a662a70cf1b2e7dc77072e0c4636c",
+      "path": ".agents/skills/smc-plan-delivery/scripts/test_engineering_method_v2.py"
+    },
+    {
+      "installed_sha256": "d79cbbfb37707c4d25beb9d6986d749a60527ef7beaaee0b714cdb29e4e6ba08",
+      "path": ".agents/skills/smc-plan-delivery/scripts/tests/test_acceptance_governance.py"
+    },
+    {
+      "installed_sha256": "08bf9d6fd816e4928e9297ef06667f21cba7ac1d11048549743a5beb51861dbe",
+      "path": ".agents/skills/smc-plan-delivery/scripts/tests/test_delivery_tools.py"
+    },
+    {
+      "installed_sha256": "309a5e9fe9fc1d26e37f2de3b675bcb1bf4c98c5d4ed0987681583d1f0ee8c04",
+      "path": ".agents/skills/smc-plan-delivery/scripts/tests/test_plan_v34.py"
+    },
+    {
+      "installed_sha256": "a456de41a38a910e9995e02d52ee933c40169dcd3f3804c0e01b83f962c15ac9",
+      "path": ".agents/skills/smc-plan-delivery/scripts/tests/test_test_assets.py"
+    },
+    {
+      "installed_sha256": "34c9e0f5587cbd9f4c5f1fdea0400b1bf6014cf808454967abfcaa496a6240c5",
+      "path": ".agents/skills/smc-plan-delivery/scripts/validate_delivery_completion.py"
+    },
+    {
+      "installed_sha256": "09f2730dd484908ad5604666a09e99416fc2b93d9367cc796e5bfe24a80c9e3d",
+      "path": ".agents/skills/smc-plan-delivery/scripts/working_tree_fingerprint.py"
+    },
+    {
+      "installed_sha256": "9897b918aae4292310728925501bd788ee03ac1311c89104e3fd3bd0bd2ea89c",
+      "path": ".agents/skills/smc-plan-delivery/scripts/workspace.py"
+    },
+    {
+      "installed_sha256": "3c21ed686469f18de7ba236c973e4cd88ffcfa2747b33fb93ba189ba360e4e39",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/SKILL.md"
+    },
+    {
+      "installed_sha256": "d31da7bdad743225264a9d7224220756fc3fb6d6b5005c7af11296db5ff5e0ae",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-contract-v3.md"
+    },
+    {
+      "installed_sha256": "224b11ba2c141029c198cde7ff2f0df210eb9df7ab3d1d1254f4f1882a5100e9",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-contract-v35.md"
+    },
+    {
+      "installed_sha256": "11839c49519755d7bd406d2ade2e09f2da790a476c9eaf5d982beaa3e382fc93",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-contract-v36.md"
+    },
+    {
+      "installed_sha256": "a1d8397073bf821c9fcfdc1e6e740adfc4de2a2d244b88e55db62a744e95d2c6",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-contract-v37.md"
+    },
+    {
+      "installed_sha256": "b9ec88013bae6f14fbb89b7f261be89655f4bc31fb8d9a1cc25856b933cb2777",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-template-v35.md"
+    },
+    {
+      "installed_sha256": "c813c20721b55443c01009426b6b0853f031904e25b3eb166cf57ea9ab009bf3",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-template-v36.md"
+    },
+    {
+      "installed_sha256": "d9b9649f57921b797bb2f08f878d848e51e3637e2bd7630c979f0dadf3a47f3c",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-template-v37.md"
+    },
+    {
+      "installed_sha256": "3c2e7754ae72801738dbefaba03d9e8fba8c2e8eab4a01f1cabd961198732401",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/references/plan-template.md"
+    },
+    {
+      "installed_sha256": "2541177a9efe3d5205a62b2d65e95f8519463c79f0d62ad234596245091abb98",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/scripts/create_plan_seed.py"
+    },
+    {
+      "installed_sha256": "c1f9636930178e39999432ea2500827633fb77798f4161ff0d8553db93864403",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/scripts/create_plan_seed_v33.py"
+    },
+    {
+      "installed_sha256": "9f4b756bd028bee07fea14cc6c073aefa1fde3d67e115c310c502c883606d168",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/scripts/create_plan_seed_v34.py"
+    },
+    {
+      "installed_sha256": "d80fb92fe7133452c8ccc54a1731f9825fe37cb8d2ed67c3c3e3f3b83e0237a9",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/scripts/create_plan_seed_v35.py"
+    },
+    {
+      "installed_sha256": "4394758d438cf715ab7a557a0e7e57e4a5f20de5e0021811e9d72772a0434d1c",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/scripts/create_plan_seed_v36.py"
+    },
+    {
+      "installed_sha256": "043a74922c664cc41797218264e1e4aa17b438223bd5dd9ee32bf1141cc65a43",
+      "path": ".agents/skills/smc-plan-from-approved-prd-ponytail/scripts/create_plan_seed_v37.py"
+    },
+    {
+      "installed_sha256": "ea753abb06a6e81f8e35bad47f984da6ddadbc65325fe6b05bdba4bcec880ddb",
+      "path": ".agents/skills/smc-plan-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "73b81f9274d79a000ee0d366e44b7b6892f5d4f6a53311039729dc6b249e8aa9",
+      "path": ".agents/skills/smc-plan-review/scripts/assess_plan_review.py"
+    },
+    {
+      "installed_sha256": "fce79eb0dcd897a52a343a51d56e49b9efd1aca5b973be8a2e75a501a36b7ad4",
+      "path": ".agents/skills/smc-plan-review/scripts/build_review_packet.py"
+    },
+    {
+      "installed_sha256": "71df06e1e268e080852dd5f7bde21cbaf45ddc389ad3686823a3f8c5199ca8f3",
+      "path": ".agents/skills/smc-plan-review/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "0144d427dccee582ffcadf333a9449e6a98112deb2e6c2263fef5e9e2d8f8875",
+      "path": ".agents/skills/smc-plan-validator/SKILL.md"
+    },
+    {
+      "installed_sha256": "213334b05d4863b4d9e86c3faf862560b188deea9cc1abc5b4187a78926f0917",
+      "path": ".agents/skills/smc-plan-validator/scripts/validate_plan_current.py"
+    },
+    {
+      "installed_sha256": "97e9552b708c89e817eb631592a9a9e46e0e1e24383c1703cfa94cabe54b4766",
+      "path": ".agents/skills/smc-plan-validator/scripts/validate_plan_v33.py"
+    },
+    {
+      "installed_sha256": "eff3eb7087ee65e2974c6a22b0f1afe31370a4587363dc22fa50fba67ce0e4b1",
+      "path": ".agents/skills/smc-plan-validator/scripts/validate_plan_v34.py"
+    },
+    {
+      "installed_sha256": "d3172486d98226a5f3631bea648d97ff6f88bd71e321a6ac8e8fc8778f8efc34",
+      "path": ".agents/skills/smc-plan-validator/scripts/validate_plan_v35.py"
+    },
+    {
+      "installed_sha256": "277a04974e7fd03755653654557f241eaaa2165eca11cbc3b8b4ad98962f00fb",
+      "path": ".agents/skills/smc-plan-validator/scripts/validate_plan_v36.py"
+    },
+    {
+      "installed_sha256": "226d775273d8370b0a46532f6067b07e97459cd321f8ea45789e253cebfb993b",
+      "path": ".agents/skills/smc-plan-validator/scripts/validate_plan_v37.py"
+    },
+    {
+      "installed_sha256": "e5842cd4853bc665ea37d811cb1732848fc2c23b47d5d3ca37a3c1d3ebbabd23",
+      "path": ".agents/skills/smc-prd-converge/SKILL.md"
+    },
+    {
+      "installed_sha256": "91ad0dc3ac28a0c47ed9b601cb6c43a645ba0b957faead6513b0b5eed87c4386",
+      "path": ".agents/skills/smc-prd-grounding/SKILL.md"
+    },
+    {
+      "installed_sha256": "378af5631edb040a3d5b405ad7e6c3a2cce1c9c2f54155af0355128805975f3a",
+      "path": ".agents/skills/smc-prd-grounding/references/clarification-contract.md"
+    },
+    {
+      "installed_sha256": "5fdf5d6eeb0c28eb4f7247168d0b4d5108aa445a15b8e88a5e232b20017fe9af",
+      "path": ".agents/skills/smc-prd-grounding/scripts/prd_profile.py"
+    },
+    {
+      "installed_sha256": "9ccc349e6915b9abc09a27f1210b65d38211990541dd315914a4101ad0497108",
+      "path": ".agents/skills/smc-prd-grounding/scripts/test_prd_profile.py"
+    },
+    {
+      "installed_sha256": "c59fc24007bb5dccdc9de6b1ff88da1270ac0f1af964f2b5854eb21a3f2a5c54",
+      "path": ".agents/skills/smc-prd-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "4d5d2e45cedcbaa89aeafb7f412529f29a591d933708a504f30d5400d8f5141c",
+      "path": ".agents/skills/smc-roadmap/SKILL.md"
+    },
+    {
+      "installed_sha256": "4c6165bc14f9fec931f1ba286d79d11a488ad9f1302638fe566d0e3b880c3770",
+      "path": ".agents/skills/smc-roadmap/references/roadmap-contract.md"
+    },
+    {
+      "installed_sha256": "3a5311c30a6dc340953eb506d77b408819b39b5966f7cff13a9d57354f2263f9",
+      "path": ".agents/skills/smc-roadmap/scripts/roadmap_next.py"
+    },
+    {
+      "installed_sha256": "2a6b6ab4fe5cc7da59a4494bc2030070430c9672f597f9ead396cb06aafe8836",
+      "path": ".agents/skills/smc-roadmap/scripts/roadmap_update.py"
+    },
+    {
+      "installed_sha256": "d692fd45753f54c4c83d23a4f022d87cae13df595498cd16f378457226db88be",
+      "path": ".agents/skills/smc-roadmap/scripts/test_roadmap_v11.py"
+    },
+    {
+      "installed_sha256": "db65e07c37c44ef1f334563885529f90c5ddf001c0359eab9fe73ef239a44aed",
+      "path": ".agents/skills/smc-roadmap/scripts/validate_roadmap.py"
+    },
+    {
+      "installed_sha256": "7272effec7b62437acc07884e40db4c33bff1511cf1dccee1df62a808d7f1cb1",
+      "path": ".agents/skills/smc-roadmap/scripts/validate_roadmap_v11.py"
+    },
+    {
+      "installed_sha256": "758870a643d0bb08a641b7202f69e6cac5405a943682f5f8d0f880a02fa1ea10",
+      "path": ".agents/skills/smc-work-router/SKILL.md"
+    },
+    {
+      "installed_sha256": "385347e4bf6b3f3d2346534a60aa28fa9183b01d3e1cf5cb5a30498b13f03661",
+      "path": ".agents/skills/smc-work-router/references/artifact-state-routing.md"
+    },
+    {
+      "installed_sha256": "fbe29698c27d8762ac84812f51e102d3039485b2a6e5b018ad8a072612be45ad",
+      "path": ".agents/skills/smc-work-router/references/complexity-routing.md"
+    },
+    {
+      "installed_sha256": "9a38289371b7c4cc01d74204880415f51d35b92d0ee8381a55be952251612625",
+      "path": ".agents/skills/smc-work-router/references/work-facts-authority-contract.md"
+    },
+    {
+      "installed_sha256": "07b85636115a2448e07e49ec1b2d6783369e764e91e1729ee8d79458fa27f9ae",
+      "path": ".agents/skills/smc-work-router/references/work-routing-contract.md"
+    },
+    {
+      "installed_sha256": "dbd355a4052a0ce6e0f16824ce4775ba057f458fa450a5784610279684002fab",
+      "path": ".agents/skills/smc-work-router/scripts/classification_state.py"
+    },
+    {
+      "installed_sha256": "e41f59c7820313457192d0289dd41978c7c6b0b5558b3acb4df5b8e4970b6a62",
+      "path": ".agents/skills/smc-work-router/scripts/path_containment.py"
+    },
+    {
+      "installed_sha256": "e809afd6411b49bee22b5af29821cfe3f9c6b6fcf1038a014c33a24b781da392",
+      "path": ".agents/skills/smc-work-router/scripts/test_work_authority.py"
+    },
+    {
+      "installed_sha256": "63fbb3f8c9fc0df586ebe5ac1b317db193d0faa2c04d141b981c0a0ec26cf64d",
+      "path": ".agents/skills/smc-work-router/scripts/test_work_facts.py"
+    },
+    {
+      "installed_sha256": "f8699fb4449a0d418685c8c9f70090a3acd419a6ba75907302f1c3866360da17",
+      "path": ".agents/skills/smc-work-router/scripts/test_work_router.py"
+    },
+    {
+      "installed_sha256": "2e0777041d3f37f8f9263faaa46d368ac7aca8eeb79ba695a3d355702ef8430a",
+      "path": ".agents/skills/smc-work-router/scripts/work_authority.py"
+    },
+    {
+      "installed_sha256": "c2449bdeb9c42b690b837d400691aede239094bfac3b970dcb70e8f146623db5",
+      "path": ".agents/skills/smc-work-router/scripts/work_facts.py"
+    },
+    {
+      "installed_sha256": "21308aa16d589dc6593106aaa2aa51a70322568dfc5a64c037d9e57d8cfd74ae",
+      "path": ".agents/skills/smc-work-router/scripts/work_router.py"
+    },
+    {
+      "installed_sha256": "b6f08a5b0df5236a2decc69ce6f5b12ab633cfcb8a4916bd4b1f2266b50ab76c",
+      "path": ".agents/skills/subagent-driven-development/SKILL.md"
+    },
+    {
+      "installed_sha256": "35d84e4f3a4c81684a543422c167cf876db849742e07f25578e02424364d8ea2",
+      "path": ".agents/skills/using-superpowers/SKILL.md"
+    },
+    {
+      "installed_sha256": "385347e4bf6b3f3d2346534a60aa28fa9183b01d3e1cf5cb5a30498b13f03661",
+      "path": ".agents/skills/using-superpowers/references/artifact-state-routing.md"
+    },
+    {
+      "installed_sha256": "fbe29698c27d8762ac84812f51e102d3039485b2a6e5b018ad8a072612be45ad",
+      "path": ".agents/skills/using-superpowers/references/complexity-routing.md"
+    },
+    {
+      "installed_sha256": "15c0b3809e4b55c313746cdc7bbcaa6d0ef7ea3bdf312003669317718cb6a5da",
+      "path": ".agents/skills/using-superpowers/references/work-facts-authority-contract.md"
+    },
+    {
+      "installed_sha256": "07b85636115a2448e07e49ec1b2d6783369e764e91e1729ee8d79458fa27f9ae",
+      "path": ".agents/skills/using-superpowers/references/work-routing-contract.md"
+    },
+    {
+      "installed_sha256": "45ca52055b17c4802eaf8698b03a82948044d6a2881aa4bbdd4d1d36d8dbd92e",
+      "path": ".agents/skills/using-superpowers/scripts/path_containment.py"
+    },
+    {
+      "installed_sha256": "e809afd6411b49bee22b5af29821cfe3f9c6b6fcf1038a014c33a24b781da392",
+      "path": ".agents/skills/using-superpowers/scripts/test_work_authority.py"
+    },
+    {
+      "installed_sha256": "63fbb3f8c9fc0df586ebe5ac1b317db193d0faa2c04d141b981c0a0ec26cf64d",
+      "path": ".agents/skills/using-superpowers/scripts/test_work_facts.py"
+    },
+    {
+      "installed_sha256": "f8699fb4449a0d418685c8c9f70090a3acd419a6ba75907302f1c3866360da17",
+      "path": ".agents/skills/using-superpowers/scripts/test_work_router.py"
+    },
+    {
+      "installed_sha256": "ec0db6a3e526ec01fff1c972cac608ad19ada71ae1a93f6dfb81b08495ffb36b",
+      "path": ".agents/skills/using-superpowers/scripts/work_authority.py"
+    },
+    {
+      "installed_sha256": "f5a44486ec61da52a6d324606bb58817cae79a5bc9af92ceeb6b20fc3e4f02ef",
+      "path": ".agents/skills/using-superpowers/scripts/work_facts.py"
+    },
+    {
+      "installed_sha256": "27572b37b0f3107e9eee71aa6cd16c1fa3294599b7867ffcc3b5ab64bed22c74",
+      "path": ".agents/skills/using-superpowers/scripts/work_router.py"
+    },
+    {
+      "installed_sha256": "7fe083a46bfe94f76891f89df4dafd049cf067c7a80c0f369149676320b53e90",
+      "path": ".cursor/skills/smc-backend-engineering/SKILL.md"
+    },
+    {
+      "installed_sha256": "9c809c9a157de825372cd67e3cdae533740eede9c8bb62290b1a1a09a1d6c07c",
+      "path": ".cursor/skills/smc-backend-preplan/SKILL.md"
+    },
+    {
+      "installed_sha256": "c8b739dfd77af364b3bf81de59577a61250e2e52b6dcc1b57aad49e8443edf4f",
+      "path": ".cursor/skills/smc-backend-preplan/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "f5695b9ef27cf53dce895c210b21387fd9ecaa64074e78664191faa217529448",
+      "path": ".cursor/skills/smc-backend-preplan/scripts/validate_prd_intent.py"
+    },
+    {
+      "installed_sha256": "f502a0015f4f6978d2b9ecc39f4bebd844d3c380604cb36184dd695c66eb526f",
+      "path": ".cursor/skills/smc-backend-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "91057992ec1eeed59ba9c7b431f839fba0c13d8aaacd6cc1fbaa41c470c60b46",
+      "path": ".cursor/skills/smc-backend-review/scripts/validate_plan_extension.py"
+    },
+    {
+      "installed_sha256": "37f0798ff08c6f8831d83c565b8461c84a163e1b975004e266d7e1cd4376f5a7",
+      "path": ".cursor/skills/smc-backend-verification/SKILL.md"
+    },
+    {
+      "installed_sha256": "d0d5fe4a369fc2d46300f838e1ad7fcbaeb7bbf245d63105c7e4ef2d8fcfd519",
+      "path": ".cursor/skills/smc-frontend-engineering/SKILL.md"
+    },
+    {
+      "installed_sha256": "bfdfa7fa14700df1c71b6670eb703cf485b811078b30b147cdb7fb64731c8382",
+      "path": ".cursor/skills/smc-frontend-engineering/references/accessibility.md"
+    },
+    {
+      "installed_sha256": "cdd9f24f2738eb8ce5c55098bf02bd34d799f4c785dbf06a305e49d26009dacd",
+      "path": ".cursor/skills/smc-frontend-engineering/references/design-system.md"
+    },
+    {
+      "installed_sha256": "5c22fffd3bccd370d0cfa08b5d72ec375e722c8b73cd2ecd1af155c113df9d3f",
+      "path": ".cursor/skills/smc-frontend-engineering/references/frontend-testing.md"
+    },
+    {
+      "installed_sha256": "864ee41c7f28f1e351db0486608342a193f667ddd6f4655957bb05daee4f0c72",
+      "path": ".cursor/skills/smc-frontend-engineering/references/interaction-states.md"
+    },
+    {
+      "installed_sha256": "7eae8f990a8b2983b4ad39b35596f209ad43d055d4b4bcdb22ebad9c183353f0",
+      "path": ".cursor/skills/smc-frontend-engineering/references/motion.md"
+    },
+    {
+      "installed_sha256": "fcb66b278696e08152aa2e541d03aee0b11389fcc3f028651a65f4c72dadf54e",
+      "path": ".cursor/skills/smc-frontend-engineering/references/react-composition.md"
+    },
+    {
+      "installed_sha256": "439d0b2b9f3ef554a396f267f78df1d6c76687d128a084285cb69741e9135725",
+      "path": ".cursor/skills/smc-frontend-engineering/references/rendering-performance.md"
+    },
+    {
+      "installed_sha256": "87f3785201cbd0bd2d73d3db1a6d61c956be5a622392f574d22380103e29a0eb",
+      "path": ".cursor/skills/smc-frontend-engineering/references/state-and-effects.md"
+    },
+    {
+      "installed_sha256": "9b0335cb0b7a2148626c7c9613a0f936e490ceee39b5f6216a6b1ce4f3cff6f1",
+      "path": ".cursor/skills/smc-frontend-preplan/SKILL.md"
+    },
+    {
+      "installed_sha256": "7b11f18a2c7ba036947c1734346a47bd14d43367766d85983ea2ce6eb01dcff0",
+      "path": ".cursor/skills/smc-frontend-preplan/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "00c38835ea5c056ea42b134fa86cf39ac966d823544cb23be9eacce9836028dc",
+      "path": ".cursor/skills/smc-frontend-preplan/scripts/validate_prd_intent.py"
+    },
+    {
+      "installed_sha256": "a1c7e32c6cf77504ed861ec6c90a33ad9dd700d46d4c28448b65100cc9e88377",
+      "path": ".cursor/skills/smc-frontend-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "c200bc4f86c0ec1d9c352cb8b8a8c1653b5149abeb8d1165800c6239bcea49a4",
+      "path": ".cursor/skills/smc-frontend-review/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "cef52a6aad8f331d88ab788002d09ec97d13a43ea8eaa223f038e40b5387856e",
+      "path": ".cursor/skills/smc-frontend-review/scripts/validate_plan_extension.py"
+    },
+    {
+      "installed_sha256": "8e65cce37f1e06ffbf64ba2b128f76e7d3b4700f945b0c6e89f326bddb4aacde",
+      "path": ".cursor/skills/smc-frontend-visual-verification/SKILL.md"
+    },
+    {
+      "installed_sha256": "f6db87536f4be3aba34ffec9dc25f6423cb39367314443b5adb640a61ae6e69a",
+      "path": ".cursor/skills/smc-frontend-visual-verification/scripts/preflight.py"
+    },
+    {
+      "installed_sha256": "a0d674003dcb6c5fe078d1888750e28c96f5281866f2c96e0376a2ba06aa22a3",
+      "path": ".cursor/skills/smc-ops-engineering/SKILL.md"
+    },
+    {
+      "installed_sha256": "d207b3072fd307c784552767d9182528b0bd7b00c92582900c94b58d466bd745",
+      "path": ".cursor/skills/smc-ops-preplan/SKILL.md"
+    },
+    {
+      "installed_sha256": "e645efe9ccbe381a632ab388506fe1d91acb801b1ebb3e8f75351c9f88500622",
+      "path": ".cursor/skills/smc-ops-preplan/scripts/selftest.py"
+    },
+    {
+      "installed_sha256": "1e2769c77843de953551a836051ba788f4b1a663bad318ce2033191372e453c2",
+      "path": ".cursor/skills/smc-ops-preplan/scripts/validate_prd_intent.py"
+    },
+    {
+      "installed_sha256": "ae8d113b209294ae5066eb3e207515e9e35f5fe69f969f9051c524e0d7d1c7fd",
+      "path": ".cursor/skills/smc-ops-review/SKILL.md"
+    },
+    {
+      "installed_sha256": "a8c4cb36b9d0a5d9ebf9475fbe80c75ead985d35353bfd121e394a116e2e3b49",
+      "path": ".cursor/skills/smc-ops-review/scripts/validate_plan_extension.py"
+    },
+    {
+      "installed_sha256": "473f8901c3c827e9a4717da8e5859b120065dec37a0b48a9f7f649492d4bf9e9",
+      "path": ".cursor/skills/smc-ops-verification/SKILL.md"
+    },
+    {
+      "installed_sha256": "ff1ec3100b8557b6cdad2edf37de48ff02e5e49e59cd285a2f2dfecebe902347",
+      "path": "tools/agent-skills/validate_plan.py"
+    }
+  ],
+  "policy_digest": "sha256:b4892123cee54fb1722703d1de914dc002c3bb5692c8d7ee35acc478ab8145bf",
+  "profile": {
+    "id": "generic",
+    "sha256": "d69743486151e400a1aa45f07952e7be09396808e249beac843bb948da23b760",
+    "version": "2.0.0"
+  },
+  "release_identity": {
+    "installer_sha256": "23d0a029e651da74c140b6c82aee3ecc6e74d1e6e8fa112952e39847e89ded9e",
+    "package_file_count": 347,
+    "package_manifest_sha256": "3aeeff00083b0210d77a75a649d4a30f5b21b55cd22e27e0409ccef5e2229abf",
+    "release_eligible": false,
+    "source_commit": "91558832633214b63ee1a54521ef13ef7c04f339",
+    "source_tree_dirty": true
+  },
+  "schema": "smc.ges.install-lock.v2"
+}

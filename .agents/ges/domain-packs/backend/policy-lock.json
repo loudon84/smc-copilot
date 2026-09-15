@@ -1,0 +1,28 @@
+{
+  "schema": "smc.ges.policy-lock.v1",
+  "policy_contract": "smc.backend.quality.v2",
+  "runtime_fetch_for_blocking_policy": false,
+  "policy_precedence": [
+    "core-invariants",
+    "approved-architecture",
+    "project-policy",
+    "pinned-domain-defaults"
+  ],
+  "sources": [
+    {
+      "name": "GES pinned backend policy",
+      "source": ".agents/skills/smc-backend-engineering/SKILL.md",
+      "adopted": [
+        "Owner",
+        "Contract",
+        "Data/Transaction",
+        "Auth",
+        "Idempotency/Concurrency",
+        "Failure Semantics",
+        "Observability",
+        "Verification"
+      ],
+      "blocking": true
+    }
+  ]
+}

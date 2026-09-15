@@ -1,0 +1,17 @@
+{
+  "schema": "smc.ges.app-profile.v2",
+  "app_id": "work",
+  "root": "apps/work",
+  "runtime": "electron-renderer",
+  "framework": "react",
+  "stack_adapter": "react-electron",
+  "boundary": {
+    "allowed_roots": [
+      "apps/work"
+    ],
+    "forbidden_roots": [
+      "apps/knowledge",
+      "packages/runtime-client-ts"
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smc.ges.feature-scope.v1",
+  "title": "GES Feature Scope Pipeline",
+  "type": "object",
+  "required": ["schema", "application", "surface", "layout_owner", "component_reuse"],
+  "properties": {
+    "schema": { "const": "smc.ges.feature-scope.v1" },
+    "application": { "type": "object" },
+    "surface": { "type": "object" },
+    "layout_owner": { "type": "object" },
+    "component_reuse": { "type": "object" },
+    "decision": { "type": "string" },
+    "ok": { "type": "boolean" }
+  },
+  "additionalProperties": true
+}

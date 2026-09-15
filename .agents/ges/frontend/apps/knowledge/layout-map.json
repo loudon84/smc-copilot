@@ -1,0 +1,15 @@
+{
+  "schema": "smc.ges.layout-map.v1",
+  "app_id": "knowledge",
+  "layouts": {
+    "app-shell": {
+      "owner": null,
+      "regions": {
+        "sidebar.footer": {
+          "owner": "profile",
+          "path": "apps/knowledge/src/routes/profile.tsx"
+        }
+      }
+    }
+  }
+}

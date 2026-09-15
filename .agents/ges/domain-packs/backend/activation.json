@@ -1,0 +1,27 @@
+{
+  "schema": "smc.ges.domain-activation-rules.v1",
+  "extensions": [
+    ".py",
+    ".go",
+    ".rs",
+    ".java",
+    ".cs"
+  ],
+  "path_globs": [
+    "**/api/**",
+    "**/server/**",
+    "**/services/**",
+    "**/backend/**",
+    "**/handlers/**"
+  ],
+  "target_tokens": [
+    "backend",
+    "api_contract",
+    "transaction",
+    "server"
+  ],
+  "exclude_globs": [
+    "**/generated/**",
+    "**/dist/**"
+  ]
+}

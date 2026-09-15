@@ -1,0 +1,17 @@
+{
+  "schema": "smc.ges.app-profile.v2",
+  "app_id": "runtime-client-ts",
+  "root": "packages/runtime-client-ts",
+  "runtime": "browser",
+  "framework": "unknown",
+  "stack_adapter": "generic",
+  "boundary": {
+    "allowed_roots": [
+      "packages/runtime-client-ts"
+    ],
+    "forbidden_roots": [
+      "apps/knowledge",
+      "apps/work"
+    ]
+  }
+}

@@ -1,4 +1,17 @@
 {
-  "packs": {},
+  "packs": {
+    "backend": {
+      "path": "backend/pack.json",
+      "status": "installed"
+    },
+    "frontend": {
+      "path": "frontend/pack.json",
+      "status": "installed"
+    },
+    "ops": {
+      "path": "ops/pack.json",
+      "status": "installed"
+    }
+  },
   "schema": "smc.ges.domain-registry.v1"
 }

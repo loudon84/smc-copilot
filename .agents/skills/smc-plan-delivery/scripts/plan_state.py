@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from common import DELIVERABLE_PLAN_CONTRACTS, atomic_write, frontmatter_end_index, parse_top_level_frontmatter
+from common import atomic_write, frontmatter_end_index, parse_top_level_frontmatter
 
 VALID = {"pending", "in_progress", "completed", "blocked"}
 
@@ -121,7 +121,7 @@ def validate(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     fm = parse_top_level_frontmatter(text)
     contract = fm.get("plan_contract", "").strip()
-    require_content = contract in DELIVERABLE_PLAN_CONTRACTS
+    require_content = contract in {"smc.plan.v3.4", "smc.plan.v3.5", "smc.plan.v3.6", "smc.plan.v3.7"}
     expected = expected_contents(text)
     curs = cursor_todos(text)
     md = markdown_todos(text)
@@ -173,6 +173,7 @@ def legacy_content_warnings(path: Path) -> list[str]:
 
 def set_status(path: Path, tid: str, status: str) -> None:
     # @lat: [[plan-delivery#Execution Context]]
+    # @lat: [[frontend-context#Classification Correction]]
     if status not in VALID:
         raise ValueError(f"PLAN_CURSOR_TODO_STATE_INVALID: {status}")
     tid = tid.upper()
@@ -182,6 +183,9 @@ def set_status(path: Path, tid: str, status: str) -> None:
     if len(items) != 1:
         raise ValueError(f"PLAN_CURSOR_TODO_MAPPING_INVALID: {tid} matches={len(items)}")
     item = items[0]
+    if status == 'completed' and parse_top_level_frontmatter(text).get('plan_contract') == 'smc.plan.v3.7':
+        from engineering_method import completion_check
+        completion_check(path, tid)
     if item["status_line"] is not None:
         line_no = int(item["status_line"])
         indent = re.match(r"^(\s*)", lines[line_no]).group(1)
@@ -192,6 +196,19 @@ def set_status(path: Path, tid: str, status: str) -> None:
             insert = int(item["content_line"]) + 1
         lines.insert(insert, " " * (int(item["indent"]) + 2) + f"status: {status}")
     atomic_write(path, "\n".join(lines).rstrip() + "\n")
+    # First production todo completion freezes classification window.
+    if status == "completed":
+        try:
+            from pathlib import Path as _P
+            import sys
+            router = _P(__file__).resolve().parents[1].parent / "smc-work-router" / "scripts"
+            if str(router) not in sys.path:
+                sys.path.insert(0, str(router))
+            from classification_state import freeze
+            from common import find_repo_root, plan_id as _pid
+            freeze(find_repo_root(path), _pid(path), reason="first_todo_completed")
+        except Exception:
+            pass
 
 
 def sync_content(path: Path) -> int:

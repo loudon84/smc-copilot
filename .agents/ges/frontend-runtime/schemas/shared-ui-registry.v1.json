@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smc.ges.shared-ui-registry.v1",
+  "title": "GES Shared UI Registry",
+  "type": "object",
+  "required": ["schema", "packages"],
+  "properties": {
+    "schema": { "const": "smc.ges.shared-ui-registry.v1" },
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["package_id", "root", "kind"],
+        "properties": {
+          "package_id": { "type": "string" },
+          "root": { "type": "string" },
+          "kind": { "const": "shared-ui-library" },
+          "components": { "type": "array" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

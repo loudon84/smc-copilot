@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smc.ges.visual-intent.v1",
+  "title": "GES Visual Intent",
+  "type": "object",
+  "required": ["schema", "app_id", "target_surface"],
+  "properties": {
+    "schema": { "const": "smc.ges.visual-intent.v1" },
+    "app_id": { "type": "string" },
+    "target_surface": { "type": "string" },
+    "keep": { "type": "array", "items": { "type": "string" } },
+    "modify": { "type": "array", "items": { "type": "string" } },
+    "hide": { "type": "array", "items": { "type": "string" } },
+    "must_not_add": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

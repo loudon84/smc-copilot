@@ -22,6 +22,15 @@ PROFILE_SCHEMA = "smc.ges.consumer-profile.v2"
 PACK_SCHEMA = "smc.ges.domain-pack.v1"
 REGISTRY_SCHEMA = "smc.ges.domain-registry.v1"
 
+def bounded_path(root, relative):
+    value = Path(relative)
+    if value.is_absolute() or '..' in value.parts:
+        raise ValueError(f'DOMAIN_PATH_OUTSIDE_ROOT: {relative}')
+    path = (root / value).resolve()
+    if not path.is_relative_to(root.resolve()):
+        raise ValueError(f'DOMAIN_PATH_OUTSIDE_ROOT: {relative}')
+    return path
+
 
 def canonical_json(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
@@ -106,11 +115,11 @@ def clean_cell(value: str) -> str:
 
 def change_rows(plan: Path) -> list[dict[str, str]]:
     text = plan.read_text(encoding="utf-8")
-    rows = markdown_table(section(text, "Change Matrix"))
+    rows = markdown_table(section(text, "Change Matrix") or section(text, "Change Classification"))
     normalized: list[dict[str, str]] = []
     for row in rows:
         cid = clean_cell(row.get("Change ID", "")).upper()
-        file_symbol = clean_cell(row.get("File / Symbol", ""))
+        file_symbol = clean_cell(row.get("File / Symbol", "") or row.get("Source Anchor", ""))
         if not cid or not file_symbol:
             continue
         path = file_symbol.split("#", 1)[0].strip()
@@ -155,7 +164,7 @@ def load_context(repo: Path, ges_root: Path | None = None, profile_path: Path | 
     ges = ges_root.resolve() if ges_root else installed_ges_root(repo)
     profile_file = profile_path.resolve() if profile_path else ges / "profile.json"
     profile = read_json(profile_file)
-    if profile.get("schema") != PROFILE_SCHEMA:
+    if profile.get("schema") not in {PROFILE_SCHEMA, "smc.ges.consumer-profile.v3"}:
         raise ValueError(f"DOMAIN_PROFILE_SCHEMA_INVALID: {profile.get('schema')}")
 
     registry_file = ges / "domain-packs" / "registry.json"
@@ -171,21 +180,21 @@ def load_context(repo: Path, ges_root: Path | None = None, profile_path: Path | 
         if not isinstance(entry, dict):
             raise ValueError(f"DOMAIN_REGISTRY_ENTRY_INVALID: {domain_id}")
         relative = Path(str(entry.get("path", domain_id + "/pack.json")))
-        pack_file = ges / "domain-packs" / relative
+        pack_file = bounded_path(ges / 'domain-packs', str(relative))
         pack = read_json(pack_file)
-        if pack.get("schema") != PACK_SCHEMA:
+        if pack.get("schema") not in {PACK_SCHEMA, "smc.ges.domain-pack.v2"}:
             raise ValueError(f"DOMAIN_PACK_SCHEMA_INVALID: {domain_id}: {pack.get('schema')}")
         if pack.get("id") != domain_id:
             raise ValueError(f"DOMAIN_PACK_ID_MISMATCH: registry={domain_id} pack={pack.get('id')}")
         pack["__file__"] = pack_file.as_posix()
-        activation_file = pack_file.parent / str(pack.get("activation_rules", "activation.json"))
+        activation_file = bounded_path(pack_file.parent, str(pack.get("activation_rules", "activation.json")))
         pack["__activation__"] = read_json(activation_file)
         lock_name = pack.get("policy_lock")
         if lock_name:
-            pack["__policy_lock__"] = read_json(pack_file.parent / str(lock_name))
+            pack["__policy_lock__"] = read_json(bounded_path(pack_file.parent, str(lock_name)))
         packs[domain_id] = pack
 
-    return {"ges_root": ges, "profile_path": profile_file, "profile": profile, "registry": registry, "packs": packs}
+    return {"repo": repo, "ges_root": ges, "profile_path": profile_file, "profile": profile, "registry": registry, "packs": packs}
 
 
 def policy_digest(context: dict[str, Any]) -> str:
@@ -195,6 +204,13 @@ def policy_digest(context: dict[str, Any]) -> str:
         "profile": profile,
         "packs": {},
     }
+    if profile.get('schema') == 'smc.ges.consumer-profile.v3':
+        payload['project_policies'] = {}
+        for rel in profile.get('project_policy_paths', []):
+            path = bounded_path(context['repo'], rel)
+            if not path.is_file():
+                raise ValueError(f'PROJECT_POLICY_MISSING: {rel}')
+            payload['project_policies'][rel] = hashlib.sha256(path.read_bytes()).hexdigest()
     for domain_id in sorted(enabled):
         pack = context["packs"].get(domain_id)
         if pack is None:
@@ -242,7 +258,7 @@ def resolve(plan: Path, ges_root: Path | None = None, profile_path: Path | None 
         )
 
     return {
-        "schema": DOMAIN_CONTRACT,
+        "schema": "smc.ges.domain-activation.v2" if frontmatter(plan.read_text(encoding="utf-8")).get("plan_contract") == "smc.plan.v3.7" else DOMAIN_CONTRACT,
         "profile": f"{context['profile'].get('id')}@{context['profile'].get('version')}",
         "policy_digest": policy_digest(context),
         "domains": resolved,
@@ -343,7 +359,8 @@ def validate_plan(plan: Path, ges_root: Path | None = None, profile_path: Path |
     errors: list[dict[str, str]] = []
     text = plan.read_text(encoding="utf-8")
     meta = frontmatter(text)
-    if meta.get("domain_contract") != DOMAIN_CONTRACT:
+    required_contract = 'smc.ges.domain-activation.v2' if meta.get('plan_contract') == 'smc.plan.v3.7' else DOMAIN_CONTRACT
+    if meta.get("domain_contract") != required_contract:
         errors.append({"code": "PLAN_DOMAIN_CONTRACT_INVALID", "detail": meta.get("domain_contract", "")})
         return errors
     try:
@@ -396,7 +413,7 @@ def validate_plan(plan: Path, ges_root: Path | None = None, profile_path: Path |
 
         validator = pack.get("plan_validator")
         if validator:
-            validator_path = repo / str(validator)
+            validator_path = bounded_path(repo, str(validator))
             if not validator_path.is_file():
                 errors.append({"code": "DOMAIN_PLAN_VALIDATOR_MISSING", "detail": f"{domain['id']}: {validator}"})
                 continue
@@ -430,10 +447,68 @@ def assert_policy(plan: Path, ges_root: Path | None = None, profile_path: Path |
     return resolved
 
 
+def normalize_domain_intent(domain: str, change_id: str, row: dict[str, str], fields: list[str]) -> dict[str, Any]:
+    """Thin wrapper — implementation lives in domain_intent.py."""
+    from domain_intent import normalize_domain_intent as _impl
+
+    return _impl(domain, change_id, row, fields)
+
+
+def domain_intent_digest(domain: str, change_id: str, normalized: dict[str, str]) -> str:
+    from domain_intent import domain_intent_digest as _impl
+
+    return _impl(domain, change_id, normalized)
+
+
+def validate_intent_binding(plan: Path, prd: Path, packs: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
+    from domain_intent import validate_intent_binding as _impl
+
+    return _impl(plan, prd, packs)
+
+
+def validate_preplan(prd, ges_root=None, profile_path=None):
+    repo = find_repo_root(prd)
+    context = load_context(repo, ges_root, profile_path)
+    changes = change_rows(prd)
+    if not changes:
+        return [{'code': 'PRD_DOMAIN_CHANGE_SCOPE_MISSING', 'detail': 'Change Classification needs Change ID and Source Anchor'}]
+    activation = resolve(prd, ges_root, profile_path)
+    errors = []
+    text = prd.read_text(encoding='utf-8')
+    for domain in activation['domains']:
+        if domain['status'] != 'REQUIRED':
+            continue
+        pack = context['packs'][domain['id']]
+        if pack['schema'] == PACK_SCHEMA:
+            continue
+        validator = pack.get('preplan_validator')
+        intent = pack.get('preplan_section')
+        if not validator or not intent:
+            errors.append({'code': 'DOMAIN_PREPLAN_CONFIG_MISSING', 'detail': domain['id']});continue
+        rows = markdown_table(section(text, intent))
+        if sorted(r.get('Change ID', '') for r in rows) != sorted(domain['trigger_changes']):
+            errors.append({'code': 'DOMAIN_PREPLAN_COVERAGE_INVALID', 'detail': domain['id']})
+        path = bounded_path(repo, validator)
+        if not path.is_file():
+            errors.append({'code': 'DOMAIN_PREPLAN_VALIDATOR_MISSING', 'detail': str(path)});continue
+        result = subprocess.run([sys.executable, str(path), str(prd), '--json'], cwd=repo, capture_output=True, text=True, encoding='utf-8')
+        if result.returncode:
+            try:
+                payload = json.loads(result.stdout or '{}')
+                child_errors = payload.get('errors', [])
+            except json.JSONDecodeError:
+                child_errors = []
+            if child_errors:
+                for item in child_errors:
+                    errors.append({'code': str(item.get('code', 'DOMAIN_PREPLAN_FAILED')), 'detail': str(item.get('detail', ''))})
+            else:
+                errors.append({'code': 'DOMAIN_PREPLAN_FAILED', 'detail': result.stdout + result.stderr})
+    return errors
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("resolve", "validate-plan", "assert-policy"):
+    for name in ("resolve", "validate-plan", "assert-policy", "validate-preplan"):
         p = sub.add_parser(name)
         p.add_argument("plan", type=Path)
         p.add_argument("--ges-root", type=Path)
@@ -441,13 +516,17 @@ def main() -> int:
         p.add_argument("--json", action="store_true")
     p = sub.add_parser("providers")
     p.add_argument("plan", type=Path)
-    p.add_argument("--phase", required=True, choices=("engineering", "review", "verification"))
+    p.add_argument("--phase", required=True, choices=("preplan", "engineering", "review", "verification"))
     p.add_argument("--ges-root", type=Path)
     p.add_argument("--profile", type=Path)
     p.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
     try:
+        if args.command == 'validate-preplan':
+            errors = validate_preplan(args.plan.resolve(), args.ges_root, args.profile)
+            print(json.dumps({'valid': not errors, 'errors': errors}, indent=2))
+            return 1 if errors else 0
         if args.command == "resolve":
             payload = resolve(args.plan.resolve(), args.ges_root, args.profile)
             print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else activation_ledger(payload))

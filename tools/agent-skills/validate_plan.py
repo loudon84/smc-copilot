@@ -11,6 +11,8 @@ LEGACY_TARGET = ROOT / '.agents/skills/smc-plan-validator/scripts/validate_plan.
 V33_TARGET = ROOT / '.agents/skills/smc-plan-validator/scripts/validate_plan_v33.py'
 V34_TARGET = ROOT / '.agents/skills/smc-plan-validator/scripts/validate_plan_v34.py'
 V35_TARGET = ROOT / '.agents/skills/smc-plan-validator/scripts/validate_plan_v35.py'
+V37_TARGET = ROOT / '.agents/skills/smc-plan-validator/scripts/validate_plan_v37.py'
+V36_TARGET = ROOT / '.agents/skills/smc-plan-validator/scripts/validate_plan_v36.py'
 
 
 def plan_contract(path: Path) -> str:
@@ -28,11 +30,14 @@ def main() -> None:
     # .agents/skills/smc-plan-validator/scripts/validate_plan.py
     candidate = next((Path(a) for a in sys.argv[1:] if not a.startswith('-')), None)
     contract = plan_contract(candidate.resolve()) if candidate and candidate.is_file() else ''
-    if contract == 'smc.plan.v3.5': target = V35_TARGET
+    if contract == 'smc.plan.v3.7': target = V37_TARGET
+    elif contract == 'smc.plan.v3.6': target = V36_TARGET
+    elif contract == 'smc.plan.v3.5': target = V35_TARGET
     elif contract == 'smc.plan.v3.4': target = V34_TARGET
     elif contract == 'smc.plan.v3.3': target = V33_TARGET
     else: target = LEGACY_TARGET
     if not target.is_file(): raise SystemExit(f'PLAN_VALIDATOR_NOT_FOUND: {target}')
+    sys.path.insert(0, str(target.parent))
     runpy.run_path(str(target), run_name='__main__')
 
 

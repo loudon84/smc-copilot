@@ -1,0 +1,19 @@
+{
+  "schema": "smc.ges.navigation-map.v1",
+  "app_id": "work",
+  "entries": [
+    {
+      "surface_id": "work:header.chrome",
+      "app_id": "work",
+      "ux_role": "chrome",
+      "business_entities": [],
+      "owner": "apps/work/src/renderer/src/components/files/preview/FilePreviewHeader.tsx",
+      "layout_owner": "apps/work/src/renderer/src/screens/Layout/Layout.tsx",
+      "visual_position": "header",
+      "actions": [],
+      "action_cluster": "chrome",
+      "reuse_priority": "MEDIUM",
+      "status": "FRESH"
+    }
+  ]
+}

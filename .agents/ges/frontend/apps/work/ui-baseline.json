@@ -1,0 +1,9 @@
+{
+  "schema": "smc.ges.per-app-baseline.v1",
+  "app_id": "work",
+  "surface_count": 5,
+  "component_count": 268,
+  "adoption_mode": "ENFORCED",
+  "provenance": "generated",
+  "calibration_status": "ACCEPTED"
+}

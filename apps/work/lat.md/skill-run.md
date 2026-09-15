@@ -62,7 +62,7 @@ Work has also imported immutable `SKILL-RUN-CONTRACT` v1.4.0. Tag `skill-run-con
 
 Entry: `apps/work/src/main/skill-run/skill-run-e2e.test.ts` via `npm run test:skill-run-e2e` (or vitest with `--pool=threads --maxWorkers=1`).
 
-- **CI fixture (blocking):** `fetchImpl` HTTP replay through real `createSkillRunGatewayClient` + `createSkillRunService` covers Catalog → start → SSE/poll → result → artifacts → rehydrate (zero second `tools/call`), plus negatives: unauthorized catalog, unpublished tool, SSE reconnect + `Last-Event-ID`, idempotency key replay, cancel, hanging SSE with concurrent poll, artifact discovery failure keeping `succeeded`, unknown event fail-soft.
+- **CI fixture (blocking):** `fetchImpl` HTTP replay through real `createSkillRunGatewayClient` + `createSkillRunService` covers Catalog → start → SSE/poll → result → artifacts → rehydrate (zero second `tools/call`), plus negatives: unauthorized catalog, unpublished tool, SSE reconnect + `Last-Event-ID`, idempotency key replay, cancel, hanging SSE with concurrent poll, artifact discovery failure keeping `succeeded`, unknown event fail-soft. The `native-crlf` case frames activity and exact `assistant.delta` chunks with CRLF; report text comes from GET `/api/v1/runs/{run_id}/result`, not Public Run snapshot `result_text`. Fixture success still does not prove a live provider returned a substantive report.
 - **Live (env-gated):** `describe.skipIf` unless `SMC_SKILL_RUN_E2E=1`. Required env (never commit secrets):
   - `SMC_SKILL_RUN_E2E_BACKEND_URL`
   - `SMC_SKILL_RUN_E2E_ACCESS_TOKEN`
@@ -160,9 +160,11 @@ Work imported immutable `SKILL-RUN-CONTRACT` v1.5.0. Tag `skill-run-contract-v1.
 
 Eligible v1.5.0 `assistant.delta` is mapped into existing projection text. Snapshot `assistant.message` stays authoritative. Mapping is gated by the eligibility helper.
 
-When [[src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunStreamingDeltaBundle]] is true, [[src/main/skill-run/skill-run-contract-parser.ts#parseSkillRunEvent]] maps enumerated `assistant.delta` to sanitized `messageId` / `deltaSeq` / `deltaText` and does not assign the chunk to `text`. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] merges those fields into existing projection text by `message_id` / `delta_seq`. A same-`message_id` snapshot remains the authoritative projection text. [[src/renderer/src/modules/skill-run/skill-run-transcript.ts#applySkillRunProjectionsToMessages]] renders that sealed `text` on the Native assistant row.
+When [[src/main/skill-run/skill-run-consumer-lock.ts#hasSkillRunStreamingDeltaBundle]] is true, [[src/main/skill-run/skill-run-contract-parser.ts#parseSkillRunEvent]] maps enumerated `assistant.delta` to a clipped `messageId`, a validated `deltaSeq`, and the exact `delta` string as `deltaText` — it does not assign the chunk to `text`. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] merges those fields into existing projection text by `message_id` / `delta_seq`. A same-`message_id` snapshot remains the authoritative projection text. [[src/renderer/src/modules/skill-run/skill-run-transcript.ts#applySkillRunProjectionsToMessages]] renders that sealed `text` on the Native assistant row.
 
 Missing fields, helper false, and unenumerated types stay `rawUnknown`. There is no new IPC, activity kind, sidecar activity row, or raw Provider event.
+
+The Skill Run SSE reader accepts LF and CRLF frame boundaries across arbitrary network chunks. A clean EOF before a terminal event uses bounded reconnect/backoff and retains polling recovery; empty streams do not reset the retry count. `run.progress` updates the status stage only. Assistant deltas preserve their exact whitespace and full text, including empty deltas that advance the sequence, so a separator chunk cannot stall subsequent report content.
 
 ## M6j Session UX and terminal Result closure
 
@@ -174,7 +176,11 @@ The Renderer no longer writes session mode. [[src/main/skill-run/skill-run-sessi
 
 [[src/main/skill-run/skill-run-gateway-client.ts#createSkillRunGatewayClient]] obtains lifecycle status from Public Run and report text only from the authorized same-origin v1.5 `/api/v1/runs/{run_id}/result` endpoint. [[src/main/skill-run/skill-run-service.ts#createSkillRunService]] funnels poll-first and SSE-first successes through one in-flight resolver: a non-empty Result text wins, empty data never erases live text, and finalization, telemetry, artifact discovery, and abort occur once. Result retrieval failure remains Provider `succeeded`, preserves usable artifacts/text, and records only `RESULT_RETRIEVAL_FAILED` with a sanitized message.
 
-[[src/main/skill-run/skill-run-continuation.ts#rehydrateSkillRunContinuationsForSession]] retries only succeeded sidecar rows with `RESULT_RETRIEVAL_FAILED` and a `providerRunId`, using existing service rehydrate without start or SSE reopening. [[src/renderer/src/modules/skill-run/skill-run-transcript.ts#applySkillRunProjectionsToMessages]] renders report text on the Native assistant; empty success, a temporarily unavailable report, and output-file preview stay File Platform callbacks. It does not claim every artifact is a textual result.
+[[src/main/skill-run/skill-run-continuation.ts#rehydrateSkillRunContinuationsForSession]] retries only succeeded sidecar rows with `RESULT_RETRIEVAL_FAILED` and a `providerRunId`, using existing service rehydrate without start or SSE reopening. [[src/renderer/src/modules/skill-run/skill-run-transcript.ts#applySkillRunProjectionsToMessages]] renders Result or live report text on the Native assistant. Empty successful reports use `skillRun.completedWithoutText` on that row; cancellation and `RESULT_RETRIEVAL_FAILED` clear the running placeholder without inventing report text. Output-file preview stays File Platform. It does not claim every artifact is a textual result.
+
+Result finalization falls back to the latest live text after the request resolves, not the text captured before the request. The provider's successful lifecycle status is distinct from whether it supplied report text or output files.
+
+Response regression coverage in [[src/main/skill-run/skill-run-service.test.ts]], [[src/main/skill-run/skill-run-contract-parser.test.ts]], [[src/renderer/src/modules/skill-run/skill-run-transcript.test.ts]], and [[src/renderer/src/screens/Chat/Chat.skill-run-transcript.test.tsx]] checks fragmented LF/CRLF activity, bounded empty-stream recovery, exact delta content, Result/live-text ordering, empty-success placeholder replacement, and native MessageList updates. [[src/main/skill-run/skill-run-e2e.test.ts]] replays the separate Public Run and Result endpoints; fixture success does not prove the deployed provider produced a substantive report.
 
 ## Still Out
 

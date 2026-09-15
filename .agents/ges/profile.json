@@ -1,11 +1,34 @@
 {
-  "domains": {},
+  "domains": {
+    "backend": {
+      "activation": "auto"
+    },
+    "frontend": {
+      "activation": "auto"
+    },
+    "ops": {
+      "activation": "auto"
+    }
+  },
+  "execution_policy": {
+    "model_tiers": {
+      "FAST": "fast",
+      "REASONING": "reasoning",
+      "STANDARD": "standard"
+    }
+  },
   "id": "generic",
   "mirror_policy": "declared-managed-set",
+  "project_policy_paths": [
+    "AGENTS.md"
+  ],
   "quality_commands": {},
   "required_paths": [
-    ".agents/skills"
+    ".agents/skills",
+    ".agents/skills/code-review-and-quality/SKILL.md",
+    ".agents/skills/verification-before-completion/SKILL.md"
   ],
-  "schema": "smc.ges.consumer-profile.v2",
-  "version": "1.0.0"
+  "schema": "smc.ges.consumer-profile.v3",
+  "test_asset_root": "docs_agent/test-assets",
+  "version": "2.0.0"
 }

@@ -1,0 +1,14 @@
+E:\git\smc-copilot\.smc\evidence-npm-shim\bin\Release\net8.0\evidence-npm-shim.exe
+E:\git\smc-copilot\.smc\evidence-npm-shim\bin\Release\net8.0\evidence-npm-shim.deps.json
+E:\git\smc-copilot\.smc\evidence-npm-shim\bin\Release\net8.0\evidence-npm-shim.runtimeconfig.json
+E:\git\smc-copilot\.smc\evidence-npm-shim\bin\Release\net8.0\evidence-npm-shim.dll
+E:\git\smc-copilot\.smc\evidence-npm-shim\bin\Release\net8.0\evidence-npm-shim.pdb
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.GeneratedMSBuildEditorConfig.editorconfig
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.AssemblyInfoInputs.cache
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.AssemblyInfo.cs
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.csproj.CoreCompileInputs.cache
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.dll
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\refint\evidence-npm-shim.dll
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.pdb
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\evidence-npm-shim.genruntimeconfig.cache
+E:\git\smc-copilot\.smc\evidence-npm-shim\obj\Release\net8.0\ref\evidence-npm-shim.dll

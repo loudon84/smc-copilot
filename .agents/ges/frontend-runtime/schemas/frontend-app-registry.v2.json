@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smc.ges.frontend-app-registry.v2",
+  "title": "GES Frontend Application Registry v2",
+  "type": "object",
+  "required": ["schema", "apps"],
+  "properties": {
+    "schema": { "const": "smc.ges.frontend-app-registry.v2" },
+    "repository": { "type": "string" },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["app_id", "root", "runtime", "framework", "stack_adapter"],
+        "properties": {
+          "app_id": { "type": "string" },
+          "root": { "type": "string" },
+          "runtime": { "type": "string" },
+          "framework": { "type": "string" },
+          "stack_adapter": { "type": "string" },
+          "baseline_status": {
+            "type": "string",
+            "enum": ["INITIALIZED", "NOT_INITIALIZED", "STALE"]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "shared_ui": { "type": "array" }
+  },
+  "additionalProperties": true
+}

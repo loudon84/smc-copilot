@@ -1,0 +1,57 @@
+{
+  "bundle": "5.0.0",
+  "feature_slices_inferred": [
+    "5.0.6",
+    "5.0.7"
+  ],
+  "frontend": {
+    "adoption_mode": "ENFORCED",
+    "calibration_status": "ACCEPTED",
+    "note": "Generated baselines are discovery clues until calibration_status=ACCEPTED; do not treat OBSERVE/GUIDED output as Production SOT.",
+    "production_sot": true
+  },
+  "paths": {
+    "adoption": ".agents/ges/frontend/adoption-mode.json",
+    "calibration": ".agents/ges/frontend/calibration-status.json",
+    "lock": ".smc/ges-install-lock.json",
+    "receipt_full": ".smc/ges-install-receipts/bc0dba98729b465fb7b5e0c20f9fd28a.json",
+    "receipt_pointer": ".smc/ges-install-receipt.json"
+  },
+  "present": {
+    "frontend_adapters": true,
+    "frontend_registry": true,
+    "frontend_runtime": true,
+    "lock": true,
+    "receipt_full": true,
+    "receipt_pointer": true
+  },
+  "probed_at": "2026-09-15T03:44:14Z",
+  "project": "E:\\git\\smc-copilot",
+  "release_identity": {
+    "note": null,
+    "package_file_count": 347,
+    "package_manifest_sha256": "3aeeff00083b0210d77a75a649d4a30f5b21b55cd22e27e0409ccef5e2229abf",
+    "release_eligible": false,
+    "source_commit": "91558832633214b63ee1a54521ef13ef7c04f339",
+    "source_tree_dirty": true
+  },
+  "scan_hints": [
+    "Read .smc/ges-install-lock.json and .smc/ges-install-receipt.json from the filesystem; do not require them to be git-tracked.",
+    "lock.bundle is the package version (currently 5.0.0). Do not expect bundle==5.0.7 for the v5.0.7 feature slice.",
+    "release_eligible=false or source_tree_dirty=true means install is not a clean release attestation.",
+    "Frontend baselines under .agents/ges/frontend/ are discovery until calibration-status is ACCEPTED; OBSERVE/GUIDED generated JSON is not Production SOT."
+  ],
+  "schema": "smc.ges.install-identity.v1",
+  "source": "filesystem",
+  "transaction_status": "PASS",
+  "verdict": {
+    "bundle_is_feature_slice": false,
+    "install_proof_found": true,
+    "not_ok_to_claim_as_bundle": [
+      "5.0.6",
+      "5.0.7"
+    ],
+    "ok_to_claim_bundle": "5.0.0",
+    "release_attestation_ok": false
+  }
+}

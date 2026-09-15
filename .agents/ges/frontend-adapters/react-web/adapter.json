@@ -1,0 +1,11 @@
+{
+  "schema": "smc.ges.frontend-adapter.v1",
+  "id": "react-web",
+  "framework": "react",
+  "runtime_hints": ["browser", "vite", "webpack", "spa"],
+  "router_hints": ["react-router", "react-router-dom", "@tanstack/react-router"],
+  "state_hints": ["redux", "@reduxjs/toolkit", "zustand", "jotai", "recoil", "mobx"],
+  "component_globs": ["src/**/*.tsx", "src/**/*.jsx", "components/**/*.tsx"],
+  "test_stack": ["vitest", "jest", "@testing-library/react", "playwright", "cypress"],
+  "layout_conventions": ["Layout.tsx", "AppShell", "Sidebar", "Header", "Footer"]
+}

@@ -1,0 +1,94 @@
+{
+  "adoption_mode": "ENFORCED",
+  "applied": true,
+  "applied_paths": [
+    ".agents/ges/frontend/adoption-mode.json",
+    ".agents/ges/frontend/calibration-status.json",
+    ".agents/ges/frontend/apps-registry.json",
+    ".agents/ges/frontend/apps/work/",
+    ".agents/ges/frontend/shared/shared-ui-registry.json"
+  ],
+  "audited_at": "2026-09-15T03:59:52Z",
+  "claims": {
+    "frontend_context": "GES_NATIVE"
+  },
+  "layers": {
+    "calibration": {
+      "checklist": [
+        "Confirm Sidebar / Header / Workspace / Settings / Account / Navigation regions",
+        "Confirm identity_control surfaces match product UX (avatar/profile/logout)",
+        "Confirm shared UI packages are correctly classified (no business surfaces)"
+      ],
+      "verdict": "OBSERVE"
+    },
+    "frontend_context": {
+      "missing": [],
+      "present": 1,
+      "registry_present": true,
+      "total": 1,
+      "verdict": "PASS"
+    },
+    "semantic_roles": {
+      "detail": {
+        "ux_roles_by_app": {
+          "knowledge": [
+            "chrome",
+            "identity_control",
+            "navigation"
+          ],
+          "runtime-client-ts": [],
+          "work": [
+            "identity_control",
+            "chrome",
+            "settings"
+          ]
+        }
+      },
+      "verdict": "PASS"
+    },
+    "static_scan": {
+      "apps_found": 3,
+      "verdict": "PASS"
+    }
+  },
+  "not_initialized_apps": [],
+  "ok": true,
+  "project": "E:\\git\\smc-copilot",
+  "scan": {
+    "adapters": {
+      "generic": true,
+      "react-electron": true
+    },
+    "apps": [
+      {
+        "app_id": "knowledge",
+        "baseline_status": "INITIALIZED",
+        "framework": "react",
+        "root": "apps/knowledge",
+        "runtime": "electron-renderer",
+        "stack_adapter": "react-electron"
+      },
+      {
+        "app_id": "work",
+        "baseline_status": "INITIALIZED",
+        "framework": "react",
+        "root": "apps/work",
+        "runtime": "electron-renderer",
+        "stack_adapter": "react-electron"
+      },
+      {
+        "app_id": "runtime-client-ts",
+        "baseline_status": "INITIALIZED",
+        "framework": "unknown",
+        "root": "packages/runtime-client-ts",
+        "runtime": "browser",
+        "stack_adapter": "generic"
+      }
+    ],
+    "shared_ui_count": 0
+  },
+  "schema": "smc.ges.frontend-audit.v1",
+  "scope_apps": [
+    "work"
+  ]
+}

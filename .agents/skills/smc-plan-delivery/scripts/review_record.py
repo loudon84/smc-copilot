@@ -35,6 +35,12 @@ def record(kind: str, plan: Path, verdict: str, reviewer: str, note: str = "") -
         rec["scope_fingerprint"] = ws["scope_fingerprint"]
         rec["ambient_fingerprint"] = ws["ambient_fingerprint"]
     append_jsonl(path_for(root, pid), rec)
+    try:
+        from runtime_metrics import reviewer_seat
+
+        reviewer_seat(plan, seats=1, mode="UNIFIED")
+    except Exception:
+        pass
     return rec
 
 

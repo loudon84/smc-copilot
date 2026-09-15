@@ -1,0 +1,107 @@
+{
+  "checks": [
+    {
+      "detail": "26/26 present",
+      "id": "GES Runtime",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "scaffold=PASS provider=UNAVAILABLE",
+      "id": "Spec Kit",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "layer=PASS required_method_ok=True",
+      "id": "Superpowers",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "spec-superpower-ges.json + smc-prd-grounding",
+      "id": "Spec -> Plan handoff",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "validator + delivery self-test entrypoints",
+      "id": "Plan -> Delivery",
+      "verdict": "PASS"
+    },
+    {
+      "detail": ".agents/skills/smc-plan-delivery/scripts/evidence.py",
+      "id": "Evidence",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "fs-proof bundle=5.0.0 slices=['5.0.6', '5.0.7'] commit=91558832633214b63ee1a54521ef13ef7c04f339 release_eligible=False + governance-policy.json",
+      "id": "Release Governance",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "registry=True adoption=ENFORCED",
+      "id": "Frontend Application Registry",
+      "verdict": "PASS"
+    },
+    {
+      "detail": ".agents/ges/frontend-adapters (consumer-installed)",
+      "id": "Stack Adapter availability",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "3 initialized app baseline(s) present",
+      "id": "Per-App baseline health",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "surface registries healthy",
+      "id": "Surface registry health",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "INITIALIZED apps only; NOT_INITIALIZED allowed",
+      "id": "Scoped Baseline",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "3 app boundary profile(s)",
+      "id": "Application Boundary",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "frontend-runtime present",
+      "id": "Frontend Runtime",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "engineering_method.py",
+      "id": "Engineering method runtime",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "engineering_method.tdd_check",
+      "id": "TDD runtime",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "runtime_metrics.py",
+      "id": "Telemetry runtime",
+      "verdict": "PASS"
+    },
+    {
+      "detail": "validate_plan_v37.py",
+      "id": "Plan validator bridge",
+      "verdict": "PASS"
+    }
+  ],
+  "claims": {
+    "frontend_context": "GES_NATIVE",
+    "ges": "GES_NATIVE",
+    "spec_kit_provider": "NATIVE_ONLY",
+    "spec_kit_scaffold": "ADAPTER_READY",
+    "superpowers_pinned": "UPSTREAM_PINNED",
+    "superpowers_shims": "GES_NATIVE"
+  },
+  "code": "CONSUMER_VALIDATION_PASS",
+  "ok": true,
+  "project": "E:\\git\\smc-copilot",
+  "schema": "smc.ges.consumer-validation.v1",
+  "validated_at": "2026-09-15T04:00:27Z"
+}

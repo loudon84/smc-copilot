@@ -1,0 +1,9 @@
+{
+  "schema": "smc.ges.per-app-baseline.v1",
+  "app_id": "knowledge",
+  "surface_count": 5,
+  "component_count": 167,
+  "adoption_mode": "ENFORCED",
+  "provenance": "generated",
+  "calibration_status": "ACCEPTED"
+}

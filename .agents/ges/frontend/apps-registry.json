@@ -1,0 +1,31 @@
+{
+  "schema": "smc.ges.frontend-app-registry.v2",
+  "repository": "smc-copilot-monorepo",
+  "apps": [
+    {
+      "app_id": "knowledge",
+      "root": "apps/knowledge",
+      "runtime": "electron-renderer",
+      "framework": "react",
+      "stack_adapter": "react-electron",
+      "baseline_status": "INITIALIZED"
+    },
+    {
+      "app_id": "work",
+      "root": "apps/work",
+      "runtime": "electron-renderer",
+      "framework": "react",
+      "stack_adapter": "react-electron",
+      "baseline_status": "INITIALIZED"
+    },
+    {
+      "app_id": "runtime-client-ts",
+      "root": "packages/runtime-client-ts",
+      "runtime": "browser",
+      "framework": "unknown",
+      "stack_adapter": "generic",
+      "baseline_status": "INITIALIZED"
+    }
+  ],
+  "shared_ui": []
+}

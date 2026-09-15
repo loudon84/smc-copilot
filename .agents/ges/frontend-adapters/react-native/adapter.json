@@ -1,0 +1,11 @@
+{
+  "schema": "smc.ges.frontend-adapter.v1",
+  "id": "react-native",
+  "framework": "react-native",
+  "runtime_hints": ["react-native", "expo", "metro"],
+  "router_hints": ["@react-navigation/native", "expo-router", "react-native-navigation"],
+  "state_hints": ["redux", "@reduxjs/toolkit", "zustand", "mobx"],
+  "component_globs": ["src/**/*.tsx", "app/**/*.tsx", "components/**/*.tsx"],
+  "test_stack": ["jest", "@testing-library/react-native", "detox"],
+  "layout_conventions": ["Screen", "Navigator", "TabBar", "Header"]
+}

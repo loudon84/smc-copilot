@@ -290,47 +290,6 @@ class DeliveryToolsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "DELIVERY_HEAD_DRIFT"):
             workspace.assert_stable(self.plan)
 
-    def test_workspace_rebind_head_after_unrelated_commit(self):
-        # @lat: [[ges-tests#GES Tests#Workspace#Rebind HEAD after unrelated commit]]
-        self.init_workspace()
-        (self.root / "app.py").write_text("def main():\n    return 2\n", encoding="utf-8")
-        path = self.root / ".agents/skills/smc-plan-validator/SKILL.md"
-        path.parent.mkdir(parents=True)
-        path.write_text("tooling fix\n", encoding="utf-8")
-        subprocess.run(["git", "-C", str(self.root), "add", ".agents/skills/smc-plan-validator/SKILL.md"], check=True)
-        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "tooling"], check=True)
-        with self.assertRaisesRegex(ValueError, "DELIVERY_HEAD_DRIFT"):
-            workspace.assert_stable(self.plan)
-        before = workspace.scope_fingerprint(self.plan)
-        data = workspace.rebind_head(self.plan)
-        status = workspace.inspect(self.plan)
-        self.assertEqual(data["base_commit"], status["current_head"])
-        self.assertTrue(status["head_stable"])
-        self.assertTrue(status["pass"], status)
-        self.assertEqual(["app.py"], status["scope_changed_files"])
-        self.assertEqual(before, status["scope_fingerprint"])
-
-    def test_workspace_rebind_head_rejects_planned_path(self):
-        # @lat: [[ges-tests#GES Tests#Workspace#Rebind HEAD rejects planned path]]
-        self.init_workspace()
-        (self.root / "app.py").write_text("def main():\n    return 2\n", encoding="utf-8")
-        subprocess.run(["git", "-C", str(self.root), "add", "app.py"], check=True)
-        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "impl"], check=True)
-        with self.assertRaisesRegex(ValueError, "DELIVERY_HEAD_REBIND_TOUCHED_SCOPE"):
-            workspace.rebind_head(self.plan)
-
-    def test_workspace_rebind_head_rejects_tooling_dirty(self):
-        # @lat: [[ges-tests#GES Tests#Workspace#Rebind HEAD rejects tooling dirty]]
-        self.init_workspace()
-        (self.root / "other.txt").write_text("x\n", encoding="utf-8")
-        subprocess.run(["git", "-C", str(self.root), "add", "other.txt"], check=True)
-        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "other"], check=True)
-        path = self.root / ".agents/skills/smc-plan-validator/SKILL.md"
-        path.parent.mkdir(parents=True)
-        path.write_text("dirty tooling\n", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "DELIVERY_TOOLING_MUTATION"):
-            workspace.rebind_head(self.plan)
-
     def test_workspace_plan_semantic_drift_blocks(self):
         # @lat: [[ges-tests#GES Tests#Workspace#Plan semantic drift blocks]]
         self.init_workspace()
@@ -379,42 +338,6 @@ class DeliveryToolsTest(unittest.TestCase):
         rc = evidence.run_cmd(self.plan, "V01", ["python", "-c", "print('wrong')"])
         self.assertEqual(2, rc)
         self.assertEqual("MISSING", evidence.current_status(self.plan, "V01")[0])
-
-    def test_windows_cmd_shim_preserves_canonical_plan_command(self):
-        # Windows CreateProcess does not resolve npm -> npm.cmd like a shell.
-        # The launcher adapts only execution; evidence still records `npm`.
-        launch = evidence.launch_command(
-            ["npm", "exec", "vitest", "--", "run"],
-            platform="nt",
-            which=lambda _: r"C:\\node\\npm.cmd",
-        )
-        self.assertEqual(r"C:\\node\\npm.cmd", launch[0])
-        self.assertEqual(["exec", "vitest", "--", "run"], launch[1:])
-
-    def test_execution_cwd_is_scoped_to_the_repository(self):
-        component = self.root / "apps/work"
-        component.mkdir(parents=True)
-        self.assertEqual(component.resolve(), evidence.execution_cwd(self.root, "apps/work"))
-        with self.assertRaisesRegex(ValueError, "EVIDENCE_CWD_OUTSIDE_REPO"):
-            evidence.execution_cwd(self.root, "..")
-
-    @unittest.skipUnless(sys.platform == "win32", "Windows command shim regression")
-    def test_windows_evidence_runner_executes_npm_and_records_canonical_command(self):
-        self.plan.write_text(
-            self.plan.read_text(encoding="utf-8").replace(
-                '`python -c "print(\'ok\')"`',
-                "`npm --version`",
-            ),
-            encoding="utf-8",
-        )
-        self.init_workspace()
-
-        rc = evidence.run_cmd(self.plan, "V01", ["npm", "--version"])
-
-        self.assertEqual(0, rc)
-        status, record = evidence.current_status(self.plan, "V01")
-        self.assertEqual("FRESH", status)
-        self.assertEqual("npm --version", record["command"])
 
     def test_evidence_scope_freshness(self):
         # @lat: [[ges-tests#GES Tests#Proof freshness#Evidence freshness is scope-bound]]

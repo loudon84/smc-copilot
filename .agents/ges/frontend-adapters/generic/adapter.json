@@ -1,0 +1,11 @@
+{
+  "schema": "smc.ges.frontend-adapter.v1",
+  "id": "generic",
+  "framework": "unknown",
+  "runtime_hints": ["browser"],
+  "router_hints": [],
+  "state_hints": [],
+  "component_globs": ["src/**/*.{tsx,jsx,vue,ts,js}", "components/**/*.{tsx,jsx,vue}"],
+  "test_stack": ["jest", "vitest", "playwright"],
+  "layout_conventions": ["Layout", "AppShell", "Sidebar", "Header", "Footer"]
+}

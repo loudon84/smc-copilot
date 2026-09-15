@@ -7,7 +7,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -60,44 +59,6 @@ def expected_plan_command(plan: Path, vid: str) -> str | None:
     if not raw: return None
     try: return shlex.join(shlex.split(raw))
     except ValueError: return raw
-
-
-def launch_command(command: list[str], *, platform: str | None = None, which=shutil.which) -> list[str]:
-    """Return the platform launch argv without changing recorded Plan syntax.
-
-    A canonical Plan command such as ``npm exec`` is intentionally shell-neutral.
-    On Windows, CreateProcess cannot resolve an extensionless command name to a
-    ``.cmd`` / ``.bat`` shim. Resolve the shim explicitly while retaining the
-    original argv for command-matching and evidence records.  Avoid adding a
-    ``cmd.exe /c`` parsing layer: Plan arguments must remain process arguments,
-    rather than becoming shell syntax.
-    """
-    if not command or (platform or os.name) != "nt":
-        return command
-    executable = command[0]
-    resolved = which(executable)
-    suffix = Path(resolved).suffix.lower() if resolved else ""
-    if suffix in {".cmd", ".bat"}:
-        return [resolved, *command[1:]]
-    shim = which(f"{executable}.cmd") or which(f"{executable}.bat")
-    if shim and Path(shim).suffix.lower() in {".cmd", ".bat"}:
-        return [shim, *command[1:]]
-    return command
-
-
-def execution_cwd(root: Path, value: str | None) -> Path:
-    """Resolve an optional repository-relative execution directory safely."""
-    resolved_root = root.resolve()
-    if not value:
-        return resolved_root
-    candidate = (resolved_root / value).resolve()
-    try:
-        candidate.relative_to(resolved_root)
-    except ValueError as exc:
-        raise ValueError("EVIDENCE_CWD_OUTSIDE_REPO") from exc
-    if not candidate.is_dir():
-        raise ValueError("EVIDENCE_CWD_NOT_DIRECTORY")
-    return candidate
 
 
 def _freshness(plan: Path, rec: dict) -> bool:
@@ -160,7 +121,7 @@ def _acceptance_claim_results(log: Path, claim_ids: list[str]) -> tuple[bool, di
     return all(results.get(cid) == "PASS" for cid in claim_ids), results, None
 
 
-def run_cmd(plan: Path, vid: str, command: list[str], cwd: str | None = None) -> int:
+def run_cmd(plan: Path, vid: str, command: list[str]) -> int:
     root = find_repo_root(plan); pid = plan_id(plan); rows = verification_rows(plan)
     if vid not in rows:
         print(f"PLAN_VERIFICATION_UNKNOWN: {vid}", file=sys.stderr); return 2
@@ -191,17 +152,13 @@ def run_cmd(plan: Path, vid: str, command: list[str], cwd: str | None = None) ->
     ws = workspace_inspect(plan)
     if not ws["pass"]:
         print("EVIDENCE_WORKSPACE_UNSTABLE", file=sys.stderr); return 2
-    try:
-        command_cwd = execution_cwd(root, cwd)
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr); return 2
     ts = utc_now(); safe_ts = ts.replace(":", "").replace("-", "")
     logs = root / ".smc" / "evidence" / pid / "logs"; logs.mkdir(parents=True, exist_ok=True)
     log = logs / f"{safe_ts}-{vid}.log"
     with log.open("w", encoding="utf-8", newline="\n") as out:
         os.chmod(log, 0o600)
         out.write(f"# command: {rendered}\n# scope_fingerprint: {ws['scope_fingerprint']}\n# ambient_fingerprint: {ws['ambient_fingerprint']}\n# timestamp: {ts}\n\n")
-        proc = subprocess.Popen(launch_command(command), cwd=command_cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+        proc = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
         assert proc.stdout is not None
         for line in proc.stdout:
             sys.stdout.write(line); out.write(line)
@@ -225,7 +182,6 @@ def run_cmd(plan: Path, vid: str, command: list[str], cwd: str | None = None) ->
         "plan_id": pid,
         "verification_id": vid,
         "command": rendered,
-        "execution_cwd": repo_relative_path(command_cwd, root),
         "command_exit_code": command_rc,
         "exit_code": effective_rc,
         "result": "PASS" if effective_rc == 0 else "FAIL",
@@ -265,10 +221,14 @@ def payload_sha256(payload: dict) -> str:
 def build_manifest(plan: Path, output: Path | None = None) -> tuple[Path, dict]:
     from completion_audit import check as audit_check
     from review_record import latest_status as review_status
+    from test_assets import resolved_assets, validate_plan as validate_test_assets
 
     root = find_repo_root(plan); pid = plan_id(plan); ws = workspace_inspect(plan)
     if not ws["pass"]:
         raise ValueError("EVIDENCE_MANIFEST_WORKSPACE_UNSTABLE")
+    asset_errors = validate_test_assets(plan, require_synced=True)
+    if asset_errors:
+        raise ValueError("EVIDENCE_MANIFEST_TEST_ASSET_INVALID: " + asset_errors[0]["code"])
     pstatus, plan_review = review_status(plan, "plan")
     if pstatus != "FRESH_PASS": raise ValueError(f"EVIDENCE_MANIFEST_PLAN_REVIEW_{pstatus}")
     astatus, audit = audit_check(plan)
@@ -334,6 +294,7 @@ def build_manifest(plan: Path, output: Path | None = None) -> tuple[Path, dict]:
         "blocking_verifications": verification_records,
         "acceptance_contract": acceptance_contract,
         "blocking_claims": blocking_claim_records,
+        "test_assets": resolved_assets(plan),
         "verification_candidate": candidate if candidate_state == "FRESH" else None,
     }
     payload["payload_sha256"] = payload_sha256(payload)
@@ -364,7 +325,7 @@ def manifest_status(plan: Path, expected_fingerprint: str | None = None, require
 
 def main() -> int:
     ap = argparse.ArgumentParser(); sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("run"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--verification", required=True); p.add_argument("--cwd"); p.add_argument("command", nargs=argparse.REMAINDER)
+    p = sub.add_parser("run"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--verification", required=True); p.add_argument("command", nargs=argparse.REMAINDER)
     p = sub.add_parser("check"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--verification"); p.add_argument("--expect-command"); p.add_argument("--all-blocking", action="store_true"); p.add_argument("--json", action="store_true")
     p = sub.add_parser("manifest"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--output", type=Path)
     p = sub.add_parser("manifest-check"); p.add_argument("--plan", required=True, type=Path); p.add_argument("--fingerprint"); p.add_argument("--json", action="store_true")
@@ -372,7 +333,7 @@ def main() -> int:
     if not plan.is_file(): print(f"PLAN_NOT_FOUND: {plan}", file=sys.stderr); return 2
     if args.cmd == "run":
         cmd = args.command[1:] if args.command and args.command[0] == "--" else args.command
-        return run_cmd(plan, args.verification.upper(), cmd, args.cwd)
+        return run_cmd(plan, args.verification.upper(), cmd)
     if args.cmd == "manifest":
         try: path, payload = build_manifest(plan, args.output)
         except (ValueError, RuntimeError) as exc: print(str(exc), file=sys.stderr); return 1

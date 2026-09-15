@@ -1,104 +1,26 @@
 ---
 name: smc-plan-validator
-description: 对 SMC Plan 做确定性静态 Gate。v1.5 新增 smc.plan.v3.5 Domain Pack binding/extension validation；Core 只调用 Domain Contract 与 pack-declared validator，不硬编码具体 domain。
-version: 1.5.0
-disable-model-invocation: true
+description: GES 5 static Plan validator. v3.7 adds LEAN/FULL governance-profile checks while preserving Single Writer, acceptance, domain and test-asset gates.
+version: 2.0.0
 ---
 
-# SMC Plan Validator v1.5
+# SMC Plan Validator v2.0
 
-## Role
-
-```text
-PASS = PLAN_STATIC_VALID
-PASS != IMPLEMENTATION_COMPLETE
-PASS != IMPLEMENTED_AND_PROVEN
-```
-
-## Current v3.5 Usage
+Use the stable dispatcher:
 
 ```bash
-python .agents/skills/smc-plan-validator/scripts/validate_plan_v35.py .cursor/plans/<feature>.plan.md
+python .agents/skills/smc-plan-validator/scripts/validate_plan_current.py <PLAN>
 ```
 
-v3.5 = v3.4 structural/acceptance gates + deterministic Domain Activation binding + dynamically declared Domain Plan extension validator. A Domain policy digest mismatch is `DOMAIN_POLICY_STALE` and fails closed.
+Supported historical readers remain v3.3-v3.6; new authoring targets `smc.plan.v3.7`.
 
-## Current v3.4 Usage
+v3.7 validates every invariant shared by v3.6 plus:
 
-```bash
-python .agents/skills/smc-plan-validator/scripts/validate_plan_v34.py .cursor/plans/<feature>.plan.md
-```
+- `governance_profile` is LEAN or FULL;
+- LEAN does not contain deterministic hard-FULL signals;
+- Domain contract is v2 and policy digest/activation ledger are fresh;
+- project policy binding, when declared, is present/fresh;
+- LEAN N/A sections are only allowed for untriggered full-only closure;
+- ownership, acceptance, verification, domain activation, test assets and commit policy can never be omitted.
 
-v3.4 复用 v3.3/v3.2 既有深度静态 Gate，并新增 Cursor interoperability projection。
-
-## v3.4 Cursor Projection Gates
-
-每个 Markdown `## Todo TN — <title>` 必须映射恰好一个 Cursor todo：
-
-```yaml
-- id: tN-<slug>
-  content: "TN — <title> [C01, C02]"
-  status: pending|in_progress|completed|blocked
-```
-
-拒绝：
-
-```text
-PLAN_CURSOR_TODO_CONTENT_MISSING
-PLAN_CURSOR_TODO_CONTENT_ID_MISMATCH
-PLAN_CURSOR_TODO_CONTENT_DRIFT
-PLAN_CURSOR_TODO_MISSING
-PLAN_CURSOR_TODO_DUPLICATE
-PLAN_CURSOR_TODO_ORPHAN
-PLAN_CURSOR_TODO_STATE_INVALID
-```
-
-`content` 是 Markdown heading + `Owns Changes` 的 deterministic UI projection，不是第二份 specification SOT。
-
-## Existing Gates Preserved
-
-- APPROVED PRD；
-- Required Sections；
-- Requirement/AC/DoD closure；
-- Change Matrix / Ponytail Decision；
-- New File / Dependency justification；
-- Write Ownership / single writer；
-- Change ↔ Todo ↔ Ledger；
-- Dependency DAG / read-write ordering / parallel safety；
-- Lifecycle / Contract / Data Flow closure；
-- Blocking Verification / Evidence Policy；
-- unique `plan_id` / single canonical Plan；
-- `commit_policy: post_review`；
-- `smc.acceptance.v1` Acceptance Claim / Scenario / Environment binding；
-- blocking prior FAIL 不得 `REUSE_EVIDENCE`；
-- LIVE/FAULT/EXTERNAL 每个 Verification 必须绑定唯一 Scenario；
-- FAULT_INJECTION 必须声明 fault driver；
-- live candidate provenance mode/probe 完整。
-
-## Compatibility
-
-### v3.3
-
-```bash
-python .../validate_plan_v33.py <plan>
-```
-
-v3.3 缺 `content` 时输出 `PLAN_CURSOR_TODO_CONTENT_LEGACY_WARNING`，不把历史 Plan 原地判 invalid。
-
-### v3.2 / v3.3 -> v3.4
-
-```bash
-python .agents/skills/smc-plan-delivery/scripts/migrate_legacy_plan.py <plan> --in-place
-```
-
-迁移必须保留 Todo runtime status 和未知 Cursor fields。
-
-## Tooling Health
-
-`load_legacy()` 必须在 `exec_module()` 前注册 `sys.modules[spec.name]`，确保 Python 3.12 dataclass validator 可加载。Validator 自身 crash 属于 `DELIVERY_TOOLING_BLOCKED`，不能在 business Plan delivery 中现场自修后继续证明。
-
-## Exit
-
-```text
-PLAN_STATIC_VALID -> smc-plan-delivery Semantic Gate
-```
+Static PASS is not implementation complete and never substitutes semantic review or Delivery.

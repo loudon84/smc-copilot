@@ -1,0 +1,20 @@
+{
+  "schema": "smc.ges.frontend-adapter.v1",
+  "id": "react-electron",
+  "framework": "react",
+  "runtime_hints": ["electron", "electron-renderer", "electron-main", "vite"],
+  "router_hints": ["react-router", "react-router-dom", "hash-router"],
+  "state_hints": ["redux", "@reduxjs/toolkit", "zustand", "jotai"],
+  "component_globs": [
+    "src/renderer/**/*.tsx",
+    "src/renderer/**/*.jsx",
+    "apps/*/src/renderer/**/*.tsx"
+  ],
+  "test_stack": ["vitest", "jest", "@testing-library/react", "spectron", "playwright"],
+  "layout_conventions": ["Layout.tsx", "AppShell", "Sidebar", "TitleBar", "ProfileSwitcher"],
+  "main": ["src/main/**/*.ts", "src/main/**/*.js", "electron/main.*"],
+  "preload": ["src/preload/**/*.ts", "src/preload/**/*.js", "electron/preload.*"],
+  "IPC": ["ipcMain", "ipcRenderer", "contextBridge", "smc.ipc"],
+  "renderer": ["src/renderer/**", "apps/*/src/renderer/**"],
+  "window_bridge": ["window.api", "window.electron", "contextBridge.exposeInMainWorld"]
+}

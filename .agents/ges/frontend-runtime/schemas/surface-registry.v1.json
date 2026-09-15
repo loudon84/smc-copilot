@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smc.ges.surface-registry.v1",
+  "title": "GES Surface Registry",
+  "type": "object",
+  "required": ["schema", "app_id", "surfaces"],
+  "properties": {
+    "schema": { "const": "smc.ges.surface-registry.v1" },
+    "app_id": { "type": "string" },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["surface_id", "app_id", "ux_role"],
+        "properties": {
+          "surface_id": { "type": "string" },
+          "app_id": { "type": "string" },
+          "ux_role": { "type": "string" },
+          "owner": { "type": "string" },
+          "layout_owner": { "type": ["string", "null"] },
+          "visual_position": { "type": "string" },
+          "actions": { "type": "array" },
+          "reuse_priority": { "type": "string" },
+          "status": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,102 @@
+{
+  "actions": [
+    {
+      "claim": "ADAPTER_READY",
+      "id": "SK-001",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "Spec Kit scaffold file missing",
+      "target": ".specify/constitution.md",
+      "template": "spec-kit/constitution.md"
+    },
+    {
+      "claim": "ADAPTER_READY",
+      "id": "SK-002",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "Spec Kit scaffold directory marker missing",
+      "target": ".specify/templates/.gitkeep",
+      "template": "spec-kit/templates/.gitkeep"
+    },
+    {
+      "claim": "ADAPTER_READY",
+      "id": "SK-003",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "Spec Kit scaffold directory marker missing",
+      "target": ".specify/scripts/.gitkeep",
+      "template": "spec-kit/scripts/.gitkeep"
+    },
+    {
+      "claim": "ADAPTER_READY",
+      "id": "SK-004",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "Spec Kit scaffold file missing",
+      "target": ".specify/specs/README.md",
+      "template": "spec-kit/specs/README.md"
+    },
+    {
+      "claim": "GES_NATIVE",
+      "id": "SP-005",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "Superpowers shim skill missing: writing-plans",
+      "target": ".agents/skills/writing-plans/SKILL.md",
+      "template": "superpowers/writing-plans/SKILL.md"
+    },
+    {
+      "claim": "GES_NATIVE",
+      "id": "SP-006",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "Superpowers shim skill missing: finishing-branch",
+      "target": ".agents/skills/finishing-branch/SKILL.md",
+      "template": "superpowers/finishing-branch/SKILL.md"
+    },
+    {
+      "claim": "GES_NATIVE",
+      "id": "BR-007",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "GES bridge contract missing: spec-kit-binding.json",
+      "target": ".agents/ges/spec-kit-binding.json",
+      "template": "ges/spec-kit-binding.json"
+    },
+    {
+      "claim": "GES_NATIVE",
+      "id": "BR-008",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "GES bridge contract missing: superpowers-binding.json",
+      "target": ".agents/ges/superpowers-binding.json",
+      "template": "ges/superpowers-binding.json"
+    },
+    {
+      "claim": "GES_NATIVE",
+      "id": "BR-009",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "GES bridge contract missing: governance-policy.json",
+      "target": ".agents/ges/governance-policy.json",
+      "template": "ges/governance-policy.json"
+    },
+    {
+      "claim": "GES_NATIVE",
+      "id": "BR-010",
+      "kind": "WRITE_TEMPLATE",
+      "reason": "GES bridge contract missing: spec-superpower-ges.json",
+      "target": ".agents/ges/spec-superpower-ges.json",
+      "template": "ges/spec-superpower-ges.json"
+    },
+    {
+      "claim": "NATIVE_ONLY",
+      "id": "SK-011",
+      "kind": "MANUAL",
+      "reason": "Spec Kit CLI unavailable; install specify on PATH for EXTERNAL_VERIFIED (optional)",
+      "target": "specify"
+    }
+  ],
+  "created_at": "2026-09-15T02:44:31Z",
+  "forbidden": [
+    ".agents/ges/frontend-adapters",
+    ".agents/ges/frontend-runtime",
+    ".agents/ges/profile.json",
+    ".specify/spec.md",
+    ".specify/spec.md"
+  ],
+  "ok": false,
+  "project": "E:\\git\\smc-copilot",
+  "schema": "smc.ges.consumer-remediation-plan.v1"
+}

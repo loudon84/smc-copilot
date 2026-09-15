@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smc.ges.per-app-baseline.v1",
+  "title": "GES Per-App UX Baseline",
+  "type": "object",
+  "required": ["schema", "app_id"],
+  "properties": {
+    "schema": { "const": "smc.ges.per-app-baseline.v1" },
+    "app_id": { "type": "string" },
+    "surface_count": { "type": "integer" },
+    "component_count": { "type": "integer" },
+    "adoption_mode": { "type": "string" }
+  },
+  "additionalProperties": true
+}

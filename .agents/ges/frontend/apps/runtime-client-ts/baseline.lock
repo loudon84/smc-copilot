@@ -1,0 +1,7 @@
+{
+  "schema": "smc.ges.baseline-lock.v1",
+  "app_id": "runtime-client-ts",
+  "fingerprint": "b93160333e36ef37fb03cd8686f47087081e9c7e4204d14128c670687aa916ab",
+  "status": "FRESH",
+  "stack_adapter": "generic"
+}

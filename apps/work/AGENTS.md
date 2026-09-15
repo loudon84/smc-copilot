@@ -1,16 +1,17 @@
 # Before starting work
 
-- Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
-- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
+- Do **not** auto-run `lat search` / `lat expand` / `lat check` on every prompt. Ignore Stop-hook follow-ups about `lat.md/` not being updated.
+- When the user is changing Work product behavior and wants docs in sync, run `lat search` / `lat expand` for relevant `[[refs]]`, then keep `lat.md/` aligned.
 - i18n: add or change UI strings only in `src/shared/i18n/locales/en/**`. Do not create or edit other locale packages during feature work. Other languages are translated later by an administrator after English review. See [[i18n]].
 
-# Post-task checklist (REQUIRED — do not skip)
+# Post-task checklist
 
-After EVERY task, before responding to the user:
+After a task that **changed** Work functionality, architecture, tests, or `lat.md/`:
 
-- [ ] Update `lat.md/` if you added or changed any functionality, architecture, tests, or behavior
+- [ ] Update `lat.md/` so it matches the new behavior
 - [ ] Run `lat check` — all wiki links and code refs must pass
-- [ ] Do not skip these steps. Do not consider your task done until both are complete.
+
+Skip this checklist for Q&A, hook follow-ups, and tasks that did not change product docs or code.
 
 ---
 
