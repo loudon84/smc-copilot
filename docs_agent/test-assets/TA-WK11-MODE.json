@@ -1,0 +1,12 @@
+{
+  "asset_id": "TA-WK11-MODE",
+  "capabilities": [
+    "vitest"
+  ],
+  "content_sha256": "sha256:0f40f4a483d12a8e97137c0ce705c1c74854fc721a5b293e624f6bf84bd10e1a",
+  "kind": "TEST",
+  "path": "apps/work/src/main/knowledge/knowledge-mode-controller.test.ts",
+  "schema": "smc.test-asset.v1",
+  "status": "ACTIVE",
+  "updated_at": "2026-09-15T14:01:26.989586Z"
+}

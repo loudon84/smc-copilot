@@ -240,6 +240,11 @@ export async function importOnePath(
           fileId: file.id,
           profileId,
           knowledgeJobId: resolved.knowledgeJobId,
+          // Mock Knowledge never writes sessionId; stamp Job dataMode for isolation.
+          ...(resolved.job.dataMode === "mock" ||
+          resolved.job.dataMode === "provider"
+            ? { dataMode: resolved.job.dataMode }
+            : {}),
           role: "prompt-attachment",
           ordinal: 0,
           createdAt: ts,

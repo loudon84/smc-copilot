@@ -7,6 +7,7 @@ import { getActiveProfileNameSync } from "../utils";
 import { readStoredSessionSync } from "../auth/token-store";
 import {
   KNOWLEDGE_JOB_IPC_CHANNELS,
+  type KnowledgeActiveDataMode,
   type KnowledgeJobCommandInput,
   type KnowledgeJobCreateDraftInput,
   type KnowledgeJobSnapshot,
@@ -18,6 +19,7 @@ import {
   isKnowledgeJobSnapshotVisibleToPartition,
   type KnowledgeJobPartition,
 } from "./knowledge-upload-job-coordinator";
+import { getKnowledgeModeSnapshot } from "./knowledge-mode-controller";
 
 export type RegisterKnowledgeJobIpcOptions = {
   getMainWindow?: () => BrowserWindow | null;
@@ -36,10 +38,16 @@ function resolveMainPartition(): KnowledgeJobPartition {
   });
 }
 
+/** Mode Controller must already be latched (register mode IPC before Job IPC). */
+function resolveDataMode(): KnowledgeActiveDataMode {
+  return getKnowledgeModeSnapshot().dataMode;
+}
+
 function ensureCoordinator() {
   return configureKnowledgeUploadJobCoordinator({
     getPartition: resolveMainPartition,
     isProviderAvailable: () => false,
+    getDataMode: resolveDataMode,
   });
 }
 

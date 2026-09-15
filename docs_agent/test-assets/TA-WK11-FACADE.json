@@ -1,0 +1,12 @@
+{
+  "asset_id": "TA-WK11-FACADE",
+  "capabilities": [
+    "vitest"
+  ],
+  "content_sha256": "sha256:b632316966eb7d621b69e030005ceb01886c246bdcbaefc725d49d004d262921",
+  "kind": "TEST",
+  "path": "apps/work/src/main/knowledge/knowledge-provider-facade.test.ts",
+  "schema": "smc.test-asset.v1",
+  "status": "ACTIVE",
+  "updated_at": "2026-09-15T14:01:26.990586Z"
+}

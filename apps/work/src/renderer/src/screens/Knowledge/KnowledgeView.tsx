@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import type { DesktopAuthState } from "../../../../shared/auth/auth-contract";
+import type { KnowledgeModeSnapshot } from "../../../../shared/knowledge/knowledge-job-ipc";
+import { useI18n } from "../../components/useI18n";
 import {
   createKnowledgeRouteScope,
   type KnowledgeRouteScope,
@@ -28,15 +30,23 @@ const EMPTY_AUTH: DesktopAuthState = {
   expiresAt: null,
 };
 
+function readModeApi():
+  | NonNullable<Window["hermesAPI"]>["knowledgeJobs"]
+  | undefined {
+  return window.hermesAPI?.knowledgeJobs;
+}
+
 /**
  * Knowledge module root for Work Layout keep-alive.
  * Stays mounted while hidden; UI-only polling/rAF/shortcuts run only when active.
+ * Mock/Demo badge is presentation of Main-owned mode — Renderer cannot hide it.
  */
 export function KnowledgeView({
   active,
   scope: injectedScope,
   uiEffectCounters,
 }: KnowledgeViewProps): ReactElement {
+  const { t } = useI18n();
   const defaultScopeRef = useRef<KnowledgeRouteScope | null>(null);
   if (!injectedScope && !defaultScopeRef.current) {
     defaultScopeRef.current = createKnowledgeRouteScope();
@@ -47,6 +57,7 @@ export function KnowledgeView({
     scope.getSnapshot(),
   );
   const [authState, setAuthState] = useState<DesktopAuthState>(EMPTY_AUTH);
+  const [mode, setMode] = useState<KnowledgeModeSnapshot | null>(null);
   const countersRef = useRef(uiEffectCounters);
   countersRef.current = uiEffectCounters;
 
@@ -77,6 +88,38 @@ export function KnowledgeView({
     return () => {
       cancelled = true;
       unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const api = readModeApi();
+    const getMode = api && "getMode" in api ? api.getMode : undefined;
+    if (!getMode) {
+      setMode({
+        dataMode: "provider",
+        allowSyntheticData: false,
+        configSource: "default",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    void getMode()
+      .then((snap) => {
+        if (!cancelled) setMode(snap);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMode({
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -113,6 +156,8 @@ export function KnowledgeView({
   }, [active]);
 
   const authSubject = authState.user?.id ?? "";
+  // Main owns mode; Renderer must always show the badge when mock is active.
+  const showMockBadge = mode?.dataMode === "mock";
 
   return (
     <div
@@ -121,8 +166,29 @@ export function KnowledgeView({
       data-page={snapshot.current.page}
       data-auth-subject={authSubject}
       data-authenticated={authState.authenticated ? "true" : "false"}
+      data-knowledge-mode={mode?.dataMode ?? "unknown"}
     >
-      <span data-testid="knowledge-route-page">{snapshot.current.page}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: showMockBadge ? 8 : 0,
+        }}
+      >
+        <span data-testid="knowledge-route-page">{snapshot.current.page}</span>
+        {showMockBadge ? (
+          <span
+            className="settings-card-badge is-update"
+            data-testid="knowledge-mock-demo-badge"
+            data-persistent="true"
+            role="status"
+            aria-live="polite"
+          >
+            {t("knowledge.mockDemoBadge")}
+          </span>
+        ) : null}
+      </div>
       <KnowledgePages page={snapshot.current.page} />
     </div>
   );

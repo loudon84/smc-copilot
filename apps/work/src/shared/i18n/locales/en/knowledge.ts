@@ -6,6 +6,10 @@ export default {
   emptyDescription:
     "No Knowledge items are available for this view. Content will appear when a provider returns data.",
   loading: "Checking Knowledge availability…",
+  mockDemoBadge: "Mock / Demo",
+  mockReadyTitle: "Mock Knowledge ready",
+  mockReadyDescription:
+    "Synthetic Knowledge data is available in mock mode. Full page layouts ship in a later stage.",
   home: {
     title: "Knowledge Home",
     description: "Overview of knowledge bases, sets, documents, and uploads.",

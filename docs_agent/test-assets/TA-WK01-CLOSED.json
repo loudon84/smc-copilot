@@ -3,10 +3,10 @@
   "capabilities": [
     "vitest"
   ],
-  "content_sha256": "sha256:ebce182122e0f339c85baeb5f35788bc94e61304e04b9dcd82f5b6b1ea0b4daf",
+  "content_sha256": "sha256:8bf93d5905cc89dba39a0067f3288e450a1b1fa51a70c49a372d72d16471845e",
   "kind": "TEST",
   "path": "apps/work/tests/knowledge-fail-closed.test.ts",
   "schema": "smc.test-asset.v1",
   "status": "ACTIVE",
-  "updated_at": "2026-09-15T08:16:56.086524Z"
+  "updated_at": "2026-09-15T14:16:00.765166Z"
 }

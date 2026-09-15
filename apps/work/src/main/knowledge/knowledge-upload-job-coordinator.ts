@@ -1,11 +1,14 @@
 /**
  * Main Knowledge Upload Job Coordinator — draft/queue/recover/cancel/retry,
  * shared capability probe, monotonic sanitized snapshots.
- * No remote Knowledge HTTP client. Never emits file-job:* events.
+ * Mock mode: Main-owned executor advances recoverable progress to completed
+ * without remote transfer. Provider mode stays RM-01 fail-closed.
+ * Never emits file-job:* events.
  */
 
 import {
   isKnowledgeJobTerminal,
+  type KnowledgeActiveDataMode,
   type KnowledgeCapabilitySnapshot,
   type KnowledgeJobPartition,
   type KnowledgeJobSnapshot,
@@ -61,6 +64,8 @@ export class KnowledgeJobNotFoundError extends Error {
 export interface KnowledgeUploadJobCoordinatorDeps {
   getPartition: () => KnowledgeJobPartition;
   isProviderAvailable?: () => boolean;
+  /** Injected from Mode Controller — defaults to provider (RM-01). */
+  getDataMode?: () => KnowledgeActiveDataMode;
 }
 
 export interface KnowledgeJobCommandOptions {
@@ -70,9 +75,19 @@ export interface KnowledgeJobCommandOptions {
 
 type SnapshotListener = (snapshot: KnowledgeJobSnapshot) => void;
 
+type WriteExtras = {
+  progress?: number;
+  errorCode?: string | null;
+  lastCommandId?: string | null;
+};
+
 function defaultProviderAvailable(): boolean {
   // Stage has no production Knowledge provider — fail closed.
   return false;
+}
+
+function defaultDataMode(): KnowledgeActiveDataMode {
+  return "provider";
 }
 
 /** One Main probe shared by upload commands and entity reads. */
@@ -111,6 +126,16 @@ function assertActingPartition(
   }
 }
 
+const MOCK_PROGRESS: ReadonlyArray<{
+  status: KnowledgeJobStatus;
+  progress: number;
+}> = [
+  { status: "queued", progress: 10 },
+  { status: "uploading", progress: 40 },
+  { status: "processing", progress: 70 },
+  { status: "completed", progress: 100 },
+];
+
 export class KnowledgeUploadJobCoordinator {
   private readonly listeners = new Set<SnapshotListener>();
   private readonly deps: Required<KnowledgeUploadJobCoordinatorDeps>;
@@ -120,6 +145,7 @@ export class KnowledgeUploadJobCoordinator {
       getPartition: deps.getPartition,
       isProviderAvailable:
         deps.isProviderAvailable ?? defaultProviderAvailable,
+      getDataMode: deps.getDataMode ?? defaultDataMode,
     };
   }
 
@@ -127,6 +153,10 @@ export class KnowledgeUploadJobCoordinator {
     return probeKnowledgeProviderCapability({
       isProviderAvailable: this.deps.isProviderAvailable,
     });
+  }
+
+  private dataMode(): KnowledgeActiveDataMode {
+    return this.deps.getDataMode();
   }
 
   private notify(snapshot: KnowledgeJobSnapshot): void {
@@ -143,8 +173,7 @@ export class KnowledgeUploadJobCoordinator {
     jobId: string,
     status: KnowledgeJobStatus,
     attempt: number,
-    lastCommandId?: string | null,
-    errorCode?: string | null,
+    extras: WriteExtras = {},
   ): KnowledgeJobSnapshot {
     const existing = getJobById(jobId);
     if (!existing) throw new KnowledgeJobNotFoundError();
@@ -162,10 +191,32 @@ export class KnowledgeUploadJobCoordinator {
       jobId,
       status,
       attempt,
-      lastCommandId,
-      errorCode,
+      lastCommandId: extras.lastCommandId,
+      errorCode: extras.errorCode,
+      progress: extras.progress,
     });
     this.notify(snap);
+    return snap;
+  }
+
+  /**
+   * Main mock executor — synchronous recoverable stages to completed.
+   * No Renderer timer, no remote transfer, no forged receipts.
+   */
+  private runMockExecutor(
+    jobId: string,
+    attempt: number,
+    lastCommandId?: string | null,
+  ): KnowledgeJobSnapshot {
+    let snap: KnowledgeJobSnapshot | null = null;
+    for (const stage of MOCK_PROGRESS) {
+      snap = this.writeStatus(jobId, stage.status, attempt, {
+        progress: stage.progress,
+        lastCommandId: lastCommandId ?? null,
+        errorCode: null,
+      });
+    }
+    if (!snap) throw new KnowledgeJobNotFoundError();
     return snap;
   }
 
@@ -190,7 +241,13 @@ export class KnowledgeUploadJobCoordinator {
       input?.knowledgeBaseId ?? "unbound",
     );
     const partition = this.deps.getPartition();
-    const snap = insertDraftJob({ partition, knowledgeBaseId });
+    const dataMode = this.dataMode();
+    const snap = insertDraftJob({
+      partition,
+      knowledgeBaseId,
+      dataMode,
+      synthetic: dataMode === "mock",
+    });
     this.notify(snap);
     return snap;
   }
@@ -214,8 +271,10 @@ export class KnowledgeUploadJobCoordinator {
   }
 
   /**
-   * Advance a draft toward upload. Without a provider, fail closed to
-   * `blocked_provider_unavailable` (no fake completed / active upload).
+   * Advance a draft toward upload.
+   * Mock: Main executor → completed with progress.
+   * Provider: without a provider, fail closed to blocked_provider_unavailable
+   * (no fake completed / active upload).
    */
   enqueue(jobId: string): KnowledgeJobSnapshot {
     const snap = getJobById(jobId);
@@ -223,18 +282,19 @@ export class KnowledgeUploadJobCoordinator {
     assertActingPartition(snap, this.deps.getPartition());
     if (isKnowledgeJobTerminal(snap.status)) return snap;
 
+    if (this.dataMode() === "mock" && snap.dataMode === "mock") {
+      return this.runMockExecutor(jobId, snap.attempt);
+    }
+
     const probe = this.probe();
     if (!probe.available) {
-      return this.writeStatus(
-        jobId,
-        "blocked_provider_unavailable",
-        snap.attempt,
-        null,
-        "PROVIDER_UNAVAILABLE",
-      );
+      return this.writeStatus(jobId, "blocked_provider_unavailable", snap.attempt, {
+        lastCommandId: null,
+        errorCode: "PROVIDER_UNAVAILABLE",
+      });
     }
     if (snap.status === "draft") {
-      return this.writeStatus(jobId, "queued", snap.attempt);
+      return this.writeStatus(jobId, "queued", snap.attempt, { progress: 0 });
     }
     return snap;
   }
@@ -259,13 +319,10 @@ export class KnowledgeUploadJobCoordinator {
       return snap;
     }
 
-    return this.writeStatus(
-      jobId,
-      "cancelled",
-      snap.attempt,
-      options.commandId ?? null,
-      "CANCELLED",
-    );
+    return this.writeStatus(jobId, "cancelled", snap.attempt, {
+      lastCommandId: options.commandId ?? null,
+      errorCode: "CANCELLED",
+    });
   }
 
   retry(
@@ -287,44 +344,70 @@ export class KnowledgeUploadJobCoordinator {
     }
 
     const nextAttempt = snap.attempt + 1;
+    if (this.dataMode() === "mock" && snap.dataMode === "mock") {
+      return this.runMockExecutor(
+        jobId,
+        nextAttempt,
+        options.commandId ?? null,
+      );
+    }
+
     const probe = this.probe();
     if (!probe.available) {
       return this.writeStatus(
         jobId,
         "blocked_provider_unavailable",
         nextAttempt,
-        options.commandId ?? null,
-        "PROVIDER_UNAVAILABLE",
+        {
+          lastCommandId: options.commandId ?? null,
+          errorCode: "PROVIDER_UNAVAILABLE",
+        },
       );
     }
-    return this.writeStatus(
-      jobId,
-      "queued",
-      nextAttempt,
-      options.commandId ?? null,
-      null,
-    );
+    return this.writeStatus(jobId, "queued", nextAttempt, {
+      lastCommandId: options.commandId ?? null,
+      errorCode: null,
+      progress: 0,
+    });
   }
 
   /**
    * Restart recovery: every non-terminal Job is resumed or marked
    * interrupted / blocked_provider_unavailable. No ownerless uploading/processing.
+   * Mock Jobs are restored by the Main executor (same jobId) or interrupted.
    */
   recoverOnStart(): void {
+    const mode = this.dataMode();
     const probe = this.probe();
+
     for (const job of listNonTerminalJobs()) {
+      if (mode === "mock" && job.dataMode === "mock") {
+        if (job.status === "draft") {
+          // Leave draft; caller may enqueue later — do not mint a second Job.
+          continue;
+        }
+        // Restore: resume Main mock executor on the same jobId.
+        this.runMockExecutor(job.jobId, job.attempt);
+        continue;
+      }
+
       if (!probe.available) {
         this.writeStatus(
           job.jobId,
           "blocked_provider_unavailable",
           job.attempt,
-          null,
-          "PROVIDER_UNAVAILABLE",
+          {
+            lastCommandId: null,
+            errorCode: "PROVIDER_UNAVAILABLE",
+          },
         );
         continue;
       }
       if (job.status === "uploading" || job.status === "processing") {
-        this.writeStatus(job.jobId, "interrupted", job.attempt, null, "INTERRUPTED");
+        this.writeStatus(job.jobId, "interrupted", job.attempt, {
+          lastCommandId: null,
+          errorCode: "INTERRUPTED",
+        });
         continue;
       }
       if (job.status === "draft") {
@@ -361,6 +444,7 @@ export function getKnowledgeUploadJobCoordinator(): KnowledgeUploadJobCoordinato
         throw new Error("KNOWLEDGE_JOB_COORDINATOR_UNCONFIGURED");
       },
       isProviderAvailable: defaultProviderAvailable,
+      getDataMode: defaultDataMode,
     });
   }
   return shared;

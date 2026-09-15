@@ -1288,8 +1288,8 @@ interface HermesAPI {
   // File Platform
   files: import("../shared/files").HermesFilesAPI;
 
-  // Knowledge Upload Jobs
-  knowledgeJobs: import("../shared/knowledge/knowledge-job-ipc").HermesKnowledgeJobsAPI;
+  // Knowledge Upload Jobs + sanitized mode/facade
+  knowledgeJobs: import("./knowledge-job-api").HermesKnowledgeJobsSurface;
 
   // Explicit Expert
   expert: import("../shared/expert").ExpertApi;

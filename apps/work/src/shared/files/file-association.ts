@@ -10,6 +10,9 @@ export type FileAssociationRole =
   | "context-file"
   | "reference";
 
+/** Association isolation mode; mock rows must not be Chat/Skill consumable. */
+export type FileAssociationDataMode = "mock" | "provider";
+
 export interface FileAssociation {
   id: string;
   fileId: string;
@@ -17,9 +20,21 @@ export interface FileAssociation {
   sessionId?: string;
   /** Knowledge Upload Job consumer; mutually exclusive with sessionId on import. */
   knowledgeJobId?: string;
+  /**
+   * Additive mode marker (ALTER like knowledge_job_id).
+   * Knowledge mock imports write `mock`; Chat/Skill leave unset or non-mock.
+   */
+  dataMode?: FileAssociationDataMode;
   messageId?: string;
   taskId?: string;
   role: FileAssociationRole;
   ordinal: number;
   createdAt: string;
+}
+
+/** Chat/Skill consumers must ignore mock Knowledge associations. */
+export function isChatConsumableAssociation(
+  assoc: Pick<FileAssociation, "dataMode">,
+): boolean {
+  return assoc.dataMode !== "mock";
 }

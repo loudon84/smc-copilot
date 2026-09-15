@@ -1,7 +1,10 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { useI18n } from "../../components/useI18n";
 import type { KnowledgePageId } from "./knowledge-route-descriptor";
-import type { KnowledgeCapabilitySnapshot } from "../../../../shared/knowledge/knowledge-job-ipc";
+import type {
+  KnowledgeCapabilitySnapshot,
+  KnowledgeModeSnapshot,
+} from "../../../../shared/knowledge/knowledge-job-ipc";
 
 export type KnowledgePagesProps = {
   page: KnowledgePageId;
@@ -10,9 +13,11 @@ export type KnowledgePagesProps = {
    * Product path probes `window.hermesAPI.knowledgeJobs.getCapability`.
    */
   capability?: KnowledgeCapabilitySnapshot | null;
+  /** Optional mode override for tests. Product path probes getMode. */
+  mode?: KnowledgeModeSnapshot | null;
 };
 
-type PagePresentation = "loading" | "unavailable" | "empty";
+type PagePresentation = "loading" | "unavailable" | "empty" | "ready";
 
 const PAGE_TITLE_KEY: Record<KnowledgePageId, string> = {
   home: "knowledge.home.title",
@@ -34,10 +39,13 @@ const PAGE_DESCRIPTION_KEY: Record<KnowledgePageId, string> = {
 
 function resolvePresentation(
   capability: KnowledgeCapabilitySnapshot | null | undefined,
+  mode: KnowledgeModeSnapshot | null | undefined,
 ): PagePresentation {
-  if (capability === undefined) return "loading";
+  if (capability === undefined || mode === undefined) return "loading";
+  // Mock mode: badge-driven ready shell only — no fixture lists/layouts (RM-04).
+  if (mode?.dataMode === "mock") return "ready";
   if (capability === null || !capability.available) return "unavailable";
-  // This Stage has no entity provider: available probe still means empty, never fixtures.
+  // Provider mode: available probe still means empty, never fixtures.
   return "empty";
 }
 
@@ -45,6 +53,14 @@ function blockedCapability(): KnowledgeCapabilitySnapshot {
   return {
     available: false,
     status: "blocked_provider_unavailable",
+  };
+}
+
+function defaultProviderMode(): KnowledgeModeSnapshot {
+  return {
+    dataMode: "provider",
+    allowSyntheticData: false,
+    configSource: "default",
   };
 }
 
@@ -56,12 +72,13 @@ function readLiveCapabilityApi():
 
 /**
  * Six Stage Knowledge pages as fail-closed Work UI.
- * Entity reads and uploads stay unavailable/empty without a Main capability
- * provider; no fixture repositories, fake upload timers, or sendable Q&A.
+ * Provider mode stays unavailable/empty. Mock mode may show a ready shell
+ * driven by Main mode, but never grows list/detail/chat layouts this Stage.
  */
 export function KnowledgePages({
   page,
   capability: injectedCapability,
+  mode: injectedMode,
 }: KnowledgePagesProps): ReactElement {
   const { t } = useI18n();
   const [capability, setCapability] = useState<
@@ -72,6 +89,16 @@ export function KnowledgePages({
     if (!api?.getCapability) return blockedCapability();
     return undefined;
   });
+  const [mode, setMode] = useState<KnowledgeModeSnapshot | null | undefined>(
+    () => {
+      if (injectedMode !== undefined) return injectedMode;
+      const api = readLiveCapabilityApi();
+      if (!api || !("getMode" in api) || !api.getMode) {
+        return defaultProviderMode();
+      }
+      return undefined;
+    },
+  );
 
   useEffect(() => {
     if (injectedCapability !== undefined) {
@@ -100,7 +127,34 @@ export function KnowledgePages({
     };
   }, [injectedCapability, page]);
 
-  const presentation = resolvePresentation(capability);
+  useEffect(() => {
+    if (injectedMode !== undefined) {
+      setMode(injectedMode);
+      return;
+    }
+
+    const api = readLiveCapabilityApi();
+    const getMode = api && "getMode" in api ? api.getMode : undefined;
+    if (!getMode) {
+      setMode(defaultProviderMode());
+      return;
+    }
+
+    let cancelled = false;
+    void getMode()
+      .then((snapshot) => {
+        if (!cancelled) setMode(snapshot);
+      })
+      .catch(() => {
+        if (!cancelled) setMode(defaultProviderMode());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [injectedMode, page]);
+
+  const presentation = resolvePresentation(capability, mode);
   const title = t(PAGE_TITLE_KEY[page]);
   const description = t(PAGE_DESCRIPTION_KEY[page]);
 
@@ -112,6 +166,9 @@ export function KnowledgePages({
   } else if (presentation === "empty") {
     statusTitle = t("knowledge.emptyTitle");
     statusDescription = t("knowledge.emptyDescription");
+  } else if (presentation === "ready") {
+    statusTitle = t("knowledge.mockReadyTitle");
+    statusDescription = t("knowledge.mockReadyDescription");
   }
 
   return (
@@ -120,6 +177,7 @@ export function KnowledgePages({
       data-testid={`knowledge-page-${page}`}
       data-page={page}
       data-state={presentation}
+      data-knowledge-mode={mode?.dataMode ?? "unknown"}
     >
       <header style={{ marginBottom: 16 }}>
         <h1 className="settings-header" style={{ marginBottom: 4 }}>

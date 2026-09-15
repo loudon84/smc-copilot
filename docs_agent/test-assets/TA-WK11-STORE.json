@@ -1,0 +1,12 @@
+{
+  "asset_id": "TA-WK11-STORE",
+  "capabilities": [
+    "vitest"
+  ],
+  "content_sha256": "sha256:7bfd4808e6be8aa265ea6c614fb15aad5ff403c6f5be933013350dca059b0a71",
+  "kind": "TEST",
+  "path": "apps/work/src/main/knowledge/knowledge-upload-job-store.test.ts",
+  "schema": "smc.test-asset.v1",
+  "status": "ACTIVE",
+  "updated_at": "2026-09-15T14:01:26.991585Z"
+}

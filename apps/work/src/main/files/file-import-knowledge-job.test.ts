@@ -100,6 +100,10 @@ type JobRow = {
   error_code: string | null;
   created_at: string;
   updated_at: string;
+  data_mode?: string | null;
+  synthetic?: number | null;
+  progress?: number | null;
+  file_summary_json?: string | null;
 };
 
 const TABLE = "knowledge_upload_jobs";
@@ -141,6 +145,10 @@ class FakeStatement {
         error_code,
         created_at,
         updated_at,
+        data_mode,
+        synthetic,
+        progress,
+        file_summary_json,
       ] = args;
       this.db.jobs.set(String(job_id), {
         job_id: String(job_id),
@@ -156,6 +164,12 @@ class FakeStatement {
         error_code: error_code == null ? null : String(error_code),
         created_at: String(created_at),
         updated_at: String(updated_at),
+        data_mode: data_mode == null ? null : String(data_mode),
+        synthetic:
+          synthetic == null ? null : Number(synthetic),
+        progress: progress == null ? null : Number(progress),
+        file_summary_json:
+          file_summary_json == null ? null : String(file_summary_json),
       });
     }
   }
@@ -227,6 +241,7 @@ function chatContext(
 
 async function bootCoordinator(
   partition: KnowledgeJobPartition = PARTITION_A,
+  dataMode: "mock" | "provider" = "provider",
 ): Promise<void> {
   const {
     createKnowledgeUploadJobCoordinator,
@@ -236,17 +251,19 @@ async function bootCoordinator(
   createKnowledgeUploadJobCoordinator({
     getPartition: () => partition,
     isProviderAvailable: () => false,
+    getDataMode: () => dataMode,
   });
 }
 
 async function draftJob(
   partition: KnowledgeJobPartition,
   knowledgeBaseId: string,
+  dataMode: "mock" | "provider" = "provider",
 ) {
   const { insertDraftJob } = await import(
     "../knowledge/knowledge-upload-job-store"
   );
-  return insertDraftJob({ partition, knowledgeBaseId });
+  return insertDraftJob({ partition, knowledgeBaseId, dataMode });
 }
 
 describe("file-import Knowledge Job consumer (V04)", () => {
@@ -522,5 +539,102 @@ describe("file-import Knowledge Job consumer (V04)", () => {
     if (managedPath) {
       expect(existsSync(managedPath)).toBe(true);
     }
+  });
+
+  it("stores dataMode=mock on Knowledge mock import without sessionId", async () => {
+    await bootCoordinator(PARTITION_A, "mock");
+    const job = await draftJob(PARTITION_A, "kb-mock", "mock");
+    expect(job.dataMode).toBe("mock");
+
+    const { importOnePath } = await import("./file-import-service");
+    const store = await import("./file-association-store");
+
+    const result = await importOnePath(
+      sampleFile("mock-note.txt"),
+      knowledgeContext(job.jobId),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const assoc = store.findAssociation({
+      profileId: "profile-job",
+      fileId: result.file.id,
+      knowledgeJobId: job.jobId,
+      role: "prompt-attachment",
+    });
+    expect(assoc).toMatchObject({
+      knowledgeJobId: job.jobId,
+      dataMode: "mock",
+    });
+    expect(assoc?.sessionId).toBeUndefined();
+    expect(store.listBySession("profile-job", "any-session")).toHaveLength(0);
+  });
+
+  it("keeps Chat associations consumable and does not delete shared ManagedFile on mock unlink", async () => {
+    await bootCoordinator(PARTITION_A, "mock");
+    const job = await draftJob(PARTITION_A, "kb-mock", "mock");
+    const { importOnePath } = await import("./file-import-service");
+    const store = await import("./file-association-store");
+
+    const chat = await importOnePath(
+      sampleFile("shared-mock.txt"),
+      chatContext("sess-mock-shared", { profile: "profile-job" }),
+    );
+    expect(chat.ok).toBe(true);
+    if (!chat.ok) return;
+
+    const knowledge = await importOnePath(
+      sampleFile("shared-mock.txt"),
+      knowledgeContext(job.jobId),
+    );
+    expect(knowledge.ok).toBe(true);
+    if (!knowledge.ok) return;
+    expect(knowledge.file.id).toBe(chat.file.id);
+
+    const mockAssoc = store.findAssociation({
+      profileId: "profile-job",
+      fileId: chat.file.id,
+      knowledgeJobId: job.jobId,
+      role: "prompt-attachment",
+    });
+    expect(mockAssoc?.dataMode).toBe("mock");
+    expect(store.countAssociations(chat.file.id, "profile-job")).toBe(2);
+
+    // Chat consumer list must still see the Chat association (mock is not consumable).
+    const chatRows = store.listBySession("profile-job", "sess-mock-shared");
+    expect(chatRows).toHaveLength(1);
+    expect(chatRows[0]?.association.sessionId).toBe("sess-mock-shared");
+    expect(chatRows[0]?.association.dataMode).not.toBe("mock");
+
+    // Adversarial: mock row sharing the Chat session key must stay non-consumable.
+    store.insertAssociation({
+      id: "a-mock-sess-adversarial",
+      fileId: chat.file.id,
+      profileId: "profile-job",
+      sessionId: "sess-mock-shared",
+      knowledgeJobId: `${job.jobId}-adv`,
+      dataMode: "mock",
+      role: "reference",
+      ordinal: 2,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(store.listBySession("profile-job", "sess-mock-shared")).toHaveLength(
+      1,
+    );
+
+    // Unlink mock via File Platform association cleanup only.
+    store.deleteAssociation("profile-job", mockAssoc!.id);
+    expect(store.countAssociations(chat.file.id, "profile-job")).toBe(2);
+    expect(store.getManagedFile("profile-job", chat.file.id)).not.toBeNull();
+    expect(store.listBySession("profile-job", "sess-mock-shared")).toHaveLength(
+      1,
+    );
+
+    store.deleteAssociation("profile-job", "a-mock-sess-adversarial");
+    expect(store.countAssociations(chat.file.id, "profile-job")).toBe(1);
+
+    const { cleanupOrphanFiles } = await import("./file-cleanup-service");
+    cleanupOrphanFiles("profile-job");
+    expect(store.getManagedFile("profile-job", chat.file.id)).not.toBeNull();
   });
 });

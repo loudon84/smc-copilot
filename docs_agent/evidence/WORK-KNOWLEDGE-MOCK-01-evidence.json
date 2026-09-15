@@ -1,0 +1,456 @@
+{
+  "acceptance_contract": "smc.acceptance.v1",
+  "ambient_fingerprint": "sha256:26bcbe450c57a2144aaa17cfa47584045964f80e341d5a8baf98ed3d017d00cd",
+  "blocking_claims": [
+    {
+      "claim_id": "CLM-01",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-01 capability fail-closed",
+      "requirement": "AC-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-02",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Coordinator `isProviderAvailable: () => false`",
+      "requirement": "AC-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V02",
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-03",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Source mock is not Work owner",
+      "requirement": "AC-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-04",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Job IPC has no completed",
+      "requirement": "AC-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V03",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-05",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "recoverOnStart exists but no mock executor",
+      "requirement": "AC-05",
+      "result": "PASS",
+      "verification_ids": [
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-06",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "sqlite has no mode column",
+      "requirement": "AC-06",
+      "result": "PASS",
+      "verification_ids": [
+        "V03"
+      ]
+    },
+    {
+      "claim_id": "CLM-07",
+      "evidence_action": "TARGETED_RERUN",
+      "prior_evidence": "RM-01 association refcount",
+      "requirement": "AC-07",
+      "result": "PASS",
+      "verification_ids": [
+        "V05"
+      ]
+    },
+    {
+      "claim_id": "CLM-08",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "KnowledgeView has no badge",
+      "requirement": "AC-08",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-09",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No mode diagnostics",
+      "requirement": "AC-09",
+      "result": "PASS",
+      "verification_ids": [
+        "V01"
+      ]
+    },
+    {
+      "claim_id": "CLM-10",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "GES forbidden_roots; generic pages",
+      "requirement": "AC-10",
+      "result": "PASS",
+      "verification_ids": [
+        "V06",
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-11",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Source mock repository",
+      "requirement": "AC-11",
+      "result": "PASS",
+      "verification_ids": [
+        "V02",
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-12",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Existing sanitizeIpcError",
+      "requirement": "AC-12",
+      "result": "PASS",
+      "verification_ids": [
+        "V01",
+        "V04"
+      ]
+    },
+    {
+      "claim_id": "CLM-13",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "No Work entity owner",
+      "requirement": "AC-13",
+      "result": "PASS",
+      "verification_ids": [
+        "V02"
+      ]
+    },
+    {
+      "claim_id": "CLM-14",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "Stage PRD ledger",
+      "requirement": "DOD-01",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-15",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "RM-01 tests",
+      "requirement": "DOD-02",
+      "result": "PASS",
+      "verification_ids": [
+        "V07"
+      ]
+    },
+    {
+      "claim_id": "CLM-16",
+      "evidence_action": "NEW_EVIDENCE",
+      "prior_evidence": "KnowledgePages shell",
+      "requirement": "DOD-03",
+      "result": "PASS",
+      "verification_ids": [
+        "V06"
+      ]
+    },
+    {
+      "claim_id": "CLM-17",
+      "evidence_action": "REUSE_EVIDENCE",
+      "prior_evidence": "PRD APPROVED 2026-09-15; AD v1.1 APPROVED",
+      "requirement": "DOD-04",
+      "result": "PASS",
+      "verification_ids": [
+        "V08"
+      ]
+    }
+  ],
+  "blocking_verifications": [
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-01",
+        "CLM-09",
+        "CLM-12"
+      ],
+      "claim_results": {
+        "CLM-01": "PASS",
+        "CLM-09": "PASS",
+        "CLM-12": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/knowledge/knowledge-mode-controller.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142525.379922Z-V01.log",
+      "raw_log_sha256": "sha256:32a4d81708a547ff17f8a92e869f814ff920a397db4d311cc9c36fb271f21279",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:25.379922Z",
+      "verification_id": "V01"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-03",
+        "CLM-11",
+        "CLM-13"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-03": "PASS",
+        "CLM-11": "PASS",
+        "CLM-13": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/knowledge/knowledge-provider-facade.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142527.148373Z-V02.log",
+      "raw_log_sha256": "sha256:bb7cb11d256f815ef1cd6f380a457369c70ebc42a35d9621014779648fa02fb0",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:27.148373Z",
+      "verification_id": "V02"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-06"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-06": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/knowledge/knowledge-upload-job-store.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142528.989655Z-V03.log",
+      "raw_log_sha256": "sha256:a54a8991e245a542e36243b9cc83651c68439519e389efc5db2912c3a7c5138c",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:28.989655Z",
+      "verification_id": "V03"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-04",
+        "CLM-05",
+        "CLM-12"
+      ],
+      "claim_results": {
+        "CLM-04": "PASS",
+        "CLM-05": "PASS",
+        "CLM-12": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/knowledge/knowledge-upload-job-coordinator.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142530.892152Z-V04.log",
+      "raw_log_sha256": "sha256:98bc43a92ffc7b37144ff5345b0f803a28071010fce827a2838a1151cc4e38a5",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:30.892152Z",
+      "verification_id": "V04"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-07"
+      ],
+      "claim_results": {
+        "CLM-07": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false src/main/files/file-import-knowledge-job.test.ts src/main/files/file-association-store.test.ts",
+      "evidence_action": "TARGETED_RERUN",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142532.734995Z-V05.log",
+      "raw_log_sha256": "sha256:01ffab711cb8d721b2c2e5460a6ab6f2200f81a6a95eddfed5d60f901f865dea",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:32.734995Z",
+      "verification_id": "V05"
+    },
+    {
+      "acceptance_mode": "LOCAL",
+      "candidate_id": null,
+      "claim_ids": [
+        "CLM-02",
+        "CLM-08",
+        "CLM-10",
+        "CLM-16"
+      ],
+      "claim_results": {
+        "CLM-02": "PASS",
+        "CLM-08": "PASS",
+        "CLM-10": "PASS",
+        "CLM-16": "PASS"
+      },
+      "command": "npm --prefix apps/work test -- --passWithNoTests=false tests/knowledge-fail-closed.test.ts",
+      "evidence_action": "NEW_EVIDENCE",
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142535.648224Z-V06.log",
+      "raw_log_sha256": "sha256:291057ed8fbe176f26cd89a2e5a72f62a99d544ffe72b39dd7c8116098c4fd80",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:35.648224Z",
+      "verification_id": "V06"
+    },
+    {
+      "acceptance_mode": null,
+      "candidate_id": null,
+      "claim_ids": [],
+      "claim_results": {
+        "CLM-10": "PASS",
+        "CLM-11": "PASS",
+        "CLM-14": "PASS",
+        "CLM-15": "PASS"
+      },
+      "command": "npm --prefix apps/work run typecheck '&&' npm --prefix apps/work run guard '&&' npm --prefix apps/work test -- --passWithNoTests=false src/main/knowledge/knowledge-mode-controller.test.ts src/main/knowledge/knowledge-provider-facade.test.ts src/main/knowledge/knowledge-upload-job-store.test.ts src/main/knowledge/knowledge-upload-job-coordinator.test.ts src/main/files/file-import-knowledge-job.test.ts tests/knowledge-fail-closed.test.ts tests/layout-knowledge-view.test.ts tests/knowledge-route-scope.test.ts",
+      "evidence_action": null,
+      "exit_code": 0,
+      "inherited": false,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142555.166928Z-V07.log",
+      "raw_log_sha256": "sha256:c3b0e4c616043bad6dffccb79ea121ac685d50d965ce009ffd9a674b70a0911d",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:55.166928Z",
+      "verification_id": "V07"
+    },
+    {
+      "acceptance_mode": null,
+      "candidate_id": null,
+      "claim_ids": [],
+      "claim_results": {
+        "CLM-17": "PASS"
+      },
+      "command": "git grep -n \"status: APPROVED\" -- docs/work/PRD-WORK-KNOWLEDGE-v1.1-RM-MOCK-01-mock-mode-foundation.md docs/work/AD-WORK-KNOWLEDGE-v1.1-mock-mode.md",
+      "evidence_action": null,
+      "exit_code": 0,
+      "inherited": true,
+      "policy": "LOCAL_TRANSIENT",
+      "raw_log_ref": ".smc/evidence/WORK-KNOWLEDGE-MOCK-01/logs/20260915T142555.844702Z-V08.log",
+      "raw_log_sha256": "sha256:857c28f547cd77fb1dc3ac9368f91b7efc90372076673d10f4b3fac2e09c1fb0",
+      "result": "PASS",
+      "source_manifest": null,
+      "source_manifest_sha256": null,
+      "source_verification_id": null,
+      "timestamp": "2026-09-15T14:25:55.844702Z",
+      "verification_id": "V08"
+    }
+  ],
+  "completion_audit": {
+    "changed": 31,
+    "deferred": 0,
+    "done": 31,
+    "scope_drift": 0,
+    "timestamp": "2026-09-15T14:24:06.710462Z",
+    "total_items": 31,
+    "unverifiable": 0,
+    "verdict": "PASS"
+  },
+  "generated_at": "2026-09-15T14:26:15.965493Z",
+  "implementation_review": {
+    "reviewer": "composer-agent",
+    "scope_fingerprint": "sha256:a26e40d2b35f8f719791162df89f592577c17c853723ef16f17921b9b74a481c",
+    "timestamp": "2026-09-15T14:24:06.955430Z",
+    "verdict": "PASS"
+  },
+  "payload_sha256": "sha256:59afaad533b0e1ef0db3f10352d79b5139a0d8f8752c6d2bc7ce79c087da4f75",
+  "plan": ".cursor/plans/work-knowledge-mock-01-mock-mode-foundation.plan.md",
+  "plan_id": "WORK-KNOWLEDGE-MOCK-01",
+  "plan_review": {
+    "plan_sha256": "sha256:19be446ff967a72fa0bc253a595dd31c13fe3627437dd489feb8947dd9d97a35",
+    "reviewer": "composer-agent",
+    "timestamp": "2026-09-15T12:13:19.366750Z",
+    "verdict": "PASS"
+  },
+  "schema": "smc.evidence.manifest.v3",
+  "scope_fingerprint": "sha256:a26e40d2b35f8f719791162df89f592577c17c853723ef16f17921b9b74a481c",
+  "test_assets": [
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK11-MODE",
+      "content_sha256": "sha256:0f40f4a483d12a8e97137c0ce705c1c74854fc721a5b293e624f6bf84bd10e1a",
+      "manifest": "docs_agent/test-assets/TA-WK11-MODE.json"
+    },
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK11-FACADE",
+      "content_sha256": "sha256:b632316966eb7d621b69e030005ceb01886c246bdcbaefc725d49d004d262921",
+      "manifest": "docs_agent/test-assets/TA-WK11-FACADE.json"
+    },
+    {
+      "action": "NEW",
+      "asset_id": "TA-WK11-STORE",
+      "content_sha256": "sha256:7bfd4808e6be8aa265ea6c614fb15aad5ff403c6f5be933013350dca059b0a71",
+      "manifest": "docs_agent/test-assets/TA-WK11-STORE.json"
+    },
+    {
+      "action": "EXTEND",
+      "asset_id": "TA-WK01-JOB",
+      "content_sha256": "sha256:d405f98452d1695919be10c7e06eadb4f0b4d2acaa4246a14ae00eba5881d1d8",
+      "manifest": "docs_agent/test-assets/TA-WK01-JOB.json"
+    },
+    {
+      "action": "EXTEND",
+      "asset_id": "TA-WK01-IMPORT",
+      "content_sha256": "sha256:a417b37ff4af1f39705ec0814826666a0f8a9f72203a32a00ca50dd4b50caa86",
+      "manifest": "docs_agent/test-assets/TA-WK01-IMPORT.json"
+    },
+    {
+      "action": "EXTEND",
+      "asset_id": "TA-WK01-CLOSED",
+      "content_sha256": "sha256:8bf93d5905cc89dba39a0067f3288e450a1b1fa51a70c49a372d72d16471845e",
+      "manifest": "docs_agent/test-assets/TA-WK01-CLOSED.json"
+    }
+  ],
+  "verification_candidate": null,
+  "workspace_base_commit": "c6a321e16f872d29544b998266c3959011db9e8a"
+}

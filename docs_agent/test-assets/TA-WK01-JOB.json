@@ -3,10 +3,10 @@
   "capabilities": [
     "vitest"
   ],
-  "content_sha256": "sha256:b84c9fea1a94df6be4e99e3c4341643c1aa0ef330796614a927202420a2c55d9",
+  "content_sha256": "sha256:d405f98452d1695919be10c7e06eadb4f0b4d2acaa4246a14ae00eba5881d1d8",
   "kind": "TEST",
   "path": "apps/work/src/main/knowledge/knowledge-upload-job-coordinator.test.ts",
   "schema": "smc.test-asset.v1",
   "status": "ACTIVE",
-  "updated_at": "2026-09-15T08:45:54.756459Z"
+  "updated_at": "2026-09-15T14:01:26.993585Z"
 }

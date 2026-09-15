@@ -13,7 +13,10 @@ import {
 } from "../src/renderer/src/screens/Knowledge/knowledge-route-scope";
 import { KnowledgeView } from "../src/renderer/src/screens/Knowledge/KnowledgeView";
 import { KnowledgePages } from "../src/renderer/src/screens/Knowledge/KnowledgePages";
-import type { KnowledgeCapabilitySnapshot } from "../src/shared/knowledge/knowledge-job-ipc";
+import type {
+  KnowledgeCapabilitySnapshot,
+  KnowledgeModeSnapshot,
+} from "../src/shared/knowledge/knowledge-job-ipc";
 
 const WORK_SRC = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -40,13 +43,29 @@ vi.mock("../src/renderer/src/components/useI18n", () => ({
   }),
 }));
 
+type MockKnowledgeJobsOptions = {
+  capability: KnowledgeCapabilitySnapshot | null;
+  mode?: KnowledgeModeSnapshot | null;
+};
+
 function mockKnowledgeJobs(
-  capability: KnowledgeCapabilitySnapshot | null,
+  capabilityOrOptions: KnowledgeCapabilitySnapshot | null | MockKnowledgeJobsOptions,
 ): {
   getCapability: ReturnType<typeof vi.fn>;
   listSnapshots: ReturnType<typeof vi.fn>;
   createDraft: ReturnType<typeof vi.fn>;
+  getMode: ReturnType<typeof vi.fn>;
 } {
+  const options: MockKnowledgeJobsOptions =
+    capabilityOrOptions !== null &&
+    typeof capabilityOrOptions === "object" &&
+    "capability" in capabilityOrOptions
+      ? capabilityOrOptions
+      : { capability: capabilityOrOptions };
+
+  const capability = options.capability;
+  const mode = options.mode;
+
   const getCapability = vi.fn(async () => {
     if (!capability) {
       throw new Error("knowledgeJobs unavailable");
@@ -57,9 +76,32 @@ function mockKnowledgeJobs(
   const createDraft = vi.fn(async () => {
     throw new Error("createDraft must not be called in fail-closed UI");
   });
+  const getMode = vi.fn(async () => {
+    if (mode === null) {
+      throw new Error("KNOWLEDGE_MODE_ERROR");
+    }
+    if (mode) return mode;
+    return {
+      dataMode: "provider" as const,
+      allowSyntheticData: false,
+      configSource: "default",
+    };
+  });
+  const listEntities = vi.fn(async () => []);
+  const getEntity = vi.fn(async () => null);
+  const mutateEntity = vi.fn(async () => {
+    throw new Error("KNOWLEDGE_FACADE_UNAVAILABLE");
+  });
+
+  const exposeApi =
+    capabilityOrOptions !== null &&
+    typeof capabilityOrOptions === "object" &&
+    "capability" in capabilityOrOptions
+      ? true
+      : Boolean(capability);
 
   const hermesAPI = {
-    knowledgeJobs: capability
+    knowledgeJobs: exposeApi
       ? {
           getCapability,
           listSnapshots,
@@ -68,6 +110,12 @@ function mockKnowledgeJobs(
           cancel: vi.fn(),
           retry: vi.fn(),
           onSnapshotChanged: () => () => undefined,
+          getMode,
+          facade: {
+            listEntities,
+            getEntity,
+            mutateEntity,
+          },
         }
       : undefined,
     skillRun: {
@@ -82,7 +130,7 @@ function mockKnowledgeJobs(
     window as unknown as { hermesAPI: typeof hermesAPI }
   ).hermesAPI = hermesAPI;
 
-  return { getCapability, listSnapshots, createDraft };
+  return { getCapability, listSnapshots, createDraft, getMode };
 }
 
 function collectProductionTsSources(root: string): string[] {
@@ -264,5 +312,116 @@ describe("Knowledge fail-closed pages (V05)", () => {
       }
     }
     expect(hits).toEqual([]);
+  });
+
+  it("shows a persistent Mock/Demo badge only in mock mode (AC-08)", async () => {
+    mockKnowledgeJobs({
+      capability: {
+        available: false,
+        status: "blocked_provider_unavailable",
+      },
+      mode: {
+        dataMode: "mock",
+        allowSyntheticData: true,
+        channel: "local",
+        configSource: "env",
+      },
+    });
+
+    await act(async () => {
+      render(React.createElement(KnowledgeView, { active: true, scope }));
+    });
+
+    await waitFor(() => {
+      const badge = screen.getByTestId("knowledge-mock-demo-badge");
+      expect(badge.textContent).toContain(knowledgeEn.mockDemoBadge);
+      expect(badge.getAttribute("data-persistent")).toBe("true");
+    });
+    expect(screen.queryByTestId("knowledge-mock-demo-badge-dismiss")).toBeNull();
+
+    // Renderer must not be able to hide the badge while Main reports mock.
+    await act(async () => {
+      scope.replace({ page: "bases", params: {} });
+    });
+    expect(screen.getByTestId("knowledge-mock-demo-badge")).toBeTruthy();
+  });
+
+  it("hides Mock/Demo badge in provider mode and never renders fixture lists (AC-08/10)", async () => {
+    mockKnowledgeJobs({
+      capability: {
+        available: true,
+        status: "available",
+      },
+      mode: {
+        dataMode: "provider",
+        allowSyntheticData: false,
+        configSource: "default",
+      },
+    });
+
+    await act(async () => {
+      render(React.createElement(KnowledgeView, { active: true, scope }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-page-home")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("knowledge-mock-demo-badge")).toBeNull();
+    expect(screen.queryByTestId("knowledge-fixture-list")).toBeNull();
+    expect(screen.queryByTestId("knowledge-base-list")).toBeNull();
+    expect(screen.queryByTestId("knowledge-document-detail")).toBeNull();
+    expect(screen.queryByTestId("knowledge-chat-thread")).toBeNull();
+    expect(document.body.textContent).not.toMatch(
+      /fixture|mock q&a|sample file|synthetic base/i,
+    );
+  });
+
+  it("keeps KnowledgePages as a generic shell in mock mode without six-page layouts (AC-10/DOD-03)", async () => {
+    mockKnowledgeJobs({
+      capability: {
+        available: false,
+        status: "blocked_provider_unavailable",
+      },
+      mode: {
+        dataMode: "mock",
+        allowSyntheticData: true,
+        configSource: "env",
+      },
+    });
+
+    await act(async () => {
+      render(React.createElement(KnowledgePages, { page: "bases" }));
+    });
+
+    await waitFor(() => {
+      const panel = screen.getByTestId("knowledge-page-bases");
+      expect(panel.getAttribute("data-state")).toBe("ready");
+      expect(panel.textContent).toContain(knowledgeEn.mockReadyTitle);
+    });
+    expect(screen.queryByTestId("knowledge-fixture-list")).toBeNull();
+    expect(screen.queryByTestId("knowledge-base-list")).toBeNull();
+    expect(screen.queryByTestId("knowledge-set-list")).toBeNull();
+    expect(screen.queryByTestId("knowledge-document-detail")).toBeNull();
+    expect(screen.queryByTestId("knowledge-upload-queue")).toBeNull();
+    expect(screen.queryByTestId("knowledge-chat-thread")).toBeNull();
+  });
+
+  it("latches Knowledge mode IPC before Job recoverOnStart (AC-05)", () => {
+    const registerSrc = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        "src/main/ipc/register.ts",
+      ),
+      "utf8",
+    );
+    const modeCall = registerSrc.indexOf(
+      "registerKnowledgeModeIpcHandlers(ipcMain)",
+    );
+    const jobCall = registerSrc.indexOf(
+      "registerKnowledgeJobIpcHandlers(ipcMain)",
+    );
+    expect(modeCall).toBeGreaterThan(-1);
+    expect(jobCall).toBeGreaterThan(-1);
+    expect(modeCall).toBeLessThan(jobCall);
   });
 });

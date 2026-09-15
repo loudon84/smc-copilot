@@ -23,6 +23,7 @@ import type {
 import { stageAttachment, clearStagedAttachments } from "../attachment-staging";
 import { registerFilesIpcHandlers } from "../files";
 import { registerKnowledgeJobIpcHandlers } from "../knowledge/register-knowledge-job-ipc";
+import { registerKnowledgeModeIpcHandlers } from "../knowledge/register-knowledge-mode-ipc";
 import { persistPromptImageAttachments } from "../session-attachment-store";
 import { persistManagedMessageAssociations } from "../files/persist-managed-message-associations";
 import { composeWireMessageWithSessionContext } from "../files/compose-wire-session-context";
@@ -1739,6 +1740,10 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   // File Platform �?typed hermesAPI.files surface (Phase 0+).
   registerFilesIpcHandlers(ipcMain);
+
+  // Knowledge mode must latch before Job recoverOnStart (AC-05).
+  // Knowledge mode + facade — sanitized getMode / entity IPC (MOCK-01).
+  registerKnowledgeModeIpcHandlers(ipcMain);
 
   // Knowledge Upload Jobs — typed hermesAPI.knowledgeJobs surface.
   registerKnowledgeJobIpcHandlers(ipcMain);

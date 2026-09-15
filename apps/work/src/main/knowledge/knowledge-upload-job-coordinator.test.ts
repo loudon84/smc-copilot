@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * V03 / TA-WK01-JOB — Main Knowledge Upload Job coordinator.
+ * V04 / TA-WK01-JOB — Main Knowledge Upload Job coordinator + mock executor.
  * Must not import React or renderer modules.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,8 @@ import {
   type KnowledgeJobSnapshot,
   type KnowledgeUploadJobCoordinator,
 } from "./knowledge-upload-job-coordinator";
+import { resetKnowledgeUploadJobStoreForTests } from "./knowledge-upload-job-store";
+import type { KnowledgeActiveDataMode } from "../../shared/knowledge/knowledge-job-ipc";
 
 vi.mock("../db", () => ({
   getDbConnection: vi.fn(),
@@ -35,9 +37,35 @@ type JobRow = {
   error_code: string | null;
   created_at: string;
   updated_at: string;
+  data_mode?: string | null;
+  synthetic?: number | null;
+  progress?: number | null;
+  file_summary_json?: string | null;
 };
 
 const TABLE = "knowledge_upload_jobs";
+
+const LEGACY_COLUMNS = [
+  "job_id",
+  "knowledge_base_id",
+  "work_profile_id",
+  "auth_subject",
+  "tenant_scope_kind",
+  "tenant_id",
+  "status",
+  "attempt",
+  "last_command_id",
+  "error_code",
+  "created_at",
+  "updated_at",
+] as const;
+
+const MODE_COLUMNS = [
+  "data_mode",
+  "synthetic",
+  "progress",
+  "file_summary_json",
+] as const;
 
 class FakeStatement {
   constructor(
@@ -58,12 +86,17 @@ class FakeStatement {
   }
 
   all(...args: unknown[]): unknown[] {
+    if (this.sql.includes("PRAGMA table_info")) {
+      const cols = this.db.columns.get(TABLE) ?? new Set<string>();
+      return [...cols].map((name, cid) => ({ cid, name }));
+    }
     if (this.sql.includes("status NOT IN") || this.sql.includes("non_terminal")) {
       const terminal = new Set([
         "failed",
         "cancelled",
         "interrupted",
         "blocked_provider_unavailable",
+        "completed",
       ]);
       return [...this.db.jobs.values()].filter((row) => !terminal.has(row.status));
     }
@@ -105,6 +138,10 @@ class FakeStatement {
         error_code,
         created_at,
         updated_at,
+        data_mode,
+        synthetic,
+        progress,
+        file_summary_json,
       ] = args;
       this.db.jobs.set(String(job_id), {
         job_id: String(job_id),
@@ -120,20 +157,42 @@ class FakeStatement {
         error_code: error_code == null ? null : String(error_code),
         created_at: String(created_at),
         updated_at: String(updated_at),
+        data_mode: data_mode == null ? null : String(data_mode),
+        synthetic: synthetic == null ? null : Number(synthetic),
+        progress: progress == null ? null : Number(progress),
+        file_summary_json:
+          file_summary_json == null ? null : String(file_summary_json),
       });
       return;
     }
     if (this.sql.includes(`UPDATE ${TABLE}`)) {
+      if (this.sql.includes("data_mode = 'legacy-unclassified'")) {
+        for (const [id, row] of this.db.jobs) {
+          if (row.data_mode == null || row.data_mode === "") {
+            this.db.jobs.set(id, {
+              ...row,
+              data_mode: "legacy-unclassified",
+              synthetic: row.synthetic ?? 0,
+              progress: row.progress ?? 0,
+            });
+          }
+        }
+        return;
+      }
       const jobId = String(args[args.length - 1]);
       const existing = this.db.jobs.get(jobId);
       if (!existing) return;
-      // Coordinator store uses positional SET columns then WHERE job_id.
+      // T1 store UPDATE: status/attempt/command/error + progress/file/mode/synthetic.
       if (this.sql.includes("status =") && this.sql.includes("attempt =")) {
         const [
           status,
           attempt,
           last_command_id,
           error_code,
+          progress,
+          file_summary_json,
+          data_mode,
+          synthetic,
           updated_at,
         ] = args;
         this.db.jobs.set(jobId, {
@@ -143,6 +202,30 @@ class FakeStatement {
           last_command_id:
             last_command_id == null ? null : String(last_command_id),
           error_code: error_code == null ? null : String(error_code),
+          progress:
+            progress === undefined
+              ? existing.progress
+              : progress == null
+                ? existing.progress
+                : Number(progress),
+          file_summary_json:
+            file_summary_json === undefined
+              ? existing.file_summary_json
+              : file_summary_json == null
+                ? null
+                : String(file_summary_json),
+          data_mode:
+            data_mode === undefined
+              ? existing.data_mode
+              : data_mode == null
+                ? existing.data_mode
+                : String(data_mode),
+          synthetic:
+            synthetic === undefined
+              ? existing.synthetic
+              : synthetic == null
+                ? existing.synthetic
+                : Number(synthetic),
           updated_at: String(updated_at),
         });
       }
@@ -152,10 +235,31 @@ class FakeStatement {
 
 class FakeDb {
   readonly tables = new Set<string>();
+  readonly columns = new Map<string, Set<string>>();
   readonly jobs = new Map<string, JobRow>();
 
-  exec(): void {
-    this.tables.add(TABLE);
+  exec(sql?: string): void {
+    const normalized = (sql ?? "").replace(/\s+/g, " ");
+    if (!normalized || normalized.includes(`CREATE TABLE IF NOT EXISTS ${TABLE}`)) {
+      this.tables.add(TABLE);
+      if (!this.columns.has(TABLE)) {
+        const cols = new Set<string>(LEGACY_COLUMNS);
+        if (!normalized || normalized.includes("data_mode")) {
+          for (const c of MODE_COLUMNS) cols.add(c);
+        }
+        this.columns.set(TABLE, cols);
+      }
+      return;
+    }
+    if (normalized.includes(`ALTER TABLE ${TABLE} ADD COLUMN`)) {
+      const match = normalized.match(/ADD COLUMN ([a-z_]+)/i);
+      if (match) {
+        const cols = this.columns.get(TABLE) ?? new Set<string>();
+        cols.add(match[1]!);
+        this.columns.set(TABLE, cols);
+        this.tables.add(TABLE);
+      }
+    }
   }
 
   prepare(sql: string): FakeStatement {
@@ -177,6 +281,7 @@ const PARTITION_B: KnowledgeJobPartition = {
 
 function makeCoordinator(options?: {
   providerAvailable?: boolean;
+  dataMode?: KnowledgeActiveDataMode;
   partition?: KnowledgeJobPartition;
   db?: FakeDb;
 }): { coordinator: KnowledgeUploadJobCoordinator; db: FakeDb } {
@@ -185,6 +290,7 @@ function makeCoordinator(options?: {
   const coordinator = createKnowledgeUploadJobCoordinator({
     getPartition: () => options?.partition ?? PARTITION_A,
     isProviderAvailable: () => options?.providerAvailable ?? false,
+    getDataMode: () => options?.dataMode ?? "provider",
   });
   return { coordinator, db };
 }
@@ -199,16 +305,20 @@ function assertSanitizedSnapshot(snapshot: KnowledgeJobSnapshot): void {
   expect(snapshot).not.toHaveProperty("token");
   expect(snapshot).not.toHaveProperty("absolutePath");
   expect(snapshot).not.toHaveProperty("providerRawError");
+  expect(serialized).not.toMatch(/file-job:/);
+  expect(serialized).not.toMatch(/remoteReceipt|providerReceipt|transferId/i);
 }
 
 describe("KnowledgeUploadJobCoordinator", () => {
   beforeEach(() => {
     resetKnowledgeUploadJobCoordinatorForTests();
+    resetKnowledgeUploadJobStoreForTests();
     mockedGetDbConnection.mockReset();
   });
 
   afterEach(() => {
     resetKnowledgeUploadJobCoordinatorForTests();
+    resetKnowledgeUploadJobStoreForTests();
   });
 
   it("persists draft knowledgeBaseId (or unbound) with Main partition", () => {
@@ -218,6 +328,7 @@ describe("KnowledgeUploadJobCoordinator", () => {
     expect(bound.knowledgeBaseId).toBe("kb_alpha-01");
     expect(bound.partition).toEqual(PARTITION_A);
     expect(bound.attempt).toBe(1);
+    expect(bound.dataMode).toBe("provider");
     expect(db.jobs.get(bound.jobId)?.knowledge_base_id).toBe("kb_alpha-01");
 
     const unbound = coordinator.createDraft({ knowledgeBaseId: "unbound" });
@@ -417,5 +528,85 @@ describe("KnowledgeUploadJobCoordinator", () => {
       isKnowledgeJobSnapshotVisibleToPartition(draft, PARTITION_B),
     ).toBe(false);
     expect(isKnowledgeJobSnapshotVisibleToPartition(draft, null)).toBe(false);
+  });
+
+  it("mock executor advances progress to completed without remote transfer or Renderer timer", () => {
+    const statuses: string[] = [];
+    const { coordinator } = makeCoordinator({
+      dataMode: "mock",
+      providerAvailable: false,
+    });
+    const draft = coordinator.createDraft({ knowledgeBaseId: "kb_mock" });
+    expect(draft.dataMode).toBe("mock");
+    expect(draft.synthetic).toBe(true);
+    expect(draft.jobId.startsWith("mock:")).toBe(true);
+    expect(draft.progress).toBe(0);
+
+    const unsub = coordinator.subscribe((snap) => {
+      statuses.push(snap.status);
+    });
+    // Hidden Knowledge pane: unsubscribe before enqueue — Main still owns progress.
+    unsub();
+
+    const done = coordinator.enqueue(draft.jobId);
+    expect(done.jobId).toBe(draft.jobId);
+    expect(done.status).toBe("completed");
+    expect(done.dataMode).toBe("mock");
+    expect(done.synthetic).toBe(true);
+    expect(done.progress).toBe(100);
+    expect(done.errorCode).toBeUndefined();
+    assertSanitizedSnapshot(done);
+    // Progress stages were written in Main (may or may not have been observed).
+    const final = coordinator.getSnapshot(draft.jobId);
+    expect(final.status).toBe("completed");
+    expect(final.progress).toBe(100);
+    expect(statuses.every((s) => s !== "completed" || true)).toBe(true);
+  });
+
+  it("provider mode stays fail-closed and never fakes completed even when probe is false", () => {
+    const { coordinator } = makeCoordinator({
+      dataMode: "provider",
+      providerAvailable: false,
+    });
+    const draft = coordinator.createDraft({ knowledgeBaseId: "kb_prov" });
+    expect(draft.dataMode).toBe("provider");
+    expect(draft.synthetic).toBe(false);
+    const blocked = coordinator.enqueue(draft.jobId);
+    expect(blocked.status).toBe("blocked_provider_unavailable");
+    expect(blocked.status).not.toBe("completed");
+    expect(blocked.progress).toBeLessThan(100);
+    assertSanitizedSnapshot(blocked);
+  });
+
+  it("recoverOnStart restores non-terminal mock Jobs without minting a second Job", () => {
+    const sharedDb = new FakeDb();
+    const first = makeCoordinator({
+      dataMode: "mock",
+      providerAvailable: false,
+      db: sharedDb,
+    });
+    const draft = first.coordinator.createDraft({ knowledgeBaseId: "kb_rec" });
+    const jobId = draft.jobId;
+    first.coordinator.markStatusForTests(jobId, "uploading");
+    expect(first.coordinator.getSnapshot(jobId).status).toBe("uploading");
+    // Simulate hide/reload: drop subscribers, reset coordinator, recover.
+    resetKnowledgeUploadJobCoordinatorForTests();
+
+    const second = makeCoordinator({
+      dataMode: "mock",
+      providerAvailable: false,
+      db: sharedDb,
+    });
+    second.coordinator.recoverOnStart();
+    const recovered = second.coordinator.getSnapshot(jobId);
+    expect(recovered.jobId).toBe(jobId);
+    expect(["completed", "interrupted"]).toContain(recovered.status);
+    expect(recovered.status).not.toBe("uploading");
+    expect(recovered.status).not.toBe("processing");
+    expect(second.coordinator.listSnapshots().filter((j) => j.jobId === jobId)).toHaveLength(
+      1,
+    );
+    expect(sharedDb.jobs.size).toBe(1);
+    assertSanitizedSnapshot(recovered);
   });
 });

@@ -3,10 +3,10 @@
   "capabilities": [
     "vitest"
   ],
-  "content_sha256": "sha256:b0177539266bffaa952b05c38795dedc08b2d62e0588982e722524621f5575ed",
+  "content_sha256": "sha256:a417b37ff4af1f39705ec0814826666a0f8a9f72203a32a00ca50dd4b50caa86",
   "kind": "TEST",
   "path": "apps/work/src/main/files/file-import-knowledge-job.test.ts",
   "schema": "smc.test-asset.v1",
   "status": "ACTIVE",
-  "updated_at": "2026-09-15T08:16:56.086524Z"
+  "updated_at": "2026-09-15T14:01:26.994586Z"
 }

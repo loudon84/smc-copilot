@@ -48,9 +48,11 @@ import {
 import { createFilesApi } from "./files-api";
 import { createExpertApi } from "./expert-api";
 import { createSkillRunApi } from "./skill-run-api";
-import { createKnowledgeJobApi } from "./knowledge-job-api";
+import {
+  createKnowledgeJobApi,
+  type HermesKnowledgeJobsSurface,
+} from "./knowledge-job-api";
 import type { HermesFilesAPI } from "../shared/files";
-import type { HermesKnowledgeJobsAPI } from "../shared/knowledge/knowledge-job-ipc";
 
 /**
  * Mirror of the renderer-side `CredentialPoolEntry` ambient type
@@ -1726,8 +1728,8 @@ const hermesAPI = {
   // File Platform (nested API — Phase 0+)
   files: createFilesApi() as HermesFilesAPI,
 
-  // Knowledge Upload Jobs (WORK-KNOWLEDGE-01)
-  knowledgeJobs: createKnowledgeJobApi() as HermesKnowledgeJobsAPI,
+  // Knowledge Upload Jobs + sanitized mode/facade (WORK-KNOWLEDGE-MOCK-01)
+  knowledgeJobs: createKnowledgeJobApi() as HermesKnowledgeJobsSurface,
 
   // Explicit Expert (WORK-EXPERT-CONTRACT v1.0.1)
   expert: createExpertApi(),

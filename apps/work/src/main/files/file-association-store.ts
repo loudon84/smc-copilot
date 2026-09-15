@@ -10,6 +10,7 @@ import type {
   ParsedDocument,
   ParsedSection,
 } from "../../shared/files";
+import { isChatConsumableAssociation } from "../../shared/files";
 import { ensureFilesLayout } from "./file-store";
 
 export interface FileChunkRow {
@@ -112,6 +113,7 @@ function migrateSchema(db: DbHandle): void {
   migrateLocalHashIndex(db);
   ensureRemoteIdentityIndex(db);
   ensureAssociationKnowledgeJobColumn(db);
+  ensureAssociationDataModeColumn(db);
   ensureAssociationIdempotencyIndex(db);
 
   try {
@@ -202,6 +204,13 @@ function ensureAssociationKnowledgeJobColumn(db: DbHandle): void {
   const cols = tableColumns(db, "file_associations");
   if (!cols.has("knowledge_job_id")) {
     db.exec(`ALTER TABLE file_associations ADD COLUMN knowledge_job_id TEXT`);
+  }
+}
+
+function ensureAssociationDataModeColumn(db: DbHandle): void {
+  const cols = tableColumns(db, "file_associations");
+  if (!cols.has("data_mode")) {
+    db.exec(`ALTER TABLE file_associations ADD COLUMN data_mode TEXT`);
   }
 }
 
@@ -307,6 +316,12 @@ function rowToManagedFile(row: Record<string, unknown>): ManagedFile {
 }
 
 function rowToAssociation(row: Record<string, unknown>): FileAssociation {
+  const dataModeRaw =
+    row.data_mode != null ? String(row.data_mode) : undefined;
+  const dataMode =
+    dataModeRaw === "mock" || dataModeRaw === "provider"
+      ? dataModeRaw
+      : undefined;
   return {
     id: String(row.id),
     fileId: String(row.file_id),
@@ -314,6 +329,7 @@ function rowToAssociation(row: Record<string, unknown>): FileAssociation {
     sessionId: row.session_id != null ? String(row.session_id) : undefined,
     knowledgeJobId:
       row.knowledge_job_id != null ? String(row.knowledge_job_id) : undefined,
+    dataMode,
     messageId: row.message_id != null ? String(row.message_id) : undefined,
     taskId: row.task_id != null ? String(row.task_id) : undefined,
     role: row.role as FileAssociation["role"],
@@ -489,6 +505,8 @@ export function listBySession(
          a.file_id AS a_file_id,
          a.profile_id AS a_profile_id,
          a.session_id AS a_session_id,
+         a.knowledge_job_id AS a_knowledge_job_id,
+         a.data_mode AS a_data_mode,
          a.message_id AS a_message_id,
          a.task_id AS a_task_id,
          a.role AS a_role,
@@ -501,21 +519,25 @@ export function listBySession(
     )
     .all(pid, sessionId) as Array<Record<string, unknown>>;
 
-  return rows.map((row) => {
-    const file = rowToManagedFile(row);
-    const association = rowToAssociation({
-      id: row.a_id,
-      file_id: row.a_file_id,
-      profile_id: row.a_profile_id,
-      session_id: row.a_session_id,
-      message_id: row.a_message_id,
-      task_id: row.a_task_id,
-      role: row.a_role,
-      ordinal: row.a_ordinal,
-      created_at: row.a_created_at,
-    });
-    return { ...file, association };
-  });
+  return rows
+    .map((row) => {
+      const file = rowToManagedFile(row);
+      const association = rowToAssociation({
+        id: row.a_id,
+        file_id: row.a_file_id,
+        profile_id: row.a_profile_id,
+        session_id: row.a_session_id,
+        knowledge_job_id: row.a_knowledge_job_id,
+        data_mode: row.a_data_mode,
+        message_id: row.a_message_id,
+        task_id: row.a_task_id,
+        role: row.a_role,
+        ordinal: row.a_ordinal,
+        created_at: row.a_created_at,
+      });
+      return { ...file, association };
+    })
+    .filter((row) => isChatConsumableAssociation(row.association));
 }
 
 export function insertAssociation(assoc: FileAssociation): void {
@@ -541,14 +563,16 @@ export function insertAssociation(assoc: FileAssociation): void {
   const db = openFileIndexDb(profileId === "default" ? undefined : profileId);
   db.prepare(
     `INSERT INTO file_associations (
-      id, file_id, profile_id, session_id, knowledge_job_id, message_id, task_id, role, ordinal, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, file_id, profile_id, session_id, knowledge_job_id, data_mode,
+      message_id, task_id, role, ordinal, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     assoc.id,
     assoc.fileId,
     profileId,
     assoc.sessionId ?? null,
     assoc.knowledgeJobId ?? null,
+    assoc.dataMode ?? null,
     assoc.messageId ?? null,
     assoc.taskId ?? null,
     assoc.role,
@@ -640,6 +664,8 @@ export function listByMessage(
          a.file_id AS a_file_id,
          a.profile_id AS a_profile_id,
          a.session_id AS a_session_id,
+         a.knowledge_job_id AS a_knowledge_job_id,
+         a.data_mode AS a_data_mode,
          a.message_id AS a_message_id,
          a.task_id AS a_task_id,
          a.role AS a_role,
@@ -652,21 +678,25 @@ export function listByMessage(
     )
     .all(pid, messageId) as Array<Record<string, unknown>>;
 
-  return rows.map((row) => {
-    const file = rowToManagedFile(row);
-    const association = rowToAssociation({
-      id: row.a_id,
-      file_id: row.a_file_id,
-      profile_id: row.a_profile_id,
-      session_id: row.a_session_id,
-      message_id: row.a_message_id,
-      task_id: row.a_task_id,
-      role: row.a_role,
-      ordinal: row.a_ordinal,
-      created_at: row.a_created_at,
-    });
-    return { ...file, association };
-  });
+  return rows
+    .map((row) => {
+      const file = rowToManagedFile(row);
+      const association = rowToAssociation({
+        id: row.a_id,
+        file_id: row.a_file_id,
+        profile_id: row.a_profile_id,
+        session_id: row.a_session_id,
+        knowledge_job_id: row.a_knowledge_job_id,
+        data_mode: row.a_data_mode,
+        message_id: row.a_message_id,
+        task_id: row.a_task_id,
+        role: row.a_role,
+        ordinal: row.a_ordinal,
+        created_at: row.a_created_at,
+      });
+      return { ...file, association };
+    })
+    .filter((row) => isChatConsumableAssociation(row.association));
 }
 
 /** List chunk rows for a file, ordered by chunk_index. */
