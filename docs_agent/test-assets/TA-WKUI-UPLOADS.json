@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-UPLOADS",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-uploads-page.test.ts",
+  "capabilities": [
+    "vitest"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:48cae046f071fd262ae077af73c9f9223d6a79ef6b4eb84916abc3c1be0a8ce7",
+  "updated_at": "2026-09-15T15:36:55.425655Z"
+}

@@ -1,13 +1,42 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { type ReactElement } from "react";
 import { useI18n } from "../../components/useI18n";
-import type { KnowledgePageId } from "./knowledge-route-descriptor";
+import {
+  KNOWLEDGE_ROUTE_PAGES,
+  type KnowledgePageId,
+  type KnowledgeRouteParams,
+} from "./knowledge-route-descriptor";
+import {
+  useKnowledgeFacade,
+  type UseKnowledgeFacadeOptions,
+} from "../../../../shared/knowledge/use-knowledge-facade";
 import type {
+  HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../shared/knowledge/knowledge-job-ipc";
+import { KnowledgeHomePage } from "./pages/KnowledgeHomePage";
+import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
+import { KnowledgeSetsPage } from "./pages/KnowledgeSetsPage";
+import { KnowledgeDocumentsPage } from "./pages/KnowledgeDocumentsPage";
+import { KnowledgeUploadsPage } from "./pages/KnowledgeUploadsPage";
+import { KnowledgeChatPage } from "./pages/KnowledgeChatPage";
+
+/** Navigation target for Knowledge page host callbacks (route scope, not URL). */
+export type KnowledgeNavigateTarget = {
+  page: KnowledgePageId | string;
+  params?: KnowledgeRouteParams;
+};
 
 export type KnowledgePagesProps = {
   page: KnowledgePageId;
+  /** Route-scope params from the keep-alive KnowledgeView (no window URL). */
+  params?: KnowledgeRouteParams;
+  /** Push a Knowledge page via route scope. */
+  onNavigate?: (target: KnowledgeNavigateTarget) => void;
+  /** Replace current Knowledge route without stacking history. */
+  onReplace?: (target: KnowledgeNavigateTarget) => void;
+  /** Pop route-scope back stack. */
+  onBack?: () => void;
   /**
    * Optional capability override for tests.
    * Product path probes `window.hermesAPI.knowledgeJobs.getCapability`.
@@ -15,9 +44,9 @@ export type KnowledgePagesProps = {
   capability?: KnowledgeCapabilitySnapshot | null;
   /** Optional mode override for tests. Product path probes getMode. */
   mode?: KnowledgeModeSnapshot | null;
+  /** Optional facade override for tests. */
+  facade?: HermesKnowledgeFacadeAPI | null;
 };
-
-type PagePresentation = "loading" | "unavailable" | "empty" | "ready";
 
 const PAGE_TITLE_KEY: Record<KnowledgePageId, string> = {
   home: "knowledge.home.title",
@@ -28,147 +57,99 @@ const PAGE_TITLE_KEY: Record<KnowledgePageId, string> = {
   chat: "knowledge.chat.title",
 };
 
-const PAGE_DESCRIPTION_KEY: Record<KnowledgePageId, string> = {
-  home: "knowledge.home.description",
-  bases: "knowledge.bases.description",
-  sets: "knowledge.sets.description",
-  documents: "knowledge.documents.description",
-  uploads: "knowledge.uploads.description",
-  chat: "knowledge.chat.description",
+const NAV_LABEL_KEY: Record<KnowledgePageId, string> = {
+  home: "knowledge.nav.home",
+  bases: "knowledge.nav.bases",
+  sets: "knowledge.nav.sets",
+  documents: "knowledge.nav.documents",
+  uploads: "knowledge.nav.uploads",
+  chat: "knowledge.nav.chat",
 };
 
-function resolvePresentation(
-  capability: KnowledgeCapabilitySnapshot | null | undefined,
-  mode: KnowledgeModeSnapshot | null | undefined,
-): PagePresentation {
-  if (capability === undefined || mode === undefined) return "loading";
-  // Mock mode: badge-driven ready shell only — no fixture lists/layouts (RM-04).
-  if (mode?.dataMode === "mock") return "ready";
-  if (capability === null || !capability.available) return "unavailable";
-  // Provider mode: available probe still means empty, never fixtures.
-  return "empty";
-}
-
-function blockedCapability(): KnowledgeCapabilitySnapshot {
-  return {
-    available: false,
-    status: "blocked_provider_unavailable",
-  };
-}
-
-function defaultProviderMode(): KnowledgeModeSnapshot {
-  return {
-    dataMode: "provider",
-    allowSyntheticData: false,
-    configSource: "default",
-  };
-}
-
-function readLiveCapabilityApi():
-  | NonNullable<Window["hermesAPI"]>["knowledgeJobs"]
-  | undefined {
-  return window.hermesAPI?.knowledgeJobs;
-}
-
 /**
- * Six Stage Knowledge pages as fail-closed Work UI.
- * Provider mode stays unavailable/empty. Mock mode may show a ready shell
- * driven by Main mode, but never grows list/detail/chat layouts this Stage.
+ * Knowledge page host: module nav + six Work-native pages over route-scope params.
+ * Fail-closed when provider capability is unavailable; mock mode stays operable.
  */
 export function KnowledgePages({
   page,
+  params = {},
+  onNavigate,
+  onReplace,
+  onBack,
   capability: injectedCapability,
   mode: injectedMode,
+  facade: injectedFacade,
 }: KnowledgePagesProps): ReactElement {
   const { t } = useI18n();
-  const [capability, setCapability] = useState<
-    KnowledgeCapabilitySnapshot | null | undefined
-  >(() => {
-    if (injectedCapability !== undefined) return injectedCapability;
-    const api = readLiveCapabilityApi();
-    if (!api?.getCapability) return blockedCapability();
-    return undefined;
-  });
-  const [mode, setMode] = useState<KnowledgeModeSnapshot | null | undefined>(
-    () => {
-      if (injectedMode !== undefined) return injectedMode;
-      const api = readLiveCapabilityApi();
-      if (!api || !("getMode" in api) || !api.getMode) {
-        return defaultProviderMode();
-      }
-      return undefined;
-    },
-  );
-
-  useEffect(() => {
-    if (injectedCapability !== undefined) {
-      setCapability(injectedCapability);
-      return;
-    }
-
-    const api = readLiveCapabilityApi();
-    if (!api?.getCapability) {
-      setCapability(blockedCapability());
-      return;
-    }
-
-    let cancelled = false;
-    void api
-      .getCapability()
-      .then((snapshot) => {
-        if (!cancelled) setCapability(snapshot);
-      })
-      .catch(() => {
-        if (!cancelled) setCapability(blockedCapability());
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [injectedCapability, page]);
-
-  useEffect(() => {
-    if (injectedMode !== undefined) {
-      setMode(injectedMode);
-      return;
-    }
-
-    const api = readLiveCapabilityApi();
-    const getMode = api && "getMode" in api ? api.getMode : undefined;
-    if (!getMode) {
-      setMode(defaultProviderMode());
-      return;
-    }
-
-    let cancelled = false;
-    void getMode()
-      .then((snapshot) => {
-        if (!cancelled) setMode(snapshot);
-      })
-      .catch(() => {
-        if (!cancelled) setMode(defaultProviderMode());
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [injectedMode, page]);
-
-  const presentation = resolvePresentation(capability, mode);
+  const probeOptions: UseKnowledgeFacadeOptions = {
+    capability: injectedCapability,
+    mode: injectedMode,
+    facade: injectedFacade,
+  };
+  const probe = useKnowledgeFacade(probeOptions);
+  const { presentation, mode } = probe;
   const title = t(PAGE_TITLE_KEY[page]);
-  const description = t(PAGE_DESCRIPTION_KEY[page]);
 
-  let statusTitle = t("knowledge.loading");
-  let statusDescription = "";
-  if (presentation === "unavailable") {
-    statusTitle = t("knowledge.unavailableTitle");
-    statusDescription = t("knowledge.unavailableDescription");
-  } else if (presentation === "empty") {
-    statusTitle = t("knowledge.emptyTitle");
-    statusDescription = t("knowledge.emptyDescription");
-  } else if (presentation === "ready") {
-    statusTitle = t("knowledge.mockReadyTitle");
-    statusDescription = t("knowledge.mockReadyDescription");
+  const pageOverrides = {
+    capability: injectedCapability,
+    mode: injectedMode,
+    facade: injectedFacade,
+  };
+
+  let pageBody: ReactElement;
+  switch (page) {
+    case "home":
+      pageBody = (
+        <KnowledgeHomePage onNavigate={onNavigate} {...pageOverrides} />
+      );
+      break;
+    case "bases":
+      pageBody = (
+        <KnowledgeBasesPage
+          params={params}
+          onNavigate={onNavigate}
+          onBack={onBack}
+          {...pageOverrides}
+        />
+      );
+      break;
+    case "sets":
+      pageBody = (
+        <KnowledgeSetsPage
+          params={params}
+          onNavigate={onNavigate}
+          onBack={onBack}
+          {...pageOverrides}
+        />
+      );
+      break;
+    case "documents":
+      pageBody = (
+        <KnowledgeDocumentsPage
+          params={params}
+          onNavigate={onNavigate}
+          onBack={onBack}
+          {...pageOverrides}
+        />
+      );
+      break;
+    case "uploads":
+      pageBody = <KnowledgeUploadsPage {...pageOverrides} />;
+      break;
+    case "chat":
+      pageBody = (
+        <KnowledgeChatPage
+          params={params}
+          onNavigate={onNavigate}
+          onReplace={onReplace}
+          {...pageOverrides}
+        />
+      );
+      break;
+    default: {
+      const _exhaustive: never = page;
+      pageBody = <p>{String(_exhaustive)}</p>;
+    }
   }
 
   return (
@@ -178,28 +159,51 @@ export function KnowledgePages({
       data-page={page}
       data-state={presentation}
       data-knowledge-mode={mode?.dataMode ?? "unknown"}
+      data-knowledge-host="true"
     >
+      <nav
+        aria-label={t("knowledge.nav.label")}
+        className="knowledge-module-nav"
+        data-testid="knowledge-module-nav"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 8,
+          marginBottom: 16,
+        }}
+      >
+        {KNOWLEDGE_ROUTE_PAGES.map((navPage) => {
+          const active = navPage === page;
+          return (
+            <button
+              key={navPage}
+              type="button"
+              data-testid={`knowledge-nav-${navPage}`}
+              data-active={active ? "true" : "false"}
+              aria-current={active ? "page" : undefined}
+              disabled={!onNavigate}
+              onClick={() => {
+                if (!onNavigate) return;
+                onNavigate({ page: navPage, params: {} });
+              }}
+              style={{
+                fontWeight: active ? 600 : 400,
+              }}
+            >
+              {t(NAV_LABEL_KEY[navPage])}
+            </button>
+          );
+        })}
+      </nav>
+
       <header style={{ marginBottom: 16 }}>
         <h1 className="settings-header" style={{ marginBottom: 4 }}>
           {title}
         </h1>
-        <p className="gateway-page-subtitle">{description}</p>
+        <p className="gateway-page-subtitle">{t("knowledge.host.subtitle")}</p>
       </header>
 
-      <section
-        aria-live="polite"
-        className="gateway-empty-state"
-        data-testid="knowledge-page-status"
-      >
-        <strong>{statusTitle}</strong>
-        {statusDescription ? <p>{statusDescription}</p> : null}
-        {page === "uploads" && presentation === "unavailable" ? (
-          <p>{t("knowledge.uploads.pickerBlocked")}</p>
-        ) : null}
-        {page === "chat" && presentation !== "loading" ? (
-          <p>{t("knowledge.chat.composerBlocked")}</p>
-        ) : null}
-      </section>
+      {pageBody}
     </div>
   );
 }

@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-CHAT",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-chat-page.test.ts",
+  "capabilities": [
+    "vitest"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:7f498d16e0fa58a49e099db477abbbbc35ca7e47804c80865e7bbc68a5553c98",
+  "updated_at": "2026-09-15T15:36:55.427651Z"
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-BASES",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-bases-page.test.ts",
+  "capabilities": [
+    "vitest"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:cd5d4092abb166b2444cfd5162bbb4b714361a90704130a822909502886f3fc8",
+  "updated_at": "2026-09-15T15:36:55.420116Z"
+}

@@ -189,7 +189,19 @@ export function KnowledgeView({
           </span>
         ) : null}
       </div>
-      <KnowledgePages page={snapshot.current.page} />
+      <KnowledgePages
+        page={snapshot.current.page}
+        params={snapshot.current.params}
+        onNavigate={(target) => {
+          scope.push(target);
+        }}
+        onReplace={(target) => {
+          scope.replace(target);
+        }}
+        onBack={() => {
+          scope.back();
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-HOME",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-home-page.test.ts",
+  "capabilities": [
+    "vitest"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:52bc94be29e2a9ceba76d64c687d6360ec1876de8241cc9f26383ca9a9921fe6",
+  "updated_at": "2026-09-15T15:36:55.418117Z"
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-DOCS",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-documents-page.test.ts",
+  "capabilities": [
+    "vitest"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:76d144672f6f9f9464eeb568ca0832d4ffb11ac1ae7867062a4158fc1b3e06c6",
+  "updated_at": "2026-09-15T15:36:55.424643Z"
+}

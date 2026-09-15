@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-HOST",
+  "kind": "TEST",
+  "path": "apps/work/tests/knowledge-page-host.test.ts",
+  "capabilities": [
+    "vitest"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:767f3e5c14adf63b6401f299206bedbad6060ffab331cddcf10bab1f508565ab",
+  "updated_at": "2026-09-15T15:36:55.414923Z"
+}

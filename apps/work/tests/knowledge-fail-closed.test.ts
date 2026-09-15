@@ -233,7 +233,13 @@ describe("Knowledge fail-closed pages (V05)", () => {
         const panel = screen.getByTestId(`knowledge-page-${page}`);
         expect(panel.getAttribute("data-state")).toBe("unavailable");
         expect(panel.textContent).toContain(knowledgeEn.unavailableTitle);
-        expect(panel.textContent).toContain(knowledgeEn.unavailableDescription);
+        if (page === "uploads") {
+          expect(panel.textContent).toContain(knowledgeEn.uploads.pickerBlocked);
+        } else if (page === "chat") {
+          expect(panel.textContent).toContain(knowledgeEn.chat.composerBlocked);
+        } else {
+          expect(panel.textContent).toContain(knowledgeEn.unavailableDescription);
+        }
         expect(panel.textContent).not.toMatch(/fixture|mock q&a|sample file/i);
       });
     }
@@ -257,7 +263,7 @@ describe("Knowledge fail-closed pages (V05)", () => {
     await waitFor(() => {
       const panel = screen.getByTestId("knowledge-page-bases");
       expect(panel.getAttribute("data-state")).toBe("empty");
-      expect(panel.textContent).toContain(knowledgeEn.emptyTitle);
+      expect(panel.textContent).toContain(knowledgeEn.bases.emptyList);
     });
     expect(listSnapshots).not.toHaveBeenCalled();
   });
@@ -368,15 +374,14 @@ describe("Knowledge fail-closed pages (V05)", () => {
     });
     expect(screen.queryByTestId("knowledge-mock-demo-badge")).toBeNull();
     expect(screen.queryByTestId("knowledge-fixture-list")).toBeNull();
-    expect(screen.queryByTestId("knowledge-base-list")).toBeNull();
-    expect(screen.queryByTestId("knowledge-document-detail")).toBeNull();
-    expect(screen.queryByTestId("knowledge-chat-thread")).toBeNull();
+    expect(screen.queryByTestId("knowledge-home-metrics")).toBeNull();
+    expect(screen.getByTestId("knowledge-home-provider-no-metrics")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(
       /fixture|mock q&a|sample file|synthetic base/i,
     );
   });
 
-  it("keeps KnowledgePages as a generic shell in mock mode without six-page layouts (AC-10/DOD-03)", async () => {
+  it("hosts six Work-native pages without Profile/Preferences and without apps/knowledge imports (AC-01/02)", async () => {
     mockKnowledgeJobs({
       capability: {
         available: false,
@@ -390,20 +395,68 @@ describe("Knowledge fail-closed pages (V05)", () => {
     });
 
     await act(async () => {
-      render(React.createElement(KnowledgePages, { page: "bases" }));
+      render(React.createElement(KnowledgeView, { active: true, scope }));
     });
 
     await waitFor(() => {
-      const panel = screen.getByTestId("knowledge-page-bases");
-      expect(panel.getAttribute("data-state")).toBe("ready");
-      expect(panel.textContent).toContain(knowledgeEn.mockReadyTitle);
+      expect(screen.getByTestId("knowledge-module-nav")).toBeTruthy();
     });
-    expect(screen.queryByTestId("knowledge-fixture-list")).toBeNull();
-    expect(screen.queryByTestId("knowledge-base-list")).toBeNull();
-    expect(screen.queryByTestId("knowledge-set-list")).toBeNull();
-    expect(screen.queryByTestId("knowledge-document-detail")).toBeNull();
-    expect(screen.queryByTestId("knowledge-upload-queue")).toBeNull();
-    expect(screen.queryByTestId("knowledge-chat-thread")).toBeNull();
+    for (const page of KNOWLEDGE_ROUTE_PAGES) {
+      expect(screen.getByTestId(`knowledge-nav-${page}`)).toBeTruthy();
+    }
+    expect(screen.queryByTestId("knowledge-nav-profile")).toBeNull();
+    expect(screen.queryByTestId("knowledge-nav-preferences")).toBeNull();
+    expect([...KNOWLEDGE_ROUTE_PAGES]).not.toContain("profile");
+    expect([...KNOWLEDGE_ROUTE_PAGES]).not.toContain("preferences");
+
+    const hits: string[] = [];
+    for (const file of collectProductionTsSources(WORK_SRC)) {
+      const text = fs.readFileSync(file, "utf8");
+      for (const line of text.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+          continue;
+        }
+        if (
+          /(?:from|import)\s+["'][^"']*apps\/knowledge/.test(trimmed) ||
+          /require\(\s*["'][^"']*apps\/knowledge/.test(trimmed)
+        ) {
+          hits.push(path.relative(WORK_SRC, file));
+          break;
+        }
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("keeps Mock/Demo badge visible across page switches when dataMode=mock (AC-12)", async () => {
+    mockKnowledgeJobs({
+      capability: {
+        available: false,
+        status: "blocked_provider_unavailable",
+      },
+      mode: {
+        dataMode: "mock",
+        allowSyntheticData: true,
+        configSource: "env",
+      },
+    });
+
+    await act(async () => {
+      render(React.createElement(KnowledgeView, { active: true, scope }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-mock-demo-badge")).toBeTruthy();
+    });
+
+    for (const page of KNOWLEDGE_ROUTE_PAGES) {
+      await act(async () => {
+        scope.replace({ page, params: {} });
+      });
+      expect(screen.getByTestId("knowledge-mock-demo-badge")).toBeTruthy();
+      expect(screen.getByTestId(`knowledge-page-${page}`)).toBeTruthy();
+    }
   });
 
   it("latches Knowledge mode IPC before Job recoverOnStart (AC-05)", () => {

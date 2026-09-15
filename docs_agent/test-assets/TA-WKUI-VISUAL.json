@@ -1,0 +1,12 @@
+{
+  "schema": "smc.test-asset.v1",
+  "asset_id": "TA-WKUI-VISUAL",
+  "kind": "TEST",
+  "path": "docs_agent/evidence/WORK-KNOWLEDGE-UI-01-visual-checklist.md",
+  "capabilities": [
+    "manual"
+  ],
+  "status": "ACTIVE",
+  "content_sha256": "sha256:c9b01da05b41f79148143892e3cc70ba7f5b2edd557b27f6ca7a86e15b527aad",
+  "updated_at": "2026-09-15T15:36:55.428688Z"
+}
