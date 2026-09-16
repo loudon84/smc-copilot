@@ -1,0 +1,23 @@
+html,
+body,
+#root,
+.knowledge-visual-root {
+  height: 100%;
+  margin: 0;
+}
+
+.knowledge-visual-root {
+  box-sizing: border-box;
+  padding: 16px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+*,
+*::before,
+*::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition: none !important;
+}

@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useI18n } from "../../components/useI18n";
+import { Tabs } from "../../components/ui/Tabs";
 import {
   KNOWLEDGE_ROUTE_PAGES,
   type KnowledgeNavigateTarget,
@@ -38,10 +39,6 @@ export type KnowledgeModuleNavProps = {
   onNavigate?: (target: KnowledgeNavigateTarget) => void;
 };
 
-/**
- * In-module top tabs for the six Knowledge pages (Memory tab pattern).
- * Route scope only — never writes window URL.
- */
 export function KnowledgeModuleNav({
   page,
   onNavigate,
@@ -51,31 +48,29 @@ export function KnowledgeModuleNav({
   return (
     <nav
       aria-label={t("knowledge.nav.label")}
-      className="memory-tabs knowledge-module-nav"
+      className="knowledge-module-nav"
       data-testid="knowledge-module-nav"
     >
-      {KNOWLEDGE_ROUTE_PAGES.map((navPage) => {
-        const active = navPage === page;
-        const Icon = NAV_ICON[navPage];
-        return (
-          <button
-            key={navPage}
-            type="button"
-            className={`memory-tab ${active ? "active" : ""}`}
-            data-testid={`knowledge-nav-${navPage}`}
-            data-active={active ? "true" : "false"}
-            aria-current={active ? "page" : undefined}
-            disabled={!onNavigate}
-            onClick={() => {
-              if (!onNavigate) return;
-              onNavigate({ page: navPage, params: {} });
-            }}
-          >
-            <Icon size={14} />
-            {t(NAV_LABEL_KEY[navPage])}
-          </button>
-        );
-      })}
+      <Tabs
+        tabs={KNOWLEDGE_ROUTE_PAGES.map((navPage) => {
+          const Icon = NAV_ICON[navPage];
+          return {
+            id: navPage,
+            label: (
+              <>
+                <Icon size={14} />
+                {t(NAV_LABEL_KEY[navPage])}
+              </>
+            ),
+          };
+        })}
+        active={page}
+        onChange={(navPage) => {
+          if (!onNavigate) return;
+          onNavigate({ page: navPage, params: {} });
+        }}
+        tabTestId={(navPage) => `knowledge-nav-${navPage}`}
+      />
     </nav>
   );
 }

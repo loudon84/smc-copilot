@@ -1,10 +1,14 @@
 import { type ReactElement, type ReactNode } from "react";
 import { OrbLoader } from "../../components/OrbLoader";
+import { EmptyState } from "../../components/common/EmptyState";
+import { PageToolbar } from "../../components/common/PageToolbar";
+import { SearchInput } from "../../components/common/SearchInput";
 import {
   AppModal,
   AppModalDescription,
   AppModalTitle,
 } from "../../components/modal/AppModal";
+import { Tabs } from "../../components/ui/Tabs";
 
 export function KnowledgeLoading({ label }: { label: string }): ReactElement {
   return (
@@ -21,14 +25,11 @@ export function KnowledgeEmptyState(props: {
   testId?: string;
 }): ReactElement {
   return (
-    <section
-      className="gateway-empty-state"
-      aria-live="polite"
-      data-testid={props.testId}
-    >
-      <strong>{props.title}</strong>
-      {props.description ? <p>{props.description}</p> : null}
-    </section>
+    <EmptyState
+      title={props.title}
+      description={props.description}
+      testId={props.testId}
+    />
   );
 }
 
@@ -37,7 +38,7 @@ export function KnowledgeToolbar({
 }: {
   children: ReactNode;
 }): ReactElement {
-  return <div className="discover-toolbar knowledge-toolbar">{children}</div>;
+  return <PageToolbar className="knowledge-toolbar">{children}</PageToolbar>;
 }
 
 export function KnowledgeSearchInput(props: {
@@ -47,15 +48,12 @@ export function KnowledgeSearchInput(props: {
   testId: string;
 }): ReactElement {
   return (
-    <div className="discover-search">
-      <input
-        className="discover-search-input"
-        data-testid={props.testId}
-        placeholder={props.placeholder}
-        value={props.value}
-        onChange={(event) => props.onChange(event.target.value)}
-      />
-    </div>
+    <SearchInput
+      value={props.value}
+      onChange={props.onChange}
+      placeholder={props.placeholder}
+      testId={props.testId}
+    />
   );
 }
 
@@ -64,7 +62,7 @@ export function KnowledgeSectionTitle({
 }: {
   children: ReactNode;
 }): ReactElement {
-  return <h2 className="settings-section-title">{children}</h2>;
+  return <h2 className="ui-page-header__title">{children}</h2>;
 }
 
 export type KnowledgeSectionTab<T extends string> = {
@@ -79,24 +77,14 @@ export function KnowledgeSectionTabs<T extends string>(props: {
   labelledBy?: string;
 }): ReactElement {
   return (
-    <div className="memory-tabs knowledge-section-tabs" role="tablist">
-      {props.tabs.map((tab) => {
-        const active = tab.id === props.active;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            className={`memory-tab ${active ? "active" : ""}`}
-            data-testid={`knowledge-section-tab-${tab.id}`}
-            onClick={() => props.onChange(tab.id)}
-          >
-            {tab.label}
-          </button>
-        );
-      })}
-    </div>
+    <Tabs
+      className="knowledge-section-tabs"
+      tabs={props.tabs}
+      active={props.active}
+      onChange={props.onChange}
+      labelledBy={props.labelledBy}
+      tabTestId={(id) => `knowledge-section-tab-${id}`}
+    />
   );
 }
 

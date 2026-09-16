@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { Button } from "../../../components/ui/Button";
+import { Card, CardHead, CardTitle } from "../../../components/ui/Card";
+import { Checkbox } from "../../../components/ui/Checkbox";
+import { FormField } from "../../../components/ui/FormField";
+import { Input } from "../../../components/ui/Input";
+import { Select } from "../../../components/ui/Select";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -190,14 +196,13 @@ export function KnowledgeSetsPage({
   if (detailId) {
     return (
       <div data-testid="knowledge-sets-page" data-state={loadState}>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
+        <Button
+          size="sm"
           data-testid="knowledge-sets-back"
           onClick={() => onBack?.()}
         >
           {t("knowledge.host.back")}
-        </button>
+        </Button>
         {loadState === "loading" ? (
           <KnowledgeLoading label={t("knowledge.loading")} />
         ) : null}
@@ -215,7 +220,7 @@ export function KnowledgeSetsPage({
           />
         ) : null}
         {loadState === "content" && detail ? (
-          <section className="settings-section" data-testid="knowledge-set-detail">
+          <section data-testid="knowledge-set-detail">
             <h2>{detail.title ?? t("knowledge.sets.detailTitle")}</h2>
             <p data-testid="knowledge-set-detail-id">{detail.id}</p>
             <KnowledgeSectionTabs
@@ -230,15 +235,15 @@ export function KnowledgeSetsPage({
             />
 
             <div hidden={detailTab !== "info"}>
-              <label className="settings-field">
-                {t("knowledge.host.edit")}
-                <input
+              <FormField label={t("knowledge.host.edit")} htmlFor="knowledge-set-title-input">
+                <Input
+                  id="knowledge-set-title-input"
                   data-testid="knowledge-set-title-input"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   disabled={!mutationsEnabled}
                 />
-              </label>
+              </FormField>
               <p>
                 {t("knowledge.sets.boundBases")}: {selectedBaseIds.size}
               </p>
@@ -249,30 +254,27 @@ export function KnowledgeSetsPage({
               data-testid="knowledge-set-bindings"
             >
               <h3>{t("knowledge.sets.bindingTitle")}</h3>
-              <label>
-                {t("knowledge.sets.weightLabel")}
-                <input
+              <FormField label={t("knowledge.sets.weightLabel")} htmlFor="knowledge-set-weight">
+                <Input
+                  id="knowledge-set-weight"
                   data-testid="knowledge-set-weight"
                   value={bindingWeight}
                   onChange={(event) => setBindingWeight(event.target.value)}
                   disabled={!mutationsEnabled}
                 />
-              </label>
+              </FormField>
               {bases.length === 0 ? (
                 <p>{t("knowledge.sets.noBases")}</p>
               ) : (
                 <ul>
                   {bases.map((base) => (
                     <li key={base.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={selectedBaseIds.has(base.id)}
-                          disabled={!mutationsEnabled}
-                          onChange={() => toggleBase(base.id)}
-                        />
-                        {base.title ?? base.id}
-                      </label>
+                      <Checkbox
+                        label={base.title ?? base.id}
+                        checked={selectedBaseIds.has(base.id)}
+                        disabled={!mutationsEnabled}
+                        onChange={() => toggleBase(base.id)}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -284,7 +286,7 @@ export function KnowledgeSetsPage({
               data-testid="knowledge-set-retrieval"
             >
               <h3>{t("knowledge.sets.retrievalTitle")}</h3>
-              <select
+              <Select
                 data-testid="knowledge-set-retrieval-mode"
                 value={retrievalMode}
                 onChange={(event) => setRetrievalMode(event.target.value)}
@@ -293,16 +295,15 @@ export function KnowledgeSetsPage({
                 <option value="hybrid">hybrid</option>
                 <option value="keyword">keyword</option>
                 <option value="vector">vector</option>
-              </select>
+              </Select>
             </section>
 
             <div hidden={detailTab !== "usage"}>
               <p>{t("knowledge.sets.usageEmpty")}</p>
             </div>
 
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              size="sm"
               data-testid="knowledge-set-submit"
               disabled={!mutationsEnabled}
               title={
@@ -313,7 +314,7 @@ export function KnowledgeSetsPage({
               }}
             >
               {t("knowledge.sets.submitBindings")}
-            </button>
+            </Button>
             {!mutationsEnabled ? (
               <p>{t("knowledge.sets.mutateDisabled")}</p>
             ) : null}
@@ -350,9 +351,9 @@ export function KnowledgeSetsPage({
               value={search}
               onChange={setSearch}
             />
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              size="sm"
+              variant="primary"
               data-testid="knowledge-set-create"
               disabled={!mutationsEnabled}
               title={
@@ -361,7 +362,7 @@ export function KnowledgeSetsPage({
               onClick={() => setDialogOpen(true)}
             >
               {t("knowledge.sets.createLabel")}
-            </button>
+            </Button>
           </KnowledgeToolbar>
           {!mutationsEnabled ? <p>{t("knowledge.sets.mutateDisabled")}</p> : null}
           {filtered.length === 0 ? (
@@ -371,14 +372,14 @@ export function KnowledgeSetsPage({
           ) : (
             <div className="knowledge-card-grid" data-testid="knowledge-set-list">
               {filtered.map((item) => (
-                <article key={item.id} className="settings-card">
-                  <div className="settings-card-head">
-                    <strong>{item.title ?? item.id}</strong>
-                  </div>
+                <Card key={item.id}>
+                  <CardHead>
+                    <CardTitle>{item.title ?? item.id}</CardTitle>
+                  </CardHead>
                   <div className="knowledge-toolbar">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       data-testid={`knowledge-set-item-${item.id}`}
                       onClick={() =>
                         onNavigate?.({
@@ -388,17 +389,17 @@ export function KnowledgeSetsPage({
                       }
                     >
                       {t("knowledge.sets.manage")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       disabled={!onNavigate}
                       onClick={() => onNavigate?.({ page: "chat", params: {} })}
                     >
                       {t("knowledge.sets.startChat")}
-                    </button>
+                    </Button>
                   </div>
-                </article>
+                </Card>
               ))}
             </div>
           )}
@@ -408,34 +409,33 @@ export function KnowledgeSetsPage({
             onOpenChange={setDialogOpen}
             title={t("knowledge.sets.createLabel")}
           >
-            <label className="settings-field">
-              {t("knowledge.host.namePlaceholder")}
-              <input
+            <FormField
+              label={t("knowledge.host.namePlaceholder")}
+              htmlFor="knowledge-set-create-title"
+            >
+              <Input
+                id="knowledge-set-create-title"
                 data-testid="knowledge-set-create-title"
                 value={draftTitle}
                 onChange={(event) => setDraftTitle(event.target.value)}
                 disabled={!mutationsEnabled}
                 placeholder={t("knowledge.sets.createLabel")}
               />
-            </label>
+            </FormField>
             <div className="knowledge-toolbar">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setDialogOpen(false)}
-              >
+              <Button size="sm" onClick={() => setDialogOpen(false)}>
                 {t("knowledge.host.cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
                 disabled={!mutationsEnabled}
                 onClick={() => {
                   void handleCreate();
                 }}
               >
                 {t("knowledge.host.create")}
-              </button>
+              </Button>
             </div>
           </KnowledgeEntityModal>
         </>

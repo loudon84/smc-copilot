@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { FilterSelect } from "../../../components/common/FilterSelect";
+import { Button } from "../../../components/ui/Button";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -232,25 +234,22 @@ export function KnowledgeUploadsPage({
       {loadState === "empty" || loadState === "content" ? (
         <>
           <KnowledgeToolbar>
-            <label>
-              {t("knowledge.uploads.targetBase")}
-              <select
-                data-testid="knowledge-upload-target"
-                value={targetBaseId}
-                disabled={!probe.mutationsEnabled || Boolean(routeBaseId)}
-                onChange={(event) => setTargetBaseId(event.target.value)}
-              >
-                <option value="unbound">{t("knowledge.uploads.unboundTarget")}</option>
-                {bases.map((base) => (
-                  <option key={base.id} value={base.id}>
-                    {base.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <FilterSelect
+              label={t("knowledge.uploads.targetBase")}
+              value={targetBaseId}
+              testId="knowledge-upload-target"
+              disabled={!probe.mutationsEnabled || Boolean(routeBaseId)}
+              onChange={setTargetBaseId}
+            >
+              <option value="unbound">{t("knowledge.uploads.unboundTarget")}</option>
+              {bases.map((base) => (
+                <option key={base.id} value={base.id}>
+                  {base.name}
+                </option>
+              ))}
+            </FilterSelect>
+            <Button
+              size="sm"
               data-testid="knowledge-upload-picker"
               disabled={!pickerEnabled}
               title={
@@ -263,7 +262,7 @@ export function KnowledgeUploadsPage({
               }}
             >
               {t("knowledge.uploads.pickerLabel")}
-            </button>
+            </Button>
             {pickerEnabled ? null : (
               <p>{t("knowledge.uploads.pickerDisabledProvider")}</p>
             )}

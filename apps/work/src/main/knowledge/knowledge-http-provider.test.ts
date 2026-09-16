@@ -87,11 +87,88 @@ describe("KnowledgeHttpProvider", () => {
     });
   });
 
-  it("does not auto-retry a timed-out non-idempotent POST", async () => {
-    let calls = 0;
+  it("reuses embedding_model/chunk_method from an existing base on create", async () => {
+    let captured: { path?: string; body?: unknown } = {};
     const provider = createKnowledgeHttpProvider(
-      transport(async () => {
-        calls += 1;
+      transport(async (path, init) => {
+        if ((init?.method ?? "GET") !== "POST") {
+          return jsonResponse(200, {
+            code: 0,
+            message: "ok",
+            data: { items: [validBase], total: 1, page: 1, page_size: 1 },
+          });
+        }
+        captured = {
+          path,
+          body: init?.body ? JSON.parse(String(init.body)) : null,
+        };
+        return jsonResponse(200, { code: 0, message: "ok", data: validBase });
+      }),
+    );
+    await provider.createBase({
+      name: "  New Base  ",
+      description: "",
+      visibility: "organization",
+    });
+    expect(captured.path).toBe("/api/v1/knowledge-bases");
+    expect(captured.body).toEqual({
+      name: "New Base",
+      description: null,
+      embedding_model: "emb",
+      chunk_method: "naive",
+      parser_config: null,
+      visibility: "organization",
+      tags: null,
+    });
+  });
+
+  it("maps create 400 to contract invalid instead of unavailable", async () => {
+    const provider = createKnowledgeHttpProvider(
+      transport(async (path, init) => {
+        if ((init?.method ?? "GET") !== "POST") {
+          return jsonResponse(200, {
+            code: 0,
+            message: "ok",
+            data: { items: [], total: 0, page: 1, page_size: 1 },
+          });
+        }
+        return jsonResponse(400, { message_key: "errors.common.bad_request" });
+      }),
+    );
+    await expect(
+      provider.createBase({ name: "New", visibility: "organization" }),
+    ).rejects.toMatchObject({
+      code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+      httpStatus: 400,
+    });
+  });
+
+  it("maps RAGFlow 400 to unavailable", async () => {
+    const provider = createKnowledgeHttpProvider(
+      transport(async (path, init) => {
+        if ((init?.method ?? "GET") !== "POST") {
+          return jsonResponse(200, {
+            code: 0,
+            message: "ok",
+            data: { items: [], total: 0, page: 1, page_size: 1 },
+          });
+        }
+        return jsonResponse(400, { message_key: "errors.knowledge.ragflow_error" });
+      }),
+    );
+    await expect(
+      provider.createBase({ name: "New", visibility: "organization" }),
+    ).rejects.toMatchObject({
+      code: KNOWLEDGE_ERROR_CODES.UNAVAILABLE,
+      messageKey: "errors.knowledge.ragflow_error",
+    });
+  });
+
+  it("does not auto-retry a timed-out non-idempotent POST", async () => {
+    let posts = 0;
+    const provider = createKnowledgeHttpProvider(
+      transport(async (_path, init) => {
+        if ((init?.method ?? "GET") === "POST") posts += 1;
         throw new AuthorizedBackendTransportError("aborted", {
           status: 0,
           errorCode: "FETCH_ABORTED",
@@ -101,7 +178,7 @@ describe("KnowledgeHttpProvider", () => {
     await expect(
       provider.createBase({ name: "New", visibility: "organization" }),
     ).rejects.toBeInstanceOf(KnowledgeFacadeError);
-    expect(calls).toBe(1);
+    expect(posts).toBe(1);
   });
 
   it("maps a missing Work session to auth_required instead of unavailable", async () => {

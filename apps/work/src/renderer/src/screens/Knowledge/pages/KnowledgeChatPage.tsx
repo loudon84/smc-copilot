@@ -1,4 +1,8 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { Button } from "../../../components/ui/Button";
+import { FormField } from "../../../components/ui/FormField";
+import { Select } from "../../../components/ui/Select";
+import { Textarea } from "../../../components/ui/Textarea";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -242,41 +246,40 @@ export function KnowledgeChatPage({
       {loadState !== "loading" && loadState !== "unavailable" && loadState !== "error" ? (
         <div className="knowledge-chat-layout">
           <aside
-            className="settings-section knowledge-chat-rail"
+            className="knowledge-chat-rail"
             data-testid="knowledge-chat-sessions"
           >
             <h2>{t("knowledge.chat.sessionsTitle")}</h2>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              size="sm"
               data-testid="knowledge-chat-new-session"
               disabled={!composerEnabled}
               onClick={() => setDialogOpen(true)}
             >
               {t("knowledge.chat.newSession")}
-            </button>
+            </Button>
             {sessions.length === 0 ? (
               <p>{t("knowledge.chat.emptySessions")}</p>
             ) : (
               <ul>
                 {sessions.map((session) => (
                   <li key={session.id}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       data-testid={`knowledge-chat-session-${session.id}`}
                       data-active={session.id === sessionId ? "true" : "false"}
                       onClick={() => handleSelectSession(session.id)}
                     >
                       {session.title ?? session.id}
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
             )}
           </aside>
 
-          <section className="settings-section knowledge-chat-thread-wrap">
+          <section className="knowledge-chat-thread-wrap">
             <h2>{t("knowledge.chat.messagesTitle")}</h2>
             {statusLine ? <p role="status">{statusLine}</p> : null}
             {messages.length === 0 ? (
@@ -294,7 +297,7 @@ export function KnowledgeChatPage({
             )}
 
             <div className="knowledge-toolbar">
-              <textarea
+              <Textarea
                 data-testid="knowledge-chat-composer"
                 value={draft}
                 disabled={!composerEnabled}
@@ -306,11 +309,10 @@ export function KnowledgeChatPage({
                 }
                 onChange={(event) => setDraft(event.target.value)}
                 rows={3}
-                style={{ width: "100%" }}
               />
-              <button
-                type="button"
-                className="btn btn-sm"
+              <Button
+                size="sm"
+                variant="primary"
                 data-testid="knowledge-chat-send"
                 disabled={!composerEnabled || !draft.trim()}
                 title={
@@ -323,7 +325,7 @@ export function KnowledgeChatPage({
                 }}
               >
                 {t("knowledge.chat.sendLabel")}
-              </button>
+              </Button>
               {!composerEnabled ? (
                 <p>{t("knowledge.chat.composerDisabledProvider")}</p>
               ) : null}
@@ -331,7 +333,7 @@ export function KnowledgeChatPage({
           </section>
 
           <aside
-            className="settings-section knowledge-chat-citations"
+            className="knowledge-chat-citations"
             data-testid="knowledge-chat-citations"
           >
             <h2>{t("knowledge.chat.citationsTitle")}</h2>
@@ -344,14 +346,14 @@ export function KnowledgeChatPage({
                 ))}
               </ul>
             )}
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={!onNavigate}
               onClick={() => onNavigate?.({ page: "sets", params: {} })}
             >
               {t("knowledge.chat.manageSets")}
-            </button>
+            </Button>
           </aside>
         </div>
       ) : null}
@@ -361,9 +363,12 @@ export function KnowledgeChatPage({
         onOpenChange={setDialogOpen}
         title={t("knowledge.chat.newSessionTitle")}
       >
-        <label className="settings-field">
-          {t("knowledge.chat.knowledgeSet")}
-          <select
+        <FormField
+          label={t("knowledge.chat.knowledgeSet")}
+          htmlFor="knowledge-chat-set-select"
+        >
+          <Select
+            id="knowledge-chat-set-select"
             data-testid="knowledge-chat-set-select"
             value={selectedSetId}
             onChange={(event) => setSelectedSetId(event.target.value)}
@@ -378,19 +383,15 @@ export function KnowledgeChatPage({
                 </option>
               ))
             )}
-          </select>
-        </label>
+          </Select>
+        </FormField>
         <div className="knowledge-toolbar">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setDialogOpen(false)}
-          >
+          <Button size="sm" onClick={() => setDialogOpen(false)}>
             {t("knowledge.host.cancel")}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm"
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
             data-testid="knowledge-chat-new-session-confirm"
             disabled={!composerEnabled}
             onClick={() => {
@@ -398,7 +399,7 @@ export function KnowledgeChatPage({
             }}
           >
             {t("knowledge.host.create")}
-          </button>
+          </Button>
         </div>
       </KnowledgeEntityModal>
     </div>

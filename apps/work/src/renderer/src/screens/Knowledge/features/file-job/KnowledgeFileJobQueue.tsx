@@ -1,5 +1,9 @@
 import { type ReactElement } from "react";
 import type { KnowledgeJobSnapshot } from "../../../../../../shared/knowledge/knowledge-job-ipc";
+import { StatusBadge } from "../../../../components/common/StatusBadge";
+import { Button } from "../../../../components/ui/Button";
+import { Card, CardHead, CardTitle } from "../../../../components/ui/Card";
+import { Progress } from "../../../../components/ui/Progress";
 
 export function KnowledgeFileJobQueue(props: {
   jobs: KnowledgeJobSnapshot[];
@@ -18,44 +22,37 @@ export function KnowledgeFileJobQueue(props: {
   return (
     <ul className="knowledge-card-grid" data-testid="knowledge-upload-queue">
       {props.jobs.map((job) => (
-        <li
+        <Card
           key={job.jobId}
-          className="settings-card"
+          as="li"
           data-testid={`knowledge-upload-job-${job.jobId}`}
           data-status={job.status}
         >
-          <div className="settings-card-head">
-            <strong>{job.fileSummary?.displayName ?? job.jobId}</strong>
-            <span className="settings-card-badge">{job.status}</span>
-          </div>
+          <CardHead>
+            <CardTitle>{job.fileSummary?.displayName ?? job.jobId}</CardTitle>
+            <StatusBadge>{job.status}</StatusBadge>
+          </CardHead>
           <p>
             {props.progressLabel}: {job.progress}%
           </p>
-          <div className="knowledge-upload-progress">
-            <div
-              className="knowledge-upload-progress-bar"
-              style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }}
-            />
-          </div>
+          <Progress value={job.progress} />
           <div className="knowledge-toolbar">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              size="sm"
               data-testid={`knowledge-upload-cancel-${job.jobId}`}
               onClick={() => props.onCancel(job.jobId)}
             >
               {props.cancelLabel}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            </Button>
+            <Button
+              size="sm"
               data-testid={`knowledge-upload-retry-${job.jobId}`}
               onClick={() => props.onRetry(job.jobId)}
             >
               {props.retryLabel}
-            </button>
+            </Button>
           </div>
-        </li>
+        </Card>
       ))}
     </ul>
   );

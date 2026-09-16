@@ -64,6 +64,7 @@ function logSanitized(
   operationId: string,
   stage: string,
   code: string,
+  extras?: { messageKey?: string; message?: string },
 ): void {
   let origin = "unknown";
   try {
@@ -71,7 +72,14 @@ function logSanitized(
   } catch {
     origin = "invalid";
   }
-  console.info("[knowledge-http]", { operationId, stage, code, origin });
+  console.info("[knowledge-http]", {
+    operationId,
+    stage,
+    code,
+    origin,
+    ...(extras?.messageKey ? { messageKey: extras.messageKey } : {}),
+    ...(extras?.message ? { message: extras.message } : {}),
+  });
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -152,7 +160,10 @@ export function createKnowledgeHttpProvider(
           envelope.messageKey,
           operationId,
         );
-        logSanitized(operationId, stage, err.code);
+        logSanitized(operationId, stage, err.code, {
+          messageKey: envelope.messageKey,
+          message: envelope.message,
+        });
         throw err;
       }
       if (body && typeof body === "object" && "_malformed" in body) {
@@ -209,13 +220,33 @@ export function createKnowledgeHttpProvider(
 
     async createBase(input): Promise<KnowledgeBaseSnapshot> {
       const operationId = randomUUID();
+      let embeddingModel = "bge-m3";
+      let chunkMethod = "naive";
+      try {
+        const existing = await this.listBases({ page: 1, pageSize: 1 });
+        const template = existing.items[0];
+        if (template?.embeddingModel) embeddingModel = template.embeddingModel;
+        if (template?.chunkMethod) chunkMethod = template.chunkMethod;
+      } catch {
+        // Fall back to service defaults when list is unavailable.
+      }
+      // KnowledgeBaseCreate: UI omits model/chunk/parser; Main reuses a working
+      // org template so RAGFlow gets a registered embedding_model, not a bare default.
+      // Matches app/api/knowledge_bases.py create_kb + KnowledgeBaseCreate.
       const payload = {
         name: input.name.trim(),
         description: input.description?.trim() ? input.description.trim() : null,
+        embedding_model: embeddingModel,
+        chunk_method: chunkMethod,
+        parser_config: null,
         visibility: input.visibility ?? "organization",
+        tags: null,
       };
+      logSanitized(operationId, "createBase", "payload", {
+        messageKey: `${embeddingModel}/${chunkMethod}`,
+      });
       const { body } = await requestJson(
-        "/api/v2/knowledge-bases",
+        "/api/v1/knowledge-bases",
         { method: "POST", body: JSON.stringify(payload) },
         operationId,
         "createBase",

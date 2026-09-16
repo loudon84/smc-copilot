@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { FilterSelect } from "../../../components/common/FilterSelect";
+import { StatusBadge } from "../../../components/common/StatusBadge";
+import { DataTable } from "../../../components/common/DataTable";
+import { Button } from "../../../components/ui/Button";
 import { useI18n } from "../../../components/useI18n";
 import { FilePreviewRouter } from "../../../components/files/preview/FilePreviewRouter";
 import {
@@ -222,14 +226,13 @@ export function KnowledgeDocumentsPage({
   if (detailId) {
     return (
       <div data-testid="knowledge-documents-page" data-state={loadState}>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
+        <Button
+          size="sm"
           data-testid="knowledge-documents-back"
           onClick={() => onBack?.()}
         >
           {t("knowledge.host.back")}
-        </button>
+        </Button>
         {loadState === "loading" ? (
           <KnowledgeLoading label={t("knowledge.loading")} />
         ) : null}
@@ -248,7 +251,6 @@ export function KnowledgeDocumentsPage({
         ) : null}
         {loadState === "content" && detail ? (
           <section
-            className="settings-section"
             data-testid="knowledge-document-detail"
           >
             <h2>{detail.title ?? t("knowledge.documents.detailTitle")}</h2>
@@ -322,14 +324,10 @@ export function KnowledgeDocumentsPage({
             <div hidden={detailTab !== "permission"}>
               <p>
                 {t("knowledge.documents.permissionLabel")}:{" "}
-                <span
-                  className="settings-card-badge"
-                  data-testid="knowledge-document-permission"
-                  data-display-only="true"
-                >
+                <StatusBadge testId="knowledge-document-permission" displayOnly>
                   {detail.permission?.role ?? "viewer"} /{" "}
                   {detail.permission?.visibility ?? "private"}
-                </span>
+                </StatusBadge>
               </p>
               <p data-testid="knowledge-document-permission-note">
                 {t("knowledge.documents.permissionDisplayOnly")}
@@ -368,34 +366,30 @@ export function KnowledgeDocumentsPage({
               value={search}
               onChange={setSearch}
             />
-            <label>
-              {t("knowledge.documents.filterStatus")}
-              <select
-                data-testid="knowledge-documents-filter"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-              >
-                <option value="all">{t("knowledge.host.filterAll")}</option>
-                <option value="private">{t("knowledge.host.private")}</option>
-                <option value="shared">{t("knowledge.host.shared")}</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <FilterSelect
+              label={t("knowledge.documents.filterStatus")}
+              value={filter}
+              testId="knowledge-documents-filter"
+              onChange={setFilter}
+            >
+              <option value="all">{t("knowledge.host.filterAll")}</option>
+              <option value="private">{t("knowledge.host.private")}</option>
+              <option value="shared">{t("knowledge.host.shared")}</option>
+            </FilterSelect>
+            <Button
+              size="sm"
               disabled={!onNavigate}
               onClick={() => onNavigate?.({ page: "uploads", params: {} })}
             >
               {t("knowledge.documents.uploadAction")}
-            </button>
+            </Button>
           </KnowledgeToolbar>
           {filtered.length === 0 ? (
             <p data-testid="knowledge-document-list-empty">
               {t("knowledge.documents.emptyList")}
             </p>
           ) : (
-            <div className="knowledge-table-wrap">
-              <table className="knowledge-table" data-testid="knowledge-document-list">
+            <DataTable testId="knowledge-document-list">
                 <thead>
                   <tr>
                     <th>{t("knowledge.documents.listTitle")}</th>
@@ -409,9 +403,9 @@ export function KnowledgeDocumentsPage({
                       <td>{item.title ?? item.id}</td>
                       <td>{item.permission?.visibility ?? "private"}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           data-testid={`knowledge-document-item-${item.id}`}
                           onClick={() =>
                             onNavigate?.({
@@ -421,13 +415,12 @@ export function KnowledgeDocumentsPage({
                           }
                         >
                           {t("knowledge.host.open")}
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </DataTable>
           )}
         </>
       ) : null}

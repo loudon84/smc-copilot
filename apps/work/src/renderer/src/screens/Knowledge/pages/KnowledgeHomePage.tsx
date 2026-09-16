@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { Button } from "../../../components/ui/Button";
+import { Card, CardHead, CardTitle } from "../../../components/ui/Card";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -134,7 +136,6 @@ export function KnowledgeHomePage({
       {loadState === "empty" || loadState === "content" ? (
         <>
           <section
-            className="settings-section"
             data-testid="knowledge-home-overview"
           >
             <KnowledgeSectionTitle>
@@ -149,18 +150,19 @@ export function KnowledgeHomePage({
                     ["documents", documents.length, "knowledge.home.documentsCount"],
                   ] as const
                 ).map(([page, count, label]) => (
-                  <button
+                  <Card
                     key={page}
+                    as="button"
                     type="button"
-                    className="settings-card knowledge-metric-card"
+                    className="knowledge-metric-card"
                     disabled={!onNavigate}
                     onClick={() => onNavigate?.({ page, params: {} })}
                   >
-                    <div className="settings-card-head">
-                      <strong>{t(label)}</strong>
-                    </div>
+                    <CardHead>
+                      <CardTitle>{t(label)}</CardTitle>
+                    </CardHead>
                     <p>{count}</p>
-                  </button>
+                  </Card>
                 ))}
               </div>
             ) : (
@@ -173,7 +175,7 @@ export function KnowledgeHomePage({
             ) : null}
           </section>
 
-          <section className="settings-section" data-testid="knowledge-home-recent">
+          <section data-testid="knowledge-home-recent">
             <KnowledgeSectionTitle>
               {t("knowledge.home.recentTitle")}
             </KnowledgeSectionTitle>
@@ -184,9 +186,9 @@ export function KnowledgeHomePage({
                   <ul>
                     {recentSets.map((item) => (
                       <li key={item.id}>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           disabled={!onNavigate}
                           onClick={() =>
                             onNavigate?.({
@@ -196,7 +198,7 @@ export function KnowledgeHomePage({
                           }
                         >
                           {item.title ?? item.id}
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -206,9 +208,9 @@ export function KnowledgeHomePage({
                   <ul>
                     {recentDocs.map((item) => (
                       <li key={item.id}>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           disabled={!onNavigate}
                           onClick={() =>
                             onNavigate?.({
@@ -218,7 +220,7 @@ export function KnowledgeHomePage({
                           }
                         >
                           {item.title ?? item.id}
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -230,7 +232,6 @@ export function KnowledgeHomePage({
           </section>
 
           <section
-            className="settings-section"
             data-testid="knowledge-home-shortcuts"
           >
             <KnowledgeSectionTitle>
@@ -246,16 +247,15 @@ export function KnowledgeHomePage({
                   ["chat", "knowledge.home.openChat"],
                 ] as const
               ).map(([page, key]) => (
-                <button
+                <Button
                   key={page}
-                  type="button"
-                  className="btn btn-secondary btn-sm"
+                  size="sm"
                   data-testid={`knowledge-home-shortcut-${page}`}
                   disabled={!onNavigate}
                   onClick={() => onNavigate?.({ page, params: {} })}
                 >
                   {t(key)}
-                </button>
+                </Button>
               ))}
             </div>
           </section>

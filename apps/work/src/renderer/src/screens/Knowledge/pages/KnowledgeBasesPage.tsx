@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { LayoutGrid, List } from "lucide-react";
+import { FilterSelect } from "../../../components/common/FilterSelect";
+import { Button } from "../../../components/ui/Button";
+import { SegmentedControl } from "../../../components/ui/SegmentedControl";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -187,40 +190,45 @@ export function KnowledgeBasesPage({
               value={search}
               onChange={setSearch}
             />
-            <label>
-              {t("knowledge.host.visibility")}
-              <select
-                data-testid="knowledge-bases-visibility"
-                value={visibility}
-                onChange={(event) => setVisibility(event.target.value)}
-              >
-                <option value="all">{t("knowledge.host.filterAll")}</option>
-                <option value="private">{t("knowledge.host.private")}</option>
-                <option value="department">{t("knowledge.host.department")}</option>
-                <option value="organization">{t("knowledge.host.organization")}</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-bases-view-card"
-              aria-pressed={view === "card"}
-              onClick={() => setView("card")}
+            <FilterSelect
+              label={t("knowledge.host.visibility")}
+              value={visibility}
+              testId="knowledge-bases-visibility"
+              onChange={setVisibility}
             >
-              <LayoutGrid size={14} /> {t("knowledge.host.viewCard")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-bases-view-table"
-              aria-pressed={view === "table"}
-              onClick={() => setView("table")}
-            >
-              <List size={14} /> {t("knowledge.host.viewTable")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+              <option value="all">{t("knowledge.host.filterAll")}</option>
+              <option value="private">{t("knowledge.host.private")}</option>
+              <option value="department">{t("knowledge.host.department")}</option>
+              <option value="organization">{t("knowledge.host.organization")}</option>
+            </FilterSelect>
+            <SegmentedControl
+              ariaLabel={t("knowledge.host.viewCard")}
+              value={view}
+              onChange={setView}
+              options={[
+                {
+                  id: "card",
+                  label: (
+                    <>
+                      <LayoutGrid size={14} /> {t("knowledge.host.viewCard")}
+                    </>
+                  ),
+                  testId: "knowledge-bases-view-card",
+                },
+                {
+                  id: "table",
+                  label: (
+                    <>
+                      <List size={14} /> {t("knowledge.host.viewTable")}
+                    </>
+                  ),
+                  testId: "knowledge-bases-view-table",
+                },
+              ]}
+            />
+            <Button
+              size="sm"
+              variant="primary"
               data-testid="knowledge-base-create"
               disabled={!mutationsEnabled}
               title={
@@ -229,7 +237,7 @@ export function KnowledgeBasesPage({
               onClick={() => setDialogOpen(true)}
             >
               {t("knowledge.bases.createLabel")}
-            </button>
+            </Button>
           </KnowledgeToolbar>
           {!mutationsEnabled ? <p>{t("knowledge.bases.mutateDisabled")}</p> : null}
           {filtered.length === 0 ? (

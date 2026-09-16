@@ -121,6 +121,24 @@ export function mapHttpStatusToKnowledgeError(
       operationId,
     });
   }
+  if (messageKey?.includes("ragflow")) {
+    return new KnowledgeFacadeError({
+      code: KNOWLEDGE_ERROR_CODES.UNAVAILABLE,
+      httpStatus: status,
+      messageKey: messageKey ?? undefined,
+      retryable: true,
+      operationId,
+    });
+  }
+  if (status === 400 || status === 422) {
+    return new KnowledgeFacadeError({
+      code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+      httpStatus: status,
+      messageKey: messageKey ?? undefined,
+      retryable: false,
+      operationId,
+    });
+  }
   if (status >= 500) {
     return new KnowledgeFacadeError({
       code: KNOWLEDGE_ERROR_CODES.UNAVAILABLE,

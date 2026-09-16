@@ -1,5 +1,9 @@
 import { type ReactElement } from "react";
 import type { KnowledgeBaseSnapshot } from "../../../../../../../shared/knowledge/knowledge-base-ipc";
+import { StatusBadge } from "../../../../../components/common/StatusBadge";
+import { Button } from "../../../../../components/ui/Button";
+import { Card, CardHead, CardTitle } from "../../../../../components/ui/Card";
+import { Table } from "../../../../../components/ui/Table";
 
 export function KnowledgeBaseCardGrid(props: {
   items: KnowledgeBaseSnapshot[];
@@ -8,19 +12,20 @@ export function KnowledgeBaseCardGrid(props: {
   return (
     <div className="knowledge-card-grid" data-testid="knowledge-base-list">
       {props.items.map((item) => (
-        <button
+        <Card
           key={item.id}
+          as="button"
           type="button"
-          className="settings-card knowledge-entity-card"
+          className="knowledge-entity-card"
           data-testid={`knowledge-base-item-${item.id}`}
           onClick={() => props.onOpen(item.id)}
         >
-          <div className="settings-card-head">
-            <strong>{item.name}</strong>
-            <span className="settings-card-badge">{item.visibility}</span>
-          </div>
+          <CardHead>
+            <CardTitle>{item.name}</CardTitle>
+            <StatusBadge>{item.visibility}</StatusBadge>
+          </CardHead>
           <p>{item.status}</p>
-        </button>
+        </Card>
       ))}
     </div>
   );
@@ -34,34 +39,32 @@ export function KnowledgeBaseTable(props: {
   visibilityLabel: string;
 }): ReactElement {
   return (
-    <div className="knowledge-table-wrap">
-      <table className="knowledge-table" data-testid="knowledge-base-list">
-        <thead>
-          <tr>
-            <th>{props.nameLabel}</th>
-            <th>{props.visibilityLabel}</th>
-            <th>{props.openLabel}</th>
+    <Table data-testid="knowledge-base-list">
+      <thead>
+        <tr>
+          <th>{props.nameLabel}</th>
+          <th>{props.visibilityLabel}</th>
+          <th>{props.openLabel}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {props.items.map((item) => (
+          <tr key={item.id}>
+            <td>{item.name}</td>
+            <td>{item.visibility}</td>
+            <td>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid={`knowledge-base-item-${item.id}`}
+                onClick={() => props.onOpen(item.id)}
+              >
+                {props.openLabel}
+              </Button>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {props.items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.name}</td>
-              <td>{item.visibility}</td>
-              <td>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  data-testid={`knowledge-base-item-${item.id}`}
-                  onClick={() => props.onOpen(item.id)}
-                >
-                  {props.openLabel}
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </Table>
   );
 }

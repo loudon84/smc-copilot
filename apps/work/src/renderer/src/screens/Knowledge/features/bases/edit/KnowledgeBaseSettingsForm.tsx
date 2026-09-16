@@ -1,5 +1,10 @@
 import { type ReactElement } from "react";
 import type { KnowledgeBaseVisibility } from "../../../../../../../shared/knowledge/knowledge-base-ipc";
+import { Button } from "../../../../../components/ui/Button";
+import { FormField } from "../../../../../components/ui/FormField";
+import { Input } from "../../../../../components/ui/Input";
+import { Select } from "../../../../../components/ui/Select";
+import { Textarea } from "../../../../../components/ui/Textarea";
 
 export function KnowledgeBaseSettingsForm(props: {
   name: string;
@@ -21,27 +26,33 @@ export function KnowledgeBaseSettingsForm(props: {
 }): ReactElement {
   return (
     <div data-testid="knowledge-base-settings">
-      <label className="settings-field">
-        {props.editLabel}
-        <input
+      <FormField label={props.editLabel} htmlFor="knowledge-base-title-input">
+        <Input
+          id="knowledge-base-title-input"
           data-testid="knowledge-base-title-input"
           value={props.name}
           onChange={(event) => props.onNameChange(event.target.value)}
           disabled={!props.saveEnabled || props.submitting}
         />
-      </label>
-      <label className="settings-field">
-        {props.descriptionLabel}
-        <textarea
+      </FormField>
+      <FormField
+        label={props.descriptionLabel}
+        htmlFor="knowledge-base-description-input"
+      >
+        <Textarea
+          id="knowledge-base-description-input"
           data-testid="knowledge-base-description-input"
           value={props.description}
           onChange={(event) => props.onDescriptionChange(event.target.value)}
           disabled={!props.saveEnabled || props.submitting}
         />
-      </label>
-      <label className="settings-field">
-        {props.visibilityLabel}
-        <select
+      </FormField>
+      <FormField
+        label={props.visibilityLabel}
+        htmlFor="knowledge-base-visibility-input"
+      >
+        <Select
+          id="knowledge-base-visibility-input"
           data-testid="knowledge-base-visibility-input"
           value={props.visibility}
           disabled={!props.saveEnabled || props.submitting}
@@ -52,17 +63,16 @@ export function KnowledgeBaseSettingsForm(props: {
           <option value="private">{props.privateLabel}</option>
           <option value="department">{props.departmentLabel}</option>
           <option value="organization">{props.organizationLabel}</option>
-        </select>
-      </label>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
+        </Select>
+      </FormField>
+      <Button
+        size="sm"
         data-testid="knowledge-base-save"
         disabled={!props.saveEnabled || props.submitting}
         onClick={props.onSave}
       >
         {props.saveLabel}
-      </button>
+      </Button>
     </div>
   );
 }

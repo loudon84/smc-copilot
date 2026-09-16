@@ -15,6 +15,7 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../shared/knowledge/knowledge-job-ipc";
 import type { HermesKnowledgeBasesAPI } from "../../../../shared/knowledge/knowledge-base-ipc";
+import { StatusBadge } from "../../components/common/StatusBadge";
 import { KnowledgeModuleNav } from "./KnowledgeModuleNav";
 import { KnowledgeHomePage } from "./pages/KnowledgeHomePage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
@@ -149,7 +150,7 @@ export function KnowledgePages({
 
   return (
     <div
-      className="settings-container knowledge-host"
+      className="ui-host knowledge-host"
       data-testid={`knowledge-page-${page}`}
       data-page={page}
       data-state={presentation}
@@ -157,15 +158,9 @@ export function KnowledgePages({
       data-knowledge-host="true"
     >
       {showMockBadge ? (
-        <span
-          className="settings-card-badge is-update"
-          data-testid="knowledge-mock-demo-badge"
-          data-persistent="true"
-          role="status"
-          aria-live="polite"
-        >
+        <StatusBadge testId="knowledge-mock-demo-badge" persistent>
           {t("knowledge.mockDemoBadge")}
-        </span>
+        </StatusBadge>
       ) : null}
       <KnowledgeModuleNav page={page} onNavigate={onNavigate} />
 

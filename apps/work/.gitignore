@@ -40,6 +40,9 @@ pnpm-debug.log*
 # Local isolated Hermes homes for development/tests
 .sandbox/
 
+# Knowledge UI visual diffs (baselines are committed)
+tests/visual/knowledge-ui/output/
+
 # Generated packaged identity (rebuilds on npm run build)
 resources/work-build-info.json
 

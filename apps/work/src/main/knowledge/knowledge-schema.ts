@@ -104,6 +104,12 @@ export function parseKnowledgeBaseSnapshot(
   if (typeof raw.owner_member_id === "string") {
     snap.ownerMemberId = raw.owner_member_id;
   }
+  if (typeof raw.embedding_model === "string" && raw.embedding_model.trim()) {
+    snap.embeddingModel = raw.embedding_model.trim();
+  }
+  if (typeof raw.chunk_method === "string" && raw.chunk_method.trim()) {
+    snap.chunkMethod = raw.chunk_method.trim();
+  }
   return snap;
 }
 
@@ -242,11 +248,13 @@ export function parseUploadAccepted(
 
 export function parseErrorEnvelope(raw: unknown): {
   messageKey?: string;
+  message?: string;
   details?: Record<string, unknown>;
 } {
   if (!isRecord(raw)) return {};
   return {
     messageKey: typeof raw.message_key === "string" ? raw.message_key : undefined,
+    message: typeof raw.message === "string" ? raw.message : undefined,
     details: isRecord(raw.details) ? raw.details : undefined,
   };
 }

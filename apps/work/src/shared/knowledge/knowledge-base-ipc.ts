@@ -41,6 +41,8 @@ export interface KnowledgeBaseSnapshot {
   visibility: KnowledgeBaseVisibility;
   orgId?: string;
   ownerMemberId?: string;
+  embeddingModel?: string;
+  chunkMethod?: string;
 }
 
 export interface KnowledgeBasePage {

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from "react";
+import { Button } from "../../../components/ui/Button";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -166,17 +167,15 @@ export function KnowledgeBaseDetailPage({
   return (
     <div data-testid="knowledge-bases-page" data-state={loadState}>
       <div className="knowledge-toolbar">
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
+        <Button
+          size="sm"
           data-testid="knowledge-bases-back"
           onClick={() => onBack?.()}
         >
           {t("knowledge.host.back")}
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
+        </Button>
+        <Button
+          size="sm"
           data-testid="knowledge-base-upload"
           disabled={!uploadEnabled || !onNavigate}
           onClick={() =>
@@ -187,7 +186,7 @@ export function KnowledgeBaseDetailPage({
           }
         >
           {t("knowledge.bases.uploadAction")}
-        </button>
+        </Button>
       </div>
       {loadState === "loading" ? (
         <KnowledgeLoading label={t("knowledge.loading")} />
@@ -212,7 +211,7 @@ export function KnowledgeBaseDetailPage({
         />
       ) : null}
       {loadState === "content" && detail ? (
-        <section className="settings-section" data-testid="knowledge-base-detail">
+        <section data-testid="knowledge-base-detail">
           <h2>{detail.name}</h2>
           <p data-testid="knowledge-base-detail-id">{detail.id}</p>
           <p data-testid="knowledge-base-detail-status">{detail.status}</p>
@@ -261,9 +260,9 @@ export function KnowledgeBaseDetailPage({
               departmentLabel={t("knowledge.host.department")}
               organizationLabel={t("knowledge.host.organization")}
             />
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
+            <Button
+              size="sm"
+              variant="danger"
               data-testid="knowledge-base-delete"
               disabled={!deleteEnabled || submitting}
               title={
@@ -272,7 +271,7 @@ export function KnowledgeBaseDetailPage({
               onClick={() => setConfirmDelete(true)}
             >
               {t("knowledge.bases.deleteLabel")}
-            </button>
+            </Button>
             {!probe.mutationsEnabled ? (
               <p>{t("knowledge.bases.mutateDisabled")}</p>
             ) : null}
