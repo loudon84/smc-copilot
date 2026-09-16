@@ -156,4 +156,32 @@ describe("Knowledge Sets page (V03)", () => {
     });
     expect(document.body.textContent).toContain(knowledgeEn.sets.mutateDisabled);
   });
+
+  it("opens the create dialog from the set list", async () => {
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeSetsPage, {
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "mock",
+            allowSyntheticData: true,
+            configSource: "env",
+          },
+          facade: {
+            listEntities: vi.fn(async () => [setEntity("s1", "Set Alpha")]),
+            getEntity: vi.fn(async () => null),
+            mutateEntity: vi.fn(async () => setEntity("s1", "Set Alpha")),
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-set-list")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-create"));
+    });
+    expect(screen.getByTestId("knowledge-set-create-title")).toBeTruthy();
+  });
 });

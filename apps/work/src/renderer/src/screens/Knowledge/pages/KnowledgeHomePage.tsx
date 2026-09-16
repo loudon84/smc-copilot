@@ -11,6 +11,11 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
+import {
+  KnowledgeEmptyState,
+  KnowledgeLoading,
+  KnowledgeSectionTitle,
+} from "../knowledge-page-chrome";
 
 export type KnowledgeHomePageProps = {
   onNavigate?: (target: {
@@ -25,7 +30,7 @@ export type KnowledgeHomePageProps = {
 type HomeLoadState = "loading" | "unavailable" | "empty" | "content" | "error";
 
 /**
- * Knowledge Home dashboard: overview, recent entities, and shortcuts.
+ * Knowledge Home dashboard: overview cards, recent entities, and shortcuts.
  * Provider mode never paints fabricated counts.
  */
 export function KnowledgeHomePage({
@@ -60,7 +65,6 @@ export function KnowledgeHomePage({
       return;
     }
     if (!isMock) {
-      // Provider: structure visible, no fake metrics / facade lists.
       setBases([]);
       setSets([]);
       setDocuments([]);
@@ -101,40 +105,60 @@ export function KnowledgeHomePage({
     };
   }, [probe.presentation, probe.facade, isMock]);
 
+  const recentSets = sets.slice(0, 4);
+  const recentDocs = documents.slice(0, 4);
   const recent = [...sets, ...documents].slice(0, 6);
 
   return (
     <div data-testid="knowledge-home-page" data-state={loadState}>
-      {loadState === "loading" ? <p>{t("knowledge.loading")}</p> : null}
+      {loadState === "loading" ? (
+        <KnowledgeLoading label={t("knowledge.loading")} />
+      ) : null}
       {loadState === "unavailable" ? (
-        <section className="gateway-empty-state" aria-live="polite">
-          <strong>{t("knowledge.unavailableTitle")}</strong>
-          <p>{t("knowledge.unavailableDescription")}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.unavailableTitle")}
+          description={t("knowledge.unavailableDescription")}
+        />
       ) : null}
       {loadState === "error" ? (
-        <section className="gateway-empty-state" aria-live="polite">
-          <strong>{t("knowledge.host.errorTitle")}</strong>
-          <p>{errorMessage}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.host.errorTitle")}
+          description={errorMessage}
+        />
       ) : null}
 
       {loadState === "empty" || loadState === "content" ? (
         <>
-          <section data-testid="knowledge-home-overview" style={{ marginBottom: 16 }}>
-            <h2 className="settings-header">{t("knowledge.home.overviewTitle")}</h2>
+          <section
+            className="settings-section"
+            data-testid="knowledge-home-overview"
+          >
+            <KnowledgeSectionTitle>
+              {t("knowledge.home.overviewTitle")}
+            </KnowledgeSectionTitle>
             {isMock ? (
-              <ul data-testid="knowledge-home-metrics">
-                <li>
-                  {t("knowledge.home.basesCount")}: {bases.length}
-                </li>
-                <li>
-                  {t("knowledge.home.setsCount")}: {sets.length}
-                </li>
-                <li>
-                  {t("knowledge.home.documentsCount")}: {documents.length}
-                </li>
-              </ul>
+              <div className="knowledge-card-grid" data-testid="knowledge-home-metrics">
+                {(
+                  [
+                    ["bases", bases.length, "knowledge.home.basesCount"],
+                    ["sets", sets.length, "knowledge.home.setsCount"],
+                    ["documents", documents.length, "knowledge.home.documentsCount"],
+                  ] as const
+                ).map(([page, count, label]) => (
+                  <button
+                    key={page}
+                    type="button"
+                    className="settings-card knowledge-metric-card"
+                    disabled={!onNavigate}
+                    onClick={() => onNavigate?.({ page, params: {} })}
+                  >
+                    <div className="settings-card-head">
+                      <strong>{t(label)}</strong>
+                    </div>
+                    <p>{count}</p>
+                  </button>
+                ))}
+              </div>
             ) : (
               <p data-testid="knowledge-home-provider-no-metrics">
                 {t("knowledge.home.providerNoMetrics")}
@@ -145,22 +169,70 @@ export function KnowledgeHomePage({
             ) : null}
           </section>
 
-          <section data-testid="knowledge-home-recent" style={{ marginBottom: 16 }}>
-            <h2 className="settings-header">{t("knowledge.home.recentTitle")}</h2>
+          <section className="settings-section" data-testid="knowledge-home-recent">
+            <KnowledgeSectionTitle>
+              {t("knowledge.home.recentTitle")}
+            </KnowledgeSectionTitle>
             {isMock && recent.length > 0 ? (
-              <ul>
-                {recent.map((item) => (
-                  <li key={`${item.kind}-${item.id}`}>{item.title ?? item.id}</li>
-                ))}
-              </ul>
+              <div className="knowledge-card-grid">
+                <div>
+                  <h3>{t("knowledge.home.recentSets")}</h3>
+                  <ul>
+                    {recentSets.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={!onNavigate}
+                          onClick={() =>
+                            onNavigate?.({
+                              page: "sets",
+                              params: { knowledgeSetId: item.id },
+                            })
+                          }
+                        >
+                          {item.title ?? item.id}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3>{t("knowledge.home.recentDocuments")}</h3>
+                  <ul>
+                    {recentDocs.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={!onNavigate}
+                          onClick={() =>
+                            onNavigate?.({
+                              page: "documents",
+                              params: { documentId: item.id },
+                            })
+                          }
+                        >
+                          {item.title ?? item.id}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             ) : (
               <p>{t("knowledge.emptyTitle")}</p>
             )}
           </section>
 
-          <section data-testid="knowledge-home-shortcuts">
-            <h2 className="settings-header">{t("knowledge.home.shortcutsTitle")}</h2>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <section
+            className="settings-section"
+            data-testid="knowledge-home-shortcuts"
+          >
+            <KnowledgeSectionTitle>
+              {t("knowledge.home.shortcutsTitle")}
+            </KnowledgeSectionTitle>
+            <div className="knowledge-toolbar">
               {(
                 [
                   ["bases", "knowledge.home.openBases"],
@@ -173,6 +245,7 @@ export function KnowledgeHomePage({
                 <button
                   key={page}
                   type="button"
+                  className="btn btn-secondary btn-sm"
                   data-testid={`knowledge-home-shortcut-${page}`}
                   disabled={!onNavigate}
                   onClick={() => onNavigate?.({ page, params: {} })}

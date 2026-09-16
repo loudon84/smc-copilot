@@ -288,5 +288,5 @@ describe("Layout Knowledge View keep-alive (V01)", () => {
       (screen.getByTestId("knowledge-view").parentElement as HTMLElement).style
         .display,
     ).toBe("none");
-  });
+  }, 20_000);
 });

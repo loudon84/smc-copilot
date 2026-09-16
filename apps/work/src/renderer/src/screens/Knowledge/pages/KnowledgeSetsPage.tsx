@@ -11,6 +11,14 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
+import {
+  KnowledgeEmptyState,
+  KnowledgeEntityModal,
+  KnowledgeLoading,
+  KnowledgeSearchInput,
+  KnowledgeSectionTabs,
+  KnowledgeToolbar,
+} from "../knowledge-page-chrome";
 
 export type KnowledgeSetsPageProps = {
   params?: KnowledgeRouteParams;
@@ -32,6 +40,8 @@ type SetsLoadState =
   | "not-found"
   | "error";
 
+type SetDetailTab = "info" | "bindings" | "retrieval" | "usage";
+
 /**
  * Knowledge Sets list/detail with local binding/weight drafts; provider submit disabled.
  */
@@ -52,6 +62,7 @@ export function KnowledgeSetsPage({
   const detailId = params.knowledgeSetId;
   const [loadState, setLoadState] = useState<SetsLoadState>("loading");
   const [items, setItems] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
+  const [bases, setBases] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
   const [detail, setDetail] = useState<KnowledgeFacadeEntitySnapshot | null>(
     null,
   );
@@ -60,6 +71,11 @@ export function KnowledgeSetsPage({
   const [draftTitle, setDraftTitle] = useState("");
   const [bindingWeight, setBindingWeight] = useState("1");
   const [retrievalMode, setRetrievalMode] = useState("hybrid");
+  const [selectedBaseIds, setSelectedBaseIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<SetDetailTab>("bindings");
 
   const refreshList = async (): Promise<void> => {
     if (!probe.facade || probe.mode?.dataMode !== "mock") {
@@ -104,6 +120,9 @@ export function KnowledgeSetsPage({
           }
           setDetail(entity);
           setDraftTitle(entity.title ?? "");
+          const baseList = await probe.facade.listEntities({ kind: "base" });
+          if (cancelled) return;
+          setBases(baseList);
           setLoadState("content");
           return;
         }
@@ -140,6 +159,7 @@ export function KnowledgeSetsPage({
       patch: { title: draftTitle.trim() || "New set" },
     });
     setDraftTitle("");
+    setDialogOpen(false);
     await refreshList();
   };
 
@@ -152,44 +172,82 @@ export function KnowledgeSetsPage({
         title: draftTitle.trim() || detail?.title || "Set",
         weight: Number(bindingWeight) || 1,
         retrieval: retrievalMode,
+        boundBaseIds: Array.from(selectedBaseIds).join(","),
       },
     });
     setDetail(updated);
   };
 
+  const toggleBase = (id: string): void => {
+    setSelectedBaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   if (detailId) {
     return (
       <div data-testid="knowledge-sets-page" data-state={loadState}>
-        <button type="button" data-testid="knowledge-sets-back" onClick={() => onBack?.()}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          data-testid="knowledge-sets-back"
+          onClick={() => onBack?.()}
+        >
           {t("knowledge.host.back")}
         </button>
-        {loadState === "loading" ? <p>{t("knowledge.loading")}</p> : null}
+        {loadState === "loading" ? (
+          <KnowledgeLoading label={t("knowledge.loading")} />
+        ) : null}
         {loadState === "not-found" ? (
-          <section data-testid="knowledge-set-not-found">
-            <strong>{t("knowledge.host.notFoundTitle")}</strong>
-            <p>{t("knowledge.host.notFoundDescription")}</p>
-          </section>
+          <KnowledgeEmptyState
+            testId="knowledge-set-not-found"
+            title={t("knowledge.host.notFoundTitle")}
+            description={t("knowledge.host.notFoundDescription")}
+          />
         ) : null}
         {loadState === "error" ? (
-          <section>
-            <strong>{t("knowledge.host.errorTitle")}</strong>
-            <p>{errorMessage}</p>
-          </section>
+          <KnowledgeEmptyState
+            title={t("knowledge.host.errorTitle")}
+            description={errorMessage}
+          />
         ) : null}
         {loadState === "content" && detail ? (
-          <section data-testid="knowledge-set-detail">
-            <h2>{t("knowledge.sets.detailTitle")}</h2>
+          <section className="settings-section" data-testid="knowledge-set-detail">
+            <h2>{detail.title ?? t("knowledge.sets.detailTitle")}</h2>
             <p data-testid="knowledge-set-detail-id">{detail.id}</p>
-            <label>
-              {t("knowledge.host.edit")}
-              <input
-                data-testid="knowledge-set-title-input"
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                disabled={!mutationsEnabled}
-              />
-            </label>
-            <section data-testid="knowledge-set-bindings" style={{ marginTop: 12 }}>
+            <KnowledgeSectionTabs
+              active={detailTab}
+              onChange={setDetailTab}
+              tabs={[
+                { id: "info", label: t("knowledge.sets.tabInfo") },
+                { id: "bindings", label: t("knowledge.sets.tabBindings") },
+                { id: "retrieval", label: t("knowledge.sets.tabRetrieval") },
+                { id: "usage", label: t("knowledge.sets.tabUsage") },
+              ]}
+            />
+
+            <div hidden={detailTab !== "info"}>
+              <label className="settings-field">
+                {t("knowledge.host.edit")}
+                <input
+                  data-testid="knowledge-set-title-input"
+                  value={draftTitle}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                  disabled={!mutationsEnabled}
+                />
+              </label>
+              <p>
+                {t("knowledge.sets.boundBases")}: {selectedBaseIds.size}
+              </p>
+            </div>
+
+            <section
+              hidden={detailTab !== "bindings"}
+              data-testid="knowledge-set-bindings"
+            >
               <h3>{t("knowledge.sets.bindingTitle")}</h3>
               <label>
                 {t("knowledge.sets.weightLabel")}
@@ -200,8 +258,31 @@ export function KnowledgeSetsPage({
                   disabled={!mutationsEnabled}
                 />
               </label>
+              {bases.length === 0 ? (
+                <p>{t("knowledge.sets.noBases")}</p>
+              ) : (
+                <ul>
+                  {bases.map((base) => (
+                    <li key={base.id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedBaseIds.has(base.id)}
+                          disabled={!mutationsEnabled}
+                          onChange={() => toggleBase(base.id)}
+                        />
+                        {base.title ?? base.id}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
-            <section data-testid="knowledge-set-retrieval" style={{ marginTop: 12 }}>
+
+            <section
+              hidden={detailTab !== "retrieval"}
+              data-testid="knowledge-set-retrieval"
+            >
               <h3>{t("knowledge.sets.retrievalTitle")}</h3>
               <select
                 data-testid="knowledge-set-retrieval-mode"
@@ -214,8 +295,14 @@ export function KnowledgeSetsPage({
                 <option value="vector">vector</option>
               </select>
             </section>
+
+            <div hidden={detailTab !== "usage"}>
+              <p>{t("knowledge.sets.usageEmpty")}</p>
+            </div>
+
             <button
               type="button"
+              className="btn btn-secondary btn-sm"
               data-testid="knowledge-set-submit"
               disabled={!mutationsEnabled}
               title={
@@ -224,7 +311,6 @@ export function KnowledgeSetsPage({
               onClick={() => {
                 void handleSubmitBindings();
               }}
-              style={{ marginTop: 12 }}
             >
               {t("knowledge.sets.submitBindings")}
             </button>
@@ -239,75 +325,119 @@ export function KnowledgeSetsPage({
 
   return (
     <div data-testid="knowledge-sets-page" data-state={loadState}>
-      {loadState === "loading" ? <p>{t("knowledge.loading")}</p> : null}
+      {loadState === "loading" ? (
+        <KnowledgeLoading label={t("knowledge.loading")} />
+      ) : null}
       {loadState === "unavailable" ? (
-        <section className="gateway-empty-state" aria-live="polite">
-          <strong>{t("knowledge.unavailableTitle")}</strong>
-          <p>{t("knowledge.unavailableDescription")}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.unavailableTitle")}
+          description={t("knowledge.unavailableDescription")}
+        />
       ) : null}
       {loadState === "error" ? (
-        <section>
-          <strong>{t("knowledge.host.errorTitle")}</strong>
-          <p>{errorMessage}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.host.errorTitle")}
+          description={errorMessage}
+        />
       ) : null}
 
       {loadState === "empty" || loadState === "content" ? (
         <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input
-              data-testid="knowledge-sets-search"
+          <KnowledgeToolbar>
+            <KnowledgeSearchInput
+              testId="knowledge-sets-search"
               placeholder={t("knowledge.host.searchPlaceholder")}
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <input
-              data-testid="knowledge-set-create-title"
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              disabled={!mutationsEnabled}
-              placeholder={t("knowledge.sets.createLabel")}
+              onChange={setSearch}
             />
             <button
               type="button"
+              className="btn btn-secondary btn-sm"
               data-testid="knowledge-set-create"
               disabled={!mutationsEnabled}
               title={
                 mutationsEnabled ? undefined : t("knowledge.sets.mutateDisabled")
               }
-              onClick={() => {
-                void handleCreate();
-              }}
+              onClick={() => setDialogOpen(true)}
             >
               {t("knowledge.sets.createLabel")}
             </button>
-          </div>
+          </KnowledgeToolbar>
           {!mutationsEnabled ? <p>{t("knowledge.sets.mutateDisabled")}</p> : null}
           {filtered.length === 0 ? (
             <p data-testid="knowledge-set-list-empty">
               {t("knowledge.sets.emptyList")}
             </p>
           ) : (
-            <ul data-testid="knowledge-set-list">
+            <div className="knowledge-card-grid" data-testid="knowledge-set-list">
               {filtered.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    data-testid={`knowledge-set-item-${item.id}`}
-                    onClick={() =>
-                      onNavigate?.({
-                        page: "sets",
-                        params: { knowledgeSetId: item.id },
-                      })
-                    }
-                  >
-                    {item.title ?? item.id}
-                  </button>
-                </li>
+                <article key={item.id} className="settings-card">
+                  <div className="settings-card-head">
+                    <strong>{item.title ?? item.id}</strong>
+                  </div>
+                  <div className="knowledge-toolbar">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      data-testid={`knowledge-set-item-${item.id}`}
+                      onClick={() =>
+                        onNavigate?.({
+                          page: "sets",
+                          params: { knowledgeSetId: item.id },
+                        })
+                      }
+                    >
+                      {t("knowledge.sets.manage")}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={!onNavigate}
+                      onClick={() => onNavigate?.({ page: "chat", params: {} })}
+                    >
+                      {t("knowledge.sets.startChat")}
+                    </button>
+                  </div>
+                </article>
               ))}
-            </ul>
+            </div>
           )}
+
+          <KnowledgeEntityModal
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            title={t("knowledge.sets.createLabel")}
+          >
+            <label className="settings-field">
+              {t("knowledge.host.namePlaceholder")}
+              <input
+                data-testid="knowledge-set-create-title"
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                disabled={!mutationsEnabled}
+                placeholder={t("knowledge.sets.createLabel")}
+              />
+            </label>
+            <div className="knowledge-toolbar">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setDialogOpen(false)}
+              >
+                {t("knowledge.host.cancel")}
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={!mutationsEnabled}
+                onClick={() => {
+                  void handleCreate();
+                }}
+              >
+                {t("knowledge.host.create")}
+              </button>
+            </div>
+          </KnowledgeEntityModal>
         </>
       ) : null}
     </div>

@@ -171,6 +171,10 @@ describe("Knowledge page host (V01)", () => {
 
     const nav = screen.getByTestId("knowledge-module-nav");
     expect(nav).toBeTruthy();
+    expect(nav.className).toContain("memory-tabs");
+    expect(screen.getByTestId("knowledge-nav-home").className).toContain(
+      "memory-tab",
+    );
     expect(screen.queryByTestId("knowledge-nav-profile")).toBeNull();
     expect(screen.queryByTestId("knowledge-nav-preferences")).toBeNull();
 

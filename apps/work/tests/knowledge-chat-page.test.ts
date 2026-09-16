@@ -119,6 +119,7 @@ describe("Knowledge Chat page (V06)", () => {
     });
     expect(screen.getByTestId("knowledge-chat-composer")).toBeTruthy();
     expect(screen.getByTestId("knowledge-chat-citations")).toBeTruthy();
+    expect(screen.getByTestId("knowledge-chat-new-session")).toBeTruthy();
 
     await act(async () => {
       fireEvent.change(screen.getByTestId("knowledge-chat-composer"), {

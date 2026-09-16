@@ -11,6 +11,11 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
+import {
+  KnowledgeEmptyState,
+  KnowledgeEntityModal,
+  KnowledgeLoading,
+} from "../knowledge-page-chrome";
 
 export type KnowledgeChatPageProps = {
   params?: KnowledgeRouteParams;
@@ -62,20 +67,24 @@ export function KnowledgeChatPage({
   const sessionId = params.sessionId;
   const [loadState, setLoadState] = useState<ChatLoadState>("loading");
   const [sessions, setSessions] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
+  const [sets, setSets] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
   const [citations, setCitations] = useState<KnowledgeFacadeEntitySnapshot[]>(
     [],
   );
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedSetId, setSelectedSetId] = useState("");
+  const [statusLine, setStatusLine] = useState("");
 
   const composerEnabled = probe.mutationsEnabled;
 
   useEffect(() => {
-    // Session switches must drop the prior local thread (Bugbot HIGH).
     setMessages([]);
     setCitations([]);
     setDraft("");
+    setStatusLine("");
 
     if (probe.presentation === "loading") {
       setLoadState("loading");
@@ -97,9 +106,16 @@ export function KnowledgeChatPage({
           return;
         }
 
-        const listed = await probe.facade.listEntities({ kind: "session" });
+        const [listed, setList] = await Promise.all([
+          probe.facade.listEntities({ kind: "session" }),
+          probe.facade.listEntities({ kind: "set" }),
+        ]);
         if (cancelled) return;
         setSessions(listed);
+        setSets(setList);
+        if (!selectedSetId && setList[0]) {
+          setSelectedSetId(setList[0].id);
+        }
 
         if (!sessionId) {
           setLoadState("no-session");
@@ -152,9 +168,13 @@ export function KnowledgeChatPage({
     if (!composerEnabled || !probe.facade) return;
     const created = await probe.facade.mutateEntity({
       kind: "session",
-      patch: { title: "Knowledge session" },
+      patch: {
+        title: "Knowledge session",
+        knowledgeSetId: selectedSetId,
+      },
     });
     setSessions((prev) => [...prev, created]);
+    setDialogOpen(false);
     onReplace?.({ page: "chat", params: { sessionId: created.id } });
   };
 
@@ -162,13 +182,8 @@ export function KnowledgeChatPage({
     if (!composerEnabled || !probe.facade || !draft.trim()) return;
     let activeSessionId = sessionId;
     if (!activeSessionId) {
-      const created = await probe.facade.mutateEntity({
-        kind: "session",
-        patch: { title: draft.trim().slice(0, 48) },
-      });
-      activeSessionId = created.id;
-      setSessions((prev) => [...prev, created]);
-      onReplace?.({ page: "chat", params: { sessionId: created.id } });
+      setDialogOpen(true);
+      return;
     }
 
     const userMessage: LocalMessage = {
@@ -179,6 +194,7 @@ export function KnowledgeChatPage({
     setMessages((prev) => [...prev, userMessage]);
     setDraft("");
     setLoadState("content");
+    setStatusLine(t("knowledge.chat.retrieving"));
 
     await probe.facade.mutateEntity({
       kind: "session",
@@ -186,12 +202,14 @@ export function KnowledgeChatPage({
       patch: { lastMessage: userMessage.text },
     });
 
+    setStatusLine(t("knowledge.chat.generating"));
     const assistant: LocalMessage = {
       id: `local-assistant-${Date.now()}`,
       role: "assistant",
       text: userMessage.text,
     };
     setMessages((prev) => [...prev, assistant]);
+    setStatusLine("");
 
     const citation = await probe.facade.mutateEntity({
       kind: "citation",
@@ -205,33 +223,37 @@ export function KnowledgeChatPage({
 
   return (
     <div data-testid="knowledge-chat-page" data-state={loadState}>
-      {loadState === "loading" ? <p>{t("knowledge.loading")}</p> : null}
+      {loadState === "loading" ? (
+        <KnowledgeLoading label={t("knowledge.loading")} />
+      ) : null}
       {loadState === "unavailable" ? (
-        <section className="gateway-empty-state" aria-live="polite">
-          <strong>{t("knowledge.unavailableTitle")}</strong>
-          <p>{t("knowledge.chat.composerBlocked")}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.unavailableTitle")}
+          description={t("knowledge.chat.composerBlocked")}
+        />
       ) : null}
       {loadState === "error" ? (
-        <section>
-          <strong>{t("knowledge.host.errorTitle")}</strong>
-          <p>{errorMessage}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.host.errorTitle")}
+          description={errorMessage}
+        />
       ) : null}
 
       {loadState !== "loading" && loadState !== "unavailable" && loadState !== "error" ? (
-        <div style={{ display: "flex", gap: 16 }}>
-          <aside data-testid="knowledge-chat-sessions" style={{ minWidth: 180 }}>
+        <div className="knowledge-chat-layout">
+          <aside
+            className="settings-section knowledge-chat-rail"
+            data-testid="knowledge-chat-sessions"
+          >
             <h2>{t("knowledge.chat.sessionsTitle")}</h2>
             <button
               type="button"
+              className="btn btn-secondary btn-sm"
               data-testid="knowledge-chat-new-session"
               disabled={!composerEnabled}
-              onClick={() => {
-                void handleCreateSession();
-              }}
+              onClick={() => setDialogOpen(true)}
             >
-              {t("knowledge.host.create")}
+              {t("knowledge.chat.newSession")}
             </button>
             {sessions.length === 0 ? (
               <p>{t("knowledge.chat.emptySessions")}</p>
@@ -241,6 +263,7 @@ export function KnowledgeChatPage({
                   <li key={session.id}>
                     <button
                       type="button"
+                      className="btn btn-ghost btn-sm"
                       data-testid={`knowledge-chat-session-${session.id}`}
                       data-active={session.id === sessionId ? "true" : "false"}
                       onClick={() => handleSelectSession(session.id)}
@@ -253,8 +276,9 @@ export function KnowledgeChatPage({
             )}
           </aside>
 
-          <section style={{ flex: 1 }}>
+          <section className="settings-section knowledge-chat-thread-wrap">
             <h2>{t("knowledge.chat.messagesTitle")}</h2>
+            {statusLine ? <p role="status">{statusLine}</p> : null}
             {messages.length === 0 ? (
               <p data-testid="knowledge-chat-empty-thread">
                 {t("knowledge.chat.emptyThread")}
@@ -269,7 +293,7 @@ export function KnowledgeChatPage({
               </ul>
             )}
 
-            <div style={{ marginTop: 12 }}>
+            <div className="knowledge-toolbar">
               <textarea
                 data-testid="knowledge-chat-composer"
                 value={draft}
@@ -286,6 +310,7 @@ export function KnowledgeChatPage({
               />
               <button
                 type="button"
+                className="btn btn-sm"
                 data-testid="knowledge-chat-send"
                 disabled={!composerEnabled || !draft.trim()}
                 title={
@@ -305,7 +330,10 @@ export function KnowledgeChatPage({
             </div>
           </section>
 
-          <aside data-testid="knowledge-chat-citations" style={{ minWidth: 160 }}>
+          <aside
+            className="settings-section knowledge-chat-citations"
+            data-testid="knowledge-chat-citations"
+          >
             <h2>{t("knowledge.chat.citationsTitle")}</h2>
             {citations.length === 0 ? (
               <p>{t("knowledge.chat.emptyCitations")}</p>
@@ -316,9 +344,63 @@ export function KnowledgeChatPage({
                 ))}
               </ul>
             )}
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={!onNavigate}
+              onClick={() => onNavigate?.({ page: "sets", params: {} })}
+            >
+              {t("knowledge.chat.manageSets")}
+            </button>
           </aside>
         </div>
       ) : null}
+
+      <KnowledgeEntityModal
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        title={t("knowledge.chat.newSessionTitle")}
+      >
+        <label className="settings-field">
+          {t("knowledge.chat.knowledgeSet")}
+          <select
+            data-testid="knowledge-chat-set-select"
+            value={selectedSetId}
+            onChange={(event) => setSelectedSetId(event.target.value)}
+            disabled={!composerEnabled}
+          >
+            {sets.length === 0 ? (
+              <option value="">{t("knowledge.chat.noSets")}</option>
+            ) : (
+              sets.map((set) => (
+                <option key={set.id} value={set.id}>
+                  {set.title ?? set.id}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <div className="knowledge-toolbar">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setDialogOpen(false)}
+          >
+            {t("knowledge.host.cancel")}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-testid="knowledge-chat-new-session-confirm"
+            disabled={!composerEnabled}
+            onClick={() => {
+              void handleCreateSession();
+            }}
+          >
+            {t("knowledge.host.create")}
+          </button>
+        </div>
+      </KnowledgeEntityModal>
     </div>
   );
 }

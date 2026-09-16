@@ -173,4 +173,41 @@ describe("Knowledge Bases page (V03)", () => {
     expect(mutateEntity).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain(knowledgeEn.bases.mutateDisabled);
   });
+
+  it("toggles card/table views and opens the create dialog", async () => {
+    const facade: HermesKnowledgeFacadeAPI = {
+      listEntities: vi.fn(async () => [base("b1", "Alpha Base")]),
+      getEntity: vi.fn(async () => null),
+      mutateEntity: vi.fn(async () => base("b1", "Alpha Base")),
+    };
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeBasesPage, {
+          onNavigate: () => undefined,
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "mock",
+            allowSyntheticData: true,
+            configSource: "env",
+          },
+          facade,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-base-item-b1")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-bases-view-table"));
+    });
+    expect(screen.getByTestId("knowledge-base-list").tagName).toBe("TABLE");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-base-create"));
+    });
+    expect(screen.getByTestId("knowledge-base-create-title")).toBeTruthy();
+  });
 });

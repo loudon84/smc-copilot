@@ -21,6 +21,12 @@ export type KnowledgeRoute = {
   params: KnowledgeRouteParams;
 };
 
+/** Navigation target for Knowledge page host callbacks (route scope, not URL). */
+export type KnowledgeNavigateTarget = {
+  page: KnowledgePageId | string;
+  params?: KnowledgeRouteParams;
+};
+
 export const KNOWLEDGE_HOME_ROUTE: KnowledgeRoute = {
   page: "home",
   params: {},

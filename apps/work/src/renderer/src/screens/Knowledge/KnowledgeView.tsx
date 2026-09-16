@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import type { DesktopAuthState } from "../../../../shared/auth/auth-contract";
 import type { KnowledgeModeSnapshot } from "../../../../shared/knowledge/knowledge-job-ipc";
-import { useI18n } from "../../components/useI18n";
 import {
   createKnowledgeRouteScope,
   type KnowledgeRouteScope,
@@ -46,7 +45,6 @@ export function KnowledgeView({
   scope: injectedScope,
   uiEffectCounters,
 }: KnowledgeViewProps): ReactElement {
-  const { t } = useI18n();
   const defaultScopeRef = useRef<KnowledgeRouteScope | null>(null);
   if (!injectedScope && !defaultScopeRef.current) {
     defaultScopeRef.current = createKnowledgeRouteScope();
@@ -156,11 +154,10 @@ export function KnowledgeView({
   }, [active]);
 
   const authSubject = authState.user?.id ?? "";
-  // Main owns mode; Renderer must always show the badge when mock is active.
-  const showMockBadge = mode?.dataMode === "mock";
 
   return (
     <div
+      className="knowledge-view"
       data-testid="knowledge-view"
       data-active={active ? "true" : "false"}
       data-page={snapshot.current.page}
@@ -168,27 +165,9 @@ export function KnowledgeView({
       data-authenticated={authState.authenticated ? "true" : "false"}
       data-knowledge-mode={mode?.dataMode ?? "unknown"}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: showMockBadge ? 8 : 0,
-        }}
-      >
-        <span data-testid="knowledge-route-page">{snapshot.current.page}</span>
-        {showMockBadge ? (
-          <span
-            className="settings-card-badge is-update"
-            data-testid="knowledge-mock-demo-badge"
-            data-persistent="true"
-            role="status"
-            aria-live="polite"
-          >
-            {t("knowledge.mockDemoBadge")}
-          </span>
-        ) : null}
-      </div>
+      <span className="knowledge-sr-only" data-testid="knowledge-route-page">
+        {snapshot.current.page}
+      </span>
       <KnowledgePages
         page={snapshot.current.page}
         params={snapshot.current.params}

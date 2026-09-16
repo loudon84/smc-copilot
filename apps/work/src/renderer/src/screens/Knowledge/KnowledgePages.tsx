@@ -1,7 +1,7 @@
 import { type ReactElement } from "react";
 import { useI18n } from "../../components/useI18n";
 import {
-  KNOWLEDGE_ROUTE_PAGES,
+  type KnowledgeNavigateTarget,
   type KnowledgePageId,
   type KnowledgeRouteParams,
 } from "./knowledge-route-descriptor";
@@ -14,6 +14,7 @@ import type {
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../shared/knowledge/knowledge-job-ipc";
+import { KnowledgeModuleNav } from "./KnowledgeModuleNav";
 import { KnowledgeHomePage } from "./pages/KnowledgeHomePage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
 import { KnowledgeSetsPage } from "./pages/KnowledgeSetsPage";
@@ -21,11 +22,7 @@ import { KnowledgeDocumentsPage } from "./pages/KnowledgeDocumentsPage";
 import { KnowledgeUploadsPage } from "./pages/KnowledgeUploadsPage";
 import { KnowledgeChatPage } from "./pages/KnowledgeChatPage";
 
-/** Navigation target for Knowledge page host callbacks (route scope, not URL). */
-export type KnowledgeNavigateTarget = {
-  page: KnowledgePageId | string;
-  params?: KnowledgeRouteParams;
-};
+export type { KnowledgeNavigateTarget } from "./knowledge-route-descriptor";
 
 export type KnowledgePagesProps = {
   page: KnowledgePageId;
@@ -57,13 +54,13 @@ const PAGE_TITLE_KEY: Record<KnowledgePageId, string> = {
   chat: "knowledge.chat.title",
 };
 
-const NAV_LABEL_KEY: Record<KnowledgePageId, string> = {
-  home: "knowledge.nav.home",
-  bases: "knowledge.nav.bases",
-  sets: "knowledge.nav.sets",
-  documents: "knowledge.nav.documents",
-  uploads: "knowledge.nav.uploads",
-  chat: "knowledge.nav.chat",
+const PAGE_SUBTITLE_KEY: Record<KnowledgePageId, string> = {
+  home: "knowledge.home.description",
+  bases: "knowledge.bases.description",
+  sets: "knowledge.sets.description",
+  documents: "knowledge.documents.description",
+  uploads: "knowledge.uploads.description",
+  chat: "knowledge.chat.description",
 };
 
 /**
@@ -89,6 +86,8 @@ export function KnowledgePages({
   const probe = useKnowledgeFacade(probeOptions);
   const { presentation, mode } = probe;
   const title = t(PAGE_TITLE_KEY[page]);
+  const subtitle = t(PAGE_SUBTITLE_KEY[page]);
+  const showMockBadge = mode?.dataMode === "mock";
 
   const pageOverrides = {
     capability: injectedCapability,
@@ -154,56 +153,35 @@ export function KnowledgePages({
 
   return (
     <div
-      className="settings-container"
+      className="settings-container knowledge-host"
       data-testid={`knowledge-page-${page}`}
       data-page={page}
       data-state={presentation}
       data-knowledge-mode={mode?.dataMode ?? "unknown"}
       data-knowledge-host="true"
     >
-      <nav
-        aria-label={t("knowledge.nav.label")}
-        className="knowledge-module-nav"
-        data-testid="knowledge-module-nav"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-          marginBottom: 16,
-        }}
-      >
-        {KNOWLEDGE_ROUTE_PAGES.map((navPage) => {
-          const active = navPage === page;
-          return (
-            <button
-              key={navPage}
-              type="button"
-              data-testid={`knowledge-nav-${navPage}`}
-              data-active={active ? "true" : "false"}
-              aria-current={active ? "page" : undefined}
-              disabled={!onNavigate}
-              onClick={() => {
-                if (!onNavigate) return;
-                onNavigate({ page: navPage, params: {} });
-              }}
-              style={{
-                fontWeight: active ? 600 : 400,
-              }}
-            >
-              {t(NAV_LABEL_KEY[navPage])}
-            </button>
-          );
-        })}
-      </nav>
-
-      <header style={{ marginBottom: 16 }}>
-        <h1 className="settings-header" style={{ marginBottom: 4 }}>
-          {title}
-        </h1>
-        <p className="gateway-page-subtitle">{t("knowledge.host.subtitle")}</p>
+      {/*
+      <header className="gateway-page-header knowledge-host-header">
+        <div>
+          <h1 className="settings-header">{title}</h1>
+          <p className="gateway-page-subtitle">{subtitle}</p>
+        </div>
+        {showMockBadge ? (
+          <span
+            className="settings-card-badge is-update"
+            data-testid="knowledge-mock-demo-badge"
+            data-persistent="true"
+            role="status"
+            aria-live="polite"
+          >
+            {t("knowledge.mockDemoBadge")}
+          </span>
+        ) : null}
       </header>
+        */}
+      <KnowledgeModuleNav page={page} onNavigate={onNavigate} />
 
-      {pageBody}
+      <div className="knowledge-host-body">{pageBody}</div>
     </div>
   );
 }

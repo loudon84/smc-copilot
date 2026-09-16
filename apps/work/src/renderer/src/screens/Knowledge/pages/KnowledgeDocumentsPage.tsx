@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useI18n } from "../../../components/useI18n";
+import { FilePreviewRouter } from "../../../components/files/preview/FilePreviewRouter";
 import {
   useKnowledgeFacade,
   type UseKnowledgeFacadeOptions,
@@ -11,6 +12,14 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
+import {
+  KnowledgeEmptyState,
+  KnowledgeLoading,
+  KnowledgeSearchInput,
+  KnowledgeSectionTabs,
+  KnowledgeToolbar,
+} from "../knowledge-page-chrome";
+import type { FilePreviewState } from "../../../hooks/files/useFilePreview";
 
 export type KnowledgeDocumentsPageProps = {
   params?: KnowledgeRouteParams;
@@ -45,8 +54,10 @@ type PreviewState =
   | { status: "idle" }
   | { status: "unavailable" }
   | { status: "loading" }
-  | { status: "ready"; fileId: string }
+  | { status: "ready"; fileId: string; filePreview?: FilePreviewState }
   | { status: "error"; message: string };
+
+type DocDetailTab = "preview" | "info" | "versions" | "parse" | "permission";
 
 /**
  * Knowledge Documents list/detail with display-only permission and Work preview
@@ -74,9 +85,11 @@ export function KnowledgeDocumentsPage({
   const [detail, setDetail] = useState<KnowledgeFacadeEntitySnapshot | null>(
     null,
   );
+  const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [errorMessage, setErrorMessage] = useState("");
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
+  const [detailTab, setDetailTab] = useState<DocDetailTab>("preview");
 
   useEffect(() => {
     if (probe.presentation === "loading") {
@@ -138,7 +151,16 @@ export function KnowledgeDocumentsPage({
                   message: result.error.message,
                 });
               } else {
-                setPreview({ status: "ready", fileId: managedFileId });
+                setPreview({
+                  status: "ready",
+                  fileId: managedFileId,
+                  filePreview: {
+                    open: true,
+                    fileId: managedFileId,
+                    loading: false,
+                    descriptor: result,
+                  },
+                });
               }
             }
           } catch (error) {
@@ -187,63 +209,66 @@ export function KnowledgeDocumentsPage({
   ]);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return items;
-    return items.filter(
-      (item) => (item.permission?.visibility ?? "all") === filter,
-    );
-  }, [items, filter]);
+    const q = search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (filter !== "all" && (item.permission?.visibility ?? "all") !== filter) {
+        return false;
+      }
+      if (!q) return true;
+      return (item.title ?? item.id).toLowerCase().includes(q);
+    });
+  }, [items, filter, search]);
 
   if (detailId) {
     return (
       <div data-testid="knowledge-documents-page" data-state={loadState}>
         <button
           type="button"
+          className="btn btn-secondary btn-sm"
           data-testid="knowledge-documents-back"
           onClick={() => onBack?.()}
         >
           {t("knowledge.host.back")}
         </button>
-        {loadState === "loading" ? <p>{t("knowledge.loading")}</p> : null}
+        {loadState === "loading" ? (
+          <KnowledgeLoading label={t("knowledge.loading")} />
+        ) : null}
         {loadState === "not-found" ? (
-          <section data-testid="knowledge-document-not-found">
-            <strong>{t("knowledge.host.notFoundTitle")}</strong>
-            <p>{t("knowledge.host.notFoundDescription")}</p>
-          </section>
+          <KnowledgeEmptyState
+            testId="knowledge-document-not-found"
+            title={t("knowledge.host.notFoundTitle")}
+            description={t("knowledge.host.notFoundDescription")}
+          />
         ) : null}
         {loadState === "error" ? (
-          <section>
-            <strong>{t("knowledge.host.errorTitle")}</strong>
-            <p>{errorMessage}</p>
-          </section>
+          <KnowledgeEmptyState
+            title={t("knowledge.host.errorTitle")}
+            description={errorMessage}
+          />
         ) : null}
         {loadState === "content" && detail ? (
-          <section data-testid="knowledge-document-detail">
-            <h2>{t("knowledge.documents.detailTitle")}</h2>
+          <section
+            className="settings-section"
+            data-testid="knowledge-document-detail"
+          >
+            <h2>{detail.title ?? t("knowledge.documents.detailTitle")}</h2>
             <p data-testid="knowledge-document-detail-id">{detail.id}</p>
-            <p>
-              {t("knowledge.documents.versionLabel")}:{" "}
-              <span data-testid="knowledge-document-version">1</span>
-            </p>
-            <p>
-              {t("knowledge.documents.parseLabel")}:{" "}
-              <span data-testid="knowledge-document-parse">indexed</span>
-            </p>
-            <p>
-              {t("knowledge.documents.permissionLabel")}:{" "}
-              <span
-                className="settings-card-badge"
-                data-testid="knowledge-document-permission"
-                data-display-only="true"
-              >
-                {detail.permission?.role ?? "viewer"} /{" "}
-                {detail.permission?.visibility ?? "private"}
-              </span>
-            </p>
-            <p data-testid="knowledge-document-permission-note">
-              {t("knowledge.documents.permissionDisplayOnly")}
-            </p>
+            <KnowledgeSectionTabs
+              active={detailTab}
+              onChange={setDetailTab}
+              tabs={[
+                { id: "preview", label: t("knowledge.documents.tabPreview") },
+                { id: "info", label: t("knowledge.documents.tabInfo") },
+                { id: "versions", label: t("knowledge.documents.tabVersions") },
+                { id: "parse", label: t("knowledge.documents.tabParse") },
+                { id: "permission", label: t("knowledge.documents.tabPermission") },
+              ]}
+            />
 
-            <section data-testid="knowledge-document-preview" style={{ marginTop: 12 }}>
+            <section
+              hidden={detailTab !== "preview"}
+              data-testid="knowledge-document-preview"
+            >
               <h3>{t("knowledge.documents.previewTitle")}</h3>
               {preview.status === "unavailable" || preview.status === "idle" ? (
                 <p data-testid="knowledge-document-preview-unavailable">
@@ -256,9 +281,13 @@ export function KnowledgeDocumentsPage({
                 </p>
               ) : null}
               {preview.status === "ready" ? (
-                <p data-testid="knowledge-document-preview-ready">
-                  ManagedFile {preview.fileId}
-                </p>
+                <div data-testid="knowledge-document-preview-ready">
+                  {preview.filePreview?.descriptor ? (
+                    <FilePreviewRouter state={preview.filePreview} />
+                  ) : (
+                    <p>ManagedFile {preview.fileId}</p>
+                  )}
+                </div>
               ) : null}
               {preview.status === "error" ? (
                 <p data-testid="knowledge-document-preview-error">
@@ -266,6 +295,46 @@ export function KnowledgeDocumentsPage({
                 </p>
               ) : null}
             </section>
+
+            <div hidden={detailTab !== "info"}>
+              <p>
+                {t("knowledge.documents.versionLabel")}:{" "}
+                <span data-testid="knowledge-document-version">
+                  {t("knowledge.documents.versionDraft")}
+                </span>
+              </p>
+              <p>
+                {t("knowledge.documents.parseLabel")}:{" "}
+                <span data-testid="knowledge-document-parse">
+                  {t("knowledge.documents.parseDraft")}
+                </span>
+              </p>
+            </div>
+
+            <div hidden={detailTab !== "versions"}>
+              <p>{t("knowledge.documents.versionDraft")}</p>
+            </div>
+
+            <div hidden={detailTab !== "parse"}>
+              <p>{t("knowledge.documents.parseDraft")}</p>
+            </div>
+
+            <div hidden={detailTab !== "permission"}>
+              <p>
+                {t("knowledge.documents.permissionLabel")}:{" "}
+                <span
+                  className="settings-card-badge"
+                  data-testid="knowledge-document-permission"
+                  data-display-only="true"
+                >
+                  {detail.permission?.role ?? "viewer"} /{" "}
+                  {detail.permission?.visibility ?? "private"}
+                </span>
+              </p>
+              <p data-testid="knowledge-document-permission-note">
+                {t("knowledge.documents.permissionDisplayOnly")}
+              </p>
+            </div>
           </section>
         ) : null}
       </div>
@@ -274,57 +343,91 @@ export function KnowledgeDocumentsPage({
 
   return (
     <div data-testid="knowledge-documents-page" data-state={loadState}>
-      {loadState === "loading" ? <p>{t("knowledge.loading")}</p> : null}
+      {loadState === "loading" ? (
+        <KnowledgeLoading label={t("knowledge.loading")} />
+      ) : null}
       {loadState === "unavailable" ? (
-        <section className="gateway-empty-state" aria-live="polite">
-          <strong>{t("knowledge.unavailableTitle")}</strong>
-          <p>{t("knowledge.unavailableDescription")}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.unavailableTitle")}
+          description={t("knowledge.unavailableDescription")}
+        />
       ) : null}
       {loadState === "error" ? (
-        <section>
-          <strong>{t("knowledge.host.errorTitle")}</strong>
-          <p>{errorMessage}</p>
-        </section>
+        <KnowledgeEmptyState
+          title={t("knowledge.host.errorTitle")}
+          description={errorMessage}
+        />
       ) : null}
 
       {loadState === "empty" || loadState === "content" ? (
         <>
-          <label>
-            {t("knowledge.documents.filterStatus")}
-            <select
-              data-testid="knowledge-documents-filter"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
+          <KnowledgeToolbar>
+            <KnowledgeSearchInput
+              testId="knowledge-documents-search"
+              placeholder={t("knowledge.host.searchPlaceholder")}
+              value={search}
+              onChange={setSearch}
+            />
+            <label>
+              {t("knowledge.documents.filterStatus")}
+              <select
+                data-testid="knowledge-documents-filter"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              >
+                <option value="all">{t("knowledge.host.filterAll")}</option>
+                <option value="private">{t("knowledge.host.private")}</option>
+                <option value="shared">{t("knowledge.host.shared")}</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={!onNavigate}
+              onClick={() => onNavigate?.({ page: "uploads", params: {} })}
             >
-              <option value="all">{t("knowledge.host.filterAll")}</option>
-              <option value="private">private</option>
-              <option value="shared">shared</option>
-            </select>
-          </label>
+              {t("knowledge.documents.uploadAction")}
+            </button>
+          </KnowledgeToolbar>
           {filtered.length === 0 ? (
             <p data-testid="knowledge-document-list-empty">
               {t("knowledge.documents.emptyList")}
             </p>
           ) : (
-            <ul data-testid="knowledge-document-list">
-              {filtered.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    data-testid={`knowledge-document-item-${item.id}`}
-                    onClick={() =>
-                      onNavigate?.({
-                        page: "documents",
-                        params: { documentId: item.id },
-                      })
-                    }
-                  >
-                    {item.title ?? item.id}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="knowledge-table-wrap">
+              <table className="knowledge-table" data-testid="knowledge-document-list">
+                <thead>
+                  <tr>
+                    <th>{t("knowledge.documents.listTitle")}</th>
+                    <th>{t("knowledge.documents.permissionLabel")}</th>
+                    <th>{t("knowledge.host.open")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.title ?? item.id}</td>
+                      <td>{item.permission?.visibility ?? "private"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          data-testid={`knowledge-document-item-${item.id}`}
+                          onClick={() =>
+                            onNavigate?.({
+                              page: "documents",
+                              params: { documentId: item.id },
+                            })
+                          }
+                        >
+                          {t("knowledge.host.open")}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       ) : null}
