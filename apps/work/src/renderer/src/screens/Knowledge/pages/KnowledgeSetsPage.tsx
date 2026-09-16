@@ -150,7 +150,7 @@ export function KnowledgeSetsPage({
     );
   }, [items, search]);
 
-  const mutationsEnabled = probe.mutationsEnabled;
+  const mutationsEnabled = probe.syntheticMutationsEnabled;
 
   const handleCreate = async (): Promise<void> => {
     if (!mutationsEnabled || !probe.facade) return;

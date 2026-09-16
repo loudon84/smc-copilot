@@ -18,9 +18,12 @@ export function getDbConnection(readonly = true): SqliteDatabase | null {
     return null;
   }
 
-  // Reuse the existing cached connection if the path and mode match
-  if (cachedDb && cachedDbPath === dbPath && cachedDbReadonly === readonly) {
-    return cachedDb;
+  // Reuse the existing cached connection if the path and mode match.
+  // A write connection can also serve readonly callers — flipping
+  // readonly closes the previous handle and breaks in-flight statements.
+  if (cachedDb && cachedDbPath === dbPath) {
+    if (cachedDbReadonly === readonly) return cachedDb;
+    if (cachedDbReadonly === false && readonly === true) return cachedDb;
   }
 
   closeDbConnection();

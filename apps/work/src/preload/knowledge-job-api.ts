@@ -20,11 +20,22 @@ import {
   type KnowledgeJobSnapshot,
   type KnowledgeModeSnapshot,
 } from "../shared/knowledge/knowledge-job-ipc";
+import {
+  KNOWLEDGE_BASE_IPC_CHANNELS,
+  type HermesKnowledgeBasesAPI,
+  type KnowledgeBaseCreateInput,
+  type KnowledgeBaseDeleteInput,
+  type KnowledgeBaseGetInput,
+  type KnowledgeBaseListFilesInput,
+  type KnowledgeBaseListInput,
+  type KnowledgeBaseUpdateInput,
+} from "../shared/knowledge/knowledge-base-ipc";
 
 /** Curated Knowledge Jobs API plus sanitized mode/facade wrappers. */
 export type HermesKnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
   getMode: HermesKnowledgeModeAPI["getSnapshot"];
   facade: HermesKnowledgeFacadeAPI;
+  bases: HermesKnowledgeBasesAPI;
 };
 
 export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
@@ -73,6 +84,21 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
         ipcRenderer.invoke(KNOWLEDGE_FACADE_IPC_CHANNELS.getEntity, input),
       mutateEntity: (input: KnowledgeFacadeMutateInput) =>
         ipcRenderer.invoke(KNOWLEDGE_FACADE_IPC_CHANNELS.mutateEntity, input),
+    },
+
+    bases: {
+      list: (input?: KnowledgeBaseListInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.list, input),
+      get: (input: KnowledgeBaseGetInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.get, input),
+      create: (input: KnowledgeBaseCreateInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.create, input),
+      update: (input: KnowledgeBaseUpdateInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.update, input),
+      delete: (input: KnowledgeBaseDeleteInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.delete, input),
+      listFiles: (input: KnowledgeBaseListFilesInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.listFiles, input),
     },
   };
 }

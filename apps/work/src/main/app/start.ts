@@ -18,6 +18,8 @@ import {
 } from "../security";
 import { registerIpcHandlers } from "../ipc/register";
 import { registerAuthIpc } from "../auth/auth-ipc";
+import { startKnowledgeProviderAfterAuth } from "../knowledge/register-knowledge-job-ipc";
+import { hydrateTokenStore } from "../auth/token-store";
 import {
   disposeExpertSubsystem,
   registerExpertIpc,
@@ -87,6 +89,9 @@ export function startMainProcess(): void {
   app.whenReady().then(() => {
     electronApp.setAppUserModelId("com.smc.copilot");
     logWorkStartupIdentity(readControlOwnerSnapshot().owner);
+    void hydrateTokenStore().then(() => {
+      startKnowledgeProviderAfterAuth();
+    });
 
     registerArtifactProtocolHandler();
     registerFilePreviewProtocolHandler();

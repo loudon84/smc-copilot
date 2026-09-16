@@ -260,6 +260,28 @@ export async function importOnePath(
         };
   insertAssociation(assoc);
 
+  if (resolved.kind === "knowledge") {
+    try {
+      const { bindJobManagedFile, updateJobRecord } = await import(
+        "../knowledge/knowledge-upload-job-store"
+      );
+      bindJobManagedFile(resolved.knowledgeJobId, file.id);
+      updateJobRecord({
+        jobId: resolved.knowledgeJobId,
+        status: resolved.job.status,
+        attempt: resolved.job.attempt,
+        fileSummary: {
+          displayName: file.name,
+          byteSize: file.size,
+          mimeType: file.mime,
+        },
+      });
+      getKnowledgeUploadJobCoordinator().enqueue(resolved.knowledgeJobId);
+    } catch {
+      // Import already bound; enqueue failure is visible on the Job snapshot.
+    }
+  }
+
   return {
     ok: true,
     file: toManagedFileView(file, {

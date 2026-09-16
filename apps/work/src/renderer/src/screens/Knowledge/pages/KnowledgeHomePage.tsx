@@ -117,7 +117,11 @@ export function KnowledgeHomePage({
       {loadState === "unavailable" ? (
         <KnowledgeEmptyState
           title={t("knowledge.unavailableTitle")}
-          description={t("knowledge.unavailableDescription")}
+          description={
+            probe.capability?.status === "auth_required"
+              ? t("knowledge.host.authRequired")
+              : t("knowledge.unavailableDescription")
+          }
         />
       ) : null}
       {loadState === "error" ? (

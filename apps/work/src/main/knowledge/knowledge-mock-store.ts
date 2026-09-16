@@ -96,9 +96,12 @@ function logMemoryFallbackOnce(): void {
   );
 }
 
-function tryDb(readonly = false): Database.Database | null {
+function tryDb(): Database.Database | null {
   if (sqliteLatchedUnavailable) return null;
-  const db = getDbConnection(readonly);
+  // Always take a write connection. Mixing getDbConnection(true/false)
+  // closes the previous handle; callers that still hold it then throw
+  // "connection is not open", which IPC sanitizes to KNOWLEDGE_MODE_ERROR.
+  const db = getDbConnection(false);
   if (!db) {
     sqliteLatchedUnavailable = true;
     logMemoryFallbackOnce();
@@ -159,7 +162,7 @@ function rowToRecord(row: EntityRow): KnowledgeMockEntityRecord {
 }
 
 export function ensureKnowledgeMockSchema(): void {
-  const db = tryDb(false);
+  const db = tryDb();
   if (!db) return;
   db.exec(`
     CREATE TABLE IF NOT EXISTS ${TABLE} (
@@ -207,7 +210,7 @@ export function listMockEntities(
   kind: KnowledgeFacadeEntityKind,
 ): KnowledgeMockEntityRecord[] {
   ensureKnowledgeMockSchema();
-  const db = tryDb(true) ?? tryDb(false);
+  const db = tryDb();
   if (!db) {
     return [...memoryRows.values()]
       .filter((record) => matchesPartition(record, partition, kind))
@@ -243,7 +246,7 @@ export function getMockEntity(
   entityId: string,
 ): KnowledgeMockEntityRecord | null {
   ensureKnowledgeMockSchema();
-  const db = tryDb(true) ?? tryDb(false);
+  const db = tryDb();
   if (!db) {
     return memoryRows.get(memoryKey(partition, kind, entityId)) ?? null;
   }
@@ -280,11 +283,10 @@ export function upsertMockEntity(input: {
   permission?: KnowledgeFacadePermissionDisplay;
   payload?: Record<string, unknown>;
 }): KnowledgeMockEntityRecord {
-  ensureKnowledgeMockSchema();
-  const db = tryDb(false);
-  const t = tenantParts(input.partition.tenantScope);
   const entityId = input.entityId?.trim() || `mock_${input.kind}_${randomUUID().slice(0, 8)}`;
   const existing = getMockEntity(input.partition, input.kind, entityId);
+  const db = tryDb();
+  const t = tenantParts(input.partition.tenantScope);
   const title =
     input.title?.trim() ||
     existing?.title ||
@@ -338,7 +340,7 @@ export function deleteMockEntity(
   ensureKnowledgeMockSchema();
   const existing = getMockEntity(partition, kind, entityId);
   if (!existing) return false;
-  const db = tryDb(false);
+  const db = tryDb();
   if (!db) {
     return memoryRows.delete(memoryKey(partition, kind, entityId));
   }

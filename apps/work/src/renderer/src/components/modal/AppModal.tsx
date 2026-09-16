@@ -12,6 +12,8 @@ export interface AppModalProps {
   describedBy?: string;
   labelledBy?: string;
   onExitComplete?: () => void;
+  /** When true, overlay/Escape/outside close must not fire a second mutation. */
+  submitting?: boolean;
 }
 
 const overlayMotion = {
@@ -38,6 +40,7 @@ function AppModalComponent({
   describedBy,
   labelledBy,
   onExitComplete,
+  submitting = false,
 }: AppModalProps): React.JSX.Element {
   const [present, setPresent] = useState(open);
 
@@ -45,8 +48,13 @@ function AppModalComponent({
     if (open) setPresent(true);
   }, [open]);
 
+  const handleOpenChange = (next: boolean): void => {
+    if (submitting && !next) return;
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       {present && (
         <Dialog.Portal forceMount>
           <AnimatePresence
@@ -69,14 +77,27 @@ function AppModalComponent({
                   asChild
                   aria-describedby={describedBy}
                   aria-labelledby={labelledBy}
+                  onPointerDownOutside={(event) => {
+                    if (submitting) event.preventDefault();
+                  }}
+                  onEscapeKeyDown={(event) => {
+                    if (submitting) event.preventDefault();
+                  }}
+                  onInteractOutside={(event) => {
+                    if (submitting) event.preventDefault();
+                  }}
                 >
-                  <motion.div
-                    key="content"
-                    {...contentMotion}
-                    className={`app-modal-content ${className} ${contentClassName}`.trim()}
+                  <div
+                    className={`app-modal-viewport ${contentClassName}`.trim()}
                   >
-                    {children}
-                  </motion.div>
+                    <motion.div
+                      key="panel"
+                      {...contentMotion}
+                      className={`app-modal-panel ${className}`.trim()}
+                    >
+                      {children}
+                    </motion.div>
+                  </div>
                 </Dialog.Content>
               </>
             )}

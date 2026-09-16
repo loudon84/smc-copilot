@@ -25,6 +25,12 @@ import {
   sanitizeKnowledgeBaseId,
   updateJobRecord,
 } from "./knowledge-upload-job-store";
+import {
+  cancelProviderJob,
+  reconcileProviderJob,
+  retryProviderJob,
+  runProviderUpload,
+} from "./knowledge-job-runtime";
 
 export type {
   KnowledgeJobPartition,
@@ -293,10 +299,26 @@ export class KnowledgeUploadJobCoordinator {
         errorCode: "PROVIDER_UNAVAILABLE",
       });
     }
-    if (snap.status === "draft") {
-      return this.writeStatus(jobId, "queued", snap.attempt, { progress: 0 });
+    if (snap.status === "draft" || snap.status === "queued") {
+      const queued = this.writeStatus(jobId, "queued", snap.attempt, {
+        progress: 0,
+      });
+      void this.startProviderRuntime(jobId);
+      return queued;
     }
     return snap;
+  }
+
+  private startProviderRuntime(jobId: string): void {
+    void runProviderUpload(jobId)
+      .then(() => {
+        const latest = getJobById(jobId);
+        if (latest) this.notify(latest);
+      })
+      .catch(() => {
+        const latest = getJobById(jobId);
+        if (latest) this.notify(latest);
+      });
   }
 
   cancel(
@@ -319,6 +341,7 @@ export class KnowledgeUploadJobCoordinator {
       return snap;
     }
 
+    void cancelProviderJob(jobId);
     return this.writeStatus(jobId, "cancelled", snap.attempt, {
       lastCommandId: options.commandId ?? null,
       errorCode: "CANCELLED",
@@ -364,11 +387,21 @@ export class KnowledgeUploadJobCoordinator {
         },
       );
     }
-    return this.writeStatus(jobId, "queued", nextAttempt, {
+    const queued = this.writeStatus(jobId, "queued", nextAttempt, {
       lastCommandId: options.commandId ?? null,
       errorCode: null,
       progress: 0,
     });
+    void retryProviderJob(jobId)
+      .then(() => {
+        const latest = getJobById(jobId);
+        if (latest) this.notify(latest);
+      })
+      .catch(() => {
+        const latest = getJobById(jobId);
+        if (latest) this.notify(latest);
+      });
+    return queued;
   }
 
   /**
@@ -404,6 +437,11 @@ export class KnowledgeUploadJobCoordinator {
         continue;
       }
       if (job.status === "uploading" || job.status === "processing") {
+        const row = getJobRow(job.jobId);
+        if (row?.remote_ingestion_job_id || row?.managed_file_id) {
+          void reconcileProviderJob(job.jobId);
+          continue;
+        }
         this.writeStatus(job.jobId, "interrupted", job.attempt, {
           lastCommandId: null,
           errorCode: "INTERRUPTED",

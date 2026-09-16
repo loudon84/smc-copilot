@@ -105,12 +105,14 @@ export function KnowledgeEntityModal(props: {
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  submitting?: boolean;
   children: ReactNode;
 }): ReactElement {
   return (
     <AppModal
       open={props.open}
       onOpenChange={props.onOpenChange}
+      submitting={props.submitting}
       labelledBy="knowledge-entity-modal-title"
       describedBy={props.description ? "knowledge-entity-modal-desc" : undefined}
     >

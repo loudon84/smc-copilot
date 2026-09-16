@@ -29,6 +29,9 @@ const MODE_COLUMN_DEFS: ReadonlyArray<[string, string]> = [
   ["synthetic", "INTEGER"],
   ["progress", "INTEGER"],
   ["file_summary_json", "TEXT"],
+  ["managed_file_id", "TEXT"],
+  ["remote_source_file_id", "TEXT"],
+  ["remote_ingestion_job_id", "TEXT"],
 ];
 
 type MigrationState = "unknown" | "ok" | "failed";
@@ -72,6 +75,9 @@ interface JobRow {
   synthetic?: number | null;
   progress?: number | null;
   file_summary_json?: string | null;
+  managed_file_id?: string | null;
+  remote_source_file_id?: string | null;
+  remote_ingestion_job_id?: string | null;
 }
 
 function nowIso(): string {
@@ -476,6 +482,42 @@ export function listNonTerminalJobs(): KnowledgeJobSnapshot[] {
     )
     .all() as JobRow[];
   return rows.map(rowToSnapshot);
+}
+
+export function bindJobManagedFile(
+  jobId: string,
+  managedFileId: string,
+): void {
+  assertWritable();
+  const db = requireDb(false);
+  db.prepare(
+    `UPDATE ${TABLE} SET managed_file_id = ?, updated_at = ? WHERE job_id = ?`,
+  ).run(managedFileId, nowIso(), jobId);
+}
+
+export function bindJobRemoteIds(
+  jobId: string,
+  ids: {
+    remoteSourceFileId?: string | null;
+    remoteIngestionJobId?: string | null;
+  },
+): void {
+  assertWritable();
+  const db = requireDb(false);
+  const existing = getJobRow(jobId);
+  if (!existing) {
+    throw new KnowledgeJobStoreUnavailableError("KNOWLEDGE_JOB_NOT_FOUND");
+  }
+  db.prepare(
+    `UPDATE ${TABLE}
+     SET remote_source_file_id = ?, remote_ingestion_job_id = ?, updated_at = ?
+     WHERE job_id = ?`,
+  ).run(
+    ids.remoteSourceFileId ?? existing.remote_source_file_id ?? null,
+    ids.remoteIngestionJobId ?? existing.remote_ingestion_job_id ?? null,
+    nowIso(),
+    jobId,
+  );
 }
 
 export function partitionsEqual(

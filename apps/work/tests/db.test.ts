@@ -104,6 +104,18 @@ describe("Database connection caching", () => {
     expect(mockClose).toHaveBeenCalledTimes(1); // Old connection closed
   });
 
+  it("reuses a write connection for a later readonly request", () => {
+    vi.mocked(activeStateDbPath).mockReturnValue(dbPath1);
+    mockExistsSync.mockReturnValue(true);
+
+    const dbWrite = getDbConnection(false);
+    const dbRead = getDbConnection(true);
+
+    expect(dbWrite).toBe(dbRead);
+    expect(mockDatabaseConstructor).toHaveBeenCalledTimes(1);
+    expect(mockClose).not.toHaveBeenCalled();
+  });
+
   it("re-creates connection if readonly status changes", () => {
     vi.mocked(activeStateDbPath).mockReturnValue(dbPath1);
     mockExistsSync.mockReturnValue(true);

@@ -62,7 +62,8 @@ export interface KnowledgeJobSnapshot {
 
 export type KnowledgeCapabilityStatus =
   | "available"
-  | "blocked_provider_unavailable";
+  | "blocked_provider_unavailable"
+  | "auth_required";
 
 export interface KnowledgeCapabilitySnapshot {
   available: boolean;

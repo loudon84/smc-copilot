@@ -6,9 +6,13 @@ import {
   type UseKnowledgeFacadeOptions,
 } from "../../../../../shared/knowledge/use-knowledge-facade";
 import type {
+  HermesKnowledgeBasesAPI,
+  KnowledgeBaseSnapshot,
+  KnowledgeBaseVisibility,
+} from "../../../../../shared/knowledge/knowledge-base-ipc";
+import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
-  KnowledgeFacadeEntitySnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
@@ -17,9 +21,13 @@ import {
   KnowledgeEntityModal,
   KnowledgeLoading,
   KnowledgeSearchInput,
-  KnowledgeSectionTabs,
   KnowledgeToolbar,
 } from "../knowledge-page-chrome";
+import {
+  KnowledgeBaseCardGrid,
+  KnowledgeBaseTable,
+} from "../features/bases/list/KnowledgeBaseList";
+import { KnowledgeBaseCreateForm } from "../features/bases/create/KnowledgeBaseCreateForm";
 
 export type KnowledgeBasesPageProps = {
   params?: KnowledgeRouteParams;
@@ -31,68 +39,57 @@ export type KnowledgeBasesPageProps = {
   capability?: KnowledgeCapabilitySnapshot | null;
   mode?: KnowledgeModeSnapshot | null;
   facade?: HermesKnowledgeFacadeAPI | null;
+  bases?: HermesKnowledgeBasesAPI | null;
 };
 
-type BasesLoadState =
-  | "loading"
-  | "unavailable"
-  | "empty"
-  | "content"
-  | "not-found"
-  | "error";
+type BasesLoadState = "loading" | "unavailable" | "empty" | "content" | "error";
 
-type BaseDetailTab = "documents" | "settings" | "members" | "runtime";
+function errorCode(error: unknown): string {
+  if (error instanceof Error) return error.message.split(/\s/)[0] ?? error.message;
+  return "KNOWLEDGE_UNAVAILABLE";
+}
 
 /**
- * Knowledge Bases list/detail with local search/filter and mock-only mutate.
+ * Knowledge Bases list only. Detail is KnowledgeBaseDetailPage.
  */
 export function KnowledgeBasesPage({
-  params = {},
   onNavigate,
-  onBack,
   capability: injectedCapability,
   mode: injectedMode,
   facade: injectedFacade,
+  bases: injectedBases,
 }: KnowledgeBasesPageProps): ReactElement {
   const { t } = useI18n();
   const probe = useKnowledgeFacade({
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
   } satisfies UseKnowledgeFacadeOptions);
-  const detailId = params.knowledgeBaseId;
   const [loadState, setLoadState] = useState<BasesLoadState>("loading");
-  const [items, setItems] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
-  const [documents, setDocuments] = useState<KnowledgeFacadeEntitySnapshot[]>(
-    [],
-  );
-  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [detail, setDetail] = useState<KnowledgeFacadeEntitySnapshot | null>(
-    null,
-  );
+  const [items, setItems] = useState<KnowledgeBaseSnapshot[]>([]);
   const [search, setSearch] = useState("");
   const [visibility, setVisibility] = useState("all");
   const [view, setView] = useState<"card" | "table">("card");
   const [errorMessage, setErrorMessage] = useState("");
-  const [draftTitle, setDraftTitle] = useState("");
+  const [draftName, setDraftName] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [draftVisibility, setDraftVisibility] =
+    useState<KnowledgeBaseVisibility>("organization");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [detailTab, setDetailTab] = useState<BaseDetailTab>("settings");
+  const [submitting, setSubmitting] = useState(false);
 
   const refreshList = async (): Promise<void> => {
-    if (!probe.facade || probe.mode?.dataMode !== "mock") {
+    if (!probe.bases) {
       setItems([]);
       setLoadState(
         probe.presentation === "unavailable" ? "unavailable" : "empty",
       );
       return;
     }
-    const listed = await probe.facade.listEntities({ kind: "base" });
-    const visible = listed.filter((item) => !removedIds.has(item.id));
-    setItems(visible);
-    setLoadState(visible.length > 0 ? "content" : "empty");
+    const page = await probe.bases.list({ page: 1, pageSize: 50 });
+    setItems(page.items);
+    setLoadState(page.items.length > 0 ? "content" : "empty");
   };
 
   useEffect(() => {
@@ -108,35 +105,10 @@ export function KnowledgeBasesPage({
     let cancelled = false;
     void (async () => {
       try {
-        if (detailId) {
-          if (!probe.facade || probe.mode?.dataMode !== "mock") {
-            if (!cancelled) setLoadState("not-found");
-            return;
-          }
-          const entity = await probe.facade.getEntity({
-            kind: "base",
-            entityId: detailId,
-          });
-          if (cancelled) return;
-          if (!entity) {
-            setDetail(null);
-            setLoadState("not-found");
-            return;
-          }
-          setDetail(entity);
-          setDraftTitle(entity.title ?? "");
-          const docs = await probe.facade.listEntities({ kind: "document" });
-          if (cancelled) return;
-          setDocuments(docs);
-          setLoadState("content");
-          return;
-        }
         await refreshList();
       } catch (error) {
         if (cancelled) return;
-        setErrorMessage(
-          error instanceof Error ? error.message : t("knowledge.host.errorTitle"),
-        );
+        setErrorMessage(errorCode(error));
         setLoadState("error");
       }
     })();
@@ -144,225 +116,45 @@ export function KnowledgeBasesPage({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh tied to probe/detail
-  }, [probe.presentation, probe.facade, probe.mode?.dataMode, detailId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh tied to probe
+  }, [probe.presentation, probe.bases]);
 
   const filtered = useMemo(() => {
-    const visible = items.filter((item) => !removedIds.has(item.id));
     const q = search.trim().toLowerCase();
-    return visible.filter((item) => {
-      if (
-        visibility !== "all" &&
-        (item.permission?.visibility ?? "private") !== visibility
-      ) {
-        return false;
-      }
+    return items.filter((item) => {
+      if (visibility !== "all" && item.visibility !== visibility) return false;
       if (!q) return true;
-      return (item.title ?? item.id).toLowerCase().includes(q);
+      return item.name.toLowerCase().includes(q);
     });
-  }, [items, search, removedIds, visibility]);
+  }, [items, search, visibility]);
 
   const mutationsEnabled = probe.mutationsEnabled;
 
   const handleCreate = async (): Promise<void> => {
-    if (!mutationsEnabled || !probe.facade) return;
-    await probe.facade.mutateEntity({
-      kind: "base",
-      patch: { title: draftTitle.trim() || "New base" },
-    });
-    setDraftTitle("");
-    setDialogOpen(false);
-    await refreshList();
-  };
-
-  const handleSaveDetail = async (): Promise<void> => {
-    if (!mutationsEnabled || !probe.facade || !detailId) return;
-    const updated = await probe.facade.mutateEntity({
-      kind: "base",
-      entityId: detailId,
-      patch: { title: draftTitle.trim() || detail?.title || "Base" },
-    });
-    setDetail(updated);
-  };
-
-  const handleDelete = async (): Promise<void> => {
-    if (!mutationsEnabled || !probe.facade || !detailId) return;
-    await probe.facade.mutateEntity({
-      kind: "base",
-      entityId: detailId,
-      patch: { title: detail?.title, deleted: true },
-    });
-    setRemovedIds((prev) => {
-      const next = new Set(prev);
-      next.add(detailId);
-      return next;
-    });
-    setItems((prev) => prev.filter((item) => item.id !== detailId));
-    setConfirmDelete(false);
-    onBack?.();
+    if (!mutationsEnabled || !probe.bases || submitting) return;
+    setSubmitting(true);
+    try {
+      await probe.bases.create({
+        name: draftName.trim(),
+        description: draftDescription.trim() ? draftDescription.trim() : null,
+        visibility: draftVisibility,
+      });
+      setDraftName("");
+      setDraftDescription("");
+      setDraftVisibility("organization");
+      setDialogOpen(false);
+      await refreshList();
+    } catch (error) {
+      setErrorMessage(errorCode(error));
+      setLoadState("error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const openItem = (id: string): void => {
     onNavigate?.({ page: "bases", params: { knowledgeBaseId: id } });
   };
-
-  if (detailId) {
-    return (
-      <div data-testid="knowledge-bases-page" data-state={loadState}>
-        <div className="knowledge-toolbar">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            data-testid="knowledge-bases-back"
-            onClick={() => onBack?.()}
-          >
-            {t("knowledge.host.back")}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={!onNavigate}
-            onClick={() => onNavigate?.({ page: "uploads", params: {} })}
-          >
-            {t("knowledge.bases.uploadAction")}
-          </button>
-        </div>
-        {loadState === "loading" ? (
-          <KnowledgeLoading label={t("knowledge.loading")} />
-        ) : null}
-        {loadState === "not-found" ? (
-          <KnowledgeEmptyState
-            testId="knowledge-base-not-found"
-            title={t("knowledge.host.notFoundTitle")}
-            description={t("knowledge.host.notFoundDescription")}
-          />
-        ) : null}
-        {loadState === "error" ? (
-          <KnowledgeEmptyState
-            title={t("knowledge.host.errorTitle")}
-            description={errorMessage}
-          />
-        ) : null}
-        {loadState === "content" && detail ? (
-          <section className="settings-section" data-testid="knowledge-base-detail">
-            <h2>{detail.title ?? t("knowledge.bases.detailTitle")}</h2>
-            <p data-testid="knowledge-base-detail-id">{detail.id}</p>
-            <KnowledgeSectionTabs
-              active={detailTab}
-              onChange={setDetailTab}
-              tabs={[
-                { id: "documents", label: t("knowledge.bases.tabDocuments") },
-                { id: "settings", label: t("knowledge.bases.tabSettings") },
-                { id: "members", label: t("knowledge.bases.tabMembers") },
-                { id: "runtime", label: t("knowledge.bases.tabRuntime") },
-              ]}
-            />
-
-            <div hidden={detailTab !== "documents"}>
-              <p>{t("knowledge.bases.documentsNote")}</p>
-              {documents.length === 0 ? (
-                <p>{t("knowledge.documents.emptyList")}</p>
-              ) : (
-                <ul>
-                  {documents.map((doc) => (
-                    <li key={doc.id}>{doc.title ?? doc.id}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div hidden={detailTab !== "settings"}>
-              <label className="settings-field">
-                {t("knowledge.host.edit")}
-                <input
-                  data-testid="knowledge-base-title-input"
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  disabled={!mutationsEnabled}
-                />
-              </label>
-              <div className="knowledge-toolbar">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  data-testid="knowledge-base-save"
-                  disabled={!mutationsEnabled}
-                  title={
-                    mutationsEnabled
-                      ? undefined
-                      : t("knowledge.bases.mutateDisabled")
-                  }
-                  onClick={() => {
-                    void handleSaveDetail();
-                  }}
-                >
-                  {t("knowledge.host.save")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  data-testid="knowledge-base-delete"
-                  disabled={!mutationsEnabled}
-                  title={
-                    mutationsEnabled
-                      ? undefined
-                      : t("knowledge.bases.mutateDisabled")
-                  }
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  {t("knowledge.bases.deleteLabel")}
-                </button>
-              </div>
-            </div>
-
-            <div hidden={detailTab !== "members"}>
-              <span
-                className="settings-card-badge"
-                data-display-only="true"
-              >
-                {detail.permission?.role ?? "viewer"} /{" "}
-                {detail.permission?.visibility ?? "private"}
-              </span>
-              <p>{t("knowledge.bases.membersNote")}</p>
-            </div>
-
-            <div hidden={detailTab !== "runtime"}>
-              <p>{t("knowledge.bases.runtimeEmpty")}</p>
-            </div>
-
-            {!mutationsEnabled ? (
-              <p>{t("knowledge.bases.mutateDisabled")}</p>
-            ) : null}
-
-            <KnowledgeEntityModal
-              open={confirmDelete}
-              onOpenChange={setConfirmDelete}
-              title={t("knowledge.bases.deleteLabel")}
-            >
-              <div className="knowledge-toolbar">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  {t("knowledge.host.cancel")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={() => {
-                    void handleDelete();
-                  }}
-                >
-                  {t("knowledge.host.confirm")}
-                </button>
-              </div>
-            </KnowledgeEntityModal>
-          </section>
-        ) : null}
-      </div>
-    );
-  }
 
   return (
     <div data-testid="knowledge-bases-page" data-state={loadState}>
@@ -372,7 +164,11 @@ export function KnowledgeBasesPage({
       {loadState === "unavailable" ? (
         <KnowledgeEmptyState
           title={t("knowledge.unavailableTitle")}
-          description={t("knowledge.unavailableDescription")}
+          description={
+            probe.capability?.status === "auth_required"
+              ? t("knowledge.host.authRequired")
+              : t("knowledge.unavailableDescription")
+          }
         />
       ) : null}
       {loadState === "error" ? (
@@ -400,7 +196,8 @@ export function KnowledgeBasesPage({
               >
                 <option value="all">{t("knowledge.host.filterAll")}</option>
                 <option value="private">{t("knowledge.host.private")}</option>
-                <option value="shared">{t("knowledge.host.shared")}</option>
+                <option value="department">{t("knowledge.host.department")}</option>
+                <option value="organization">{t("knowledge.host.organization")}</option>
               </select>
             </label>
             <button
@@ -440,90 +237,50 @@ export function KnowledgeBasesPage({
               {t("knowledge.bases.emptyList")}
             </p>
           ) : view === "card" ? (
-            <div className="knowledge-card-grid" data-testid="knowledge-base-list">
-              {filtered.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="settings-card knowledge-entity-card"
-                  data-testid={`knowledge-base-item-${item.id}`}
-                  onClick={() => openItem(item.id)}
-                >
-                  <div className="settings-card-head">
-                    <strong>{item.title ?? item.id}</strong>
-                    <span className="settings-card-badge">
-                      {item.permission?.visibility ?? "private"}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <KnowledgeBaseCardGrid items={filtered} onOpen={openItem} />
           ) : (
-            <div className="knowledge-table-wrap">
-              <table className="knowledge-table" data-testid="knowledge-base-list">
-                <thead>
-                  <tr>
-                    <th>{t("knowledge.bases.listTitle")}</th>
-                    <th>{t("knowledge.host.visibility")}</th>
-                    <th>{t("knowledge.host.open")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.title ?? item.id}</td>
-                      <td>{item.permission?.visibility ?? "private"}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          data-testid={`knowledge-base-item-${item.id}`}
-                          onClick={() => openItem(item.id)}
-                        >
-                          {t("knowledge.host.open")}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <KnowledgeBaseTable
+              items={filtered}
+              onOpen={openItem}
+              openLabel={t("knowledge.host.open")}
+              nameLabel={t("knowledge.bases.listTitle")}
+              visibilityLabel={t("knowledge.host.visibility")}
+            />
           )}
 
           <KnowledgeEntityModal
             open={dialogOpen}
-            onOpenChange={setDialogOpen}
+            onOpenChange={(open) => {
+              if (submitting && !open) return;
+              setDialogOpen(open);
+            }}
+            submitting={submitting}
             title={t("knowledge.bases.createLabel")}
           >
-            <label className="settings-field">
-              {t("knowledge.host.namePlaceholder")}
-              <input
-                data-testid="knowledge-base-create-title"
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                disabled={!mutationsEnabled}
-                placeholder={t("knowledge.bases.createLabel")}
-              />
-            </label>
-            <div className="knowledge-toolbar">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setDialogOpen(false)}
-              >
-                {t("knowledge.host.cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={!mutationsEnabled}
-                onClick={() => {
-                  void handleCreate();
-                }}
-              >
-                {t("knowledge.host.create")}
-              </button>
-            </div>
+            <KnowledgeBaseCreateForm
+              name={draftName}
+              description={draftDescription}
+              visibility={draftVisibility}
+              disabled={!mutationsEnabled}
+              submitting={submitting}
+              onNameChange={setDraftName}
+              onDescriptionChange={setDraftDescription}
+              onVisibilityChange={setDraftVisibility}
+              onCancel={() => {
+                if (!submitting) setDialogOpen(false);
+              }}
+              onSubmit={() => {
+                void handleCreate();
+              }}
+              nameLabel={t("knowledge.host.namePlaceholder")}
+              descriptionLabel={t("knowledge.bases.descriptionLabel")}
+              visibilityLabel={t("knowledge.host.visibility")}
+              cancelLabel={t("knowledge.host.cancel")}
+              createLabel={t("knowledge.host.create")}
+              privateLabel={t("knowledge.host.private")}
+              departmentLabel={t("knowledge.host.department")}
+              organizationLabel={t("knowledge.host.organization")}
+            />
           </KnowledgeEntityModal>
         </>
       ) : null}

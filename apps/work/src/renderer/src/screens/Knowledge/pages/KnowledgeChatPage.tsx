@@ -78,7 +78,7 @@ export function KnowledgeChatPage({
   const [selectedSetId, setSelectedSetId] = useState("");
   const [statusLine, setStatusLine] = useState("");
 
-  const composerEnabled = probe.mutationsEnabled;
+  const composerEnabled = probe.syntheticMutationsEnabled;
 
   useEffect(() => {
     setMessages([]);

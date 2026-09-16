@@ -24,6 +24,7 @@ import { stageAttachment, clearStagedAttachments } from "../attachment-staging";
 import { registerFilesIpcHandlers } from "../files";
 import { registerKnowledgeJobIpcHandlers } from "../knowledge/register-knowledge-job-ipc";
 import { registerKnowledgeModeIpcHandlers } from "../knowledge/register-knowledge-mode-ipc";
+import { registerKnowledgeBaseIpcHandlers } from "../knowledge/register-knowledge-base-ipc";
 import { persistPromptImageAttachments } from "../session-attachment-store";
 import { persistManagedMessageAssociations } from "../files/persist-managed-message-associations";
 import { composeWireMessageWithSessionContext } from "../files/compose-wire-session-context";
@@ -1747,6 +1748,9 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   // Knowledge Upload Jobs — typed hermesAPI.knowledgeJobs surface.
   registerKnowledgeJobIpcHandlers(ipcMain);
+
+  // Typed Knowledge Base CRUD (4530). Delete is DELETE, not patch.deleted.
+  registerKnowledgeBaseIpcHandlers(ipcMain);
 
   // Model discovery �?fetch the provider's /v1/models for autocomplete.
   ipcMain.handle(

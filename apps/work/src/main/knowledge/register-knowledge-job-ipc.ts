@@ -20,6 +20,15 @@ import {
   type KnowledgeJobPartition,
 } from "./knowledge-upload-job-coordinator";
 import { getKnowledgeModeSnapshot } from "./knowledge-mode-controller";
+import {
+  ensureKnowledgeCapability,
+  isKnowledgeProviderAvailable,
+} from "./knowledge-capability";
+import {
+  hydrateTokenStore,
+  subscribeStoredSessionChanges,
+} from "../auth/token-store";
+import { refreshKnowledgeCapability } from "./knowledge-capability";
 
 export type RegisterKnowledgeJobIpcOptions = {
   getMainWindow?: () => BrowserWindow | null;
@@ -46,7 +55,7 @@ function resolveDataMode(): KnowledgeActiveDataMode {
 function ensureCoordinator() {
   return configureKnowledgeUploadJobCoordinator({
     getPartition: resolveMainPartition,
-    isProviderAvailable: () => false,
+    isProviderAvailable: isKnowledgeProviderAvailable,
     getDataMode: resolveDataMode,
   });
 }
@@ -98,7 +107,6 @@ export function registerKnowledgeJobIpcHandlers(
   _options: RegisterKnowledgeJobIpcOptions = {},
 ): void {
   const coordinator = ensureCoordinator();
-  coordinator.recoverOnStart();
   coordinator.subscribe(broadcastSnapshot);
 
   ipcMain.handle(
@@ -164,11 +172,30 @@ export function registerKnowledgeJobIpcHandlers(
     },
   );
 
-  ipcMain.handle(KNOWLEDGE_JOB_IPC_CHANNELS.getCapability, () => {
+  ipcMain.handle(KNOWLEDGE_JOB_IPC_CHANNELS.getCapability, async () => {
     try {
-      return getKnowledgeUploadJobCoordinator().getCapabilitySnapshot();
+      return await ensureKnowledgeCapability();
     } catch (err) {
       throw sanitizeIpcError(err);
     }
   });
+}
+
+/**
+ * After `app.ready` + token hydrate: probe 4530 with the LoginScreen JWT,
+ * then recover non-terminal FileJobs. Do not run this during IPC register —
+ * safeStorage/session is not readable before ready.
+ */
+export function startKnowledgeProviderAfterAuth(): void {
+  subscribeStoredSessionChanges(() => {
+    void refreshKnowledgeCapability();
+  });
+  void hydrateTokenStore()
+    .then(() => ensureKnowledgeCapability())
+    .then(() => {
+      getKnowledgeUploadJobCoordinator().recoverOnStart();
+    })
+    .catch(() => {
+      /* probe fail-closed; getCapability will re-probe */
+    });
 }

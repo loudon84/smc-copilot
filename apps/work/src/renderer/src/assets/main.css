@@ -10438,11 +10438,21 @@ body:has(.shell-vibrant),
   z-index: 200;
 }
 
-.app-modal-content {
+.app-modal-content,
+.app-modal-viewport {
   position: fixed;
   inset: 0;
   z-index: 201;
-  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+.app-modal-panel {
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
   outline: none;
 }
 

@@ -31,6 +31,9 @@ function sanitizeIpcError(err: unknown): Error {
     if (/^[A-Z][A-Z0-9_]+$/.test(code)) {
       return new Error(code);
     }
+    console.error("[knowledge-facade]", err);
+  } else {
+    console.error("[knowledge-facade]", err);
   }
   return new Error("KNOWLEDGE_MODE_ERROR");
 }

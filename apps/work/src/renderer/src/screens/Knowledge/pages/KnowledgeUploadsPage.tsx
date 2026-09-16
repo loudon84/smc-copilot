@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useI18n } from "../../../components/useI18n";
-import { FilePickerButton } from "../../../components/files/composer/FilePickerButton";
 import {
   useKnowledgeFacade,
   type UseKnowledgeFacadeOptions,
@@ -8,27 +7,31 @@ import {
 import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
-  KnowledgeFacadeEntitySnapshot,
   KnowledgeJobSnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
+import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
 import {
   KnowledgeEmptyState,
   KnowledgeLoading,
   KnowledgeToolbar,
 } from "../knowledge-page-chrome";
+import { KnowledgeFileJobQueue } from "../features/file-job/KnowledgeFileJobQueue";
+import type {
+  HermesKnowledgeBasesAPI,
+  KnowledgeBaseSnapshot,
+} from "../../../../../shared/knowledge/knowledge-base-ipc";
 
 export type KnowledgeUploadsPageProps = {
+  params?: KnowledgeRouteParams;
   capability?: KnowledgeCapabilitySnapshot | null;
   mode?: KnowledgeModeSnapshot | null;
   facade?: HermesKnowledgeFacadeAPI | null;
-  /** Optional createDraft override for tests. */
+  bases?: HermesKnowledgeBasesAPI | null;
   createDraft?: (input?: {
     knowledgeBaseId?: string;
   }) => Promise<KnowledgeJobSnapshot>;
-  /** Optional listSnapshots override for tests. */
   listSnapshots?: () => Promise<KnowledgeJobSnapshot[]>;
-  /** Optional subscribe override for tests. */
   onSnapshotChanged?: (
     callback: (snapshot: KnowledgeJobSnapshot) => void,
   ) => () => void;
@@ -36,14 +39,17 @@ export type KnowledgeUploadsPageProps = {
   retryJob?: (input: { jobId: string }) => Promise<KnowledgeJobSnapshot>;
 };
 
-/**
- * Knowledge Uploads page — consumes Main knowledgeJobs snapshots only.
- * Never owns a Renderer progress timer (Main snapshots only).
- */
+function errorCode(error: unknown): string {
+  if (error instanceof Error) return error.message.split(/\s/)[0] ?? error.message;
+  return "KNOWLEDGE_UNAVAILABLE";
+}
+
 export function KnowledgeUploadsPage({
+  params = {},
   capability: injectedCapability,
   mode: injectedMode,
   facade: injectedFacade,
+  bases: injectedBases,
   createDraft: injectedCreateDraft,
   listSnapshots: injectedListSnapshots,
   onSnapshotChanged: injectedOnSnapshotChanged,
@@ -55,18 +61,25 @@ export function KnowledgeUploadsPage({
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
   } satisfies UseKnowledgeFacadeOptions);
+  const routeBaseId = params.knowledgeBaseId;
   const [jobs, setJobs] = useState<KnowledgeJobSnapshot[]>([]);
-  const [bases, setBases] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
-  const [targetBaseId, setTargetBaseId] = useState("unbound");
+  const [bases, setBases] = useState<KnowledgeBaseSnapshot[]>([]);
+  const [targetBaseId, setTargetBaseId] = useState(routeBaseId ?? "unbound");
   const [loadState, setLoadState] = useState<
     "loading" | "unavailable" | "empty" | "content" | "error"
   >("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const subscribedRef = useRef(false);
 
+  useEffect(() => {
+    if (routeBaseId) setTargetBaseId(routeBaseId);
+  }, [routeBaseId]);
+
   const pickerEnabled =
-    probe.mode?.dataMode === "mock" && probe.mutationsEnabled;
+    probe.mutationsEnabled &&
+    (targetBaseId !== "unbound" || injectedCreateDraft !== undefined);
 
   useEffect(() => {
     if (probe.presentation === "loading") {
@@ -99,15 +112,13 @@ export function KnowledgeUploadsPage({
         if (cancelled) return;
         setJobs(listed);
         setLoadState(listed.length > 0 ? "content" : "empty");
-        if (probe.facade && probe.mode?.dataMode === "mock") {
-          const listedBases = await probe.facade.listEntities({ kind: "base" });
-          if (!cancelled) setBases(listedBases);
+        if (probe.bases) {
+          const page = await probe.bases.list({ page: 1, pageSize: 50 });
+          if (!cancelled) setBases(page.items);
         }
       } catch (error) {
         if (cancelled) return;
-        setErrorMessage(
-          error instanceof Error ? error.message : t("knowledge.host.errorTitle"),
-        );
+        setErrorMessage(errorCode(error));
         setLoadState("error");
       }
     })();
@@ -133,10 +144,15 @@ export function KnowledgeUploadsPage({
   }, [
     probe.presentation,
     probe.mode?.dataMode,
-    probe.facade,
+    probe.bases,
     injectedListSnapshots,
     injectedOnSnapshotChanged,
   ]);
+
+  const visibleJobs = useMemo(() => {
+    if (!routeBaseId) return jobs;
+    return jobs.filter((job) => job.knowledgeBaseId === routeBaseId);
+  }, [jobs, routeBaseId]);
 
   const upsertJob = (draft: KnowledgeJobSnapshot): void => {
     setJobs((prev) => {
@@ -149,11 +165,30 @@ export function KnowledgeUploadsPage({
 
   const handlePick = async (): Promise<void> => {
     if (!pickerEnabled) return;
+    if (routeBaseId && targetBaseId !== routeBaseId) {
+      setErrorMessage("KNOWLEDGE_JOB_TARGET_MISMATCH");
+      return;
+    }
     const api = window.hermesAPI?.knowledgeJobs;
     const createDraft = injectedCreateDraft ?? api?.createDraft?.bind(api);
+    const cancel = injectedCancel ?? api?.cancel?.bind(api);
     if (!createDraft) return;
     const draft = await createDraft({ knowledgeBaseId: targetBaseId });
     upsertJob(draft);
+
+    const filesApi = window.hermesAPI?.files;
+    if (!filesApi?.pickFiles) return;
+    const results = await filesApi.pickFiles(
+      { multiple: false },
+      { knowledgeJobId: draft.jobId, mode: "local", source: "picker" },
+    );
+    const imported = results.filter((result) => result.ok);
+    if (imported.length === 0) {
+      if (cancel) {
+        const cancelled = await cancel({ jobId: draft.jobId });
+        upsertJob(cancelled);
+      }
+    }
   };
 
   const handleCancel = async (jobId: string): Promise<void> => {
@@ -202,13 +237,13 @@ export function KnowledgeUploadsPage({
               <select
                 data-testid="knowledge-upload-target"
                 value={targetBaseId}
-                disabled={!pickerEnabled}
+                disabled={!probe.mutationsEnabled || Boolean(routeBaseId)}
                 onChange={(event) => setTargetBaseId(event.target.value)}
               >
                 <option value="unbound">{t("knowledge.uploads.unboundTarget")}</option>
                 {bases.map((base) => (
                   <option key={base.id} value={base.id}>
-                    {base.title ?? base.id}
+                    {base.name}
                   </option>
                 ))}
               </select>
@@ -229,84 +264,24 @@ export function KnowledgeUploadsPage({
             >
               {t("knowledge.uploads.pickerLabel")}
             </button>
-            <FilePickerButton
-              className="btn btn-secondary btn-sm"
-              disabled={!pickerEnabled}
-              title={t("knowledge.uploads.pickerLabel")}
-              onPicked={() => {
-                void handlePick();
-              }}
-            />
-            {pickerEnabled ? (
-              <button
-                type="button"
-                className="btn btn-sm"
-                data-testid="knowledge-upload-submit"
-                onClick={() => {
-                  void handlePick();
-                }}
-              >
-                {t("knowledge.uploads.pickerLabel")}
-              </button>
-            ) : (
+            {pickerEnabled ? null : (
               <p>{t("knowledge.uploads.pickerDisabledProvider")}</p>
             )}
           </KnowledgeToolbar>
 
-          {jobs.length === 0 ? (
-            <p data-testid="knowledge-upload-queue-empty">
-              {t("knowledge.uploads.emptyList")}
-            </p>
-          ) : (
-            <ul className="knowledge-card-grid" data-testid="knowledge-upload-queue">
-              {jobs.map((job) => (
-                <li
-                  key={job.jobId}
-                  className="settings-card"
-                  data-testid={`knowledge-upload-job-${job.jobId}`}
-                  data-status={job.status}
-                >
-                  <div className="settings-card-head">
-                    <strong>
-                      {job.fileSummary?.displayName ?? job.jobId}
-                    </strong>
-                    <span className="settings-card-badge">{job.status}</span>
-                  </div>
-                  <p>
-                    {t("knowledge.uploads.progressLabel")}: {job.progress}%
-                  </p>
-                  <div className="knowledge-upload-progress">
-                    <div
-                      className="knowledge-upload-progress-bar"
-                      style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }}
-                    />
-                  </div>
-                  <div className="knowledge-toolbar">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      data-testid={`knowledge-upload-cancel-${job.jobId}`}
-                      onClick={() => {
-                        void handleCancel(job.jobId);
-                      }}
-                    >
-                      {t("knowledge.uploads.cancelLabel")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      data-testid={`knowledge-upload-retry-${job.jobId}`}
-                      onClick={() => {
-                        void handleRetry(job.jobId);
-                      }}
-                    >
-                      {t("knowledge.uploads.retryLabel")}
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <KnowledgeFileJobQueue
+            jobs={visibleJobs}
+            emptyLabel={t("knowledge.uploads.emptyList")}
+            progressLabel={t("knowledge.uploads.progressLabel")}
+            cancelLabel={t("knowledge.uploads.cancelLabel")}
+            retryLabel={t("knowledge.uploads.retryLabel")}
+            onCancel={(jobId) => {
+              void handleCancel(jobId);
+            }}
+            onRetry={(jobId) => {
+              void handleRetry(jobId);
+            }}
+          />
         </>
       ) : null}
     </div>

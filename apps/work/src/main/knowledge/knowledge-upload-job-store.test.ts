@@ -51,6 +51,9 @@ const MODE_COLUMNS = [
   "synthetic",
   "progress",
   "file_summary_json",
+  "managed_file_id",
+  "remote_source_file_id",
+  "remote_ingestion_job_id",
 ] as const;
 
 type JobRow = {

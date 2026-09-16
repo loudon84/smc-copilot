@@ -14,9 +14,11 @@ import type {
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../shared/knowledge/knowledge-job-ipc";
+import type { HermesKnowledgeBasesAPI } from "../../../../shared/knowledge/knowledge-base-ipc";
 import { KnowledgeModuleNav } from "./KnowledgeModuleNav";
 import { KnowledgeHomePage } from "./pages/KnowledgeHomePage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
+import { KnowledgeBaseDetailPage } from "./pages/KnowledgeBaseDetailPage";
 import { KnowledgeSetsPage } from "./pages/KnowledgeSetsPage";
 import { KnowledgeDocumentsPage } from "./pages/KnowledgeDocumentsPage";
 import { KnowledgeUploadsPage } from "./pages/KnowledgeUploadsPage";
@@ -43,24 +45,8 @@ export type KnowledgePagesProps = {
   mode?: KnowledgeModeSnapshot | null;
   /** Optional facade override for tests. */
   facade?: HermesKnowledgeFacadeAPI | null;
-};
-
-const PAGE_TITLE_KEY: Record<KnowledgePageId, string> = {
-  home: "knowledge.home.title",
-  bases: "knowledge.bases.title",
-  sets: "knowledge.sets.title",
-  documents: "knowledge.documents.title",
-  uploads: "knowledge.uploads.title",
-  chat: "knowledge.chat.title",
-};
-
-const PAGE_SUBTITLE_KEY: Record<KnowledgePageId, string> = {
-  home: "knowledge.home.description",
-  bases: "knowledge.bases.description",
-  sets: "knowledge.sets.description",
-  documents: "knowledge.documents.description",
-  uploads: "knowledge.uploads.description",
-  chat: "knowledge.chat.description",
+  /** Optional typed Base API override for tests. */
+  bases?: HermesKnowledgeBasesAPI | null;
 };
 
 /**
@@ -76,23 +62,24 @@ export function KnowledgePages({
   capability: injectedCapability,
   mode: injectedMode,
   facade: injectedFacade,
+  bases: injectedBases,
 }: KnowledgePagesProps): ReactElement {
   const { t } = useI18n();
   const probeOptions: UseKnowledgeFacadeOptions = {
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
   };
   const probe = useKnowledgeFacade(probeOptions);
   const { presentation, mode } = probe;
-  const title = t(PAGE_TITLE_KEY[page]);
-  const subtitle = t(PAGE_SUBTITLE_KEY[page]);
   const showMockBadge = mode?.dataMode === "mock";
 
   const pageOverrides = {
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
   };
 
   let pageBody: ReactElement;
@@ -103,7 +90,14 @@ export function KnowledgePages({
       );
       break;
     case "bases":
-      pageBody = (
+      pageBody = params.knowledgeBaseId ? (
+        <KnowledgeBaseDetailPage
+          params={params}
+          onNavigate={onNavigate}
+          onBack={onBack}
+          {...pageOverrides}
+        />
+      ) : (
         <KnowledgeBasesPage
           params={params}
           onNavigate={onNavigate}
@@ -133,7 +127,9 @@ export function KnowledgePages({
       );
       break;
     case "uploads":
-      pageBody = <KnowledgeUploadsPage {...pageOverrides} />;
+      pageBody = (
+        <KnowledgeUploadsPage params={params} {...pageOverrides} />
+      );
       break;
     case "chat":
       pageBody = (
@@ -160,25 +156,17 @@ export function KnowledgePages({
       data-knowledge-mode={mode?.dataMode ?? "unknown"}
       data-knowledge-host="true"
     >
-      {/*
-      <header className="gateway-page-header knowledge-host-header">
-        <div>
-          <h1 className="settings-header">{title}</h1>
-          <p className="gateway-page-subtitle">{subtitle}</p>
-        </div>
-        {showMockBadge ? (
-          <span
-            className="settings-card-badge is-update"
-            data-testid="knowledge-mock-demo-badge"
-            data-persistent="true"
-            role="status"
-            aria-live="polite"
-          >
-            {t("knowledge.mockDemoBadge")}
-          </span>
-        ) : null}
-      </header>
-        */}
+      {showMockBadge ? (
+        <span
+          className="settings-card-badge is-update"
+          data-testid="knowledge-mock-demo-badge"
+          data-persistent="true"
+          role="status"
+          aria-live="polite"
+        >
+          {t("knowledge.mockDemoBadge")}
+        </span>
+      ) : null}
       <KnowledgeModuleNav page={page} onNavigate={onNavigate} />
 
       <div className="knowledge-host-body">{pageBody}</div>

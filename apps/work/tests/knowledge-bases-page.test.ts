@@ -4,11 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import knowledgeEn from "../src/shared/i18n/locales/en/knowledge";
 import { KnowledgeBasesPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeBasesPage";
+import { KnowledgeBaseDetailPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeBaseDetailPage";
 import type {
-  HermesKnowledgeFacadeAPI,
-  KnowledgeFacadeEntitySnapshot,
-  KnowledgeFacadeMutateInput,
-} from "../src/shared/knowledge/knowledge-job-ipc";
+  HermesKnowledgeBasesAPI,
+  KnowledgeBaseSnapshot,
+} from "../src/shared/knowledge/knowledge-base-ipc";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
   useI18n: () => ({
@@ -30,49 +30,70 @@ vi.mock("../src/renderer/src/components/useI18n", () => ({
   }),
 }));
 
-function base(id: string, title: string): KnowledgeFacadeEntitySnapshot {
+function base(
+  id: string,
+  name: string,
+  visibility: KnowledgeBaseSnapshot["visibility"] = "private",
+): KnowledgeBaseSnapshot {
   return {
     id,
-    kind: "base",
-    title,
-    dataMode: "mock",
-    partition: {
-      workProfileId: "wp",
-      authSubject: "user",
-      tenantScope: { kind: "personal" },
-    },
+    name,
+    description: null,
+    status: "active",
+    visibility,
   };
 }
 
-describe("Knowledge Bases page (V03)", () => {
+function makeBasesApi(
+  store: KnowledgeBaseSnapshot[],
+): HermesKnowledgeBasesAPI {
+  return {
+    list: vi.fn(async () => ({
+      items: [...store],
+      total: store.length,
+      page: 1,
+      pageSize: 50,
+    })),
+    get: vi.fn(async ({ knowledgeBaseId }) => {
+      const found = store.find((item) => item.id === knowledgeBaseId);
+      if (!found) throw new Error("KNOWLEDGE_NOT_FOUND");
+      return found;
+    }),
+    create: vi.fn(async (input) => {
+      const created = base(`b${store.length + 1}`, input.name, input.visibility);
+      store.push(created);
+      return created;
+    }),
+    update: vi.fn(async (input) => {
+      const existing = store.find((item) => item.id === input.knowledgeBaseId)!;
+      existing.name = input.name ?? existing.name;
+      existing.description =
+        input.description === undefined ? existing.description : input.description;
+      existing.visibility = input.visibility ?? existing.visibility;
+      return existing;
+    }),
+    delete: vi.fn(async ({ knowledgeBaseId }) => {
+      const index = store.findIndex((item) => item.id === knowledgeBaseId);
+      if (index >= 0) store.splice(index, 1);
+    }),
+    listFiles: vi.fn(async () => ({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 50,
+    })),
+  };
+}
+
+describe("Knowledge Bases pages", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
   });
 
-  it("supports list/detail/search and mock mutate affordances", async () => {
+  it("supports list/search and typed create", async () => {
     const store = [base("b1", "Alpha Base"), base("b2", "Beta Base")];
-    const mutateEntity = vi.fn(async (input: KnowledgeFacadeMutateInput) => {
-      if (input.entityId) {
-        const existing = store.find((item) => item.id === input.entityId)!;
-        const updated = {
-          ...existing,
-          title: String(input.patch?.title ?? existing.title),
-        };
-        Object.assign(existing, updated);
-        return updated;
-      }
-      const created = base(`b${store.length + 1}`, String(input.patch?.title ?? "New"));
-      store.push(created);
-      return created;
-    });
-    const facade: HermesKnowledgeFacadeAPI = {
-      listEntities: vi.fn(async () => [...store]),
-      getEntity: vi.fn(async ({ entityId }) =>
-        store.find((item) => item.id === entityId) ?? null,
-      ),
-      mutateEntity,
-    };
+    const bases = makeBasesApi(store);
     const onNavigate = vi.fn();
 
     await act(async () => {
@@ -81,11 +102,11 @@ describe("Knowledge Bases page (V03)", () => {
           onNavigate,
           capability: { available: true, status: "available" },
           mode: {
-            dataMode: "mock",
-            allowSyntheticData: true,
-            configSource: "env",
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
           },
-          facade,
+          bases,
         }),
       );
     });
@@ -109,20 +130,24 @@ describe("Knowledge Bases page (V03)", () => {
       page: "bases",
       params: { knowledgeBaseId: "b2" },
     });
+  });
 
-    cleanup();
+  it("saves detail through typed update, not patch.deleted", async () => {
+    const store = [base("b2", "Beta Base")];
+    const bases = makeBasesApi(store);
+
     await act(async () => {
       render(
-        React.createElement(KnowledgeBasesPage, {
+        React.createElement(KnowledgeBaseDetailPage, {
           params: { knowledgeBaseId: "b2" },
           onBack: () => undefined,
           capability: { available: true, status: "available" },
           mode: {
-            dataMode: "mock",
-            allowSyntheticData: true,
-            configSource: "env",
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
           },
-          facade,
+          bases,
         }),
       );
     });
@@ -131,23 +156,20 @@ describe("Knowledge Bases page (V03)", () => {
       expect(screen.getByTestId("knowledge-base-detail")).toBeTruthy();
     });
     await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-section-tab-settings"));
+    });
+    await act(async () => {
       fireEvent.change(screen.getByTestId("knowledge-base-title-input"), {
         target: { value: "Beta Updated" },
       });
       fireEvent.click(screen.getByTestId("knowledge-base-save"));
     });
-    expect(mutateEntity).toHaveBeenCalled();
+    expect(bases.update).toHaveBeenCalled();
+    expect(bases.delete).not.toHaveBeenCalled();
   });
 
-  it("disables mutations and stays empty in provider mode", async () => {
-    const mutateEntity = vi.fn(async () => {
-      throw new Error("must not mutate");
-    });
-    const facade: HermesKnowledgeFacadeAPI = {
-      listEntities: vi.fn(async () => [base("b1", "Nope")]),
-      getEntity: vi.fn(async () => null),
-      mutateEntity,
-    };
+  it("enables mutations in provider mode when capability is available", async () => {
+    const bases = makeBasesApi([]);
 
     await act(async () => {
       render(
@@ -158,7 +180,33 @@ describe("Knowledge Bases page (V03)", () => {
             allowSyntheticData: false,
             configSource: "default",
           },
-          facade,
+          bases,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-base-create")).not.toBeDisabled();
+    });
+    expect(screen.getByTestId("knowledge-base-list-empty")).toBeTruthy();
+  });
+
+  it("disables mutations when the provider is unavailable", async () => {
+    const bases = makeBasesApi([base("b1", "Nope")]);
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeBasesPage, {
+          capability: {
+            available: false,
+            status: "blocked_provider_unavailable",
+          },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          bases,
         }),
       );
     });
@@ -166,20 +214,13 @@ describe("Knowledge Bases page (V03)", () => {
     await waitFor(() => {
       expect(
         screen.getByTestId("knowledge-bases-page").getAttribute("data-state"),
-      ).toBe("empty");
+      ).toBe("unavailable");
     });
-    expect(screen.getByTestId("knowledge-base-create")).toBeDisabled();
-    expect(screen.getByTestId("knowledge-base-list-empty")).toBeTruthy();
-    expect(mutateEntity).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain(knowledgeEn.bases.mutateDisabled);
+    expect(screen.queryByTestId("knowledge-base-create")).toBeNull();
   });
 
   it("toggles card/table views and opens the create dialog", async () => {
-    const facade: HermesKnowledgeFacadeAPI = {
-      listEntities: vi.fn(async () => [base("b1", "Alpha Base")]),
-      getEntity: vi.fn(async () => null),
-      mutateEntity: vi.fn(async () => base("b1", "Alpha Base")),
-    };
+    const bases = makeBasesApi([base("b1", "Alpha Base")]);
 
     await act(async () => {
       render(
@@ -191,7 +232,7 @@ describe("Knowledge Bases page (V03)", () => {
             allowSyntheticData: true,
             configSource: "env",
           },
-          facade,
+          bases,
         }),
       );
     });

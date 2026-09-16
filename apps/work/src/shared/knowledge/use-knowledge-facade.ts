@@ -9,6 +9,7 @@ import type {
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
 } from "./knowledge-job-ipc";
+import type { HermesKnowledgeBasesAPI } from "./knowledge-base-ipc";
 
 export type KnowledgePagePresentation =
   | "loading"
@@ -23,19 +24,26 @@ export type UseKnowledgeFacadeOptions = {
   mode?: KnowledgeModeSnapshot | null;
   /** Optional facade override for tests. */
   facade?: HermesKnowledgeFacadeAPI | null;
+  /** Optional typed Base API override for tests. */
+  bases?: HermesKnowledgeBasesAPI | null;
 };
 
 export type KnowledgeFacadeProbe = {
   capability: KnowledgeCapabilitySnapshot | null | undefined;
   mode: KnowledgeModeSnapshot | null | undefined;
   facade: HermesKnowledgeFacadeAPI | null;
+  bases: HermesKnowledgeBasesAPI | null;
   presentation: KnowledgePagePresentation;
+  /** Bases/Uploads: auth + capability (or explicit mock). Not mock-only. */
   mutationsEnabled: boolean;
+  /** Sets/Documents/Chat stay mock-only this release. */
+  syntheticMutationsEnabled: boolean;
 };
 
 type KnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
   getMode?: () => Promise<KnowledgeModeSnapshot>;
   facade?: HermesKnowledgeFacadeAPI;
+  bases?: HermesKnowledgeBasesAPI;
 };
 
 function blockedCapability(): KnowledgeCapabilitySnapshot {
@@ -83,6 +91,7 @@ export function useKnowledgeFacade(
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
   } = options;
 
   const [capability, setCapability] = useState<
@@ -174,15 +183,35 @@ export function useKnowledgeFacade(
     setFacade(api?.facade ?? null);
   }, [injectedFacade]);
 
+  const [bases, setBases] = useState<HermesKnowledgeBasesAPI | null>(() => {
+    if (injectedBases !== undefined) return injectedBases;
+    const api = readLiveJobsApi();
+    return api?.bases ?? null;
+  });
+
+  useEffect(() => {
+    if (injectedBases !== undefined) {
+      setBases(injectedBases);
+      return;
+    }
+    const api = readLiveJobsApi();
+    setBases(api?.bases ?? null);
+  }, [injectedBases]);
+
   const presentation = resolveKnowledgePresentation(capability, mode);
-  const mutationsEnabled =
+  const syntheticMutationsEnabled =
     mode?.dataMode === "mock" && mode.allowSyntheticData === true;
+  const mutationsEnabled =
+    syntheticMutationsEnabled ||
+    (capability?.available === true && capability.status === "available");
 
   return {
     capability,
     mode,
     facade,
+    bases,
     presentation,
     mutationsEnabled,
+    syntheticMutationsEnabled,
   };
 }

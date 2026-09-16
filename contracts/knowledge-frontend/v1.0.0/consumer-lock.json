@@ -1,0 +1,19 @@
+{
+  "contractName": "knowledge-frontend-contract",
+  "contractVersion": "1.0.0",
+  "providerRepository": "loudon84/nodeskclaw",
+  "tagName": "knowledge-frontend-contract-v1.0.0",
+  "tagTargetCommit": "f11e7cbe74cee767cab7a0cbd65baf98c2f44018",
+  "providerPath": "nodeskclaw-knowledge/contracts/frontend/v1.0.0",
+  "files": {
+    "FRONTEND-INTEGRATION.md": {
+      "sha256": "b72580badeacb4ebf92504378ddf880ca7812cfb70b763c5e515b9e7d09354bc"
+    },
+    "openapi.frontend.yaml": {
+      "sha256": "a005a0aa31fc8855e9ca58c769497adffd1b169859543ee580679411fc82d537"
+    },
+    "typescript/knowledge-contract.ts": {
+      "sha256": "0c8d61b0e26419a5eae11ae4f8765aff55d2c667dce07bd5373ea74de9509a4f"
+    }
+  }
+}

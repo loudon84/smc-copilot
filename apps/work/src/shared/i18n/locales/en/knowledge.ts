@@ -18,7 +18,11 @@ export default {
     errorTitle: "Something went wrong",
     notFoundTitle: "Not found",
     notFoundDescription: "The selected Knowledge item is not available.",
-    mutationsDisabled: "Editing is unavailable without mock mode.",
+    mutationsDisabled: "Editing is unavailable until Knowledge is authenticated and available.",
+    authRequired:
+      "Sign in with your Work account so Knowledge can call the local service.",
+    department: "Department",
+    organization: "Organization",
     searchPlaceholder: "Search…",
     filterAll: "All",
     create: "Create",
@@ -73,7 +77,9 @@ export default {
     emptyList: "No knowledge bases yet.",
     createLabel: "Create base",
     deleteLabel: "Delete base",
-    mutateDisabled: "Base changes are disabled until mock mode is active.",
+    mutateDisabled:
+      "Base changes are disabled until Knowledge is available and the base status allows it.",
+    descriptionLabel: "Description",
     uploadAction: "Upload files",
     tabDocuments: "Documents",
     tabSettings: "Settings",
@@ -82,8 +88,7 @@ export default {
     membersNote:
       "Member rows are display-only. They do not grant File or Chat access.",
     runtimeEmpty: "Runtime metrics stay empty until a provider returns them.",
-    documentsNote:
-      "Document lists are not scoped by parent id in mock mode.",
+    documentsNote: "Documents listed from the Knowledge Base files API.",
   },
   sets: {
     title: "Knowledge Sets",
@@ -140,7 +145,7 @@ export default {
     pickerBlocked:
       "File upload is unavailable until a Knowledge provider is configured.",
     pickerDisabledProvider:
-      "File picker stays disabled in provider mode until a real executor is available.",
+      "Choose an available knowledge base before uploading a file.",
     cancelLabel: "Cancel",
     retryLabel: "Retry",
     progressLabel: "Progress",

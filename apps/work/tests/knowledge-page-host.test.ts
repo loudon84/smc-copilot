@@ -13,6 +13,7 @@ import type {
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
 } from "../src/shared/knowledge/knowledge-job-ipc";
+import type { HermesKnowledgeBasesAPI } from "../src/shared/knowledge/knowledge-base-ipc";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
   useI18n: () => ({
@@ -38,6 +39,7 @@ function mockJobs(options: {
   capability?: KnowledgeCapabilitySnapshot | null;
   mode?: KnowledgeModeSnapshot;
   facade?: HermesKnowledgeFacadeAPI;
+  bases?: HermesKnowledgeBasesAPI;
 }): void {
   const capability =
     options.capability === undefined
@@ -61,6 +63,28 @@ function mockJobs(options: {
       }),
     } satisfies HermesKnowledgeFacadeAPI);
 
+  const bases =
+    options.bases ??
+    ({
+      list: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 50 })),
+      get: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_NOT_FOUND");
+      }),
+      create: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      update: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      delete: vi.fn(async () => undefined),
+      listFiles: vi.fn(async () => ({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 50,
+      })),
+    } satisfies HermesKnowledgeBasesAPI);
+
   (
     window as unknown as {
       hermesAPI: {
@@ -68,6 +92,7 @@ function mockJobs(options: {
           getCapability: ReturnType<typeof vi.fn>;
           getMode: ReturnType<typeof vi.fn>;
           facade: HermesKnowledgeFacadeAPI;
+          bases: HermesKnowledgeBasesAPI;
           listSnapshots: ReturnType<typeof vi.fn>;
           createDraft: ReturnType<typeof vi.fn>;
           onSnapshotChanged: () => () => undefined;
@@ -82,6 +107,7 @@ function mockJobs(options: {
       }),
       getMode: vi.fn(async () => mode),
       facade,
+      bases,
       listSnapshots: vi.fn(async () => []),
       createDraft: vi.fn(async () => {
         throw new Error("createDraft blocked");
@@ -134,6 +160,42 @@ describe("Knowledge page host (V01)", () => {
         listEntities: vi.fn(async () => entities),
         getEntity: vi.fn(async () => entities[0]),
         mutateEntity: vi.fn(async () => entities[0]),
+      },
+      bases: {
+        list: vi.fn(async () => ({
+          items: [
+            {
+              id: "base-42",
+              name: "Base Forty Two",
+              description: null,
+              status: "active",
+              visibility: "private",
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        })),
+        get: vi.fn(async () => ({
+          id: "base-42",
+          name: "Base Forty Two",
+          description: null,
+          status: "active",
+          visibility: "private",
+        })),
+        create: vi.fn(async () => {
+          throw new Error("unused");
+        }),
+        update: vi.fn(async () => {
+          throw new Error("unused");
+        }),
+        delete: vi.fn(async () => undefined),
+        listFiles: vi.fn(async () => ({
+          items: [],
+          total: 0,
+          page: 1,
+          pageSize: 50,
+        })),
       },
     });
 
