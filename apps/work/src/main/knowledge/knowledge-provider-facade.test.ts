@@ -416,4 +416,21 @@ describe("knowledge-provider-facade (V02)", () => {
       expect(facade.listEntities({ kind }).length).toBeGreaterThan(0);
     }
   });
+
+  it("keeps mock list/mutate available when sqlite cannot open", () => {
+    mockedGetDbConnection.mockReturnValue(null);
+    mode = "mock";
+    const facade = createFacade();
+    facade.ensureSeeded();
+    expect(facade.listEntities({ kind: "base" }).length).toBeGreaterThan(0);
+
+    const created = facade.mutateEntity({
+      kind: "set",
+      patch: { title: "Memory-only set" },
+    });
+    expect(created.title).toBe("Memory-only set");
+    expect(facade.listEntities({ kind: "set" }).some((e) => e.id === created.id)).toBe(
+      true,
+    );
+  });
 });

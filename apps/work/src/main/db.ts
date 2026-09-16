@@ -1,8 +1,8 @@
-import Database from "better-sqlite3";
 import { existsSync } from "fs";
+import { openSqliteDatabase, type SqliteDatabase } from "./sqlite-database";
 import { activeStateDbPath } from "./utils";
 
-let cachedDb: Database.Database | null = null;
+let cachedDb: SqliteDatabase | null = null;
 let cachedDbPath: string | null = null;
 let cachedDbReadonly: boolean | null = null;
 
@@ -11,7 +11,7 @@ let cachedDbReadonly: boolean | null = null;
  * If the active profile database path or readonly status changes,
  * the old database connection is cleanly closed and a new one is established.
  */
-export function getDbConnection(readonly = true): Database.Database | null {
+export function getDbConnection(readonly = true): SqliteDatabase | null {
   const dbPath = activeStateDbPath();
   if (!existsSync(dbPath)) {
     closeDbConnection();
@@ -26,7 +26,7 @@ export function getDbConnection(readonly = true): Database.Database | null {
   closeDbConnection();
 
   try {
-    cachedDb = new Database(dbPath, readonly ? { readonly: true } : {});
+    cachedDb = openSqliteDatabase(dbPath, readonly ? { readonly: true } : {});
     cachedDbPath = dbPath;
     cachedDbReadonly = readonly;
     return cachedDb;

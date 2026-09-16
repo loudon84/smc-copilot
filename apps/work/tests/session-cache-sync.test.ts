@@ -52,6 +52,20 @@ vi.mock("../src/main/locale", () => ({
   getAppLocale: () => "en",
 }));
 
+vi.mock("../src/main/session-metadata-store", () => ({
+  createSessionScope: (value: string) => value,
+  ensureChatSessionMetadata: () => ({
+    sessionKind: "chat",
+    executionProvider: "hermes-chat",
+  }),
+  isSessionClassification: (value: unknown) =>
+    typeof value === "object" &&
+    value !== null &&
+    (value as { sessionKind?: unknown }).sessionKind === "chat" &&
+    (value as { executionProvider?: unknown }).executionProvider ===
+      "hermes-chat",
+}));
+
 vi.mock("better-sqlite3", () => {
   // The app rebuilds better-sqlite3 for Electron during postinstall, while
   // Vitest runs under Node. Mock the tiny DB surface this unit test needs so

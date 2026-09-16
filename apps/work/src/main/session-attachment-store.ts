@@ -1,4 +1,5 @@
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { openSqliteDatabase } from "./sqlite-database";
 import { basename, extname } from "path";
 import { existsSync, readFileSync, statSync } from "fs";
 import { activeStateDbPath } from "./utils";
@@ -209,7 +210,7 @@ export function findUserMessageIdForPrompt(
 ): number | null {
   const dbPath = activeStateDbPath();
   if (!existsSync(dbPath)) return null;
-  const db = new Database(dbPath);
+  const db = openSqliteDatabase(dbPath);
   try {
     return findMatchingUserMessageId(db, sessionId, promptText, {
       skipIfHasStoredImages: false,
@@ -231,7 +232,7 @@ export function persistPromptImageAttachments(
   const dbPath = activeStateDbPath();
   if (!existsSync(dbPath)) return;
 
-  const db = new Database(dbPath);
+  const db = openSqliteDatabase(dbPath);
   try {
     ensureTable(db);
     const messageId = findMatchingUserMessageId(db, sessionId, promptText);

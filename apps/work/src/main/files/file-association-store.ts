@@ -3,7 +3,8 @@
  * Uses a dedicated file-index.db under the profile files layout (not state.db).
  */
 
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { openSqliteDatabase } from "../sqlite-database";
 import type {
   FileAssociation,
   ManagedFile,
@@ -232,7 +233,7 @@ export function openFileIndexDb(profile?: string): DbHandle {
   const cached = dbCache.get(dbPath);
   if (cached) return cached;
 
-  const db = new Database(dbPath);
+  const db = openSqliteDatabase(dbPath);
   db.pragma("journal_mode = WAL");
   migrateSchema(db);
   dbCache.set(dbPath, db);

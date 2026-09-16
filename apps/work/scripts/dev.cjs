@@ -31,6 +31,26 @@ function ensureWinUtf8Console() {
 
 ensureWinUtf8Console();
 
+/**
+ * Local `npm run dev` must dual-declare mock mode (AD-WORK-KNOWLEDGE-v1.1).
+ * Without both flags, Main latches provider and pages stay fail-closed
+ * ("Knowledge unavailable") because no real adapter exists yet.
+ * Leave either env var set to keep an explicit override.
+ */
+function withKnowledgeMockMode(env) {
+  const next = { ...env };
+  if (next.SMC_KNOWLEDGE_MODE || next.SMC_KNOWLEDGE_ALLOW_SYNTHETIC_DATA) {
+    return next;
+  }
+  next.SMC_KNOWLEDGE_MODE = "mock";
+  next.SMC_KNOWLEDGE_ALLOW_SYNTHETIC_DATA = "true";
+  next.SMC_KNOWLEDGE_CHANNEL = next.SMC_KNOWLEDGE_CHANNEL || "dev";
+  console.log(
+    "[dev] Knowledge mock mode enabled (SMC_KNOWLEDGE_MODE=mock). Set SMC_KNOWLEDGE_MODE=provider to disable.",
+  );
+  return next;
+}
+
 // Main process: attach debugger at chrome://inspect or VS Code "Attach to 9229"
 console.log("[dev] electron-vite dev --inspect=9229 --sourcemap (Main attach port 9229)");
 
@@ -38,7 +58,7 @@ const child = spawn("npx", ["electron-vite", "dev", "--inspect=9229", "--sourcem
   cwd: projectRoot,
   stdio: "inherit",
   shell: true,
-  env: process.env,
+  env: withKnowledgeMockMode(process.env),
 });
 
 child.on("exit", (code, signal) => {

@@ -1,7 +1,9 @@
 /**
  * Work-owned mock Knowledge entity persistence (AC-03 / AC-04).
  * Partition: {workProfileId, authSubject, tenantScope, dataMode=mock}.
- * Uses getDbConnection like the Job store. Never imports apps/knowledge.
+ * Uses getDbConnection like the Job store; falls back to process-local
+ * memory when sqlite cannot open (native ABI mismatch / missing state.db).
+ * Never imports apps/knowledge.
  */
 import { randomUUID } from "crypto";
 import type Database from "better-sqlite3";
@@ -52,9 +54,55 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function requireDb(readonly = false): Database.Database {
+const memoryRows = new Map<string, KnowledgeMockEntityRecord>();
+let sqliteLatchedUnavailable = false;
+let memoryFallbackLogged = false;
+
+function memoryKey(
+  partition: KnowledgeJobPartition,
+  kind: KnowledgeFacadeEntityKind,
+  entityId: string,
+): string {
+  const t = tenantParts(partition.tenantScope);
+  return [
+    partition.workProfileId,
+    partition.authSubject,
+    t.kind,
+    t.tenantId ?? "",
+    DATA_MODE,
+    kind,
+    entityId,
+  ].join("\u0001");
+}
+
+function matchesPartition(
+  record: KnowledgeMockEntityRecord,
+  partition: KnowledgeJobPartition,
+  kind: KnowledgeFacadeEntityKind,
+): boolean {
+  if (record.kind !== kind) return false;
+  if (record.partition.workProfileId !== partition.workProfileId) return false;
+  if (record.partition.authSubject !== partition.authSubject) return false;
+  const a = tenantParts(record.partition.tenantScope);
+  const b = tenantParts(partition.tenantScope);
+  return a.kind === b.kind && a.tenantId === b.tenantId;
+}
+
+function logMemoryFallbackOnce(): void {
+  if (memoryFallbackLogged) return;
+  memoryFallbackLogged = true;
+  console.warn(
+    "[knowledge-mock] sqlite unavailable; using in-process memory store",
+  );
+}
+
+function tryDb(readonly = false): Database.Database | null {
+  if (sqliteLatchedUnavailable) return null;
   const db = getDbConnection(readonly);
-  if (!db) throw new KnowledgeMockStoreUnavailableError();
+  if (!db) {
+    sqliteLatchedUnavailable = true;
+    logMemoryFallbackOnce();
+  }
   return db;
 }
 
@@ -111,7 +159,8 @@ function rowToRecord(row: EntityRow): KnowledgeMockEntityRecord {
 }
 
 export function ensureKnowledgeMockSchema(): void {
-  const db = requireDb(false);
+  const db = tryDb(false);
+  if (!db) return;
   db.exec(`
     CREATE TABLE IF NOT EXISTS ${TABLE} (
       work_profile_id TEXT NOT NULL,
@@ -158,7 +207,12 @@ export function listMockEntities(
   kind: KnowledgeFacadeEntityKind,
 ): KnowledgeMockEntityRecord[] {
   ensureKnowledgeMockSchema();
-  const db = requireDb(true);
+  const db = tryDb(true) ?? tryDb(false);
+  if (!db) {
+    return [...memoryRows.values()]
+      .filter((record) => matchesPartition(record, partition, kind))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
   const t = tenantParts(partition.tenantScope);
   const rows = db
     .prepare(
@@ -189,7 +243,10 @@ export function getMockEntity(
   entityId: string,
 ): KnowledgeMockEntityRecord | null {
   ensureKnowledgeMockSchema();
-  const db = requireDb(true);
+  const db = tryDb(true) ?? tryDb(false);
+  if (!db) {
+    return memoryRows.get(memoryKey(partition, kind, entityId)) ?? null;
+  }
   const t = tenantParts(partition.tenantScope);
   const row = db
     .prepare(
@@ -224,7 +281,7 @@ export function upsertMockEntity(input: {
   payload?: Record<string, unknown>;
 }): KnowledgeMockEntityRecord {
   ensureKnowledgeMockSchema();
-  const db = requireDb(false);
+  const db = tryDb(false);
   const t = tenantParts(input.partition.tenantScope);
   const entityId = input.entityId?.trim() || `mock_${input.kind}_${randomUUID().slice(0, 8)}`;
   const existing = getMockEntity(input.partition, input.kind, entityId);
@@ -238,6 +295,20 @@ export function upsertMockEntity(input: {
     ...(input.payload ?? {}),
   };
   const updatedAt = nowIso();
+  const record: KnowledgeMockEntityRecord = {
+    id: entityId,
+    kind: input.kind,
+    title,
+    permission,
+    payload,
+    partition: input.partition,
+    dataMode: DATA_MODE,
+    updatedAt,
+  };
+  if (!db) {
+    memoryRows.set(memoryKey(input.partition, input.kind, entityId), record);
+    return record;
+  }
   db.prepare(
     `INSERT OR REPLACE INTO ${TABLE} (
       work_profile_id, auth_subject, tenant_scope_kind, tenant_id,
@@ -256,16 +327,7 @@ export function upsertMockEntity(input: {
     JSON.stringify(payload),
     updatedAt,
   );
-  return {
-    id: entityId,
-    kind: input.kind,
-    title,
-    permission,
-    payload,
-    partition: input.partition,
-    dataMode: DATA_MODE,
-    updatedAt,
-  };
+  return record;
 }
 
 export function deleteMockEntity(
@@ -276,7 +338,10 @@ export function deleteMockEntity(
   ensureKnowledgeMockSchema();
   const existing = getMockEntity(partition, kind, entityId);
   if (!existing) return false;
-  const db = requireDb(false);
+  const db = tryDb(false);
+  if (!db) {
+    return memoryRows.delete(memoryKey(partition, kind, entityId));
+  }
   const t = tenantParts(partition.tenantScope);
   db.prepare(
     `DELETE FROM ${TABLE}
@@ -324,7 +389,9 @@ export function seedMockFixtures(partition: KnowledgeJobPartition): void {
 }
 
 export function resetKnowledgeMockStoreForTests(): void {
-  // Schema is created lazily; tests swap FakeDb per case.
+  memoryRows.clear();
+  sqliteLatchedUnavailable = false;
+  memoryFallbackLogged = false;
 }
 
 export { displayPermission };

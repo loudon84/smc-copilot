@@ -6,7 +6,8 @@ import {
   getActiveProfileNameSync,
   safeWriteFile,
 } from "./utils";
-import Database from "better-sqlite3";
+import type Database from "better-sqlite3";
+import { openSqliteDatabase } from "./sqlite-database";
 import { t } from "../shared/i18n";
 import { getAppLocale } from "./locale";
 import { getDbConnection } from "./db";
@@ -409,7 +410,7 @@ export function updateSessionTitle(sessionId: string, title: string): void {
   try {
     const dbPath = activeStateDbPath();
     if (existsSync(dbPath)) {
-      const db = new Database(dbPath);
+      const db = openSqliteDatabase(dbPath);
       try {
         db.prepare("UPDATE sessions SET title = ? WHERE id = ?").run(
           title,
