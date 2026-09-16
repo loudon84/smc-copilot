@@ -1,7 +1,0 @@
-{
-  "schema": "smc.ges.baseline-lock.v1",
-  "app_id": "knowledge",
-  "fingerprint": "63b20333d7303faf0cc9772efe8bd8054b4bdeb68c6ba60a13cb8135dd1b1e15",
-  "status": "FRESH",
-  "stack_adapter": "react-electron"
-}
