@@ -1,5 +1,0 @@
-E:\git\smc-copilot\.smc\evidence-npm-shim\out\evidence-npm-shim.exe
-E:\git\smc-copilot\.smc\evidence-npm-shim\out\evidence-npm-shim.dll
-E:\git\smc-copilot\.smc\evidence-npm-shim\out\evidence-npm-shim.deps.json
-E:\git\smc-copilot\.smc\evidence-npm-shim\out\evidence-npm-shim.runtimeconfig.json
-E:\git\smc-copilot\.smc\evidence-npm-shim\out\evidence-npm-shim.pdb

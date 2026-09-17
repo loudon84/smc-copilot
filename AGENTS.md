@@ -31,3 +31,54 @@ For non-trivial feature or architecture changes:
 - Desktop must not listen on Agent ports (`18781` removed); Connection Ready follows `readiness.service` only.
 - Work (v2.1/v2.2): Endpoint Control Plane **default** SOT is Salt (`infra/salt`) + `services/salt-control`; see ADR-026. Customers may choose a parallel OPSI provider (`infra/opsi` + `services/opsi-control`); see ADR-031. `services/runtime` control plane is frozen (P0/P1 only); decommission via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` after Ring 3 (410 on endpoint routes; Chat/Task retained). `apps/work` defaults to `direct` Hermes Gateway (`:8642`); enterprise Bootstrap writes `control-owner=salt` or `{ "hermes": "opsi" }` (Availability only); Runtime `:8765` only when `SMC_HERMES_CONTROL_OWNER=runtime`.
 - OPSI task: read `docs/adr/ADR-031-opsi-parallel-endpoint-control-plane.md` and `docs/opsi/`. Do not modify `infra/salt`, `services/salt-control`, or `contracts/salt-control-api` for OPSI features. Do not add OPSI capability to `services/runtime` or `contracts/runtime-api`.
+<!-- ges:v6:engineering-stack:begin -->
+
+## AI Engineering Stack
+
+Discovery / requirement grilling:
+grill-with-docs
+grilling
+domain-modeling
+
+Architecture / codebase design:
+codebase-design
+
+Work decomposition:
+to-tickets
+
+Project principles / constitution:
+speckit-constitution
+
+Feature specification:
+speckit-specify
+
+Requirement clarification:
+speckit-clarify
+
+Technical intent planning:
+speckit-plan
+
+Implementation plan methodology:
+writing-plans
+
+Execution:
+subagent-driven-development
+
+TDD:
+test-driven-development
+
+Debug:
+systematic-debugging
+
+Review:
+requesting-code-review
+receiving-code-review
+
+Completion:
+verification-before-completion
+finishing-a-development-branch
+
+GES manages composition and governance metadata.
+GES does not generate Specs, implementation plans or code.
+
+<!-- ges:v6:engineering-stack:end -->

@@ -1,7 +1,0 @@
-{
-  "bootstrap_id": "bf18a9577c57481f930c4f18e3a2f0cd",
-  "finalized_at": "2026-09-15T10:48:05Z",
-  "receipt_path": ".smc/ges-bootstrap-receipts/bf18a9577c57481f930c4f18e3a2f0cd.json",
-  "schema": "smc.ges.consumer-bootstrap-receipt.v1",
-  "status": "PASS"
-}

@@ -1,3 +1,0 @@
-chore(roadmap): mark RM-13 streaming-delta import as DONE
-
-Bind the implementation commit and durable evidence; keep RM-14 BACKLOG until mapping starts.

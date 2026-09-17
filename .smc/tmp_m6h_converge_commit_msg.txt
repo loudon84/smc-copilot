@@ -1,3 +1,0 @@
-docs(work): approve M6h streaming-delta mapping PRD
-
-Mark RM-14 READY and bind the reviewed Stage PRD so mapping can proceed to Plan.

@@ -1,0 +1,75 @@
+{
+  "schema": "ges.repo-profile.v2",
+  "repository_lifecycle": "brownfield",
+  "layout": "monorepo",
+  "kind": "brownfield-monorepo",
+  "repository_kind": "brownfield-monorepo",
+  "agents": [
+    "cursor",
+    "codex"
+  ],
+  "languages": [
+    "typescript"
+  ],
+  "spec_kit": false,
+  "legacy_ges": false,
+  "ci": [
+    "github-actions"
+  ],
+  "package_managers": [
+    "npm"
+  ],
+  "frameworks": [
+    "nx"
+  ],
+  "existing": {
+    "AGENTS.md": true,
+    "CLAUDE.md": false,
+    ".agents": true,
+    ".cursor": true,
+    ".codex": true,
+    ".specify": false,
+    ".smc": false,
+    "CONTEXT.md": false,
+    "CONTEXT-MAP.md": false,
+    "docs/adr": true
+  },
+  "source_roots": [
+    "apps",
+    "services",
+    "packages",
+    "contracts"
+  ],
+  "scripts": {
+    "test": [
+      "apps/knowledge/package.json",
+      "apps/work/package.json",
+      "apps/work/references/chatbox/package.json"
+    ],
+    "build": [
+      "package.json",
+      "apps/work/package.json",
+      "apps/work/references/chatbox/package.json"
+    ],
+    "lint": [
+      "apps/work/package.json",
+      "apps/work/references/chatbox/package.json"
+    ]
+  },
+  "tsconfig_evidence": [
+    "apps/knowledge/tsconfig.json",
+    "apps/work/references/chatbox/tsconfig.json",
+    "apps/work/tsconfig.json",
+    "apps/work/tsconfig.node.json",
+    "apps/work/tsconfig.web.json",
+    "packages/runtime-client-ts/tsconfig.json"
+  ],
+  "analyzer_version": "6.0.0-alpha.2",
+  "analyzed_at": "2026-09-16T23:46:18.420669+00:00",
+  "git": {
+    "repository": true,
+    "head": "32c9532a86632f4599019df5bb3ea57d7c8994c6",
+    "remote": null
+  },
+  "llm_token_usage": 0
+}
