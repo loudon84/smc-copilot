@@ -13,6 +13,8 @@ import {
 } from "../src/renderer/src/screens/Knowledge/knowledge-route-scope";
 import { KnowledgeView } from "../src/renderer/src/screens/Knowledge/KnowledgeView";
 import { KnowledgePages } from "../src/renderer/src/screens/Knowledge/KnowledgePages";
+import { KnowledgeBaseDetailPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeBaseDetailPage";
+import { makeBasesApi } from "./helpers/knowledge-bases-api";
 import type {
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
@@ -197,13 +199,12 @@ describe("Knowledge fail-closed pages (V05)", () => {
     delete (window as unknown as { hermesAPI?: unknown }).hermesAPI;
   });
 
-  it("covers all six Stage pages through KnowledgePages", () => {
+  it("covers all five Stage pages through KnowledgePages", () => {
     expect([...KNOWLEDGE_ROUTE_PAGES]).toEqual([
       "home",
       "bases",
       "sets",
       "documents",
-      "uploads",
       "chat",
     ]);
     for (const page of KNOWLEDGE_ROUTE_PAGES) {
@@ -233,9 +234,7 @@ describe("Knowledge fail-closed pages (V05)", () => {
         const panel = screen.getByTestId(`knowledge-page-${page}`);
         expect(panel.getAttribute("data-state")).toBe("unavailable");
         expect(panel.textContent).toContain(knowledgeEn.unavailableTitle);
-        if (page === "uploads") {
-          expect(panel.textContent).toContain(knowledgeEn.uploads.pickerBlocked);
-        } else if (page === "chat") {
+        if (page === "chat") {
           expect(panel.textContent).toContain(knowledgeEn.chat.composerBlocked);
         } else {
           expect(panel.textContent).toContain(knowledgeEn.unavailableDescription);
@@ -268,21 +267,45 @@ describe("Knowledge fail-closed pages (V05)", () => {
     expect(listSnapshots).not.toHaveBeenCalled();
   });
 
-  it("shows uploads unavailable without provider and never submits picker jobs", async () => {
+  it("disables Detail upload without a provider and never submits picker jobs", async () => {
     const { createDraft } = mockKnowledgeJobs({
       available: false,
       status: "blocked_provider_unavailable",
     });
+    const bases = makeBasesApi([
+      {
+        id: "b1",
+        name: "Alpha",
+        description: null,
+        status: "active",
+        visibility: "private",
+      },
+    ]);
 
     await act(async () => {
-      render(React.createElement(KnowledgePages, { page: "uploads" }));
+      render(
+        React.createElement(KnowledgeBaseDetailPage, {
+          params: { knowledgeBaseId: "b1" },
+          capability: {
+            available: false,
+            status: "blocked_provider_unavailable",
+          },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          bases,
+          createDraft,
+          listSnapshots: async () => [],
+        }),
+      );
     });
 
     await waitFor(() => {
-      const panel = screen.getByTestId("knowledge-page-uploads");
-      expect(panel.getAttribute("data-state")).toBe("unavailable");
+      expect(screen.getByTestId("knowledge-base-upload")).toBeDisabled();
     });
-    expect(screen.queryByTestId("knowledge-upload-submit")).toBeNull();
+    expect(screen.queryByTestId("knowledge-upload-drawer")).toBeNull();
     expect(createDraft).not.toHaveBeenCalled();
   });
 

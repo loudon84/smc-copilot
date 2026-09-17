@@ -5,7 +5,6 @@ import {
   Home,
   Layers,
   MessageSquare,
-  Upload,
   type LucideIcon,
 } from "lucide-react";
 import { useI18n } from "../../components/useI18n";
@@ -20,7 +19,6 @@ const NAV_ICON: Record<KnowledgePageId, LucideIcon> = {
   bases: Database,
   sets: Layers,
   documents: FileText,
-  uploads: Upload,
   chat: MessageSquare,
 };
 
@@ -29,7 +27,6 @@ const NAV_LABEL_KEY: Record<KnowledgePageId, string> = {
   bases: "knowledge.nav.bases",
   sets: "knowledge.nav.sets",
   documents: "knowledge.nav.documents",
-  uploads: "knowledge.nav.uploads",
   chat: "knowledge.nav.chat",
 };
 
@@ -39,7 +36,7 @@ export type KnowledgeModuleNavProps = {
 };
 
 /**
- * In-module top tabs for the six Knowledge pages (Memory tab pattern).
+ * In-module top tabs for the five Knowledge pages (Memory tab pattern).
  * Route scope only — never writes window URL.
  */
 export function KnowledgeModuleNav({

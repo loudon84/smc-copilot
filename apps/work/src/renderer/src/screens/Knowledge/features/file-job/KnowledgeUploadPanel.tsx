@@ -1,29 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { useI18n } from "../../../components/useI18n";
+import { useI18n } from "../../../../components/useI18n";
 import {
   useKnowledgeFacade,
   type UseKnowledgeFacadeOptions,
-} from "../../../../../shared/knowledge/use-knowledge-facade";
+} from "../../../../../../shared/knowledge/use-knowledge-facade";
 import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
   KnowledgeJobSnapshot,
   KnowledgeModeSnapshot,
-} from "../../../../../shared/knowledge/knowledge-job-ipc";
-import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
-import {
-  KnowledgeEmptyState,
-  KnowledgeLoading,
-  KnowledgeToolbar,
-} from "../knowledge-page-chrome";
-import { KnowledgeFileJobQueue } from "../features/file-job/KnowledgeFileJobQueue";
-import type {
-  HermesKnowledgeBasesAPI,
-  KnowledgeBaseSnapshot,
-} from "../../../../../shared/knowledge/knowledge-base-ipc";
+} from "../../../../../../shared/knowledge/knowledge-job-ipc";
+import { EmptyState } from "@/components/common/empty-state";
+import { Button } from "@/components/ui/button";
+import { KnowledgeFileJobQueue } from "./KnowledgeFileJobQueue";
+import type { HermesKnowledgeBasesAPI } from "../../../../../../shared/knowledge/knowledge-base-ipc";
 
-export type KnowledgeUploadsPageProps = {
-  params?: KnowledgeRouteParams;
+export type KnowledgeUploadPanelProps = {
+  knowledgeBaseId: string;
+  baseName?: string;
   capability?: KnowledgeCapabilitySnapshot | null;
   mode?: KnowledgeModeSnapshot | null;
   facade?: HermesKnowledgeFacadeAPI | null;
@@ -44,8 +38,9 @@ function errorCode(error: unknown): string {
   return "KNOWLEDGE_UNAVAILABLE";
 }
 
-export function KnowledgeUploadsPage({
-  params = {},
+export function KnowledgeUploadPanel({
+  knowledgeBaseId,
+  baseName,
   capability: injectedCapability,
   mode: injectedMode,
   facade: injectedFacade,
@@ -55,7 +50,7 @@ export function KnowledgeUploadsPage({
   onSnapshotChanged: injectedOnSnapshotChanged,
   cancelJob: injectedCancel,
   retryJob: injectedRetry,
-}: KnowledgeUploadsPageProps): ReactElement {
+}: KnowledgeUploadPanelProps): ReactElement {
   const { t } = useI18n();
   const probe = useKnowledgeFacade({
     capability: injectedCapability,
@@ -63,25 +58,29 @@ export function KnowledgeUploadsPage({
     facade: injectedFacade,
     bases: injectedBases,
   } satisfies UseKnowledgeFacadeOptions);
-  const routeBaseId = params.knowledgeBaseId;
+  const lockedBaseId =
+    knowledgeBaseId && knowledgeBaseId !== "unbound" ? knowledgeBaseId : "";
   const [jobs, setJobs] = useState<KnowledgeJobSnapshot[]>([]);
-  const [bases, setBases] = useState<KnowledgeBaseSnapshot[]>([]);
-  const [targetBaseId, setTargetBaseId] = useState(routeBaseId ?? "unbound");
   const [loadState, setLoadState] = useState<
     "loading" | "unavailable" | "empty" | "content" | "error"
   >("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const subscribedRef = useRef(false);
 
-  useEffect(() => {
-    if (routeBaseId) setTargetBaseId(routeBaseId);
-  }, [routeBaseId]);
+  const createDraftFn =
+    injectedCreateDraft ??
+    window.hermesAPI?.knowledgeJobs?.createDraft?.bind(
+      window.hermesAPI.knowledgeJobs,
+    );
+  const pickerEnabled = Boolean(
+    probe.mutationsEnabled && lockedBaseId && createDraftFn,
+  );
 
-  const pickerEnabled =
-    probe.mutationsEnabled &&
-    (targetBaseId !== "unbound" || injectedCreateDraft !== undefined);
-
   useEffect(() => {
+    if (!lockedBaseId) {
+      setLoadState("empty");
+      return;
+    }
     if (probe.presentation === "loading") {
       setLoadState("loading");
       return;
@@ -110,12 +109,9 @@ export function KnowledgeUploadsPage({
       try {
         const listed = await listSnapshots();
         if (cancelled) return;
+        const scoped = listed.filter((job) => job.knowledgeBaseId === lockedBaseId);
         setJobs(listed);
-        setLoadState(listed.length > 0 ? "content" : "empty");
-        if (probe.bases) {
-          const page = await probe.bases.list({ page: 1, pageSize: 50 });
-          if (!cancelled) setBases(page.items);
-        }
+        setLoadState(scoped.length > 0 ? "content" : "empty");
       } catch (error) {
         if (cancelled) return;
         setErrorMessage(errorCode(error));
@@ -132,7 +128,9 @@ export function KnowledgeUploadsPage({
           next.push(snapshot);
           return next;
         });
-        setLoadState("content");
+        if (snapshot.knowledgeBaseId === lockedBaseId) {
+          setLoadState("content");
+        }
       });
     }
 
@@ -142,17 +140,17 @@ export function KnowledgeUploadsPage({
       subscribedRef.current = false;
     };
   }, [
+    lockedBaseId,
     probe.presentation,
     probe.mode?.dataMode,
-    probe.bases,
     injectedListSnapshots,
     injectedOnSnapshotChanged,
   ]);
 
-  const visibleJobs = useMemo(() => {
-    if (!routeBaseId) return jobs;
-    return jobs.filter((job) => job.knowledgeBaseId === routeBaseId);
-  }, [jobs, routeBaseId]);
+  const visibleJobs = useMemo(
+    () => jobs.filter((job) => job.knowledgeBaseId === lockedBaseId),
+    [jobs, lockedBaseId],
+  );
 
   const upsertJob = (draft: KnowledgeJobSnapshot): void => {
     setJobs((prev) => {
@@ -164,16 +162,12 @@ export function KnowledgeUploadsPage({
   };
 
   const handlePick = async (): Promise<void> => {
-    if (!pickerEnabled) return;
-    if (routeBaseId && targetBaseId !== routeBaseId) {
-      setErrorMessage("KNOWLEDGE_JOB_TARGET_MISMATCH");
-      return;
-    }
+    if (!pickerEnabled || !lockedBaseId) return;
     const api = window.hermesAPI?.knowledgeJobs;
     const createDraft = injectedCreateDraft ?? api?.createDraft?.bind(api);
     const cancel = injectedCancel ?? api?.cancel?.bind(api);
     if (!createDraft) return;
-    const draft = await createDraft({ knowledgeBaseId: targetBaseId });
+    const draft = await createDraft({ knowledgeBaseId: lockedBaseId });
     upsertJob(draft);
 
     const filesApi = window.hermesAPI?.files;
@@ -183,11 +177,9 @@ export function KnowledgeUploadsPage({
       { knowledgeJobId: draft.jobId, mode: "local", source: "picker" },
     );
     const imported = results.filter((result) => result.ok);
-    if (imported.length === 0) {
-      if (cancel) {
-        const cancelled = await cancel({ jobId: draft.jobId });
-        upsertJob(cancelled);
-      }
+    if (imported.length === 0 && cancel) {
+      const cancelled = await cancel({ jobId: draft.jobId });
+      upsertJob(cancelled);
     }
   };
 
@@ -211,19 +203,34 @@ export function KnowledgeUploadsPage({
     );
   };
 
+  if (!lockedBaseId) {
+    return (
+      <div data-testid="knowledge-upload-panel" data-state="empty" className="px-6 pb-6">
+        <EmptyState
+          title={t("knowledge.uploads.title")}
+          description={t("knowledge.uploads.pickerDisabledProvider")}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div data-testid="knowledge-uploads-page" data-state={loadState}>
+    <div
+      data-testid="knowledge-upload-panel"
+      data-state={loadState}
+      className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-6"
+    >
       {loadState === "loading" ? (
-        <KnowledgeLoading label={t("knowledge.loading")} />
+        <p className="text-xs text-muted-foreground">{t("knowledge.loading")}</p>
       ) : null}
       {loadState === "unavailable" ? (
-        <KnowledgeEmptyState
+        <EmptyState
           title={t("knowledge.unavailableTitle")}
           description={t("knowledge.uploads.pickerBlocked")}
         />
       ) : null}
       {loadState === "error" ? (
-        <KnowledgeEmptyState
+        <EmptyState
           title={t("knowledge.host.errorTitle")}
           description={errorMessage}
         />
@@ -231,26 +238,16 @@ export function KnowledgeUploadsPage({
 
       {loadState === "empty" || loadState === "content" ? (
         <>
-          <KnowledgeToolbar>
-            <label>
-              {t("knowledge.uploads.targetBase")}
-              <select
-                data-testid="knowledge-upload-target"
-                value={targetBaseId}
-                disabled={!probe.mutationsEnabled || Boolean(routeBaseId)}
-                onChange={(event) => setTargetBaseId(event.target.value)}
-              >
-                <option value="unbound">{t("knowledge.uploads.unboundTarget")}</option>
-                {bases.map((base) => (
-                  <option key={base.id} value={base.id}>
-                    {base.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
+          <div className="grid gap-2">
+            <p
+              data-testid="knowledge-upload-target"
+              className="text-xs text-muted-foreground"
+            >
+              {t("knowledge.uploads.targetBase")}: {baseName || lockedBaseId}
+            </p>
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              variant="outline"
               data-testid="knowledge-upload-picker"
               disabled={!pickerEnabled}
               title={
@@ -263,11 +260,13 @@ export function KnowledgeUploadsPage({
               }}
             >
               {t("knowledge.uploads.pickerLabel")}
-            </button>
+            </Button>
             {pickerEnabled ? null : (
-              <p>{t("knowledge.uploads.pickerDisabledProvider")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("knowledge.uploads.pickerDisabledProvider")}
+              </p>
             )}
-          </KnowledgeToolbar>
+          </div>
 
           <KnowledgeFileJobQueue
             jobs={visibleJobs}
@@ -287,5 +286,3 @@ export function KnowledgeUploadsPage({
     </div>
   );
 }
-
-export default KnowledgeUploadsPage;

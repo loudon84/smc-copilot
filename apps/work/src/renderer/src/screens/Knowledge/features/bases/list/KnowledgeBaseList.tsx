@@ -1,26 +1,49 @@
 import { type ReactElement } from "react";
-import type { KnowledgeBaseSnapshot } from "../../../../../../../shared/knowledge/knowledge-base-ipc";
+import { KnowledgeBaseCard } from "@/components/knowledge/knowledge-base-card";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type {
+  KnowledgeBaseSnapshot,
+  KnowledgeBaseStatus,
+  KnowledgeBaseVisibility,
+} from "../../../../../../../shared/knowledge/knowledge-base-ipc";
 
 export function KnowledgeBaseCardGrid(props: {
   items: KnowledgeBaseSnapshot[];
   onOpen: (id: string) => void;
+  statusLabel: (status: KnowledgeBaseStatus) => string;
+  visibilityLabel: (visibility: KnowledgeBaseVisibility) => string;
+  openLabel: string;
+  emptyDescription: string;
+  ownerLabel: string;
+  createdAtLabel: string;
 }): ReactElement {
   return (
-    <div className="knowledge-card-grid" data-testid="knowledge-base-list">
+    <div
+      className="grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 min-[1000px]:grid-cols-3 min-[1400px]:grid-cols-4"
+      data-testid="knowledge-base-list"
+    >
       {props.items.map((item) => (
-        <button
+        <KnowledgeBaseCard
           key={item.id}
-          type="button"
-          className="settings-card knowledge-entity-card"
-          data-testid={`knowledge-base-item-${item.id}`}
-          onClick={() => props.onOpen(item.id)}
-        >
-          <div className="settings-card-head">
-            <strong>{item.name}</strong>
-            <span className="settings-card-badge">{item.visibility}</span>
-          </div>
-          <p>{item.status}</p>
-        </button>
+          knowledgeBase={item}
+          onOpen={props.onOpen}
+          labels={{
+            status: props.statusLabel(item.status),
+            visibility: props.visibilityLabel(item.visibility),
+            open: props.openLabel,
+            emptyDescription: props.emptyDescription,
+            owner: props.ownerLabel,
+            createdAt: props.createdAtLabel,
+          }}
+        />
       ))}
     </div>
   );
@@ -32,36 +55,38 @@ export function KnowledgeBaseTable(props: {
   openLabel: string;
   nameLabel: string;
   visibilityLabel: string;
+  visibilityValue: (visibility: KnowledgeBaseVisibility) => string;
 }): ReactElement {
   return (
-    <div className="knowledge-table-wrap">
-      <table className="knowledge-table" data-testid="knowledge-base-list">
-        <thead>
-          <tr>
-            <th>{props.nameLabel}</th>
-            <th>{props.visibilityLabel}</th>
-            <th>{props.openLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="overflow-x-hidden">
+      <Table className="w-full" data-testid="knowledge-base-list">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{props.nameLabel}</TableHead>
+            <TableHead>{props.visibilityLabel}</TableHead>
+            <TableHead>{props.openLabel}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {props.items.map((item) => (
-            <tr key={item.id}>
-              <td>{item.name}</td>
-              <td>{item.visibility}</td>
-              <td>
-                <button
+            <TableRow key={item.id}>
+              <TableCell>{item.name}</TableCell>
+              <TableCell>{props.visibilityValue(item.visibility)}</TableCell>
+              <TableCell>
+                <Button
                   type="button"
-                  className="btn btn-ghost btn-sm"
+                  size="sm"
+                  variant="ghost"
                   data-testid={`knowledge-base-item-${item.id}`}
                   onClick={() => props.onOpen(item.id)}
                 >
                   {props.openLabel}
-                </button>
-              </td>
-            </tr>
+                </Button>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

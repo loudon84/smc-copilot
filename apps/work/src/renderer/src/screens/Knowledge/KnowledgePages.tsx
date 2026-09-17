@@ -21,7 +21,7 @@ import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
 import { KnowledgeBaseDetailPage } from "./pages/KnowledgeBaseDetailPage";
 import { KnowledgeSetsPage } from "./pages/KnowledgeSetsPage";
 import { KnowledgeDocumentsPage } from "./pages/KnowledgeDocumentsPage";
-import { KnowledgeUploadsPage } from "./pages/KnowledgeUploadsPage";
+import { KnowledgeDocumentDetailPage } from "./pages/KnowledgeDocumentDetailPage";
 import { KnowledgeChatPage } from "./pages/KnowledgeChatPage";
 
 export type { KnowledgeNavigateTarget } from "./knowledge-route-descriptor";
@@ -50,7 +50,7 @@ export type KnowledgePagesProps = {
 };
 
 /**
- * Knowledge page host: module nav + six Work-native pages over route-scope params.
+ * Knowledge page host: module nav + five Work-native pages over route-scope params.
  * Fail-closed when provider capability is unavailable; mock mode stays operable.
  */
 export function KnowledgePages({
@@ -117,18 +117,20 @@ export function KnowledgePages({
       );
       break;
     case "documents":
-      pageBody = (
+      pageBody = params.documentId ? (
+        <KnowledgeDocumentDetailPage
+          params={params}
+          onNavigate={onNavigate}
+          onBack={onBack}
+          {...pageOverrides}
+        />
+      ) : (
         <KnowledgeDocumentsPage
           params={params}
           onNavigate={onNavigate}
           onBack={onBack}
           {...pageOverrides}
         />
-      );
-      break;
-    case "uploads":
-      pageBody = (
-        <KnowledgeUploadsPage params={params} {...pageOverrides} />
       );
       break;
     case "chat":

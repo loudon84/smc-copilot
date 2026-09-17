@@ -23,12 +23,19 @@ import {
 import {
   KNOWLEDGE_BASE_IPC_CHANNELS,
   type HermesKnowledgeBasesAPI,
+  type KnowledgeActivateFileVersionInput,
+  type KnowledgeAddFileVersionInput,
   type KnowledgeBaseCreateInput,
   type KnowledgeBaseDeleteInput,
   type KnowledgeBaseGetInput,
   type KnowledgeBaseListFilesInput,
   type KnowledgeBaseListInput,
   type KnowledgeBaseUpdateInput,
+  type KnowledgeBuildIdInput,
+  type KnowledgeBuildJobSnapshot,
+  type KnowledgeFileIdInput,
+  type KnowledgeStartBuildInput,
+  type KnowledgeUpdateBuildProfileInput,
 } from "../shared/knowledge/knowledge-base-ipc";
 
 /** Curated Knowledge Jobs API plus sanitized mode/facade wrappers. */
@@ -99,6 +106,53 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.delete, input),
       listFiles: (input: KnowledgeBaseListFilesInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.listFiles, input),
+      getFile: (input: KnowledgeFileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.getFile, input),
+      listFileVersions: (input: KnowledgeFileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.listFileVersions, input),
+      addFileVersion: (input: KnowledgeAddFileVersionInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.addFileVersion, input),
+      activateFileVersion: (input: KnowledgeActivateFileVersionInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.activateFileVersion, input),
+      archiveFile: (input: KnowledgeFileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.archiveFile, input),
+      unarchiveFile: (input: KnowledgeFileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.unarchiveFile, input),
+      reparseFile: (input: KnowledgeFileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.reparseFile, input),
+      deleteFile: (input: KnowledgeFileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.deleteFile, input),
+      listIndexes: (input: KnowledgeBaseGetInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.listIndexes, input),
+      getBuildProfile: (input: KnowledgeBaseGetInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.getBuildProfile, input),
+      updateBuildProfile: (input: KnowledgeUpdateBuildProfileInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.updateBuildProfile, input),
+      startBuild: (input: KnowledgeStartBuildInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.startBuild, input),
+      getBuild: (input: KnowledgeBuildIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.getBuild, input),
+      retryBuild: (input: KnowledgeBuildIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.retryBuild, input),
+      watchBuild: (input: KnowledgeBuildIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.watchBuild, input),
+      unwatchBuild: (input?: KnowledgeBuildIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.unwatchBuild, input),
+      onBuildChanged: (callback) => {
+        const handler = (
+          _event: Electron.IpcRendererEvent,
+          payload: KnowledgeBuildJobSnapshot,
+        ): void => {
+          callback(payload);
+        };
+        ipcRenderer.on(KNOWLEDGE_BASE_IPC_CHANNELS.buildChanged, handler);
+        return () => {
+          ipcRenderer.removeListener(
+            KNOWLEDGE_BASE_IPC_CHANNELS.buildChanged,
+            handler,
+          );
+        };
+      },
     },
   };
 }

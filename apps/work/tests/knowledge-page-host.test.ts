@@ -14,6 +14,7 @@ import type {
   KnowledgeModeSnapshot,
 } from "../src/shared/knowledge/knowledge-job-ipc";
 import type { HermesKnowledgeBasesAPI } from "../src/shared/knowledge/knowledge-base-ipc";
+import { makeBasesApi, unusedKnowledgeBaseOps } from "./helpers/knowledge-bases-api";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
   useI18n: () => ({
@@ -83,6 +84,7 @@ function mockJobs(options: {
         page: 1,
         pageSize: 50,
       })),
+      ...unusedKnowledgeBaseOps(),
     } satisfies HermesKnowledgeBasesAPI);
 
   (
@@ -196,6 +198,7 @@ describe("Knowledge page host (V01)", () => {
           page: 1,
           pageSize: 50,
         })),
+        ...unusedKnowledgeBaseOps(),
       },
     });
 
@@ -218,7 +221,7 @@ describe("Knowledge page host (V01)", () => {
     expect(window.location.href).not.toContain("base-42");
   });
 
-  it("switches across six Knowledge pages without a Profile slot", async () => {
+  it("switches across five Knowledge pages without a Profile or Uploads slot", async () => {
     const onNavigate = vi.fn();
 
     await act(async () => {
@@ -239,6 +242,7 @@ describe("Knowledge page host (V01)", () => {
     );
     expect(screen.queryByTestId("knowledge-nav-profile")).toBeNull();
     expect(screen.queryByTestId("knowledge-nav-preferences")).toBeNull();
+    expect(screen.queryByTestId("knowledge-nav-uploads")).toBeNull();
 
     for (const page of KNOWLEDGE_ROUTE_PAGES) {
       expect(screen.getByTestId(`knowledge-nav-${page}`)).toBeTruthy();
@@ -317,5 +321,55 @@ describe("Knowledge page host (V01)", () => {
 
     expect(onNavigate).toHaveBeenCalled();
     expect(window.location.href).toBe(hrefBefore);
+  });
+
+  it("routes documents documentId to the detail page", async () => {
+    const bases = makeBasesApi(
+      [
+        {
+          id: "b1",
+          name: "Alpha",
+          description: null,
+          status: "active",
+          visibility: "private",
+        },
+      ],
+      {
+        files: [
+          {
+            id: "sf-1",
+            knowledgeBaseId: "b1",
+            fileName: "handbook.pdf",
+            status: "active",
+            activeVersionId: "sf-1-v1",
+            archivedAt: null,
+          },
+        ],
+      },
+    );
+    mockJobs({
+      capability: { available: true, status: "available" },
+      mode: {
+        dataMode: "provider",
+        allowSyntheticData: false,
+        configSource: "default",
+      },
+      bases,
+    });
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgePages, {
+          page: "documents",
+          params: { knowledgeBaseId: "b1", documentId: "sf-1" },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-detail-page")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("knowledge-documents-page")).toBeNull();
+    expect(screen.getByTestId("knowledge-document-detail")).toBeTruthy();
   });
 });

@@ -2,15 +2,24 @@
  * Register typed `knowledge-base:*` IPC. Delete is DELETE, never patch.deleted.
  */
 
-import type { IpcMain, IpcMainInvokeEvent } from "electron";
+import { BrowserWindow, type IpcMain, type IpcMainInvokeEvent } from "electron";
+import { readFile } from "fs/promises";
 import {
   KNOWLEDGE_BASE_IPC_CHANNELS,
+  type KnowledgeActivateFileVersionInput,
+  type KnowledgeAddFileVersionInput,
   type KnowledgeBaseCreateInput,
   type KnowledgeBaseDeleteInput,
+  type KnowledgeBaseFileSnapshot,
   type KnowledgeBaseGetInput,
   type KnowledgeBaseListFilesInput,
   type KnowledgeBaseListInput,
   type KnowledgeBaseUpdateInput,
+  type KnowledgeBuildIdInput,
+  type KnowledgeBuildJobSnapshot,
+  type KnowledgeFileIdInput,
+  type KnowledgeStartBuildInput,
+  type KnowledgeUpdateBuildProfileInput,
 } from "../../shared/knowledge/knowledge-base-ipc";
 import { KnowledgeFacadeError } from "../../shared/knowledge/knowledge-errors";
 import { getKnowledgeModeSnapshot } from "./knowledge-mode-controller";
@@ -19,6 +28,24 @@ import { KnowledgeProviderFacade } from "./knowledge-provider-facade";
 import { deriveKnowledgeJobPartition } from "./knowledge-upload-job-coordinator";
 import { getActiveProfileNameSync } from "../utils";
 import { readStoredSessionSync } from "../auth/token-store";
+import { getManagedFile } from "../files/file-association-store";
+import { KnowledgeBuildPoller } from "./knowledge-build-poller";
+
+function broadcastBuildSnapshot(snapshot: KnowledgeBuildJobSnapshot): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    try {
+      win.webContents.send(KNOWLEDGE_BASE_IPC_CHANNELS.buildChanged, snapshot);
+    } catch {
+      // Window may be closing mid-send.
+    }
+  }
+}
+
+const buildPoller = new KnowledgeBuildPoller(
+  (buildId) => getKnowledgeHttpProvider().getBuild({ buildId }),
+  broadcastBuildSnapshot,
+);
 
 function sanitizeIpcError(err: unknown): Error {
   if (err instanceof KnowledgeFacadeError) {
@@ -218,6 +245,287 @@ export function registerKnowledgeBaseIpcHandlers(ipcMain: IpcMain): void {
           return { items, total: items.length, page: 1, pageSize: items.length };
         }
         return await getKnowledgeHttpProvider().listBaseFiles(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  const mockFile = (
+    sourceFileId: string,
+    knowledgeBaseId = "mock-base",
+  ): KnowledgeBaseFileSnapshot => ({
+    id: sourceFileId,
+    knowledgeBaseId,
+    fileName: sourceFileId,
+    status: "active",
+    activeVersionId: `${sourceFileId}-v1`,
+    archivedAt: null,
+  });
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.getFile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeFileIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) return mockFile(input.sourceFileId);
+        return await getKnowledgeHttpProvider().getFile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.listFileVersions,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeFileIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return [
+            {
+              id: `${input.sourceFileId}-v1`,
+              sourceFileId: input.sourceFileId,
+              versionNo: 1,
+              parseStatus: "active" as const,
+            },
+          ];
+        }
+        return await getKnowledgeHttpProvider().listFileVersions(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.addFileVersion,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeAddFileVersionInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) return mockFile(input.sourceFileId);
+        const file = getManagedFile(
+          getActiveProfileNameSync(),
+          input.managedFileId,
+        );
+        const filePath = file?.managedPath || file?.originalPath;
+        if (!file || !filePath) throw new Error("KNOWLEDGE_JOB_FILE_MISSING");
+        const bytes = await readFile(filePath);
+        const accepted = await getKnowledgeHttpProvider().addFileVersion({
+          sourceFileId: input.sourceFileId,
+          fileName: file.name,
+          bytes,
+          mimeType: file.mime,
+        });
+        return await getKnowledgeHttpProvider().getFile({
+          sourceFileId: accepted.sourceFileId,
+        });
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.activateFileVersion,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeActivateFileVersionInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return {
+            ...mockFile(input.sourceFileId),
+            activeVersionId: input.versionId,
+          };
+        }
+        return await getKnowledgeHttpProvider().activateFileVersion(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.archiveFile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeFileIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return { ...mockFile(input.sourceFileId), archivedAt: new Date().toISOString() };
+        }
+        return await getKnowledgeHttpProvider().archiveFile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.unarchiveFile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeFileIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) return mockFile(input.sourceFileId);
+        return await getKnowledgeHttpProvider().unarchiveFile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.reparseFile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeFileIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) return mockFile(input.sourceFileId);
+        return await getKnowledgeHttpProvider().reparseFile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.deleteFile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeFileIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) return;
+        await getKnowledgeHttpProvider().deleteFile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.listIndexes,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeBaseGetInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) return [];
+        return await getKnowledgeHttpProvider().listIndexes(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.getBuildProfile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeBaseGetInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return {
+            activeBuildProfileId: "mock-profile",
+            profileId: "mock-profile",
+            profileName: "Mock profile",
+          };
+        }
+        return await getKnowledgeHttpProvider().getBuildProfile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.updateBuildProfile,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeUpdateBuildProfileInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return {
+            activeBuildProfileId: input.buildProfileId,
+            profileId: input.buildProfileId,
+            profileName: input.buildProfileId,
+          };
+        }
+        return await getKnowledgeHttpProvider().updateBuildProfile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.startBuild,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeStartBuildInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return {
+            id: `build-${input.knowledgeBaseId}`,
+            status: "completed" as const,
+            progress: 100,
+            knowledgeBaseId: input.knowledgeBaseId,
+          };
+        }
+        const snapshot = await getKnowledgeHttpProvider().startBuild(input);
+        buildPoller.watch(snapshot.id);
+        return snapshot;
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.getBuild,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeBuildIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return { id: input.buildId, status: "completed" as const, progress: 100 };
+        }
+        return await getKnowledgeHttpProvider().getBuild(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.retryBuild,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeBuildIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return { id: input.buildId, status: "queued" as const, progress: 0 };
+        }
+        const snapshot = await getKnowledgeHttpProvider().retryBuild(input);
+        buildPoller.watch(snapshot.id);
+        return snapshot;
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.watchBuild,
+    async (_e: IpcMainInvokeEvent, input: KnowledgeBuildIdInput) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          return { id: input.buildId, status: "completed" as const, progress: 100 };
+        }
+        const snapshot = await getKnowledgeHttpProvider().getBuild(input);
+        buildPoller.watch(input.buildId);
+        return snapshot;
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.unwatchBuild,
+    async (_e: IpcMainInvokeEvent, input?: KnowledgeBuildIdInput) => {
+      try {
+        requireAuth();
+        buildPoller.unwatch(input?.buildId);
       } catch (err) {
         throw sanitizeIpcError(err);
       }

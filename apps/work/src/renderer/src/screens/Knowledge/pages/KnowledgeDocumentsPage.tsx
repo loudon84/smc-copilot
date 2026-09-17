@@ -1,25 +1,45 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { BusinessModuleUISurface } from "@/components/common/business-module-ui-surface";
+import { EmptyState } from "@/components/common/empty-state";
+import { PageHeader } from "@/components/common/page-header";
+import { PageToolbar } from "@/components/common/page-toolbar";
+import { SearchInput } from "@/components/common/search-input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useI18n } from "../../../components/useI18n";
-import { FilePreviewRouter } from "../../../components/files/preview/FilePreviewRouter";
 import {
   useKnowledgeFacade,
   type UseKnowledgeFacadeOptions,
 } from "../../../../../shared/knowledge/use-knowledge-facade";
 import type {
+  HermesKnowledgeBasesAPI,
+  KnowledgeBaseFileSnapshot,
+  KnowledgeBaseSnapshot,
+  KnowledgeSourceFileStatus,
+} from "../../../../../shared/knowledge/knowledge-base-ipc";
+import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
-  KnowledgeFacadeEntitySnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
-import {
-  KnowledgeEmptyState,
-  KnowledgeLoading,
-  KnowledgeSearchInput,
-  KnowledgeSectionTabs,
-  KnowledgeToolbar,
-} from "../knowledge-page-chrome";
-import type { FilePreviewState } from "../../../hooks/files/useFilePreview";
+import { KnowledgeLoading } from "../knowledge-page-chrome";
+
+const NONE_BASE = "__none__";
 
 export type KnowledgeDocumentsPageProps = {
   params?: KnowledgeRouteParams;
@@ -31,65 +51,69 @@ export type KnowledgeDocumentsPageProps = {
   capability?: KnowledgeCapabilitySnapshot | null;
   mode?: KnowledgeModeSnapshot | null;
   facade?: HermesKnowledgeFacadeAPI | null;
-  /**
-   * Optional ManagedFile id resolver. Product default returns null so preview
-   * stays gracefully unavailable unless a ManagedFile is known.
-   */
-  resolveManagedFileId?: (
-    entity: KnowledgeFacadeEntitySnapshot,
-  ) => string | null;
-  /** Optional preview loader for tests / File Platform bridge. */
-  loadPreview?: (fileId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  bases?: HermesKnowledgeBasesAPI | null;
 };
 
-type DocsLoadState =
-  | "loading"
-  | "unavailable"
-  | "empty"
-  | "content"
-  | "not-found"
-  | "error";
+type DocsLoadState = "loading" | "unavailable" | "empty" | "content" | "error";
+type FileFilter = "all" | KnowledgeSourceFileStatus | "archived";
 
-type PreviewState =
-  | { status: "idle" }
-  | { status: "unavailable" }
-  | { status: "loading" }
-  | { status: "ready"; fileId: string; filePreview?: FilePreviewState }
-  | { status: "error"; message: string };
+const FILE_STATUS_FILTERS: KnowledgeSourceFileStatus[] = [
+  "pending",
+  "active",
+  "updating",
+  "error",
+  "deleting",
+];
 
-type DocDetailTab = "preview" | "info" | "versions" | "parse" | "permission";
+function errorCode(error: unknown): string {
+  if (error instanceof Error) return error.message.split(/\s/)[0] ?? error.message;
+  return "KNOWLEDGE_UNAVAILABLE";
+}
+
+async function listDocumentsForBases(
+  api: HermesKnowledgeBasesAPI,
+  listedBases: KnowledgeBaseSnapshot[],
+  knowledgeBaseId: string,
+): Promise<KnowledgeBaseFileSnapshot[]> {
+  const ids = knowledgeBaseId
+    ? [knowledgeBaseId]
+    : listedBases.map((base) => base.id);
+  if (ids.length === 0) return [];
+  const pages = await Promise.all(
+    ids.map((id) => api.listFiles({ knowledgeBaseId: id })),
+  );
+  const items = pages.flatMap((page) => page.items);
+  return knowledgeBaseId
+    ? items.filter((file) => file.knowledgeBaseId === knowledgeBaseId)
+    : items;
+}
 
 /**
- * Knowledge Documents list/detail with display-only permission and Work preview
- * when a ManagedFile id is available.
+ * Knowledge Documents list over Base file IPC. Open navigates to
+ * KnowledgeDocumentDetailPage via route-scope documentId.
  */
 export function KnowledgeDocumentsPage({
   params = {},
   onNavigate,
-  onBack,
   capability: injectedCapability,
   mode: injectedMode,
   facade: injectedFacade,
-  resolveManagedFileId,
-  loadPreview,
+  bases: injectedBases,
 }: KnowledgeDocumentsPageProps): ReactElement {
   const { t } = useI18n();
   const probe = useKnowledgeFacade({
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
   } satisfies UseKnowledgeFacadeOptions);
-  const detailId = params.documentId;
+  const routeBaseId = params.knowledgeBaseId ?? "";
   const [loadState, setLoadState] = useState<DocsLoadState>("loading");
-  const [items, setItems] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
-  const [detail, setDetail] = useState<KnowledgeFacadeEntitySnapshot | null>(
-    null,
-  );
+  const [bases, setBases] = useState<KnowledgeBaseSnapshot[]>([]);
+  const [items, setItems] = useState<KnowledgeBaseFileSnapshot[]>([]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<FileFilter>("all");
   const [errorMessage, setErrorMessage] = useState("");
-  const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
-  const [detailTab, setDetailTab] = useState<DocDetailTab>("preview");
 
   useEffect(() => {
     if (probe.presentation === "loading") {
@@ -100,98 +124,30 @@ export function KnowledgeDocumentsPage({
       setLoadState("unavailable");
       return;
     }
+    if (!probe.bases) {
+      setBases([]);
+      setItems([]);
+      setLoadState("empty");
+      return;
+    }
 
     let cancelled = false;
     void (async () => {
       try {
-        if (detailId) {
-          if (!probe.facade || probe.mode?.dataMode !== "mock") {
-            if (!cancelled) setLoadState("not-found");
-            return;
-          }
-          const entity = await probe.facade.getEntity({
-            kind: "document",
-            entityId: detailId,
-          });
-          if (cancelled) return;
-          if (!entity) {
-            setDetail(null);
-            setLoadState("not-found");
-            return;
-          }
-          setDetail(entity);
-          setLoadState("content");
-
-          const managedFileId = resolveManagedFileId?.(entity) ?? null;
-          if (!managedFileId) {
-            setPreview({ status: "unavailable" });
-            return;
-          }
-          setPreview({ status: "loading" });
-          try {
-            if (loadPreview) {
-              const result = await loadPreview(managedFileId);
-              if (cancelled) return;
-              if (result.ok) {
-                setPreview({ status: "ready", fileId: managedFileId });
-              } else {
-                setPreview({ status: "error", message: result.error });
-              }
-            } else {
-              const filesApi = window.hermesAPI?.files;
-              if (!filesApi?.getPreview) {
-                if (!cancelled) setPreview({ status: "unavailable" });
-                return;
-              }
-              const result = await filesApi.getPreview(undefined, managedFileId);
-              if (cancelled) return;
-              if (result && "error" in result) {
-                setPreview({
-                  status: "error",
-                  message: result.error.message,
-                });
-              } else {
-                setPreview({
-                  status: "ready",
-                  fileId: managedFileId,
-                  filePreview: {
-                    open: true,
-                    fileId: managedFileId,
-                    loading: false,
-                    descriptor: result,
-                  },
-                });
-              }
-            }
-          } catch (error) {
-            if (cancelled) return;
-            setPreview({
-              status: "error",
-              message:
-                error instanceof Error
-                  ? error.message
-                  : t("knowledge.documents.previewError"),
-            });
-          }
-          return;
-        }
-
-        if (!probe.facade || probe.mode?.dataMode !== "mock") {
-          setItems([]);
-          setLoadState(
-            probe.presentation === "unavailable" ? "unavailable" : "empty",
-          );
-          return;
-        }
-        const listed = await probe.facade.listEntities({ kind: "document" });
+        const listedBases = await probe.bases!.list();
         if (cancelled) return;
-        setItems(listed);
-        setLoadState(listed.length > 0 ? "content" : "empty");
+        setBases(listedBases.items);
+        const scoped = await listDocumentsForBases(
+          probe.bases!,
+          listedBases.items,
+          routeBaseId,
+        );
+        if (cancelled) return;
+        setItems(scoped);
+        setLoadState(scoped.length > 0 ? "content" : "empty");
       } catch (error) {
         if (cancelled) return;
-        setErrorMessage(
-          error instanceof Error ? error.message : t("knowledge.host.errorTitle"),
-        );
+        setErrorMessage(errorCode(error));
         setLoadState("error");
       }
     })();
@@ -199,239 +155,201 @@ export function KnowledgeDocumentsPage({
     return () => {
       cancelled = true;
     };
-  }, [
-    probe.presentation,
-    probe.facade,
-    probe.mode?.dataMode,
-    detailId,
-    resolveManagedFileId,
-    loadPreview,
-  ]);
+  }, [probe.presentation, probe.bases, routeBaseId]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
-      if (filter !== "all" && (item.permission?.visibility ?? "all") !== filter) {
+      if (filter === "archived") {
+        if (!item.archivedAt) return false;
+      } else if (filter !== "all" && item.status !== filter) {
         return false;
       }
       if (!q) return true;
-      return (item.title ?? item.id).toLowerCase().includes(q);
+      return item.fileName.toLowerCase().includes(q);
     });
   }, [items, filter, search]);
 
-  if (detailId) {
-    return (
+  const baseNameById = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const base of bases) {
+      names.set(base.id, base.name);
+    }
+    return names;
+  }, [bases]);
+
+  const statusLabel = (status: KnowledgeSourceFileStatus): string => {
+    switch (status) {
+      case "pending":
+        return t("knowledge.documents.statusPending");
+      case "active":
+        return t("knowledge.documents.statusActive");
+      case "updating":
+        return t("knowledge.documents.statusUpdating");
+      case "error":
+        return t("knowledge.documents.statusError");
+      case "deleting":
+        return t("knowledge.documents.statusDeleting");
+      default:
+        return status;
+    }
+  };
+
+  return (
+    <BusinessModuleUISurface module="knowledge">
       <div data-testid="knowledge-documents-page" data-state={loadState}>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          data-testid="knowledge-documents-back"
-          onClick={() => onBack?.()}
-        >
-          {t("knowledge.host.back")}
-        </button>
         {loadState === "loading" ? (
           <KnowledgeLoading label={t("knowledge.loading")} />
         ) : null}
-        {loadState === "not-found" ? (
-          <KnowledgeEmptyState
-            testId="knowledge-document-not-found"
-            title={t("knowledge.host.notFoundTitle")}
-            description={t("knowledge.host.notFoundDescription")}
+        {loadState === "unavailable" ? (
+          <EmptyState
+            title={t("knowledge.unavailableTitle")}
+            description={
+              probe.capability?.status === "auth_required"
+                ? t("knowledge.host.authRequired")
+                : t("knowledge.unavailableDescription")
+            }
           />
         ) : null}
         {loadState === "error" ? (
-          <KnowledgeEmptyState
+          <EmptyState
             title={t("knowledge.host.errorTitle")}
             description={errorMessage}
           />
         ) : null}
-        {loadState === "content" && detail ? (
-          <section
-            className="settings-section"
-            data-testid="knowledge-document-detail"
-          >
-            <h2>{detail.title ?? t("knowledge.documents.detailTitle")}</h2>
-            <p data-testid="knowledge-document-detail-id">{detail.id}</p>
-            <KnowledgeSectionTabs
-              active={detailTab}
-              onChange={setDetailTab}
-              tabs={[
-                { id: "preview", label: t("knowledge.documents.tabPreview") },
-                { id: "info", label: t("knowledge.documents.tabInfo") },
-                { id: "versions", label: t("knowledge.documents.tabVersions") },
-                { id: "parse", label: t("knowledge.documents.tabParse") },
-                { id: "permission", label: t("knowledge.documents.tabPermission") },
-              ]}
+
+        {loadState === "empty" || loadState === "content" ? (
+          <div className="grid gap-3">
+            <PageHeader
+              title={t("knowledge.documents.title")}
+              description={t("knowledge.documents.description")}
             />
-
-            <section
-              hidden={detailTab !== "preview"}
-              data-testid="knowledge-document-preview"
-            >
-              <h3>{t("knowledge.documents.previewTitle")}</h3>
-              {preview.status === "unavailable" || preview.status === "idle" ? (
-                <p data-testid="knowledge-document-preview-unavailable">
-                  {t("knowledge.documents.previewUnavailable")}
-                </p>
-              ) : null}
-              {preview.status === "loading" ? (
-                <p data-testid="knowledge-document-preview-loading">
-                  {t("knowledge.loading")}
-                </p>
-              ) : null}
-              {preview.status === "ready" ? (
-                <div data-testid="knowledge-document-preview-ready">
-                  {preview.filePreview?.descriptor ? (
-                    <FilePreviewRouter state={preview.filePreview} />
-                  ) : (
-                    <p>ManagedFile {preview.fileId}</p>
-                  )}
-                </div>
-              ) : null}
-              {preview.status === "error" ? (
-                <p data-testid="knowledge-document-preview-error">
-                  {t("knowledge.documents.previewError")}: {preview.message}
-                </p>
-              ) : null}
-            </section>
-
-            <div hidden={detailTab !== "info"}>
-              <p>
-                {t("knowledge.documents.versionLabel")}:{" "}
-                <span data-testid="knowledge-document-version">
-                  {t("knowledge.documents.versionDraft")}
-                </span>
-              </p>
-              <p>
-                {t("knowledge.documents.parseLabel")}:{" "}
-                <span data-testid="knowledge-document-parse">
-                  {t("knowledge.documents.parseDraft")}
-                </span>
-              </p>
-            </div>
-
-            <div hidden={detailTab !== "versions"}>
-              <p>{t("knowledge.documents.versionDraft")}</p>
-            </div>
-
-            <div hidden={detailTab !== "parse"}>
-              <p>{t("knowledge.documents.parseDraft")}</p>
-            </div>
-
-            <div hidden={detailTab !== "permission"}>
-              <p>
-                {t("knowledge.documents.permissionLabel")}:{" "}
-                <span
-                  className="settings-card-badge"
-                  data-testid="knowledge-document-permission"
-                  data-display-only="true"
+            <PageToolbar className="flex-nowrap">
+              <div className="min-w-0 flex-1">
+                <Select
+                  value={routeBaseId || NONE_BASE}
+                  onValueChange={(value) => {
+                    onNavigate?.({
+                      page: "documents",
+                      params: value === NONE_BASE ? {} : { knowledgeBaseId: value },
+                    });
+                  }}
                 >
-                  {detail.permission?.role ?? "viewer"} /{" "}
-                  {detail.permission?.visibility ?? "private"}
-                </span>
+                  <SelectTrigger data-testid="knowledge-documents-base">
+                    <SelectValue placeholder={t("knowledge.documents.allBases")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE_BASE} data-testid="knowledge-documents-base-none">
+                      {t("knowledge.documents.allBases")}
+                    </SelectItem>
+                    {bases.map((base) => (
+                      <SelectItem
+                        key={base.id}
+                        value={base.id}
+                        data-testid={`knowledge-documents-base-${base.id}`}
+                      >
+                        {base.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-0 flex-1">
+                <SearchInput
+                  className="w-full"
+                  testId="knowledge-documents-search"
+                  placeholder={t("knowledge.host.searchPlaceholder")}
+                  value={search}
+                  onChange={setSearch}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <Select
+                  value={filter}
+                  onValueChange={(value) => setFilter(value as FileFilter)}
+                >
+                  <SelectTrigger data-testid="knowledge-documents-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("knowledge.host.filterAll")}</SelectItem>
+                    {FILE_STATUS_FILTERS.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {statusLabel(status)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="archived">
+                      {t("knowledge.documents.filterArchived")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </PageToolbar>
+            {filtered.length === 0 ? (
+              <p data-testid="knowledge-document-list-empty">
+                {t("knowledge.documents.emptyList")}
               </p>
-              <p data-testid="knowledge-document-permission-note">
-                {t("knowledge.documents.permissionDisplayOnly")}
-              </p>
-            </div>
-          </section>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <div data-testid="knowledge-documents-page" data-state={loadState}>
-      {loadState === "loading" ? (
-        <KnowledgeLoading label={t("knowledge.loading")} />
-      ) : null}
-      {loadState === "unavailable" ? (
-        <KnowledgeEmptyState
-          title={t("knowledge.unavailableTitle")}
-          description={t("knowledge.unavailableDescription")}
-        />
-      ) : null}
-      {loadState === "error" ? (
-        <KnowledgeEmptyState
-          title={t("knowledge.host.errorTitle")}
-          description={errorMessage}
-        />
-      ) : null}
-
-      {loadState === "empty" || loadState === "content" ? (
-        <>
-          <KnowledgeToolbar>
-            <KnowledgeSearchInput
-              testId="knowledge-documents-search"
-              placeholder={t("knowledge.host.searchPlaceholder")}
-              value={search}
-              onChange={setSearch}
-            />
-            <label>
-              {t("knowledge.documents.filterStatus")}
-              <select
-                data-testid="knowledge-documents-filter"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-              >
-                <option value="all">{t("knowledge.host.filterAll")}</option>
-                <option value="private">{t("knowledge.host.private")}</option>
-                <option value="shared">{t("knowledge.host.shared")}</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={!onNavigate}
-              onClick={() => onNavigate?.({ page: "uploads", params: {} })}
-            >
-              {t("knowledge.documents.uploadAction")}
-            </button>
-          </KnowledgeToolbar>
-          {filtered.length === 0 ? (
-            <p data-testid="knowledge-document-list-empty">
-              {t("knowledge.documents.emptyList")}
-            </p>
-          ) : (
-            <div className="knowledge-table-wrap">
-              <table className="knowledge-table" data-testid="knowledge-document-list">
-                <thead>
-                  <tr>
-                    <th>{t("knowledge.documents.listTitle")}</th>
-                    <th>{t("knowledge.documents.permissionLabel")}</th>
-                    <th>{t("knowledge.host.open")}</th>
-                  </tr>
-                </thead>
-                <tbody>
+            ) : (
+              <Table data-testid="knowledge-document-list">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("knowledge.documents.baseLabel")}</TableHead>
+                    <TableHead>{t("knowledge.bases.fileName")}</TableHead>
+                    <TableHead>{t("knowledge.bases.fileStatus")}</TableHead>
+                    <TableHead>{t("knowledge.host.owner")}</TableHead>
+                    <TableHead>{t("knowledge.host.createdAt")}</TableHead>
+                    <TableHead>{t("knowledge.bases.fileVersion")}</TableHead>
+                    <TableHead>{t("knowledge.bases.fileLastError")}</TableHead>
+                    <TableHead>{t("knowledge.host.open")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {filtered.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.title ?? item.id}</td>
-                      <td>{item.permission?.visibility ?? "private"}</td>
-                      <td>
-                        <button
+                    <TableRow
+                      key={item.id}
+                      data-testid={`knowledge-document-row-${item.id}`}
+                    >
+                      <TableCell data-testid={`knowledge-document-base-${item.id}`}>
+                        {baseNameById.get(item.knowledgeBaseId) ?? item.knowledgeBaseId}
+                      </TableCell>
+                      <TableCell>{item.fileName}</TableCell>
+                      <TableCell>{statusLabel(item.status)}</TableCell>
+                      <TableCell data-testid={`knowledge-document-owner-${item.id}`}>
+                        {item.ownerMemberId ?? ""}
+                      </TableCell>
+                      <TableCell data-testid={`knowledge-document-created-${item.id}`}>
+                        {item.createdAt ?? ""}
+                      </TableCell>
+                      <TableCell>{item.activeVersionId ?? ""}</TableCell>
+                      <TableCell>{item.lastError ?? ""}</TableCell>
+                      <TableCell>
+                        <Button
                           type="button"
-                          className="btn btn-ghost btn-sm"
+                          size="sm"
+                          variant="outline"
                           data-testid={`knowledge-document-item-${item.id}`}
                           onClick={() =>
                             onNavigate?.({
                               page: "documents",
-                              params: { documentId: item.id },
+                              params: {
+                                knowledgeBaseId: routeBaseId || item.knowledgeBaseId,
+                                documentId: item.id,
+                              },
                             })
                           }
                         >
                           {t("knowledge.host.open")}
-                        </button>
-                      </td>
-                    </tr>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      ) : null}
-    </div>
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </BusinessModuleUISurface>
   );
 }
 

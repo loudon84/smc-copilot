@@ -8,15 +8,25 @@ import { AccessTokenError } from "../auth/ensure-access-token";
 import { AuthorizedBackendTransportError } from "../auth/authorized-backend-transport";
 import { resolveKnowledgeServiceUrl } from "./knowledge-service-url";
 import type {
+  KnowledgeActivateFileVersionInput,
   KnowledgeBaseCreateInput,
   KnowledgeBaseDeleteInput,
   KnowledgeBaseFilePage,
+  KnowledgeBaseFileSnapshot,
   KnowledgeBaseGetInput,
   KnowledgeBaseListFilesInput,
   KnowledgeBaseListInput,
   KnowledgeBasePage,
   KnowledgeBaseSnapshot,
   KnowledgeBaseUpdateInput,
+  KnowledgeBuildIdInput,
+  KnowledgeBuildJobSnapshot,
+  KnowledgeBuildProfileView,
+  KnowledgeFileIdInput,
+  KnowledgeFileVersionSnapshot,
+  KnowledgeIndexState,
+  KnowledgeStartBuildInput,
+  KnowledgeUpdateBuildProfileInput,
 } from "../../shared/knowledge/knowledge-base-ipc";
 import { KNOWLEDGE_ERROR_CODES } from "../../shared/knowledge/knowledge-base-ipc";
 import {
@@ -31,8 +41,14 @@ import {
   parseErrorEnvelope,
   parseIngestionJob,
   parseKnowledgeBaseFilePage,
+  parseKnowledgeBaseFileSnapshot,
   parseKnowledgeBasePage,
   parseKnowledgeBaseSnapshot,
+  parseKnowledgeBuildJobList,
+  parseKnowledgeBuildJobSnapshot,
+  parseKnowledgeBuildProfileView,
+  parseKnowledgeFileVersionList,
+  parseKnowledgeIndexStates,
   parseUploadAccepted,
   type ParsedIngestionJob,
   type ParsedUploadAccepted,
@@ -54,6 +70,33 @@ export type KnowledgeHttpProvider = {
   getIngestionJob(jobId: string): Promise<ParsedIngestionJob>;
   retryIngestionJob(jobId: string): Promise<ParsedIngestionJob>;
   cancelIngestionJob(jobId: string): Promise<ParsedIngestionJob>;
+  getFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  listFileVersions(
+    input: KnowledgeFileIdInput,
+  ): Promise<KnowledgeFileVersionSnapshot[]>;
+  addFileVersion(input: {
+    sourceFileId: string;
+    fileName: string;
+    bytes: Uint8Array;
+    mimeType?: string;
+  }): Promise<ParsedUploadAccepted>;
+  activateFileVersion(
+    input: KnowledgeActivateFileVersionInput,
+  ): Promise<KnowledgeBaseFileSnapshot>;
+  archiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  unarchiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  reparseFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  deleteFile(input: KnowledgeFileIdInput): Promise<void>;
+  listIndexes(input: KnowledgeBaseGetInput): Promise<KnowledgeIndexState[]>;
+  getBuildProfile(
+    input: KnowledgeBaseGetInput,
+  ): Promise<KnowledgeBuildProfileView>;
+  updateBuildProfile(
+    input: KnowledgeUpdateBuildProfileInput,
+  ): Promise<KnowledgeBuildProfileView>;
+  startBuild(input: KnowledgeStartBuildInput): Promise<KnowledgeBuildJobSnapshot>;
+  getBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
+  retryBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
   probeCapability(): Promise<{
     available: boolean;
     status: "available" | "blocked_provider_unavailable" | "auth_required";
@@ -324,6 +367,197 @@ export function createKnowledgeHttpProvider(
       );
       const data = (body as { data?: unknown })?.data ?? body;
       return parseIngestionJob(data, operationId);
+    },
+
+    async getFile(input): Promise<KnowledgeBaseFileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}`,
+        { method: "GET" },
+        operationId,
+        "getFile",
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeBaseFileSnapshot(data, operationId);
+    },
+
+    async listFileVersions(input): Promise<KnowledgeFileVersionSnapshot[]> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/versions`,
+        { method: "GET" },
+        operationId,
+        "listFileVersions",
+      );
+      return parseKnowledgeFileVersionList(body, operationId);
+    },
+
+    async addFileVersion(input): Promise<ParsedUploadAccepted> {
+      const operationId = randomUUID();
+      const form = new FormData();
+      const blob = new Blob([Uint8Array.from(input.bytes)], {
+        type: input.mimeType || "application/octet-stream",
+      });
+      form.append("file", blob, input.fileName);
+      form.append("metadata", JSON.stringify({}));
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/versions`,
+        { method: "POST", body: form },
+        operationId,
+        "addFileVersion",
+      );
+      return parseUploadAccepted(body, operationId);
+    },
+
+    async activateFileVersion(input): Promise<KnowledgeBaseFileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/versions/${encodeURIComponent(input.versionId)}/activate`,
+        { method: "POST" },
+        operationId,
+        "activateFileVersion",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeBaseFileSnapshot(data, operationId);
+    },
+
+    async archiveFile(input): Promise<KnowledgeBaseFileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/archive`,
+        { method: "POST" },
+        operationId,
+        "archiveFile",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeBaseFileSnapshot(data, operationId);
+    },
+
+    async unarchiveFile(input): Promise<KnowledgeBaseFileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/unarchive`,
+        { method: "POST" },
+        operationId,
+        "unarchiveFile",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeBaseFileSnapshot(data, operationId);
+    },
+
+    async reparseFile(input): Promise<KnowledgeBaseFileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/reparse`,
+        { method: "POST" },
+        operationId,
+        "reparseFile",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeBaseFileSnapshot(data, operationId);
+    },
+
+    async deleteFile(input): Promise<void> {
+      const operationId = randomUUID();
+      await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}`,
+        { method: "DELETE" },
+        operationId,
+        "deleteFile",
+        { allowNonIdempotentRetry: false },
+      );
+    },
+
+    async listIndexes(input): Promise<KnowledgeIndexState[]> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}/indexes`,
+        { method: "GET" },
+        operationId,
+        "listIndexes",
+      );
+      return parseKnowledgeIndexStates(body, operationId);
+    },
+
+    async getBuildProfile(input): Promise<KnowledgeBuildProfileView> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}/build-profile`,
+        { method: "GET" },
+        operationId,
+        "getBuildProfile",
+      );
+      return parseKnowledgeBuildProfileView(body, operationId);
+    },
+
+    async updateBuildProfile(input): Promise<KnowledgeBuildProfileView> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}/build-profile`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ build_profile_id: input.buildProfileId }),
+        },
+        operationId,
+        "updateBuildProfile",
+      );
+      return parseKnowledgeBuildProfileView(body, operationId);
+    },
+
+    async startBuild(input): Promise<KnowledgeBuildJobSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}/builds`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            index_types: input.indexTypes,
+            force: input.force === true,
+          }),
+        },
+        operationId,
+        "startBuild",
+        { allowNonIdempotentRetry: false },
+      );
+      try {
+        const jobs = parseKnowledgeBuildJobList(body, operationId);
+        if (jobs[0]) return jobs[0];
+      } catch (err) {
+        if (
+          !(err instanceof KnowledgeFacadeError) ||
+          err.code !== KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID
+        ) {
+          throw err;
+        }
+      }
+      return parseKnowledgeBuildJobSnapshot(body, operationId);
+    },
+
+    async getBuild(input): Promise<KnowledgeBuildJobSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/builds/${encodeURIComponent(input.buildId)}`,
+        { method: "GET" },
+        operationId,
+        "getBuild",
+      );
+      return parseKnowledgeBuildJobSnapshot(body, operationId);
+    },
+
+    async retryBuild(input): Promise<KnowledgeBuildJobSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/builds/${encodeURIComponent(input.buildId)}/retry`,
+        { method: "POST" },
+        operationId,
+        "retryBuild",
+        { allowNonIdempotentRetry: false },
+      );
+      return parseKnowledgeBuildJobSnapshot(body, operationId);
     },
 
     async probeCapability() {

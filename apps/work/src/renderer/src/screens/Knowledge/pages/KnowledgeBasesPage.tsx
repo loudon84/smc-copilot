@@ -1,5 +1,23 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
-import { LayoutGrid, List } from "lucide-react";
+import { BusinessModuleUISurface } from "@/components/common/business-module-ui-surface";
+import { EmptyState } from "@/components/common/empty-state";
+import { PageHeader } from "@/components/common/page-header";
+import { PageToolbar } from "@/components/common/page-toolbar";
+import { SearchInput } from "@/components/common/search-input";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -8,6 +26,7 @@ import {
 import type {
   HermesKnowledgeBasesAPI,
   KnowledgeBaseSnapshot,
+  KnowledgeBaseStatus,
   KnowledgeBaseVisibility,
 } from "../../../../../shared/knowledge/knowledge-base-ipc";
 import type {
@@ -16,17 +35,8 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
-import {
-  KnowledgeEmptyState,
-  KnowledgeEntityModal,
-  KnowledgeLoading,
-  KnowledgeSearchInput,
-  KnowledgeToolbar,
-} from "../knowledge-page-chrome";
-import {
-  KnowledgeBaseCardGrid,
-  KnowledgeBaseTable,
-} from "../features/bases/list/KnowledgeBaseList";
+import { KnowledgeLoading } from "../knowledge-page-chrome";
+import { KnowledgeBaseCardGrid } from "../features/bases/list/KnowledgeBaseList";
 import { KnowledgeBaseCreateForm } from "../features/bases/create/KnowledgeBaseCreateForm";
 
 export type KnowledgeBasesPageProps = {
@@ -49,9 +59,6 @@ function errorCode(error: unknown): string {
   return "KNOWLEDGE_UNAVAILABLE";
 }
 
-/**
- * Knowledge Bases list only. Detail is KnowledgeBaseDetailPage.
- */
 export function KnowledgeBasesPage({
   onNavigate,
   capability: injectedCapability,
@@ -70,7 +77,6 @@ export function KnowledgeBasesPage({
   const [items, setItems] = useState<KnowledgeBaseSnapshot[]>([]);
   const [search, setSearch] = useState("");
   const [visibility, setVisibility] = useState("all");
-  const [view, setView] = useState<"card" | "table">("card");
   const [errorMessage, setErrorMessage] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
@@ -129,6 +135,13 @@ export function KnowledgeBasesPage({
   }, [items, search, visibility]);
 
   const mutationsEnabled = probe.mutationsEnabled;
+  const statusLabel = (status: KnowledgeBaseStatus): string =>
+    t(`knowledge.bases.status.${status}`);
+  const visibilityLabel = (value: KnowledgeBaseVisibility): string => {
+    if (value === "private") return t("knowledge.host.private");
+    if (value === "department") return t("knowledge.host.department");
+    return t("knowledge.host.organization");
+  };
 
   const handleCreate = async (): Promise<void> => {
     if (!mutationsEnabled || !probe.bases || submitting) return;
@@ -157,134 +170,127 @@ export function KnowledgeBasesPage({
   };
 
   return (
-    <div data-testid="knowledge-bases-page" data-state={loadState}>
-      {loadState === "loading" ? (
-        <KnowledgeLoading label={t("knowledge.loading")} />
-      ) : null}
-      {loadState === "unavailable" ? (
-        <KnowledgeEmptyState
-          title={t("knowledge.unavailableTitle")}
-          description={
-            probe.capability?.status === "auth_required"
-              ? t("knowledge.host.authRequired")
-              : t("knowledge.unavailableDescription")
-          }
-        />
-      ) : null}
-      {loadState === "error" ? (
-        <KnowledgeEmptyState
-          title={t("knowledge.host.errorTitle")}
-          description={errorMessage}
-        />
-      ) : null}
+    <BusinessModuleUISurface module="knowledge">
+      <div data-testid="knowledge-bases-page" data-state={loadState}>
+        {loadState === "loading" ? (
+          <KnowledgeLoading label={t("knowledge.loading")} />
+        ) : null}
+        {loadState === "unavailable" ? (
+          <EmptyState
+            title={t("knowledge.unavailableTitle")}
+            description={
+              probe.capability?.status === "auth_required"
+                ? t("knowledge.host.authRequired")
+                : t("knowledge.unavailableDescription")
+            }
+          />
+        ) : null}
+        {loadState === "error" ? (
+          <EmptyState
+            title={t("knowledge.host.errorTitle")}
+            description={errorMessage}
+          />
+        ) : null}
 
-      {loadState === "empty" || loadState === "content" ? (
-        <>
-          <KnowledgeToolbar>
-            <KnowledgeSearchInput
-              testId="knowledge-bases-search"
-              placeholder={t("knowledge.host.searchPlaceholder")}
-              value={search}
-              onChange={setSearch}
+        {loadState === "empty" || loadState === "content" ? (
+          <div className="grid gap-3">
+            <PageHeader
+              title={t("knowledge.bases.title")}
+              description={t("knowledge.bases.description")}
             />
-            <label>
-              {t("knowledge.host.visibility")}
-              <select
-                data-testid="knowledge-bases-visibility"
-                value={visibility}
-                onChange={(event) => setVisibility(event.target.value)}
+            <PageToolbar>
+              <SearchInput
+                testId="knowledge-bases-search"
+                placeholder={t("knowledge.host.searchPlaceholder")}
+                value={search}
+                onChange={setSearch}
+              />
+              <Select value={visibility} onValueChange={setVisibility}>
+                <SelectTrigger data-testid="knowledge-bases-visibility">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("knowledge.host.filterAll")}</SelectItem>
+                  <SelectItem value="private">{t("knowledge.host.private")}</SelectItem>
+                  <SelectItem value="department">
+                    {t("knowledge.host.department")}
+                  </SelectItem>
+                  <SelectItem value="organization">
+                    {t("knowledge.host.organization")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                data-testid="knowledge-base-create"
+                disabled={!mutationsEnabled}
+                title={
+                  mutationsEnabled ? undefined : t("knowledge.bases.mutateDisabled")
+                }
+                onClick={() => setDialogOpen(true)}
               >
-                <option value="all">{t("knowledge.host.filterAll")}</option>
-                <option value="private">{t("knowledge.host.private")}</option>
-                <option value="department">{t("knowledge.host.department")}</option>
-                <option value="organization">{t("knowledge.host.organization")}</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-bases-view-card"
-              aria-pressed={view === "card"}
-              onClick={() => setView("card")}
-            >
-              <LayoutGrid size={14} /> {t("knowledge.host.viewCard")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-bases-view-table"
-              aria-pressed={view === "table"}
-              onClick={() => setView("table")}
-            >
-              <List size={14} /> {t("knowledge.host.viewTable")}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-base-create"
-              disabled={!mutationsEnabled}
-              title={
-                mutationsEnabled ? undefined : t("knowledge.bases.mutateDisabled")
-              }
-              onClick={() => setDialogOpen(true)}
-            >
-              {t("knowledge.bases.createLabel")}
-            </button>
-          </KnowledgeToolbar>
-          {!mutationsEnabled ? <p>{t("knowledge.bases.mutateDisabled")}</p> : null}
-          {filtered.length === 0 ? (
-            <p data-testid="knowledge-base-list-empty">
-              {t("knowledge.bases.emptyList")}
-            </p>
-          ) : view === "card" ? (
-            <KnowledgeBaseCardGrid items={filtered} onOpen={openItem} />
-          ) : (
-            <KnowledgeBaseTable
-              items={filtered}
-              onOpen={openItem}
-              openLabel={t("knowledge.host.open")}
-              nameLabel={t("knowledge.bases.listTitle")}
-              visibilityLabel={t("knowledge.host.visibility")}
-            />
-          )}
+                {t("knowledge.bases.createLabel")}
+              </Button>
+            </PageToolbar>
+            {!mutationsEnabled ? <p>{t("knowledge.bases.mutateDisabled")}</p> : null}
+            {filtered.length === 0 ? (
+              <p data-testid="knowledge-base-list-empty">
+                {t("knowledge.bases.emptyList")}
+              </p>
+            ) : (
+              <KnowledgeBaseCardGrid
+                items={filtered}
+                onOpen={openItem}
+                statusLabel={statusLabel}
+                visibilityLabel={visibilityLabel}
+                openLabel={t("knowledge.host.open")}
+                emptyDescription={t("knowledge.bases.emptyDescription")}
+                ownerLabel={t("knowledge.host.owner")}
+                createdAtLabel={t("knowledge.host.createdAt")}
+              />
+            )}
 
-          <KnowledgeEntityModal
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              if (submitting && !open) return;
-              setDialogOpen(open);
-            }}
-            submitting={submitting}
-            title={t("knowledge.bases.createLabel")}
-          >
-            <KnowledgeBaseCreateForm
-              name={draftName}
-              description={draftDescription}
-              visibility={draftVisibility}
-              disabled={!mutationsEnabled}
-              submitting={submitting}
-              onNameChange={setDraftName}
-              onDescriptionChange={setDraftDescription}
-              onVisibilityChange={setDraftVisibility}
-              onCancel={() => {
-                if (!submitting) setDialogOpen(false);
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(open) => {
+                if (submitting && !open) return;
+                setDialogOpen(open);
               }}
-              onSubmit={() => {
-                void handleCreate();
-              }}
-              nameLabel={t("knowledge.host.namePlaceholder")}
-              descriptionLabel={t("knowledge.bases.descriptionLabel")}
-              visibilityLabel={t("knowledge.host.visibility")}
-              cancelLabel={t("knowledge.host.cancel")}
-              createLabel={t("knowledge.host.create")}
-              privateLabel={t("knowledge.host.private")}
-              departmentLabel={t("knowledge.host.department")}
-              organizationLabel={t("knowledge.host.organization")}
-            />
-          </KnowledgeEntityModal>
-        </>
-      ) : null}
-    </div>
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("knowledge.bases.createLabel")}</DialogTitle>
+                </DialogHeader>
+                <KnowledgeBaseCreateForm
+                  name={draftName}
+                  description={draftDescription}
+                  visibility={draftVisibility}
+                  disabled={!mutationsEnabled}
+                  submitting={submitting}
+                  onNameChange={setDraftName}
+                  onDescriptionChange={setDraftDescription}
+                  onVisibilityChange={setDraftVisibility}
+                  onCancel={() => {
+                    if (!submitting) setDialogOpen(false);
+                  }}
+                  onSubmit={() => {
+                    void handleCreate();
+                  }}
+                  nameLabel={t("knowledge.host.namePlaceholder")}
+                  descriptionLabel={t("knowledge.bases.descriptionLabel")}
+                  visibilityLabel={t("knowledge.host.visibility")}
+                  cancelLabel={t("knowledge.host.cancel")}
+                  createLabel={t("knowledge.host.create")}
+                  privateLabel={t("knowledge.host.private")}
+                  departmentLabel={t("knowledge.host.department")}
+                  organizationLabel={t("knowledge.host.organization")}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
+        ) : null}
+      </div>
+    </BusinessModuleUISurface>
   );
 }
 

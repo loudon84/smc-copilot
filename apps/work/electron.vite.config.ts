@@ -64,6 +64,14 @@ export default defineConfig({
     resolve: {
       alias: {
         "@renderer": resolve(configDir, "src/renderer/src"),
+        "@/components/ui": resolve(configDir, "components/ui"),
+        "@/components/common": resolve(configDir, "components/common"),
+        "@/components/knowledge/knowledge-base-card": resolve(
+          configDir,
+          "components/knowledge/knowledge-base-card.tsx",
+        ),
+        "@/utils": resolve(configDir, "utils"),
+        "@/hooks": resolve(configDir, "hooks"),
       },
       // Ensure a single Three.js instance across our code, @react-three/fiber,
       // drei and troika — multiple copies break `instanceof THREE.*` checks in

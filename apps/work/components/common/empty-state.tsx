@@ -3,17 +3,22 @@ import { Inbox } from "lucide-react";
 type EmptyStateProps = {
   title?: string;
   description?: string;
+  testId?: string;
 };
 
 export function EmptyState({
-  title = "暂无数据",
-  description = "当前没有可显示的内容",
+  title = "Nothing here yet",
+  description = "No content is available.",
+  testId,
 }: EmptyStateProps) {
   return (
-    <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">
+    <div
+      className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground"
+      data-testid={testId}
+    >
       <Inbox className="h-10 w-10" />
       <p className="font-medium">{title}</p>
-      <p className="text-sm">{description}</p>
+      {description ? <p className="text-sm">{description}</p> : null}
     </div>
   );
 }

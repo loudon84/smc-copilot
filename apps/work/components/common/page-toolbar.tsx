@@ -1,3 +1,4 @@
+import { type ReactNode } from "react";
 import { cn } from "@/utils/tailwind";
 
 export function PageToolbar({
@@ -5,7 +6,7 @@ export function PageToolbar({
   children,
 }: {
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>

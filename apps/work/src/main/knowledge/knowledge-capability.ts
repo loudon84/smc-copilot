@@ -17,7 +17,6 @@ let cache: KnowledgeCapabilitySnapshotEx = {
   status: "blocked_provider_unavailable",
 };
 let inFlight: Promise<KnowledgeCapabilitySnapshotEx> | null = null;
-let probed = false;
 
 export function getCachedKnowledgeCapability(): KnowledgeCapabilitySnapshotEx {
   return cache;
@@ -33,11 +32,9 @@ export async function refreshKnowledgeCapability(): Promise<KnowledgeCapabilityS
     try {
       const next = await getKnowledgeHttpProvider().probeCapability();
       cache = next;
-      probed = true;
       return cache;
     } catch {
       cache = { available: false, status: "blocked_provider_unavailable" };
-      probed = true;
       return cache;
     } finally {
       inFlight = null;
@@ -55,12 +52,10 @@ export async function ensureKnowledgeCapability(): Promise<KnowledgeCapabilitySn
 export function resetKnowledgeCapabilityForTests(): void {
   cache = { available: false, status: "blocked_provider_unavailable" };
   inFlight = null;
-  probed = false;
 }
 
 export function setKnowledgeCapabilityForTests(
   snapshot: KnowledgeCapabilitySnapshotEx,
 ): void {
   cache = snapshot;
-  probed = true;
 }

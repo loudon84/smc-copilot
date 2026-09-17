@@ -3,7 +3,6 @@ export const KNOWLEDGE_ROUTE_PAGES = [
   "bases",
   "sets",
   "documents",
-  "uploads",
   "chat",
 ] as const;
 
@@ -41,6 +40,9 @@ export function resolveKnowledgeRoute(input: {
   page?: string;
   params?: KnowledgeRouteParams;
 }): KnowledgeRoute {
+  if (input.page === "uploads") {
+    return { page: "bases", params: {} };
+  }
   if (!input.page || !isKnowledgePageId(input.page)) {
     return { ...KNOWLEDGE_HOME_ROUTE };
   }

@@ -6,7 +6,7 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import knowledgeEn from "../src/shared/i18n/locales/en/knowledge";
-import { KnowledgeUploadsPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeUploadsPage";
+import { KnowledgeUploadPanel } from "../src/renderer/src/screens/Knowledge/features/file-job/KnowledgeUploadPanel";
 import type { KnowledgeJobSnapshot } from "../src/shared/knowledge/knowledge-job-ipc";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
@@ -33,7 +33,7 @@ function job(
   overrides: Partial<KnowledgeJobSnapshot> & Pick<KnowledgeJobSnapshot, "jobId" | "status">,
 ): KnowledgeJobSnapshot {
   return {
-    knowledgeBaseId: "unbound",
+    knowledgeBaseId: "kb-1",
     attempt: 1,
     partition: {
       workProfileId: "wp",
@@ -49,7 +49,7 @@ function job(
   };
 }
 
-describe("Knowledge Uploads page (V05)", () => {
+describe("Knowledge upload panel", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
@@ -73,7 +73,9 @@ describe("Knowledge Uploads page (V05)", () => {
 
     await act(async () => {
       render(
-        React.createElement(KnowledgeUploadsPage, {
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "kb-1",
+          baseName: "Alpha",
           capability: { available: true, status: "available" },
           mode: {
             dataMode: "mock",
@@ -111,22 +113,44 @@ describe("Knowledge Uploads page (V05)", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-upload-picker"));
     });
-    expect(createDraft).toHaveBeenCalled();
+    expect(createDraft).toHaveBeenCalledWith({ knowledgeBaseId: "kb-1" });
   });
 
-  it("disables picker in provider mode and never owns a setInterval progress timer", async () => {
-    const pageSrc = fs.readFileSync(
+  it("hides the picker without a knowledge base and never owns a setInterval", async () => {
+    const panelSrc = fs.readFileSync(
       path.resolve(
         path.dirname(fileURLToPath(import.meta.url)),
-        "../src/renderer/src/screens/Knowledge/pages/KnowledgeUploadsPage.tsx",
+        "../src/renderer/src/screens/Knowledge/features/file-job/KnowledgeUploadPanel.tsx",
       ),
       "utf8",
     );
-    expect(pageSrc).not.toMatch(/setInterval\s*\(/);
+    expect(panelSrc).not.toMatch(/setInterval\s*\(/);
 
     await act(async () => {
       render(
-        React.createElement(KnowledgeUploadsPage, {
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "",
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          listSnapshots: async () => [],
+        }),
+      );
+    });
+
+    expect(screen.queryByTestId("knowledge-upload-picker")).toBeNull();
+    expect(screen.queryByTestId("knowledge-upload-submit")).toBeNull();
+  });
+
+  it("disables picker in provider mode without createDraft", async () => {
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "kb-1",
+          baseName: "Alpha",
           capability: { available: true, status: "available" },
           mode: {
             dataMode: "provider",
@@ -141,9 +165,58 @@ describe("Knowledge Uploads page (V05)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-upload-picker")).toBeDisabled();
     });
-    expect(screen.queryByTestId("knowledge-upload-submit")).toBeNull();
     expect(document.body.textContent).toContain(
       knowledgeEn.uploads.pickerDisabledProvider,
     );
+  });
+
+  it("locks the upload target to the required knowledge base", async () => {
+    const createDraft = vi.fn(async ({ knowledgeBaseId }: { knowledgeBaseId?: string }) =>
+      job({
+        jobId: "j-lock",
+        status: "queued",
+        progress: 0,
+        knowledgeBaseId: knowledgeBaseId ?? "unbound",
+      }),
+    );
+    const pickFiles = vi.fn(async () => []);
+    (
+      window as unknown as {
+        hermesAPI: { files: { pickFiles: typeof pickFiles } };
+      }
+    ).hermesAPI = { files: { pickFiles } };
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "kb-42",
+          baseName: "Locked Base",
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          listSnapshots: async () => [],
+          createDraft,
+          cancelJob: async ({ jobId }) =>
+            job({ jobId, status: "cancelled", progress: 0 }),
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-upload-target").textContent).toContain(
+        "Locked Base",
+      );
+    });
+    expect(screen.getByTestId("knowledge-upload-target").tagName).toBe("P");
+    expect(screen.queryByText(knowledgeEn.uploads.unboundTarget ?? "Unbound")).toBeNull();
+    expect(screen.getByTestId("knowledge-upload-picker")).not.toBeDisabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-upload-picker"));
+    });
+    expect(createDraft).toHaveBeenCalledWith({ knowledgeBaseId: "kb-42" });
   });
 });

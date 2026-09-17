@@ -11,6 +11,23 @@ export const KNOWLEDGE_BASE_IPC_CHANNELS = {
   update: "knowledge-base:update",
   delete: "knowledge-base:delete",
   listFiles: "knowledge-base:list-files",
+  getFile: "knowledge-base:get-file",
+  listFileVersions: "knowledge-base:list-file-versions",
+  addFileVersion: "knowledge-base:add-file-version",
+  activateFileVersion: "knowledge-base:activate-file-version",
+  archiveFile: "knowledge-base:archive-file",
+  unarchiveFile: "knowledge-base:unarchive-file",
+  reparseFile: "knowledge-base:reparse-file",
+  deleteFile: "knowledge-base:delete-file",
+  listIndexes: "knowledge-base:list-indexes",
+  getBuildProfile: "knowledge-base:get-build-profile",
+  updateBuildProfile: "knowledge-base:update-build-profile",
+  startBuild: "knowledge-base:start-build",
+  getBuild: "knowledge-base:get-build",
+  retryBuild: "knowledge-base:retry-build",
+  watchBuild: "knowledge-base:watch-build",
+  unwatchBuild: "knowledge-base:unwatch-build",
+  buildChanged: "knowledge-base:build-changed",
 } as const;
 
 export type KnowledgeBaseIpcChannel =
@@ -41,6 +58,7 @@ export interface KnowledgeBaseSnapshot {
   visibility: KnowledgeBaseVisibility;
   orgId?: string;
   ownerMemberId?: string;
+  createdAt?: string | null;
 }
 
 export interface KnowledgeBasePage {
@@ -91,6 +109,112 @@ export interface KnowledgeBaseFileSnapshot {
   status: KnowledgeSourceFileStatus;
   mimeType?: string | null;
   lastError?: string | null;
+  activeVersionId?: string | null;
+  archivedAt?: string | null;
+  ownerMemberId?: string | null;
+  createdAt?: string | null;
+}
+
+export type KnowledgeFileParseStatus =
+  | "pending"
+  | "parsing"
+  | "active"
+  | "failed"
+  | "superseded";
+
+export interface KnowledgeFileVersionSnapshot {
+  id: string;
+  sourceFileId: string;
+  versionNo: number;
+  parseStatus: KnowledgeFileParseStatus;
+  createdAt?: string | null;
+  uploadedByMemberId?: string | null;
+}
+
+export interface KnowledgeFileIdInput {
+  sourceFileId: string;
+}
+
+export interface KnowledgeActivateFileVersionInput {
+  sourceFileId: string;
+  versionId: string;
+}
+
+export interface KnowledgeAddFileVersionInput {
+  sourceFileId: string;
+  managedFileId: string;
+}
+
+export type KnowledgeIndexBuildStatus =
+  | "not_built"
+  | "building"
+  | "ready"
+  | "stale"
+  | "failed"
+  | "unsupported";
+
+export type KnowledgeIndexRetrievalStatus =
+  | "unavailable"
+  | "ready"
+  | "degraded"
+  | "unsupported";
+
+export interface KnowledgeIndexState {
+  indexType: string;
+  buildStatus: KnowledgeIndexBuildStatus;
+  retrievalStatus: KnowledgeIndexRetrievalStatus;
+}
+
+export function isKnowledgeIndexRetrievalReady(
+  state: KnowledgeIndexState,
+): boolean {
+  return state.buildStatus === "ready" && state.retrievalStatus === "ready";
+}
+
+export interface KnowledgeBuildProfileView {
+  activeBuildProfileId: string | null;
+  profileId: string;
+  profileName: string;
+}
+
+export interface KnowledgeUpdateBuildProfileInput {
+  knowledgeBaseId: string;
+  buildProfileId: string;
+}
+
+export interface KnowledgeStartBuildInput {
+  knowledgeBaseId: string;
+  indexTypes: string[];
+  force?: boolean;
+}
+
+export interface KnowledgeBuildIdInput {
+  buildId: string;
+}
+
+export type KnowledgeBuildJobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "partial"
+  | "failed"
+  | "cancelled";
+
+export interface KnowledgeBuildJobSnapshot {
+  id: string;
+  status: KnowledgeBuildJobStatus;
+  progress: number;
+  errorCode?: string | null;
+  knowledgeBaseId?: string | null;
+}
+
+export const KNOWLEDGE_BUILD_TERMINAL_STATUSES: ReadonlySet<KnowledgeBuildJobStatus> =
+  new Set(["completed", "partial", "failed", "cancelled"]);
+
+export function isKnowledgeBuildJobTerminal(
+  status: KnowledgeBuildJobStatus,
+): boolean {
+  return KNOWLEDGE_BUILD_TERMINAL_STATUSES.has(status);
 }
 
 export interface KnowledgeBaseFilePage {
@@ -160,4 +284,33 @@ export interface HermesKnowledgeBasesAPI {
   update(input: KnowledgeBaseUpdateInput): Promise<KnowledgeBaseSnapshot>;
   delete(input: KnowledgeBaseDeleteInput): Promise<void>;
   listFiles(input: KnowledgeBaseListFilesInput): Promise<KnowledgeBaseFilePage>;
+  getFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  listFileVersions(
+    input: KnowledgeFileIdInput,
+  ): Promise<KnowledgeFileVersionSnapshot[]>;
+  addFileVersion(
+    input: KnowledgeAddFileVersionInput,
+  ): Promise<KnowledgeBaseFileSnapshot>;
+  activateFileVersion(
+    input: KnowledgeActivateFileVersionInput,
+  ): Promise<KnowledgeBaseFileSnapshot>;
+  archiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  unarchiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  reparseFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  deleteFile(input: KnowledgeFileIdInput): Promise<void>;
+  listIndexes(input: KnowledgeBaseGetInput): Promise<KnowledgeIndexState[]>;
+  getBuildProfile(
+    input: KnowledgeBaseGetInput,
+  ): Promise<KnowledgeBuildProfileView>;
+  updateBuildProfile(
+    input: KnowledgeUpdateBuildProfileInput,
+  ): Promise<KnowledgeBuildProfileView>;
+  startBuild(input: KnowledgeStartBuildInput): Promise<KnowledgeBuildJobSnapshot>;
+  getBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
+  retryBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
+  watchBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
+  unwatchBuild(input?: KnowledgeBuildIdInput): Promise<void>;
+  onBuildChanged(
+    callback: (snapshot: KnowledgeBuildJobSnapshot) => void,
+  ): () => void;
 }

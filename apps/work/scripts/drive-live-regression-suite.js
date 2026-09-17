@@ -51,6 +51,17 @@ const DEFAULT_BAD_MODEL = {
 
 const DEAD_ROUTE_BASE_URL = "http://127.0.0.1:9/v1";
 
+/** THIS_RELEASE Knowledge UI Kit views. Do not add Home / Uploads / Chat migration baselines. */
+const THIS_RELEASE_KNOWLEDGE_UI_KIT_VIEWS = [
+  "Bases Card",
+  "Create Base Dialog",
+  "Base Detail Documents",
+  "Base Detail Settings",
+  "Delete Base AlertDialog",
+  "Legacy Settings",
+  "Legacy Chat",
+];
+
 function mediaPathForMode(mode) {
   if (mode === "local") return LOCAL_MEDIA;
   return REMOTE_MEDIA.startsWith("MEDIA:") ? REMOTE_MEDIA.slice("MEDIA:".length) : REMOTE_MEDIA;

@@ -88,17 +88,22 @@ describe("Knowledge route scope and descriptor (V02)", () => {
     vi.restoreAllMocks();
   });
 
-  it("covers exactly the six Stage pages", () => {
+  it("covers exactly the five Stage pages", () => {
     expect([...KNOWLEDGE_ROUTE_PAGES]).toEqual([
       "home",
       "bases",
       "sets",
       "documents",
-      "uploads",
       "chat",
     ]);
     const pages: KnowledgePageId[] = [...KNOWLEDGE_ROUTE_PAGES];
-    expect(new Set(pages).size).toBe(6);
+    expect(new Set(pages).size).toBe(5);
+  });
+
+  it("resolves a leftover uploads route to bases", () => {
+    const scope = createKnowledgeRouteScope();
+    scope.replace({ page: "uploads", params: { knowledgeBaseId: "kb-old" } });
+    expect(scope.getSnapshot().current).toEqual({ page: "bases", params: {} });
   });
 
   it("isolates mutable state across two host-constructed scopes", () => {
@@ -115,16 +120,16 @@ describe("Knowledge route scope and descriptor (V02)", () => {
 
     b.replace({ page: "uploads", params: {} });
     expect(a.getSnapshot().current.page).toBe("bases");
-    expect(b.getSnapshot().current.page).toBe("uploads");
+    expect(b.getSnapshot().current.page).toBe("bases");
 
     a.push({ page: "documents", params: { documentId: "doc-1" } });
     a.back();
     expect(a.getSnapshot().current.page).toBe("bases");
-    expect(b.getSnapshot().current.page).toBe("uploads");
+    expect(b.getSnapshot().current.page).toBe("bases");
 
     a.reset();
     expect(a.getSnapshot().current.page).toBe("home");
-    expect(b.getSnapshot().current.page).toBe("uploads");
+    expect(b.getSnapshot().current.page).toBe("bases");
   });
 
   it("falls back to home for invalid routes and does not export a tab collection API", () => {

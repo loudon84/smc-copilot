@@ -1,4 +1,15 @@
 import { type ReactElement } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { KnowledgeBaseVisibility } from "../../../../../../../shared/knowledge/knowledge-base-ipc";
 
 export function KnowledgeBaseSettingsForm(props: {
@@ -19,50 +30,58 @@ export function KnowledgeBaseSettingsForm(props: {
   departmentLabel: string;
   organizationLabel: string;
 }): ReactElement {
+  const locked = !props.saveEnabled || props.submitting;
   return (
-    <div data-testid="knowledge-base-settings">
-      <label className="settings-field">
-        {props.editLabel}
-        <input
+    <div className="grid gap-3" data-testid="knowledge-base-settings">
+      <div className="grid gap-1">
+        <Label htmlFor="knowledge-base-title-input">{props.editLabel}</Label>
+        <Input
+          id="knowledge-base-title-input"
           data-testid="knowledge-base-title-input"
           value={props.name}
           onChange={(event) => props.onNameChange(event.target.value)}
-          disabled={!props.saveEnabled || props.submitting}
+          disabled={locked}
         />
-      </label>
-      <label className="settings-field">
-        {props.descriptionLabel}
-        <textarea
+      </div>
+      <div className="grid gap-1">
+        <Label htmlFor="knowledge-base-description-input">
+          {props.descriptionLabel}
+        </Label>
+        <Textarea
+          id="knowledge-base-description-input"
           data-testid="knowledge-base-description-input"
           value={props.description}
           onChange={(event) => props.onDescriptionChange(event.target.value)}
-          disabled={!props.saveEnabled || props.submitting}
+          disabled={locked}
         />
-      </label>
-      <label className="settings-field">
-        {props.visibilityLabel}
-        <select
-          data-testid="knowledge-base-visibility-input"
+      </div>
+      <div className="grid gap-1">
+        <Label>{props.visibilityLabel}</Label>
+        <Select
           value={props.visibility}
-          disabled={!props.saveEnabled || props.submitting}
-          onChange={(event) =>
-            props.onVisibilityChange(event.target.value as KnowledgeBaseVisibility)
+          disabled={locked}
+          onValueChange={(value) =>
+            props.onVisibilityChange(value as KnowledgeBaseVisibility)
           }
         >
-          <option value="private">{props.privateLabel}</option>
-          <option value="department">{props.departmentLabel}</option>
-          <option value="organization">{props.organizationLabel}</option>
-        </select>
-      </label>
-      <button
+          <SelectTrigger data-testid="knowledge-base-visibility-input">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="private">{props.privateLabel}</SelectItem>
+            <SelectItem value="department">{props.departmentLabel}</SelectItem>
+            <SelectItem value="organization">{props.organizationLabel}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Button
         type="button"
-        className="btn btn-secondary btn-sm"
         data-testid="knowledge-base-save"
-        disabled={!props.saveEnabled || props.submitting}
+        disabled={locked}
         onClick={props.onSave}
       >
         {props.saveLabel}
-      </button>
+      </Button>
     </div>
   );
 }

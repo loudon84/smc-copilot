@@ -1,4 +1,5 @@
 import { type ReactElement } from "react";
+import { Button } from "@/components/ui/button";
 
 export function KnowledgeBaseDeleteConfirm(props: {
   onCancel: () => void;
@@ -8,24 +9,24 @@ export function KnowledgeBaseDeleteConfirm(props: {
   confirmLabel: string;
 }): ReactElement {
   return (
-    <div className="knowledge-toolbar" data-testid="knowledge-base-delete-confirm">
-      <button
+    <div className="flex justify-end gap-2" data-testid="knowledge-base-delete-confirm">
+      <Button
         type="button"
-        className="btn btn-secondary btn-sm"
+        variant="outline"
         disabled={props.submitting}
         onClick={props.onCancel}
       >
         {props.cancelLabel}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        className="btn btn-sm"
+        variant="destructive"
         data-testid="knowledge-base-delete-confirm-submit"
         disabled={props.submitting}
         onClick={props.onConfirm}
       >
         {props.confirmLabel}
-      </button>
+      </Button>
     </div>
   );
 }

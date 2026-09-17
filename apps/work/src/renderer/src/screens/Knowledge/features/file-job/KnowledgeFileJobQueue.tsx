@@ -1,4 +1,7 @@
 import { type ReactElement } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import type { KnowledgeJobSnapshot } from "../../../../../../shared/knowledge/knowledge-job-ipc";
 
 export function KnowledgeFileJobQueue(props: {
@@ -12,48 +15,49 @@ export function KnowledgeFileJobQueue(props: {
 }): ReactElement {
   if (props.jobs.length === 0) {
     return (
-      <p data-testid="knowledge-upload-queue-empty">{props.emptyLabel}</p>
+      <p data-testid="knowledge-upload-queue-empty" className="text-xs text-muted-foreground">
+        {props.emptyLabel}
+      </p>
     );
   }
   return (
-    <ul className="knowledge-card-grid" data-testid="knowledge-upload-queue">
+    <ul className="grid gap-3" data-testid="knowledge-upload-queue">
       {props.jobs.map((job) => (
         <li
           key={job.jobId}
-          className="settings-card"
+          className="grid gap-2 rounded-md border border-border bg-card p-3 text-card-foreground"
           data-testid={`knowledge-upload-job-${job.jobId}`}
           data-status={job.status}
         >
-          <div className="settings-card-head">
-            <strong>{job.fileSummary?.displayName ?? job.jobId}</strong>
-            <span className="settings-card-badge">{job.status}</span>
+          <div className="flex items-center justify-between gap-2">
+            <strong className="truncate text-sm">
+              {job.fileSummary?.displayName ?? job.jobId}
+            </strong>
+            <Badge>{job.status}</Badge>
           </div>
-          <p>
+          <p className="text-xs text-muted-foreground">
             {props.progressLabel}: {job.progress}%
           </p>
-          <div className="knowledge-upload-progress">
-            <div
-              className="knowledge-upload-progress-bar"
-              style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }}
-            />
-          </div>
-          <div className="knowledge-toolbar">
-            <button
+          <Progress value={Math.max(0, Math.min(100, job.progress))} />
+          <div className="flex flex-wrap gap-2">
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              size="sm"
+              variant="outline"
               data-testid={`knowledge-upload-cancel-${job.jobId}`}
               onClick={() => props.onCancel(job.jobId)}
             >
               {props.cancelLabel}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-secondary btn-sm"
+              size="sm"
+              variant="outline"
               data-testid={`knowledge-upload-retry-${job.jobId}`}
               onClick={() => props.onRetry(job.jobId)}
             >
               {props.retryLabel}
-            </button>
+            </Button>
           </div>
         </li>
       ))}

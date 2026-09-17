@@ -242,7 +242,6 @@ export function KnowledgeHomePage({
                   ["bases", "knowledge.home.openBases"],
                   ["sets", "knowledge.home.openSets"],
                   ["documents", "knowledge.home.openDocuments"],
-                  ["uploads", "knowledge.home.openUploads"],
                   ["chat", "knowledge.home.openChat"],
                 ] as const
               ).map(([page, key]) => (

@@ -101,10 +101,11 @@ describe("Knowledge Home page (V02)", () => {
     expect(screen.getByTestId("knowledge-home-recent").textContent).toContain("Set One");
     expect(screen.getByTestId("knowledge-home-shortcuts")).toBeTruthy();
 
+    expect(screen.queryByTestId("knowledge-home-shortcut-uploads")).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByTestId("knowledge-home-shortcut-uploads"));
+      fireEvent.click(screen.getByTestId("knowledge-home-shortcut-bases"));
     });
-    expect(onNavigate).toHaveBeenCalledWith({ page: "uploads", params: {} });
+    expect(onNavigate).toHaveBeenCalledWith({ page: "bases", params: {} });
   });
 
   it("shows structure without fake metrics in provider mode", async () => {

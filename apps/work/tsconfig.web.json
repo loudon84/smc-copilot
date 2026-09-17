@@ -5,15 +5,40 @@
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
     "src/shared/**/*",
-    "src/preload/*.d.ts"
+    "src/preload/*.d.ts",
+    "components/ui/**/*",
+    "components/common/**/*",
+    "components/knowledge/knowledge-base-card.tsx",
+    "utils/**/*",
+    "hooks/**/*"
   ],
-  "exclude": ["references/**", "wiki/**", "node_modules", "dist", "out"],
+  "exclude": [
+    "references/**",
+    "wiki/**",
+    "node_modules",
+    "dist",
+    "out",
+    "components/layout/**",
+    "components/knowledge/citation-card.tsx",
+    "components/knowledge/document-table.tsx",
+    "components/knowledge/document-status-badge.tsx",
+    "components/knowledge/knowledge-set-card.tsx",
+    "components/knowledge/permission-badge.tsx",
+    "components/knowledge/upload-status-badge.tsx"
+  ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
     "types": ["vitest/globals"],
     "paths": {
-      "@renderer/*": ["./src/renderer/src/*"]
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@/components/ui/*": ["./components/ui/*"],
+      "@/components/common/*": ["./components/common/*"],
+      "@/components/knowledge/knowledge-base-card": [
+        "./components/knowledge/knowledge-base-card.tsx"
+      ],
+      "@/utils/*": ["./utils/*"],
+      "@/hooks/*": ["./hooks/*"]
     }
   }
 }

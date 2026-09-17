@@ -1,4 +1,15 @@
 import { type ReactElement } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { KnowledgeBaseVisibility } from "../../../../../../../shared/knowledge/knowledge-base-ipc";
 
 export function KnowledgeBaseCreateForm(props: {
@@ -21,61 +32,69 @@ export function KnowledgeBaseCreateForm(props: {
   departmentLabel: string;
   organizationLabel: string;
 }): ReactElement {
+  const locked = props.disabled || props.submitting;
   return (
-    <>
-      <label className="settings-field">
-        {props.nameLabel}
-        <input
+    <div className="grid gap-3">
+      <div className="grid gap-1">
+        <Label htmlFor="knowledge-base-create-title">{props.nameLabel}</Label>
+        <Input
+          id="knowledge-base-create-title"
           data-testid="knowledge-base-create-title"
           value={props.name}
           onChange={(event) => props.onNameChange(event.target.value)}
-          disabled={props.disabled || props.submitting}
+          disabled={locked}
           placeholder={props.createLabel}
         />
-      </label>
-      <label className="settings-field">
-        {props.descriptionLabel}
-        <textarea
+      </div>
+      <div className="grid gap-1">
+        <Label htmlFor="knowledge-base-create-description">
+          {props.descriptionLabel}
+        </Label>
+        <Textarea
+          id="knowledge-base-create-description"
           data-testid="knowledge-base-create-description"
           value={props.description}
           onChange={(event) => props.onDescriptionChange(event.target.value)}
-          disabled={props.disabled || props.submitting}
+          disabled={locked}
         />
-      </label>
-      <label className="settings-field">
-        {props.visibilityLabel}
-        <select
-          data-testid="knowledge-base-create-visibility"
+      </div>
+      <div className="grid gap-1">
+        <Label>{props.visibilityLabel}</Label>
+        <Select
           value={props.visibility}
-          disabled={props.disabled || props.submitting}
-          onChange={(event) =>
-            props.onVisibilityChange(event.target.value as KnowledgeBaseVisibility)
+          disabled={locked}
+          onValueChange={(value) =>
+            props.onVisibilityChange(value as KnowledgeBaseVisibility)
           }
         >
-          <option value="private">{props.privateLabel}</option>
-          <option value="department">{props.departmentLabel}</option>
-          <option value="organization">{props.organizationLabel}</option>
-        </select>
-      </label>
-      <div className="knowledge-toolbar">
-        <button
+          <SelectTrigger data-testid="knowledge-base-create-visibility">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="private">{props.privateLabel}</SelectItem>
+            <SelectItem value="department">{props.departmentLabel}</SelectItem>
+            <SelectItem value="organization">{props.organizationLabel}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button
           type="button"
-          className="btn btn-secondary btn-sm"
+          variant="outline"
           disabled={props.submitting}
           onClick={props.onCancel}
         >
           {props.cancelLabel}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn btn-sm"
           data-testid="knowledge-base-create-submit"
-          disabled={props.disabled || props.submitting || !props.name.trim()}
+          disabled={locked || !props.name.trim()}
           onClick={props.onSubmit}
         >
           {props.createLabel}
-        </button>
+        </Button>
       </div>
-    </>
+    </div>
   );
 }

@@ -34,9 +34,9 @@ export type KnowledgeFacadeProbe = {
   facade: HermesKnowledgeFacadeAPI | null;
   bases: HermesKnowledgeBasesAPI | null;
   presentation: KnowledgePagePresentation;
-  /** Bases/Uploads: auth + capability (or explicit mock). Not mock-only. */
+  /** Bases/Documents/Uploads: auth + capability (or explicit mock). Not mock-only. */
   mutationsEnabled: boolean;
-  /** Sets/Documents/Chat stay mock-only this release. */
+  /** Sets/Chat stay mock-only this release. */
   syntheticMutationsEnabled: boolean;
 };
 
