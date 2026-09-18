@@ -1,0 +1,24 @@
+{
+  "name": "work-office-engine-spike",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "fixtures": "node generate-fixtures.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "@open-file-viewer/core": "^0.1.47",
+    "@open-file-viewer/react": "^0.1.47",
+    "docx-preview": "^0.3.7",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "playwright": "^1.55.0",
+    "vite": "^7.1.3"
+  }
+}
