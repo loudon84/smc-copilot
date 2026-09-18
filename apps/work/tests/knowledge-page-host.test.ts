@@ -14,7 +14,9 @@ import type {
   KnowledgeModeSnapshot,
 } from "../src/shared/knowledge/knowledge-job-ipc";
 import type { HermesKnowledgeBasesAPI } from "../src/shared/knowledge/knowledge-base-ipc";
+import type { HermesKnowledgeSetsAPI } from "../src/shared/knowledge/knowledge-set-ipc";
 import { makeBasesApi, unusedKnowledgeBaseOps } from "./helpers/knowledge-bases-api";
+import { makeSetsApi } from "./helpers/knowledge-sets-api";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
   useI18n: () => ({
@@ -41,6 +43,7 @@ function mockJobs(options: {
   mode?: KnowledgeModeSnapshot;
   facade?: HermesKnowledgeFacadeAPI;
   bases?: HermesKnowledgeBasesAPI;
+  sets?: HermesKnowledgeSetsAPI;
 }): void {
   const capability =
     options.capability === undefined
@@ -87,6 +90,43 @@ function mockJobs(options: {
       ...unusedKnowledgeBaseOps(),
     } satisfies HermesKnowledgeBasesAPI);
 
+  const sets =
+    options.sets ??
+    ({
+      list: vi.fn(async () => ({ items: [], total: 0, page: 1, pageSize: 50 })),
+      get: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_NOT_FOUND");
+      }),
+      create: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      update: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      bindBase: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      unbindBase: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      listProfiles: vi.fn(async () => []),
+      createProfile: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      getProfile: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_NOT_FOUND");
+      }),
+      updateProfile: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      publishProfile: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+      rollbackProfile: vi.fn(async () => {
+        throw new Error("KNOWLEDGE_UNAVAILABLE");
+      }),
+    } satisfies HermesKnowledgeSetsAPI);
+
   (
     window as unknown as {
       hermesAPI: {
@@ -95,6 +135,7 @@ function mockJobs(options: {
           getMode: ReturnType<typeof vi.fn>;
           facade: HermesKnowledgeFacadeAPI;
           bases: HermesKnowledgeBasesAPI;
+          sets: HermesKnowledgeSetsAPI;
           listSnapshots: ReturnType<typeof vi.fn>;
           createDraft: ReturnType<typeof vi.fn>;
           onSnapshotChanged: () => () => undefined;
@@ -110,6 +151,7 @@ function mockJobs(options: {
       getMode: vi.fn(async () => mode),
       facade,
       bases,
+      sets,
       listSnapshots: vi.fn(async () => []),
       createDraft: vi.fn(async () => {
         throw new Error("createDraft blocked");
@@ -371,5 +413,42 @@ describe("Knowledge page host (V01)", () => {
     });
     expect(screen.queryByTestId("knowledge-documents-page")).toBeNull();
     expect(screen.getByTestId("knowledge-document-detail")).toBeTruthy();
+  });
+
+  it("routes sets knowledgeSetId to the detail page", async () => {
+    const sets = makeSetsApi([
+      {
+        id: "set-9",
+        name: "Set Nine",
+        description: null,
+        status: "active",
+        visibility: "organization",
+        usageCount: 0,
+        knowledgeBases: [],
+      },
+    ]);
+    mockJobs({
+      capability: { available: true, status: "available" },
+      mode: {
+        dataMode: "provider",
+        allowSyntheticData: false,
+        configSource: "default",
+      },
+      sets,
+    });
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgePages, {
+          page: "sets",
+          params: { knowledgeSetId: "set-9" },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-set-detail")).toBeTruthy();
+    });
+    expect(screen.queryByTestId("knowledge-sets-page")).toBeNull();
   });
 });

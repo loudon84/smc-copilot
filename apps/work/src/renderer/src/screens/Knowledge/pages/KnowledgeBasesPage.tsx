@@ -198,30 +198,36 @@ export function KnowledgeBasesPage({
               title={t("knowledge.bases.title")}
               description={t("knowledge.bases.description")}
             />
-            <PageToolbar>
-              <SearchInput
-                testId="knowledge-bases-search"
-                placeholder={t("knowledge.host.searchPlaceholder")}
-                value={search}
-                onChange={setSearch}
-              />
-              <Select value={visibility} onValueChange={setVisibility}>
-                <SelectTrigger data-testid="knowledge-bases-visibility">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t("knowledge.host.filterAll")}</SelectItem>
-                  <SelectItem value="private">{t("knowledge.host.private")}</SelectItem>
-                  <SelectItem value="department">
-                    {t("knowledge.host.department")}
-                  </SelectItem>
-                  <SelectItem value="organization">
-                    {t("knowledge.host.organization")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+            <PageToolbar className="flex-nowrap">
+              <div className="min-w-0 flex-1">
+                <SearchInput
+                  className="w-full"
+                  testId="knowledge-bases-search"
+                  placeholder={t("knowledge.host.searchPlaceholder")}
+                  value={search}
+                  onChange={setSearch}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <Select value={visibility} onValueChange={setVisibility}>
+                  <SelectTrigger data-testid="knowledge-bases-visibility">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t("knowledge.host.filterAll")}</SelectItem>
+                    <SelectItem value="private">{t("knowledge.host.private")}</SelectItem>
+                    <SelectItem value="department">
+                      {t("knowledge.host.department")}
+                    </SelectItem>
+                    <SelectItem value="organization">
+                      {t("knowledge.host.organization")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 type="button"
+                className="shrink-0"
                 data-testid="knowledge-base-create"
                 disabled={!mutationsEnabled}
                 title={

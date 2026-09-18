@@ -1,24 +1,54 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { BusinessModuleUISurface } from "@/components/common/business-module-ui-surface";
+import { EmptyState } from "@/components/common/empty-state";
+import { PageHeader } from "@/components/common/page-header";
+import { PageToolbar } from "@/components/common/page-toolbar";
+import { SearchInput } from "@/components/common/search-input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
   type UseKnowledgeFacadeOptions,
 } from "../../../../../shared/knowledge/use-knowledge-facade";
 import type {
+  HermesKnowledgeSetsAPI,
+  KnowledgeSetSnapshot,
+  KnowledgeSetStatus,
+  KnowledgeSetVisibility,
+} from "../../../../../shared/knowledge/knowledge-set-ipc";
+import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
-  KnowledgeFacadeEntitySnapshot,
   KnowledgeModeSnapshot,
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
+import type { HermesKnowledgeBasesAPI } from "../../../../../shared/knowledge/knowledge-base-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
-import {
-  KnowledgeEmptyState,
-  KnowledgeEntityModal,
-  KnowledgeLoading,
-  KnowledgeSearchInput,
-  KnowledgeSectionTabs,
-  KnowledgeToolbar,
-} from "../knowledge-page-chrome";
+import { KnowledgeLoading } from "../knowledge-page-chrome";
 
 export type KnowledgeSetsPageProps = {
   params?: KnowledgeRouteParams;
@@ -30,64 +60,55 @@ export type KnowledgeSetsPageProps = {
   capability?: KnowledgeCapabilitySnapshot | null;
   mode?: KnowledgeModeSnapshot | null;
   facade?: HermesKnowledgeFacadeAPI | null;
+  bases?: HermesKnowledgeBasesAPI | null;
+  sets?: HermesKnowledgeSetsAPI | null;
 };
 
-type SetsLoadState =
-  | "loading"
-  | "unavailable"
-  | "empty"
-  | "content"
-  | "not-found"
-  | "error";
+type SetsLoadState = "loading" | "unavailable" | "empty" | "content" | "error";
 
-type SetDetailTab = "info" | "bindings" | "retrieval" | "usage";
+function errorCode(error: unknown): string {
+  if (error instanceof Error) return error.message.split(/\s/)[0] ?? error.message;
+  return "KNOWLEDGE_UNAVAILABLE";
+}
 
-/**
- * Knowledge Sets list/detail with local binding/weight drafts; provider submit disabled.
- */
 export function KnowledgeSetsPage({
-  params = {},
   onNavigate,
-  onBack,
   capability: injectedCapability,
   mode: injectedMode,
   facade: injectedFacade,
+  bases: injectedBases,
+  sets: injectedSets,
 }: KnowledgeSetsPageProps): ReactElement {
   const { t } = useI18n();
   const probe = useKnowledgeFacade({
     capability: injectedCapability,
     mode: injectedMode,
     facade: injectedFacade,
+    bases: injectedBases,
+    sets: injectedSets,
   } satisfies UseKnowledgeFacadeOptions);
-  const detailId = params.knowledgeSetId;
   const [loadState, setLoadState] = useState<SetsLoadState>("loading");
-  const [items, setItems] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
-  const [bases, setBases] = useState<KnowledgeFacadeEntitySnapshot[]>([]);
-  const [detail, setDetail] = useState<KnowledgeFacadeEntitySnapshot | null>(
-    null,
-  );
+  const [items, setItems] = useState<KnowledgeSetSnapshot[]>([]);
   const [search, setSearch] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [draftTitle, setDraftTitle] = useState("");
-  const [bindingWeight, setBindingWeight] = useState("1");
-  const [retrievalMode, setRetrievalMode] = useState("hybrid");
-  const [selectedBaseIds, setSelectedBaseIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const [draftName, setDraftName] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [draftVisibility, setDraftVisibility] =
+    useState<KnowledgeSetVisibility>("organization");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [detailTab, setDetailTab] = useState<SetDetailTab>("bindings");
+  const [submitting, setSubmitting] = useState(false);
 
   const refreshList = async (): Promise<void> => {
-    if (!probe.facade || probe.mode?.dataMode !== "mock") {
+    if (!probe.sets) {
       setItems([]);
       setLoadState(
         probe.presentation === "unavailable" ? "unavailable" : "empty",
       );
       return;
     }
-    const listed = await probe.facade.listEntities({ kind: "set" });
-    setItems(listed);
-    setLoadState(listed.length > 0 ? "content" : "empty");
+    const page = await probe.sets.list({ page: 1, pageSize: 50 });
+    setItems(page.items);
+    setLoadState(page.items.length > 0 ? "content" : "empty");
   };
 
   useEffect(() => {
@@ -103,35 +124,10 @@ export function KnowledgeSetsPage({
     let cancelled = false;
     void (async () => {
       try {
-        if (detailId) {
-          if (!probe.facade || probe.mode?.dataMode !== "mock") {
-            if (!cancelled) setLoadState("not-found");
-            return;
-          }
-          const entity = await probe.facade.getEntity({
-            kind: "set",
-            entityId: detailId,
-          });
-          if (cancelled) return;
-          if (!entity) {
-            setDetail(null);
-            setLoadState("not-found");
-            return;
-          }
-          setDetail(entity);
-          setDraftTitle(entity.title ?? "");
-          const baseList = await probe.facade.listEntities({ kind: "base" });
-          if (cancelled) return;
-          setBases(baseList);
-          setLoadState("content");
-          return;
-        }
         await refreshList();
       } catch (error) {
         if (cancelled) return;
-        setErrorMessage(
-          error instanceof Error ? error.message : t("knowledge.host.errorTitle"),
-        );
+        setErrorMessage(errorCode(error));
         setLoadState("error");
       }
     })();
@@ -139,308 +135,249 @@ export function KnowledgeSetsPage({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [probe.presentation, probe.facade, probe.mode?.dataMode, detailId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh tied to probe
+  }, [probe.presentation, probe.sets]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((item) =>
-      (item.title ?? item.id).toLowerCase().includes(q),
-    );
+    return items.filter((item) => item.name.toLowerCase().includes(q));
   }, [items, search]);
 
-  const mutationsEnabled = probe.syntheticMutationsEnabled;
+  const mutationsEnabled = probe.mutationsEnabled;
+  const statusLabel = (status: KnowledgeSetStatus): string =>
+    t(`knowledge.sets.status.${status}`);
+  const visibilityLabel = (value: KnowledgeSetVisibility): string => {
+    if (value === "private") return t("knowledge.host.private");
+    if (value === "department") return t("knowledge.host.department");
+    return t("knowledge.host.organization");
+  };
 
   const handleCreate = async (): Promise<void> => {
-    if (!mutationsEnabled || !probe.facade) return;
-    await probe.facade.mutateEntity({
-      kind: "set",
-      patch: { title: draftTitle.trim() || "New set" },
-    });
-    setDraftTitle("");
-    setDialogOpen(false);
-    await refreshList();
+    if (!mutationsEnabled || !probe.sets || submitting) return;
+    const name = draftName.trim();
+    if (!name) return;
+    setSubmitting(true);
+    try {
+      await probe.sets.create({
+        name,
+        description: draftDescription.trim() ? draftDescription.trim() : null,
+        visibility: draftVisibility,
+      });
+      setDraftName("");
+      setDraftDescription("");
+      setDraftVisibility("organization");
+      setDialogOpen(false);
+      await refreshList();
+    } catch (error) {
+      setErrorMessage(errorCode(error));
+      setLoadState("error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleSubmitBindings = async (): Promise<void> => {
-    if (!mutationsEnabled || !probe.facade || !detailId) return;
-    const updated = await probe.facade.mutateEntity({
-      kind: "set",
-      entityId: detailId,
-      patch: {
-        title: draftTitle.trim() || detail?.title || "Set",
-        weight: Number(bindingWeight) || 1,
-        retrieval: retrievalMode,
-        boundBaseIds: Array.from(selectedBaseIds).join(","),
-      },
-    });
-    setDetail(updated);
+  const openItem = (id: string): void => {
+    onNavigate?.({ page: "sets", params: { knowledgeSetId: id } });
   };
 
-  const toggleBase = (id: string): void => {
-    setSelectedBaseIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  if (detailId) {
-    return (
+  return (
+    <BusinessModuleUISurface module="knowledge">
       <div data-testid="knowledge-sets-page" data-state={loadState}>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          data-testid="knowledge-sets-back"
-          onClick={() => onBack?.()}
-        >
-          {t("knowledge.host.back")}
-        </button>
         {loadState === "loading" ? (
           <KnowledgeLoading label={t("knowledge.loading")} />
         ) : null}
-        {loadState === "not-found" ? (
-          <KnowledgeEmptyState
-            testId="knowledge-set-not-found"
-            title={t("knowledge.host.notFoundTitle")}
-            description={t("knowledge.host.notFoundDescription")}
+        {loadState === "unavailable" ? (
+          <EmptyState
+            title={t("knowledge.unavailableTitle")}
+            description={
+              probe.capability?.status === "auth_required"
+                ? t("knowledge.host.authRequired")
+                : t("knowledge.unavailableDescription")
+            }
           />
         ) : null}
         {loadState === "error" ? (
-          <KnowledgeEmptyState
+          <EmptyState
             title={t("knowledge.host.errorTitle")}
             description={errorMessage}
           />
         ) : null}
-        {loadState === "content" && detail ? (
-          <section className="settings-section" data-testid="knowledge-set-detail">
-            <h2>{detail.title ?? t("knowledge.sets.detailTitle")}</h2>
-            <p data-testid="knowledge-set-detail-id">{detail.id}</p>
-            <KnowledgeSectionTabs
-              active={detailTab}
-              onChange={setDetailTab}
-              tabs={[
-                { id: "info", label: t("knowledge.sets.tabInfo") },
-                { id: "bindings", label: t("knowledge.sets.tabBindings") },
-                { id: "retrieval", label: t("knowledge.sets.tabRetrieval") },
-                { id: "usage", label: t("knowledge.sets.tabUsage") },
-              ]}
+
+        {loadState === "empty" || loadState === "content" ? (
+          <div className="grid gap-3">
+            <PageHeader
+              title={t("knowledge.sets.title")}
+              description={t("knowledge.sets.description")}
             />
-
-            <div hidden={detailTab !== "info"}>
-              <label className="settings-field">
-                {t("knowledge.host.edit")}
-                <input
-                  data-testid="knowledge-set-title-input"
-                  value={draftTitle}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                  disabled={!mutationsEnabled}
+            <PageToolbar className="flex-nowrap">
+              <div className="min-w-0 flex-1">
+                <SearchInput
+                  className="w-full"
+                  testId="knowledge-sets-search"
+                  placeholder={t("knowledge.host.searchPlaceholder")}
+                  value={search}
+                  onChange={setSearch}
                 />
-              </label>
-              <p>
-                {t("knowledge.sets.boundBases")}: {selectedBaseIds.size}
-              </p>
-            </div>
-
-            <section
-              hidden={detailTab !== "bindings"}
-              data-testid="knowledge-set-bindings"
-            >
-              <h3>{t("knowledge.sets.bindingTitle")}</h3>
-              <label>
-                {t("knowledge.sets.weightLabel")}
-                <input
-                  data-testid="knowledge-set-weight"
-                  value={bindingWeight}
-                  onChange={(event) => setBindingWeight(event.target.value)}
-                  disabled={!mutationsEnabled}
-                />
-              </label>
-              {bases.length === 0 ? (
-                <p>{t("knowledge.sets.noBases")}</p>
-              ) : (
-                <ul>
-                  {bases.map((base) => (
-                    <li key={base.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={selectedBaseIds.has(base.id)}
-                          disabled={!mutationsEnabled}
-                          onChange={() => toggleBase(base.id)}
-                        />
-                        {base.title ?? base.id}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <section
-              hidden={detailTab !== "retrieval"}
-              data-testid="knowledge-set-retrieval"
-            >
-              <h3>{t("knowledge.sets.retrievalTitle")}</h3>
-              <select
-                data-testid="knowledge-set-retrieval-mode"
-                value={retrievalMode}
-                onChange={(event) => setRetrievalMode(event.target.value)}
-                disabled={!mutationsEnabled}
+              </div>
+              <Button
+                type="button"
+                className="shrink-0"
+                data-testid="knowledge-set-create"
+                disabled={!mutationsEnabled || !probe.sets}
+                title={
+                  mutationsEnabled ? undefined : t("knowledge.sets.mutateDisabled")
+                }
+                onClick={() => setDialogOpen(true)}
               >
-                <option value="hybrid">hybrid</option>
-                <option value="keyword">keyword</option>
-                <option value="vector">vector</option>
-              </select>
-            </section>
+                {t("knowledge.sets.createLabel")}
+              </Button>
+            </PageToolbar>
+            {!mutationsEnabled ? <p>{t("knowledge.sets.mutateDisabled")}</p> : null}
+            {filtered.length === 0 ? (
+              <p data-testid="knowledge-set-list-empty">
+                {t("knowledge.sets.emptyList")}
+              </p>
+            ) : (
+              <div
+                className="grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 min-[1000px]:grid-cols-3 min-[1400px]:grid-cols-4"
+                data-testid="knowledge-set-list"
+              >
+                {filtered.map((item) => (
+                  <Card
+                    key={item.id}
+                    className="flex h-full cursor-pointer flex-col shadow-none"
+                    data-testid={`knowledge-set-item-${item.id}`}
+                    onClick={() => openItem(item.id)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="line-clamp-1 text-base">
+                          {item.name}
+                        </CardTitle>
+                        <Badge variant="outline">{statusLabel(item.status)}</Badge>
+                      </div>
+                      <CardDescription className="line-clamp-2">
+                        {item.description || t("knowledge.sets.emptyDescription")}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 text-muted-foreground text-sm">
+                      <p>{visibilityLabel(item.visibility)}</p>
+                      <p data-testid={`knowledge-set-owner-${item.id}`}>
+                        {t("knowledge.host.owner")}: {item.ownerMemberId ?? "—"}
+                      </p>
+                      <p data-testid={`knowledge-set-bound-count-${item.id}`}>
+                        {t("knowledge.sets.boundBases")}: {item.knowledgeBases.length}
+                      </p>
+                    </CardContent>
+                    <CardFooter>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openItem(item.id);
+                        }}
+                      >
+                        {t("knowledge.host.open")}
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
 
-            <div hidden={detailTab !== "usage"}>
-              <p>{t("knowledge.sets.usageEmpty")}</p>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-set-submit"
-              disabled={!mutationsEnabled}
-              title={
-                mutationsEnabled ? undefined : t("knowledge.sets.mutateDisabled")
-              }
-              onClick={() => {
-                void handleSubmitBindings();
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(open) => {
+                if (submitting && !open) return;
+                setDialogOpen(open);
               }}
             >
-              {t("knowledge.sets.submitBindings")}
-            </button>
-            {!mutationsEnabled ? (
-              <p>{t("knowledge.sets.mutateDisabled")}</p>
-            ) : null}
-          </section>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <div data-testid="knowledge-sets-page" data-state={loadState}>
-      {loadState === "loading" ? (
-        <KnowledgeLoading label={t("knowledge.loading")} />
-      ) : null}
-      {loadState === "unavailable" ? (
-        <KnowledgeEmptyState
-          title={t("knowledge.unavailableTitle")}
-          description={t("knowledge.unavailableDescription")}
-        />
-      ) : null}
-      {loadState === "error" ? (
-        <KnowledgeEmptyState
-          title={t("knowledge.host.errorTitle")}
-          description={errorMessage}
-        />
-      ) : null}
-
-      {loadState === "empty" || loadState === "content" ? (
-        <>
-          <KnowledgeToolbar>
-            <KnowledgeSearchInput
-              testId="knowledge-sets-search"
-              placeholder={t("knowledge.host.searchPlaceholder")}
-              value={search}
-              onChange={setSearch}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              data-testid="knowledge-set-create"
-              disabled={!mutationsEnabled}
-              title={
-                mutationsEnabled ? undefined : t("knowledge.sets.mutateDisabled")
-              }
-              onClick={() => setDialogOpen(true)}
-            >
-              {t("knowledge.sets.createLabel")}
-            </button>
-          </KnowledgeToolbar>
-          {!mutationsEnabled ? <p>{t("knowledge.sets.mutateDisabled")}</p> : null}
-          {filtered.length === 0 ? (
-            <p data-testid="knowledge-set-list-empty">
-              {t("knowledge.sets.emptyList")}
-            </p>
-          ) : (
-            <div className="knowledge-card-grid" data-testid="knowledge-set-list">
-              {filtered.map((item) => (
-                <article key={item.id} className="settings-card">
-                  <div className="settings-card-head">
-                    <strong>{item.title ?? item.id}</strong>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t("knowledge.sets.createLabel")}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-3">
+                  <div className="grid gap-1">
+                    <Label htmlFor="knowledge-set-create-name">
+                      {t("knowledge.host.namePlaceholder")}
+                    </Label>
+                    <Input
+                      id="knowledge-set-create-name"
+                      data-testid="knowledge-set-create-name"
+                      value={draftName}
+                      disabled={!mutationsEnabled || submitting}
+                      onChange={(event) => setDraftName(event.target.value)}
+                    />
                   </div>
-                  <div className="knowledge-toolbar">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      data-testid={`knowledge-set-item-${item.id}`}
-                      onClick={() =>
-                        onNavigate?.({
-                          page: "sets",
-                          params: { knowledgeSetId: item.id },
-                        })
+                  <div className="grid gap-1">
+                    <Label htmlFor="knowledge-set-create-description">
+                      {t("knowledge.sets.descriptionLabel")}
+                    </Label>
+                    <Textarea
+                      id="knowledge-set-create-description"
+                      data-testid="knowledge-set-create-description"
+                      value={draftDescription}
+                      disabled={!mutationsEnabled || submitting}
+                      onChange={(event) => setDraftDescription(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label>{t("knowledge.host.visibility")}</Label>
+                    <Select
+                      value={draftVisibility}
+                      disabled={!mutationsEnabled || submitting}
+                      onValueChange={(value) =>
+                        setDraftVisibility(value as KnowledgeSetVisibility)
                       }
                     >
-                      {t("knowledge.sets.manage")}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      disabled={!onNavigate}
-                      onClick={() => onNavigate?.({ page: "chat", params: {} })}
-                    >
-                      {t("knowledge.sets.startChat")}
-                    </button>
+                      <SelectTrigger data-testid="knowledge-set-create-visibility">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="private">
+                          {t("knowledge.host.private")}
+                        </SelectItem>
+                        <SelectItem value="department">
+                          {t("knowledge.host.department")}
+                        </SelectItem>
+                        <SelectItem value="organization">
+                          {t("knowledge.host.organization")}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </article>
-              ))}
-            </div>
-          )}
-
-          <KnowledgeEntityModal
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            title={t("knowledge.sets.createLabel")}
-          >
-            <label className="settings-field">
-              {t("knowledge.host.namePlaceholder")}
-              <input
-                data-testid="knowledge-set-create-title"
-                value={draftTitle}
-                onChange={(event) => setDraftTitle(event.target.value)}
-                disabled={!mutationsEnabled}
-                placeholder={t("knowledge.sets.createLabel")}
-              />
-            </label>
-            <div className="knowledge-toolbar">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setDialogOpen(false)}
-              >
-                {t("knowledge.host.cancel")}
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={!mutationsEnabled}
-                onClick={() => {
-                  void handleCreate();
-                }}
-              >
-                {t("knowledge.host.create")}
-              </button>
-            </div>
-          </KnowledgeEntityModal>
-        </>
-      ) : null}
-    </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={submitting}
+                      onClick={() => setDialogOpen(false)}
+                    >
+                      {t("knowledge.host.cancel")}
+                    </Button>
+                    <Button
+                      type="button"
+                      data-testid="knowledge-set-create-submit"
+                      disabled={
+                        !mutationsEnabled || submitting || !draftName.trim()
+                      }
+                      onClick={() => {
+                        void handleCreate();
+                      }}
+                    >
+                      {t("knowledge.host.create")}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        ) : null}
+      </div>
+    </BusinessModuleUISurface>
   );
 }
 

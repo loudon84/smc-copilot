@@ -30,7 +30,9 @@ export type KnowledgeAuthorizedTransport = {
   joinUrl(pathOrUrl: string): string;
   authorizedFetch(
     pathOrUrl: string,
-    init?: AuthorizedTransportRequestOptions,
+    init?: import("../auth/authorized-backend-transport").AuthorizedTransportRequestOptions & {
+      timeoutMs?: number;
+    },
   ): Promise<Response>;
   withAuthRetry<T>(op: () => Promise<T>): Promise<T>;
 };
@@ -69,7 +71,7 @@ export function createKnowledgeAuthorizedTransport(
 
   async function authorizedFetch(
     pathOrUrl: string,
-    init: AuthorizedTransportRequestOptions = {},
+    init: AuthorizedTransportRequestOptions & { timeoutMs?: number } = {},
   ): Promise<Response> {
     const url = assertSameOriginAndJoinUrl(baseUrl(), pathOrUrl);
     const token = (await ensureAccessToken()) || requireCachedAccessToken();
@@ -84,7 +86,8 @@ export function createKnowledgeAuthorizedTransport(
       headers.set("X-Idempotency-Key", init.idempotencyKey);
     }
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), defaultTimeoutMs);
+    const timeoutMs = init.timeoutMs ?? defaultTimeoutMs;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const onExternalAbort = (): void => {
       controller.abort();
     };

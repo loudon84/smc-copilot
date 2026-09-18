@@ -251,6 +251,34 @@ describe("Knowledge Documents page", () => {
       "2026-01-03T00:00:00.000Z",
     );
     expect(screen.getByTestId("knowledge-document-parse").textContent).toBe("active");
+    expect(screen.getByTestId("knowledge-document-sidebar")).toBeTruthy();
+    expect(screen.getByTestId("knowledge-document-preview")).toBeTruthy();
+    expect(
+      screen.getByTestId("knowledge-document-detail-page").getAttribute("data-sidebar"),
+    ).toBe("expanded");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-sidebar-toggle"));
+    });
+    expect(
+      screen.getByTestId("knowledge-document-detail-page").getAttribute("data-sidebar"),
+    ).toBe("collapsed");
+    expect(screen.getByTestId("knowledge-document-sidebar").getAttribute("data-collapsed")).toBe(
+      "true",
+    );
+    expect(screen.queryByTestId("knowledge-document-info")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-sidebar-toggle"));
+    });
+    expect(
+      screen.getByTestId("knowledge-document-detail-page").getAttribute("data-sidebar"),
+    ).toBe("expanded");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-open-versions"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-versions-drawer")).toBeTruthy();
+    });
     expect(screen.getByTestId("knowledge-document-version-created-sf-1-v1").textContent).toContain(
       "2026-01-04T00:00:00.000Z",
     );
@@ -260,6 +288,13 @@ describe("Knowledge Documents page", () => {
     expect(screen.getByTestId("knowledge-document-version-sf-1-v1").getAttribute("data-active")).toBe(
       "true",
     );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-open-parse"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-parse-drawer")).toBeTruthy();
+    });
     expect(screen.getByTestId("knowledge-document-parse-sf-1-v2").textContent).toContain(
       "pending",
     );
@@ -307,6 +342,12 @@ describe("Knowledge Documents page", () => {
       );
     });
 
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-open-versions")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-open-versions"));
+    });
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-document-activate-sf-1-v2")).toBeTruthy();
     });
@@ -366,7 +407,12 @@ describe("Knowledge Documents page", () => {
     });
     expect(screen.getByTestId("knowledge-document-archive")).toBeDisabled();
     expect(screen.getByTestId("knowledge-document-delete")).toBeDisabled();
-    expect(screen.getByTestId("knowledge-document-activate-sf-1-v1")).toBeDisabled();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-open-versions"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-activate-sf-1-v1")).toBeDisabled();
+    });
   });
 
   it("deletes a file after confirm and returns to the base list", async () => {

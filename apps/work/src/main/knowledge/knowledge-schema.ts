@@ -18,6 +18,14 @@ import type {
   KnowledgeIndexState,
   KnowledgeSourceFileStatus,
 } from "../../shared/knowledge/knowledge-base-ipc";
+import type {
+  KnowledgeRetrievalProfileSnapshot,
+  KnowledgeRetrievalProfileStatus,
+  KnowledgeSetBoundBase,
+  KnowledgeSetSnapshot,
+  KnowledgeSetStatus,
+  KnowledgeSetVisibility,
+} from "../../shared/knowledge/knowledge-set-ipc";
 import { KNOWLEDGE_ERROR_CODES } from "../../shared/knowledge/knowledge-base-ipc";
 import { KnowledgeFacadeError } from "../../shared/knowledge/knowledge-errors";
 
@@ -434,4 +442,156 @@ export function parseErrorEnvelope(raw: unknown): {
     messageKey: typeof raw.message_key === "string" ? raw.message_key : undefined,
     details: isRecord(raw.details) ? raw.details : undefined,
   };
+}
+
+const SET_STATUSES: ReadonlySet<KnowledgeSetStatus> = new Set([
+  "active",
+  "disabled",
+]);
+
+const SET_VISIBILITIES: ReadonlySet<KnowledgeSetVisibility> = new Set([
+  "private",
+  "department",
+  "organization",
+]);
+
+const PROFILE_STATUSES: ReadonlySet<KnowledgeRetrievalProfileStatus> = new Set([
+  "draft",
+  "active",
+  "archived",
+]);
+
+function parseBoundBase(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeSetBoundBase {
+  if (!isRecord(raw)) throw contractInvalid(operationId);
+  const knowledgeBaseId =
+    typeof raw.knowledge_base_id === "string" ? raw.knowledge_base_id.trim() : "";
+  if (!knowledgeBaseId) throw contractInvalid(operationId);
+  const bound: KnowledgeSetBoundBase = { knowledgeBaseId };
+  if (typeof raw.name === "string") bound.name = raw.name;
+  if (Number.isFinite(Number(raw.weight))) bound.weight = Number(raw.weight);
+  return bound;
+}
+
+export function parseKnowledgeSetSnapshot(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeSetSnapshot {
+  if (!isRecord(raw)) throw contractInvalid(operationId);
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  const status = raw.status;
+  const visibility = raw.visibility;
+  if (
+    !id ||
+    !name ||
+    typeof status !== "string" ||
+    !SET_STATUSES.has(status as KnowledgeSetStatus) ||
+    typeof visibility !== "string" ||
+    !SET_VISIBILITIES.has(visibility as KnowledgeSetVisibility)
+  ) {
+    throw contractInvalid(operationId);
+  }
+  const description =
+    raw.description === null || raw.description === undefined
+      ? null
+      : typeof raw.description === "string"
+        ? raw.description
+        : null;
+  const knowledgeBases = Array.isArray(raw.knowledge_bases)
+    ? raw.knowledge_bases.map((item) => parseBoundBase(item, operationId))
+    : [];
+  const snap: KnowledgeSetSnapshot = {
+    id,
+    name,
+    description,
+    status: status as KnowledgeSetStatus,
+    visibility: visibility as KnowledgeSetVisibility,
+    usageCount: Number.isFinite(Number(raw.usage_count))
+      ? Number(raw.usage_count)
+      : 0,
+    knowledgeBases,
+  };
+  if (typeof raw.owner_member_id === "string") {
+    snap.ownerMemberId = raw.owner_member_id;
+  }
+  if (typeof raw.last_used_at === "string") snap.lastUsedAt = raw.last_used_at;
+  return snap;
+}
+
+export function parseKnowledgeSetPage(
+  raw: unknown,
+  operationId?: string,
+): {
+  items: KnowledgeSetSnapshot[];
+  total: number;
+  page: number;
+  pageSize: number;
+} {
+  const data = unwrapApiData(raw, operationId);
+  if (!isRecord(data) || !Array.isArray(data.items)) {
+    throw contractInvalid(operationId);
+  }
+  return {
+    items: data.items.map((item) => parseKnowledgeSetSnapshot(item, operationId)),
+    total: Number.isFinite(Number(data.total)) ? Number(data.total) : data.items.length,
+    page: Number.isFinite(Number(data.page)) ? Number(data.page) : 1,
+    pageSize: Number.isFinite(Number(data.page_size))
+      ? Number(data.page_size)
+      : data.items.length,
+  };
+}
+
+export function parseKnowledgeRetrievalProfileSnapshot(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeRetrievalProfileSnapshot {
+  if (!isRecord(raw)) throw contractInvalid(operationId);
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  const knowledgeSetId =
+    typeof raw.knowledge_set_id === "string" ? raw.knowledge_set_id.trim() : "";
+  const version = Number(raw.version);
+  const status = raw.status;
+  if (
+    !id ||
+    !knowledgeSetId ||
+    !Number.isFinite(version) ||
+    typeof status !== "string" ||
+    !PROFILE_STATUSES.has(status as KnowledgeRetrievalProfileStatus) ||
+    !isRecord(raw.config)
+  ) {
+    throw contractInvalid(operationId);
+  }
+  const snap: KnowledgeRetrievalProfileSnapshot = {
+    id,
+    knowledgeSetId,
+    version,
+    config: { ...raw.config },
+    status: status as KnowledgeRetrievalProfileStatus,
+  };
+  if (typeof raw.created_by_member_id === "string") {
+    snap.createdByMemberId = raw.created_by_member_id;
+  }
+  if (typeof raw.created_at === "string") snap.createdAt = raw.created_at;
+  if (typeof raw.updated_at === "string") snap.updatedAt = raw.updated_at;
+  if (typeof raw.activated_at === "string") snap.activatedAt = raw.activated_at;
+  return snap;
+}
+
+export function parseKnowledgeRetrievalProfileList(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeRetrievalProfileSnapshot[] {
+  const data = unwrapApiData(raw, operationId);
+  const items = Array.isArray(data)
+    ? data
+    : isRecord(data) && Array.isArray(data.items)
+      ? data.items
+      : null;
+  if (!items) throw contractInvalid(operationId);
+  return items.map((item) =>
+    parseKnowledgeRetrievalProfileSnapshot(item, operationId),
+  );
 }

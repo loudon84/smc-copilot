@@ -4,11 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import knowledgeEn from "../src/shared/i18n/locales/en/knowledge";
 import { KnowledgeSetsPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeSetsPage";
-import type {
-  HermesKnowledgeFacadeAPI,
-  KnowledgeFacadeEntitySnapshot,
-  KnowledgeFacadeMutateInput,
-} from "../src/shared/knowledge/knowledge-job-ipc";
+import { KnowledgeSetDetailPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeSetDetailPage";
+import type { KnowledgeSetSnapshot } from "../src/shared/knowledge/knowledge-set-ipc";
+import { makeBasesApi } from "./helpers/knowledge-bases-api";
+import { makeSetsApi } from "./helpers/knowledge-sets-api";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
   useI18n: () => ({
@@ -30,92 +29,89 @@ vi.mock("../src/renderer/src/components/useI18n", () => ({
   }),
 }));
 
-function setEntity(id: string, title: string): KnowledgeFacadeEntitySnapshot {
+function setSnapshot(
+  id: string,
+  name: string,
+  overrides: Partial<KnowledgeSetSnapshot> = {},
+): KnowledgeSetSnapshot {
   return {
     id,
-    kind: "set",
-    title,
-    dataMode: "mock",
-    partition: {
-      workProfileId: "wp",
-      authSubject: "user",
-      tenantScope: { kind: "personal" },
-    },
+    name,
+    description: null,
+    status: "active",
+    visibility: "organization",
+    usageCount: 0,
+    knowledgeBases: [],
+    ...overrides,
   };
 }
 
-describe("Knowledge Sets page (V03)", () => {
+const availableCapability = { available: true, status: "available" as const };
+const providerMode = {
+  dataMode: "provider" as const,
+  allowSyntheticData: false,
+  configSource: "default" as const,
+};
+
+describe("Knowledge Sets pages (4530)", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
   });
 
-  it("supports list/detail and mock binding submit", async () => {
-    const store = [setEntity("s1", "Set Alpha")];
-    const mutateEntity = vi.fn(async (input: KnowledgeFacadeMutateInput) => {
-      const existing = store.find((item) => item.id === input.entityId)!;
-      return { ...existing, title: String(input.patch?.title ?? existing.title) };
-    });
-    const facade: HermesKnowledgeFacadeAPI = {
-      listEntities: vi.fn(async () => [...store]),
-      getEntity: vi.fn(async ({ entityId }) =>
-        store.find((item) => item.id === entityId) ?? null,
-      ),
-      mutateEntity,
-    };
+  it("lists and creates sets via typed sets API", async () => {
+    const store = [setSnapshot("s1", "Set Alpha")];
+    const sets = makeSetsApi(store);
+    const onNavigate = vi.fn();
 
     await act(async () => {
       render(
         React.createElement(KnowledgeSetsPage, {
-          params: { knowledgeSetId: "s1" },
-          onBack: () => undefined,
-          capability: { available: true, status: "available" },
-          mode: {
-            dataMode: "mock",
-            allowSyntheticData: true,
-            configSource: "env",
-          },
-          facade,
+          onNavigate,
+          capability: availableCapability,
+          mode: providerMode,
+          sets,
         }),
       );
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("knowledge-set-detail")).toBeTruthy();
+      expect(screen.getByTestId("knowledge-set-item-s1")).toBeTruthy();
     });
-    expect(screen.getByTestId("knowledge-set-bindings")).toBeTruthy();
-    expect(screen.getByTestId("knowledge-set-retrieval")).toBeTruthy();
 
     await act(async () => {
-      fireEvent.change(screen.getByTestId("knowledge-set-weight"), {
-        target: { value: "2" },
-      });
-      fireEvent.click(screen.getByTestId("knowledge-set-submit"));
+      fireEvent.click(screen.getByTestId("knowledge-set-create"));
     });
-    expect(mutateEntity).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("knowledge-set-create-name"), {
+        target: { value: "Set Beta" },
+      });
+      fireEvent.click(screen.getByTestId("knowledge-set-create-submit"));
+    });
+
+    await waitFor(() => {
+      expect(sets.create).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Set Beta" }),
+      );
+      expect(screen.getByTestId("knowledge-set-item-s2")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-item-s1"));
+    });
+    expect(onNavigate).toHaveBeenCalledWith({
+      page: "sets",
+      params: { knowledgeSetId: "s1" },
+    });
   });
 
-  it("blocks provider submit", async () => {
-    const mutateEntity = vi.fn(async () => {
-      throw new Error("blocked");
-    });
-    const facade: HermesKnowledgeFacadeAPI = {
-      listEntities: vi.fn(async () => []),
-      getEntity: vi.fn(async () => setEntity("s1", "Hidden")),
-      mutateEntity,
-    };
-
+  it("fails closed without sets API", async () => {
     await act(async () => {
       render(
         React.createElement(KnowledgeSetsPage, {
-          params: { knowledgeSetId: "s1" },
-          capability: { available: true, status: "available" },
-          mode: {
-            dataMode: "provider",
-            allowSyntheticData: false,
-            configSource: "default",
-          },
-          facade,
+          capability: availableCapability,
+          mode: providerMode,
+          sets: null,
         }),
       );
     });
@@ -123,65 +119,208 @@ describe("Knowledge Sets page (V03)", () => {
     await waitFor(() => {
       expect(
         screen.getByTestId("knowledge-sets-page").getAttribute("data-state"),
-      ).toBe("not-found");
+      ).toBe("empty");
     });
-    expect(screen.queryByTestId("knowledge-set-submit")).toBeNull();
-    expect(mutateEntity).not.toHaveBeenCalled();
-    expect(document.body.textContent).not.toMatch(/http:\/\//i);
+    expect(screen.getByTestId("knowledge-set-create")).toBeDisabled();
   });
 
-  it("disables list create in provider mode", async () => {
+  it("binds and unbinds bases on detail", async () => {
+    const store = [setSnapshot("s1", "Set Alpha")];
+    const sets = makeSetsApi(store);
+    const bases = makeBasesApi([
+      {
+        id: "b1",
+        name: "Base One",
+        description: null,
+        status: "active",
+        visibility: "organization",
+      },
+    ]);
+
     await act(async () => {
       render(
-        React.createElement(KnowledgeSetsPage, {
-          capability: { available: true, status: "available" },
-          mode: {
-            dataMode: "provider",
-            allowSyntheticData: false,
-            configSource: "default",
-          },
-          facade: {
-            listEntities: vi.fn(async () => []),
-            getEntity: vi.fn(async () => null),
-            mutateEntity: vi.fn(async () => {
-              throw new Error("no");
-            }),
-          },
+        React.createElement(KnowledgeSetDetailPage, {
+          params: { knowledgeSetId: "s1" },
+          capability: availableCapability,
+          mode: providerMode,
+          sets,
+          bases,
         }),
       );
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("knowledge-set-create")).toBeDisabled();
+      expect(screen.getByTestId("knowledge-set-detail").getAttribute("data-state")).toBe(
+        "content",
+      );
     });
-    expect(document.body.textContent).toContain(knowledgeEn.sets.mutateDisabled);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-tab-bindings"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-set-bind-base")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("knowledge-set-bind-base"), {
+        target: { value: "b1" },
+      });
+      fireEvent.change(screen.getByTestId("knowledge-set-bind-weight"), {
+        target: { value: "2" },
+      });
+      fireEvent.click(screen.getByTestId("knowledge-set-bind"));
+    });
+
+    await waitFor(() => {
+      expect(sets.bindBase).toHaveBeenCalledWith(
+        expect.objectContaining({
+          knowledgeSetId: "s1",
+          knowledgeBaseId: "b1",
+          weight: 2,
+        }),
+      );
+      expect(screen.getByTestId("knowledge-set-bound-b1")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-unbind-b1"));
+    });
+    await waitFor(() => {
+      expect(sets.unbindBase).toHaveBeenCalledWith({
+        knowledgeSetId: "s1",
+        knowledgeBaseId: "b1",
+      });
+    });
   });
 
-  it("opens the create dialog from the set list", async () => {
+  it("creates, updates, publishes, and rolls back retrieval profiles", async () => {
+    const store = [setSnapshot("s1", "Set Alpha")];
+    const sets = makeSetsApi(store);
+
     await act(async () => {
       render(
-        React.createElement(KnowledgeSetsPage, {
-          capability: { available: true, status: "available" },
-          mode: {
-            dataMode: "mock",
-            allowSyntheticData: true,
-            configSource: "env",
-          },
-          facade: {
-            listEntities: vi.fn(async () => [setEntity("s1", "Set Alpha")]),
-            getEntity: vi.fn(async () => null),
-            mutateEntity: vi.fn(async () => setEntity("s1", "Set Alpha")),
-          },
+        React.createElement(KnowledgeSetDetailPage, {
+          params: { knowledgeSetId: "s1" },
+          capability: availableCapability,
+          mode: providerMode,
+          sets,
         }),
       );
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("knowledge-set-list")).toBeTruthy();
+      expect(screen.getByTestId("knowledge-set-detail").getAttribute("data-state")).toBe(
+        "content",
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-tab-retrieval"));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("knowledge-set-profile-create-config"),
+      ).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("knowledge-set-profile-create-config"), {
+        target: { value: '{"top_k":3}' },
+      });
+      fireEvent.click(screen.getByTestId("knowledge-set-profile-create"));
+    });
+
+    await waitFor(() => {
+      expect(sets.createProfile).toHaveBeenCalledWith({
+        knowledgeSetId: "s1",
+        config: { top_k: 3 },
+      });
+      expect(screen.getByTestId("knowledge-set-profile-p1")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-profile-edit-p1"));
     });
     await act(async () => {
-      fireEvent.click(screen.getByTestId("knowledge-set-create"));
+      fireEvent.change(screen.getByTestId("knowledge-set-profile-edit-config"), {
+        target: { value: '{"top_k":5}' },
+      });
+      fireEvent.click(screen.getByTestId("knowledge-set-profile-save"));
     });
-    expect(screen.getByTestId("knowledge-set-create-title")).toBeTruthy();
+    await waitFor(() => {
+      expect(sets.updateProfile).toHaveBeenCalledWith({
+        profileId: "p1",
+        config: { top_k: 5 },
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-profile-publish-p1"));
+    });
+    await waitFor(() => {
+      expect(sets.publishProfile).toHaveBeenCalledWith({ profileId: "p1" });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-rollback-publish"));
+      fireEvent.click(screen.getByTestId("knowledge-set-profile-rollback-p1"));
+    });
+    await waitFor(() => {
+      expect(sets.rollbackProfile).toHaveBeenCalledWith({
+        profileId: "p1",
+        publish: true,
+      });
+    });
+  });
+
+  it("disables create without capability", async () => {
+    const sets = makeSetsApi([]);
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeSetsPage, {
+          capability: {
+            available: false,
+            status: "blocked_provider_unavailable",
+          },
+          mode: providerMode,
+          sets,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("knowledge-sets-page").getAttribute("data-state"),
+      ).toBe("unavailable");
+    });
+  });
+
+  it("navigates Start Q&A to chat only", async () => {
+    const store = [setSnapshot("s1", "Set Alpha")];
+    const sets = makeSetsApi(store);
+    const onNavigate = vi.fn();
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeSetDetailPage, {
+          params: { knowledgeSetId: "s1" },
+          onNavigate,
+          capability: availableCapability,
+          mode: providerMode,
+          sets,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-set-start-chat")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-set-start-chat"));
+    });
+    expect(onNavigate).toHaveBeenCalledWith({ page: "chat" });
   });
 });

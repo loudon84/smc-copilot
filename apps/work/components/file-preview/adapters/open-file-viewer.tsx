@@ -35,7 +35,7 @@ export function OpenFileViewerAdapter({
 }: OpenFileViewerAdapterProps): ReactElement {
   return (
     <div
-      className="h-full min-h-[240px] w-full"
+      className="file-preview-ofv-host h-full min-h-0 w-full"
       data-testid="file-preview-ofv-host"
     >
       <FileViewer

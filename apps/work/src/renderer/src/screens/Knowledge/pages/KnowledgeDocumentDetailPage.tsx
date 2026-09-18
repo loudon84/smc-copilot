@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { BusinessModuleUISurface } from "@/components/common/business-module-ui-surface";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
@@ -16,7 +17,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { cn } from "@/utils/tailwind";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -60,9 +68,6 @@ export type KnowledgeDocumentDetailPageProps = {
 
 type DetailLoadState = "loading" | "unavailable" | "not-found" | "content" | "error";
 
-/** Reserved tabs for later file-management entries (update / translate). */
-type DocDetailTab = "preview" | "info" | "versions" | "parse" | "permission";
-
 function errorCode(error: unknown): string {
   if (error instanceof Error) return error.message.split(/\s/)[0] ?? error.message;
   return "KNOWLEDGE_UNAVAILABLE";
@@ -93,8 +98,8 @@ function statusLabel(
 }
 
 /**
- * Document detail over Base file IPC. Preview uses FilePreview Framework
- * (KnowledgeFileProvider → materialize bridge → open-file-viewer).
+ * Document detail: left metadata/actions/permission (~30%), right FilePreview (~70%).
+ * Versions / Parse open in sheets so preview stays visible.
  */
 export function KnowledgeDocumentDetailPage({
   params = {},
@@ -121,10 +126,12 @@ export function KnowledgeDocumentDetailPage({
   const [versions, setVersions] = useState<KnowledgeFileVersionSnapshot[]>([]);
   const [ownerBase, setOwnerBase] = useState<KnowledgeBaseSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [detailTab, setDetailTab] = useState<DocDetailTab>("preview");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [previewEpoch, setPreviewEpoch] = useState(0);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [parseOpen, setParseOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (probe.presentation === "loading") {
@@ -273,12 +280,21 @@ export function KnowledgeDocumentDetailPage({
   };
 
   return (
-    <BusinessModuleUISurface module="knowledge">
-      <div data-testid="knowledge-document-detail-page" data-state={loadState}>
+    <BusinessModuleUISurface
+      module="knowledge"
+      className="flex h-full min-h-0 flex-1 flex-col"
+    >
+      <div
+        className="flex h-full min-h-0 flex-col gap-2 overflow-hidden"
+        data-testid="knowledge-document-detail-page"
+        data-state={loadState}
+        data-sidebar={sidebarCollapsed ? "collapsed" : "expanded"}
+      >
         <Button
           type="button"
           variant="outline"
           size="sm"
+          className="w-fit shrink-0"
           data-testid="knowledge-documents-back"
           onClick={() => onBack?.()}
         >
@@ -307,183 +323,278 @@ export function KnowledgeDocumentDetailPage({
           />
         ) : null}
         {loadState === "content" && detail ? (
-          <section className="grid gap-3" data-testid="knowledge-document-detail">
-            <PageHeader title={detail.fileName || t("knowledge.documents.detailTitle")}>
-              <Badge>{statusLabel(t, detail.status)}</Badge>
-            </PageHeader>
-            <p data-testid="knowledge-document-detail-id">{detail.id}</p>
-            <PageToolbar>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="knowledge-document-reparse"
-                disabled={!fileMutationsEnabled || submitting}
-                onClick={() => {
-                  void handleReparse();
-                }}
+          <section
+            className="flex min-h-0 flex-1 flex-col"
+            data-testid="knowledge-document-detail"
+          >
+            <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:items-stretch">
+              <aside
+                className={cn(
+                  "flex shrink-0 flex-col border-border transition-[width] duration-200 ease-out",
+                  sidebarCollapsed
+                    ? "w-[50px] items-center gap-2 overflow-hidden border-r pr-0"
+                    : "w-full gap-3 overflow-y-auto lg:w-[30%] lg:max-w-md lg:border-r lg:pr-4",
+                )}
+                data-testid="knowledge-document-sidebar"
+                data-collapsed={sidebarCollapsed ? "true" : "false"}
               >
-                {t("knowledge.bases.reparseFile")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                data-testid="knowledge-document-archive"
-                disabled={!fileMutationsEnabled || submitting}
-                onClick={() => {
-                  void handleArchiveToggle();
-                }}
-              >
-                {detail.archivedAt
-                  ? t("knowledge.bases.unarchiveFile")
-                  : t("knowledge.bases.archiveFile")}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                data-testid="knowledge-document-delete"
-                disabled={!fileMutationsEnabled || submitting}
-                onClick={() => setConfirmDelete(true)}
-              >
-                {t("knowledge.documents.deleteFile")}
-              </Button>
-            </PageToolbar>
-            <Tabs
-              className="flex flex-col gap-3"
-              value={detailTab}
-              onValueChange={(value) => setDetailTab(value as DocDetailTab)}
-            >
-              <TabsList>
-                <TabsTrigger value="preview" data-testid="knowledge-section-tab-preview">
-                  {t("knowledge.documents.tabPreview")}
-                </TabsTrigger>
-                <TabsTrigger value="info" data-testid="knowledge-section-tab-info">
-                  {t("knowledge.documents.tabInfo")}
-                </TabsTrigger>
-                <TabsTrigger value="versions" data-testid="knowledge-section-tab-versions">
-                  {t("knowledge.documents.tabVersions")}
-                </TabsTrigger>
-                <TabsTrigger value="parse" data-testid="knowledge-section-tab-parse">
-                  {t("knowledge.documents.tabParse")}
-                </TabsTrigger>
-                <TabsTrigger value="permission" data-testid="knowledge-section-tab-permission">
-                  {t("knowledge.documents.tabPermission")}
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent forceMount value="preview">
-                <section data-testid="knowledge-document-preview">
-                  
-                  {detail ? (
-                    <FilePreview
-                      key={`${detail.id}:${detail.activeVersionId ?? ""}:${previewEpoch}`}
-                      testIdPrefix="knowledge-document-preview"
-                      source={{
-                        type: "knowledge",
-                        id: detail.id,
-                        name: detail.fileName,
-                        mime: detail.mimeType ?? undefined,
-                        activeVersionId: detail.activeVersionId,
-                      }}
-                      forceRefresh={previewEpoch > 0}
-                      knowledgeDeps={knowledgeDeps}
-                    />
-                  ) : null}
-                </section>
-              </TabsContent>
-              <TabsContent forceMount value="info">
-                <div className="grid gap-2" data-testid="knowledge-document-info">
-                  <p>
-                    {t("knowledge.host.owner")}:{" "}
-                    <span data-testid="knowledge-document-owner">
-                      {detail.ownerMemberId ?? ""}
-                    </span>
-                  </p>
-                  {detail.createdAt ? (
-                    <p>
-                      {t("knowledge.host.createdAt")}:{" "}
-                      <span data-testid="knowledge-document-created">
-                        {detail.createdAt}
-                      </span>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-9 w-9 shrink-0"
+                  data-testid="knowledge-document-sidebar-toggle"
+                  aria-expanded={!sidebarCollapsed}
+                  aria-label={
+                    sidebarCollapsed
+                      ? t("knowledge.documents.sidebarExpand")
+                      : t("knowledge.documents.sidebarCollapse")
+                  }
+                  title={
+                    sidebarCollapsed
+                      ? t("knowledge.documents.sidebarExpand")
+                      : t("knowledge.documents.sidebarCollapse")
+                  }
+                  onClick={() => setSidebarCollapsed((prev) => !prev)}
+                >
+                  {sidebarCollapsed ? (
+                    <PanelLeftOpen className="h-4 w-4" />
+                  ) : (
+                    <PanelLeftClose className="h-4 w-4" />
+                  )}
+                </Button>
+                {!sidebarCollapsed ? (
+                  <>
+                    <PageHeader
+                      title={
+                        detail.fileName || t("knowledge.documents.detailTitle")
+                      }
+                    >
+                      <Badge>{statusLabel(t, detail.status)}</Badge>
+                    </PageHeader>
+                    <p
+                      className="break-all text-xs text-muted-foreground"
+                      data-testid="knowledge-document-detail-id"
+                    >
+                      {detail.id}
                     </p>
-                  ) : null}
-                  <p>
-                    {t("knowledge.documents.filterStatus")}:{" "}
-                    <span data-testid="knowledge-document-status">
-                      {statusLabel(t, detail.status)}
-                    </span>
-                  </p>
-                  <p>
-                    {t("knowledge.documents.versionLabel")}:{" "}
-                    <span data-testid="knowledge-document-version">
-                      {detail.activeVersionId ?? ""}
-                    </span>
-                  </p>
-                  <p>
-                    {t("knowledge.documents.parseLabel")}:{" "}
-                    <span data-testid="knowledge-document-parse">
-                      {versions.find((version) => version.id === detail.activeVersionId)
-                        ?.parseStatus ??
-                        versions[0]?.parseStatus ??
-                        ""}
-                    </span>
-                  </p>
-                  <p>
-                    {t("knowledge.documents.mimeLabel")}:{" "}
-                    <span data-testid="knowledge-document-mime">
-                      {detail.mimeType ?? ""}
-                    </span>
-                  </p>
-                  <p>
-                    {t("knowledge.documents.archivedLabel")}:{" "}
-                    <span data-testid="knowledge-document-archived">
-                      {detail.archivedAt ?? ""}
-                    </span>
-                  </p>
-                  <p>
-                    {t("knowledge.documents.baseLabel")}:{" "}
-                    <span data-testid="knowledge-document-base">
-                      {ownerBase?.name ?? detail.knowledgeBaseId}
-                    </span>
-                  </p>
-                  <p>
-                    {t("knowledge.documents.lastErrorLabel")}:{" "}
-                    <span data-testid="knowledge-document-last-error">
-                      {detail.lastError ?? ""}
-                    </span>
-                  </p>
-                </div>
-              </TabsContent>
-              <TabsContent forceMount value="versions">
-                <div data-testid="knowledge-document-versions">
+                    <PageToolbar>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        data-testid="knowledge-document-reparse"
+                        disabled={!fileMutationsEnabled || submitting}
+                        onClick={() => {
+                          void handleReparse();
+                        }}
+                      >
+                        {t("knowledge.bases.reparseFile")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        data-testid="knowledge-document-archive"
+                        disabled={!fileMutationsEnabled || submitting}
+                        onClick={() => {
+                          void handleArchiveToggle();
+                        }}
+                      >
+                        {detail.archivedAt
+                          ? t("knowledge.bases.unarchiveFile")
+                          : t("knowledge.bases.archiveFile")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        data-testid="knowledge-document-delete"
+                        disabled={!fileMutationsEnabled || submitting}
+                        onClick={() => setConfirmDelete(true)}
+                      >
+                        {t("knowledge.documents.deleteFile")}
+                      </Button>
+                    </PageToolbar>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        data-testid="knowledge-document-open-versions"
+                        onClick={() => setVersionsOpen(true)}
+                      >
+                        {t("knowledge.documents.tabVersions")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        data-testid="knowledge-document-open-parse"
+                        onClick={() => setParseOpen(true)}
+                      >
+                        {t("knowledge.documents.tabParse")}
+                      </Button>
+                    </div>
+                    <div
+                      className="grid gap-2"
+                      data-testid="knowledge-document-info"
+                    >
+                      <p>
+                        {t("knowledge.host.owner")}:{" "}
+                        <span data-testid="knowledge-document-owner">
+                          {detail.ownerMemberId ?? ""}
+                        </span>
+                      </p>
+                      {detail.createdAt ? (
+                        <p>
+                          {t("knowledge.host.createdAt")}:{" "}
+                          <span data-testid="knowledge-document-created">
+                            {detail.createdAt}
+                          </span>
+                        </p>
+                      ) : null}
+                      <p>
+                        {t("knowledge.documents.filterStatus")}:{" "}
+                        <span data-testid="knowledge-document-status">
+                          {statusLabel(t, detail.status)}
+                        </span>
+                      </p>
+                      <p>
+                        {t("knowledge.documents.versionLabel")}:{" "}
+                        <span data-testid="knowledge-document-version">
+                          {detail.activeVersionId ?? ""}
+                        </span>
+                      </p>
+                      <p>
+                        {t("knowledge.documents.parseLabel")}:{" "}
+                        <span data-testid="knowledge-document-parse">
+                          {versions.find(
+                            (version) => version.id === detail.activeVersionId,
+                          )?.parseStatus ??
+                            versions[0]?.parseStatus ??
+                            ""}
+                        </span>
+                      </p>
+                      <p>
+                        {t("knowledge.documents.mimeLabel")}:{" "}
+                        <span data-testid="knowledge-document-mime">
+                          {detail.mimeType ?? ""}
+                        </span>
+                      </p>
+                      <p>
+                        {t("knowledge.documents.archivedLabel")}:{" "}
+                        <span data-testid="knowledge-document-archived">
+                          {detail.archivedAt ?? ""}
+                        </span>
+                      </p>
+                      <p>
+                        {t("knowledge.documents.baseLabel")}:{" "}
+                        <span data-testid="knowledge-document-base">
+                          {ownerBase?.name ?? detail.knowledgeBaseId}
+                        </span>
+                      </p>
+                      <p>
+                        {t("knowledge.documents.lastErrorLabel")}:{" "}
+                        <span data-testid="knowledge-document-last-error">
+                          {detail.lastError ?? ""}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="grid gap-2 border-t border-border pt-3">
+                      <Badge
+                        variant="outline"
+                        data-testid="knowledge-document-permission"
+                        data-display-only="true"
+                      >
+                        {t("knowledge.documents.permissionLabel")}
+                      </Badge>
+                      <p
+                        className="text-xs text-muted-foreground"
+                        data-testid="knowledge-document-permission-note"
+                      >
+                        {t("knowledge.documents.permissionDisplayOnly")}
+                      </p>
+                    </div>
+                  </>
+                ) : null}
+              </aside>
+
+              <div
+                className="flex min-h-0 min-w-0 flex-1 flex-col"
+                data-testid="knowledge-document-preview"
+              >
+                <FilePreview
+                  key={`${detail.id}:${detail.activeVersionId ?? ""}:${previewEpoch}`}
+                  testIdPrefix="knowledge-document-preview"
+                  className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-background"
+                  source={{
+                    type: "knowledge",
+                    id: detail.id,
+                    name: detail.fileName,
+                    mime: detail.mimeType ?? undefined,
+                    activeVersionId: detail.activeVersionId,
+                  }}
+                  forceRefresh={previewEpoch > 0}
+                  knowledgeDeps={knowledgeDeps}
+                />
+              </div>
+            </div>
+
+            <Sheet open={versionsOpen} onOpenChange={setVersionsOpen}>
+              <SheetContent
+                side="right"
+                className="work-business-module-ui max-w-md gap-0 overflow-y-auto p-0"
+                data-testid="knowledge-document-versions-drawer"
+                data-business-module-ui="true"
+                data-business-module="knowledge"
+              >
+                <SheetHeader>
+                  <SheetTitle>{t("knowledge.documents.tabVersions")}</SheetTitle>
+                  <SheetDescription>
+                    {detail.fileName || t("knowledge.documents.detailTitle")}
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="px-6 pb-6" data-testid="knowledge-document-versions">
                   {versions.length === 0 ? (
                     <p>{t("knowledge.documents.emptyVersions")}</p>
                   ) : (
-                    <ul className="grid gap-2">
+                    <ul className="grid gap-3">
                       {versions.map((version) => {
                         const active = version.id === detail.activeVersionId;
                         return (
                           <li
                             key={version.id}
-                            className="flex flex-wrap items-center gap-2"
+                            className="flex flex-col gap-2 rounded-md border border-border p-3"
                             data-testid={`knowledge-document-version-${version.id}`}
                             data-active={active ? "true" : "false"}
                           >
-                            {version.versionNo} ({version.id})
-                            {active ? ` — ${t("knowledge.documents.versionLabel")}` : null}
-                            <span data-testid={`knowledge-document-version-created-${version.id}`}>
-                              {t("knowledge.host.createdAt")}: {version.createdAt ?? ""}
+                            <div>
+                              {version.versionNo} ({version.id})
+                              {active
+                                ? ` — ${t("knowledge.documents.versionLabel")}`
+                                : null}
+                            </div>
+                            <span
+                              data-testid={`knowledge-document-version-created-${version.id}`}
+                            >
+                              {t("knowledge.host.createdAt")}:{" "}
+                              {version.createdAt ?? ""}
                             </span>
-                            <span data-testid={`knowledge-document-version-uploader-${version.id}`}>
-                              {t("knowledge.host.uploadedBy")}: {version.uploadedByMemberId ?? ""}
+                            <span
+                              data-testid={`knowledge-document-version-uploader-${version.id}`}
+                            >
+                              {t("knowledge.host.uploadedBy")}:{" "}
+                              {version.uploadedByMemberId ?? ""}
                             </span>
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
                               data-testid={`knowledge-document-activate-${version.id}`}
-                              disabled={!fileMutationsEnabled || submitting || active}
+                              disabled={
+                                !fileMutationsEnabled || submitting || active
+                              }
                               onClick={() => {
                                 void handleActivate(version.id);
                               }}
@@ -496,9 +607,24 @@ export function KnowledgeDocumentDetailPage({
                     </ul>
                   )}
                 </div>
-              </TabsContent>
-              <TabsContent forceMount value="parse">
-                <div data-testid="knowledge-document-parse-list">
+              </SheetContent>
+            </Sheet>
+
+            <Sheet open={parseOpen} onOpenChange={setParseOpen}>
+              <SheetContent
+                side="right"
+                className="work-business-module-ui max-w-md gap-0 overflow-y-auto p-0"
+                data-testid="knowledge-document-parse-drawer"
+                data-business-module-ui="true"
+                data-business-module="knowledge"
+              >
+                <SheetHeader>
+                  <SheetTitle>{t("knowledge.documents.tabParse")}</SheetTitle>
+                  <SheetDescription>
+                    {detail.fileName || t("knowledge.documents.detailTitle")}
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="px-6 pb-6" data-testid="knowledge-document-parse-list">
                   {versions.length === 0 ? (
                     <p>{t("knowledge.documents.emptyParse")}</p>
                   ) : (
@@ -514,20 +640,9 @@ export function KnowledgeDocumentDetailPage({
                     </ul>
                   )}
                 </div>
-              </TabsContent>
-              <TabsContent forceMount value="permission">
-                <Badge
-                  variant="outline"
-                  data-testid="knowledge-document-permission"
-                  data-display-only="true"
-                >
-                  {t("knowledge.documents.permissionLabel")}
-                </Badge>
-                <p data-testid="knowledge-document-permission-note">
-                  {t("knowledge.documents.permissionDisplayOnly")}
-                </p>
-              </TabsContent>
-            </Tabs>
+              </SheetContent>
+            </Sheet>
+
             <AlertDialog
               open={confirmDelete}
               onOpenChange={(open) => {
@@ -537,7 +652,9 @@ export function KnowledgeDocumentDetailPage({
             >
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{t("knowledge.documents.deleteFile")}</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {t("knowledge.documents.deleteFile")}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
                     {t("knowledge.documents.deleteFileConfirm")}
                   </AlertDialogDescription>

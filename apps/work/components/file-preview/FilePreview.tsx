@@ -35,6 +35,8 @@ export type FilePreviewProps = {
   forceRefresh?: boolean;
   /** Prefix for data-testid attributes (default: file-preview). */
   testIdPrefix?: string;
+  /** Optional container class (e.g. fill parent height in detail layout). */
+  className?: string;
   localDeps?: LocalFileProviderDeps;
   httpDeps?: HttpFileProviderDeps;
   knowledgeDeps?: KnowledgeFileProviderDeps;
@@ -56,6 +58,7 @@ export function FilePreview({
   source,
   forceRefresh = false,
   testIdPrefix = "file-preview",
+  className,
   localDeps,
   httpDeps,
   knowledgeDeps,
@@ -122,7 +125,7 @@ export function FilePreview({
   };
 
   return (
-    <FilePreviewContainer>
+    <FilePreviewContainer className={className}>
       <FilePreviewToolbar
         fileName={source.name}
         onRetry={
@@ -161,7 +164,7 @@ export function FilePreview({
       ) : null}
       {state.status === "ready" ? (
         <div
-          className="min-h-[240px] flex-1"
+          className="min-h-0 flex-1 overflow-hidden"
           data-testid={`${testIdPrefix}-ready`}
         >
           <OpenFileViewerAdapter

@@ -15,11 +15,13 @@ import type {
   KnowledgeModeSnapshot,
 } from "../../../../shared/knowledge/knowledge-job-ipc";
 import type { HermesKnowledgeBasesAPI } from "../../../../shared/knowledge/knowledge-base-ipc";
+import type { HermesKnowledgeSetsAPI } from "../../../../shared/knowledge/knowledge-set-ipc";
 import { KnowledgeModuleNav } from "./KnowledgeModuleNav";
 import { KnowledgeHomePage } from "./pages/KnowledgeHomePage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
 import { KnowledgeBaseDetailPage } from "./pages/KnowledgeBaseDetailPage";
 import { KnowledgeSetsPage } from "./pages/KnowledgeSetsPage";
+import { KnowledgeSetDetailPage } from "./pages/KnowledgeSetDetailPage";
 import { KnowledgeDocumentsPage } from "./pages/KnowledgeDocumentsPage";
 import { KnowledgeDocumentDetailPage } from "./pages/KnowledgeDocumentDetailPage";
 import { KnowledgeChatPage } from "./pages/KnowledgeChatPage";
@@ -47,6 +49,8 @@ export type KnowledgePagesProps = {
   facade?: HermesKnowledgeFacadeAPI | null;
   /** Optional typed Base API override for tests. */
   bases?: HermesKnowledgeBasesAPI | null;
+  /** Optional typed Set API override for tests. */
+  sets?: HermesKnowledgeSetsAPI | null;
 };
 
 /**
@@ -63,6 +67,7 @@ export function KnowledgePages({
   mode: injectedMode,
   facade: injectedFacade,
   bases: injectedBases,
+  sets: injectedSets,
 }: KnowledgePagesProps): ReactElement {
   const { t } = useI18n();
   const probeOptions: UseKnowledgeFacadeOptions = {
@@ -70,6 +75,7 @@ export function KnowledgePages({
     mode: injectedMode,
     facade: injectedFacade,
     bases: injectedBases,
+    sets: injectedSets,
   };
   const probe = useKnowledgeFacade(probeOptions);
   const { presentation, mode } = probe;
@@ -80,6 +86,7 @@ export function KnowledgePages({
     mode: injectedMode,
     facade: injectedFacade,
     bases: injectedBases,
+    sets: injectedSets,
   };
 
   let pageBody: ReactElement;
@@ -107,7 +114,14 @@ export function KnowledgePages({
       );
       break;
     case "sets":
-      pageBody = (
+      pageBody = params.knowledgeSetId ? (
+        <KnowledgeSetDetailPage
+          params={params}
+          onNavigate={onNavigate}
+          onBack={onBack}
+          {...pageOverrides}
+        />
+      ) : (
         <KnowledgeSetsPage
           params={params}
           onNavigate={onNavigate}

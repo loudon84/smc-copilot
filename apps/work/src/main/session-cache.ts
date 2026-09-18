@@ -449,16 +449,24 @@ export function upsertCachedSession(session: CachedSessionInput): void {
   const idx = cache.sessions.findIndex((s) => s.id === session.id);
   const reason: SessionCacheChangedReason = idx >= 0 ? "updated" : "created";
   if (idx >= 0) {
-    cache.sessions[idx] = {
+    const merged: CachedSession = {
       ...cache.sessions[idx],
       ...session,
       contextFolder:
         session.contextFolder ?? cache.sessions[idx].contextFolder ?? null,
     };
+    // Durable upserts (materialize / DB sync) omit the provisional flag.
+    if (session.locallyMaterialized !== true) {
+      delete merged.locallyMaterialized;
+    }
+    cache.sessions[idx] = merged;
   } else {
     cache.sessions.push({
       ...session,
       contextFolder: session.contextFolder ?? null,
+      ...(session.locallyMaterialized === true
+        ? { locallyMaterialized: true }
+        : {}),
     });
   }
   cache.sessions.sort((a, b) => b.startedAt - a.startedAt);

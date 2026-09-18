@@ -10,6 +10,7 @@ import type {
   KnowledgeModeSnapshot,
 } from "./knowledge-job-ipc";
 import type { HermesKnowledgeBasesAPI } from "./knowledge-base-ipc";
+import type { HermesKnowledgeSetsAPI } from "./knowledge-set-ipc";
 
 export type KnowledgePagePresentation =
   | "loading"
@@ -26,6 +27,8 @@ export type UseKnowledgeFacadeOptions = {
   facade?: HermesKnowledgeFacadeAPI | null;
   /** Optional typed Base API override for tests. */
   bases?: HermesKnowledgeBasesAPI | null;
+  /** Optional typed Set API override for tests. */
+  sets?: HermesKnowledgeSetsAPI | null;
 };
 
 export type KnowledgeFacadeProbe = {
@@ -33,10 +36,11 @@ export type KnowledgeFacadeProbe = {
   mode: KnowledgeModeSnapshot | null | undefined;
   facade: HermesKnowledgeFacadeAPI | null;
   bases: HermesKnowledgeBasesAPI | null;
+  sets: HermesKnowledgeSetsAPI | null;
   presentation: KnowledgePagePresentation;
-  /** Bases/Documents/Uploads: auth + capability (or explicit mock). Not mock-only. */
+  /** Bases/Documents/Uploads/Sets: auth + capability (or explicit mock). */
   mutationsEnabled: boolean;
-  /** Sets/Chat stay mock-only this release. */
+  /** Remaining mock-only surfaces (e.g. Chat synthetic). */
   syntheticMutationsEnabled: boolean;
 };
 
@@ -44,6 +48,7 @@ type KnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
   getMode?: () => Promise<KnowledgeModeSnapshot>;
   facade?: HermesKnowledgeFacadeAPI;
   bases?: HermesKnowledgeBasesAPI;
+  sets?: HermesKnowledgeSetsAPI;
 };
 
 function blockedCapability(): KnowledgeCapabilitySnapshot {
@@ -92,6 +97,7 @@ export function useKnowledgeFacade(
     mode: injectedMode,
     facade: injectedFacade,
     bases: injectedBases,
+    sets: injectedSets,
   } = options;
 
   const [capability, setCapability] = useState<
@@ -198,6 +204,21 @@ export function useKnowledgeFacade(
     setBases(api?.bases ?? null);
   }, [injectedBases]);
 
+  const [sets, setSets] = useState<HermesKnowledgeSetsAPI | null>(() => {
+    if (injectedSets !== undefined) return injectedSets;
+    const api = readLiveJobsApi();
+    return api?.sets ?? null;
+  });
+
+  useEffect(() => {
+    if (injectedSets !== undefined) {
+      setSets(injectedSets);
+      return;
+    }
+    const api = readLiveJobsApi();
+    setSets(api?.sets ?? null);
+  }, [injectedSets]);
+
   const presentation = resolveKnowledgePresentation(capability, mode);
   const syntheticMutationsEnabled =
     mode?.dataMode === "mock" && mode.allowSyntheticData === true;
@@ -210,6 +231,7 @@ export function useKnowledgeFacade(
     mode,
     facade,
     bases,
+    sets,
     presentation,
     mutationsEnabled,
     syntheticMutationsEnabled,
