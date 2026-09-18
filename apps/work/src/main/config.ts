@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { randomBytes } from "crypto";
-import { join } from "path";
+import { dirname, join } from "path";
+import { app } from "electron";
 import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
 import { expectedEnvKeyForModel } from "./installer";
 import {
@@ -68,10 +69,39 @@ export interface PublicConnectionConfig {
   ssh: SshConnectionConfig;
 }
 
-// Lazy getter — avoids circular dependency with installer.ts
-// (HERMES_HOME may not be assigned yet when this module first loads)
-function desktopConfigFile(): string {
+/**
+ * Work-owned settings SOT (A-CONFIG-001): Electron userData/work-settings.json.
+ * Must NOT use Hermes Root `desktop.json` as the Work source of truth.
+ */
+function workSettingsFile(): string {
+  const userData = app?.getPath?.("userData");
+  return userData ? join(userData, "work-settings.json") : "";
+}
+
+/** Legacy Hermes-home path — migration source only, never Work SOT. */
+function legacyHermesDesktopConfigFile(): string {
   return join(HERMES_HOME, "desktop.json");
+}
+
+function parseSettingsJson(raw: string): Record<string, unknown> {
+  return JSON.parse(raw.replace(/^\uFEFF/, "")) as Record<string, unknown>;
+}
+
+/**
+ * One-time migrate-if-absent: copy Hermes `desktop.json` → userData
+ * `work-settings.json` when the Work SOT file is missing. Not a Release Gate.
+ */
+function migrateLegacyDesktopConfigIfNeeded(target: string): void {
+  if (!target || existsSync(target)) return;
+  const legacy = legacyHermesDesktopConfigFile();
+  if (!existsSync(legacy)) return;
+  try {
+    const data = parseSettingsJson(readFileSync(legacy, "utf-8"));
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, JSON.stringify(data, null, 2), "utf-8");
+  } catch {
+    /* best effort — leave empty Work settings if legacy is unreadable */
+  }
 }
 
 export function normalizeRemoteChatTransport(
@@ -84,25 +114,37 @@ export function normalizeRemoteAuthMode(value: unknown): RemoteAuthMode {
   return value === "token" || value === "oauth" ? value : "auto";
 }
 
+/** @deprecated Prefer {@link readWorkSettings} — kept for existing callers. */
 export function readDesktopConfig(): Record<string, unknown> {
+  return readWorkSettings();
+}
+
+/** @deprecated Prefer {@link writeWorkSettings} — kept for existing callers. */
+export function writeDesktopConfig(data: Record<string, unknown>): void {
+  writeWorkSettings(data);
+}
+
+export function readWorkSettings(): Record<string, unknown> {
   try {
-    const f = desktopConfigFile();
+    const f = workSettingsFile();
+    if (!f) return {};
+    migrateLegacyDesktopConfigIfNeeded(f);
     if (!existsSync(f)) return {};
-    return JSON.parse(readFileSync(f, "utf-8").replace(/^\uFEFF/, ""));
+    return parseSettingsJson(readFileSync(f, "utf-8"));
   } catch {
     return {};
   }
 }
 
-export function writeDesktopConfig(data: Record<string, unknown>): void {
-  if (!existsSync(HERMES_HOME)) {
-    mkdirSync(HERMES_HOME, { recursive: true });
-  }
-  writeFileSync(desktopConfigFile(), JSON.stringify(data, null, 2), "utf-8");
+export function writeWorkSettings(data: Record<string, unknown>): void {
+  const f = workSettingsFile();
+  if (!f) return;
+  mkdirSync(dirname(f), { recursive: true });
+  writeFileSync(f, JSON.stringify(data, null, 2), "utf-8");
 }
 
 export function getConnectionConfig(): ConnectionConfig {
-  const data = readDesktopConfig();
+  const data = readWorkSettings();
   const ssh = (data.sshConfig as Partial<SshConnectionConfig>) ?? {};
   return {
     mode: (data.connectionMode as "local" | "remote" | "ssh") || "local",
@@ -137,7 +179,7 @@ export function getPublicConnectionConfig(): PublicConnectionConfig {
 }
 
 export function setConnectionConfig(config: ConnectionConfig): void {
-  const data = readDesktopConfig();
+  const data = readWorkSettings();
   data.connectionMode = config.mode;
   if (config.mode === "remote" || config.remoteUrl.trim()) {
     data.remoteUrl = config.remoteUrl;
@@ -153,7 +195,7 @@ export function setConnectionConfig(config: ConnectionConfig): void {
   if (config.mode === "ssh") {
     data.sshConfig = config.ssh;
   }
-  writeDesktopConfig(data);
+  writeWorkSettings(data);
 }
 
 export function resolveConnectionApiKeyUpdate(

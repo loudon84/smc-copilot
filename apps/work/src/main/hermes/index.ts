@@ -4,6 +4,7 @@
  */
 export {
   getHermesControlOwner,
+  getEffectiveControlOwner,
   isSaltControlOwner,
   isOpsiControlOwner,
   isExternallyManagedControlOwner,

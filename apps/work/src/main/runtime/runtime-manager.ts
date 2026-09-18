@@ -12,7 +12,7 @@ import {
   DEFAULT_RUNTIME_CONTRACT,
 } from "../build-info";
 import { readControlOwnerSnapshot } from "../hermes/control-owner";
-import { LegacyLocalRuntimeAdapter } from "./legacy-local-runtime-adapter";
+import { NativeHermesRuntimeAdapter } from "./native-hermes-runtime-backend";
 import {
   setHermesHomeOverride,
   getHermesHome,
@@ -30,7 +30,7 @@ export class RuntimeManager {
   private listeners = new Set<(probe: HermesRuntimeProbe) => void>();
 
   constructor(adapter?: HermesRuntimeAdapter) {
-    this.adapter = adapter ?? new LegacyLocalRuntimeAdapter();
+    this.adapter = adapter ?? new NativeHermesRuntimeAdapter();
   }
 
   /** @internal Test-only adapter injection; production must not call this. */
@@ -64,13 +64,14 @@ export class RuntimeManager {
     ].join("|");
     if (signature === this.lastLoggedSignature) return;
     this.lastLoggedSignature = signature;
-    const owner = readControlOwnerSnapshot().owner;
+    const owner = readControlOwnerSnapshot();
     console.info(
       JSON.stringify({
         event: "hermes_runtime_probe",
         runtimeAdapter: RUNTIME_ADAPTER_ID,
         runtimeContract: RUNTIME_CONTRACT_ID,
-        controlOwner: owner,
+        controlOwner: owner.observed,
+        controlOwnerEffective: owner.effective,
         state: probe.state,
         endpoint: probe.endpoint,
         homePath: probe.homePath,

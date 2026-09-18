@@ -148,13 +148,13 @@ def test_wix_gate_rejects_duplicate_approved_component(tmp_path: Path) -> None:
         assert_wix_path_environment_allowlist(tmp_path)
 
 
-def test_wix_gate_rejects_missing_approved_component(tmp_path: Path) -> None:
+def test_wix_gate_allows_zero_approved_when_no_path_env(tmp_path: Path) -> None:
+    """Phase 8: WiX installer removed — zero approved PATH components is OK."""
     (tmp_path / "Product.wxs").write_text(
         '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"><Component Id="X" /></Wix>\n',
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="exactly once"):
-        assert_wix_path_environment_allowlist(tmp_path)
+    assert_wix_path_environment_allowlist(tmp_path)
 
 
 def test_wix_gate_rejects_setx_and_registry_writers(tmp_path: Path) -> None:

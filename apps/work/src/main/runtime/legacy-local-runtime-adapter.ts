@@ -9,7 +9,6 @@ import type {
   HermesRuntimeProbe,
   HermesRuntimeState,
 } from "../../shared/runtime/runtime-contract";
-import { resolve } from "path";
 import { getHermesVersion } from "../installer";
 import {
   inspectGatewayListener,
@@ -66,12 +65,6 @@ function fail(
     listenerOwnership: extras?.listenerOwnership ?? "unknown",
     listenerExecutable: extras?.listenerExecutable,
   };
-}
-
-function isForbiddenSelfInstallHome(homePath: string | undefined): boolean {
-  const local = process.env.LOCALAPPDATA?.trim();
-  if (!local || !homePath?.trim()) return false;
-  return resolve(homePath).toLowerCase() === resolve(local, "hermes").toLowerCase();
 }
 
 async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
@@ -148,15 +141,6 @@ async function probeLocal(profile?: string): Promise<HermesRuntimeProbe> {
     ...withStatus,
     authenticated: true,
   };
-
-  if (isForbiddenSelfInstallHome(loc.homePath)) {
-    return fail(
-      "configuration_error",
-      RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
-      authenticated,
-      "Hermes home must not be the per-user AppData hermes directory.",
-    );
-  }
 
   const listen = await inspectGatewayListener(
     loc.endpoint,

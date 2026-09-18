@@ -24,7 +24,7 @@ const {
     gatewayRunning: false,
     gatewayHealthy: false,
     authenticated: false,
-    homePath: "C:\\ProgramData\\SMC\\Hermes",
+    homePath: "C:\\Users\\test\\AppData\\Local\\hermes",
   });
   const connectMock = vi.fn(async () => false);
   const refreshMock = vi.fn(async () => {});
@@ -73,7 +73,7 @@ function stubApi(owner: ControlOwnerSnapshot): void {
       getControlOwner: getControlOwnerMock,
       runtimeGetStatus: runtimeGetStatusMock,
       selectFolder: selectFolderMock,
-      getHermesHome: vi.fn(async () => "C:\\ProgramData\\SMC\\Hermes"),
+      getHermesHome: vi.fn(async () => "C:\\Users\\test\\AppData\\Local\\hermes"),
       openExternal: vi.fn(),
       relaunchApp: vi.fn(),
     },
@@ -96,48 +96,69 @@ describe("RuntimePane Self-Install gate", () => {
   });
 
   // @lat: [[runtime-connection#Direct Hermes Mode]]
-  it("hides Choose Hermes directory for managed-local-v1 with controlOwner=direct", async () => {
-    stubApi({ owner: "direct", source: "default" });
+  it("shows Choose Hermes directory for native-hermes with effective direct", async () => {
+    stubApi({
+      observed: "direct",
+      effective: "direct",
+      owner: "direct",
+      source: "default",
+    });
     render(<RuntimePane />);
 
     await waitFor(() => {
       expect(getControlOwnerMock).toHaveBeenCalled();
     });
     expect(
-      screen.queryByRole("button", { name: "Choose Hermes directory" }),
-    ).toBeNull();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
+      screen.getByRole("button", { name: "Choose Hermes directory" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
-  it("hides Choose Hermes directory for opsi and salt owners", async () => {
-    stubApi({ owner: "opsi", source: "file" });
+  it("does not block Choose Hermes directory when observed opsi but effective direct", async () => {
+    stubApi({
+      observed: "opsi",
+      effective: "direct",
+      owner: "opsi",
+      source: "file",
+    });
     const first = render(<RuntimePane />);
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: "Choose Hermes directory" }),
-      ).toBeNull();
+        screen.getByRole("button", { name: "Choose Hermes directory" }),
+      ).toBeTruthy();
     });
+    expect(screen.queryByText(/Managed by organization \(OPSI\)/i)).toBeNull();
     first.unmount();
 
-    stubApi({ owner: "salt", source: "file" });
+    stubApi({
+      observed: "salt",
+      effective: "direct",
+      owner: "salt",
+      source: "file",
+    });
     render(<RuntimePane />);
     await waitFor(() => {
       expect(
-        screen.queryByRole("button", { name: "Choose Hermes directory" }),
-      ).toBeNull();
+        screen.getByRole("button", { name: "Choose Hermes directory" }),
+      ).toBeTruthy();
     });
   });
 
-  it("Retry probes only and never opens Self-Install folder picker", async () => {
-    stubApi({ owner: "direct", source: "default" });
+  it("Reconnect probes only and never opens Self-Install folder picker until chosen", async () => {
+    stubApi({
+      observed: "direct",
+      effective: "direct",
+      owner: "direct",
+      source: "default",
+    });
     render(<RuntimePane />);
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Reconnect" })).toBeTruthy();
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
     });
     expect(connectMock).toHaveBeenCalled();
     expect(selectFolderMock).not.toHaveBeenCalled();

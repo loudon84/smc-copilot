@@ -1,0 +1,3 @@
+# Placeholder directory for bundled enterprise-fork install.ps1.
+# T5 release stage `hermes-bootstrap` copies the pinned install.ps1 here.
+# Dev resolves via HERMES_INSTALL_PS1 or e:/git/hermes-agent/scripts/install.ps1.

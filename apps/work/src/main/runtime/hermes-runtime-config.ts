@@ -1,9 +1,11 @@
 /**
- * Hermes Runtime Descriptor — single source of truth for OPSI Managed Runtime.
+ * Hermes Runtime Descriptor — Native Enterprise defaults (ADR-038 / PRD F-002).
  * Work discovers Hermes via home, CLI, and Gateway endpoint only.
+ * Env / runtime.json / hermes-home-override still override defaults.
  */
 // @lat: [[runtime-connection#Path resolution]]
 import { existsSync, readFileSync } from "fs";
+import { homedir } from "os";
 import { isAbsolute, join, normalize } from "path";
 import { app } from "electron";
 import { readHermesHomeOverride } from "./hermes-home-override";
@@ -25,35 +27,52 @@ export interface HermesRuntimeConfig {
 
 const IS_WINDOWS = process.platform === "win32";
 
-const WINDOWS_ENTERPRISE_DEFAULTS: HermesRuntimeConfig = {
-  schemaVersion: 1,
-  hermes: {
-    home: "C:\\ProgramData\\SMC\\Hermes",
-    programRoot: "D:\\Programs\\SMC\\Hermes",
-    cliPath: "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
-    agentRoot: "D:\\Programs\\SMC\\Hermes\\node\\hermes-agent",
-    scriptsRoot: "D:\\Programs\\SMC\\Hermes\\scripts",
-  },
-  gateway: {
-    baseUrl: "http://127.0.0.1:8642",
-    healthPath: "/health",
-  },
-};
+/**
+ * Native Root layout (install.ps1):
+ *   home        = %LOCALAPPDATA%\hermes
+ *   agentRoot   = %LOCALAPPDATA%\hermes\hermes-agent
+ *   cliPath     = %LOCALAPPDATA%\hermes\bin\hermes.exe (staged from venv\Scripts)
+ *   programRoot = home (listen ownership covers bin + hermes-agent\venv)
+ */
+function windowsNativeDefaults(): HermesRuntimeConfig {
+  const localAppData =
+    process.env.LOCALAPPDATA?.trim() ||
+    join(homedir(), "AppData", "Local");
+  const home = join(localAppData, "hermes");
+  const agentRoot = join(home, "hermes-agent");
+  return {
+    schemaVersion: 1,
+    hermes: {
+      home,
+      programRoot: home,
+      cliPath: join(home, "bin", "hermes.exe"),
+      agentRoot,
+      scriptsRoot: join(agentRoot, "scripts"),
+    },
+    gateway: {
+      baseUrl: "http://127.0.0.1:8642",
+      healthPath: "/health",
+    },
+  };
+}
 
-const NON_WINDOWS_DEFAULTS: HermesRuntimeConfig = {
-  schemaVersion: 1,
-  hermes: {
-    home: join(process.env.HOME || "/tmp", ".hermes"),
-    programRoot: join(process.env.HOME || "/tmp", ".hermes"),
-    cliPath: join(process.env.HOME || "/tmp", ".hermes", "bin", "hermes"),
-    agentRoot: join(process.env.HOME || "/tmp", ".hermes", "hermes-agent"),
-    scriptsRoot: join(process.env.HOME || "/tmp", ".hermes", "scripts"),
-  },
-  gateway: {
-    baseUrl: "http://127.0.0.1:8642",
-    healthPath: "/health",
-  },
-};
+function nonWindowsDefaults(): HermesRuntimeConfig {
+  const home = join(process.env.HOME || "/tmp", ".hermes");
+  return {
+    schemaVersion: 1,
+    hermes: {
+      home,
+      programRoot: home,
+      cliPath: join(home, "bin", "hermes"),
+      agentRoot: join(home, "hermes-agent"),
+      scriptsRoot: join(home, "hermes-agent", "scripts"),
+    },
+    gateway: {
+      baseUrl: "http://127.0.0.1:8642",
+      healthPath: "/health",
+    },
+  };
+}
 
 let cachedConfig: HermesRuntimeConfig | null = null;
 
@@ -62,7 +81,7 @@ export function invalidateHermesRuntimeConfigCache(): void {
 }
 
 function platformDefaults(): HermesRuntimeConfig {
-  return IS_WINDOWS ? WINDOWS_ENTERPRISE_DEFAULTS : NON_WINDOWS_DEFAULTS;
+  return IS_WINDOWS ? windowsNativeDefaults() : nonWindowsDefaults();
 }
 
 function workRuntimeConfigPath(): string {

@@ -137,10 +137,10 @@ export function assertWorkBuildInfo(path, expectedVersion, expectedCommit) {
       `work-build-info.json gitCommit mismatch: expected ${expectedCommit}, got ${info.gitCommit || "<empty>"}`,
     );
   }
-  if (info.runtimeAdapter !== "legacy-local") {
+  if (info.runtimeAdapter !== "native-hermes") {
     throw new Error(`work-build-info.json runtimeAdapter mismatch: ${info.runtimeAdapter || "<empty>"}`);
   }
-  if (info.runtimeContract !== "managed-local-v1") {
+  if (info.runtimeContract !== "native-enterprise-v1") {
     throw new Error(`work-build-info.json runtimeContract mismatch: ${info.runtimeContract || "<empty>"}`);
   }
   if (info.dirty) {

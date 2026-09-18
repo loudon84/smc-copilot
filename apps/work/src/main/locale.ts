@@ -5,7 +5,7 @@ import {
   setLocale as setSharedLocale,
   type AppLocale,
 } from "../shared/i18n";
-import { readDesktopConfig, writeDesktopConfig } from "./config";
+import { readWorkSettings, writeWorkSettings } from "./config";
 
 const DESKTOP_LOCALE_KEY = "locale";
 
@@ -14,14 +14,14 @@ function isAppLocale(value: unknown): value is AppLocale {
 }
 
 function readSavedLocale(): AppLocale | undefined {
-  const value = readDesktopConfig()[DESKTOP_LOCALE_KEY];
+  const value = readWorkSettings()[DESKTOP_LOCALE_KEY];
   return isAppLocale(value) ? value : undefined;
 }
 
 function writeSavedLocale(locale: AppLocale): void {
-  const data = readDesktopConfig();
+  const data = readWorkSettings();
   data[DESKTOP_LOCALE_KEY] = locale;
-  writeDesktopConfig(data);
+  writeWorkSettings(data);
 }
 
 const savedLocale = readSavedLocale();

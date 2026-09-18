@@ -34,17 +34,25 @@ describe("hermes-runtime-config", () => {
     vi.resetModules();
   });
 
-  it("uses Windows enterprise defaults when no config files exist", async () => {
+  it("uses Windows Native defaults when no config files exist", async () => {
     const {
       getHermesRuntimeConfig,
       getGatewayBaseUrl,
       getHermesCliPath,
+      getHermesHome,
     } = await import("../src/main/runtime/hermes-runtime-config");
     const config = getHermesRuntimeConfig();
     if (process.platform === "win32") {
-      expect(config.hermes.home).toBe("C:\\ProgramData\\SMC\\Hermes");
-      expect(getHermesCliPath()).toBe(
-        "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
+      const expectedHome = `${process.env.LOCALAPPDATA}\\hermes`;
+      expect(getHermesHome().toLowerCase()).toBe(expectedHome.toLowerCase());
+      expect(config.hermes.programRoot.toLowerCase()).toBe(
+        expectedHome.toLowerCase(),
+      );
+      expect(config.hermes.agentRoot?.toLowerCase()).toBe(
+        `${expectedHome}\\hermes-agent`.toLowerCase(),
+      );
+      expect(getHermesCliPath().toLowerCase()).toBe(
+        `${expectedHome}\\bin\\hermes.exe`.toLowerCase(),
       );
       expect(getGatewayBaseUrl()).toBe("http://127.0.0.1:8642");
     } else {

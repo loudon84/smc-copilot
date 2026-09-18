@@ -5,8 +5,8 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { app } from "electron";
 
-export const DEFAULT_RUNTIME_ADAPTER = "legacy-local";
-export const DEFAULT_RUNTIME_CONTRACT = "managed-local-v1";
+export const DEFAULT_RUNTIME_ADAPTER = "native-hermes";
+export const DEFAULT_RUNTIME_CONTRACT = "native-enterprise-v1";
 
 export interface WorkBuildInfo {
   schema: "smc.work.build.v1";

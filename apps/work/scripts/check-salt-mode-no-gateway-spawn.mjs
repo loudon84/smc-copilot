@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Salt/OPSI managed mode must refuse local Gateway spawn (ADR-026 / ADR-031).
+ * Salt/OPSI observed markers must still leave a MANAGED_GATEWAY_MESSAGE refuse
+ * path for non-direct effective owners; production gates use effective owner.
  */
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";

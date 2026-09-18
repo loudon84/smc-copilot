@@ -420,8 +420,10 @@ export interface MemoryProviderInfo {
 }
 
 /**
- * Discover available memory providers by scanning the plugins directory
- * and reading config.yaml for the active provider.
+ * Discover available memory providers by scanning the agent checkout
+ * plugins directory under Hermes Root (`agentRoot/plugins/memory`).
+ * User/Native plugin state for a profile lives at
+ * `<Active Profile Home>/plugins` (see getHermesPluginRoot).
  */
 export function discoverMemoryProviders(
   profile?: string,

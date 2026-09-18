@@ -199,10 +199,12 @@ def assert_wix_path_environment_allowlist(root: Path | None = None) -> None:
             "PERSISTENT_PATH_MUTATION_FORBIDDEN: unapproved WiX Environment PATH in "
             + "; ".join(rejects)
         )
-    if approved != 1:
+    # Phase 8: WiX installer tree removed — zero approved PATH components is OK.
+    # If any .wxs/.wxi remain under hermes-agent, at most one approved component.
+    if approved > 1:
         raise ValueError(
             "PERSISTENT_PATH_MUTATION_FORBIDDEN: approved WiX Environment PATH "
-            f"component {ALLOWED_WIX_PATH_COMPONENT_ID} must appear exactly once "
+            f"component {ALLOWED_WIX_PATH_COMPONENT_ID} must appear at most once "
             f"(found {approved})"
         )
 

@@ -10,7 +10,6 @@ import { homedir } from "os";
 import http from "http";
 import https from "https";
 import {
-  HERMES_HOME,
   getEnhancedPath,
 } from "./runtime/hermes-runtime-paths";
 import {
@@ -1673,11 +1672,13 @@ export function buildGatewayEnv(profile?: string): Record<string, string> {
   ensureApiServerConfig(profile);
   const port = getProfilePort(profile);
 
+  // Active Profile Home for the gateway process (A-PROFILE-002). Hermes Root
+  // (`HERMES_HOME` live binding / getHermesRoot) stays unchanged in Work.
   const gatewayEnv: Record<string, string> = {
     ...(process.env as Record<string, string>),
     PATH: getEnhancedPath(),
     HOME: homedir(),
-    HERMES_HOME: HERMES_HOME,
+    HERMES_HOME: profileHome(profile),
     API_SERVER_ENABLED: "true",
     // Bind to this profile's port. config.yaml's api_server.port wins when
     // present (getProfilePort keeps it collision-free); this env value covers

@@ -47,25 +47,50 @@ describe("hermes control owner", () => {
     expect(getHermesControlOwner()).toBe("salt");
   });
 
-  it("reads opsi from file", async () => {
+  it("reads opsi from file with effective direct (A-OWNER-001)", async () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(path, JSON.stringify({ hermes: "opsi" }), "utf-8");
     process.env.SMC_CONTROL_OWNER_PATH = path;
     delete process.env.SMC_HERMES_CONTROL_OWNER;
-    const { getHermesControlOwner, isOpsiControlOwner, isExternallyManagedControlOwner } =
-      await import("../src/main/hermes/control-owner");
+    const {
+      getHermesControlOwner,
+      getEffectiveControlOwner,
+      isOpsiControlOwner,
+      isExternallyManagedControlOwner,
+      isDirectControlOwner,
+      readControlOwnerSnapshot,
+    } = await import("../src/main/hermes/control-owner");
     expect(getHermesControlOwner()).toBe("opsi");
+    expect(getEffectiveControlOwner()).toBe("direct");
     expect(isOpsiControlOwner()).toBe(true);
-    expect(isExternallyManagedControlOwner()).toBe(true);
+    expect(isExternallyManagedControlOwner()).toBe(false);
+    expect(isDirectControlOwner()).toBe(true);
+    const snapshot = readControlOwnerSnapshot();
+    expect(snapshot.observed).toBe("opsi");
+    expect(snapshot.effective).toBe("direct");
+    expect(snapshot.owner).toBe("opsi");
   });
 
-  it("reads runtime from env", async () => {
+  it("maps observed salt to effective direct", async () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, JSON.stringify({ hermes: "salt" }), "utf-8");
+    process.env.SMC_CONTROL_OWNER_PATH = path;
+    delete process.env.SMC_HERMES_CONTROL_OWNER;
+    const { readControlOwnerSnapshot, isExternallyManagedControlOwner } =
+      await import("../src/main/hermes/control-owner");
+    const snapshot = readControlOwnerSnapshot();
+    expect(snapshot.observed).toBe("salt");
+    expect(snapshot.effective).toBe("direct");
+    expect(isExternallyManagedControlOwner()).toBe(false);
+  });
+
+  it("keeps runtime effective as runtime", async () => {
     process.env.SMC_CONTROL_OWNER_PATH = join(dir, "missing.json");
     process.env.SMC_HERMES_CONTROL_OWNER = "runtime";
-    const { getHermesControlOwner, isRuntimeControlOwner } = await import(
-      "../src/main/hermes/control-owner"
-    );
+    const { getHermesControlOwner, getEffectiveControlOwner, isRuntimeControlOwner } =
+      await import("../src/main/hermes/control-owner");
     expect(getHermesControlOwner()).toBe("runtime");
+    expect(getEffectiveControlOwner()).toBe("runtime");
     expect(isRuntimeControlOwner()).toBe(true);
   });
 

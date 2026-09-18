@@ -34,6 +34,7 @@ function Get-SmcHermesManagedLayout {
     $directories = @(
         "profiles",
         "skills",
+        "plugins",
         "sessions",
         "memories",
         "logs",

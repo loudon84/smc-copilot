@@ -116,8 +116,8 @@ describe("work release guard helpers", () => {
         gitCommit: "abc123",
         gitBranch: "main",
         buildTime: "2026-08-20T00:00:00.000Z",
-        runtimeAdapter: "legacy-local",
-        runtimeContract: "managed-local-v1",
+        runtimeAdapter: "native-hermes",
+        runtimeContract: "native-enterprise-v1",
         dirty: false,
       }),
     );
@@ -133,8 +133,8 @@ describe("work release guard helpers", () => {
         gitCommit: "abc123",
         gitBranch: "main",
         buildTime: "2026-08-20T00:00:00.000Z",
-        runtimeAdapter: "legacy-local",
-        runtimeContract: "managed-local-v1",
+        runtimeAdapter: "native-hermes",
+        runtimeContract: "native-enterprise-v1",
         dirty: true,
       }),
     );

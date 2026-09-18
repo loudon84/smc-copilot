@@ -1,17 +1,42 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+} from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import http from "http";
 import type { AddressInfo } from "net";
 
 let testHome: string;
+let userData: string;
+
+vi.mock("electron", () => ({
+  app: {
+    getPath: (name: string): string => {
+      if (name === "userData") {
+        return process.env.HERMES_DESKTOP_USER_DATA_DIR || tmpdir();
+      }
+      return tmpdir();
+    },
+    setPath: (): void => {},
+  },
+}));
 
 async function loadConnectionConfigModule(): Promise<
   typeof import("../src/main/config")
 > {
   vi.resetModules();
   vi.stubEnv("HERMES_HOME", testHome);
+  vi.stubEnv("HERMES_DESKTOP_USER_DATA_DIR", userData);
+  const { invalidateHermesRuntimeConfigCache } = await import(
+    "../src/main/runtime/hermes-runtime-config"
+  );
+  invalidateHermesRuntimeConfigCache();
   return await import("../src/main/config");
 }
 
@@ -26,12 +51,16 @@ function listen(server: http.Server): Promise<string> {
 
 describe("connection config secret exposure", () => {
   beforeEach(() => {
-    testHome = mkdtempSync(join(tmpdir(), "hermes-connection-config-"));
+    const base = mkdtempSync(join(tmpdir(), "hermes-connection-config-"));
+    testHome = join(base, "hermes");
+    userData = join(base, "userdata");
+    mkdirSync(testHome, { recursive: true });
+    mkdirSync(userData, { recursive: true });
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    rmSync(testHome, { recursive: true, force: true });
+    rmSync(join(testHome, ".."), { recursive: true, force: true });
   });
 
   it("keeps the remote API key out of the public renderer config", async () => {
@@ -87,11 +116,9 @@ describe("connection config secret exposure", () => {
     ).toBe("");
   });
 
-  it("reads desktop config files written with a UTF-8 BOM", async () => {
-    const { getConnectionConfig } = await loadConnectionConfigModule();
-
+  it("reads work-settings.json written with a UTF-8 BOM", async () => {
     writeFileSync(
-      join(testHome, "desktop.json"),
+      join(userData, "work-settings.json"),
       `\uFEFF${JSON.stringify({
         connectionMode: "remote",
         remoteUrl: "https://hermes.example",
@@ -101,11 +128,63 @@ describe("connection config secret exposure", () => {
       "utf-8",
     );
 
+    const { getConnectionConfig } = await loadConnectionConfigModule();
+
     expect(getConnectionConfig()).toMatchObject({
       mode: "remote",
       remoteUrl: "https://hermes.example",
       apiKey: "remote-secret",
       remoteChatTransport: "dashboard",
+    });
+  });
+
+  it("stores Work settings under userData and does not write Hermes desktop.json (A-CONFIG-001)", async () => {
+    const { setConnectionConfig, getConnectionConfig } =
+      await loadConnectionConfigModule();
+
+    setConnectionConfig({
+      mode: "remote",
+      remoteUrl: "https://hermes.example",
+      apiKey: "remote-secret",
+      remoteChatTransport: "auto",
+      sshChatTransport: "auto",
+      remoteAuthMode: "auto",
+      ssh: getConnectionConfig().ssh,
+    });
+
+    const workSettings = join(userData, "work-settings.json");
+    const legacyDesktop = join(testHome, "desktop.json");
+    expect(existsSync(workSettings)).toBe(true);
+    expect(existsSync(legacyDesktop)).toBe(false);
+    expect(JSON.parse(readFileSync(workSettings, "utf-8"))).toMatchObject({
+      connectionMode: "remote",
+      remoteUrl: "https://hermes.example",
+    });
+  });
+
+  it("migrates legacy Hermes desktop.json once when work-settings.json is absent", async () => {
+    writeFileSync(
+      join(testHome, "desktop.json"),
+      JSON.stringify({
+        connectionMode: "ssh",
+        remoteUrl: "https://legacy.example",
+        remoteApiKey: "legacy-secret",
+      }),
+      "utf-8",
+    );
+
+    const { getConnectionConfig } = await loadConnectionConfigModule();
+    expect(getConnectionConfig()).toMatchObject({
+      mode: "ssh",
+      remoteUrl: "https://legacy.example",
+      apiKey: "legacy-secret",
+    });
+
+    const workSettings = join(userData, "work-settings.json");
+    expect(existsSync(workSettings)).toBe(true);
+    expect(JSON.parse(readFileSync(workSettings, "utf-8"))).toMatchObject({
+      connectionMode: "ssh",
+      remoteUrl: "https://legacy.example",
     });
   });
 

@@ -8,6 +8,10 @@ const persistedDesktopConfig = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/main/config", () => ({
+  readWorkSettings: () => ({ ...persistedDesktopConfig.value }),
+  writeWorkSettings: (data: Record<string, unknown>) => {
+    persistedDesktopConfig.value = { ...data };
+  },
   readDesktopConfig: () => ({ ...persistedDesktopConfig.value }),
   writeDesktopConfig: (data: Record<string, unknown>) => {
     persistedDesktopConfig.value = { ...data };

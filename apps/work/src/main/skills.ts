@@ -7,7 +7,7 @@ import {
   statSync,
 } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
-import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
+import { getHermesRoot } from "./runtime/hermes-root";
 import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 import { isValidNamedProfileName, profileHome } from "./utils";
 
@@ -66,6 +66,8 @@ function parseSkillFrontmatter(content: string): {
  * Structure: skills/<category>/<skill-name>/SKILL.md
  */
 export function listInstalledSkills(profile?: string): InstalledSkill[] {
+  // Native plugin root (A-STATE-002): Active Profile Home\plugins under Hermes Root.
+  void getHermesPluginRoot(profile);
   const skillsDir = join(profileHome(profile), "skills");
   if (!existsSync(skillsDir)) return [];
 
@@ -130,7 +132,7 @@ function pathIsInside(parent: string, child: string): boolean {
 }
 
 function isProfileSkillFile(skillFile: string): boolean {
-  const profilesRoot = realOrResolved(join(HERMES_HOME, "profiles"));
+  const profilesRoot = realOrResolved(join(getHermesRoot(), "profiles"));
   if (!pathIsInside(profilesRoot, skillFile)) return false;
 
   const parts = relative(profilesRoot, skillFile).split(/[\\/]+/);
@@ -142,7 +144,7 @@ function isProfileSkillFile(skillFile: string): boolean {
 }
 
 function isAllowedSkillFile(skillFile: string): boolean {
-  const allowedRoots = [join(HERMES_HOME, "skills")].map(realOrResolved);
+  const allowedRoots = [join(getHermesRoot(), "skills")].map(realOrResolved);
 
   return (
     allowedRoots.some((root) => pathIsInside(root, skillFile)) ||

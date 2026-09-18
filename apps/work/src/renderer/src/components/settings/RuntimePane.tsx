@@ -5,19 +5,31 @@ import type {
   ControlOwnerSnapshot,
   HermesControlOwner,
 } from "../../../../shared/runtime/control-owner";
+import { isExternallyManagedEffective } from "../../../../shared/runtime/control-owner";
 
-/** Production default contract. Self-Install UI is unreachable under this id. */
-const MANAGED_RUNTIME_CONTRACT = "managed-local-v1";
+/** Gates must use effective owner (ADR-038). Observed opsi/salt → effective direct. */
+function effectiveOwner(
+  snapshot: ControlOwnerSnapshot | null,
+): HermesControlOwner | undefined {
+  return snapshot?.effective ?? snapshot?.owner;
+}
 
-function isEnterpriseManagedOwner(owner: HermesControlOwner | undefined): boolean {
+function isEnterpriseManagedOwner(
+  owner: HermesControlOwner | undefined,
+): boolean {
   return owner === "salt" || owner === "opsi";
 }
 
-function isSelfInstallUnreachable(owner: HermesControlOwner | undefined): boolean {
-  return (
-    MANAGED_RUNTIME_CONTRACT === "managed-local-v1" ||
-    isEnterpriseManagedOwner(owner)
-  );
+/**
+ * Self-Install folder picker is only blocked when effective ownership is still
+ * external. Native contract + effective direct must not appear as
+ * "unreachable self-install".
+ */
+function isSelfInstallUnreachable(
+  snapshot: ControlOwnerSnapshot | null,
+): boolean {
+  const effective = effectiveOwner(snapshot);
+  return isExternallyManagedEffective(effective ?? "direct");
 }
 
 /**
@@ -65,7 +77,7 @@ function RuntimePane(): React.JSX.Element {
   }
 
   async function handleChooseHome(): Promise<void> {
-    if (isSelfInstallUnreachable(owner?.owner)) return;
+    if (isSelfInstallUnreachable(owner)) return;
     const dir = await window.hermesAPI.selectFolder();
     if (!dir) return;
     const valid = await runtime.validateHome(dir);
@@ -90,15 +102,16 @@ function RuntimePane(): React.JSX.Element {
     }
   }
 
-  const managedMode = isEnterpriseManagedOwner(owner?.owner);
-  const selfInstallUnreachable = isSelfInstallUnreachable(owner?.owner);
+  const managedMode = isEnterpriseManagedOwner(effectiveOwner(owner));
+  const selfInstallUnreachable = isSelfInstallUnreachable(owner);
+  const observedLabel = owner?.observed ?? owner?.owner;
 
   return (
     <div className="settings-pane">
       <h2>{managedMode ? "Hermes Availability" : "Hermes Runtime"}</h2>
       <p className="settings-pane-desc">
         {managedMode
-          ? owner?.owner === "opsi"
+          ? observedLabel === "opsi"
             ? "Managed by organization (OPSI). Endpoint management owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
             : "Managed by organization. Salt owns Hermes install and Gateway lifecycle. This app only checks whether Gateway is reachable."
           : "SMC-Copilot connects to a locally installed Hermes Agent. Runtime installation and model API keys are managed outside this app."}
@@ -107,7 +120,11 @@ function RuntimePane(): React.JSX.Element {
       <dl className="settings-kv">
         <div>
           <dt>Control owner</dt>
-          <dd>{managedMode ? "Managed by organization" : (owner?.owner ?? "—")}</dd>
+          <dd>
+            {managedMode
+              ? "Managed by organization"
+              : (owner?.effective ?? owner?.owner ?? "—")}
+          </dd>
         </div>
         <div>
           <dt>Hermes status</dt>

@@ -19,6 +19,11 @@ extraResources:
     to: .
     filter:
       - work-registry-config.json
+  - from: resources/hermes-native
+    to: hermes-native
+  - from: resources/hermes-policy
+    to: hermes-policy
+  # hermes-bootstrap/install.ps1 is added by T5 release stage; path resolved at runtime.
 win:
   executableName: smc-copilot
   icon: build/icon.ico

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * CI guard: production Main/IPC/Startup must use LegacyLocalRuntimeAdapter only.
- * Historical adapters may exist for tests but must not enter the production graph.
+ * CI guard: production Main must not wire historical RuntimeService / Availability
+ * adapters. NativeHermesRuntimeAdapter is the production local default.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";

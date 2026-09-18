@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HermesRuntimeProbe } from "../../../../shared/runtime/runtime-contract";
-import type { HermesControlOwner } from "../../../../shared/runtime/control-owner";
+import type { ControlOwnerSnapshot } from "../../../../shared/runtime/control-owner";
 import ConnectionErrorScreen from "./ConnectionErrorScreen";
 
 const getControlOwnerMock = vi.fn();
@@ -17,12 +17,12 @@ function probe(): HermesRuntimeProbe {
     gatewayRunning: false,
     gatewayHealthy: false,
     authenticated: false,
-    homePath: "C:\\ProgramData\\SMC\\Hermes",
+    homePath: "C:\\Users\\test\\AppData\\Local\\hermes",
   };
 }
 
-function stubOwner(owner: HermesControlOwner): void {
-  getControlOwnerMock.mockResolvedValue({ owner, source: "default" });
+function stubOwner(snapshot: ControlOwnerSnapshot): void {
+  getControlOwnerMock.mockResolvedValue(snapshot);
   Object.defineProperty(window, "hermesAPI", {
     configurable: true,
     value: {
@@ -65,22 +65,32 @@ describe("ConnectionErrorScreen Self-Install gate", () => {
     getControlOwnerMock.mockReset();
   });
 
-  it("hides Choose Hermes directory for managed-local-v1 with controlOwner=direct", async () => {
-    stubOwner("direct");
+  it("shows Choose Hermes directory for native effective direct", async () => {
+    stubOwner({
+      observed: "direct",
+      effective: "direct",
+      owner: "direct",
+      source: "default",
+    });
     renderScreen();
 
     await waitFor(() => {
       expect(getControlOwnerMock).toHaveBeenCalled();
     });
-    expect(screen.queryByRole("button", { name: "Choose Hermes directory" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(
-      screen.queryByText(/Install or configure Hermes separately/i),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Choose Hermes directory" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByText(/Native runtime recovers/i)).toBeTruthy();
   });
 
-  it("hides Choose Hermes directory for opsi and salt owners", async () => {
-    stubOwner("opsi");
+  it("does not treat observed opsi/salt as enterprise-waiting when effective is direct", async () => {
+    stubOwner({
+      observed: "opsi",
+      effective: "direct",
+      owner: "opsi",
+      source: "file",
+    });
     const first = render(
       <ConnectionErrorScreen
         status={probe()}
@@ -93,19 +103,36 @@ describe("ConnectionErrorScreen Self-Install gate", () => {
       />,
     );
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Choose Hermes directory" })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Choose Hermes directory" }),
+      ).toBeTruthy();
     });
+    expect(
+      screen.queryByText(/Waiting for enterprise Hermes Agent/i),
+    ).toBeNull();
     first.unmount();
 
-    stubOwner("salt");
+    stubOwner({
+      observed: "salt",
+      effective: "direct",
+      owner: "salt",
+      source: "file",
+    });
     renderScreen();
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Choose Hermes directory" })).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Choose Hermes directory" }),
+      ).toBeTruthy();
     });
   });
 
   it("Retry only reconnects and never selects a Hermes home", async () => {
-    stubOwner("direct");
+    stubOwner({
+      observed: "direct",
+      effective: "direct",
+      owner: "direct",
+      source: "default",
+    });
     const { onReconnect, onSelectHermesHome } = renderScreen();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();

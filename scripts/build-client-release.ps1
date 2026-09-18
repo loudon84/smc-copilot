@@ -1,17 +1,11 @@
 param(
-    [ValidateSet("preflight", "work", "hermes", "hermes-installer", "runtime", "opsi-stage", "opsi-package", "assemble", "verify", "all")]
+    [ValidateSet("preflight", "work", "hermes-bootstrap", "assemble", "verify", "all")]
     [string]$Stage = "all",
-    [string]$HermesRepo = "",
-    [string]$OpsiClientInstaller = "",
     [string]$Output = "",
     [string]$WorkDist = "",
-    [string]$HermesZip = "",
-    [string]$OpsiPackage = "",
-    [string]$Wheelhouse = "",
-    [string]$NodeRoot = "",
-    [ValidateSet("online", "offline")][string]$Mode = "online",
-    [ValidateSet("zipfile", "native")][string]$OpsiTooling = "native",
-    [switch]$AllowDirty
+    [string]$HermesInstallPs1 = "",
+    [switch]$AllowDirty,
+    [switch]$CheckSourceReachability
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -50,16 +44,10 @@ path.write_bytes(
 }
 
 $argsList = @($py, $Stage, "--signing-key-ref", $keyPath, "--output", $outputDir)
-if ($HermesRepo) { $argsList += @("--hermes-repo", $HermesRepo) }
-if ($OpsiClientInstaller) { $argsList += @("--opsi-client-installer", $OpsiClientInstaller) }
 if ($WorkDist) { $argsList += @("--work-dist", $WorkDist) }
-if ($HermesZip) { $argsList += @("--hermes-zip", $HermesZip) }
-if ($OpsiPackage) { $argsList += @("--opsi-package", $OpsiPackage) }
-if ($Wheelhouse) { $argsList += @("--wheelhouse", $Wheelhouse) }
-if ($NodeRoot) { $argsList += @("--node-root", $NodeRoot) }
-if ($Mode) { $argsList += @("--mode", $Mode) }
-if ($OpsiTooling) { $argsList += @("--opsi-tooling", $OpsiTooling) }
+if ($HermesInstallPs1) { $argsList += @("--hermes-install-ps1", $HermesInstallPs1) }
 if ($AllowDirty) { $argsList += "--allow-dirty" }
+if ($CheckSourceReachability) { $argsList += "--check-source-reachability" }
 & python @argsList
 if ($LASTEXITCODE -ne 0) { throw "client release build failed" }
 

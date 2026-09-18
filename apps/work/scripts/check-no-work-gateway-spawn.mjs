@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * CI guard: local Gateway lifecycle must not be spawned from apps/work Main.
- * Work probes managed Gateway state only; OPSI/Salt own install and lifecycle.
+ * CI guard: local Gateway lifecycle must not spawn pythonw / hermes_cli.main /
+ * `gateway run` from apps/work Main.
+ * NativeHermesRuntimeAdapter may invoke `hermes gateway start|restart` via CLI.
  *
  * Scans production src/main (not tests). Remote SSH helpers may start a
  * Gateway on the remote host and are allowlisted.
@@ -18,6 +19,7 @@ const ALLOWLIST = new Set([
   "runtime-management-backend.ts",
   "runtime-service-adapter.ts",
   "availability-backend.ts",
+  "native-hermes-runtime-backend.ts",
 ]);
 
 const banned = [

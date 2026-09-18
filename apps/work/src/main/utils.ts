@@ -47,12 +47,18 @@ export function normalizeProfileName(profile?: unknown): string | undefined {
 }
 
 /**
- * Resolve the home directory for a given profile.
- * 'default' or undefined maps to ~/.hermes; named profiles
- * live under ~/.hermes/profiles/<name>.
+ * Active Profile Home under Hermes Root (`HERMES_HOME` live binding).
+ *
+ * - default / undefined → Hermes Root (same as {@link getHermesHome})
+ * - named → `Root/profiles/<name>`
+ *
+ * Work MUST keep Hermes Root constant when switching profiles (A-PROFILE-001).
+ * Child CLI env may set `HERMES_HOME` to this path for a named profile
+ * (A-PROFILE-002); that must not rewrite the Root binding itself.
  */
 export function profileHome(profile?: unknown): string {
   const normalized = normalizeProfileName(profile);
+  // HERMES_HOME here is Hermes Root — never rewrite Root to profiles\<name>.
   return normalized ? join(HERMES_HOME, "profiles", normalized) : HERMES_HOME;
 }
 

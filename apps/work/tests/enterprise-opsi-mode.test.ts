@@ -50,20 +50,31 @@ describe("enterprise opsi mode canary", () => {
   });
 
   // @lat: [[runtime-connection#OPSI enterprise mode canary]]
-  it("uses opsi control-owner and refuses local gateway restart", async () => {
+  it("observes opsi with effective direct and does not block local gates", async () => {
     const {
       getHermesControlOwner,
+      getEffectiveControlOwner,
       isOpsiControlOwner,
       isSaltControlOwner,
       isRuntimeControlOwner,
       isExternallyManagedControlOwner,
+      isDirectControlOwner,
+      readControlOwnerSnapshot,
     } = await import("../src/main/hermes/control-owner");
     expect(getHermesControlOwner()).toBe("opsi");
+    expect(getEffectiveControlOwner()).toBe("direct");
     expect(isOpsiControlOwner()).toBe(true);
     expect(isSaltControlOwner()).toBe(false);
     expect(isRuntimeControlOwner()).toBe(false);
-    expect(isExternallyManagedControlOwner()).toBe(true);
+    expect(isExternallyManagedControlOwner()).toBe(false);
+    expect(isDirectControlOwner()).toBe(true);
+    expect(readControlOwnerSnapshot()).toMatchObject({
+      observed: "opsi",
+      effective: "direct",
+      owner: "opsi",
+    });
 
+    // Historical AvailabilityBackend still refuses restart when constructed directly.
     const { HermesAvailabilityBackend } = await import(
       "../src/main/hermes/availability-backend"
     );
@@ -75,10 +86,15 @@ describe("enterprise opsi mode canary", () => {
   });
 
   it("keeps chat data-plane independent of Runtime :8765 and opsi-control", async () => {
-    const { isDirectControlOwner, isRuntimeControlOwner, getHermesControlOwner } =
-      await import("../src/main/hermes/control-owner");
+    const {
+      isDirectControlOwner,
+      isRuntimeControlOwner,
+      getHermesControlOwner,
+      getEffectiveControlOwner,
+    } = await import("../src/main/hermes/control-owner");
     expect(getHermesControlOwner()).toBe("opsi");
-    expect(isDirectControlOwner()).toBe(false);
+    expect(getEffectiveControlOwner()).toBe("direct");
+    expect(isDirectControlOwner()).toBe(true);
     expect(isRuntimeControlOwner()).toBe(false);
   });
 
@@ -97,12 +113,12 @@ describe("enterprise opsi mode canary", () => {
   });
 
   // @lat: [[runtime-connection#OPSI owner / lifecycle]]
-  it("keeps LegacyLocalRuntimeAdapter identity when control owner is opsi", async () => {
+  it("keeps NativeHermesRuntimeAdapter identity when control owner is opsi", async () => {
     const { getRuntimeManager, RUNTIME_ADAPTER_ID } = await import(
       "../src/main/runtime/runtime-manager"
     );
     const manager = getRuntimeManager();
     expect(manager.getAdapterIdentity().adapter).toBe(RUNTIME_ADAPTER_ID);
-    expect(RUNTIME_ADAPTER_ID).toBe("legacy-local");
+    expect(RUNTIME_ADAPTER_ID).toBe("native-hermes");
   });
 });

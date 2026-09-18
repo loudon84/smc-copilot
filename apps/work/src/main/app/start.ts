@@ -2,7 +2,7 @@ import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../../resources/icon.png?asset";
-import { getPublicConnectionConfig } from "../config";
+import { getConnectionConfig, getPublicConnectionConfig } from "../config";
 import { stopHealthPolling } from "../hermes";
 import { stopAllDashboards } from "../dashboard";
 import { cleanupTempMediaFiles } from "../media";
@@ -38,6 +38,7 @@ import { registerArtifactProtocolHandler } from "../artifact-protocol";
 import { registerFilePreviewProtocolHandler } from "../files/file-preview-service";
 import { logWorkStartupIdentity } from "../build-info";
 import { readControlOwnerSnapshot } from "../hermes/control-owner";
+import { startHermesBootstrapAsync } from "../runtime/hermes-bootstrap";
 
 const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC-Copilot";
 const OPEN_DEVTOOLS_ON_START =
@@ -88,7 +89,10 @@ export function startMainProcess(): void {
 
   app.whenReady().then(() => {
     electronApp.setAppUserModelId("com.smc.copilot");
-    logWorkStartupIdentity(readControlOwnerSnapshot().owner);
+    const controlOwner = readControlOwnerSnapshot();
+    logWorkStartupIdentity(
+      `${controlOwner.observed}->${controlOwner.effective}`,
+    );
     void hydrateTokenStore().then(() => {
       startKnowledgeProviderAfterAuth();
     });
@@ -164,6 +168,12 @@ export function startMainProcess(): void {
     ) {
       mainWindow.setAutoHideMenuBar(false);
       mainWindow.setMenuBarVisibility(true);
+    }
+
+    // Native Bootstrap (T4 / C-007): main window already open; local-only
+    // install runs async. INSTALLING/ABSENT/FAIL block local chat via IPC.
+    if (getConnectionConfig().mode === "local") {
+      startHermesBootstrapAsync();
     }
 
     if (CLOSE_TO_TRAY) {

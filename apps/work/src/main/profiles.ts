@@ -4,6 +4,11 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
 import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 import {
+  ensureProfileGatewayStarted,
+  uninstallProfileGateway,
+} from "./runtime/hermes-named-gateway";
+import { getProfilePort } from "./gateway-ports";
+import {
   getActiveProfileNameSync,
   isValidNamedProfileName,
   isValidProfileName,
@@ -306,6 +311,13 @@ export function createProfile(
     );
   }
 
+  // C-004: allocate named port; gateway install deferred to first activate/chat.
+  try {
+    getProfilePort(id);
+  } catch {
+    /* non-fatal */
+  }
+
   return { success: true, id };
 }
 
@@ -318,6 +330,9 @@ export function deleteProfile(name: string): {
   if (!isValidNamedProfileName(name)) {
     return { success: false, error: PROFILE_NAME_ERROR };
   }
+
+  // C-004 / A-GW-004: uninstall named gateway before deleting profile.
+  uninstallProfileGateway(name);
 
   try {
     runHermesCliSync(["profile", "delete", name, "--yes"]);
@@ -356,5 +371,12 @@ export function setActiveProfile(name: string): void {
       // Filesystem write failed — nothing else to fall back to; the CLI
       // attempt above already didn't persist it either.
     }
+  }
+
+  // C-004: named profile activation → gateway install + start if needed.
+  if (name !== "default") {
+    void ensureProfileGatewayStarted(name).catch((err) => {
+      console.warn(`[gateway] named profile ensure failed for ${name}:`, err);
+    });
   }
 }

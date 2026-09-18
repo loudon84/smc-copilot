@@ -48,8 +48,8 @@ const payload = {
   gitCommit,
   gitBranch,
   buildTime: new Date().toISOString(),
-  runtimeAdapter: "legacy-local",
-  runtimeContract: "managed-local-v1",
+  runtimeAdapter: "native-hermes",
+  runtimeContract: "native-enterprise-v1",
   dirty,
 };
 

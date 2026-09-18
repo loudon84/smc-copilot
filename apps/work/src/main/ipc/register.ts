@@ -78,7 +78,16 @@ import { getRuntimeManager } from "../runtime/runtime-manager";
 import { MANAGED_GATEWAY_MESSAGE } from "../runtime/hermes-runtime-paths";
 import { getRuntimeManagementBackend } from "../runtime/runtime-management-backend";
 import {
+  cancelHermesBootstrap,
+  runHermesBootstrap,
+  startHermesBootstrapAsync,
+} from "../runtime/hermes-bootstrap";
+import { getBootstrapStatus, assertLocalChatAllowed } from "../runtime/hermes-bootstrap-state";
+import { repairHermesOrigin } from "../runtime/hermes-repair";
+import { ensureProfileGatewayStarted } from "../runtime/hermes-named-gateway";
+import {
   isExternallyManagedControlOwner,
+  isDirectControlOwner,
   isRuntimeControlOwner,
   readControlOwnerSnapshot,
   externallyManagedMessage,
@@ -1306,6 +1315,10 @@ export function registerIpcHandlers(context: IpcContext): void {
       });
       resetSshDashboardAvailability();
       notifyConnectionConfigChanged();
+      // C-007: switching back to local while ABSENT/FAIL re-triggers Bootstrap.
+      if (mode === "local" && existing.mode !== "local") {
+        startHermesBootstrapAsync();
+      }
       return true;
     },
   );
@@ -1466,8 +1479,13 @@ export function registerIpcHandlers(context: IpcContext): void {
       // Each conversation has a stable runId minted by the renderer. Fall back
       // to a generated id for legacy callers so the run is still tracked.
       const chatRunId = runId || `run-${randomUUID()}`;
-      // Local mode: ensure Gateway is healthy before sending (race protection).
+      // A-INSTALL-003: local chat blocked until bootstrap READY.
       if (!isRemoteMode()) {
+        assertLocalChatAllowed();
+        // C-004: named profile first local chat → gateway install/start.
+        if (profile && profile !== "default") {
+          await ensureProfileGatewayStarted(profile);
+        }
         const ready = await getRuntimeManager().ensureReady(profile);
         if (!ready.ok) {
           throw new Error(
@@ -1793,6 +1811,15 @@ export function registerIpcHandlers(context: IpcContext): void {
   );
 
   // Gateway
+  ipcMain.handle("hermes-bootstrap-status", () => getBootstrapStatus());
+  ipcMain.handle("hermes-bootstrap-cancel", () => cancelHermesBootstrap());
+  ipcMain.handle("hermes-bootstrap-run", async () => runHermesBootstrap());
+  ipcMain.handle(
+    "hermes-repair-origin",
+    async (_event, confirm?: boolean) =>
+      repairHermesOrigin({ confirm: confirm === true }),
+  );
+
   ipcMain.handle("start-gateway", async () => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
@@ -1807,10 +1834,29 @@ export function registerIpcHandlers(context: IpcContext): void {
           "Remote mode points at an already-running Hermes server. Start or restart the gateway on that remote host.",
       };
     }
+    // ADR-038: observed opsi/salt → effective direct; allow Native adapter start.
+    if (isExternallyManagedControlOwner()) {
+      return {
+        success: false,
+        running: false,
+        error: MANAGED_GATEWAY_MESSAGE,
+      };
+    }
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().startGateway();
+    }
+    if (!isDirectControlOwner()) {
+      return {
+        success: false,
+        running: false,
+        error: MANAGED_GATEWAY_MESSAGE,
+      };
+    }
+    const result = await runtimeManager.ensureReady();
     return {
-      success: false,
-      running: false,
-      error: MANAGED_GATEWAY_MESSAGE,
+      success: result.ok,
+      running: result.ok,
+      error: result.ok ? undefined : result.errorMessage ?? MANAGED_GATEWAY_MESSAGE,
     };
   });
   ipcMain.handle("stop-gateway", async () => {
@@ -1822,9 +1868,10 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "remote") {
       return true;
     }
+    // Native: Work exit / stop must not kill Gateway (A-GW-002).
     return false;
   });
-  ipcMain.handle("restart-gateway", async (_event, _profile?: string) => {
+  ipcMain.handle("restart-gateway", async (_event, profile?: string) => {
     const conn = getConnectionConfig();
     if (conn.mode === "ssh" && conn.ssh) {
       await sshStopGateway(conn.ssh);
@@ -1834,7 +1881,17 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "remote") {
       return false;
     }
-    return false;
+    if (isExternallyManagedControlOwner()) {
+      return false;
+    }
+    if (isRuntimeControlOwner()) {
+      return getRuntimeManagementBackend().restartGateway(profile);
+    }
+    if (!isDirectControlOwner()) {
+      return false;
+    }
+    const result = await runtimeManager.restart(profile);
+    return result.ok;
   });
   ipcMain.handle("gateway-status", async () => {
     const conn = getConnectionConfig();

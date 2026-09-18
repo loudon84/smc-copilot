@@ -1,5 +1,6 @@
 /**
  * Read Hermes control owner from env or %ProgramData%\\SMC\\control-owner.json.
+ * Returns observed + effective (ADR-038 / PRD A-OWNER-001).
  */
 // @lat: [[runtime-connection#Direct Hermes Mode]]
 import { existsSync, readFileSync } from "fs";
@@ -8,7 +9,11 @@ import type {
   HermesControlOwner,
   ControlOwnerSnapshot,
 } from "../../shared/runtime/control-owner";
-import { isExternallyManagedOwner } from "../../shared/runtime/control-owner";
+import {
+  effectiveControlOwner,
+  isExternallyManagedEffective,
+  isExternallyManagedOwner,
+} from "../../shared/runtime/control-owner";
 
 const VALID_OWNERS = new Set<HermesControlOwner>([
   "direct",
@@ -40,10 +45,25 @@ function parseOwner(raw: string | undefined): HermesControlOwner | null {
   return null;
 }
 
+function snapshotFrom(
+  observed: HermesControlOwner,
+  source: ControlOwnerSnapshot["source"],
+  path?: string,
+): ControlOwnerSnapshot {
+  const effective = effectiveControlOwner(observed);
+  return {
+    observed,
+    effective,
+    owner: observed,
+    source,
+    path,
+  };
+}
+
 export function readControlOwnerSnapshot(): ControlOwnerSnapshot {
   const envOwner = parseOwner(process.env.SMC_HERMES_CONTROL_OWNER);
   if (envOwner) {
-    return { owner: envOwner, source: "env" };
+    return snapshotFrom(envOwner, "env");
   }
   const path = defaultControlOwnerPath();
   if (existsSync(path)) {
@@ -55,18 +75,23 @@ export function readControlOwnerSnapshot(): ControlOwnerSnapshot {
         typeof parsed.hermes === "string" ? parsed.hermes : undefined,
       );
       if (fileOwner) {
-        return { owner: fileOwner, source: "file", path };
+        return snapshotFrom(fileOwner, "file", path);
       }
     } catch {
       /* fall through to default */
     }
   }
   // Work default: connect Gateway directly (8642), not Runtime :8765.
-  return { owner: "direct", source: "default", path };
+  return snapshotFrom("direct", "default", path);
 }
 
+/** Observed control owner (env/file/default). Prefer getEffectiveControlOwner for gates. */
 export function getHermesControlOwner(): HermesControlOwner {
-  return readControlOwnerSnapshot().owner;
+  return readControlOwnerSnapshot().observed;
+}
+
+export function getEffectiveControlOwner(): HermesControlOwner {
+  return readControlOwnerSnapshot().effective;
 }
 
 export function isSaltControlOwner(): boolean {
@@ -77,16 +102,20 @@ export function isOpsiControlOwner(): boolean {
   return getHermesControlOwner() === "opsi";
 }
 
+/**
+ * Production gate: uses **effective** owner so observed opsi/salt do not block
+ * Doctor/Update/Gateway (A-OWNER-001).
+ */
 export function isExternallyManagedControlOwner(): boolean {
-  return isExternallyManagedOwner(getHermesControlOwner());
+  return isExternallyManagedEffective(getEffectiveControlOwner());
 }
 
 export function isRuntimeControlOwner(): boolean {
-  return getHermesControlOwner() === "runtime";
+  return getEffectiveControlOwner() === "runtime";
 }
 
 export function isDirectControlOwner(): boolean {
-  return getHermesControlOwner() === "direct";
+  return getEffectiveControlOwner() === "direct";
 }
 
 export function saltManagedMessage(action: string): string {
@@ -122,3 +151,6 @@ export function assertOwner(
     throw new Error(`Invalid Hermes control owner: ${_exhaustive}`);
   }
 }
+
+/** Re-export for callers that still check observed values explicitly. */
+export { isExternallyManagedOwner, effectiveControlOwner };

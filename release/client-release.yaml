@@ -1,34 +1,37 @@
-schema: smc.client-release.config.v1
-
+schema: smc.client-release.config.v2
 release:
   version: "1.7.2"
-  channel: "lab"
-
+  channel: lab
+work:
+  enabled: true
 clientRuntime:
   platform: windows
   architecture: amd64
-
   python:
     version: "3.12"
     range: ">=3.12,<3.13"
-
   node:
     version: "24.21.0"
     range: ">=24.11,<25"
-
-work:
-  enabled: true
-
 hermes:
-  repo: "D:/git/hermes-agent"
-  version: auto
-  profile: smc-managed
-
-opsi:
-  productVersion: "1.7.2"
-  packageVersion: "1"
-  controllerRevision: "2"
-  buildMode: native
-
-external:
-  opsiClientInstaller: "D:/packages/opsi-client-agent-installer.exe"
+  distribution: enterprise-native
+  source:
+    installUrl: http://git.superic.com/aiplatform/hermes-agent.git
+    repositoryHttp: http://git.superic.com/aiplatform/hermes-agent.git
+    allowedHosts:
+      - git.superic.com
+    defaultBranch: main
+    approvedCommit: "29112bef099274229cadff79cdff7bf7b99c4b77"
+    publicUpstreamAllowedOnEndpoint: false
+  update:
+    policy: follow-defaultBranch
+  compatibility:
+    minVersion: "0.21.0"
+    testedVersion: "0.21.0"
+  gateway:
+    host: "127.0.0.1"
+    port: 8642
+  policy:
+    version: "smc-managed-2"
+  bootstrap:
+    authMode: anonymous-internal

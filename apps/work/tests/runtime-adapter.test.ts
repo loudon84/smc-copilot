@@ -96,6 +96,7 @@ describe("LegacyLocalRuntimeAdapter", () => {
     vi.doUnmock("../src/main/runtime/hermes-runtime-locator");
     vi.doUnmock("../src/main/runtime/gateway-probe");
     vi.doUnmock("../src/main/installer");
+    vi.doUnmock("../src/main/runtime/hermes-cli-runner");
   });
 
   it("ensureReady does not start gateway", async () => {
@@ -302,7 +303,7 @@ describe("LegacyLocalRuntimeAdapter", () => {
     expect(probe.listenerOwnership).not.toBe("managed");
   });
 
-  it("rejects %LOCALAPPDATA%\\hermes as a managed home even when listen matches", async () => {
+  it("accepts %LOCALAPPDATA%\\hermes as a valid Native home when listen matches", async () => {
     const localAppData = "C:\\Users\\test\\AppData\\Local";
     const previous = process.env.LOCALAPPDATA;
     process.env.LOCALAPPDATA = localAppData;
@@ -320,8 +321,60 @@ describe("LegacyLocalRuntimeAdapter", () => {
         "../src/main/runtime/legacy-local-runtime-adapter"
       );
       const probe = await new LegacyLocalRuntimeAdapter().probe();
-      expect(probe.state).toBe("configuration_error");
-      expect(probe.runtimeContextVerified).toBe(false);
+      expect(probe.state).toBe("ready");
+      expect(probe.runtimeContextVerified).toBe(true);
+      expect(probe.errorCode).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.LOCALAPPDATA;
+      else process.env.LOCALAPPDATA = previous;
+    }
+  });
+
+  it("NativeHermesRuntimeAdapter accepts LOCALAPPDATA hermes and starts gateway on ensureReady", async () => {
+    const localAppData = "C:\\Users\\test\\AppData\\Local";
+    const previous = process.env.LOCALAPPDATA;
+    process.env.LOCALAPPDATA = localAppData;
+    const health = vi
+      .fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    const runCli = vi.fn(() => "");
+    vi.doMock("../src/main/runtime/hermes-runtime-locator", () =>
+      locatorMock({
+        homePath: `${localAppData}\\hermes`,
+        programRoot: `${localAppData}\\hermes`,
+        executablePath: `${localAppData}\\hermes\\bin\\hermes.exe`,
+      }),
+    );
+    vi.doMock("../src/main/runtime/gateway-probe", () =>
+      gatewayProbeMock({
+        probeGatewayHealth: health,
+        probeGatewayAuthentication: vi.fn(async () => "ok" as const),
+        inspectGatewayListener: vi.fn(async () => ({
+          status: "match" as const,
+          actualPath: `${localAppData}\\hermes\\hermes-agent\\venv\\Scripts\\python.exe`,
+        })),
+      }),
+    );
+    vi.doMock("../src/main/installer", () => ({
+      getHermesVersion: vi.fn(async () => "1.0.0"),
+    }));
+    vi.doMock("../src/main/runtime/hermes-cli-runner", () => ({
+      runHermesCliSync: runCli,
+      cliPathExists: () => true,
+    }));
+    try {
+      const { NativeHermesRuntimeAdapter } = await import(
+        "../src/main/runtime/native-hermes-runtime-backend"
+      );
+      const adapter = new NativeHermesRuntimeAdapter();
+      const result = await adapter.ensureReady();
+      expect(runCli).toHaveBeenCalledWith(
+        ["gateway", "start"],
+        expect.any(Number),
+      );
+      expect(result.ok).toBe(true);
+      expect(result.state).toBe("ready");
     } finally {
       if (previous === undefined) delete process.env.LOCALAPPDATA;
       else process.env.LOCALAPPDATA = previous;
@@ -353,11 +406,11 @@ describe("LegacyLocalRuntimeAdapter", () => {
 });
 
 describe("RuntimeManager default adapter", () => {
-  it("uses LegacyLocalRuntimeAdapter by default", async () => {
+  it("uses NativeHermesRuntimeAdapter by default", async () => {
     const { RuntimeManager, RUNTIME_ADAPTER_ID, RUNTIME_CONTRACT_ID } =
       await import("../src/main/runtime/runtime-manager");
-    const { LegacyLocalRuntimeAdapter } = await import(
-      "../src/main/runtime/legacy-local-runtime-adapter"
+    const { NativeHermesRuntimeAdapter } = await import(
+      "../src/main/runtime/native-hermes-runtime-backend"
     );
     const manager = new RuntimeManager();
     expect(manager).toBeDefined();
@@ -365,9 +418,9 @@ describe("RuntimeManager default adapter", () => {
       adapter: RUNTIME_ADAPTER_ID,
       contract: RUNTIME_CONTRACT_ID,
     });
-    expect(RUNTIME_ADAPTER_ID).toBe("legacy-local");
-    expect(RUNTIME_CONTRACT_ID).toBe("managed-local-v1");
-    expect(LegacyLocalRuntimeAdapter).toBeTypeOf("function");
+    expect(RUNTIME_ADAPTER_ID).toBe("native-hermes");
+    expect(RUNTIME_CONTRACT_ID).toBe("native-enterprise-v1");
+    expect(NativeHermesRuntimeAdapter).toBeTypeOf("function");
     expect(manager).toBeInstanceOf(RuntimeManager);
   });
 
@@ -378,8 +431,8 @@ describe("RuntimeManager default adapter", () => {
       mode: "local" as const,
       state: "gateway_auth_failed" as const,
       endpoint: "http://127.0.0.1:8642",
-      homePath: "C:\\ProgramData\\SMC\\Hermes",
-      executablePath: "D:\\Programs\\SMC\\Hermes\\bin\\hermes.exe",
+      homePath: "C:\\Users\\test\\AppData\\Local\\hermes",
+      executablePath: "C:\\Users\\test\\AppData\\Local\\hermes\\bin\\hermes.exe",
       runtimeFound: true,
       cliAvailable: true,
       gatewayRunning: true,
@@ -399,7 +452,7 @@ describe("RuntimeManager default adapter", () => {
       .map((call) => String(call[0]))
       .find((line) => line.includes("hermes_runtime_probe"));
     expect(logged).toBeDefined();
-    expect(logged).toContain("legacy-local");
+    expect(logged).toContain("native-hermes");
     expect(logged).not.toContain("sk-secret");
     expect(logged).not.toContain("Bearer");
     infoSpy.mockRestore();

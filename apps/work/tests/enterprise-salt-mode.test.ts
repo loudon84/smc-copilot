@@ -50,12 +50,21 @@ describe("enterprise salt mode canary (v2.3.1)", () => {
   });
 
   // @lat: [[runtime-connection#Salt enterprise mode canary]]
-  it("uses salt control-owner and refuses local gateway restart", async () => {
-    const { getHermesControlOwner, isSaltControlOwner, isRuntimeControlOwner } =
-      await import("../src/main/hermes/control-owner");
+  it("observes salt with effective direct; historical AvailabilityBackend still refuses", async () => {
+    const {
+      getHermesControlOwner,
+      getEffectiveControlOwner,
+      isSaltControlOwner,
+      isRuntimeControlOwner,
+      isExternallyManagedControlOwner,
+      isDirectControlOwner,
+    } = await import("../src/main/hermes/control-owner");
     expect(getHermesControlOwner()).toBe("salt");
+    expect(getEffectiveControlOwner()).toBe("direct");
     expect(isSaltControlOwner()).toBe(true);
     expect(isRuntimeControlOwner()).toBe(false);
+    expect(isExternallyManagedControlOwner()).toBe(false);
+    expect(isDirectControlOwner()).toBe(true);
 
     const { HermesAvailabilityBackend } = await import(
       "../src/main/hermes/availability-backend"
@@ -67,10 +76,15 @@ describe("enterprise salt mode canary (v2.3.1)", () => {
   });
 
   it("keeps chat data-plane independent of Runtime :8765", async () => {
-    const { isDirectControlOwner, isRuntimeControlOwner, getHermesControlOwner } =
-      await import("../src/main/hermes/control-owner");
+    const {
+      isDirectControlOwner,
+      isRuntimeControlOwner,
+      getHermesControlOwner,
+      getEffectiveControlOwner,
+    } = await import("../src/main/hermes/control-owner");
     expect(getHermesControlOwner()).toBe("salt");
-    expect(isDirectControlOwner()).toBe(false);
+    expect(getEffectiveControlOwner()).toBe("direct");
+    expect(isDirectControlOwner()).toBe(true);
     expect(isRuntimeControlOwner()).toBe(false);
   });
 });

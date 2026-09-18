@@ -141,6 +141,32 @@ const hermesAPI = {
   getControlOwner: (): Promise<ControlOwnerSnapshot> =>
     ipcRenderer.invoke("get-control-owner"),
 
+  getHermesBootstrapStatus: (): Promise<{
+    state: string;
+    operationId: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    skippedReason: string | null;
+    allowsLocalChat: boolean;
+  }> => ipcRenderer.invoke("hermes-bootstrap-status"),
+
+  cancelHermesBootstrap: (): Promise<boolean> =>
+    ipcRenderer.invoke("hermes-bootstrap-cancel"),
+
+  runHermesBootstrap: (): Promise<unknown> =>
+    ipcRenderer.invoke("hermes-bootstrap-run"),
+
+  repairHermesOrigin: (
+    confirm: boolean,
+  ): Promise<{
+    success: boolean;
+    errorCode?: string;
+    errorMessage?: string;
+    backupPath?: string;
+    backupDigest?: string;
+    operationId?: string;
+  }> => ipcRenderer.invoke("hermes-repair-origin", confirm),
+
   onRuntimeStatusChanged: (
     callback: (probe: HermesRuntimeProbe) => void,
   ): (() => void) => {

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "installUrl": "http://git.superic.com/aiplatform/hermes-agent.git",
+  "originUrls": {
+    "http": "http://git.superic.com/aiplatform/hermes-agent.git",
+    "https": null,
+    "ssh": null
+  },
+  "allowedHosts": ["git.superic.com"],
+  "defaultBranch": "main",
+  "approvedCommit": "29112bef099274229cadff79cdff7bf7b99c4b77",
+  "policyVersion": "smc-managed-2",
+  "repositoryIdentity": "sha256:afa50d51f2304e018ca53820bcd37a80e122312996cfc1daebfbb392961e20f4",
+  "compatibility": {
+    "minVersion": "0.21.0",
+    "testedVersion": "0.21.0"
+  },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 8642
+  },
+  "bootstrap": {
+    "authMode": "anonymous-internal"
+  }
+}
