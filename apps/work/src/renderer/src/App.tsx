@@ -18,18 +18,12 @@ import { UpdateDownloadStatus } from "./update/UpdateDownloadStatus";
 import { UpdateReadyDialog } from "./update/UpdateReadyDialog";
 import { captureScreenView } from "./utils/analytics";
 import type { HermesRuntimeProbe } from "../../shared/runtime/runtime-contract";
+import { skipPortalLogin } from "../../shared/auth/auth-url";
 
 // @lat: [[runtime-connection#Startup]]
 type AppScreen = "splash" | "login" | "main" | "connection-error";
 
 const SPLASH_MIN_MS = 3000;
-
-function skipPortalLogin(): boolean {
-  return (
-    import.meta.env.VITE_SKIP_PORTAL_LOGIN === "true" ||
-    import.meta.env.HERMES_SKIP_PORTAL_LOGIN === "true"
-  );
-}
 
 function AppBootstrap(): React.JSX.Element {
   const runtime = useRuntime();
@@ -141,6 +135,17 @@ function AppBootstrap(): React.JSX.Element {
   useEffect(() => {
     captureScreenView(screen);
   }, [screen]);
+
+  useEffect(() => {
+    if (skipPortalLogin()) return;
+    const api = window.desktopAuth;
+    if (!api) return;
+    return api.onStateChanged((state) => {
+      if (!state.authenticated) {
+        setScreen((current) => (current === "main" ? "login" : current));
+      }
+    });
+  }, []);
 
   async function handleLoginSuccess(): Promise<void> {
     setScreen("splash");

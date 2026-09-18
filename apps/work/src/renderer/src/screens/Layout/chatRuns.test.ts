@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildResumedChatRun,
   cycleRunId,
+  fetchWithEmptyRetry,
   isScratchRun,
   mintRun,
   openSessionRunTransition,
+  resolveResumeExecutionMode,
   runIdAtOrdinal,
   selectProfileRunTransition,
   selectSkillModeTransition,
@@ -196,6 +199,97 @@ describe("chrome-style tab shortcuts", () => {
     expect(runIdAtOrdinal(three, 4)).toBeNull();
     expect(runIdAtOrdinal([], 1)).toBeNull();
     expect(runIdAtOrdinal([], 9)).toBeNull();
+  });
+});
+
+describe("resume session to run", () => {
+  it("builds a titled non-scratch run when messages are empty", () => {
+    const randomUUID = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValue("00000000-0000-4000-8000-0000000000aa");
+
+    const run = buildResumedChatRun(
+      "default",
+      {
+        sessionId: "sess-chat",
+        title: "Report skills research dir",
+        sessionKind: "chat",
+        executionProvider: "hermes-chat",
+      },
+      [],
+    );
+
+    expect(run.sessionId).toBe("sess-chat");
+    expect(run.title).toBe("Report skills research dir");
+    expect(run.seed).toEqual([]);
+    expect(run.executionMode).toBe("local-chat");
+    expect(isScratchRun(run)).toBe(false);
+    randomUUID.mockRestore();
+  });
+
+  it("seeds transcript messages when present", () => {
+    const seed = [
+      {
+        id: "u1",
+        role: "user" as const,
+        content: "hello",
+      },
+    ];
+    const run = buildResumedChatRun(
+      "default",
+      { sessionId: "sess-chat", title: "hello" },
+      seed,
+    );
+    expect(run.seed).toEqual(seed);
+  });
+
+  it("resolves skill-run mode from history pair and prefers skill title override", () => {
+    expect(
+      resolveResumeExecutionMode({
+        sessionId: "s",
+        sessionKind: "work",
+        executionProvider: "skill-run",
+        title: "Sidebar title",
+      }),
+    ).toEqual({
+      executionMode: "skill-run",
+      title: "Sidebar title",
+    });
+
+    expect(
+      resolveResumeExecutionMode(
+        {
+          sessionId: "s",
+          sessionKind: "work",
+          executionProvider: "skill-run",
+          title: "Sidebar title",
+        },
+        { executionMode: "skill-run", toolTitle: "Calculator" },
+      ),
+    ).toEqual({
+      executionMode: "skill-run",
+      title: "Calculator",
+    });
+  });
+
+  it("retries load once after onEmpty when the first result is empty", async () => {
+    let calls = 0;
+    const onEmpty = vi.fn(async () => undefined);
+    const items = await fetchWithEmptyRetry(async () => {
+      calls += 1;
+      return calls === 1 ? [] : [{ id: 1 }];
+    }, onEmpty);
+
+    expect(onEmpty).toHaveBeenCalledTimes(1);
+    expect(calls).toBe(2);
+    expect(items).toEqual([{ id: 1 }]);
+  });
+
+  it("does not call onEmpty when the first load returns items", async () => {
+    const onEmpty = vi.fn(async () => undefined);
+    const items = await fetchWithEmptyRetry(async () => [{ id: 1 }], onEmpty);
+    expect(onEmpty).not.toHaveBeenCalled();
+    expect(items).toEqual([{ id: 1 }]);
   });
 });
 

@@ -14,6 +14,7 @@ import {
   Wallet,
   X,
 } from "../../assets/icons";
+import type { DesktopAuthState } from "../../../../shared/auth/auth-contract";
 import ProfileAvatar from "../common/ProfileAvatar";
 import { PROFILE_COLORS } from "../../../../shared/profileColors";
 import { fileToAvatarDataUrl } from "../../utils/imageResize";
@@ -26,6 +27,13 @@ import ProfileWalletPane from "./ProfileWalletPane";
 import ProfileSyncPane from "./ProfileSyncPane";
 import { OrbLoader } from "../OrbLoader";
 import type { ProfileSection } from "./ProfileModalContext";
+
+const EMPTY_AUTH: DesktopAuthState = {
+  authenticated: false,
+  endpointConfig: null,
+  user: null,
+  expiresAt: null,
+};
 
 /** Mirrors the entry shape returned by `window.hermesAPI.listProfiles()`. */
 interface ProfileInfo {
@@ -73,7 +81,6 @@ const PROFILE_SECTIONS: ReadonlyArray<{
   { id: "profile", labelKey: "agents.sectionProfile", Icon: User },
   { id: "persona", labelKey: "agents.sectionPersona", Icon: Drama },
   { id: "agentMemory", labelKey: "agents.sectionAgentMemory", Icon: Database },
-  { id: "wallet", labelKey: "agents.sectionWallet", Icon: Wallet },
   { id: "sync", labelKey: "agents.sectionSync", Icon: Refresh },
   { id: "advanced", labelKey: "agents.sectionAdvanced", Icon: Settings },
 ];
@@ -97,6 +104,7 @@ export default function ProfileModal({
   const id = name;
   const { t } = useI18n();
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
+  const [authState, setAuthState] = useState<DesktopAuthState>(EMPTY_AUTH);
   const [section, setSection] = useState<ProfileSection>(
     initialSection ?? "profile",
   );
@@ -130,6 +138,29 @@ export default function ProfileModal({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const api = window.desktopAuth;
+    if (!api) return;
+
+    let cancelled = false;
+    const apply = (state: DesktopAuthState): void => {
+      if (cancelled) return;
+      setAuthState({
+        authenticated: state.authenticated,
+        endpointConfig: state.endpointConfig,
+        user: state.user,
+        expiresAt: state.expiresAt,
+      });
+    };
+
+    if (open) void api.getState().then(apply);
+    const unsubscribe = api.onStateChanged(apply);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!profileName) return;
@@ -303,6 +334,14 @@ export default function ProfileModal({
       ]
     : [];
   const agentName = profile?.name || id;
+  const portalAccountLabel = authState.authenticated
+    ? authState.user?.displayName?.trim() ||
+      authState.user?.username?.trim() ||
+      null
+    : null;
+  const portalBackendUrl = authState.authenticated
+    ? authState.endpointConfig?.backendUrl?.trim() || null
+    : null;
 
   return (
     <AppModal
@@ -428,6 +467,32 @@ export default function ProfileModal({
                       {nameSaving && (
                         <span className="profile-modal-tag">
                           {t("setup.saving")}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="profile-modal-account-meta"
+                      aria-label={t("auth.account")}
+                    >
+                      {authState.authenticated ? (
+                        <>
+                          {portalAccountLabel && (
+                            <span className="profile-modal-account-user">
+                              {portalAccountLabel}
+                            </span>
+                          )}
+                          {portalBackendUrl && (
+                            <span
+                              className="profile-modal-account-url"
+                              title={portalBackendUrl}
+                            >
+                              {portalBackendUrl}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="profile-modal-account-user is-muted">
+                          {t("auth.notSignedIn")}
                         </span>
                       )}
                     </div>

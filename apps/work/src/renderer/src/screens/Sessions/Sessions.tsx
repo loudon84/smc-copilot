@@ -23,7 +23,10 @@ interface SearchResult {
 }
 
 interface SessionsProps {
-  onResumeSession: (sessionId: string) => void;
+  onResumeSession: (target: {
+    sessionId: string;
+    title?: string;
+  }) => void;
   onNewChat: () => void;
   currentSessionId: string | null;
   visible: boolean;
@@ -778,7 +781,10 @@ function Sessions({
                     if (isSelectionMode) {
                       toggleSessionSelected(r.sessionId);
                     } else {
-                      onResumeSession(r.sessionId);
+                      onResumeSession({
+                        sessionId: r.sessionId,
+                        title: r.title ?? undefined,
+                      });
                     }
                   }}
                   onKeyDown={(e) => {
@@ -787,7 +793,10 @@ function Sessions({
                       if (isSelectionMode) {
                         toggleSessionSelected(r.sessionId);
                       } else {
-                        onResumeSession(r.sessionId);
+                        onResumeSession({
+                          sessionId: r.sessionId,
+                          title: r.title ?? undefined,
+                        });
                       }
                     }
                   }}
@@ -915,7 +924,12 @@ function Sessions({
                   showFullDate={
                     group.label === "thisWeek" || group.label === "earlier"
                   }
-                  onClick={() => onResumeSession(s.id)}
+                  onClick={() =>
+                    onResumeSession({
+                      sessionId: s.id,
+                      title: s.title,
+                    })
+                  }
                   onDelete={handleDelete}
                   deleteTitle={t("sessions.delete")}
                   onRename={startRename}

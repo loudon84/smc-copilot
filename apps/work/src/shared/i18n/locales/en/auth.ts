@@ -30,4 +30,8 @@ export default {
   signingIn: "Signing in…",
   notSignedIn: "Not signed in",
   exitApp: "Exit",
+  logoutConfirmTitle: "Sign out?",
+  logoutConfirm:
+    "Sign out of {{name}}? You'll return to the sign-in screen.",
+  logoutConfirmAnonymous: "You'll return to the sign-in screen.",
 } as const;

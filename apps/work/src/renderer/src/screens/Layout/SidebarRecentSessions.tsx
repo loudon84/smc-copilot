@@ -229,7 +229,12 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
   loadingSessionIds: Set<string>;
   /** A session whose history is being fetched for resume (transient spinner). */
   resumingSessionId: string | null;
-  onSelect: (sessionId: string) => void;
+  onSelect: (target: {
+    sessionId: string;
+    title?: string;
+    sessionKind?: "chat" | "work";
+    executionProvider?: "hermes-chat" | "skill-run";
+  }) => void;
   /** Notifies Layout when a row is deleted so it can leave a stale active chat. */
   onSessionDeleted?: (sessionId: string) => void;
   /** Scroll container owned by Layout; nearing its bottom loads the next page. */
@@ -759,11 +764,23 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
         className={`sidebar-recent-session ${project ? "project-child" : ""} ${
           active ? "active" : ""
         } ${menuOpen ? "menu-open" : ""}`}
-        onClick={() => onSelect(s.id)}
+        onClick={() =>
+          onSelect({
+            sessionId: s.id,
+            title: s.title,
+            sessionKind: s.sessionKind,
+            executionProvider: s.executionProvider,
+          })
+        }
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onSelect(s.id);
+            onSelect({
+              sessionId: s.id,
+              title: s.title,
+              sessionKind: s.sessionKind,
+              executionProvider: s.executionProvider,
+            });
           }
         }}
         onContextMenu={(e) => {

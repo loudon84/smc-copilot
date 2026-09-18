@@ -36,6 +36,12 @@ export default {
   },
   emptyTitle: "How can I help you today?",
   emptyHint: "Ask me to write code, answer questions, search the web, and more",
+  resumeEmptyTitle: "Couldn't load this conversation",
+  resumeEmptyHint:
+    "The session is open, but no messages were found yet. Retry after the gateway finishes writing history.",
+  resumeEmptyRetry: "Retry",
+  resumeEmptyRetrying: "Retrying…",
+  resumeEmptyNewChat: "New chat",
   suggestionSearch: "Search the web",
   suggestionReminder: "Set a reminder",
   suggestionEmail: "Summarize emails",

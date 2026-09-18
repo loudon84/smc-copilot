@@ -765,6 +765,22 @@ function userContentById(
   return message && isBubbleMessage(message) ? message.content || "" : "";
 }
 
+/** Last non-error agent bubble for the active turn (or overall transcript). */
+export function assistantContentForTurn(
+  messages: ReadonlyArray<ChatMessage>,
+  turnId?: string | null,
+): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!isBubbleMessage(message) || message.role !== "agent" || message.error) {
+      continue;
+    }
+    if (turnId && message.turnId && message.turnId !== turnId) continue;
+    return message.content || "";
+  }
+  return "";
+}
+
 function previousUserIdBefore(
   messages: ReadonlyArray<ChatMessage>,
   beforeIndex: number,
@@ -1069,6 +1085,36 @@ export function useDashboardChatTransport({
               error: completionErrorMessage(event.payload),
             }).catch(() => undefined);
           }
+        } else if (
+          connectionMode === "local" &&
+          dashboardShouldPersistLocalOverlays(connectionMode)
+        ) {
+          const storedSessionId = storedSessionIdRef.current;
+          const activeTurn = activeTurnRef.current;
+          const userContent = userContentById(
+            messagesRef.current,
+            activeTurn?.userId,
+          );
+          const assistantContent = assistantContentForTurn(
+            messagesRef.current,
+            activeTurn?.turnId,
+          );
+          const materialize = window.hermesAPI.materializeChatSessionTurn;
+          if (
+            storedSessionId &&
+            userContent.trim() &&
+            assistantContent.trim() &&
+            typeof materialize === "function"
+          ) {
+            void materialize({
+              sessionId: storedSessionId,
+              userContent,
+              assistantContent,
+              profileId: profile,
+            })
+              .then(() => window.hermesAPI.syncSessionCache?.())
+              .catch(() => undefined);
+          }
         }
         const activeTurn = activeTurnRef.current;
         if (activeTurn) activeTurn.status = failed ? "failed" : "completed";
@@ -1123,6 +1169,7 @@ export function useDashboardChatTransport({
     [
       activeTurnRef,
       connectionMode,
+      profile,
       setIsLoading,
       setMessages,
       setToolProgress,

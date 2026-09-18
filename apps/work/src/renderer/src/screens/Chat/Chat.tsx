@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { Zap, Globe, PanelRightOpen } from "lucide-react";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatEmptyState } from "./ChatEmptyState";
+import { ChatResumeEmptyState } from "./ChatResumeEmptyState";
 import { MessageList } from "./MessageList";
 import { ModelPicker } from "./ModelPicker";
 import { ReasoningEffortPicker } from "./ReasoningEffortPicker";
@@ -37,6 +38,10 @@ import FollowUsModal from "../../components/FollowUsModal";
 import type { Attachment } from "../../../../shared/attachments";
 import type { SessionModelOverride } from "../../../../shared/model-override";
 import type { ActiveTurn, ChatMessage, UsageState } from "./types";
+import {
+  dbItemsToChatMessages,
+  type DbHistoryItem,
+} from "./sessionHistory";
 import type { ContextUsage } from "./ContextGauge";
 import { contextWindowForModel } from "./contextWindows";
 import { QueuedMessages } from "./QueuedMessages";
@@ -223,6 +228,8 @@ interface ChatProps {
   initialMessages?: ChatMessage[];
   /** Gateway session id when resuming a known session; null for a new chat. */
   initialSessionId?: string | null;
+  /** Sidebar / Sessions title carried through resume even when seed is empty. */
+  initialTitle?: string;
   /** Whether this run is the one currently shown (drives keyboard handlers). */
   active?: boolean;
   profile?: string;
@@ -250,6 +257,7 @@ function Chat({
   executionMode = "local-chat",
   initialMessages,
   initialSessionId,
+  initialTitle,
   active = true,
   profile,
   onSessionStarted,
@@ -275,6 +283,7 @@ function Chat({
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialMessages ?? [],
   );
+  const [resumeRetrying, setResumeRetrying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
   const isSkillRunMode = executionMode === "skill-run";
@@ -336,6 +345,12 @@ function Chat({
   const reportedTitleRef = useRef(false);
   useEffect(() => {
     if (reportedTitleRef.current) return;
+    const seededTitle = initialTitle?.trim();
+    if (seededTitle) {
+      reportedTitleRef.current = true;
+      onTitleChange?.(runId, seededTitle.slice(0, 60));
+      return;
+    }
     const firstUser = messages.find(
       (m) => m.role === "user" && "content" in m && m.content.trim(),
     );
@@ -343,7 +358,32 @@ function Chat({
       reportedTitleRef.current = true;
       onTitleChange?.(runId, firstUser.content.slice(0, 60));
     }
-  }, [runId, messages, onTitleChange]);
+  }, [runId, messages, initialTitle, onTitleChange]);
+
+  // Resume race: Layout may open before state.db has rows. Re-fetch once on
+  // mount when a session id is bound but the seed transcript is empty.
+  useEffect(() => {
+    if (!initialSessionId) return;
+    if ((initialMessages?.length ?? 0) > 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const items = (await window.hermesAPI.getSessionMessages(
+          initialSessionId,
+        )) as DbHistoryItem[];
+        if (cancelled || items.length === 0) return;
+        const mapped = dbItemsToChatMessages(items);
+        if (mapped.length === 0) return;
+        setMessages(mapped);
+      } catch {
+        /* best-effort — resume empty UI still offers Retry */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialSessionId, initialMessages?.length]);
+
   const [toolProgress, setToolProgress] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageState | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -1617,6 +1657,29 @@ function Chat({
     ],
   );
 
+  const handleResumeTranscriptRetry = useCallback(async (): Promise<void> => {
+    if (!initialSessionId || resumeRetrying) return;
+    setResumeRetrying(true);
+    try {
+      try {
+        await window.hermesAPI.syncSessionCache();
+      } catch {
+        /* sync is best-effort before re-read */
+      }
+      const items = (await window.hermesAPI.getSessionMessages(
+        initialSessionId,
+      )) as DbHistoryItem[];
+      const mapped = dbItemsToChatMessages(items);
+      if (mapped.length > 0) {
+        setMessages(mapped);
+      }
+    } catch {
+      /* keep resume-empty UI */
+    } finally {
+      setResumeRetrying(false);
+    }
+  }, [initialSessionId, resumeRetrying]);
+
   const handleSuggestion = useCallback((text: string) => {
     chatInputRef.current?.setText(text);
   }, []);
@@ -1846,7 +1909,16 @@ function Chat({
                 }}
               />
             ) : messages.length === 0 ? (
-              <ChatEmptyState onSelectSuggestion={handleSuggestion} />
+              initialSessionId ? (
+                <ChatResumeEmptyState
+                  title={initialTitle}
+                  retrying={resumeRetrying}
+                  onRetry={() => void handleResumeTranscriptRetry()}
+                  onNewChat={onNewChat}
+                />
+              ) : (
+                <ChatEmptyState onSelectSuggestion={handleSuggestion} />
+              )
             ) : (
               <MessageList
                 messages={messages}

@@ -5,7 +5,6 @@ export type ProfileSection =
   | "profile"
   | "persona"
   | "agentMemory"
-  | "wallet"
   | "sync"
   | "advanced";
 

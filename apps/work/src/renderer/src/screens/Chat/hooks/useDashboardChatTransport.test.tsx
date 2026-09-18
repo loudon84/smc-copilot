@@ -150,14 +150,78 @@ describe("useDashboardChatTransport recovery", () => {
       configurable: true,
       value: {
         freshDashboardWsUrl: vi.fn(async () => "ws://fresh-dashboard"),
+        materializeChatSessionTurn: vi.fn(async () => ({
+          sessionId: "stored",
+          title: "hello",
+          wroteMessages: true,
+        })),
         recordSessionContinuation: vi.fn(async () => true),
         recordSessionLocalError: vi.fn(async () => true),
         startDashboard: vi.fn(async () => ({
           connection: { wsUrl: "ws://127.0.0.1:12345" },
           running: true,
         })),
+        syncSessionCache: vi.fn(async () => []),
       },
     });
+  });
+
+  it("materializes a successful turn into state.db via Main", async () => {
+    dashboardMock.request.mockImplementation(async (method) => {
+      if (method === "session.create") {
+        return { session_id: "live-1", stored_session_id: "stored-1" };
+      }
+      if (method === "model.options") {
+        return { model: "bad-model", provider: "bad-provider", providers: [] };
+      }
+      return {};
+    });
+
+    const api: HarnessApi = {};
+    render(<Harness api={api} />);
+
+    await act(async () => {
+      await api.send?.("prime session");
+    });
+
+    await act(async () => {
+      api.activeTurnRef!.current = {
+        startIndex: 0,
+        status: "running",
+        turnId: "turn-durable",
+        userId: "u-durable",
+      };
+      api.setMessages?.([
+        {
+          id: "u-durable",
+          role: "user",
+          content: "hello durable",
+          turnId: "turn-durable",
+        },
+        {
+          id: "a-durable",
+          role: "agent",
+          content: "hi from gateway",
+          turnId: "turn-durable",
+        },
+      ]);
+    });
+
+    await act(async () => {
+      dashboardMock.onEvent?.({
+        payload: { status: "completed", final_response: "hi from gateway" },
+        session_id: "live-1",
+        type: "message.complete",
+      });
+    });
+
+    expect(window.hermesAPI.materializeChatSessionTurn).toHaveBeenCalledWith({
+      sessionId: "stored-1",
+      userContent: "hello durable",
+      assistantContent: "hi from gateway",
+      profileId: undefined,
+    });
+    expect(window.hermesAPI.syncSessionCache).toHaveBeenCalled();
   });
 
   it("requests a fresh WebSocket URL immediately before connecting", async () => {

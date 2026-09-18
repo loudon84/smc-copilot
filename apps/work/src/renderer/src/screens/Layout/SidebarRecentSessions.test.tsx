@@ -2,6 +2,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   within,
@@ -308,6 +309,25 @@ describe("SidebarRecentSessions classified history", () => {
     expect(within(work).getByText("Accepted skill run")).toBeTruthy();
     expect(within(chat).queryByText("Accepted skill run")).toBeNull();
     expect(within(work).queryByText("Original chat")).toBeNull();
+  });
+
+  it("passes sessionId, title, and history pair on chat row select", async () => {
+    const onSelect = vi.fn();
+    installHermesAPI([chatRow({ id: "sess-chat", title: "Original chat" })]);
+    renderSidebar({ onSelect });
+    await flushPaint();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const chat = historySection("navigation.chatHistory");
+    fireEvent.click(within(chat).getByText("Original chat"));
+    expect(onSelect).toHaveBeenCalledWith({
+      sessionId: "sess-chat",
+      title: "Original chat",
+      sessionKind: "chat",
+      executionProvider: "hermes-chat",
+    });
   });
 
   it("omits missing, partial, cross-paired, unknown, and third-class rows from classified history", async () => {

@@ -208,3 +208,71 @@ export function loadingSessionIds(runs: ChatRun[]): Set<string> {
   }
   return ids;
 }
+
+/** Sidebar / Sessions modal payload when opening a saved conversation. */
+export interface ResumeSessionTarget {
+  sessionId: string;
+  title?: string;
+  sessionKind?: "chat" | "work";
+  executionProvider?: "hermes-chat" | "skill-run";
+}
+
+/**
+ * Prefer an explicit history pair from the sidebar; skill-run IPC may still
+ * override the display title after the fact.
+ */
+export function resolveResumeExecutionMode(
+  target: ResumeSessionTarget,
+  skillRunMode?: {
+    executionMode?: string;
+    toolTitle?: string;
+  } | null,
+): { executionMode: ChatExecutionMode; title?: string } {
+  const fromPair =
+    target.sessionKind === "work" && target.executionProvider === "skill-run"
+      ? ("skill-run" as const)
+      : ("local-chat" as const);
+  const executionMode =
+    skillRunMode?.executionMode === "skill-run" ? "skill-run" : fromPair;
+  const skillTitle = skillRunMode?.toolTitle?.trim();
+  const sidebarTitle = target.title?.trim();
+  return {
+    executionMode,
+    title:
+      executionMode === "skill-run" && skillTitle
+        ? skillTitle
+        : sidebarTitle || undefined,
+  };
+}
+
+/** Mint a run bound to a persisted session id, carrying sidebar title + seed. */
+export function buildResumedChatRun(
+  profile: string,
+  target: ResumeSessionTarget,
+  seed: ChatMessage[],
+  options?: { executionMode?: ChatExecutionMode; title?: string },
+): ChatRun {
+  const executionMode = options?.executionMode ?? "local-chat";
+  const run = mintRun(profile, seed, executionMode);
+  run.sessionId = target.sessionId;
+  const title = options?.title?.trim() || target.title?.trim();
+  if (title) run.title = title;
+  return run;
+}
+
+/**
+ * Load transcript rows; when the first read is empty, run `onEmpty` once
+ * (typically a session-cache sync) and retry. Covers locally-materialized
+ * sidebar rows racing gateway state.db writes.
+ */
+export async function fetchWithEmptyRetry<T>(
+  load: () => Promise<T[]>,
+  onEmpty: () => Promise<void>,
+): Promise<T[]> {
+  let items = await load();
+  if (items.length === 0) {
+    await onEmpty();
+    items = await load();
+  }
+  return items;
+}

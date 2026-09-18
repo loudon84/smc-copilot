@@ -38,6 +38,7 @@ export {
   Wallet,
   Wrench,
   X,
+  LogOut,
 } from "lucide-react";
 
 export { RefreshCw as Refresh } from "lucide-react";

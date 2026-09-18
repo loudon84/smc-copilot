@@ -75,3 +75,11 @@ export function getDefaultAuthEndpointConfig(): AuthEndpointConfig {
     aiosHomeUrl: "http://192.168.102.247:4517",
   };
 }
+
+/** True when Work should skip the Portal Auth gate (local/dev). */
+export function skipPortalLogin(): boolean {
+  return (
+    import.meta.env.VITE_SKIP_PORTAL_LOGIN === "true" ||
+    import.meta.env.HERMES_SKIP_PORTAL_LOGIN === "true"
+  );
+}
