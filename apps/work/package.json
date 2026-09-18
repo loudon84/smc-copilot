@@ -49,6 +49,8 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@open-file-viewer/core": "^0.1.47",
+    "@open-file-viewer/react": "^0.1.47",
     "@radix-ui/react-dialog": "^1.1.17",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
@@ -69,6 +71,7 @@
     "lucide-react": "^1.7.0",
     "mermaid": "^11.16.0",
     "motion": "^12.40.0",
+    "pdfjs-dist": "^4.10.38",
     "radix-ui": "^1.6.7",
     "react-file-icon": "^1.6.0",
     "react-hot-toast": "^2.6.0",

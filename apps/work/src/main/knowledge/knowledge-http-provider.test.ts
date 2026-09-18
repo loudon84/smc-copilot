@@ -62,6 +62,42 @@ describe("KnowledgeHttpProvider", () => {
     expect(page.total).toBe(1);
   });
 
+  it("downloads source file bytes via F10 (DH-01 active version)", async () => {
+    const seen: Array<{ path: string; timeoutMs?: number }> = [];
+    const provider = createKnowledgeHttpProvider({
+      getBaseUrl: () => "http://knowledge.test",
+      joinUrl: (path) => `http://knowledge.test${path}`,
+      withAuthRetry: (op) => op(),
+      authorizedFetch: async (path, init) => {
+        seen.push({
+          path,
+          timeoutMs: (init as { timeoutMs?: number } | undefined)?.timeoutMs,
+        });
+        return new Response(new Uint8Array([10, 20, 30]), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "Content-Disposition": 'attachment; filename="note.md"',
+          },
+        });
+      },
+    });
+    const result = await provider.downloadSourceFile({ sourceFileId: "sf-1" });
+    expect(seen[0]?.path).toContain("/api/v1/source-files/sf-1/download");
+    expect(seen[0]?.timeoutMs).toBe(60_000);
+    expect([...result.bytes]).toEqual([10, 20, 30]);
+    expect(result.fileName).toBe("note.md");
+  });
+
+  it("maps F10 download 404 to NOT_FOUND", async () => {
+    const provider = createKnowledgeHttpProvider(
+      transport(async () => jsonResponse(404, { message_key: "missing" })),
+    );
+    await expect(
+      provider.downloadSourceFile({ sourceFileId: "missing" }),
+    ).rejects.toMatchObject({ code: KNOWLEDGE_ERROR_CODES.NOT_FOUND });
+  });
+
   it("maps 401/403/404/409/5xx and malformed payloads", async () => {
     const cases: Array<[number, string, unknown]> = [
       [401, KNOWLEDGE_ERROR_CODES.AUTH_REQUIRED, { message_key: "errors.auth" }],
@@ -222,6 +258,206 @@ describe("knowledge schema fail-closed", () => {
       },
     });
     expect(isKnowledgeIndexRetrievalReady(ready[0]!)).toBe(true);
+  });
+
+  it("parses knowledge set and retrieval profile snapshots fail-closed", async () => {
+    const {
+      parseKnowledgeSetSnapshot,
+      parseKnowledgeRetrievalProfileSnapshot,
+    } = await import("./knowledge-schema");
+    const set = parseKnowledgeSetSnapshot({
+      id: "ks_1",
+      name: "Alpha Set",
+      description: null,
+      status: "active",
+      visibility: "organization",
+      owner_member_id: "m1",
+      usage_count: 3,
+      last_used_at: "2026-01-05T00:00:00.000Z",
+      knowledge_bases: [
+        { knowledge_base_id: "kb_1", name: "Base", weight: 1.5 },
+      ],
+      dataset_id: "ds-hidden",
+    });
+    expect(set).toMatchObject({
+      id: "ks_1",
+      name: "Alpha Set",
+      status: "active",
+      usageCount: 3,
+      ownerMemberId: "m1",
+      lastUsedAt: "2026-01-05T00:00:00.000Z",
+      knowledgeBases: [{ knowledgeBaseId: "kb_1", name: "Base", weight: 1.5 }],
+    });
+    expect(set).not.toHaveProperty("dataset_id");
+    expect(() =>
+      parseKnowledgeSetSnapshot({ id: "ks_1", name: "x", status: "bogus" }),
+    ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
+
+    const profile = parseKnowledgeRetrievalProfileSnapshot({
+      id: "rp_1",
+      knowledge_set_id: "ks_1",
+      version: 2,
+      config: { top_k: 4 },
+      status: "draft",
+      created_by_member_id: "m2",
+      ragflow_id: "rf-hidden",
+    });
+    expect(profile).toMatchObject({
+      id: "rp_1",
+      knowledgeSetId: "ks_1",
+      version: 2,
+      status: "draft",
+      config: { top_k: 4 },
+      createdByMemberId: "m2",
+    });
+    expect(profile).not.toHaveProperty("ragflow_id");
+    expect(() =>
+      parseKnowledgeRetrievalProfileSnapshot({
+        id: "rp_1",
+        knowledge_set_id: "ks_1",
+        version: 1,
+        status: "nope",
+      }),
+    ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
+  });
+});
+
+describe("KnowledgeHttpProvider sets and retrieval profiles", () => {
+  afterEach(() => {
+    resetKnowledgeHttpProviderForTests();
+  });
+
+  it("calls set and retrieval-profile contract paths", async () => {
+    const seen: string[] = [];
+    const validSet = {
+      id: "ks_1",
+      name: "Alpha Set",
+      description: null,
+      status: "active",
+      visibility: "organization",
+      usage_count: 0,
+      knowledge_bases: [{ knowledge_base_id: "kb_1", weight: 1 }],
+    };
+    const validProfile = {
+      id: "rp_1",
+      knowledge_set_id: "ks_1",
+      version: 1,
+      config: { top_k: 3 },
+      status: "draft",
+    };
+    const provider = createKnowledgeHttpProvider(
+      transport(async (path, init) => {
+        seen.push(`${init?.method ?? "GET"} ${path}`);
+        if (path.startsWith("/api/v2/knowledge-sets?") && (init?.method ?? "GET") === "GET") {
+          return jsonResponse(200, {
+            data: { items: [validSet], total: 1, page: 1, page_size: 50 },
+          });
+        }
+        if (
+          path === "/api/v2/knowledge-sets" &&
+          init?.method === "POST"
+        ) {
+          return jsonResponse(200, { data: validSet });
+        }
+        if (
+          path === "/api/v2/knowledge-sets/ks_1" &&
+          init?.method === "PATCH"
+        ) {
+          return jsonResponse(200, { data: { ...validSet, name: "Renamed" } });
+        }
+        if (
+          path === "/api/v2/knowledge-sets/ks_1/knowledge-bases" &&
+          init?.method === "POST"
+        ) {
+          return jsonResponse(200, { data: null });
+        }
+        if (
+          path === "/api/v2/knowledge-sets/ks_1/knowledge-bases/kb_1" &&
+          init?.method === "DELETE"
+        ) {
+          return jsonResponse(200, { data: null });
+        }
+        if (path === "/api/v2/knowledge-sets/ks_1") {
+          return jsonResponse(200, { data: validSet });
+        }
+        if (
+          path === "/api/v1/knowledge-sets/ks_1/retrieval-profiles" &&
+          init?.method === "POST"
+        ) {
+          return jsonResponse(200, { data: validProfile });
+        }
+        if (path === "/api/v1/knowledge-sets/ks_1/retrieval-profiles") {
+          return jsonResponse(200, { data: { items: [validProfile] } });
+        }
+        if (path.endsWith("/publish") || path.endsWith("/rollback")) {
+          return jsonResponse(200, {
+            data: { ...validProfile, status: "active" },
+          });
+        }
+        if (path === "/api/v1/retrieval-profiles/rp_1" && init?.method === "PATCH") {
+          return jsonResponse(200, {
+            data: { ...validProfile, config: { top_k: 5 } },
+          });
+        }
+        if (path === "/api/v1/retrieval-profiles/rp_1") {
+          return jsonResponse(200, { data: validProfile });
+        }
+        return jsonResponse(404, { message_key: "missing" });
+      }),
+    );
+
+    await expect(provider.listSets()).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: "ks_1" })],
+      total: 1,
+    });
+    await expect(
+      provider.createSet({ name: "Alpha Set" }),
+    ).resolves.toMatchObject({ id: "ks_1" });
+    await expect(
+      provider.updateSet({ knowledgeSetId: "ks_1", name: "Renamed" }),
+    ).resolves.toMatchObject({ name: "Renamed" });
+    await expect(
+      provider.bindSetBase({ knowledgeSetId: "ks_1", knowledgeBaseId: "kb_1" }),
+    ).resolves.toMatchObject({ id: "ks_1" });
+    await expect(
+      provider.unbindSetBase({
+        knowledgeSetId: "ks_1",
+        knowledgeBaseId: "kb_1",
+      }),
+    ).resolves.toMatchObject({ id: "ks_1" });
+    await expect(
+      provider.listRetrievalProfiles({ knowledgeSetId: "ks_1" }),
+    ).resolves.toEqual([expect.objectContaining({ id: "rp_1" })]);
+    await expect(
+      provider.createRetrievalProfile({
+        knowledgeSetId: "ks_1",
+        config: { top_k: 3 },
+      }),
+    ).resolves.toMatchObject({ id: "rp_1", status: "draft" });
+    await expect(
+      provider.updateRetrievalProfile({
+        profileId: "rp_1",
+        config: { top_k: 5 },
+      }),
+    ).resolves.toMatchObject({ config: { top_k: 5 } });
+    await expect(
+      provider.publishRetrievalProfile({ profileId: "rp_1" }),
+    ).resolves.toMatchObject({ status: "active" });
+    await expect(
+      provider.rollbackRetrievalProfile({ profileId: "rp_1", publish: true }),
+    ).resolves.toMatchObject({ status: "active" });
+
+    expect(seen).toContain("GET /api/v2/knowledge-sets?page=1&page_size=50");
+    expect(seen).toContain("POST /api/v2/knowledge-sets");
+    expect(seen).toContain("POST /api/v2/knowledge-sets/ks_1/knowledge-bases");
+    expect(seen).toContain(
+      "DELETE /api/v2/knowledge-sets/ks_1/knowledge-bases/kb_1",
+    );
+    expect(seen).toContain(
+      "GET /api/v1/knowledge-sets/ks_1/retrieval-profiles",
+    );
+    expect(seen).toContain("POST /api/v1/retrieval-profiles/rp_1/publish");
+    expect(seen).toContain("POST /api/v1/retrieval-profiles/rp_1/rollback");
   });
 });
 

@@ -848,6 +848,19 @@ const hermesAPI = {
     }>
   > => ipcRenderer.invoke("get-session-messages", sessionId),
 
+  materializeChatSessionTurn: (payload: {
+    sessionId: string;
+    userContent: string;
+    assistantContent: string;
+    profileId?: string;
+  }): Promise<{
+    sessionId: string;
+    title: string;
+    wroteMessages: boolean;
+    cacheOnly?: boolean;
+    gatewayOwned?: boolean;
+  } | null> => ipcRenderer.invoke("materialize-chat-session-turn", payload),
+
   recordSessionContinuation: (
     sessionId: string,
     items: DesktopSessionContinuationItem[],

@@ -83,7 +83,7 @@ describe("file-preview-service", () => {
     expect(result.canCopyText).toBe(true);
   });
 
-  it("returns an image descriptor with a file:// localUrl", async () => {
+  it("returns an image descriptor with a hermes-file-preview localUrl", async () => {
     const filePath = join(dir, "photo.png");
     writeFileSync(filePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     mockState.files.set(
@@ -95,11 +95,15 @@ describe("file-preview-service", () => {
         originalPath: filePath,
       }),
     );
-    const { getPreviewDescriptor } = await import("./file-preview-service");
+    const { getPreviewDescriptor, FILE_PREVIEW_SCHEME } = await import(
+      "./file-preview-service"
+    );
     const result = await getPreviewDescriptor(undefined, "file-1");
     if ("error" in result) throw new Error("expected descriptor");
     expect(result.type).toBe("image");
-    expect(result.localUrl).toMatch(/^file:\/\//);
+    expect(result.localUrl).toMatch(
+      new RegExp(`^${FILE_PREVIEW_SCHEME}://`),
+    );
   });
 
   it("marks office files unsupported with a Phase 4 reason when unparsed", async () => {

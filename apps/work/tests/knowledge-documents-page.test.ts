@@ -11,6 +11,20 @@ import type {
 } from "../src/shared/knowledge/knowledge-base-ipc";
 import { makeBasesApi } from "./helpers/knowledge-bases-api";
 
+vi.mock("@open-file-viewer/react", () => ({
+  FileViewer: () => React.createElement("div", { "data-testid": "mock-ofv" }),
+}));
+vi.mock("@open-file-viewer/core", () => ({
+  textPlugin: () => ({}),
+  imagePlugin: () => ({}),
+  pdfPlugin: () => ({}),
+  officePlugin: () => ({}),
+}));
+vi.mock("@open-file-viewer/core/style.css", () => ({}));
+vi.mock("pdfjs-dist/build/pdf.worker.mjs?url", () => ({
+  default: "/mock-pdf.worker.mjs",
+}));
+
 vi.mock("../src/renderer/src/components/useI18n", () => ({
   useI18n: () => ({
     locale: "en",

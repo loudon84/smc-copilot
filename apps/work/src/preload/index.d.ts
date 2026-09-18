@@ -613,6 +613,18 @@ interface HermesAPI {
         }
     >
   >;
+  materializeChatSessionTurn: (payload: {
+    sessionId: string;
+    userContent: string;
+    assistantContent: string;
+    profileId?: string;
+  }) => Promise<{
+    sessionId: string;
+    title: string;
+    wroteMessages: boolean;
+    cacheOnly?: boolean;
+    gatewayOwned?: boolean;
+  } | null>;
   recordSessionContinuation: (
     sessionId: string,
     items: DesktopSessionContinuationItem[],

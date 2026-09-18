@@ -20,6 +20,7 @@ export function unusedKnowledgeBaseOps(
   | "unarchiveFile"
   | "reparseFile"
   | "deleteFile"
+  | "resolveDocumentPreview"
   | "listIndexes"
   | "getBuildProfile"
   | "updateBuildProfile"
@@ -42,6 +43,7 @@ export function unusedKnowledgeBaseOps(
     unarchiveFile: vi.fn(unused),
     reparseFile: vi.fn(unused),
     deleteFile: vi.fn(async () => undefined),
+    resolveDocumentPreview: vi.fn(unused),
     listIndexes: vi.fn(async () => []),
     getBuildProfile: vi.fn(async () => ({
       activeBuildProfileId: null,

@@ -19,6 +19,7 @@ export const KNOWLEDGE_BASE_IPC_CHANNELS = {
   unarchiveFile: "knowledge-base:unarchive-file",
   reparseFile: "knowledge-base:reparse-file",
   deleteFile: "knowledge-base:delete-file",
+  resolveDocumentPreview: "knowledge-base:resolve-document-preview",
   listIndexes: "knowledge-base:list-indexes",
   getBuildProfile: "knowledge-base:get-build-profile",
   updateBuildProfile: "knowledge-base:update-build-profile",
@@ -135,6 +136,18 @@ export interface KnowledgeFileIdInput {
   sourceFileId: string;
 }
 
+export interface KnowledgeResolveDocumentPreviewInput {
+  sourceFileId: string;
+  activeVersionId?: string | null;
+  forceRefresh?: boolean;
+  fileName?: string | null;
+  mimeType?: string | null;
+}
+
+export interface KnowledgeResolveDocumentPreviewResult {
+  managedFileId: string;
+}
+
 export interface KnowledgeActivateFileVersionInput {
   sourceFileId: string;
   versionId: string;
@@ -243,6 +256,7 @@ export const KNOWLEDGE_ERROR_CODES = {
   MODE_ERROR: "KNOWLEDGE_MODE_ERROR",
   JOB_TARGET_MISMATCH: "KNOWLEDGE_JOB_TARGET_MISMATCH",
   JOB_FILE_MISSING: "KNOWLEDGE_JOB_FILE_MISSING",
+  PREVIEW_TOO_LARGE: "KNOWLEDGE_PREVIEW_TOO_LARGE",
 } as const;
 
 export function isKnowledgeFacadeErrorShape(
@@ -298,6 +312,9 @@ export interface HermesKnowledgeBasesAPI {
   unarchiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
   reparseFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
   deleteFile(input: KnowledgeFileIdInput): Promise<void>;
+  resolveDocumentPreview(
+    input: KnowledgeResolveDocumentPreviewInput,
+  ): Promise<KnowledgeResolveDocumentPreviewResult>;
   listIndexes(input: KnowledgeBaseGetInput): Promise<KnowledgeIndexState[]>;
   getBuildProfile(
     input: KnowledgeBaseGetInput,

@@ -28,6 +28,22 @@ import type {
   KnowledgeStartBuildInput,
   KnowledgeUpdateBuildProfileInput,
 } from "../../shared/knowledge/knowledge-base-ipc";
+import type {
+  KnowledgeProfileIdInput,
+  KnowledgeRetrievalProfileSnapshot,
+  KnowledgeSetBindBaseInput,
+  KnowledgeSetCreateInput,
+  KnowledgeSetCreateProfileInput,
+  KnowledgeSetGetInput,
+  KnowledgeSetListInput,
+  KnowledgeSetListProfilesInput,
+  KnowledgeSetPage,
+  KnowledgeSetRollbackProfileInput,
+  KnowledgeSetSnapshot,
+  KnowledgeSetUnbindBaseInput,
+  KnowledgeSetUpdateInput,
+  KnowledgeSetUpdateProfileInput,
+} from "../../shared/knowledge/knowledge-set-ipc";
 import { KNOWLEDGE_ERROR_CODES } from "../../shared/knowledge/knowledge-base-ipc";
 import {
   KnowledgeFacadeError,
@@ -49,6 +65,10 @@ import {
   parseKnowledgeBuildProfileView,
   parseKnowledgeFileVersionList,
   parseKnowledgeIndexStates,
+  parseKnowledgeRetrievalProfileList,
+  parseKnowledgeRetrievalProfileSnapshot,
+  parseKnowledgeSetPage,
+  parseKnowledgeSetSnapshot,
   parseUploadAccepted,
   type ParsedIngestionJob,
   type ParsedUploadAccepted,
@@ -87,6 +107,14 @@ export type KnowledgeHttpProvider = {
   unarchiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
   reparseFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
   deleteFile(input: KnowledgeFileIdInput): Promise<void>;
+  /**
+   * F10 download — DH-01: response bytes are the current active version.
+   * Main-only; never expose token/path to Renderer.
+   */
+  downloadSourceFile(input: KnowledgeFileIdInput): Promise<{
+    bytes: Uint8Array;
+    fileName?: string;
+  }>;
   listIndexes(input: KnowledgeBaseGetInput): Promise<KnowledgeIndexState[]>;
   getBuildProfile(
     input: KnowledgeBaseGetInput,
@@ -97,6 +125,30 @@ export type KnowledgeHttpProvider = {
   startBuild(input: KnowledgeStartBuildInput): Promise<KnowledgeBuildJobSnapshot>;
   getBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
   retryBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
+  listSets(input?: KnowledgeSetListInput): Promise<KnowledgeSetPage>;
+  getSet(input: KnowledgeSetGetInput): Promise<KnowledgeSetSnapshot>;
+  createSet(input: KnowledgeSetCreateInput): Promise<KnowledgeSetSnapshot>;
+  updateSet(input: KnowledgeSetUpdateInput): Promise<KnowledgeSetSnapshot>;
+  bindSetBase(input: KnowledgeSetBindBaseInput): Promise<KnowledgeSetSnapshot>;
+  unbindSetBase(input: KnowledgeSetUnbindBaseInput): Promise<KnowledgeSetSnapshot>;
+  listRetrievalProfiles(
+    input: KnowledgeSetListProfilesInput,
+  ): Promise<KnowledgeRetrievalProfileSnapshot[]>;
+  createRetrievalProfile(
+    input: KnowledgeSetCreateProfileInput,
+  ): Promise<KnowledgeRetrievalProfileSnapshot>;
+  getRetrievalProfile(
+    input: KnowledgeProfileIdInput,
+  ): Promise<KnowledgeRetrievalProfileSnapshot>;
+  updateRetrievalProfile(
+    input: KnowledgeSetUpdateProfileInput,
+  ): Promise<KnowledgeRetrievalProfileSnapshot>;
+  publishRetrievalProfile(
+    input: KnowledgeProfileIdInput,
+  ): Promise<KnowledgeRetrievalProfileSnapshot>;
+  rollbackRetrievalProfile(
+    input: KnowledgeSetRollbackProfileInput,
+  ): Promise<KnowledgeRetrievalProfileSnapshot>;
   probeCapability(): Promise<{
     available: boolean;
     status: "available" | "blocked_provider_unavailable" | "auth_required";
@@ -472,6 +524,57 @@ export function createKnowledgeHttpProvider(
       );
     },
 
+    /**
+     * F10 — GET /api/v1/source-files/{id}/download
+     * Contract assumption DH-01: bytes are the current active version.
+     */
+    async downloadSourceFile(input): Promise<{
+      bytes: Uint8Array;
+      fileName?: string;
+    }> {
+      const operationId = randomUUID();
+      const path = `/api/v1/source-files/${encodeURIComponent(input.sourceFileId)}/download`;
+      try {
+        const response = await transport.withAuthRetry(() =>
+          transport.authorizedFetch(path, {
+            method: "GET",
+            timeoutMs: 60_000,
+          }),
+        );
+        if (!response.ok) {
+          const err = mapHttpStatusToKnowledgeError(
+            response.status,
+            null,
+            operationId,
+          );
+          logSanitized(operationId, "downloadSourceFile", err.code);
+          throw err;
+        }
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        const disposition = response.headers.get("content-disposition");
+        let fileName: string | undefined;
+        if (disposition) {
+          const utfMatch = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+          const plainMatch = /filename="?([^";]+)"?/i.exec(disposition);
+          const raw = utfMatch?.[1] ?? plainMatch?.[1];
+          if (raw) {
+            try {
+              fileName = decodeURIComponent(raw.trim());
+            } catch {
+              fileName = raw.trim();
+            }
+          }
+        }
+        logSanitized(operationId, "downloadSourceFile", "OK");
+        return { bytes: buffer, fileName };
+      } catch (err) {
+        if (err instanceof KnowledgeFacadeError) throw err;
+        const mapped = mapTransportError(err, operationId);
+        logSanitized(operationId, "downloadSourceFile", mapped.code);
+        throw mapped;
+      }
+    },
+
     async listIndexes(input): Promise<KnowledgeIndexState[]> {
       const operationId = randomUUID();
       const { body } = await requestJson(
@@ -558,6 +661,194 @@ export function createKnowledgeHttpProvider(
         { allowNonIdempotentRetry: false },
       );
       return parseKnowledgeBuildJobSnapshot(body, operationId);
+    },
+
+    async listSets(input = {}): Promise<KnowledgeSetPage> {
+      const operationId = randomUUID();
+      const page = input.page ?? 1;
+      const pageSize = input.pageSize ?? 50;
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (input.q?.trim()) params.set("q", input.q.trim());
+      const { body } = await requestJson(
+        `/api/v2/knowledge-sets?${params.toString()}`,
+        { method: "GET" },
+        operationId,
+        "listSets",
+      );
+      return parseKnowledgeSetPage(body, operationId);
+    },
+
+    async getSet(input): Promise<KnowledgeSetSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v2/knowledge-sets/${encodeURIComponent(input.knowledgeSetId)}`,
+        { method: "GET" },
+        operationId,
+        "getSet",
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeSetSnapshot(data, operationId);
+    },
+
+    async createSet(input): Promise<KnowledgeSetSnapshot> {
+      const operationId = randomUUID();
+      const payload = {
+        name: input.name.trim(),
+        description: input.description?.trim() ? input.description.trim() : null,
+        visibility: input.visibility ?? "organization",
+      };
+      const { body } = await requestJson(
+        "/api/v2/knowledge-sets",
+        { method: "POST", body: JSON.stringify(payload) },
+        operationId,
+        "createSet",
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeSetSnapshot(data, operationId);
+    },
+
+    async updateSet(input): Promise<KnowledgeSetSnapshot> {
+      const operationId = randomUUID();
+      const payload: Record<string, unknown> = {};
+      if (input.name !== undefined) payload.name = input.name.trim();
+      if (input.description !== undefined) {
+        payload.description = input.description?.trim()
+          ? input.description.trim()
+          : null;
+      }
+      if (input.status !== undefined) payload.status = input.status;
+      if (input.visibility !== undefined) payload.visibility = input.visibility;
+      const { body } = await requestJson(
+        `/api/v2/knowledge-sets/${encodeURIComponent(input.knowledgeSetId)}`,
+        { method: "PATCH", body: JSON.stringify(payload) },
+        operationId,
+        "updateSet",
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeSetSnapshot(data, operationId);
+    },
+
+    async bindSetBase(input): Promise<KnowledgeSetSnapshot> {
+      const operationId = randomUUID();
+      const payload: Record<string, unknown> = {
+        knowledge_base_id: input.knowledgeBaseId,
+      };
+      if (input.weight !== undefined) payload.weight = input.weight;
+      if (input.sortOrder !== undefined) payload.sort_order = input.sortOrder;
+      await requestJson(
+        `/api/v2/knowledge-sets/${encodeURIComponent(input.knowledgeSetId)}/knowledge-bases`,
+        { method: "POST", body: JSON.stringify(payload) },
+        operationId,
+        "bindSetBase",
+        { allowNonIdempotentRetry: false },
+      );
+      return this.getSet({ knowledgeSetId: input.knowledgeSetId });
+    },
+
+    async unbindSetBase(input): Promise<KnowledgeSetSnapshot> {
+      const operationId = randomUUID();
+      await requestJson(
+        `/api/v2/knowledge-sets/${encodeURIComponent(input.knowledgeSetId)}/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}`,
+        { method: "DELETE" },
+        operationId,
+        "unbindSetBase",
+        { allowNonIdempotentRetry: false },
+      );
+      return this.getSet({ knowledgeSetId: input.knowledgeSetId });
+    },
+
+    async listRetrievalProfiles(
+      input,
+    ): Promise<KnowledgeRetrievalProfileSnapshot[]> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/knowledge-sets/${encodeURIComponent(input.knowledgeSetId)}/retrieval-profiles`,
+        { method: "GET" },
+        operationId,
+        "listRetrievalProfiles",
+      );
+      return parseKnowledgeRetrievalProfileList(body, operationId);
+    },
+
+    async createRetrievalProfile(
+      input,
+    ): Promise<KnowledgeRetrievalProfileSnapshot> {
+      const operationId = randomUUID();
+      const payload = {
+        config: input.config ?? null,
+      };
+      const { body } = await requestJson(
+        `/api/v1/knowledge-sets/${encodeURIComponent(input.knowledgeSetId)}/retrieval-profiles`,
+        { method: "POST", body: JSON.stringify(payload) },
+        operationId,
+        "createRetrievalProfile",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeRetrievalProfileSnapshot(data, operationId);
+    },
+
+    async getRetrievalProfile(
+      input,
+    ): Promise<KnowledgeRetrievalProfileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/retrieval-profiles/${encodeURIComponent(input.profileId)}`,
+        { method: "GET" },
+        operationId,
+        "getRetrievalProfile",
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeRetrievalProfileSnapshot(data, operationId);
+    },
+
+    async updateRetrievalProfile(
+      input,
+    ): Promise<KnowledgeRetrievalProfileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/retrieval-profiles/${encodeURIComponent(input.profileId)}`,
+        { method: "PATCH", body: JSON.stringify({ config: input.config }) },
+        operationId,
+        "updateRetrievalProfile",
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeRetrievalProfileSnapshot(data, operationId);
+    },
+
+    async publishRetrievalProfile(
+      input,
+    ): Promise<KnowledgeRetrievalProfileSnapshot> {
+      const operationId = randomUUID();
+      const { body } = await requestJson(
+        `/api/v1/retrieval-profiles/${encodeURIComponent(input.profileId)}/publish`,
+        { method: "POST" },
+        operationId,
+        "publishRetrievalProfile",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeRetrievalProfileSnapshot(data, operationId);
+    },
+
+    async rollbackRetrievalProfile(
+      input,
+    ): Promise<KnowledgeRetrievalProfileSnapshot> {
+      const operationId = randomUUID();
+      const payload =
+        input.publish === undefined ? {} : { publish: input.publish };
+      const { body } = await requestJson(
+        `/api/v1/retrieval-profiles/${encodeURIComponent(input.profileId)}/rollback`,
+        { method: "POST", body: JSON.stringify(payload) },
+        operationId,
+        "rollbackRetrievalProfile",
+        { allowNonIdempotentRetry: false },
+      );
+      const data = (body as { data?: unknown })?.data ?? body;
+      return parseKnowledgeRetrievalProfileSnapshot(data, operationId);
     },
 
     async probeCapability() {

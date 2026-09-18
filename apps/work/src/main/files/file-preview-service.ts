@@ -6,7 +6,6 @@
 
 import { createReadStream, existsSync, readFileSync, renameSync, rmSync, statSync } from "fs";
 import { protocol } from "electron";
-import { pathToFileURL } from "url";
 import {
   makeFileError,
   type FileError,
@@ -490,12 +489,14 @@ export async function getPreviewDescriptor(
   const type = previewTypeForCategory(file.category);
 
   if (type === "image") {
+    previewCacheByFileId.set(fileId, path);
     return {
       fileId,
       type: "image",
       title: file.name,
       mime: file.mime,
-      localUrl: pathToFileURL(path).toString(),
+      // Renderer CSP blocks fetch(file://); privileged hermes-file-preview supports Fetch API.
+      localUrl: previewSchemeUrl(fileId),
       canOpenExternal: true,
       canSaveAs: true,
       canCopyText: false,
@@ -505,12 +506,13 @@ export async function getPreviewDescriptor(
   }
 
   if (type === "pdf") {
+    previewCacheByFileId.set(fileId, path);
     return {
       fileId,
       type: "pdf",
       title: file.name,
       mime: file.mime,
-      localUrl: pathToFileURL(path).toString(),
+      localUrl: previewSchemeUrl(fileId),
       canOpenExternal: true,
       canSaveAs: true,
       canCopyText: false,
@@ -608,13 +610,19 @@ export function registerFilePreviewSchemePrivileged(): void {
   ]);
 }
 
-/** Register protocol handler after app ready — serves preview cache by fileId. */
+/** Register protocol handler after app ready — serves preview bytes by fileId. */
 export function registerFilePreviewProtocolHandler(): void {
   protocol.handle(FILE_PREVIEW_SCHEME, (request) => {
     try {
       const url = new URL(request.url);
       const fileId = decodeURIComponent(url.hostname || url.pathname.replace(/^\//, ""));
-      const path = previewCacheByFileId.get(fileId);
+      let path = previewCacheByFileId.get(fileId);
+      if (!path || !existsSync(path)) {
+        // Local managed files (image/pdf) register on getPreview; if map missed,
+        // resolve from the managed-file index for the default profile.
+        const managed = getManagedFile("default", fileId);
+        path = managed?.managedPath || managed?.originalPath;
+      }
       if (!path || !existsSync(path)) {
         return new Response("Not found", { status: 404 });
       }

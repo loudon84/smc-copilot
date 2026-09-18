@@ -34,15 +34,32 @@ import {
   type KnowledgeBuildIdInput,
   type KnowledgeBuildJobSnapshot,
   type KnowledgeFileIdInput,
+  type KnowledgeResolveDocumentPreviewInput,
   type KnowledgeStartBuildInput,
   type KnowledgeUpdateBuildProfileInput,
 } from "../shared/knowledge/knowledge-base-ipc";
+import {
+  KNOWLEDGE_SET_IPC_CHANNELS,
+  type HermesKnowledgeSetsAPI,
+  type KnowledgeProfileIdInput,
+  type KnowledgeSetBindBaseInput,
+  type KnowledgeSetCreateInput,
+  type KnowledgeSetCreateProfileInput,
+  type KnowledgeSetGetInput,
+  type KnowledgeSetListInput,
+  type KnowledgeSetListProfilesInput,
+  type KnowledgeSetRollbackProfileInput,
+  type KnowledgeSetUnbindBaseInput,
+  type KnowledgeSetUpdateInput,
+  type KnowledgeSetUpdateProfileInput,
+} from "../shared/knowledge/knowledge-set-ipc";
 
 /** Curated Knowledge Jobs API plus sanitized mode/facade wrappers. */
 export type HermesKnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
   getMode: HermesKnowledgeModeAPI["getSnapshot"];
   facade: HermesKnowledgeFacadeAPI;
   bases: HermesKnowledgeBasesAPI;
+  sets: HermesKnowledgeSetsAPI;
 };
 
 export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
@@ -122,6 +139,11 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.reparseFile, input),
       deleteFile: (input: KnowledgeFileIdInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.deleteFile, input),
+      resolveDocumentPreview: (input: KnowledgeResolveDocumentPreviewInput) =>
+        ipcRenderer.invoke(
+          KNOWLEDGE_BASE_IPC_CHANNELS.resolveDocumentPreview,
+          input,
+        ),
       listIndexes: (input: KnowledgeBaseGetInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.listIndexes, input),
       getBuildProfile: (input: KnowledgeBaseGetInput) =>
@@ -153,6 +175,32 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
           );
         };
       },
+    },
+    sets: {
+      list: (input?: KnowledgeSetListInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.list, input),
+      get: (input: KnowledgeSetGetInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.get, input),
+      create: (input: KnowledgeSetCreateInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.create, input),
+      update: (input: KnowledgeSetUpdateInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.update, input),
+      bindBase: (input: KnowledgeSetBindBaseInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.bindBase, input),
+      unbindBase: (input: KnowledgeSetUnbindBaseInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.unbindBase, input),
+      listProfiles: (input: KnowledgeSetListProfilesInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.listProfiles, input),
+      createProfile: (input: KnowledgeSetCreateProfileInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.createProfile, input),
+      getProfile: (input: KnowledgeProfileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.getProfile, input),
+      updateProfile: (input: KnowledgeSetUpdateProfileInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.updateProfile, input),
+      publishProfile: (input: KnowledgeProfileIdInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.publishProfile, input),
+      rollbackProfile: (input: KnowledgeSetRollbackProfileInput) =>
+        ipcRenderer.invoke(KNOWLEDGE_SET_IPC_CHANNELS.rollbackProfile, input),
     },
   };
 }

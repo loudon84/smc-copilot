@@ -66,6 +66,10 @@ export default defineConfig({
         "@renderer": resolve(configDir, "src/renderer/src"),
         "@/components/ui": resolve(configDir, "components/ui"),
         "@/components/common": resolve(configDir, "components/common"),
+        "@/components/file-preview": resolve(
+          configDir,
+          "components/file-preview",
+        ),
         "@/components/knowledge/knowledge-base-card": resolve(
           configDir,
           "components/knowledge/knowledge-base-card.tsx",

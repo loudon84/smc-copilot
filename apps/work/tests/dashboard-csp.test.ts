@@ -18,8 +18,8 @@ const loopbackConnectSources = [
 ];
 
 const packagedAssetSources = [
-  "img-src 'self' data: blob: file: https:",
-  "media-src 'self' data: blob: file: https:",
+  "img-src 'self' data: blob: file: hermes-file-preview: https:",
+  "media-src 'self' data: blob: file: hermes-file-preview: https:",
   "font-src 'self' data:",
   "object-src 'none'",
   "base-uri 'self'",

@@ -1,8 +1,12 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { BusinessModuleUISurface } from "@/components/common/business-module-ui-surface";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { PageToolbar } from "@/components/common/page-toolbar";
+import {
+  FilePreview,
+  type KnowledgeFileProviderDeps,
+} from "@/components/file-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +18,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "../../../components/useI18n";
-import { FilePreviewRouter } from "../../../components/files/preview/FilePreviewRouter";
 import {
   useKnowledgeFacade,
   type UseKnowledgeFacadeOptions,
@@ -34,7 +37,6 @@ import type {
 } from "../../../../../shared/knowledge/knowledge-job-ipc";
 import type { KnowledgeRouteParams } from "../knowledge-route-descriptor";
 import { KnowledgeLoading } from "../knowledge-page-chrome";
-import type { FilePreviewState } from "../../../hooks/files/useFilePreview";
 
 export type KnowledgeDocumentDetailPageProps = {
   params?: KnowledgeRouteParams;
@@ -48,22 +50,15 @@ export type KnowledgeDocumentDetailPageProps = {
   facade?: HermesKnowledgeFacadeAPI | null;
   bases?: HermesKnowledgeBasesAPI | null;
   /**
-   * Optional ManagedFile id resolver. Product default returns null so preview
-   * stays gracefully unavailable unless a ManagedFile is known.
+   * Test override: skip Main resolve and use a known ManagedFile id.
+   * Production uses `bases.resolveDocumentPreview` via FilePreview Framework.
    */
   resolveManagedFileId?: (file: KnowledgeBaseFileSnapshot) => string | null;
-  /** Optional preview loader for tests / File Platform bridge. */
+  /** Optional preview probe for tests (Framework KnowledgeFileProvider). */
   loadPreview?: (fileId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
 type DetailLoadState = "loading" | "unavailable" | "not-found" | "content" | "error";
-
-type PreviewState =
-  | { status: "idle" }
-  | { status: "unavailable" }
-  | { status: "loading" }
-  | { status: "ready"; fileId: string; filePreview?: FilePreviewState }
-  | { status: "error"; message: string };
 
 /** Reserved tabs for later file-management entries (update / translate). */
 type DocDetailTab = "preview" | "info" | "versions" | "parse" | "permission";
@@ -98,8 +93,8 @@ function statusLabel(
 }
 
 /**
- * Document detail over Base file IPC. Preview stays ManagedFile-only until
- * the unified multi-format preview is wired. Permission copy is display-only.
+ * Document detail over Base file IPC. Preview uses FilePreview Framework
+ * (KnowledgeFileProvider → materialize bridge → open-file-viewer).
  */
 export function KnowledgeDocumentDetailPage({
   params = {},
@@ -126,64 +121,10 @@ export function KnowledgeDocumentDetailPage({
   const [versions, setVersions] = useState<KnowledgeFileVersionSnapshot[]>([]);
   const [ownerBase, setOwnerBase] = useState<KnowledgeBaseSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
   const [detailTab, setDetailTab] = useState<DocDetailTab>("preview");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const loadPreviewFor = async (
-    file: KnowledgeBaseFileSnapshot,
-    cancelled: () => boolean,
-  ): Promise<void> => {
-    const managedFileId = resolveManagedFileId?.(file) ?? null;
-    if (!managedFileId) {
-      setPreview({ status: "unavailable" });
-      return;
-    }
-    setPreview({ status: "loading" });
-    try {
-      if (loadPreview) {
-        const result = await loadPreview(managedFileId);
-        if (cancelled()) return;
-        if (result.ok) {
-          setPreview({ status: "ready", fileId: managedFileId });
-        } else {
-          setPreview({ status: "error", message: result.error });
-        }
-        return;
-      }
-      const filesApi = window.hermesAPI?.files;
-      if (!filesApi?.getPreview) {
-        if (!cancelled()) setPreview({ status: "unavailable" });
-        return;
-      }
-      const result = await filesApi.getPreview(undefined, managedFileId);
-      if (cancelled()) return;
-      if (result && "error" in result) {
-        setPreview({ status: "error", message: result.error.message });
-        return;
-      }
-      setPreview({
-        status: "ready",
-        fileId: managedFileId,
-        filePreview: {
-          open: true,
-          fileId: managedFileId,
-          loading: false,
-          descriptor: result,
-        },
-      });
-    } catch (error) {
-      if (cancelled()) return;
-      setPreview({
-        status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : t("knowledge.documents.previewError"),
-      });
-    }
-  };
+  const [previewEpoch, setPreviewEpoch] = useState(0);
 
   useEffect(() => {
     if (probe.presentation === "loading") {
@@ -217,7 +158,6 @@ export function KnowledgeDocumentDetailPage({
         setVersions(listedVersions);
         setOwnerBase(owner);
         setLoadState("content");
-        await loadPreviewFor(file, () => cancelled);
       } catch (error) {
         if (cancelled) return;
         if (isNotFound(error)) {
@@ -233,20 +173,30 @@ export function KnowledgeDocumentDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [
-    probe.presentation,
-    probe.bases,
-    detailId,
-    routeBaseId,
-    resolveManagedFileId,
-    loadPreview,
-  ]);
+  }, [probe.presentation, probe.bases, detailId, routeBaseId]);
 
   const fileMutationsEnabled =
     probe.mutationsEnabled &&
     knowledgeBaseActionAllowed(ownerBase?.status, "upload");
 
-  const refreshDetail = async (): Promise<void> => {
+  const knowledgeDeps = useMemo((): KnowledgeFileProviderDeps => {
+    return {
+      resolveManagedFileId: resolveManagedFileId
+        ? (source) => {
+            if (!detail || detail.id !== source.id) return null;
+            return resolveManagedFileId(detail);
+          }
+        : undefined,
+      resolveDocumentPreview: probe.bases?.resolveDocumentPreview
+        ? (input) => probe.bases!.resolveDocumentPreview!(input)
+        : undefined,
+      probeLoad: loadPreview,
+    };
+  }, [resolveManagedFileId, loadPreview, probe.bases, detail]);
+
+  const refreshDetail = async (opts?: {
+    reloadPreview?: boolean;
+  }): Promise<void> => {
     if (!probe.bases || !detailId) return;
     const [file, listedVersions] = await Promise.all([
       probe.bases.getFile({ sourceFileId: detailId }),
@@ -254,6 +204,9 @@ export function KnowledgeDocumentDetailPage({
     ]);
     setDetail(file);
     setVersions(listedVersions);
+    if (opts?.reloadPreview) {
+      setPreviewEpoch((n) => n + 1);
+    }
   };
 
   const runFileAction = async (
@@ -263,7 +216,7 @@ export function KnowledgeDocumentDetailPage({
     setSubmitting(true);
     try {
       await action();
-      await refreshDetail();
+      await refreshDetail({ reloadPreview: true });
     } catch (error) {
       setErrorMessage(errorCode(error));
     } finally {
@@ -421,32 +374,21 @@ export function KnowledgeDocumentDetailPage({
               </TabsList>
               <TabsContent forceMount value="preview">
                 <section data-testid="knowledge-document-preview">
-                  <h3 className="text-sm font-medium">
-                    {t("knowledge.documents.previewTitle")}
-                  </h3>
-                  {preview.status === "unavailable" || preview.status === "idle" ? (
-                    <p data-testid="knowledge-document-preview-unavailable">
-                      {t("knowledge.documents.previewUnavailable")}
-                    </p>
-                  ) : null}
-                  {preview.status === "loading" ? (
-                    <p data-testid="knowledge-document-preview-loading">
-                      {t("knowledge.loading")}
-                    </p>
-                  ) : null}
-                  {preview.status === "ready" ? (
-                    <div data-testid="knowledge-document-preview-ready">
-                      {preview.filePreview?.descriptor ? (
-                        <FilePreviewRouter state={preview.filePreview} />
-                      ) : (
-                        <p>ManagedFile {preview.fileId}</p>
-                      )}
-                    </div>
-                  ) : null}
-                  {preview.status === "error" ? (
-                    <p data-testid="knowledge-document-preview-error">
-                      {t("knowledge.documents.previewError")}: {preview.message}
-                    </p>
+                  
+                  {detail ? (
+                    <FilePreview
+                      key={`${detail.id}:${detail.activeVersionId ?? ""}:${previewEpoch}`}
+                      testIdPrefix="knowledge-document-preview"
+                      source={{
+                        type: "knowledge",
+                        id: detail.id,
+                        name: detail.fileName,
+                        mime: detail.mimeType ?? undefined,
+                        activeVersionId: detail.activeVersionId,
+                      }}
+                      forceRefresh={previewEpoch > 0}
+                      knowledgeDeps={knowledgeDeps}
+                    />
                   ) : null}
                 </section>
               </TabsContent>

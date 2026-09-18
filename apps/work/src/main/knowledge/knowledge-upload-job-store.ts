@@ -484,6 +484,50 @@ export function listNonTerminalJobs(): KnowledgeJobSnapshot[] {
   return rows.map(rowToSnapshot);
 }
 
+/** Main-only: completed jobs with a local ManagedFile for a remote source file. */
+export type CompletedJobManagedFileHit = {
+  jobId: string;
+  managedFileId: string;
+  dataMode: KnowledgeDataMode;
+  updatedAt: string;
+};
+
+/**
+ * Find completed upload jobs for a remote source_file_id (newest first).
+ * Used by Knowledge document preview Path A-Job bootstrap.
+ */
+export function findCompletedJobsByRemoteSourceFileId(input: {
+  workProfileId: string;
+  sourceFileId: string;
+}): CompletedJobManagedFileHit[] {
+  ensureKnowledgeUploadJobsSchema();
+  const db = getDbConnection(true) ?? getDbConnection(false);
+  if (!db || !tableExists(db)) return [];
+  const rows = db
+    .prepare(
+      `SELECT job_id, managed_file_id, data_mode, updated_at
+       FROM ${TABLE}
+       WHERE work_profile_id = ?
+         AND remote_source_file_id = ?
+         AND status = 'completed'
+         AND managed_file_id IS NOT NULL
+         AND TRIM(managed_file_id) != ''
+       ORDER BY updated_at DESC`,
+    )
+    .all(input.workProfileId, input.sourceFileId) as Array<{
+    job_id: string;
+    managed_file_id: string;
+    data_mode: string | null;
+    updated_at: string;
+  }>;
+  return rows.map((row) => ({
+    jobId: row.job_id,
+    managedFileId: row.managed_file_id,
+    dataMode: normalizeDataMode(row.data_mode),
+    updatedAt: row.updated_at,
+  }));
+}
+
 export function bindJobManagedFile(
   jobId: string,
   managedFileId: string,

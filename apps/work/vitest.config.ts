@@ -21,6 +21,10 @@ export default defineConfig({
       "@shared": resolve(__dirname, "src/shared"),
       "@/components/ui": resolve(__dirname, "components/ui"),
       "@/components/common": resolve(__dirname, "components/common"),
+      "@/components/file-preview": resolve(
+        __dirname,
+        "components/file-preview",
+      ),
       "@/components/knowledge/knowledge-base-card": resolve(
         __dirname,
         "components/knowledge/knowledge-base-card.tsx",
@@ -43,6 +47,8 @@ export default defineConfig({
       "src/**/*.test.tsx",
       "tests/**/*.test.ts",
       "tests/**/*.test.tsx",
+      "components/file-preview/**/*.test.ts",
+      "components/file-preview/**/*.test.tsx",
     ],
   },
 });

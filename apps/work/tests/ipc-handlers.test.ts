@@ -176,6 +176,7 @@ describe("Legacy IPC handlers preserved", () => {
     "set-platform-enabled",
     "list-sessions",
     "get-session-messages",
+    "materialize-chat-session-turn",
     "list-profiles",
     "create-profile",
     "list-cron-jobs",

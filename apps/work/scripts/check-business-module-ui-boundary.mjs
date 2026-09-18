@@ -13,6 +13,7 @@ const ERROR = "BUSINESS_MODULE_UI_BOUNDARY_VIOLATION";
 const KIT_ALIAS = [
   /^@\/components\/ui(?:\/|$)/,
   /^@\/components\/common(?:\/|$)/,
+  /^@\/components\/file-preview(?:\/|$)/,
   /^@\/components\/knowledge\/knowledge-base-card$/,
   /^@\/utils(?:\/|$)/,
   /^@\/hooks(?:\/|$)/,
@@ -21,6 +22,7 @@ const KIT_ALIAS = [
 const KIT_DIRS = [
   resolve(ROOT, "components/ui"),
   resolve(ROOT, "components/common"),
+  resolve(ROOT, "components/file-preview"),
 ];
 const KIT_FILES = [resolve(ROOT, "components/knowledge/knowledge-base-card.tsx")];
 
@@ -38,6 +40,8 @@ const ALLOW_KIT = new Set([
   "components/knowledge/knowledge-base-card.tsx",
   "src/renderer/src/screens/Knowledge/pages/KnowledgeBasesPage.tsx",
   "src/renderer/src/screens/Knowledge/pages/KnowledgeBaseDetailPage.tsx",
+  "src/renderer/src/screens/Knowledge/pages/KnowledgeSetsPage.tsx",
+  "src/renderer/src/screens/Knowledge/pages/KnowledgeSetDetailPage.tsx",
   "src/renderer/src/screens/Knowledge/pages/KnowledgeDocumentsPage.tsx",
   "src/renderer/src/screens/Knowledge/pages/KnowledgeDocumentDetailPage.tsx",
 ]);
@@ -45,6 +49,7 @@ const ALLOW_KIT = new Set([
 const ALLOW_KIT_PREFIX = [
   "components/ui/",
   "components/common/",
+  "components/file-preview/",
   "src/renderer/src/screens/Knowledge/features/bases/",
   "src/renderer/src/screens/Knowledge/features/file-job/",
 ];
@@ -168,6 +173,7 @@ const probe = process.argv.includes("--probe")
 for (const file of walk(join(ROOT, "src"))) scan(file);
 for (const file of walk(join(ROOT, "components/ui"))) scan(file);
 for (const file of walk(join(ROOT, "components/common"))) scan(file);
+for (const file of walk(join(ROOT, "components/file-preview"))) scan(file);
 scan(join(ROOT, "components/knowledge/knowledge-base-card.tsx"));
 if (probe) scan(resolve(ROOT, probe));
 

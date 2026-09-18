@@ -18,6 +18,7 @@ import {
   type KnowledgeBuildIdInput,
   type KnowledgeBuildJobSnapshot,
   type KnowledgeFileIdInput,
+  type KnowledgeResolveDocumentPreviewInput,
   type KnowledgeStartBuildInput,
   type KnowledgeUpdateBuildProfileInput,
 } from "../../shared/knowledge/knowledge-base-ipc";
@@ -30,6 +31,7 @@ import { getActiveProfileNameSync } from "../utils";
 import { readStoredSessionSync } from "../auth/token-store";
 import { getManagedFile } from "../files/file-association-store";
 import { KnowledgeBuildPoller } from "./knowledge-build-poller";
+import { resolveDocumentPreview } from "./knowledge-preview-resolve";
 
 function broadcastBuildSnapshot(snapshot: KnowledgeBuildJobSnapshot): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -392,6 +394,31 @@ export function registerKnowledgeBaseIpcHandlers(ipcMain: IpcMain): void {
         requireAuth();
         if (isMockMode()) return;
         await getKnowledgeHttpProvider().deleteFile(input);
+      } catch (err) {
+        throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.resolveDocumentPreview,
+    async (
+      _e: IpcMainInvokeEvent,
+      input: KnowledgeResolveDocumentPreviewInput,
+    ) => {
+      try {
+        requireAuth();
+        if (isMockMode()) {
+          throw new Error("KNOWLEDGE_UNAVAILABLE");
+        }
+        return await resolveDocumentPreview({
+          sourceFileId: input.sourceFileId,
+          activeVersionId: input.activeVersionId,
+          forceRefresh: input.forceRefresh,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          workProfileId: getActiveProfileNameSync(),
+        });
       } catch (err) {
         throw sanitizeIpcError(err);
       }

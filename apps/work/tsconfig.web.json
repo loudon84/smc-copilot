@@ -8,6 +8,7 @@
     "src/preload/*.d.ts",
     "components/ui/**/*",
     "components/common/**/*",
+    "components/file-preview/**/*",
     "components/knowledge/knowledge-base-card.tsx",
     "utils/**/*",
     "hooks/**/*"
@@ -34,6 +35,8 @@
       "@renderer/*": ["./src/renderer/src/*"],
       "@/components/ui/*": ["./components/ui/*"],
       "@/components/common/*": ["./components/common/*"],
+      "@/components/file-preview": ["./components/file-preview/index.ts"],
+      "@/components/file-preview/*": ["./components/file-preview/*"],
       "@/components/knowledge/knowledge-base-card": [
         "./components/knowledge/knowledge-base-card.tsx"
       ],
