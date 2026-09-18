@@ -1,18 +1,49 @@
-# 设计输入审查提示模板
+# Spec Document Reviewer Prompt Template
 
-此 prompt 只用于 brainstorming 输出的设计输入自检，不再把设计直接判定为“ready for generic plan”。
+Use this template when dispatching a spec document reviewer subagent.
 
-检查：
+**Purpose:** Verify the spec is complete, consistent, and ready for implementation planning.
 
-- 完整性：目标、约束、成功标准是否足够进入下一 governed Artifact；
-- 一致性：是否存在相互冲突的需求/边界；
-- 范围：是否需要 Architecture Decision，还是仅属于既有架构内 Stage PRD；
-- YAGNI：是否包含未请求的未来扩展；
-- Evidence：事实、假设、未知是否区分；
-- Ownership：是否存在 Production Owner 可能改变但未进入 architecture mode。
+**Dispatch after:** Spec document is written to docs/superpowers/specs/
 
-返回：
+```
+Subagent (general-purpose):
+  description: "Review spec document"
+  prompt: |
+    You are a spec document reviewer. Verify this spec is complete and ready for planning.
 
-- `FEATURE_READY` → `smc-prd-grounding`；
-- `ARCHITECTURE_REQUIRED` → `smc-architecture-decision` draft；
-- `NEEDS_CLARIFICATION` → 只列答案会改变下一决策的问题。
+    **Spec to review:** [SPEC_FILE_PATH]
+
+    ## What to Check
+
+    | Category | What to Look For |
+    |----------|------------------|
+    | Completeness | TODOs, placeholders, "TBD", incomplete sections |
+    | Consistency | Internal contradictions, conflicting requirements |
+    | Clarity | Requirements ambiguous enough to cause someone to build the wrong thing |
+    | Scope | Focused enough for a single plan — not covering multiple independent subsystems |
+    | YAGNI | Unrequested features, over-engineering |
+
+    ## Calibration
+
+    **Only flag issues that would cause real problems during implementation planning.**
+    A missing section, a contradiction, or a requirement so ambiguous it could be
+    interpreted two different ways — those are issues. Minor wording improvements,
+    stylistic preferences, and "sections less detailed than others" are not.
+
+    Approve unless there are serious gaps that would lead to a flawed plan.
+
+    ## Output Format
+
+    ## Spec Review
+
+    **Status:** Approved | Issues Found
+
+    **Issues (if any):**
+    - [Section X]: [specific issue] - [why it matters for planning]
+
+    **Recommendations (advisory, do not block approval):**
+    - [suggestions for improvement]
+```
+
+**Reviewer returns:** Status, Issues (if any), Recommendations

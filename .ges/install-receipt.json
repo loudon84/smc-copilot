@@ -1,7 +1,7 @@
 {
   "schema": "ges.install-receipt.v2",
   "installed_at": "2026-09-16T23:46:56.730328+00:00",
-  "ges_version": "6.0.0-alpha.2",
+  "ges_version": "6.0.0-alpha.4",
   "distribution_version": "1.2.1",
   "transaction_id": "33687520-12b1-403c-b9c5-c8c11e9c5eb6",
   "repo_identity": {

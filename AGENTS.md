@@ -82,3 +82,13 @@ GES manages composition and governance metadata.
 GES does not generate Specs, implementation plans or code.
 
 <!-- ges:v6:engineering-stack:end -->
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+multi-context: a root `CONTEXT-MAP.md` points at per-context `CONTEXT.md` files. See `docs/agents/domain.md`.

@@ -1,33 +1,63 @@
-# Gemini CLI 工具映射
+# Gemini CLI Tool Mapping
 
-Skills 使用 Claude Code 的工具名称。在 Gemini CLI 中遇到这些名称时，请使用对应的平台等价工具：
+Skills speak in actions ("dispatch a subagent", "create a todo", "read a file"). On Gemini CLI these resolve to the tools below.
 
-| Skill 中的引用 | Gemini CLI 等价工具 |
-|---------------|-------------------|
-| `Read`（读取文件） | `read_file` |
-| `Write`（创建文件） | `write_file` |
-| `Edit`（编辑文件） | `replace` |
-| `Bash`（执行命令） | `run_shell_command` |
-| `Grep`（搜索文件内容） | `grep_search` |
-| `Glob`（按名称搜索文件） | `glob` |
-| `TodoWrite`（任务跟踪） | `write_todos` |
-| `Skill` 工具（调用 skill） | `activate_skill` |
-| `WebSearch` | `google_web_search` |
-| `WebFetch` | `web_fetch` |
-| `Task` 工具（派遣子 agent） | 无等价工具——Gemini CLI 不支持子 agent |
+| Action skills request | Gemini CLI equivalent |
+|----------------------|----------------------|
+| Read a file | `read_file` |
+| Read multiple files at once | `read_many_files` |
+| Create a new file | `write_file` |
+| Edit a file | `replace` |
+| Run a shell command | `run_shell_command` |
+| Search file contents | `grep_search` |
+| Find files by name | `glob` |
+| List files and subdirectories | `list_directory` |
+| Fetch a URL | `web_fetch` |
+| Search the web | `google_web_search` |
+| Invoke a skill | `activate_skill` |
+| Dispatch a subagent (`Subagent (general-purpose):` template) | `invoke_agent` with `agent_name: "generalist"` (invocable via `@generalist` chat syntax — see [Subagent support](#subagent-support)) |
+| Multiple parallel dispatches | Multiple `invoke_agent` calls in the same response |
+| Task tracking ("create a todo", "mark complete") | `write_todos` (statuses: pending, in_progress, completed, cancelled, blocked) |
 
-## 不支持子 Agent
+## Instructions file
 
-Gemini CLI 没有 Claude Code `Task` 工具的等价物。依赖子 agent 派遣的 skills（`subagent-driven-development`、`dispatching-parallel-agents`）将退化为通过 `executing-plans` 进行单会话执行。
+When a skill mentions "your instructions file", on Gemini CLI this is **`GEMINI.md`**. Gemini CLI loads `GEMINI.md` hierarchically: global at `~/.gemini/GEMINI.md`, project-level files in workspace directories and their ancestors, and sub-directory `GEMINI.md` files when a tool accesses files in those directories.
 
-## Gemini CLI 额外工具
+## Personal skills directory
 
-以下工具在 Gemini CLI 中可用，但 Claude Code 中没有对应工具：
+User-level skills live at **`~/.gemini/skills/`**, with **`~/.agents/skills/`** as a cross-runtime alias (shared with Codex and Copilot CLI). When both directories exist at the same scope, `.agents/skills/` takes precedence. Each skill is a subdirectory containing a `SKILL.md` (with `name` and `description` frontmatter).
 
-| 工具 | 用途 |
-|------|------|
-| `list_directory` | 列出文件和子目录 |
-| `save_memory` | 将信息持久化到 GEMINI.md，跨会话保留 |
-| `ask_user` | 向用户请求结构化输入 |
-| `tracker_create_task` | 丰富的任务管理（创建、更新、列表、可视化） |
-| `enter_plan_mode` / `exit_plan_mode` | 切换到只读研究模式，在修改前先调研 |
+## Subagent support
+
+Gemini CLI dispatches subagents through the `invoke_agent` tool, which takes `agent_name` and `prompt` parameters. The same dispatch is also surfaced as a chat-syntax shortcut: typing `@generalist <prompt>` is equivalent to calling `invoke_agent` with `agent_name: "generalist"`. Built-in agent names include `generalist`, `cli_help`, `codebase_investigator`, and (with browser tooling enabled) `browser_agent`.
+
+Skills dispatch with `Subagent (general-purpose):` and either reference a prompt-template file (e.g., `superpowers:subagent-driven-development`'s `./implementer-prompt.md`) or supply an inline prompt. On Gemini CLI:
+
+| Skill dispatch form | Gemini CLI equivalent |
+|---------------------|----------------------|
+| References a `*-prompt.md` template (implementer, task-reviewer, code-reviewer, etc.) | Fill the template, then `invoke_agent` with `agent_name: "generalist"` and the filled prompt |
+| References `superpowers:requesting-code-review`'s `./code-reviewer.md` | `invoke_agent` with `agent_name: "generalist"` and the filled review template |
+| Inline prompt (no template referenced) | `invoke_agent` with `agent_name: "generalist"` and your inline prompt |
+
+### Prompt filling
+
+Skills provide prompt templates with placeholders like `{WHAT_WAS_IMPLEMENTED}` or `[FULL TEXT of task]`. Fill all placeholders before passing the complete prompt to `invoke_agent`. The prompt template itself contains the agent's role, review criteria, and expected output format — the subagent will follow it.
+
+### Parallel dispatch
+
+Gemini CLI supports parallel subagent dispatch. Issue multiple `invoke_agent` calls in the same response (or multiple `@generalist` invocations in one prompt) to run independent subagent work in parallel. Keep dependent tasks sequential, but do not serialize independent subagent tasks just to preserve a simpler history.
+
+## Additional Gemini CLI tools
+
+These tools are unique to Gemini CLI:
+
+| Tool | Purpose |
+|------|---------|
+| `save_memory` (legacy) | Persist facts across sessions when `experimental.memoryV2 = false` |
+| `get_internal_docs` | Look up Gemini CLI's bundled documentation |
+| `ask_user` | Pose structured questions to the user (text / single-select / multi-select) |
+| `enter_plan_mode` / `exit_plan_mode` | Switch into and out of read-only plan mode |
+| `update_topic` | Update the current conversation's topic / strategic-intent metadata |
+| `complete_task` | Signal that a Gemini subagent has completed and return its result to the parent agent |
+| `tracker_create_task`, `tracker_update_task`, `tracker_get_task`, `tracker_list_tasks`, `tracker_add_dependency`, `tracker_visualize` | Rich task tracker with dependency and visualization support |
+| `read_mcp_resource`, `list_mcp_resources` | MCP resource access |
