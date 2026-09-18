@@ -25,6 +25,7 @@ import { registerFilesIpcHandlers } from "../files";
 import { registerKnowledgeJobIpcHandlers } from "../knowledge/register-knowledge-job-ipc";
 import { registerKnowledgeModeIpcHandlers } from "../knowledge/register-knowledge-mode-ipc";
 import { registerKnowledgeBaseIpcHandlers } from "../knowledge/register-knowledge-base-ipc";
+import { registerKnowledgeSetIpcHandlers } from "../knowledge/register-knowledge-set-ipc";
 import { persistPromptImageAttachments } from "../session-attachment-store";
 import { persistManagedMessageAssociations } from "../files/persist-managed-message-associations";
 import { composeWireMessageWithSessionContext } from "../files/compose-wire-session-context";
@@ -1752,6 +1753,9 @@ export function registerIpcHandlers(context: IpcContext): void {
   // Typed Knowledge Base CRUD (4530). Delete is DELETE, not patch.deleted.
   registerKnowledgeBaseIpcHandlers(ipcMain);
 
+  // Typed Knowledge Set + Retrieval Profile CRUD (4530).
+  registerKnowledgeSetIpcHandlers(ipcMain);
+
   // Model discovery �?fetch the provider's /v1/models for autocomplete.
   ipcMain.handle(
     "discover-provider-models",
@@ -2023,26 +2027,39 @@ export function registerIpcHandlers(context: IpcContext): void {
     return listSessions(limit, offset);
   });
 
-  ipcMain.handle("get-session-messages", (_event, sessionId: string) => {
+  ipcMain.handle("get-session-messages", (_event, sessionId: unknown) => {
+    // Sidebar historically mismatched and passed a resume target object;
+    // accept either a string id or `{ sessionId }` so SQL bind stays scalar.
+    const id =
+      typeof sessionId === "string"
+        ? sessionId
+        : sessionId &&
+            typeof sessionId === "object" &&
+            "sessionId" in sessionId &&
+            typeof (sessionId as { sessionId: unknown }).sessionId === "string"
+          ? (sessionId as { sessionId: string }).sessionId
+          : "";
+    if (!id.trim()) return [];
+
     const conn = getConnectionConfig();
     if (conn.mode === "remote")
-      return remoteGetSessionMessages(conn, sessionId).then((items) =>
-        applySessionLocalOverlays(sessionId, items),
+      return remoteGetSessionMessages(conn, id).then((items) =>
+        applySessionLocalOverlays(id, items),
       );
     if (conn.mode === "ssh" && conn.ssh)
       return withSshDashboardSessions(
         conn,
         (config) =>
-          remoteGetSessionMessages(config, sessionId).then((items) =>
-            applySessionLocalOverlays(sessionId, items),
+          remoteGetSessionMessages(config, id).then((items) =>
+            applySessionLocalOverlays(id, items),
           ),
         () =>
-          sshGetSessionMessages(conn.ssh, sessionId).then((items) =>
-            applySessionLocalOverlays(sessionId, items),
+          sshGetSessionMessages(conn.ssh, id).then((items) =>
+            applySessionLocalOverlays(id, items),
           ),
         activeSshProfile(),
       );
-    return getSessionMessages(sessionId);
+    return getSessionMessages(id);
   });
 
   ipcMain.handle(

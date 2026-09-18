@@ -6,6 +6,7 @@ import {
 } from "../Chat/sessionHistory";
 import {
   type ChatRun,
+  type ResumeSessionTarget,
   mintRun,
   patchRun,
   isScratchRun,
@@ -16,6 +17,9 @@ import {
   cycleRunId,
   runIdAtOrdinal,
   loadingSessionIds as deriveLoadingSessionIds,
+  buildResumedChatRun,
+  resolveResumeExecutionMode,
+  fetchWithEmptyRetry,
 } from "./chatRuns";
 import { ActiveSessionsBar } from "./ActiveSessionsBar";
 import { StatusBar } from "./StatusBar";
@@ -573,7 +577,13 @@ function Layout(): React.JSX.Element {
   }, [runs, activeRunId, handleActivateRun, handleCloseRun]);
 
   const handleResumeSession = useCallback(
-    async (sessionId: string) => {
+    async (target: ResumeSessionTarget | string) => {
+      // Sidebar / Sessions pass a typed target; tolerate a bare session id.
+      const resumeTarget: ResumeSessionTarget =
+        typeof target === "string" ? { sessionId: target } : target;
+      const sessionId = resumeTarget.sessionId?.trim();
+      if (!sessionId) return;
+
       // Already open as a live run? Re-attach to it (keeps live streaming).
       const live = findRunBySession(runs, sessionId);
       if (live) {
@@ -587,27 +597,36 @@ function Layout(): React.JSX.Element {
       resumingRef.current.add(sessionId);
       setResumingSessionId(sessionId);
       try {
-        const items = (await window.hermesAPI.getSessionMessages(
-          sessionId,
+        const items = (await fetchWithEmptyRetry(
+          async () =>
+            (await window.hermesAPI.getSessionMessages(
+              sessionId,
+            )) as DbHistoryItem[],
+          async () => {
+            if (window.hermesAPI.syncSessionCache) {
+              await window.hermesAPI.syncSessionCache();
+            }
+          },
         )) as DbHistoryItem[];
-        let executionMode: "local-chat" | "skill-run" = "local-chat";
-        let sessionTitle: string | undefined;
+
+        let skillRunMode: {
+          executionMode?: string;
+          toolTitle?: string;
+        } | null = null;
         if (window.hermesAPI.skillRun?.getSessionMode) {
-          const mode = await window.hermesAPI.skillRun.getSessionMode(sessionId);
-          if (mode?.executionMode === "skill-run") {
-            executionMode = "skill-run";
-            sessionTitle = mode.toolTitle;
-          }
+          skillRunMode =
+            (await window.hermesAPI.skillRun.getSessionMode(sessionId)) ?? null;
         }
-        const run = mintRun(
+        const resolved = resolveResumeExecutionMode(resumeTarget, skillRunMode);
+        const run = buildResumedChatRun(
           activeProfile,
+          { ...resumeTarget, sessionId },
           dbItemsToChatMessages(items),
-          executionMode,
+          {
+            executionMode: resolved.executionMode,
+            title: resolved.title,
+          },
         );
-        run.sessionId = sessionId;
-        if (sessionTitle) {
-          run.title = sessionTitle;
-        }
         setRuns(
           (prev) => openSessionRunTransition(prev, activeRunId, run).runs,
         );
@@ -876,9 +895,9 @@ function Layout(): React.JSX.Element {
                 onClick={(e) => e.stopPropagation()}
               >
                 <Sessions
-                  onResumeSession={(id) => {
+                  onResumeSession={(target) => {
                     setSessionsModalOpen(false);
-                    void handleResumeSession(id);
+                    void handleResumeSession(target);
                   }}
                   onNewChat={() => {
                     setSessionsModalOpen(false);
