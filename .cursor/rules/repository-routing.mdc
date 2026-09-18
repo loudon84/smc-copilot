@@ -18,3 +18,5 @@ alwaysApply: true
 3. Do not recursively scan the whole monorepo without a target.
 
 4. Prefer `lat search` inside Runtime before reading large Python trees.
+
+5. Skip disabled Salt trees: `infra/salt/` and `services/salt-control/`. Do not search, read, or modify them unless the user explicitly re-enables Salt.

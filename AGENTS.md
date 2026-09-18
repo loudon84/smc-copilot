@@ -26,10 +26,12 @@ For non-trivial feature or architecture changes:
 
 - Never scan references, build outputs, runtime data or archived PRDs
   unless explicitly requested.
+- Agent-disabled (do not search, read, or modify unless the user explicitly re-enables Salt):
+  `infra/salt/`, `services/salt-control/`.
 
 - Desktop is a Runtime Client; Agent control plane for Desktop remains `services/runtime` (v1.4 / v1.4.1).
 - Desktop must not listen on Agent ports (`18781` removed); Connection Ready follows `readiness.service` only.
-- Work (v2.1/v2.2): Endpoint Control Plane **default** SOT is Salt (`infra/salt`) + `services/salt-control`; see ADR-026. Customers may choose a parallel OPSI provider (`infra/opsi` + `services/opsi-control`); see ADR-031. `services/runtime` control plane is frozen (P0/P1 only); decommission via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` after Ring 3 (410 on endpoint routes; Chat/Task retained). `apps/work` defaults to `direct` Hermes Gateway (`:8642`); enterprise Bootstrap writes `control-owner=salt` or `{ "hermes": "opsi" }` (Availability only); Runtime `:8765` only when `SMC_HERMES_CONTROL_OWNER=runtime`.
+- Work (v2.1/v2.2): Salt trees are **agent-disabled**. Historical Endpoint Control Plane SOT is ADR-026 (`infra/salt` + `services/salt-control`). Active agent work for Endpoint Control Plane is OPSI (`infra/opsi` + `services/opsi-control`); see ADR-031. `services/runtime` control plane is frozen (P0/P1 only); decommission via `SMC_RUNTIME_ENDPOINT_CONTROL_ENABLED=false` after Ring 3 (410 on endpoint routes; Chat/Task retained). `apps/work` defaults to `direct` Hermes Gateway (`:8642`); enterprise Bootstrap writes `control-owner=salt` or `{ "hermes": "opsi" }` (Availability only); Runtime `:8765` only when `SMC_HERMES_CONTROL_OWNER=runtime`.
 - OPSI task: read `docs/adr/ADR-031-opsi-parallel-endpoint-control-plane.md` and `docs/opsi/`. Do not modify `infra/salt`, `services/salt-control`, or `contracts/salt-control-api` for OPSI features. Do not add OPSI capability to `services/runtime` or `contracts/runtime-api`.
 <!-- ges:v6:engineering-stack:begin -->
 

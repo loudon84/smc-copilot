@@ -1,4 +1,8 @@
-﻿# Dependencies
+# Agent-disabled Salt trees
+infra/salt/
+services/salt-control/
+
+# Dependencies
 **/node_modules/
 **/.venv/
 **/venv/

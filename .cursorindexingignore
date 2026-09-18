@@ -1,3 +1,7 @@
+# Agent-disabled Salt trees
+infra/salt/
+services/salt-control/
+
 # Historical material
 **/references/
 **/prd/archive/

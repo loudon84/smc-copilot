@@ -1,0 +1,14 @@
+---
+description: Agent-disable Salt trees; do not scan or modify
+alwaysApply: true
+---
+
+# Salt trees are disabled
+
+`infra/salt/` and `services/salt-control/` are **agent-disabled**.
+
+- Do not classify tasks into these trees.
+- Do not search, read, index, edit, test, or generate diffs in them.
+- Do not use them as implementation, comparison, or copy-from sources.
+- Endpoint Control Plane agent work uses `infra/opsi/` + `services/opsi-control/` (ADR-031).
+- Exception: only if the user explicitly says to re-enable Salt in that message.
