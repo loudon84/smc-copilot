@@ -6,6 +6,8 @@
 @source "../components/knowledge/knowledge-base-card.tsx";
 @source "../src/renderer/src/screens/Knowledge/pages/KnowledgeBasesPage.tsx";
 @source "../src/renderer/src/screens/Knowledge/pages/KnowledgeBaseDetailPage.tsx";
+@source "../src/renderer/src/screens/Knowledge/pages/KnowledgeSetsPage.tsx";
+@source "../src/renderer/src/screens/Knowledge/pages/KnowledgeSetDetailPage.tsx";
 @source "../src/renderer/src/screens/Knowledge/pages/KnowledgeDocumentsPage.tsx";
 @source "../src/renderer/src/screens/Knowledge/pages/KnowledgeDocumentDetailPage.tsx";
 @source "../src/renderer/src/screens/Knowledge/features/bases";
