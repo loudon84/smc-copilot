@@ -19,7 +19,7 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { getConnectionConfig } from "../config";
+import { getApiServerKey, getConnectionConfig } from "../config";
 import { HIDDEN_SUBPROCESS_OPTIONS } from "../process-options";
 import { supportsHermesRunsTransport } from "../run-stream";
 import { withBootstrapLock } from "./hermes-bootstrap-lock";
@@ -330,7 +330,12 @@ async function defaultReadOrigin(
 async function defaultFetchCapabilities(): Promise<unknown> {
   const base = getGatewayBaseUrl().replace(/\/+$/, "");
   try {
-    const res = await fetch(`${base}/v1/capabilities`);
+    const headers: Record<string, string> = {};
+    const apiKey = getApiServerKey()?.trim();
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+    const res = await fetch(`${base}/v1/capabilities`, { headers });
     if (!res.ok) return null;
     return await res.json();
   } catch {

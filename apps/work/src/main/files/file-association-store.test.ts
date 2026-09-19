@@ -237,3 +237,47 @@ describe("file-association-store remote identity", () => {
     ).toBe("task-keep");
   });
 });
+
+describe("file-association unique index migration", () => {
+  beforeEach(() => {
+    mockState.hermesHome = mkdtempSync(
+      join(tmpdir(), "hermes-files-assoc-idx-"),
+    );
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    const store = await import("./file-association-store");
+    store.closeFileIndexDb();
+    rmSync(mockState.hermesHome, { recursive: true, force: true });
+  });
+
+  it("dedupes existing session rows before creating the unique index", async () => {
+    const store = await import("./file-association-store");
+    store.upsertManagedFile(
+      baseRemote({ id: "f-local", remoteArtifactId: "art-idx" }),
+    );
+    const db = store.openFileIndexDb();
+    db.exec(
+      "DROP INDEX IF EXISTS idx_file_associations_session_file_role",
+    );
+    const insert = db.prepare(
+      `INSERT INTO file_associations (
+        id, file_id, profile_id, session_id, knowledge_job_id, data_mode,
+        message_id, task_id, role, ordinal, created_at
+      ) VALUES (?, ?, 'default', 'sess-1', NULL, NULL, NULL, NULL, 'attachment', 0, ?)`,
+    );
+    insert.run("assoc-old", "f-local", "2026-01-01T00:00:00.000Z");
+    insert.run("assoc-new", "f-local", "2026-01-02T00:00:00.000Z");
+    store.closeFileIndexDb();
+
+    const reopened = store.openFileIndexDb();
+    const row = reopened
+      .prepare(
+        `SELECT COUNT(*) AS n FROM file_associations
+         WHERE profile_id = 'default' AND session_id = 'sess-1' AND file_id = 'f-local'`,
+      )
+      .get() as { n: number };
+    expect(row.n).toBe(1);
+  });
+});

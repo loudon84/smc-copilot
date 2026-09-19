@@ -215,17 +215,59 @@ function ensureAssociationDataModeColumn(db: DbHandle): void {
   }
 }
 
+function indexExists(db: DbHandle, name: string): boolean {
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ? LIMIT 1`,
+      )
+      .get(name),
+  );
+}
+
+/** Drop extras so CREATE UNIQUE INDEX can succeed on already-dirty DBs. */
+function dedupeAssociationGroups(
+  db: DbHandle,
+  columns: string,
+  where: string,
+): void {
+  db.exec(`
+    DELETE FROM file_associations
+    WHERE ${where}
+      AND rowid NOT IN (
+        SELECT MAX(rowid)
+        FROM file_associations
+        WHERE ${where}
+        GROUP BY ${columns}
+      )
+  `);
+}
+
 function ensureAssociationIdempotencyIndex(db: DbHandle): void {
-  db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_file_associations_session_file_role
-      ON file_associations(profile_id, session_id, file_id, role)
-      WHERE session_id IS NOT NULL
-  `);
-  db.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_file_associations_knowledge_job_file_role
-      ON file_associations(profile_id, knowledge_job_id, file_id, role)
-      WHERE knowledge_job_id IS NOT NULL
-  `);
+  if (!indexExists(db, "idx_file_associations_session_file_role")) {
+    dedupeAssociationGroups(
+      db,
+      "profile_id, session_id, file_id, role",
+      "session_id IS NOT NULL",
+    );
+    db.exec(`
+      CREATE UNIQUE INDEX idx_file_associations_session_file_role
+        ON file_associations(profile_id, session_id, file_id, role)
+        WHERE session_id IS NOT NULL
+    `);
+  }
+  if (!indexExists(db, "idx_file_associations_knowledge_job_file_role")) {
+    dedupeAssociationGroups(
+      db,
+      "profile_id, knowledge_job_id, file_id, role",
+      "knowledge_job_id IS NOT NULL",
+    );
+    db.exec(`
+      CREATE UNIQUE INDEX idx_file_associations_knowledge_job_file_role
+        ON file_associations(profile_id, knowledge_job_id, file_id, role)
+        WHERE knowledge_job_id IS NOT NULL
+    `);
+  }
 }
 
 export function openFileIndexDb(profile?: string): DbHandle {

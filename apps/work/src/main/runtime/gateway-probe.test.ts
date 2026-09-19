@@ -14,12 +14,16 @@ const SIBLING_EVIL = String.raw`D:\Programs\SMC\Hermes-evil\python\python.exe`;
 const OTHER_ROOT_PYTHON = String.raw`C:\Python311\python.exe`;
 const FOREIGN_EXE = String.raw`C:\Windows\System32\svchost.exe`;
 const APPDATA_HERMES = String.raw`C:\Users\test\AppData\Local\hermes\hermes.exe`;
+const NATIVE_ROOT = String.raw`C:\Users\test\AppData\Local\hermes`;
+const NATIVE_VENV_PYTHON = String.raw`C:\Users\test\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe`;
+const UV_REDIRECTED_PYTHON = String.raw`D:\smc-sz-hr21007\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\python.exe`;
 
 function listener(
   executablePath: string,
   commandLine?: string | null,
+  ancestorExecutablePaths?: string[],
 ): GatewayListenerProcess {
-  return { executablePath, commandLine };
+  return { executablePath, commandLine, ancestorExecutablePaths };
 }
 
 describe("isManagedHermesGatewayProcess", () => {
@@ -83,6 +87,46 @@ describe("isManagedHermesGatewayProcess", () => {
       ),
     ).toBe(false);
   });
+
+  it("matches uv listen exe outside Native Root when an ancestor is under Root", () => {
+    expect(
+      isManagedHermesGatewayProcess(
+        NATIVE_ROOT,
+        listener(
+          UV_REDIRECTED_PYTHON,
+          "python.exe -m hermes_cli.main gateway run",
+          [NATIVE_VENV_PYTHON],
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects uv listen exe outside Root when ancestors are missing", () => {
+    expect(
+      isManagedHermesGatewayProcess(
+        NATIVE_ROOT,
+        listener(UV_REDIRECTED_PYTHON, "python.exe -m hermes_cli.main gateway run"),
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects outside listen when ancestor is only a sibling HermesExtra prefix", () => {
+    expect(
+      isManagedHermesGatewayProcess(
+        PROGRAM_ROOT,
+        listener(OTHER_ROOT_PYTHON, null, [SIBLING_EXTRA]),
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects outside listen when ancestor is only a sibling Hermes-evil prefix", () => {
+    expect(
+      isManagedHermesGatewayProcess(
+        PROGRAM_ROOT,
+        listener(OTHER_ROOT_PYTHON, null, [SIBLING_EVIL]),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("evaluateGatewayListeners", () => {
@@ -104,6 +148,20 @@ describe("evaluateGatewayListeners", () => {
     expect(result).toEqual({
       status: "mismatch",
       actualPath: APPDATA_HERMES,
+    });
+  });
+
+  it("matches when listen exe is outside Root but ancestor ExecutablePath is inside", () => {
+    const result = evaluateGatewayListeners(NATIVE_ROOT, [
+      listener(
+        UV_REDIRECTED_PYTHON,
+        "python.exe -m hermes_cli.main gateway run",
+        [NATIVE_VENV_PYTHON],
+      ),
+    ]);
+    expect(result).toEqual({
+      status: "match",
+      actualPath: UV_REDIRECTED_PYTHON,
     });
   });
 

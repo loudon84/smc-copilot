@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "installUrl": "http://git.superic.com/aiplatform/hermes-agent.git",
+  "installUrl": "https://github.com/loudon84/copilot-hermes.git",
   "originUrls": {
-    "http": "http://git.superic.com/aiplatform/hermes-agent.git",
-    "https": null,
+    "http": null,
+    "https": "https://github.com/loudon84/copilot-hermes.git",
     "ssh": null
   },
-  "allowedHosts": ["git.superic.com"],
+  "allowedHosts": ["github.com"],
   "defaultBranch": "main",
-  "approvedCommit": "29112bef099274229cadff79cdff7bf7b99c4b77",
+  "approvedCommit": "ae17b582a9679a926aaa3be2eaf209ed1bd540f8",
   "policyVersion": "smc-managed-2",
-  "repositoryIdentity": "sha256:afa50d51f2304e018ca53820bcd37a80e122312996cfc1daebfbb392961e20f4",
+  "repositoryIdentity": "sha256:91be13052f226806ea659c68c271be67ba7bd2f7b88bd316ca5c4695a0983006",
   "compatibility": {
     "minVersion": "0.21.0",
     "testedVersion": "0.21.0"

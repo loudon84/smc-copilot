@@ -16,12 +16,12 @@ clientRuntime:
 hermes:
   distribution: enterprise-native
   source:
-    installUrl: http://git.superic.com/aiplatform/hermes-agent.git
-    repositoryHttp: http://git.superic.com/aiplatform/hermes-agent.git
+    installUrl: https://github.com/loudon84/copilot-hermes.git
+    repositoryHttp: https://github.com/loudon84/copilot-hermes.git
     allowedHosts:
-      - git.superic.com
+      - github.com
     defaultBranch: main
-    approvedCommit: "29112bef099274229cadff79cdff7bf7b99c4b77"
+    approvedCommit: "ae17b582a9679a926aaa3be2eaf209ed1bd540f8"
     publicUpstreamAllowedOnEndpoint: false
   update:
     policy: follow-defaultBranch

@@ -38,9 +38,9 @@ Release writes `resources/work-build-info.json` (`smc.work.build.v1`) with versi
 
 ## Gateway probe
 
-[[src/main/runtime/gateway-probe.ts]] probes Gateway health and auth. Windows READY requires every listener executable inside the Locator ProgramRoot.
+[[src/main/runtime/gateway-probe.ts]] probes Gateway health and auth. Windows READY requires each listener ExecutablePath inside ProgramRoot, or an ancestor ExecutablePath within three ParentProcessId hops.
 
-Inspect is read-only: CommandLine is not an ownership input, health alone is not READY, and Work never kills the OwningProcess. Failure, no local listener, or a listener outside ProgramRoot is `configuration_error` or CONFLICT.
+CommandLine is not an ownership input; ancestor ExecutablePath is. Health alone is not READY. Inspect is read-only and never kills the OwningProcess. Failure, no local listener, or a listener outside ProgramRoot without an in-root ancestor is `configuration_error` or CONFLICT.
 
 ## Startup
 

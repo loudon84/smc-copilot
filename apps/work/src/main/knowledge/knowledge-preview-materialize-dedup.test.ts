@@ -109,4 +109,60 @@ describe("materializeKnowledgePreviewBytes hash dedup", () => {
 
     expect(result.managedFileId).toBe(priorId);
   });
+
+  it("recovers when concurrent insert wins the hash UNIQUE race", async () => {
+    const store = await import("../files/file-association-store");
+    const { createHash } = await import("crypto");
+    const bytes = new TextEncoder().encode("# race README\n");
+    const hash = createHash("sha256").update(bytes).digest("hex");
+
+    const originalFind = store.findByHash;
+    let findCalls = 0;
+    vi.spyOn(store, "findByHash").mockImplementation((profileId, h) => {
+      findCalls += 1;
+      // First lookup pretends miss so we attempt a new-id insert; after UNIQUE
+      // the retry path must see the winner row.
+      if (findCalls === 1) return null;
+      return originalFind(profileId, h);
+    });
+
+    // Winner row inserted while our first findByHash returned null.
+    const { writeFileSync, mkdirSync } = await import("fs");
+    const managedDir = join(mockState.hermesHome, "files", "managed");
+    mkdirSync(managedDir, { recursive: true });
+    const managedPath = join(managedDir, `${hash}.bin`);
+    writeFileSync(managedPath, Buffer.from(bytes));
+    const winnerId = "race-winner-mf";
+    const ts = "2026-09-18T00:00:00.000Z";
+    store.upsertManagedFile({
+      id: winnerId,
+      profileId: "default",
+      name: "README.md",
+      extension: "md",
+      mime: "text/markdown",
+      category: "markdown",
+      source: "workspace",
+      status: "stored",
+      size: bytes.byteLength,
+      managedPath,
+      contentHash: hash,
+      createdAt: ts,
+      updatedAt: ts,
+      locality: "local",
+    });
+
+    const { materializeKnowledgePreviewBytes } = await import(
+      "./knowledge-preview-resolve"
+    );
+    const result = await materializeKnowledgePreviewBytes({
+      workProfileId: "default",
+      sourceFileId: "sf-race",
+      activeVersionId: "v1",
+      bytes,
+      fileName: "README.md",
+    });
+
+    expect(result.managedFileId).toBe(winnerId);
+    expect(findCalls).toBeGreaterThanOrEqual(2);
+  });
 });

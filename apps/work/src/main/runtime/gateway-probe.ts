@@ -30,6 +30,8 @@ export type GatewayAuthProbeResult =
 export type GatewayListenerProcess = {
   executablePath: string;
   commandLine?: string | null;
+  /** Parent ExecutablePaths walked via ParentProcessId (≤3 hops). */
+  ancestorExecutablePaths?: string[];
 };
 
 function requestStatus(
@@ -134,14 +136,19 @@ export function isInManagedProgramRoot(
 }
 
 /**
- * Windows listen-match identity: ExecutablePath is inside Locator ProgramRoot.
+ * Windows listen-match identity: listen ExecutablePath is inside ProgramRoot,
+ * or any ancestor ExecutablePath (≤3 ParentProcessId hops) is inside ProgramRoot.
  * CommandLine is not an ownership input.
  */
 export function isManagedHermesGatewayProcess(
   programRoot: string,
   listener: GatewayListenerProcess,
 ): boolean {
-  return isInManagedProgramRoot(programRoot, listener.executablePath);
+  if (isInManagedProgramRoot(programRoot, listener.executablePath)) {
+    return true;
+  }
+  const ancestors = listener.ancestorExecutablePaths ?? [];
+  return ancestors.some((path) => isInManagedProgramRoot(programRoot, path));
 }
 
 export function evaluateGatewayListeners(
@@ -218,9 +225,17 @@ function parseInspectStdout(stdout: string): ParsedListenerInspect {
         const executablePath = (item as { ExecutablePath?: unknown })
           .ExecutablePath;
         const commandLine = (item as { CommandLine?: unknown }).CommandLine;
+        const rawAncestors = (item as { AncestorExecutablePaths?: unknown })
+          .AncestorExecutablePaths;
         if (typeof executablePath !== "string" || !executablePath.trim()) {
           return { kind: "error", error: "missing_executable_path" };
         }
+        const ancestorExecutablePaths = Array.isArray(rawAncestors)
+          ? rawAncestors.filter(
+              (path): path is string =>
+                typeof path === "string" && Boolean(path.trim()),
+            )
+          : [];
         listeners.push({
           executablePath,
           commandLine:
@@ -229,6 +244,7 @@ function parseInspectStdout(stdout: string): ParsedListenerInspect {
               : commandLine == null
                 ? null
                 : String(commandLine),
+          ancestorExecutablePaths,
         });
       }
       return { kind: "paths", listeners };
@@ -264,9 +280,18 @@ export async function inspectGatewayListener(
     "foreach ($procId in $pids) {",
     "  $proc = Get-CimInstance Win32_Process -Filter \"ProcessId=$procId\"",
     "  if (-not $proc -or [string]::IsNullOrWhiteSpace($proc.ExecutablePath)) { Write-Output '{\"error\":\"missing_executable_path\"}'; exit 0 }",
-    "  $rows += [pscustomobject]@{ ExecutablePath = $proc.ExecutablePath; CommandLine = $proc.CommandLine }",
+    "  $ancestors = @()",
+    "  $walkId = $proc.ParentProcessId",
+    "  for ($i = 0; $i -lt 3; $i++) {",
+    "    if (-not $walkId -or $walkId -le 0) { break }",
+    "    $parent = Get-CimInstance Win32_Process -Filter \"ProcessId=$walkId\" -ErrorAction SilentlyContinue",
+    "    if (-not $parent) { break }",
+    "    if (-not [string]::IsNullOrWhiteSpace($parent.ExecutablePath)) { $ancestors += $parent.ExecutablePath }",
+    "    $walkId = $parent.ParentProcessId",
+    "  }",
+    "  $rows += [pscustomobject]@{ ExecutablePath = $proc.ExecutablePath; CommandLine = $proc.CommandLine; AncestorExecutablePaths = @($ancestors) }",
     "}",
-    "Write-Output (ConvertTo-Json -Compress -InputObject @($rows))",
+    "Write-Output (ConvertTo-Json -Compress -InputObject @($rows) -Depth 4)",
   ].join("; ");
   try {
     const { stdout } = await execFileAsync(

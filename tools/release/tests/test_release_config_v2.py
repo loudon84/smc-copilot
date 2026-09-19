@@ -65,12 +65,14 @@ def test_golden_http_only_loads():
     data = load_release_config(GOLDEN)
     assert data["schema"] == SCHEMA
     assert data["hermes"]["distribution"] == "enterprise-native"
-    assert data["hermes"]["source"]["installUrl"].startswith("http://git.superic.com/")
+    assert data["hermes"]["source"]["installUrl"].startswith(
+        "https://github.com/loudon84/copilot-hermes"
+    )
     assert "repositoryHttps" not in data["hermes"]["source"]
     assert "repositorySsh" not in data["hermes"]["source"]
     assert data["hermes"]["source"]["identity"].startswith("sha256:")
     key = canonical_repository_key(data["hermes"]["source"]["installUrl"])
-    assert key == "git|git.superic.com|aiplatform/hermes-agent"
+    assert key == "git|github.com|loudon84/copilot-hermes"
     assert data["hermes"]["source"]["identity"] == repository_identity(
         data["hermes"]["source"]["installUrl"]
     )

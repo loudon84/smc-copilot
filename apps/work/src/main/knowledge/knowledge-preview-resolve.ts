@@ -105,6 +105,15 @@ function pickJobManagedFileId(
   return null;
 }
 
+function isSqliteUniqueConstraint(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: string; message?: string };
+  return (
+    e.code === "SQLITE_CONSTRAINT_UNIQUE" ||
+    Boolean(e.message && /\bUNIQUE\b/i.test(e.message))
+  );
+}
+
 export async function materializeKnowledgePreviewBytes(input: {
   workProfileId: string;
   sourceFileId: string;
@@ -128,7 +137,7 @@ export async function materializeKnowledgePreviewBytes(input: {
   }
 
   const hash = createHash("sha256").update(input.bytes).digest("hex");
-  const existing = findByHash(profileId, hash);
+  let existing = findByHash(profileId, hash);
   const ts = nowIso();
   const mime = resolveMime(fileName, input.mimeType ?? undefined);
   const category = resolveFileCategory(fileName, mime);
@@ -148,7 +157,7 @@ export async function materializeKnowledgePreviewBytes(input: {
       : tempPath;
   }
 
-  const file: ManagedFile = existing
+  let file: ManagedFile = existing
     ? {
         ...existing,
         name: fileName,
@@ -179,7 +188,30 @@ export async function materializeKnowledgePreviewBytes(input: {
         updatedAt: ts,
         locality: "local",
       };
-  upsertManagedFile(file);
+
+  try {
+    upsertManagedFile(file);
+  } catch (err) {
+    // Concurrent Path B / prior upload: same (profile, hash) already inserted.
+    if (!isSqliteUniqueConstraint(err)) throw err;
+    existing = findByHash(profileId, hash);
+    if (!existing) throw err;
+    file = {
+      ...existing,
+      name: fileName,
+      extension,
+      mime,
+      category,
+      source: existing.source ?? "workspace",
+      status: "stored",
+      size,
+      managedPath: existing.managedPath || managedPath,
+      contentHash: hash,
+      updatedAt: ts,
+      locality: "local",
+    };
+    upsertManagedFile(file);
+  }
 
   const associationId = randomUUID();
   const assoc: FileAssociation = {

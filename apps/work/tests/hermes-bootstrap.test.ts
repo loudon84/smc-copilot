@@ -294,7 +294,7 @@ describe("hermes-release-source", () => {
   it("loads golden release-source matching client-release.yaml", () => {
     const src = loadReleaseSource(RELEASE_PATH);
     expect(src.installUrl).toBe(
-      "http://git.superic.com/aiplatform/hermes-agent.git",
+      "https://github.com/loudon84/copilot-hermes.git",
     );
     expect(src.approvedCommit).toHaveLength(40);
     expect(src.policyVersion).toBe("smc-managed-2");
