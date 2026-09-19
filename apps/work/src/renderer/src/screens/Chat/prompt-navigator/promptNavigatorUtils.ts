@@ -1,4 +1,5 @@
 // @lat: [[prompt-navigator#Conversation Prompt Navigator]]
+import { stripKnowledgeScopedPromptPrefix } from "../../../../../shared/knowledge/chat-knowledge-context";
 import type { ChatBubbleMessage, ChatMessage } from "../types";
 
 export interface PromptNavigationItem {
@@ -18,7 +19,7 @@ export function isUserBubble(
 }
 
 export function normalizePromptLabel(content: string): string {
-  return content
+  return stripKnowledgeScopedPromptPrefix(content)
     .replace(/```[\s\S]*?```/g, "[code]")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "[image]")

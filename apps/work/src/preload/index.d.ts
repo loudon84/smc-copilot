@@ -426,6 +426,7 @@ interface HermesAPI {
     contextFolder?: string,
     runId?: string,
     modelOverride?: SessionModelOverride,
+    knowledgeContext?: { version: "1.0"; knowledgeSetId: string } | null,
   ) => Promise<{ response: string; sessionId?: string }>;
   abortChat: (runId?: string) => Promise<void>;
   transcribeAudio: (
@@ -531,6 +532,10 @@ interface HermesAPI {
   dashboardStatus: (profile?: string) => Promise<DashboardStatus>;
   freshDashboardWsUrl: (profile?: string) => Promise<string>;
   startDashboard: (profile?: string) => Promise<DashboardStatus>;
+  /** Knowledge Chat only: attach existing local dashboard (no spawn). */
+  attachLocalDashboardForKnowledge: (
+    profile?: string,
+  ) => Promise<DashboardStatus>;
   stopDashboard: (profile?: string) => Promise<boolean>;
 
   // Platform toggles
@@ -646,6 +651,39 @@ interface HermesAPI {
     sessionId: string,
     override: SessionModelOverride | null,
   ) => Promise<boolean>;
+  getSessionKnowledgeContext: (sessionId: string) => Promise<{
+    sessionId: string;
+    profileId: string;
+    knowledgeSetId: string;
+    sessionKind: "kb-set";
+    executionProvider: "hermes-chat";
+  } | null>;
+  setSessionKnowledgeContext: (input: {
+    sessionId: string;
+    profileId: string;
+    knowledgeSetId: string;
+    messageCount?: number;
+  }) => Promise<{ ok: true }>;
+  /** G9a: Portal token-store → Hermes SMC_KB_API_* for knowledge.retrieve plugin. */
+  syncKnowledgePluginCredentials: (
+    profile?: string,
+  ) => Promise<
+    | { ok: true; url: string; gatewayRestarted: boolean }
+    | { ok: false; error: string }
+  >;
+  listKbSetSessions: (
+    profileId: string,
+    limit?: number,
+  ) => Promise<
+    Array<{
+      id: string;
+      title: string;
+      startedAt: number;
+      knowledgeSetId?: string | null;
+      sessionKind: "kb-set";
+      executionProvider: "hermes-chat";
+    }>
+  >;
 
   // Profiles
   listProfiles: () => Promise<

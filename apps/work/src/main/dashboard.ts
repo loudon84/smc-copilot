@@ -2,7 +2,7 @@ import { type ChildProcess } from "child_process";
 import { randomBytes } from "crypto";
 import http from "http";
 import https from "https";
-import { getConnectionConfig, type ConnectionConfig } from "./config";
+import { getConnectionConfig, readEnv, type ConnectionConfig } from "./config";
 import { dashboardWebSocketUrlForRenderer } from "./dashboard-websocket-relay";
 import {
   buildRemoteOAuthWsUrl,
@@ -47,6 +47,22 @@ interface ManagedDashboard {
 
 const dashboards = new Map<string, ManagedDashboard>();
 
+/** Default local Hermes dashboard port (matches SSH default profile). */
+export const LOCAL_DASHBOARD_DEFAULT_PORT = 9119;
+
+/**
+ * Knowledge first-create fail-closed message when no attachable local dashboard.
+ * Work does not spawn/kill local dashboard (managed data-plane); attach-only.
+ */
+export const KNOWLEDGE_DASHBOARD_REQUIRED_LOCAL =
+  "KNOWLEDGE_DASHBOARD_REQUIRED: Local Hermes Dashboard is not available to attach. Knowledge first create needs a running dashboard; Work does not start it.";
+
+export type LocalDashboardAttachCandidates = {
+  port: number;
+  token: string;
+  baseUrl: string;
+};
+
 function resolveProfile(profile?: string): string | undefined {
   return normalizeProfileName(profile ?? getActiveProfileNameSync());
 }
@@ -60,6 +76,138 @@ function dashboardWsUrl(baseUrl: string, token: string): string {
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.searchParams.set("token", token);
   return url.toString();
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
+function parseDashboardPort(raw: string | undefined, fallback: number): number {
+  const n = Number.parseInt((raw || "").trim(), 10);
+  if (Number.isInteger(n) && n > 0 && n < 65536) return n;
+  return fallback;
+}
+
+/**
+ * Resolve port + session token for Knowledge local attach-only.
+ * Does not spawn processes. Token/port from process.env then profile/.env then default home .env.
+ */
+export function resolveLocalDashboardAttachCandidates(
+  profile?: string,
+): LocalDashboardAttachCandidates | { error: string } {
+  const resolved = resolveProfile(profile);
+  const profileEnv = readEnv(resolved);
+  const defaultEnv = resolved ? readEnv(undefined) : profileEnv;
+
+  const token = firstNonEmpty(
+    process.env.HERMES_DASHBOARD_SESSION_TOKEN,
+    profileEnv.HERMES_DASHBOARD_SESSION_TOKEN,
+    defaultEnv.HERMES_DASHBOARD_SESSION_TOKEN,
+  );
+  if (!token) {
+    return {
+      error:
+        "KNOWLEDGE_DASHBOARD_REQUIRED: Local Hermes Dashboard session token not found (HERMES_DASHBOARD_SESSION_TOKEN).",
+    };
+  }
+
+  const port = parseDashboardPort(
+    firstNonEmpty(
+      process.env.HERMES_DESKTOP_DASHBOARD_PORT,
+      profileEnv.HERMES_DESKTOP_DASHBOARD_PORT,
+      defaultEnv.HERMES_DESKTOP_DASHBOARD_PORT,
+    ),
+    LOCAL_DASHBOARD_DEFAULT_PORT,
+  );
+  const baseUrl = `http://127.0.0.1:${port}`;
+  return { port, token, baseUrl };
+}
+
+/**
+ * Probe an already-running local Hermes Dashboard. Never spawns or kills.
+ */
+export async function attachExistingLocalDashboard(
+  profile?: string,
+): Promise<DashboardStatus> {
+  const candidates = resolveLocalDashboardAttachCandidates(profile);
+  if ("error" in candidates) {
+    return {
+      supported: true,
+      running: false,
+      error: candidates.error,
+    };
+  }
+
+  const resolvedProfile = resolveProfile(profile);
+  const connection: DashboardConnection = {
+    baseUrl: candidates.baseUrl,
+    wsUrl: dashboardWsUrl(candidates.baseUrl, candidates.token),
+    token: candidates.token,
+    authMode: "token",
+    mode: "local",
+    profile: resolvedProfile,
+    port: candidates.port,
+    alreadyRunning: true,
+  };
+
+  try {
+    const status = await requestJson(
+      `${connection.baseUrl}/api/status`,
+      connection.token,
+    );
+    if (dashboardStatusRequiresOAuth(status)) {
+      return {
+        supported: true,
+        running: false,
+        connection,
+        error:
+          "KNOWLEDGE_DASHBOARD_REQUIRED: Local dashboard requires OAuth; token attach is not available.",
+      };
+    }
+    await requestJson(
+      `${connection.baseUrl}/api/sessions?limit=1`,
+      connection.token,
+    );
+    await probeDashboardWebSocket(connection);
+    return {
+      supported: true,
+      running: true,
+      connection: {
+        ...connection,
+        // Renderer must use the Main relay URL (same as freshDashboardWebSocketUrl).
+        wsUrl: await dashboardWebSocketUrlForRenderer(connection.wsUrl),
+        alreadyRunning: true,
+      },
+    };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return {
+      supported: true,
+      running: false,
+      connection,
+      error: `${KNOWLEDGE_DASHBOARD_REQUIRED_LOCAL} (${detail})`,
+    };
+  }
+}
+
+/**
+ * Knowledge Chat Dashboard entry: remote/SSH unchanged; local is attach-only.
+ * Ordinary Chat must keep calling {@link startDashboard} (local stays stubbed).
+ */
+export async function attachLocalDashboardForKnowledge(
+  profile?: string,
+): Promise<DashboardStatus> {
+  const config = getConnectionConfig();
+  const mode =
+    config.mode === "remote" || config.mode === "ssh" ? config.mode : "local";
+  if (mode === "remote")
+    return getRemoteDashboardStatusForConfig(config, profile);
+  if (mode === "ssh") return getSshDashboardStatusForConfig(config, profile);
+  return attachExistingLocalDashboard(profile);
 }
 
 function normalizeRemoteDashboardBaseUrl(value: string): string | null {
@@ -178,26 +326,16 @@ function requestJson(
           }
           try {
             resolve(JSON.parse(text));
-          } catch {
-            reject(
-              new Error(
-                `Invalid JSON from ${url} (status ${res.statusCode}): ${text.slice(
-                  0,
-                  200,
-                )}`,
-              ),
-            );
+          } catch (err) {
+            reject(err);
           }
         });
       },
     );
     req.on("error", reject);
     req.setTimeout(timeoutMs, () => {
-      req.destroy(
-        new Error(
-          `Timed out connecting to Hermes dashboard after ${timeoutMs}ms`,
-        ),
-      );
+      req.destroy();
+      reject(new Error(`Timed out requesting ${url}`));
     });
     req.end();
   });
@@ -437,6 +575,7 @@ export async function getDashboardStatus(
     return getRemoteDashboardStatusForConfig(config, profile);
   if (mode === "ssh") return getSshDashboardStatusForConfig(config, profile);
 
+  // Ordinary Chat / Settings: Work does not own local dashboard lifecycle.
   return {
     supported: false,
     running: false,
@@ -485,6 +624,7 @@ export async function startDashboard(
     return getRemoteDashboardStatusForConfig(config, profile);
   if (mode === "ssh") return getSshDashboardStatusForConfig(config, profile);
 
+  // Ordinary Chat keeps Legacy fallback on local; do not spawn or attach here.
   return {
     supported: false,
     running: false,

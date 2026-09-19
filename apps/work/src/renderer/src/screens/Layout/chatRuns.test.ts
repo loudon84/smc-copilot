@@ -272,6 +272,19 @@ describe("resume session to run", () => {
     });
   });
 
+  it("rejects kb-set resume into ordinary Layout Chat (G3)", () => {
+    expect(
+      resolveResumeExecutionMode({
+        sessionId: "kb-sess",
+        sessionKind: "kb-set",
+        title: "Knowledge chat",
+      }),
+    ).toEqual({
+      executionMode: "local-chat",
+      rejected: "kb-set",
+    });
+  });
+
   it("retries load once after onEmpty when the first result is empty", async () => {
     let calls = 0;
     const onEmpty = vi.fn(async () => undefined);

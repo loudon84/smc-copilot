@@ -79,6 +79,8 @@ interface UseChatActionsArgs {
    *  an agent prompt while a turn is already in flight. */
   enqueueMessage?: (text: string, attachments?: Attachment[]) => void;
   abortDashboard?: () => void;
+  knowledgeRequired?: boolean;
+  knowledgeContext?: import("../../../../../shared/knowledge/chat-knowledge-context").ChatKnowledgeContextV1 | null;
 }
 
 interface UseChatActionsResult {
@@ -128,15 +130,23 @@ export function useChatActions({
   addAgentMessage,
   enqueueMessage,
   abortDashboard,
+  knowledgeRequired = false,
+  knowledgeContext = null,
 }: UseChatActionsArgs): UseChatActionsResult {
   const messagesRef = useRef(messages);
   const isLoadingRef = useRef(isLoading);
   const sessionModelRef = useRef(sessionModel);
+  /** Sticky Hermes session for Knowledge multi-turn (avoid per-prompt first-create). */
+  const knowledgeSessionStickyRef = useRef<string | null>(null);
   useEffect(() => {
     messagesRef.current = messages;
     isLoadingRef.current = isLoading;
     sessionModelRef.current = sessionModel;
   });
+  useEffect(() => {
+    const sid = hermesSessionId?.trim();
+    if (sid) knowledgeSessionStickyRef.current = sid;
+  }, [hermesSessionId]);
 
   const pushUser = useCallback(
     (content: string, idPrefix = "user", attachments?: Attachment[]) => {
@@ -159,14 +169,29 @@ export function useChatActions({
   const sendToAgent = useCallback(
     async (text: string, attachments?: Attachment[]): Promise<void> => {
       try {
-        if (sendViaDashboard) {
+        if (knowledgeRequired) {
+          if (!knowledgeContext?.knowledgeSetId?.trim()) {
+            return;
+          }
+          if (sendViaDashboard) {
+            const handled = await sendViaDashboard(text, attachments);
+            if (handled) return;
+          }
+          // Plan B / G4: Local Legacy first-create allowed (no session yet).
+          // Once sticky/session id exists, subsequent turns MUST resume.
+        } else if (sendViaDashboard) {
           const handled = await sendViaDashboard(text, attachments);
           if (handled) return;
         }
+        const resumeSessionId =
+          hermesSessionId?.trim() ||
+          (knowledgeRequired
+            ? knowledgeSessionStickyRef.current?.trim() || undefined
+            : undefined);
         await window.hermesAPI.sendMessage(
           text,
           profile,
-          hermesSessionId || undefined,
+          resumeSessionId,
           messagesRef.current.filter(shouldSendToAgent).map((m) => ({
             role: m.role,
             content: m.content,
@@ -175,12 +200,21 @@ export function useChatActions({
           contextFolder ?? undefined,
           runId,
           sessionModelRef.current || undefined,
+          knowledgeRequired ? knowledgeContext ?? undefined : undefined,
         );
       } catch {
         // onChatError IPC already surfaces this to the user
       }
     },
-    [runId, profile, hermesSessionId, contextFolder, sendViaDashboard],
+    [
+      runId,
+      profile,
+      hermesSessionId,
+      contextFolder,
+      sendViaDashboard,
+      knowledgeRequired,
+      knowledgeContext,
+    ],
   );
 
   // Shared "side question" flow (the 💭 quick-ask button and a typed `/btw`).

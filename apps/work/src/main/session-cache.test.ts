@@ -46,12 +46,18 @@ vi.mock("./session-metadata-store", () => ({
     sessionKind: "chat",
     executionProvider: "hermes-chat",
   }),
-  isSessionClassification: (value: unknown) =>
-    typeof value === "object" &&
-    value !== null &&
-    (value as { sessionKind?: unknown }).sessionKind === "chat" &&
-    (value as { executionProvider?: unknown }).executionProvider ===
-      "hermes-chat",
+  listKbSetSessionIdsForProfile: () => [],
+  isSessionClassification: (value: unknown) => {
+    if (typeof value !== "object" || value === null) return false;
+    const v = value as {
+      sessionKind?: unknown;
+      executionProvider?: unknown;
+    };
+    return (
+      (v.sessionKind === "chat" && v.executionProvider === "hermes-chat") ||
+      (v.sessionKind === "kb-set" && v.executionProvider === "hermes-chat")
+    );
+  },
 }));
 
 vi.mock("../shared/i18n", () => ({
@@ -213,6 +219,29 @@ describe("session-cache mutation events", () => {
     ]);
     expect(received).toEqual([
       { sessionId: "desk-visible-chat", reason: "created" },
+    ]);
+  });
+
+  it("materializes Legacy Knowledge first-create as kb-set (not ordinary chat)", async () => {
+    const cache = await import("./session-cache");
+
+    cache.recordVisibleChatSession("desk-kb-first", "威通有哪些产品", {
+      sessionKind: "kb-set",
+      knowledgeSetId: "KS-A",
+    });
+
+    // Ordinary Sessions list must not surface kb-set (G2 / SCOPE-011).
+    expect(cache.listCachedSessions()).toEqual([]);
+    expect(harness.cacheContents).toBeTruthy();
+    const stored = JSON.parse(harness.cacheContents!) as {
+      sessions: Array<{ id: string; sessionKind: string; knowledgeSetId?: string }>;
+    };
+    expect(stored.sessions).toEqual([
+      expect.objectContaining({
+        id: "desk-kb-first",
+        sessionKind: "kb-set",
+        knowledgeSetId: "KS-A",
+      }),
     ]);
   });
 

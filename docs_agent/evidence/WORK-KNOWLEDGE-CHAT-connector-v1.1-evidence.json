@@ -1,0 +1,66 @@
+{
+  "schema": "smc.evidence.manifest.v2",
+  "plan_id": "knowledge_plan_b_fdd2d141",
+  "prd": "docs/knowledge/PRD-WORK-KNOWLEDGE-CHAT-v1.0-hermes-knowledge-connector.md",
+  "prd_version": "1.1.1",
+  "summary": "KnowledgeChat Plan B (PRD v1.1.1): Local Legacy first-create (G4) + Portal token-store → SMC_KB_* (G9a) with gateway reload on token change. Baseline connector T1–T10 remain. Live Hermes Golden observe remains env-gated; Local Legacy is the intended golden path.",
+  "supersedes_plan_id": "knowledge_chat_connector_3174e83f",
+  "blocking_verifications": [
+    {
+      "verification_id": "T-P2-gateway-env-reload",
+      "command": "npx vitest run src/main/knowledge/knowledge-plugin-credentials.test.ts",
+      "result": "PASS",
+      "acceptance_refs": ["A-INT-001", "G9a"],
+      "notes": "Token-unchanged skips restart; token-changed invokes restart; reload failure → KNOWLEDGE_PLUGIN_GATEWAY_RELOAD_FAILED. Manual local retrieve HTTP 401 cleared after sync+reload."
+    },
+    {
+      "verification_id": "T-P3-legacy-first-tests",
+      "command": "npx vitest run src/main/knowledge/legacy-knowledge-send-guard.test.ts src/main/session-cache.test.ts src/renderer/src/screens/Chat/hooks/useDashboardChatTransport.test.tsx",
+      "result": "PASS",
+      "acceptance_refs": ["A-API-101", "REQ-API-003", "G4"],
+      "notes": "Legacy first-create allowed without KNOWLEDGE_DASHBOARD_REQUIRED; kb-set cache materialize; knowledgeChatForcesLegacyTransport(local)=true."
+    },
+    {
+      "verification_id": "T1-chat-knowledge-context",
+      "command": "npx vitest run src/shared/knowledge/chat-knowledge-context.test.ts",
+      "result": "PASS",
+      "acceptance_refs": ["A-API-001", "A-API-002", "A-SEC-001"]
+    },
+    {
+      "verification_id": "T2-kb-set-metadata",
+      "command": "npx vitest run src/main/session-metadata-store.test.ts",
+      "result": "PASS",
+      "acceptance_refs": ["A-STATE-001", "A-STATE-002", "A-NEG-201"]
+    },
+    {
+      "verification_id": "T4-chatRuns-kb-set-reject",
+      "command": "npx vitest run src/renderer/src/screens/Layout/chatRuns.test.ts",
+      "result": "PASS",
+      "acceptance_refs": ["A-NEG-001"]
+    },
+    {
+      "verification_id": "T7-connector-scope",
+      "command": "npx vitest run src/renderer/src/screens/Chat/knowledge/KnowledgeConnector.test.tsx src/renderer/src/screens/Knowledge/features/chat/useKnowledgeChatScope.test.tsx",
+      "result": "PASS",
+      "acceptance_refs": ["A-UI-101", "A-UI-102", "A-STATE-101", "A-NEG-101", "A-NEG-202"]
+    },
+    {
+      "verification_id": "T8-T9-single-mount-migrate",
+      "command": "npx vitest run src/renderer/src/screens/Knowledge/pages/KnowledgeChatPage.test.tsx src/renderer/src/screens/Chat/Chat.knowledge-context.test.tsx",
+      "result": "PASS",
+      "acceptance_refs": ["A-UI-001", "A-UI-002", "A-MIGRATE-001", "A-NEG-301"]
+    },
+    {
+      "verification_id": "T10-golden-wire-oracle",
+      "command": "npx vitest run src/main/knowledge/knowledge-chat-golden-observe.test.ts",
+      "result": "PASS",
+      "acceptance_refs": ["A-INT-001", "A-INT-002", "A-SEC-001"],
+      "notes": "CI proves wire knowledge_set_id + no token fields. Live Hermes retrieve observation requires SMC_KNOWLEDGE_CHAT_GOLDEN=1 (skipped in CI ≠ PASS for live path). Intended live path: Local Legacy Knowledge Chat."
+    }
+  ],
+  "prd_body_align": {
+    "verification_id": "T-P1-prd-body-align",
+    "result": "PASS",
+    "notes": "§23 / REQ-API-002/003 / Failure+Conflict / DoD / §35 aligned with G4 Local Legacy + G9a; Dashboard-only reject leftovers removed."
+  }
+}

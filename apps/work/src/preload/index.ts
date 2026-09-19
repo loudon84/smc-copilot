@@ -533,6 +533,7 @@ const hermesAPI = {
     contextFolder?: string,
     runId?: string,
     modelOverride?: SessionModelOverride,
+    knowledgeContext?: { version: "1.0"; knowledgeSetId: string } | null,
   ): Promise<{ response: string; sessionId?: string }> =>
     ipcRenderer.invoke(
       "send-message",
@@ -544,6 +545,7 @@ const hermesAPI = {
       contextFolder,
       runId,
       modelOverride,
+      knowledgeContext ?? null,
     ),
 
   abortChat: (runId?: string): Promise<void> =>
@@ -817,6 +819,10 @@ const hermesAPI = {
     ipcRenderer.invoke("fresh-dashboard-ws-url", profile),
   startDashboard: (profile?: string): Promise<DashboardStatus> =>
     ipcRenderer.invoke("start-dashboard", profile),
+  attachLocalDashboardForKnowledge: (
+    profile?: string,
+  ): Promise<DashboardStatus> =>
+    ipcRenderer.invoke("attach-local-dashboard-for-knowledge", profile),
   stopDashboard: (profile?: string): Promise<boolean> =>
     ipcRenderer.invoke("stop-dashboard", profile),
 
@@ -921,6 +927,45 @@ const hermesAPI = {
     override: SessionModelOverride | null,
   ): Promise<boolean> =>
     ipcRenderer.invoke("set-session-model-override", sessionId, override),
+
+  getSessionKnowledgeContext: (
+    sessionId: string,
+  ): Promise<{
+    sessionId: string;
+    profileId: string;
+    knowledgeSetId: string;
+    sessionKind: "kb-set";
+    executionProvider: "hermes-chat";
+  } | null> => ipcRenderer.invoke("get-session-knowledge-context", sessionId),
+
+  setSessionKnowledgeContext: (input: {
+    sessionId: string;
+    profileId: string;
+    knowledgeSetId: string;
+    messageCount?: number;
+  }): Promise<{ ok: true }> =>
+    ipcRenderer.invoke("set-session-knowledge-context", input),
+
+  syncKnowledgePluginCredentials: (
+    profile?: string,
+  ): Promise<
+    | { ok: true; url: string; gatewayRestarted: boolean }
+    | { ok: false; error: string }
+  > => ipcRenderer.invoke("sync-knowledge-plugin-credentials", profile),
+
+  listKbSetSessions: (
+    profileId: string,
+    limit?: number,
+  ): Promise<
+    Array<{
+      id: string;
+      title: string;
+      startedAt: number;
+      knowledgeSetId?: string | null;
+      sessionKind: "kb-set";
+      executionProvider: "hermes-chat";
+    }>
+  > => ipcRenderer.invoke("list-kb-set-sessions", profileId, limit),
 
   // Profiles
   listProfiles: (): Promise<

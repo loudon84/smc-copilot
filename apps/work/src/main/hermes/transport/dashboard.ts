@@ -5,6 +5,7 @@ export {
   getDashboardStatus,
   freshDashboardWebSocketUrl,
   startDashboard,
+  attachLocalDashboardForKnowledge,
   stopDashboard,
   stopAllDashboards,
 } from "../../dashboard";

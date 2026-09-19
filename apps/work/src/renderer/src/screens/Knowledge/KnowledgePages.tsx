@@ -32,6 +32,8 @@ export type KnowledgePagesProps = {
   page: KnowledgePageId;
   /** Route-scope params from the keep-alive KnowledgeView (no window URL). */
   params?: KnowledgeRouteParams;
+  /** Layout active Hermes profile — Knowledge chat follows this (G5). */
+  profile?: string;
   /** Push a Knowledge page via route scope. */
   onNavigate?: (target: KnowledgeNavigateTarget) => void;
   /** Replace current Knowledge route without stacking history. */
@@ -60,6 +62,7 @@ export type KnowledgePagesProps = {
 export function KnowledgePages({
   page,
   params = {},
+  profile = "default",
   onNavigate,
   onReplace,
   onBack,
@@ -151,9 +154,9 @@ export function KnowledgePages({
       pageBody = (
         <KnowledgeChatPage
           params={params}
+          profile={profile}
           onNavigate={onNavigate}
           onReplace={onReplace}
-          {...pageOverrides}
         />
       );
       break;

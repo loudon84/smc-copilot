@@ -12,11 +12,14 @@ import { t } from "../shared/i18n";
 import { getAppLocale } from "./locale";
 import { getDbConnection } from "./db";
 import { getSessionContextFolders } from "./session-context-folder-store";
+import { stripKnowledgeScopedPromptPrefix } from "../shared/knowledge/chat-knowledge-context";
 import {
   createSessionScope,
   ensureChatSessionMetadata,
   isSessionClassification,
+  listKbSetSessionIdsForProfile,
   type SessionClassification,
+  type SessionMetadata,
 } from "./session-metadata-store";
 import {
   isSessionCacheChangedEvent,
@@ -47,6 +50,8 @@ export interface CachedSession extends SessionClassification {
   messageCount: number;
   model: string;
   contextFolder: string | null;
+  /** Present when sessionKind === kb-set. */
+  knowledgeSetId?: string | null;
   /** A visible original Chat turn exists, but the gateway has not yet written
    * its session row to state.db. The next matching DB sync clears this flag. */
   locallyMaterialized?: boolean;
@@ -62,7 +67,7 @@ interface CacheData {
 
 /** Short sidebar title from the first user message (ChatGPT/Claude style). */
 export function sessionTitleFromUserMessage(message: string): string {
-  return generateTitle(message);
+  return generateTitle(stripKnowledgeScopedPromptPrefix(message));
 }
 
 // Generate a short, readable title from the first user message (like ChatGPT/Claude)
@@ -164,7 +169,10 @@ function getDb(): Database.Database | null {
   return getDbConnection(false);
 }
 
-function localChatClassification(db: Database.Database, sessionId: string): SessionClassification | null {
+function localChatClassification(
+  db: Database.Database,
+  sessionId: string,
+): SessionMetadata | null {
   try {
     const profileId = getActiveProfileNameSync().trim() || "default";
     return ensureChatSessionMetadata(db, {
@@ -271,6 +279,7 @@ export function syncSessionCache(
         if (row.title) existing.title = row.title;
         existing.sessionKind = classification.sessionKind;
         existing.executionProvider = classification.executionProvider;
+        existing.knowledgeSetId = classification.knowledgeSetId;
         delete existing.locallyMaterialized;
         continue;
       }
@@ -393,7 +402,43 @@ export function syncSessionCache(
 // stays current without this path touching the DB.
 export function listCachedSessions(limit = 50, offset = 0): CachedSession[] {
   const cache = readCache();
-  return cache.sessions.slice(offset, offset + limit);
+  // Ordinary Sessions UI must not include kb-set (PRD G2 / SCOPE-011).
+  const ordinary = cache.sessions.filter((s) => s.sessionKind !== "kb-set");
+  return ordinary.slice(offset, offset + limit);
+}
+
+/** Knowledge page history: kb-set rows for a profile (metadata SOT + cache titles). */
+export function listCachedKbSetSessions(
+  profileId: string,
+  limit = 50,
+): CachedSession[] {
+  const pid = profileId.trim() || "default";
+  const db = getDb();
+  const ids = db ? listKbSetSessionIdsForProfile(db, pid) : [];
+  const cache = readCache();
+  const byId = new Map(cache.sessions.map((s) => [s.id, s]));
+  const out: CachedSession[] = [];
+  for (const id of ids) {
+    if (out.length >= limit) break;
+    const cached = byId.get(id);
+    if (cached && cached.sessionKind === "kb-set") {
+      out.push(cached);
+      continue;
+    }
+    out.push({
+      id,
+      title: cached?.title || id.slice(-6),
+      startedAt: cached?.startedAt ?? 0,
+      source: cached?.source || "api_server",
+      messageCount: cached?.messageCount ?? 0,
+      model: cached?.model || "",
+      contextFolder: cached?.contextFolder ?? null,
+      sessionKind: "kb-set",
+      executionProvider: "hermes-chat",
+      knowledgeSetId: cached?.knowledgeSetId ?? null,
+    });
+  }
+  return out;
 }
 
 // Update title for a specific session
@@ -481,13 +526,21 @@ export function upsertCachedSession(session: CachedSessionInput): void {
  * This local marker is retained through DB cache refreshes and is cleared once
  * the matching gateway row is observed.
  */
-export function recordVisibleChatSession(sessionId: string, prompt: string): void {
+export function recordVisibleChatSession(
+  sessionId: string,
+  prompt: string,
+  opts?: {
+    sessionKind?: "chat" | "kb-set";
+    knowledgeSetId?: string | null;
+  },
+): void {
   const id = sessionId.trim();
   if (!id) return;
   // Resumed sessions announce immediately. Keep their durable cache row and
   // title intact; this fallback is exclusively for a fresh session missing
   // from the gateway-backed cache.
   if (readCache().sessions.some((session) => session.id === id)) return;
+  const sessionKind = opts?.sessionKind ?? "chat";
   upsertCachedSession({
     id,
     title: sessionTitleFromUserMessage(prompt),
@@ -496,8 +549,10 @@ export function recordVisibleChatSession(sessionId: string, prompt: string): voi
     messageCount: 1,
     model: "",
     contextFolder: null,
-    sessionKind: "chat",
+    sessionKind,
     executionProvider: "hermes-chat",
+    knowledgeSetId:
+      sessionKind === "kb-set" ? opts?.knowledgeSetId?.trim() || null : null,
     locallyMaterialized: true,
   });
 }

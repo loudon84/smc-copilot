@@ -38,6 +38,16 @@ describe("promptNavigatorUtils", () => {
     expect(items.map((i) => i.sequence)).toEqual([1, 2]);
   });
 
+  it("strips Knowledge wire prefix from navigator labels", () => {
+    const wire =
+      '<smc_knowledge_context>\n{"version":"1.0","knowledge_set_id":"KS-A","tool":"knowledge.retrieve","policy":{"selected_set_fixed":true,"retrieve_for_enterprise_knowledge":true,"on_retrieval_failure":"report_failure_without_fabrication"}}\n</smc_knowledge_context>\n\nMT6571 电压参数';
+    expect(normalizePromptLabel(wire)).toBe("MT6571 电压参数");
+    const items = buildPromptNavigationItems([
+      { id: "u1", role: "user", content: wire },
+    ]);
+    expect(items[0]?.label).toBe("MT6571 电压参数");
+  });
+
   it("includes attachment-only prompts and skips empty ones", () => {
     const messages: ChatMessage[] = [
       {

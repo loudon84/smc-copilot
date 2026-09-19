@@ -117,6 +117,7 @@ vi.mock("./hooks/useLocalCommands", () => ({
 
 vi.mock("./hooks/useDashboardChatTransport", () => ({
   dashboardChatEnabledForConnection: () => false,
+  knowledgeChatForcesLegacyTransport: () => false,
   useDashboardChatTransport: () => ({
     abort: vi.fn(),
     enabled: false,

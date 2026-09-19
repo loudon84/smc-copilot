@@ -597,6 +597,12 @@ function Layout(): React.JSX.Element {
       resumingRef.current.add(sessionId);
       setResumingSessionId(sessionId);
       try {
+        // Reject kb-set into ordinary Layout Chat (PRD G3).
+        const binding =
+          await window.hermesAPI.getSessionKnowledgeContext?.(sessionId);
+        if (binding?.sessionKind === "kb-set") {
+          return;
+        }
         const items = (await fetchWithEmptyRetry(
           async () =>
             (await window.hermesAPI.getSessionMessages(
@@ -1008,7 +1014,10 @@ function Layout(): React.JSX.Element {
 
           {visitedViews.has("knowledge") && (
             <div style={paneStyle("knowledge")}>
-              <KnowledgeView active={view === "knowledge"} />
+              <KnowledgeView
+                active={view === "knowledge"}
+                profile={activeProfile}
+              />
             </div>
           )}
 

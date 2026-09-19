@@ -213,13 +213,14 @@ export function loadingSessionIds(runs: ChatRun[]): Set<string> {
 export interface ResumeSessionTarget {
   sessionId: string;
   title?: string;
-  sessionKind?: "chat" | "work";
+  sessionKind?: "chat" | "work" | "kb-set";
   executionProvider?: "hermes-chat" | "skill-run";
 }
 
 /**
  * Prefer an explicit history pair from the sidebar; skill-run IPC may still
  * override the display title after the fact.
+ * kb-set sessions MUST NOT resume into ordinary Layout Chat (PRD G3).
  */
 export function resolveResumeExecutionMode(
   target: ResumeSessionTarget,
@@ -227,7 +228,10 @@ export function resolveResumeExecutionMode(
     executionMode?: string;
     toolTitle?: string;
   } | null,
-): { executionMode: ChatExecutionMode; title?: string } {
+): { executionMode: ChatExecutionMode; title?: string; rejected?: "kb-set" } {
+  if (target.sessionKind === "kb-set") {
+    return { executionMode: "local-chat", rejected: "kb-set" };
+  }
   const fromPair =
     target.sessionKind === "work" && target.executionProvider === "skill-run"
       ? ("skill-run" as const)

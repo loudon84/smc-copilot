@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { Zap, Globe, PanelRightOpen } from "lucide-react";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -28,6 +28,7 @@ import { useReasoningEffort } from "./hooks/useReasoningEffort";
 import { useLocalCommands } from "./hooks/useLocalCommands";
 import {
   dashboardChatEnabledForConnection,
+  knowledgeChatForcesLegacyTransport,
   useDashboardChatTransport,
 } from "./hooks/useDashboardChatTransport";
 import { useI18n } from "../../components/useI18n";
@@ -36,6 +37,7 @@ import { ConfigHealthBanner } from "../../components/ConfigHealthBanner";
 import { FileServiceUnavailableBanner } from "../../components/files/FileServiceUnavailableBanner";
 import FollowUsModal from "../../components/FollowUsModal";
 import type { Attachment } from "../../../../shared/attachments";
+import { stripKnowledgeScopedPromptPrefix } from "../../../../shared/knowledge/chat-knowledge-context";
 import type { SessionModelOverride } from "../../../../shared/model-override";
 import type { ActiveTurn, ChatMessage, UsageState } from "./types";
 import {
@@ -250,6 +252,15 @@ interface ChatProps {
   /** Resolved avatar/colour of `profile`, so idle agent avatars in the
    *  transcript show the agent's profile picture instead of the loading gif. */
   agentAppearance?: { color?: string | null; avatar?: string | null };
+  /** Knowledge scope for KnowledgeChatPage; null/omit = ordinary Chat. */
+  knowledgeContext?: import("../../../../shared/knowledge/chat-knowledge-context").ChatKnowledgeContextV1 | null;
+  /** When true, normal Send requires a valid knowledgeContext. */
+  knowledgeRequired?: boolean;
+  /** Extra toolbar control (KnowledgeConnector). */
+  knowledgeControl?: ReactNode;
+  /** When true, transcript is shown but Send stays blocked (BLOCKED scope). */
+  knowledgeSendBlocked?: boolean;
+  knowledgeSendBlockedReason?: string;
 }
 
 function Chat({
@@ -267,6 +278,11 @@ function Chat({
   onSessionIdChange,
   onTitleChange,
   agentAppearance,
+  knowledgeContext = null,
+  knowledgeRequired = false,
+  knowledgeControl = null,
+  knowledgeSendBlocked = false,
+  knowledgeSendBlockedReason,
 }: ChatProps): React.JSX.Element {
   const { t } = useI18n();
   // Identity + appearance of the agent this conversation is with. Passed to the
@@ -356,7 +372,8 @@ function Chat({
     );
     if (firstUser && "content" in firstUser) {
       reportedTitleRef.current = true;
-      onTitleChange?.(runId, firstUser.content.slice(0, 60));
+      const visible = stripKnowledgeScopedPromptPrefix(firstUser.content);
+      onTitleChange?.(runId, visible.slice(0, 60));
     }
   }, [runId, messages, initialTitle, onTitleChange]);
 
@@ -641,12 +658,17 @@ function Chat({
   );
   const expertSelected = expertSelection.expertSlug != null;
   const activeTurnRef = useRef<ActiveTurn | null>(null);
-  const dashboardChatEnabled = dashboardChatEnabledForConnection(
-    import.meta.env.VITE_HERMES_DESKTOP_DASHBOARD_CHAT,
-    connectionModeLoaded,
+  const dashboardChatEnabled = knowledgeChatForcesLegacyTransport(
+    knowledgeRequired,
     connectionMode,
-    chatTransportPreference,
-  );
+  )
+    ? false
+    : dashboardChatEnabledForConnection(
+        import.meta.env.VITE_HERMES_DESKTOP_DASHBOARD_CHAT,
+        connectionModeLoaded,
+        connectionMode,
+        chatTransportPreference,
+      );
 
   useEffect(() => {
     ensureExpertProjectionSubscription();
@@ -962,8 +984,35 @@ function Chat({
         fixLocation: "gateway",
       };
     }
+    if (knowledgeSendBlocked) {
+      return {
+        ok: false,
+        code: knowledgeSendBlockedReason || "KNOWLEDGE_UNAVAILABLE",
+        message:
+          knowledgeSendBlockedReason ||
+          "Knowledge set is unavailable. Start a new knowledge chat.",
+      };
+    }
+    if (
+      knowledgeRequired &&
+      (!knowledgeContext || !knowledgeContext.knowledgeSetId.trim())
+    ) {
+      return {
+        ok: false,
+        code: "KNOWLEDGE_SET_REQUIRED",
+        message: "Select a Knowledge Set before sending.",
+      };
+    }
     return readiness;
-  }, [runtimeReady, runtime?.error, readiness]);
+  }, [
+    runtimeReady,
+    runtime?.error,
+    readiness,
+    knowledgeRequired,
+    knowledgeContext,
+    knowledgeSendBlocked,
+    knowledgeSendBlockedReason,
+  ]);
 
   // Authoritative context-window size for the active model, resolved from the
   // provider's /models catalogue (issue #597). Null until/unless the provider
@@ -1166,8 +1215,11 @@ function Chat({
     contextFolder,
     connectionMode,
     enabled: dashboardChatEnabled,
-    fallbackOnUnavailable: chatTransportPreference === "auto",
+    fallbackOnUnavailable:
+      chatTransportPreference === "auto" && !knowledgeRequired,
     hermesSessionId,
+    knowledgeContext,
+    knowledgeRequired,
     messages,
     model: chatCurrentModel,
     modelBaseUrl: chatCurrentBaseUrl,
@@ -1300,6 +1352,8 @@ function Chat({
     abortDashboard: dashboardTransport.enabled
       ? dashboardTransport.abort
       : undefined,
+    knowledgeRequired,
+    knowledgeContext,
   });
 
   // Stable ref to handleSend so the drain effect doesn't re-trigger on
@@ -2190,6 +2244,7 @@ function Chat({
                     onToggleWorktree={handleToggleWorktree}
                     onSelectRecentFolder={handleSelectRecentFolder}
                   />
+                  {knowledgeControl}
                 </div>
                 <button
                   type="button"

@@ -13,6 +13,7 @@ import { useI18n } from "../../components/useI18n";
 import { parseMediaTokens, cleanLeakedToolTags } from "./mediaUtils";
 import { isDocumentLikeMessage } from "../../components/files/message/document-message-utils";
 import type { MessageDocumentPreviewInput } from "../../../../shared/files";
+import { stripKnowledgeScopedPromptPrefix } from "../../../../shared/knowledge/chat-knowledge-context";
 import type { ChatBubbleMessage, ChatMessage } from "./types";
 
 export const APPROVAL_RE =
@@ -206,11 +207,15 @@ export const MessageRow = memo(function MessageRow({
   // runs a full regex pipeline. Cache the result against the message content
   // so a long conversation doesn't reparse every row on every render.
   // Only agent bubbles need media parsing — user bubbles render content
-  // verbatim — so this is gated on the role to skip the work entirely for
-  // user rows. (Follow-up item from PR #303 review.)
-  const bubbleContent = isChatBubbleMessage(msg)
+  // verbatim (after stripping Knowledge wire prefix for display) — so this is
+  // gated on the role to skip the work entirely for user rows.
+  const rawBubbleContent = isChatBubbleMessage(msg)
     ? (msg as ChatBubbleMessage).content
     : null;
+  const bubbleContent =
+    msg.role === "user" && rawBubbleContent != null
+      ? stripKnowledgeScopedPromptPrefix(rawBubbleContent)
+      : rawBubbleContent;
   const segments = useMemo(
     () =>
       msg.role === "agent" && bubbleContent
@@ -334,7 +339,7 @@ export const MessageRow = memo(function MessageRow({
                   />
                 ),
               )
-            : msg.content)
+            : bubbleContent || msg.content)
         )}
         {msg.error && (
           <div className="chat-error-message" role="alert">

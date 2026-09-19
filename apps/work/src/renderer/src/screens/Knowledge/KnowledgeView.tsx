@@ -16,6 +16,8 @@ export type KnowledgeUiEffectCounters = {
 
 export type KnowledgeViewProps = {
   active: boolean;
+  /** Layout active Hermes profile — threaded into Knowledge Chat (G5). */
+  profile?: string;
   /** Optional injected scope for tests; product uses one default host scope. */
   scope?: KnowledgeRouteScope;
   /** Optional observability counters for hidden-effect proofs (V02). */
@@ -42,6 +44,7 @@ function readModeApi():
  */
 export function KnowledgeView({
   active,
+  profile = "default",
   scope: injectedScope,
   uiEffectCounters,
 }: KnowledgeViewProps): ReactElement {
@@ -171,6 +174,7 @@ export function KnowledgeView({
       <KnowledgePages
         page={snapshot.current.page}
         params={snapshot.current.params}
+        profile={profile}
         onNavigate={(target) => {
           scope.push(target);
         }}

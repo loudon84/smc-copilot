@@ -10,7 +10,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import type { DashboardRpcEvent } from "../dashboardGatewayClient";
-import { useDashboardChatTransport } from "./useDashboardChatTransport";
+import {
+  knowledgeChatForcesLegacyTransport,
+  useDashboardChatTransport,
+} from "./useDashboardChatTransport";
 import type { ActiveTurn, ChatMessage, UsageState } from "../types";
 
 type SetUsageMock = Mock<(value: SetStateAction<UsageState | null>) => void>;
@@ -138,6 +141,15 @@ function Harness({
 
   return null;
 }
+
+describe("knowledgeChatForcesLegacyTransport (Plan B / G4)", () => {
+  it("forces Legacy for local Knowledge Chat only", () => {
+    expect(knowledgeChatForcesLegacyTransport(true, "local")).toBe(true);
+    expect(knowledgeChatForcesLegacyTransport(true, "ssh")).toBe(false);
+    expect(knowledgeChatForcesLegacyTransport(true, "remote")).toBe(false);
+    expect(knowledgeChatForcesLegacyTransport(false, "local")).toBe(false);
+  });
+});
 
 describe("useDashboardChatTransport recovery", () => {
   beforeEach(() => {

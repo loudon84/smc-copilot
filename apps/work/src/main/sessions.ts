@@ -28,8 +28,7 @@ import {
 } from "./session-continuation-store";
 import { deleteSessionContextFolderForSession } from "./session-context-folder-store";
 import { deleteSessionModelOverrideForSession } from "./session-model-override-store";
-import { createSessionScope, deleteSessionMetadataForSession } from "./session-metadata-store";
-import { getActiveProfileNameSync } from "./utils";
+import { deleteAllSessionMetadataForSessionId, getSessionMetadataBySessionId } from "./session-metadata-store";
 import {
   deleteSkillRunTranscriptForSession,
   listSkillRunTranscriptForSession,
@@ -451,9 +450,13 @@ export function searchSessions(query: string, limit = 20): SearchResult[] {
 
     const uniqueRows = dedupeSearchRowsBySession(
       [...titleMatches, ...ftsRows, ...messageMatches],
-      limit,
+      limit * 3,
     );
-    return uniqueRows.map((r) => ({
+    const ordinary = uniqueRows.filter((r) => {
+      const meta = getSessionMetadataBySessionId(db, r.session_id);
+      return meta?.sessionKind !== "kb-set";
+    });
+    return ordinary.slice(0, limit).map((r) => ({
       sessionId: r.session_id,
       title: r.title,
       startedAt: r.started_at,
@@ -1036,12 +1039,7 @@ export function deleteSessionRows(db: Database.Database, sessionId: string): num
     ).run(sessionId);
   }
   deleteSessionContextFolderForSession(db, sessionId);
-  const profileId = getActiveProfileNameSync().trim() || "default";
-  deleteSessionMetadataForSession(db, {
-    sessionScope: createSessionScope(`local|${profileId}`),
-    profileId,
-    sessionId,
-  });
+  deleteAllSessionMetadataForSessionId(db, sessionId);
   deleteSessionModelOverrideForSession(db, sessionId);
   db.prepare("DELETE FROM messages WHERE session_id = ?").run(sessionId);
   const result = db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,8 +43,15 @@ vi.mock("./prompt-navigator/usePromptNavigator", () => ({
 }));
 
 vi.mock("./ChatInput", () => ({
-  ChatInput: forwardRef(function ChatInputMock() {
-    return <div data-testid="chat-input" />;
+  ChatInput: forwardRef(function ChatInputMock(props: {
+    disabled?: boolean;
+    toolbarExtras?: ReactNode;
+  }) {
+    return (
+      <div data-testid="chat-input" data-disabled={String(!!props.disabled)}>
+        {props.toolbarExtras}
+      </div>
+    );
   }),
 }));
 
@@ -107,6 +114,10 @@ vi.mock("./hooks/useDashboardChatTransport", () => ({
     runBackground: undefined,
     abort: undefined,
   }),
+}));
+
+vi.mock("./ModelPicker", () => ({
+  ModelPicker: () => <div data-testid="model-picker" />,
 }));
 
 vi.mock("../../components/ConfigHealthBanner", () => ({
@@ -179,7 +190,7 @@ function installHermes(): void {
   } as unknown as typeof window.desktopAuth;
 }
 
-describe("Chat resume empty vs new-chat empty", () => {
+describe("Chat knowledge props", () => {
   beforeEach(() => {
     resetSkillRunStoreForTests();
     class ResizeObserverStub {
@@ -196,25 +207,37 @@ describe("Chat resume empty vs new-chat empty", () => {
     resetSkillRunStoreForTests();
   });
 
-  it("shows resume empty state when a session id is bound with no messages", () => {
-    render(
-      <Chat
-        runId="run-1"
-        initialSessionId="sess-chat"
-        initialTitle="Report skills research dir"
-        initialMessages={[]}
-      />,
-    );
-
-    expect(screen.getByTestId("chat-resume-empty")).toBeTruthy();
-    expect(screen.getByText("Report skills research dir")).toBeTruthy();
-    expect(screen.queryByText("chat.suggestionSearch")).toBeNull();
+  it("ordinary Chat with null context mounts unchanged", () => {
+    render(<Chat runId="run-ordinary" profile="default" active />);
+    expect(screen.getByTestId("chat-input")).toBeTruthy();
   });
 
-  it("shows new-chat suggestions when there is no session id", () => {
-    render(<Chat runId="run-2" initialMessages={[]} />);
+  it("knowledgeRequired mounts knowledgeControl toolbar slot", () => {
+    render(
+      <Chat
+        runId="run-kb"
+        profile="default"
+        active
+        knowledgeRequired
+        knowledgeContext={null}
+        knowledgeControl={<span data-testid="kb-control">picker</span>}
+      />,
+    );
+    expect(screen.getByTestId("kb-control")).toBeTruthy();
+  });
 
-    expect(screen.queryByTestId("chat-resume-empty")).toBeNull();
-    expect(screen.getByText("chat.suggestionSearch")).toBeTruthy();
+  it("knowledgeSendBlocked mounts without crashing", () => {
+    render(
+      <Chat
+        runId="run-blocked"
+        profile="default"
+        active
+        knowledgeRequired
+        knowledgeContext={{ version: "1.0", knowledgeSetId: "KS-A" }}
+        knowledgeSendBlocked
+        knowledgeSendBlockedReason="KNOWLEDGE_SET_NOT_ACTIVE"
+      />,
+    );
+    expect(screen.getByTestId("chat-input")).toBeTruthy();
   });
 });

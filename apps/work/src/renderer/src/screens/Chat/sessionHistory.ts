@@ -1,4 +1,5 @@
 import type { Attachment } from "../../../../shared/attachments";
+import { stripKnowledgeScopedPromptPrefix } from "../../../../shared/knowledge/chat-knowledge-context";
 import {
   isAssistantError,
   isBubbleMessage,
@@ -78,7 +79,7 @@ export function dbItemsToChatMessages(
           return {
             id: it.platformMessageId || `db-${it.id}`,
             role: "user",
-            content: it.content || "",
+            content: stripKnowledgeScopedPromptPrefix(it.content || ""),
             ...(typeof it.timestamp === "number"
               ? { timestamp: it.timestamp }
               : {}),
@@ -179,7 +180,10 @@ const LEGACY_TEXT_FILE_WRAPPER_RE =
 
 function normalizeBubbleContentForMatch(s: string): string {
   return normalizeWhitespace(
-    s.replace(LEGACY_TEXT_FILE_WRAPPER_RE, ""),
+    stripKnowledgeScopedPromptPrefix(s).replace(
+      LEGACY_TEXT_FILE_WRAPPER_RE,
+      "",
+    ),
   ).replace(/(?:\s+\[(?:screenshot|image)\])+$/i, "");
 }
 

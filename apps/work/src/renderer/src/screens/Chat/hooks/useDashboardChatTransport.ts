@@ -85,6 +85,8 @@ interface UseDashboardChatTransportArgs {
   enabled: boolean;
   fallbackOnUnavailable: boolean;
   hermesSessionId: string | null;
+  knowledgeContext?: import("../../../../../shared/knowledge/chat-knowledge-context").ChatKnowledgeContextV1 | null;
+  knowledgeRequired?: boolean;
   messages: ChatMessage[];
   model?: string;
   modelBaseUrl?: string;
@@ -155,6 +157,14 @@ export function dashboardChatEnabledForConnection(
   if (mode === "local") return true;
   if (mode === "remote") return true;
   return mode === "ssh";
+}
+
+/** Plan B / G4: local Knowledge Chat stays on Legacy data-plane (no Dashboard token). */
+export function knowledgeChatForcesLegacyTransport(
+  knowledgeRequired: boolean,
+  mode: "local" | "remote" | "ssh",
+): boolean {
+  return knowledgeRequired && mode === "local";
 }
 
 export function dashboardShouldPersistLocalOverlays(
@@ -919,6 +929,8 @@ export function useDashboardChatTransport({
   enabled,
   fallbackOnUnavailable,
   hermesSessionId,
+  knowledgeContext = null,
+  knowledgeRequired = false,
   messages,
   model,
   modelBaseUrl,
@@ -943,6 +955,10 @@ export function useDashboardChatTransport({
   const dashboardUnavailableRef = useRef(false);
   const runtimeSessionIdRef = useRef<string | null>(null);
   const storedSessionIdRef = useRef<string | null>(hermesSessionId);
+  const knowledgeContextRef = useRef(knowledgeContext);
+  const knowledgeRequiredRef = useRef(knowledgeRequired);
+  knowledgeContextRef.current = knowledgeContext;
+  knowledgeRequiredRef.current = knowledgeRequired;
   const messagesRef = useRef<ChatMessage[]>(messages);
   const reasoningSegmentClosedRef = useRef(false);
   const appliedModelRef = useRef<string | null>(null);
@@ -1200,7 +1216,11 @@ export function useDashboardChatTransport({
         // negative flag and lets the caller drop to legacy gateway /v1.
         let lastConnectErr: unknown = null;
         for (let attempt = 0; attempt < 3; attempt++) {
-          const status = await window.hermesAPI.startDashboard(profile);
+          // Knowledge Chat: local attach-only (no Work spawn). Ordinary Chat
+          // keeps startDashboard — local stub → Legacy fallback.
+          const status = knowledgeRequiredRef.current
+            ? await window.hermesAPI.attachLocalDashboardForKnowledge(profile)
+            : await window.hermesAPI.startDashboard(profile);
           if (clientGenerationRef.current !== generation) {
             throw new Error("Hermes dashboard connection was superseded");
           }
@@ -1237,9 +1257,17 @@ export function useDashboardChatTransport({
             },
           });
           try {
-            const freshUrl = window.hermesAPI.freshDashboardWsUrl
-              ? await window.hermesAPI.freshDashboardWsUrl(profile)
-              : status.connection.wsUrl;
+            // Local Knowledge attach already returns a renderer-safe relay URL.
+            const useAttachedLocalWs =
+              knowledgeRequiredRef.current &&
+              status.connection.mode === "local" &&
+              status.connection.alreadyRunning &&
+              status.connection.wsUrl;
+            const freshUrl = useAttachedLocalWs
+              ? status.connection.wsUrl
+              : window.hermesAPI.freshDashboardWsUrl
+                ? await window.hermesAPI.freshDashboardWsUrl(profile)
+                : status.connection.wsUrl;
             if (!freshUrl) {
               throw new Error("Hermes dashboard WebSocket URL is unavailable");
             }
@@ -1617,6 +1645,17 @@ export function useDashboardChatTransport({
       }
 
       try {
+        const knowledgeRequiredNow = knowledgeRequiredRef.current;
+        const knowledgeContextNow = knowledgeContextRef.current;
+        // Knowledge multi-turn: never force-create a new runtime session once
+        // a durable id exists (avoids per-prompt kb-set rows).
+        if (
+          knowledgeRequiredNow &&
+          storedSessionIdRef.current?.trim() &&
+          recreateRuntimeSessionRef.current
+        ) {
+          recreateRuntimeSessionRef.current = false;
+        }
         let continuationItems: DesktopSessionContinuationItem[] = [];
         const forceCreateRuntime = recreateRuntimeSessionRef.current;
         if (recreateRuntimeSessionRef.current) {
@@ -1637,6 +1676,56 @@ export function useDashboardChatTransport({
         const runtimeSessionId = await ensureRuntimeSession(client, {
           forceCreate: forceCreateRuntime,
         });
+        const justCreated = lastRuntimeSessionWasCreatedRef.current;
+        // Durable id is what Chat/route/list use (stored_session_id).
+        const durableSessionId =
+          storedSessionIdRef.current?.trim() || runtimeSessionId;
+        if (knowledgeRequiredNow) {
+          const setId = knowledgeContextNow?.knowledgeSetId?.trim();
+          if (!setId) {
+            return failActiveTurn("KNOWLEDGE_SET_REQUIRED");
+          }
+          const credSync =
+            await window.hermesAPI.syncKnowledgePluginCredentials?.(profile);
+          if (credSync && !credSync.ok) {
+            return failActiveTurn(credSync.error);
+          }
+          const existingBinding =
+            await window.hermesAPI.getSessionKnowledgeContext(durableSessionId);
+          if (!existingBinding) {
+            try {
+              await window.hermesAPI.setSessionKnowledgeContext({
+                sessionId: durableSessionId,
+                profileId: profile?.trim() || "default",
+                knowledgeSetId: setId,
+                messageCount: justCreated ? 0 : undefined,
+              });
+            } catch (persistErr) {
+              if (justCreated) {
+                await window.hermesAPI.deleteSession?.(durableSessionId).catch(
+                  () => undefined,
+                );
+                runtimeSessionIdRef.current = null;
+                setHermesSessionId("");
+              }
+              const message =
+                persistErr instanceof Error
+                  ? persistErr.message
+                  : String(persistErr);
+              return failActiveTurn(
+                message.includes("KNOWLEDGE_")
+                  ? message
+                  : "KNOWLEDGE_BINDING_PERSIST_FAILED",
+              );
+            }
+          } else if (
+            existingBinding.knowledgeSetId !== setId ||
+            (profile &&
+              existingBinding.profileId !== (profile.trim() || "default"))
+          ) {
+            return failActiveTurn("KNOWLEDGE_SESSION_SCOPE_CONFLICT");
+          }
+        }
         if (
           lastRuntimeSessionWasCreatedRef.current ||
           pendingRecoveredContinuationRef.current.length > 0
@@ -1667,10 +1756,17 @@ export function useDashboardChatTransport({
           dashboardText,
           syncedAttachments.refs,
         );
+        const { composeKnowledgeScopedPrompt } = await import(
+          "../../../../../shared/knowledge/chat-knowledge-context"
+        );
+        const wireText = composeKnowledgeScopedPrompt(
+          submitText,
+          knowledgeRequiredNow ? knowledgeContextNow : null,
+        );
         await submitDashboardPromptWithRecovery(client, {
           sessionId: selectedSessionId,
           storedSessionId: storedSessionIdRef.current,
-          text: submitText,
+          text: wireText,
           profile,
           onRecoveredSessionId: (recoveredSessionId) => {
             runtimeSessionIdRef.current = recoveredSessionId;

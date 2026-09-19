@@ -148,6 +148,7 @@ import {
   freshDashboardWebSocketUrl,
   getDashboardStatus,
   startDashboard,
+  attachLocalDashboardForKnowledge,
   stopDashboard,
 } from "../dashboard";
 import {
@@ -221,10 +222,20 @@ import {
 import {
   syncSessionCache,
   listCachedSessions,
+  listCachedKbSetSessions,
   recordVisibleChatSession,
   updateSessionTitle,
   subscribeSessionCacheChanged,
 } from "../session-cache";
+import {
+  getSessionKnowledgeContext,
+  setSessionKnowledgeContext,
+} from "../session-knowledge-binding";
+import { syncKnowledgePluginCredentialsFromPortal } from "../knowledge/knowledge-plugin-credentials";
+import {
+  guardLegacyKnowledgeSend,
+  isLegacyKnowledgeFirstCreate,
+} from "../knowledge/legacy-knowledge-send-guard";
 import { SESSION_CACHE_CHANGED_CHANNEL } from "../../shared/session-cache-events";
 import {
   remoteDeleteSession,
@@ -1475,6 +1486,7 @@ export function registerIpcHandlers(context: IpcContext): void {
       contextFolder?: string,
       runId?: string,
       modelOverride?: SessionModelOverride,
+      knowledgeContext?: { version: "1.0"; knowledgeSetId: string } | null,
     ) => {
       // Each conversation has a stable runId minted by the renderer. Fall back
       // to a generated id for legacy callers so the run is still tracked.
@@ -1540,12 +1552,65 @@ export function registerIpcHandlers(context: IpcContext): void {
         activeRuns.get(chatRunId)?.();
       };
 
-      // Ephemeral context inject for the model wire only �?dual-write below
+      // Ephemeral context inject for the model wire only — dual-write below
       // still uses the original `message` so UI/history matching stays clean.
-      const wireMessage = await composeWireMessageWithSessionContext(message, {
+      // Order: Knowledge Context → File Context → User Prompt (PRD REQ-API-003).
+      // G4: Local Legacy first-create allowed when no resumeSessionId; kb-set
+      // is written ONLY on first-create (never on subsequent resume turns).
+      const knowledgeSetIdForSend = knowledgeContext?.knowledgeSetId?.trim() || "";
+      const resumeSid = resumeSessionId?.trim() || "";
+      const profileIdForKb = profile?.trim() || "default";
+      const isKnowledgeFirstCreate = isLegacyKnowledgeFirstCreate(
+        knowledgeSetIdForSend,
+        resumeSid,
+      );
+      let kbSetBindingWritten = false;
+      const writeKbSetBinding = (sessionId: string): void => {
+        if (!isKnowledgeFirstCreate || kbSetBindingWritten) return;
+        const sid = sessionId?.trim();
+        if (!sid) return;
+        setSessionKnowledgeContext({
+          sessionId: sid,
+          profileId: profileIdForKb,
+          knowledgeSetId: knowledgeSetIdForSend,
+          messageCount: 0,
+        });
+        kbSetBindingWritten = true;
+      };
+
+      if (knowledgeSetIdForSend) {
+        const credSync = await syncKnowledgePluginCredentialsFromPortal(
+          profile,
+        );
+        if (!credSync.ok) {
+          throw new Error(credSync.error);
+        }
+        const guard = guardLegacyKnowledgeSend({
+          knowledgeSetId: knowledgeSetIdForSend,
+          resumeSessionId: resumeSid || null,
+          binding: resumeSid ? getSessionKnowledgeContext(resumeSid) : null,
+        });
+        if (!guard.ok) {
+          throw new Error(guard.error);
+        }
+        if (guard.bindingWritten) {
+          kbSetBindingWritten = true;
+        }
+      }
+
+      let wireMessage = await composeWireMessageWithSessionContext(message, {
         profile,
         sessionId: resumeSessionId,
       });
+      if (knowledgeSetIdForSend) {
+        const { composeKnowledgeScopedPrompt } = await import(
+          "../../shared/knowledge/chat-knowledge-context"
+        );
+        wireMessage = composeKnowledgeScopedPrompt(wireMessage, {
+          version: "1.0",
+          knowledgeSetId: knowledgeSetIdForSend,
+        });
+      }
 
       const handle = await sendMessage(
         wireMessage,
@@ -1569,6 +1634,28 @@ export function registerIpcHandlers(context: IpcContext): void {
           },
           onDone: (sessionId) => {
             activeRuns.delete(chatRunId);
+            // G4 Legacy first-create fallback: write kb-set if onSessionStarted
+            // never fired with an id (or write failed earlier and we retry).
+            if (knowledgeSetIdForSend && sessionId && !kbSetBindingWritten) {
+              try {
+                writeKbSetBinding(sessionId);
+              } catch (err) {
+                console.warn(
+                  "[knowledge] Failed to persist kb-set on chat-done:",
+                  err,
+                );
+                const messageText =
+                  err instanceof Error
+                    ? err.message
+                    : "KNOWLEDGE_BINDING_PERSIST_FAILED";
+                safeSend(
+                  "chat-error",
+                  messageText.includes("KNOWLEDGE_")
+                    ? messageText
+                    : "KNOWLEDGE_BINDING_PERSIST_FAILED",
+                );
+              }
+            }
             // Reconcile a locally materialized visible Chat row after a
             // successful turn, once the gateway may have written its durable
             // state.db metadata.
@@ -1615,10 +1702,41 @@ export function registerIpcHandlers(context: IpcContext): void {
             }
           },
           onSessionStarted: (sessionId) => {
+            // G4: write kb-set BEFORE ensureChat / visible-chat materialize
+            // so sync cannot classify the new session as ordinary chat.
+            if (knowledgeSetIdForSend) {
+              try {
+                writeKbSetBinding(sessionId);
+              } catch (err) {
+                console.warn(
+                  "[knowledge] Failed to persist kb-set on session-started:",
+                  err,
+                );
+                const messageText =
+                  err instanceof Error
+                    ? err.message
+                    : "KNOWLEDGE_BINDING_PERSIST_FAILED";
+                safeSend(
+                  "chat-error",
+                  messageText.includes("KNOWLEDGE_")
+                    ? messageText
+                    : "KNOWLEDGE_BINDING_PERSIST_FAILED",
+                );
+              }
+            }
             // A visible Chat turn earns a local, classified sidebar row even
             // before the gateway writes its state.db row. The following sync
             // reconciles it with gateway metadata when that row is available.
-            recordVisibleChatSession(sessionId, message);
+            recordVisibleChatSession(
+              sessionId,
+              message,
+              knowledgeSetIdForSend
+                ? {
+                    sessionKind: "kb-set",
+                    knowledgeSetId: knowledgeSetIdForSend,
+                  }
+                : undefined,
+            );
             syncSessionCache();
             safeSend("chat-session-started", sessionId);
           },
@@ -1923,6 +2041,10 @@ export function registerIpcHandlers(context: IpcContext): void {
   ipcMain.handle("start-dashboard", (_event, profile?: string) =>
     startDashboard(profile),
   );
+  ipcMain.handle(
+    "attach-local-dashboard-for-knowledge",
+    (_event, profile?: string) => attachLocalDashboardForKnowledge(profile),
+  );
   ipcMain.handle("stop-dashboard", (_event, profile?: string) =>
     stopDashboard(profile),
   );
@@ -2180,6 +2302,43 @@ export function registerIpcHandlers(context: IpcContext): void {
     (_event, sessionId: string, override: SessionModelOverride | null) => {
       setSessionModelOverride(sessionId, override);
       return true;
+    },
+  );
+
+  ipcMain.handle(
+    "get-session-knowledge-context",
+    (_event, sessionId: string) => {
+      return getSessionKnowledgeContext(sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "set-session-knowledge-context",
+    (
+      _event,
+      input: {
+        sessionId: string;
+        profileId: string;
+        knowledgeSetId: string;
+        messageCount?: number;
+      },
+    ) => {
+      return setSessionKnowledgeContext(input);
+    },
+  );
+
+  ipcMain.handle(
+    "sync-knowledge-plugin-credentials",
+    async (_event, profile?: string) => {
+      return syncKnowledgePluginCredentialsFromPortal(profile);
+    },
+  );
+
+  ipcMain.handle(
+    "list-kb-set-sessions",
+    (_event, profileId: string, limit?: number) => {
+      const lim = typeof limit === "number" && limit > 0 ? limit : 50;
+      return listCachedKbSetSessions(profileId || "default", lim);
     },
   );
 
