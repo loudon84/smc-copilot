@@ -17,12 +17,19 @@ import {
   type KnowledgeBaseUpdateInput,
   type KnowledgeBuildIdInput,
   type KnowledgeBuildJobSnapshot,
+  type KnowledgeChunkIpcResult,
+  type KnowledgeFacadeErrorShape,
   type KnowledgeFileIdInput,
+  type KnowledgeListFileChunksInput,
   type KnowledgeResolveDocumentPreviewInput,
+  type KnowledgeSetFileChunkAvailabilityInput,
   type KnowledgeStartBuildInput,
   type KnowledgeUpdateBuildProfileInput,
 } from "../../shared/knowledge/knowledge-base-ipc";
-import { KnowledgeFacadeError } from "../../shared/knowledge/knowledge-errors";
+import {
+  KnowledgeFacadeError,
+  toKnowledgeFacadeError,
+} from "../../shared/knowledge/knowledge-errors";
 import { getKnowledgeModeSnapshot } from "./knowledge-mode-controller";
 import { getKnowledgeHttpProvider } from "./knowledge-http-provider";
 import { KnowledgeProviderFacade } from "./knowledge-provider-facade";
@@ -67,6 +74,20 @@ function sanitizeIpcError(err: unknown): Error {
     console.error("[knowledge-base]", err.name);
   }
   return new Error("KNOWLEDGE_UNAVAILABLE");
+}
+
+function chunkIpcErrorShape(err: unknown): KnowledgeFacadeErrorShape {
+  const facade = toKnowledgeFacadeError(err);
+  console.info("[knowledge-base-chunk]", {
+    operationId: facade.operationId,
+    code: facade.code,
+    httpStatus: facade.httpStatus,
+  });
+  return facade.toShape();
+}
+
+function chunkIpcFail(err: unknown): KnowledgeChunkIpcResult<never> {
+  return { ok: false, error: chunkIpcErrorShape(err) };
 }
 
 function requireAuth(): void {
@@ -555,6 +576,40 @@ export function registerKnowledgeBaseIpcHandlers(ipcMain: IpcMain): void {
         buildPoller.unwatch(input?.buildId);
       } catch (err) {
         throw sanitizeIpcError(err);
+      }
+    },
+  );
+
+  /** Chunk IPC: structured result only — never mockFacade success path. */
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.listFileChunks,
+    async (
+      _e: IpcMainInvokeEvent,
+      input: KnowledgeListFileChunksInput,
+    ): Promise<KnowledgeChunkIpcResult<unknown>> => {
+      try {
+        requireAuth();
+        const data = await getKnowledgeHttpProvider().listFileChunks(input);
+        return { ok: true, data };
+      } catch (err) {
+        return chunkIpcFail(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.setFileChunkAvailability,
+    async (
+      _e: IpcMainInvokeEvent,
+      input: KnowledgeSetFileChunkAvailabilityInput,
+    ): Promise<KnowledgeChunkIpcResult<unknown>> => {
+      try {
+        requireAuth();
+        const data =
+          await getKnowledgeHttpProvider().setFileChunkAvailability(input);
+        return { ok: true, data };
+      } catch (err) {
+        return chunkIpcFail(err);
       }
     },
   );

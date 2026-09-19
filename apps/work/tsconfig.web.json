@@ -10,6 +10,7 @@
     "components/common/**/*",
     "components/file-preview/**/*",
     "components/knowledge/knowledge-base-card.tsx",
+    "components/knowledge/document-detail/**/*",
     "utils/**/*",
     "hooks/**/*"
   ],
@@ -37,6 +38,12 @@
       "@/components/common/*": ["./components/common/*"],
       "@/components/file-preview": ["./components/file-preview/index.ts"],
       "@/components/file-preview/*": ["./components/file-preview/*"],
+      "@/components/knowledge/document-detail": [
+        "./components/knowledge/document-detail/index.ts"
+      ],
+      "@/components/knowledge/document-detail/*": [
+        "./components/knowledge/document-detail/*"
+      ],
       "@/components/knowledge/knowledge-base-card": [
         "./components/knowledge/knowledge-base-card.tsx"
       ],

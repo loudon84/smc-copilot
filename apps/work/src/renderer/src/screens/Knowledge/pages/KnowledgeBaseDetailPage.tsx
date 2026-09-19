@@ -103,7 +103,7 @@ function chunkReadinessLabel(
 
 export function KnowledgeBaseDetailPage({
   params = {},
-  onNavigate: _onNavigate,
+  onNavigate,
   onBack,
   capability: injectedCapability,
   mode: injectedMode,
@@ -516,6 +516,23 @@ export function KnowledgeBaseDetailPage({
                           <TableCell>{file.lastError ?? ""}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                data-testid={`knowledge-base-file-open-${file.id}`}
+                                onClick={() =>
+                                  onNavigate?.({
+                                    page: "documents",
+                                    params: {
+                                      knowledgeBaseId: detailId,
+                                      documentId: file.id,
+                                    },
+                                  })
+                                }
+                              >
+                                {t("knowledge.host.open")}
+                              </Button>
                               <Button
                                 type="button"
                                 size="sm"

@@ -30,6 +30,8 @@ export function unusedKnowledgeBaseOps(
   | "watchBuild"
   | "unwatchBuild"
   | "onBuildChanged"
+  | "listFileChunks"
+  | "setFileChunkAvailability"
 > {
   const unused = async (): Promise<never> => {
     throw new Error("unused");
@@ -61,6 +63,15 @@ export function unusedKnowledgeBaseOps(
     watchBuild: vi.fn(unused),
     unwatchBuild: vi.fn(async () => undefined),
     onBuildChanged: () => () => undefined,
+    listFileChunks: vi.fn(async (input) => ({
+      sourceFileId: input.sourceFileId,
+      fileVersionId: "ver-stub",
+      items: [],
+      total: 0,
+      page: input.page ?? 1,
+      pageSize: input.pageSize ?? 50,
+    })),
+    setFileChunkAvailability: vi.fn(unused),
     ...overrides,
   };
 }
@@ -159,6 +170,17 @@ export function makeBasesApi(
             knowledgeBaseId: store[0]?.id ?? "kb",
           })),
       ),
+      listFileChunks: vi.fn(async (input) => {
+        const file = files.find((item) => item.id === input.sourceFileId);
+        return {
+          sourceFileId: input.sourceFileId,
+          fileVersionId: file?.activeVersionId ?? "ver-stub",
+          items: [],
+          total: 0,
+          page: input.page ?? 1,
+          pageSize: input.pageSize ?? 50,
+        };
+      }),
     }),
   };
 }

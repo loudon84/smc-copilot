@@ -22,9 +22,13 @@ import type {
   KnowledgeBuildIdInput,
   KnowledgeBuildJobSnapshot,
   KnowledgeBuildProfileView,
+  KnowledgeFileChunkAvailabilityResult,
+  KnowledgeFileChunkPage,
   KnowledgeFileIdInput,
   KnowledgeFileVersionSnapshot,
   KnowledgeIndexState,
+  KnowledgeListFileChunksInput,
+  KnowledgeSetFileChunkAvailabilityInput,
   KnowledgeStartBuildInput,
   KnowledgeUpdateBuildProfileInput,
 } from "../../shared/knowledge/knowledge-base-ipc";
@@ -63,6 +67,8 @@ import {
   parseKnowledgeBuildJobList,
   parseKnowledgeBuildJobSnapshot,
   parseKnowledgeBuildProfileView,
+  parseKnowledgeFileChunkAvailabilityResult,
+  parseKnowledgeFileChunkPage,
   parseKnowledgeFileVersionList,
   parseKnowledgeIndexStates,
   parseKnowledgeRetrievalProfileList,
@@ -153,6 +159,12 @@ export type KnowledgeHttpProvider = {
     available: boolean;
     status: "available" | "blocked_provider_unavailable" | "auth_required";
   }>;
+  listFileChunks(
+    input: KnowledgeListFileChunksInput,
+  ): Promise<KnowledgeFileChunkPage>;
+  setFileChunkAvailability(
+    input: KnowledgeSetFileChunkAvailabilityInput,
+  ): Promise<KnowledgeFileChunkAvailabilityResult>;
 };
 
 function logSanitized(
@@ -873,6 +885,91 @@ export function createKnowledgeHttpProvider(
           status: "blocked_provider_unavailable" as const,
         };
       }
+    },
+
+    async listFileChunks(input): Promise<KnowledgeFileChunkPage> {
+      const operationId = randomUUID();
+      const sourceFileId = input.sourceFileId?.trim() ?? "";
+      if (!sourceFileId) {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+          retryable: false,
+          operationId,
+        });
+      }
+      const page = input.page ?? 1;
+      const pageSize = input.pageSize ?? 50;
+      if (
+        !Number.isInteger(page) ||
+        page < 1 ||
+        !Number.isInteger(pageSize) ||
+        pageSize < 1 ||
+        pageSize > 100
+      ) {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+          retryable: false,
+          operationId,
+        });
+      }
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      const keywords =
+        typeof input.keywords === "string" ? input.keywords.trim() : "";
+      if (keywords.length > 200) {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+          retryable: false,
+          operationId,
+        });
+      }
+      if (keywords) params.set("keywords", keywords);
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(sourceFileId)}/chunks?${params.toString()}`,
+        { method: "GET" },
+        operationId,
+        "listFileChunks",
+      );
+      return parseKnowledgeFileChunkPage(body, operationId);
+    },
+
+    async setFileChunkAvailability(
+      input,
+    ): Promise<KnowledgeFileChunkAvailabilityResult> {
+      const operationId = randomUUID();
+      const sourceFileId = input.sourceFileId?.trim() ?? "";
+      const chunkId = input.chunkId?.trim() ?? "";
+      const fileVersionId = input.fileVersionId?.trim() ?? "";
+      if (!sourceFileId || !chunkId || !fileVersionId) {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+          retryable: false,
+          operationId,
+        });
+      }
+      if (typeof input.available !== "boolean") {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+          retryable: false,
+          operationId,
+        });
+      }
+      const { body } = await requestJson(
+        `/api/v1/source-files/${encodeURIComponent(sourceFileId)}/chunks/${encodeURIComponent(chunkId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            file_version_id: fileVersionId,
+            available: input.available,
+          }),
+        },
+        operationId,
+        "setFileChunkAvailability",
+        { allowNonIdempotentRetry: false },
+      );
+      return parseKnowledgeFileChunkAvailabilityResult(body, operationId);
     },
   };
 }

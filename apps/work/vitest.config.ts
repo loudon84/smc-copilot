@@ -25,6 +25,10 @@ export default defineConfig({
         __dirname,
         "components/file-preview",
       ),
+      "@/components/knowledge/document-detail": resolve(
+        __dirname,
+        "components/knowledge/document-detail",
+      ),
       "@/components/knowledge/knowledge-base-card": resolve(
         __dirname,
         "components/knowledge/knowledge-base-card.tsx",

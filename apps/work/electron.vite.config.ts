@@ -70,6 +70,10 @@ export default defineConfig({
           configDir,
           "components/file-preview",
         ),
+        "@/components/knowledge/document-detail": resolve(
+          configDir,
+          "components/knowledge/document-detail",
+        ),
         "@/components/knowledge/knowledge-base-card": resolve(
           configDir,
           "components/knowledge/knowledge-base-card.tsx",

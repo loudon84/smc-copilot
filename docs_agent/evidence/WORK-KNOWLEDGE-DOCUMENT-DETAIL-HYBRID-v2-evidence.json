@@ -1,0 +1,43 @@
+{
+  "schema": "smc.evidence.manifest.v2",
+  "plan_id": "DOCUMENTDETAIL-HYBRID-V2",
+  "prd_id": "PRD-WORK-KNOWLEDGE-DOCUMENT-DETAIL-HYBRID-V2",
+  "prd_version": "2.0",
+  "prd_status": "APPROVED_FOR_PLAN",
+  "baseline_note": "Implementation evidence against grilling §1.4 lock; HEAD at evidence write time may move before commit.",
+  "commit_at_evidence": "03632b0d4c6e2444ee7cc2e9df072069fb819dec",
+  "summary": "Chunk Thin Gateway IPC + DocumentDetail Hybrid module + Base Actions [Open]; product mock not used for Chunk; Golden Consumer live-only (not executed in this CI pass).",
+  "blocking_verifications": [
+    {
+      "verification_id": "V-UNIT-CONTRACT",
+      "command": "cd apps/work && npx vitest run src/shared/knowledge/knowledge-base-ipc.test.ts src/main/knowledge/knowledge-http-provider.test.ts components/knowledge/document-detail/useKnowledgeChunkPanel.test.ts",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "verification_id": "V-UNIT-NAV-UI",
+      "command": "cd apps/work && npx vitest run tests/knowledge-bases-page.test.ts tests/knowledge-documents-page.test.ts tests/knowledge-preview-chain-trace.test.ts",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "verification_id": "V-GOLDEN-LIVE",
+      "command": "manual live nodeskclaw Golden Consumer (PRD §30)",
+      "exit_code": null,
+      "result": "PENDING",
+      "note": "MUST NOT count mock datasets as Golden PASS per §1.4"
+    }
+  ],
+  "delivered": [
+    "T1 Chunk shared types/channels KnowledgeChunkIpcResult",
+    "T2 fail-closed chunk schema parsers",
+    "T3 HTTP listFileChunks / setFileChunkAvailability",
+    "T4 Chunk-only structured IPC (no mockFacade success)",
+    "T5 Preload Chunk unwrap only",
+    "T6 useKnowledgeChunkPanel state machine",
+    "T7 DocumentDetail Hybrid module",
+    "T8 Base Detail Actions Open",
+    "T9 Thin KnowledgeDocumentDetailPage adapter",
+    "T10 i18n en knowledge.chunk.* + focused tests + this evidence"
+  ]
+}

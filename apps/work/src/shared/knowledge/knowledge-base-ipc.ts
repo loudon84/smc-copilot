@@ -29,6 +29,8 @@ export const KNOWLEDGE_BASE_IPC_CHANNELS = {
   watchBuild: "knowledge-base:watch-build",
   unwatchBuild: "knowledge-base:unwatch-build",
   buildChanged: "knowledge-base:build-changed",
+  listFileChunks: "knowledge-base:list-file-chunks",
+  setFileChunkAvailability: "knowledge-base:set-file-chunk-availability",
 } as const;
 
 export type KnowledgeBaseIpcChannel =
@@ -271,6 +273,64 @@ export function isKnowledgeFacadeErrorShape(
   );
 }
 
+/** Chunk Thin Gateway item (public DTO — no provider runtime IDs). */
+export interface KnowledgeFileChunk {
+  id: string;
+  content: string;
+  available: boolean | null;
+  positions: unknown[] | null;
+  importantKeywords: string[];
+  questions: string[];
+}
+
+export interface KnowledgeFileChunkPage {
+  sourceFileId: string;
+  fileVersionId: string;
+  items: KnowledgeFileChunk[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface KnowledgeListFileChunksInput {
+  sourceFileId: string;
+  page?: number;
+  pageSize?: number;
+  keywords?: string;
+}
+
+export interface KnowledgeSetFileChunkAvailabilityInput {
+  sourceFileId: string;
+  chunkId: string;
+  fileVersionId: string;
+  available: boolean;
+}
+
+export interface KnowledgeFileChunkAvailabilityResult {
+  sourceFileId: string;
+  fileVersionId: string;
+  chunkId: string;
+  available: boolean;
+}
+
+/**
+ * Structured IPC envelope for Chunk channels only.
+ * Non-Chunk Knowledge IPC continues to throw Error(code).
+ */
+export type KnowledgeChunkIpcResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: KnowledgeFacadeErrorShape };
+
+export function isKnowledgeChunkIpcResult<T = unknown>(
+  value: unknown,
+): value is KnowledgeChunkIpcResult<T> {
+  if (!value || typeof value !== "object") return false;
+  const rec = value as Record<string, unknown>;
+  if (rec.ok === true) return "data" in rec;
+  if (rec.ok === false) return isKnowledgeFacadeErrorShape(rec.error);
+  return false;
+}
+
 export type KnowledgeBaseMutationAction = "save" | "upload" | "delete";
 
 export function knowledgeBaseActionAllowed(
@@ -330,4 +390,10 @@ export interface HermesKnowledgeBasesAPI {
   onBuildChanged(
     callback: (snapshot: KnowledgeBuildJobSnapshot) => void,
   ): () => void;
+  listFileChunks(
+    input: KnowledgeListFileChunksInput,
+  ): Promise<KnowledgeFileChunkPage>;
+  setFileChunkAvailability(
+    input: KnowledgeSetFileChunkAvailabilityInput,
+  ): Promise<KnowledgeFileChunkAvailabilityResult>;
 }

@@ -260,6 +260,82 @@ describe("knowledge schema fail-closed", () => {
     expect(isKnowledgeIndexRetrievalReady(ready[0]!)).toBe(true);
   });
 
+  it("parses chunk page and rejects invalid contracts", async () => {
+    const {
+      parseKnowledgeFileChunkPage,
+      parseKnowledgeFileChunkAvailabilityResult,
+    } = await import("./knowledge-schema");
+    const page = parseKnowledgeFileChunkPage({
+      data: {
+        source_file_id: "sf-1",
+        file_version_id: "ver-1",
+        items: [
+          {
+            id: "c1",
+            content: "hello",
+            available: true,
+            positions: null,
+            important_keywords: ["a"],
+            questions: [],
+            available_int: 1,
+            ragflow_chunk_id: "hidden",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      },
+    });
+    expect(page).toEqual({
+      sourceFileId: "sf-1",
+      fileVersionId: "ver-1",
+      items: [
+        {
+          id: "c1",
+          content: "hello",
+          available: true,
+          positions: null,
+          importantKeywords: ["a"],
+          questions: [],
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    });
+    expect(page.items[0]).not.toHaveProperty("available_int");
+    expect(page.items[0]).not.toHaveProperty("ragflow_chunk_id");
+    expect(() =>
+      parseKnowledgeFileChunkPage({
+        data: {
+          source_file_id: "sf-1",
+          file_version_id: "ver-1",
+          items: [{ id: "c1", content: "x", available: "yes" }],
+          total: 1,
+          page: 1,
+          page_size: 50,
+        },
+      }),
+    ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
+    expect(
+      parseKnowledgeFileChunkAvailabilityResult({
+        data: {
+          source_file_id: "sf-1",
+          file_version_id: "ver-1",
+          chunk_id: "c1",
+          available: false,
+        },
+      }),
+    ).toEqual({
+      sourceFileId: "sf-1",
+      fileVersionId: "ver-1",
+      chunkId: "c1",
+      available: false,
+    });
+  });
+});
+
+describe("KnowledgeHttpProvider sets and retrieval profiles", () => {
   it("parses knowledge set and retrieval profile snapshots fail-closed", async () => {
     const {
       parseKnowledgeSetSnapshot,
@@ -596,5 +672,71 @@ describe("KnowledgeHttpProvider source file and build", () => {
     expect(seen).toContain("GET /api/v2/knowledge-bases/kb_1/indexes");
     expect(seen).toContain("POST /api/v2/knowledge-bases/kb_1/builds");
     expect(seen).toContain("GET /api/v2/builds/build-1");
+  });
+
+  it("calls source-file chunk GET/PATCH contract paths", async () => {
+    const seen: string[] = [];
+    let patchBody = "";
+    const provider = createKnowledgeHttpProvider(
+      transport(async (path, init) => {
+        seen.push(`${init?.method ?? "GET"} ${path}`);
+        if (path.includes("/chunks/") && init?.method === "PATCH") {
+          patchBody = String(init.body ?? "");
+          return jsonResponse(200, {
+            data: {
+              source_file_id: "sf-1",
+              file_version_id: "ver-1",
+              chunk_id: "c1",
+              available: false,
+            },
+          });
+        }
+        if (path.includes("/chunks")) {
+          return jsonResponse(200, {
+            data: {
+              source_file_id: "sf-1",
+              file_version_id: "ver-1",
+              items: [
+                {
+                  id: "c1",
+                  content: "hi",
+                  available: true,
+                  positions: null,
+                  important_keywords: [],
+                  questions: [],
+                },
+              ],
+              total: 1,
+              page: 1,
+              page_size: 50,
+            },
+          });
+        }
+        return jsonResponse(404, { error: { code: "NOT_FOUND" } });
+      }),
+    );
+
+    const page = await provider.listFileChunks({
+      sourceFileId: "sf-1",
+      keywords: "  hi  ",
+    });
+    expect(page.items[0]?.id).toBe("c1");
+    expect(seen.some((s) => s.startsWith("GET ") && s.includes("/chunks?"))).toBe(
+      true,
+    );
+    expect(seen.some((s) => s.includes("keywords=hi"))).toBe(true);
+
+    await expect(
+      provider.setFileChunkAvailability({
+        sourceFileId: "sf-1",
+        chunkId: "c1",
+        fileVersionId: "ver-1",
+        available: false,
+      }),
+    ).resolves.toMatchObject({ chunkId: "c1", available: false });
+    expect(JSON.parse(patchBody)).toEqual({
+      file_version_id: "ver-1",
+      available: false,
+    });
   });
 });

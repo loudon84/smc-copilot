@@ -488,6 +488,51 @@ describe("Knowledge Bases pages", () => {
     });
   });
 
+  it("opens DocumentDetail from Actions Open without mutating fileName", async () => {
+    const store = [base("b2", "Beta Base")];
+    const files = [
+      {
+        id: "sf-1",
+        knowledgeBaseId: "b2",
+        fileName: "notes.pdf",
+        status: "active" as const,
+        activeVersionId: "ver-1",
+        ownerMemberId: "file-owner-1",
+        createdAt: "2026-01-03T00:00:00.000Z",
+      },
+    ];
+    const bases = makeBasesApi(store, { files });
+    const onNavigate = vi.fn();
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeBaseDetailPage, {
+          params: { knowledgeBaseId: "b2" },
+          onNavigate,
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          bases,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-base-file-open-sf-1")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-base-file-open-sf-1"));
+    });
+    expect(onNavigate).toHaveBeenCalledWith({
+      page: "documents",
+      params: { knowledgeBaseId: "b2", documentId: "sf-1" },
+    });
+    expect(bases.getFile).not.toHaveBeenCalled();
+  });
+
   it("marks retrieval-ready only when chunk build and retrieval are ready", async () => {
     const store = [base("b2", "Beta Base")];
     const bases = makeBasesApi(store, {

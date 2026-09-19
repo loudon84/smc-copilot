@@ -241,6 +241,17 @@ describe("Knowledge Documents page", () => {
       expect(screen.getByTestId("knowledge-document-detail-page")).toBeTruthy();
       expect(screen.getByTestId("knowledge-document-detail")).toBeTruthy();
     });
+    expect(screen.getByTestId("document-detail-source-pane")).toBeTruthy();
+    expect(screen.getByTestId("document-detail-chunk-pane")).toBeTruthy();
+    expect(screen.getByTestId("knowledge-document-preview")).toBeTruthy();
+    expect(screen.getByTestId("knowledge-chunk-panel")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-open-info"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-info-drawer")).toBeTruthy();
+    });
     expect(screen.getByTestId("knowledge-document-version").textContent).toBe("sf-1-v1");
     expect(screen.getByTestId("knowledge-document-status").textContent).toBe(
       knowledgeEn.documents.statusActive,
@@ -251,27 +262,6 @@ describe("Knowledge Documents page", () => {
       "2026-01-03T00:00:00.000Z",
     );
     expect(screen.getByTestId("knowledge-document-parse").textContent).toBe("active");
-    expect(screen.getByTestId("knowledge-document-sidebar")).toBeTruthy();
-    expect(screen.getByTestId("knowledge-document-preview")).toBeTruthy();
-    expect(
-      screen.getByTestId("knowledge-document-detail-page").getAttribute("data-sidebar"),
-    ).toBe("expanded");
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("knowledge-document-sidebar-toggle"));
-    });
-    expect(
-      screen.getByTestId("knowledge-document-detail-page").getAttribute("data-sidebar"),
-    ).toBe("collapsed");
-    expect(screen.getByTestId("knowledge-document-sidebar").getAttribute("data-collapsed")).toBe(
-      "true",
-    );
-    expect(screen.queryByTestId("knowledge-document-info")).toBeNull();
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("knowledge-document-sidebar-toggle"));
-    });
-    expect(
-      screen.getByTestId("knowledge-document-detail-page").getAttribute("data-sidebar"),
-    ).toBe("expanded");
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-document-open-versions"));

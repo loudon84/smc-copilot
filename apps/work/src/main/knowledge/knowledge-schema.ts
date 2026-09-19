@@ -11,6 +11,9 @@ import type {
   KnowledgeBuildJobSnapshot,
   KnowledgeBuildJobStatus,
   KnowledgeBuildProfileView,
+  KnowledgeFileChunk,
+  KnowledgeFileChunkAvailabilityResult,
+  KnowledgeFileChunkPage,
   KnowledgeFileParseStatus,
   KnowledgeFileVersionSnapshot,
   KnowledgeIndexBuildStatus,
@@ -594,4 +597,116 @@ export function parseKnowledgeRetrievalProfileList(
   return items.map((item) =>
     parseKnowledgeRetrievalProfileSnapshot(item, operationId),
   );
+}
+
+function parseStringArray(value: unknown, operationId?: string): string[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw contractInvalid(operationId);
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") throw contractInvalid(operationId);
+    out.push(item);
+  }
+  return out;
+}
+
+/** Fail-closed Chunk item — strips provider-only fields by omission. */
+export function parseKnowledgeFileChunk(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeFileChunk {
+  if (!isRecord(raw)) throw contractInvalid(operationId);
+  const id = typeof raw.id === "string" ? raw.id.trim() : "";
+  if (!id || typeof raw.content !== "string") {
+    throw contractInvalid(operationId);
+  }
+  if (
+    !(
+      raw.available === null ||
+      typeof raw.available === "boolean"
+    )
+  ) {
+    throw contractInvalid(operationId);
+  }
+  const positions =
+    raw.positions == null
+      ? null
+      : Array.isArray(raw.positions)
+        ? raw.positions
+        : (() => {
+            throw contractInvalid(operationId);
+          })();
+  return {
+    id,
+    content: raw.content,
+    available: raw.available,
+    positions,
+    importantKeywords: parseStringArray(raw.important_keywords, operationId),
+    questions: parseStringArray(raw.questions, operationId),
+  };
+}
+
+export function parseKnowledgeFileChunkPage(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeFileChunkPage {
+  const data = unwrapApiData(raw, operationId);
+  if (!isRecord(data) || !Array.isArray(data.items)) {
+    throw contractInvalid(operationId);
+  }
+  const sourceFileId =
+    typeof data.source_file_id === "string" ? data.source_file_id.trim() : "";
+  const fileVersionId =
+    typeof data.file_version_id === "string" ? data.file_version_id.trim() : "";
+  const total = Number(data.total);
+  const page = Number(data.page);
+  const pageSize = Number(data.page_size);
+  if (
+    !sourceFileId ||
+    !fileVersionId ||
+    !Number.isInteger(total) ||
+    total < 0 ||
+    !Number.isInteger(page) ||
+    page < 1 ||
+    !Number.isInteger(pageSize) ||
+    pageSize < 1 ||
+    pageSize > 100
+  ) {
+    throw contractInvalid(operationId);
+  }
+  return {
+    sourceFileId,
+    fileVersionId,
+    items: data.items.map((item) => parseKnowledgeFileChunk(item, operationId)),
+    total,
+    page,
+    pageSize,
+  };
+}
+
+export function parseKnowledgeFileChunkAvailabilityResult(
+  raw: unknown,
+  operationId?: string,
+): KnowledgeFileChunkAvailabilityResult {
+  const data = unwrapApiData(raw, operationId);
+  if (!isRecord(data)) throw contractInvalid(operationId);
+  const sourceFileId =
+    typeof data.source_file_id === "string" ? data.source_file_id.trim() : "";
+  const fileVersionId =
+    typeof data.file_version_id === "string" ? data.file_version_id.trim() : "";
+  const chunkId = typeof data.chunk_id === "string" ? data.chunk_id.trim() : "";
+  if (
+    !sourceFileId ||
+    !fileVersionId ||
+    !chunkId ||
+    typeof data.available !== "boolean"
+  ) {
+    throw contractInvalid(operationId);
+  }
+  return {
+    sourceFileId,
+    fileVersionId,
+    chunkId,
+    available: data.available,
+  };
 }

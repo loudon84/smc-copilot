@@ -21,7 +21,9 @@ import {
   type KnowledgeModeSnapshot,
 } from "../shared/knowledge/knowledge-job-ipc";
 import {
+  isKnowledgeChunkIpcResult,
   KNOWLEDGE_BASE_IPC_CHANNELS,
+  KNOWLEDGE_ERROR_CODES,
   type HermesKnowledgeBasesAPI,
   type KnowledgeActivateFileVersionInput,
   type KnowledgeAddFileVersionInput,
@@ -33,11 +35,15 @@ import {
   type KnowledgeBaseUpdateInput,
   type KnowledgeBuildIdInput,
   type KnowledgeBuildJobSnapshot,
+  type KnowledgeChunkIpcResult,
   type KnowledgeFileIdInput,
+  type KnowledgeListFileChunksInput,
   type KnowledgeResolveDocumentPreviewInput,
+  type KnowledgeSetFileChunkAvailabilityInput,
   type KnowledgeStartBuildInput,
   type KnowledgeUpdateBuildProfileInput,
 } from "../shared/knowledge/knowledge-base-ipc";
+import { KnowledgeFacadeError } from "../shared/knowledge/knowledge-errors";
 import {
   KNOWLEDGE_SET_IPC_CHANNELS,
   type HermesKnowledgeSetsAPI,
@@ -61,6 +67,21 @@ export type HermesKnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
   bases: HermesKnowledgeBasesAPI;
   sets: HermesKnowledgeSetsAPI;
 };
+
+async function unwrapChunkIpcResult<T>(
+  raw: unknown,
+): Promise<T> {
+  if (!isKnowledgeChunkIpcResult<T>(raw)) {
+    throw new KnowledgeFacadeError({
+      code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+      retryable: false,
+    });
+  }
+  if (!raw.ok) {
+    throw new KnowledgeFacadeError(raw.error);
+  }
+  return raw.data;
+}
 
 export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
   return {
@@ -174,6 +195,22 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
             handler,
           );
         };
+      },
+      listFileChunks: async (input: KnowledgeListFileChunksInput) => {
+        const raw: KnowledgeChunkIpcResult<unknown> = await ipcRenderer.invoke(
+          KNOWLEDGE_BASE_IPC_CHANNELS.listFileChunks,
+          input,
+        );
+        return unwrapChunkIpcResult(raw);
+      },
+      setFileChunkAvailability: async (
+        input: KnowledgeSetFileChunkAvailabilityInput,
+      ) => {
+        const raw: KnowledgeChunkIpcResult<unknown> = await ipcRenderer.invoke(
+          KNOWLEDGE_BASE_IPC_CHANNELS.setFileChunkAvailability,
+          input,
+        );
+        return unwrapChunkIpcResult(raw);
       },
     },
     sets: {
