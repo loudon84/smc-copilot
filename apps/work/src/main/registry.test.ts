@@ -254,7 +254,7 @@ describe("Registry endpoint descriptor", () => {
     await fetchRegistry();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://raw.githubusercontent.com/fathah/hermes-registry/refs/heads/main/index.json",
+      "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main/index.json",
       expect.any(Object),
     );
   });

@@ -513,7 +513,7 @@ export default function Discover({
           <p className="discover-subtitle">{t("discover.subtitle")}</p>
         </div>
         <a
-          href="https://github.com/hermesonehq/hermes-registry"
+          href="https://github.com/smc-copilot/hermes-registry"
           target="_blank"
           rel="noreferrer"
           className="btn btn-secondary btn-sm"
