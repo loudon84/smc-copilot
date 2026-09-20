@@ -11793,8 +11793,46 @@ body:has(.shell-vibrant),
   min-width: 16px;
 }
 
-.profile-wallet-delete-modal-overlay {
-  z-index: 300;
+.profile-logout-overlay {
+  z-index: 2100;
+}
+
+.profile-logout-viewport {
+  z-index: 2101;
+}
+
+.profile-logout-modal {
+  width: min(420px, calc(100vw - 32px));
+  height: fit-content;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.profile-logout-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.profile-logout-body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.profile-logout-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .profile-wallet-delete-modal {

@@ -34,6 +34,7 @@ import kanbanEn from "./locales/en/kanban";
 import diagnoseEn from "./locales/en/diagnose";
 import skillRunEn from "./locales/en/skillRun";
 import knowledgeEn from "./locales/en/knowledge";
+import authEn from "./locales/en/auth";
 import commonHe from "./locales/he/common";
 import navigationHe from "./locales/he/navigation";
 import discoverHe from "./locales/he/discover";
@@ -122,6 +123,7 @@ import installId from "./locales/id/install";
 import constantsId from "./locales/id/constants";
 import commonZh from "./locales/zh-CN/common";
 import navigationZh from "./locales/zh-CN/navigation";
+import discoverZh from "./locales/zh-CN/discover";
 import welcomeZh from "./locales/zh-CN/welcome";
 import setupZh from "./locales/zh-CN/setup";
 import chatZh from "./locales/zh-CN/chat";
@@ -141,7 +143,10 @@ import memoryZh from "./locales/zh-CN/memory";
 import installZh from "./locales/zh-CN/install";
 import constantsZh from "./locales/zh-CN/constants";
 import kanbanZh from "./locales/zh-CN/kanban";
+import diagnoseZh from "./locales/zh-CN/diagnose";
 import skillRunZh from "./locales/zh-CN/skillRun";
+import knowledgeZh from "./locales/zh-CN/knowledge";
+import authZh from "./locales/zh-CN/auth";
 import commonZhTw from "./locales/zh-TW/common";
 import navigationZhTw from "./locales/zh-TW/navigation";
 import welcomeZhTw from "./locales/zh-TW/welcome";
@@ -300,6 +305,7 @@ export const resources = {
       diagnose: diagnoseEn,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   he: {
@@ -329,6 +335,7 @@ export const resources = {
       diagnose: diagnoseHe,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   pl: {
@@ -356,6 +363,7 @@ export const resources = {
       kanban: kanbanPl,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   es: {
@@ -384,6 +392,7 @@ export const resources = {
       diagnose: diagnoseEs,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   id: {
@@ -410,12 +419,14 @@ export const resources = {
       constants: constantsId,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   "zh-CN": {
     translation: {
       common: commonZh,
       navigation: navigationZh,
+      discover: discoverZh,
       welcome: welcomeZh,
       setup: setupZh,
       chat: chatZh,
@@ -435,7 +446,10 @@ export const resources = {
       install: installZh,
       constants: constantsZh,
       kanban: kanbanZh,
+      diagnose: diagnoseZh,
       skillRun: skillRunZh,
+      knowledge: knowledgeZh,
+      auth: authZh,
     },
   },
   "zh-TW": {
@@ -463,6 +477,7 @@ export const resources = {
       kanban: kanbanZhTw,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   "pt-BR": {
@@ -489,6 +504,7 @@ export const resources = {
       constants: constantsPt,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   "pt-PT": {
@@ -517,6 +533,7 @@ export const resources = {
       diagnose: diagnosePtPt,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   ja: {
@@ -543,6 +560,7 @@ export const resources = {
       constants: constantsJa,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   tr: {
@@ -572,6 +590,7 @@ export const resources = {
       diagnose: diagnoseTr,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
   ar: {
@@ -601,6 +620,7 @@ export const resources = {
       diagnose: diagnoseAr,
       skillRun: skillRunEn,
       knowledge: knowledgeEn,
+      auth: authEn,
     },
   },
 } satisfies Resource;

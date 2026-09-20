@@ -57,7 +57,7 @@ describe("I18nProvider", () => {
     }
   });
 
-  it("renders English translations by default", async () => {
+  it("renders zh-CN translations by default", async () => {
     await act(async () => {
       render(
         <I18nProvider>
@@ -67,7 +67,7 @@ describe("I18nProvider", () => {
     });
 
     expect(
-      await screen.findByText("Welcome to SMC Copilot"),
+      await screen.findByText("欢迎使用 SMC Copilot"),
     ).toBeInTheDocument();
   });
 

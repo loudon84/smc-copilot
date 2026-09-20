@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { t, getLocaleDirection } from "./index";
 
 describe("shared i18n", () => {
-  it("returns English text by default", () => {
-    expect(t("welcome.title")).toBe("Welcome to SMC Copilot");
+  it("returns zh-CN text by default", () => {
+    expect(t("welcome.title")).toBe("欢迎使用 SMC Copilot");
   });
 
   it("falls back to the key when an English key is missing", () => {
@@ -11,7 +11,7 @@ describe("shared i18n", () => {
   });
 
   it("returns zh-CN text when available", () => {
-    expect(t("welcome.title", "zh-CN")).toBe("欢迎使用 Hermes");
+    expect(t("welcome.title", "zh-CN")).toBe("欢迎使用 SMC Copilot");
   });
 
   it("returns zh-TW text when available", () => {
@@ -45,13 +45,18 @@ describe("shared i18n", () => {
     );
   });
 
-  it("falls back to English when zh-CN omits newer skillRun keys", () => {
+  it("falls back to English when a non-source locale omits a key", () => {
     // @lat: [[i18n-tests#Missing non-source keys fall back to English]]
+    // pl does not register the diagnose namespace; t() falls back to English.
+    expect(t("diagnose.title", "pl")).toBe(t("diagnose.title", "en"));
+  });
+
+  it("serves translated skillRun keys in zh-CN after administrator sync", () => {
     expect(t("skillRun.parametersRequired", "zh-CN")).toBe(
-      t("skillRun.parametersRequired", "en"),
+      "此技能需要尚不支持的额外参数。",
     );
     expect(t("skillRun.startDisabledFeatureMode", "zh-CN")).toBe(
-      t("skillRun.startDisabledFeatureMode", "en"),
+      "仅在技能优先（skill-first）功能模式下才可启动 Skill Run。",
     );
   });
 

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { useI18n } from "../useI18n";
-import { APP_LOCALES, type AppLocale } from "../../../../shared/i18n";
+import type { AppLocale } from "../../../../shared/i18n";
 import { LANGUAGE_NATIVE_NAMES } from "./settingsHelpers";
+
+/** Locales exposed in Settings → Language. Other APP_LOCALES stay loadable. */
+const SELECTABLE_LOCALES: AppLocale[] = ["zh-CN", "en"];
 
 /** Interface language selector. */
 export default function LanguagePane(): React.JSX.Element {
@@ -62,7 +65,7 @@ function LanguageSelect({
       </button>
       {isOpen && (
         <div className="settings-language-dropdown" role="listbox">
-          {APP_LOCALES.map((l) => {
+          {SELECTABLE_LOCALES.map((l) => {
             const active = l === locale;
             return (
               <button

@@ -1,5 +1,5 @@
 export default {
-  title: "欢迎使用 Hermes",
+  title: "欢迎使用 SMC Copilot",
   subtitle: "你的自进化 AI 助手，运行在本机，兼顾隐私、能力与持续学习。",
   installIssueTitle: "安装问题",
   getStarted: "开始使用",
@@ -15,7 +15,7 @@ export default {
   connectRemoteSubtitle: "输入运行中的 Hermes API 服务器的 URL。",
   remoteServerUrl: "服务器 URL",
   remoteApiKey: "API 密钥（可选）",
-  remoteApiKeyPlaceholder: "Bearer token (API_SERVER_KEY)",
+  remoteApiKeyPlaceholder: "Bearer 令牌（API_SERVER_KEY）",
   testingConnection: "测试连接中...",
   connect: "连接",
   remoteHint:

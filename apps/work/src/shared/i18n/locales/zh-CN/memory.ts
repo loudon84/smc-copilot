@@ -9,6 +9,7 @@ export default {
   userProfile: "用户画像",
   entries: "{{count}} 条记录",
   addMemory: "添加记忆",
+  loadFailed: "加载记忆失败",
   addFailed: "添加记录失败",
   updateFailed: "更新记录失败",
   saveFailed: "保存失败",

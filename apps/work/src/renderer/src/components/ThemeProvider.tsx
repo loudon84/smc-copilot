@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import {
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
+  DEFAULT_THEME,
   THEMES,
   THEME_STORAGE_KEY as STORAGE_KEY,
 } from "../constants";
@@ -23,8 +24,8 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "system",
-  resolved: DEFAULT_DARK_THEME,
+  theme: DEFAULT_THEME,
+  resolved: DEFAULT_THEME,
   setTheme: () => {},
   rounded: true,
   setRounded: () => {},
@@ -51,7 +52,7 @@ export function ThemeProvider({
   const [theme, setThemeState] = useState<Theme>(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "system" || (stored && THEME_IDS.has(stored))) return stored;
-    return DEFAULT_DARK_THEME;
+    return DEFAULT_THEME;
   });
   const [resolved, setResolved] = useState<string>(() => resolve(theme));
   const [rounded, setRoundedState] = useState<boolean>(

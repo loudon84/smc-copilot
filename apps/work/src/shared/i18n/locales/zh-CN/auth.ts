@@ -30,4 +30,7 @@ export default {
   signingIn: "正在登录…",
   notSignedIn: "未登录",
   exitApp: "退出",
+  logoutConfirmTitle: "退出登录？",
+  logoutConfirm: "退出 {{name}}？你将返回登录界面。",
+  logoutConfirmAnonymous: "你将返回登录界面。",
 } as const;

@@ -8,7 +8,7 @@ export default {
     local: {
       name: "本地 / OpenAI 兼容",
       desc: "LM Studio、Ollama、Groq、DeepSeek、Together 等",
-      tag: "任意 OpenAI 兼容 API",
+      tag: "",
     },
   },
   localPresets: {
@@ -22,7 +22,9 @@ export default {
     together: "Together AI",
     fireworks: "Fireworks",
     cerebras: "Cerebras",
+    atlascloud: "AtlasCloud",
     mistral: "Mistral",
+    aimlapi: "AIML API",
   },
   serverPreset: "服务器预设",
   localGroupLabel: "本地服务",

@@ -151,6 +151,7 @@ export default function ProfileSwitcher({
         }}
         className="profile-logout-modal"
         overlayClassName="profile-logout-overlay"
+        contentClassName="profile-logout-viewport"
         labelledBy="profile-logout-title"
         describedBy="profile-logout-body"
         submitting={logoutBusy}

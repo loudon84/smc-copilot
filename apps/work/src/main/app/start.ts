@@ -268,10 +268,9 @@ function openExternalUrl(rawUrl: unknown): void {
 
 function createWindow(): void {
   const rendererHtmlPath = join(__dirname, "../renderer/index.html");
-  // Default the vibrancy material to dark (the app's default theme) so the
-  // first paint isn't a light, milky frost; the renderer overrides this to
-  // match the stored theme as soon as ThemeProvider mounts.
-  nativeTheme.themeSource = "dark";
+  // Default the vibrancy material to light (the app's default theme) so the
+  // first paint matches ThemeProvider before the renderer mounts.
+  nativeTheme.themeSource = "light";
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 850,
@@ -286,8 +285,8 @@ function createWindow(): void {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
     // macOS: translucent window material so the sidebar reads as frosted glass.
     // The material's light/dark tone follows `nativeTheme.themeSource`, which
-    // the renderer keeps in step with the app theme (default dark below) — so a
-    // dark theme never renders a light, milky sidebar.
+    // the renderer keeps in step with the app theme (default light below) — so a
+    // light theme never renders a mismatched dark sidebar on first paint.
     ...(process.platform === "darwin"
       ? {
           trafficLightPosition: { x: 16, y: 16 },
