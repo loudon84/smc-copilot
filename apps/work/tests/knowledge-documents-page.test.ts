@@ -353,12 +353,24 @@ describe("Knowledge Documents page", () => {
     });
 
     await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-more"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-reparse")).toBeTruthy();
+    });
+    await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-document-reparse"));
     });
     await waitFor(() => {
       expect(bases.reparseFile).toHaveBeenCalledWith({ sourceFileId: "sf-1" });
     });
 
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-more"));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-archive")).toBeTruthy();
+    });
     await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-document-archive"));
     });
@@ -392,6 +404,12 @@ describe("Knowledge Documents page", () => {
       );
     });
 
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-more")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-more"));
+    });
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-document-reparse")).toBeDisabled();
     });
@@ -432,6 +450,12 @@ describe("Knowledge Documents page", () => {
       );
     });
 
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-document-more")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-document-more"));
+    });
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-document-delete")).toBeEnabled();
     });

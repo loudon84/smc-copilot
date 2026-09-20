@@ -37,6 +37,7 @@ import {
   type KnowledgeBuildJobSnapshot,
   type KnowledgeChunkIpcResult,
   type KnowledgeFileIdInput,
+  type KnowledgeGetFileChunkImageInput,
   type KnowledgeListFileChunksInput,
   type KnowledgeResolveDocumentPreviewInput,
   type KnowledgeSetFileChunkAvailabilityInput,
@@ -208,6 +209,13 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
       ) => {
         const raw: KnowledgeChunkIpcResult<unknown> = await ipcRenderer.invoke(
           KNOWLEDGE_BASE_IPC_CHANNELS.setFileChunkAvailability,
+          input,
+        );
+        return unwrapChunkIpcResult(raw);
+      },
+      getFileChunkImage: async (input: KnowledgeGetFileChunkImageInput) => {
+        const raw: KnowledgeChunkIpcResult<unknown> = await ipcRenderer.invoke(
+          KNOWLEDGE_BASE_IPC_CHANNELS.getFileChunkImage,
           input,
         );
         return unwrapChunkIpcResult(raw);

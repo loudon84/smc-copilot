@@ -23,9 +23,11 @@ import type {
   KnowledgeBuildJobSnapshot,
   KnowledgeBuildProfileView,
   KnowledgeFileChunkAvailabilityResult,
+  KnowledgeFileChunkImageResult,
   KnowledgeFileChunkPage,
   KnowledgeFileIdInput,
   KnowledgeFileVersionSnapshot,
+  KnowledgeGetFileChunkImageInput,
   KnowledgeIndexState,
   KnowledgeListFileChunksInput,
   KnowledgeSetFileChunkAvailabilityInput,
@@ -68,6 +70,7 @@ import {
   parseKnowledgeBuildJobSnapshot,
   parseKnowledgeBuildProfileView,
   parseKnowledgeFileChunkAvailabilityResult,
+  parseKnowledgeFileChunkImageResult,
   parseKnowledgeFileChunkPage,
   parseKnowledgeFileVersionList,
   parseKnowledgeIndexStates,
@@ -165,6 +168,9 @@ export type KnowledgeHttpProvider = {
   setFileChunkAvailability(
     input: KnowledgeSetFileChunkAvailabilityInput,
   ): Promise<KnowledgeFileChunkAvailabilityResult>;
+  getFileChunkImage(
+    input: KnowledgeGetFileChunkImageInput,
+  ): Promise<KnowledgeFileChunkImageResult>;
 };
 
 function logSanitized(
@@ -970,6 +976,59 @@ export function createKnowledgeHttpProvider(
         { allowNonIdempotentRetry: false },
       );
       return parseKnowledgeFileChunkAvailabilityResult(body, operationId);
+    },
+
+    async getFileChunkImage(
+      input,
+    ): Promise<KnowledgeFileChunkImageResult> {
+      const operationId = randomUUID();
+      const sourceFileId = input.sourceFileId?.trim() ?? "";
+      const chunkId = input.chunkId?.trim() ?? "";
+      const fileVersionId = input.fileVersionId?.trim() ?? "";
+      if (!sourceFileId || !chunkId || !fileVersionId) {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+          retryable: false,
+          operationId,
+        });
+      }
+      const params = new URLSearchParams();
+      params.set("file_version_id", fileVersionId);
+      const path = `/api/v1/source-files/${encodeURIComponent(sourceFileId)}/chunks/${encodeURIComponent(chunkId)}/image?${params.toString()}`;
+      try {
+        const response = await transport.withAuthRetry(() =>
+          transport.authorizedFetch(path, {
+            method: "GET",
+            timeoutMs: 60_000,
+          }),
+        );
+        if (!response.ok) {
+          const errBody = await readJson(response).catch(() => null);
+          const envelope = parseErrorEnvelope(errBody);
+          const err = mapHttpStatusToKnowledgeError(
+            response.status,
+            envelope.messageKey,
+            operationId,
+          );
+          logSanitized(operationId, "getFileChunkImage", err.code);
+          throw err;
+        }
+        const contentType = response.headers.get("content-type");
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+        const result = parseKnowledgeFileChunkImageResult(
+          contentType,
+          bytes,
+          operationId,
+        );
+        logSanitized(operationId, "getFileChunkImage", "OK");
+        return result;
+      } catch (err) {
+        if (err instanceof KnowledgeFacadeError) throw err;
+        const mapped = mapTransportError(err, operationId);
+        logSanitized(operationId, "getFileChunkImage", mapped.code);
+        throw mapped;
+      }
     },
   };
 }

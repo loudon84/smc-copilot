@@ -2,6 +2,8 @@ export { DocumentDetail } from "./DocumentDetail";
 export type { DocumentDetailProps } from "./DocumentDetail";
 export { KnowledgeChunkPanel } from "./KnowledgeChunkPanel";
 export { HybridSplit } from "./HybridSplit";
+export { ChunkRichContentRenderer } from "./ChunkRichContentRenderer";
+export { ChunkImage } from "./ChunkImage";
 export {
   useKnowledgeChunkPanel,
   type ChunkPanelState,

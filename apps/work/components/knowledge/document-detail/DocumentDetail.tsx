@@ -38,6 +38,8 @@ import { HybridSplit } from "./HybridSplit";
 import { KnowledgeChunkPanel } from "./KnowledgeChunkPanel";
 import { useKnowledgeChunkPanel } from "./useKnowledgeChunkPanel";
 
+const DEFAULT_SOURCE_PERCENT = 42;
+
 export type DocumentDetailProps = {
   t: (key: string) => string;
   documentId: string;
@@ -124,7 +126,8 @@ export function DocumentDetail({
   const [infoOpen, setInfoOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [parseOpen, setParseOpen] = useState(false);
-  const [sourcePercent, setSourcePercent] = useState(45);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [sourcePercent, setSourcePercent] = useState(DEFAULT_SOURCE_PERCENT);
   const [stacked, setStacked] = useState(
     () =>
       typeof window !== "undefined" ? window.innerWidth < STACK_MQ : false,
@@ -139,6 +142,11 @@ export function DocumentDetail({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  // Reopen resets split; no cross-session persistence (v2.1 lock).
+  useEffect(() => {
+    setSourcePercent(DEFAULT_SOURCE_PERCENT);
+  }, [detailId]);
 
   useEffect(() => {
     if (presentation === "loading") {
@@ -370,42 +378,68 @@ export function DocumentDetail({
             >
               {t("knowledge.documents.tabParse")}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="knowledge-document-reparse"
-              disabled={!fileMutationsEnabled || submitting}
-              onClick={() => {
-                void handleReparse();
-              }}
-            >
-              {t("knowledge.bases.reparseFile")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="knowledge-document-archive"
-              disabled={!fileMutationsEnabled || submitting}
-              onClick={() => {
-                void handleArchiveToggle();
-              }}
-            >
-              {detail.archivedAt
-                ? t("knowledge.bases.unarchiveFile")
-                : t("knowledge.bases.archiveFile")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              data-testid="knowledge-document-delete"
-              disabled={!fileMutationsEnabled || submitting}
-              onClick={() => setConfirmDelete(true)}
-            >
-              {t("knowledge.documents.deleteFile")}
-            </Button>
+            <div className="relative">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                data-testid="knowledge-document-more"
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+                onClick={() => setMoreOpen((open) => !open)}
+              >
+                {t("knowledge.documents.moreActions")}
+              </Button>
+              {moreOpen ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-20 mt-1 min-w-40 rounded-md border border-border bg-popover p-1 shadow-md"
+                  data-testid="knowledge-document-more-menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                    data-testid="knowledge-document-reparse"
+                    disabled={!fileMutationsEnabled || submitting}
+                    onClick={() => {
+                      setMoreOpen(false);
+                      void handleReparse();
+                    }}
+                  >
+                    {t("knowledge.bases.reparseFile")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                    data-testid="knowledge-document-archive"
+                    disabled={!fileMutationsEnabled || submitting}
+                    onClick={() => {
+                      setMoreOpen(false);
+                      void handleArchiveToggle();
+                    }}
+                  >
+                    {detail.archivedAt
+                      ? t("knowledge.bases.unarchiveFile")
+                      : t("knowledge.bases.archiveFile")}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full rounded-md px-2 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50"
+                    data-testid="knowledge-document-delete"
+                    disabled={!fileMutationsEnabled || submitting}
+                    onClick={() => {
+                      setMoreOpen(false);
+                      setConfirmDelete(true);
+                    }}
+                  >
+                    {t("knowledge.documents.deleteFile")}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </>
         ) : null}
       </div>

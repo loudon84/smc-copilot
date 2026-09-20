@@ -20,6 +20,7 @@ import {
   type KnowledgeChunkIpcResult,
   type KnowledgeFacadeErrorShape,
   type KnowledgeFileIdInput,
+  type KnowledgeGetFileChunkImageInput,
   type KnowledgeListFileChunksInput,
   type KnowledgeResolveDocumentPreviewInput,
   type KnowledgeSetFileChunkAvailabilityInput,
@@ -607,6 +608,22 @@ export function registerKnowledgeBaseIpcHandlers(ipcMain: IpcMain): void {
         requireAuth();
         const data =
           await getKnowledgeHttpProvider().setFileChunkAvailability(input);
+        return { ok: true, data };
+      } catch (err) {
+        return chunkIpcFail(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    KNOWLEDGE_BASE_IPC_CHANNELS.getFileChunkImage,
+    async (
+      _e: IpcMainInvokeEvent,
+      input: KnowledgeGetFileChunkImageInput,
+    ): Promise<KnowledgeChunkIpcResult<unknown>> => {
+      try {
+        requireAuth();
+        const data = await getKnowledgeHttpProvider().getFileChunkImage(input);
         return { ok: true, data };
       } catch (err) {
         return chunkIpcFail(err);

@@ -7,10 +7,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   HermesKnowledgeBasesAPI,
   KnowledgeFileChunk,
+  KnowledgeFileChunkImageResult,
   KnowledgeFileChunkPage,
   KnowledgeFileParseStatus,
   KnowledgeFileVersionSnapshot,
 } from "../../../src/shared/knowledge/knowledge-base-ipc";
+import { KNOWLEDGE_ERROR_CODES } from "../../../src/shared/knowledge/knowledge-base-ipc";
 import { KnowledgeFacadeError } from "../../../src/shared/knowledge/knowledge-errors";
 
 export type ChunkPanelState =
@@ -59,6 +61,31 @@ function activeParseStatus(
   return versions.find((v) => v.id === activeVersionId)?.parseStatus;
 }
 
+/**
+ * Validate six-field page contract against request + active version.
+ * Version mismatch → STALE; other mismatches → ERROR / CONTRACT_INVALID.
+ */
+export function validateChunkPageContract(input: {
+  result: KnowledgeFileChunkPage;
+  sourceFileId: string;
+  activeVersionId: string;
+  page: number;
+  pageSize: number;
+}): "ok" | "stale" | "invalid" {
+  const { result, sourceFileId, activeVersionId, page, pageSize } = input;
+  if (result.fileVersionId !== activeVersionId) return "stale";
+  if (
+    result.sourceFileId !== sourceFileId ||
+    result.page !== page ||
+    result.pageSize !== pageSize ||
+    !Number.isInteger(result.total) ||
+    result.total < 0
+  ) {
+    return "invalid";
+  }
+  return "ok";
+}
+
 export type UseKnowledgeChunkPanelInput = {
   bases: HermesKnowledgeBasesAPI | null;
   sourceFileId: string;
@@ -73,6 +100,7 @@ export type UseKnowledgeChunkPanelInput = {
 export type UseKnowledgeChunkPanelResult = {
   state: ChunkPanelState;
   page: KnowledgeFileChunkPage | null;
+  sourceFileId: string;
   keywords: string;
   setKeywords: (value: string) => void;
   pageSize: ChunkPageSize;
@@ -85,6 +113,7 @@ export type UseKnowledgeChunkPanelResult = {
   refresh: () => void;
   goPage: (page: number) => void;
   toggleAvailable: (chunk: KnowledgeFileChunk) => void;
+  getChunkImage: (chunkId: string) => Promise<KnowledgeFileChunkImageResult>;
   pageSizes: readonly ChunkPageSize[];
 };
 
@@ -106,7 +135,7 @@ export function useKnowledgeChunkPanel(
   const [keywords, setKeywordsState] = useState("");
   const [debouncedKeywords, setDebouncedKeywords] = useState("");
   const [pageIndex, setPageIndex] = useState(1);
-  const [pageSize, setPageSizeState] = useState<ChunkPageSize>(50);
+  const [pageSize, setPageSizeState] = useState<ChunkPageSize>(10);
   const [contentMode, setContentMode] = useState<ChunkContentMode>("ellipse");
   const [errorCodeState, setErrorCodeState] = useState("");
   const [notice, setNotice] = useState("");
@@ -166,6 +195,8 @@ export function useKnowledgeChunkPanel(
     }
 
     const gen = ++generationRef.current;
+    // New query generation clears current list (v2.1 page contract).
+    setPage(null);
     setState((prev) =>
       prev === "VERIFYING" || prev === "STALE" || prev === "MUTATING_CHUNK"
         ? prev
@@ -180,9 +211,22 @@ export function useKnowledgeChunkPanel(
         keywords: debouncedKeywords || undefined,
       });
       if (gen !== generationRef.current) return;
-      if (result.fileVersionId !== activeVersionId) {
+      const verdict = validateChunkPageContract({
+        result,
+        sourceFileId,
+        activeVersionId,
+        page: pageIndex,
+        pageSize,
+      });
+      if (verdict === "stale") {
         setPage(result);
         setState("STALE");
+        return;
+      }
+      if (verdict === "invalid") {
+        setPage(null);
+        setErrorCodeState(KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID);
+        setState("ERROR");
         return;
       }
       setPage(result);
@@ -272,6 +316,23 @@ export function useKnowledgeChunkPanel(
     setPageIndex(next);
   }, []);
 
+  const getChunkImage = useCallback(
+    async (chunkId: string): Promise<KnowledgeFileChunkImageResult> => {
+      if (!bases || !page) {
+        throw new KnowledgeFacadeError({
+          code: KNOWLEDGE_ERROR_CODES.UNAVAILABLE,
+          retryable: true,
+        });
+      }
+      return bases.getFileChunkImage({
+        sourceFileId,
+        chunkId,
+        fileVersionId: page.fileVersionId,
+      });
+    },
+    [bases, page, sourceFileId],
+  );
+
   const toggleAvailable = useCallback(
     (chunk: KnowledgeFileChunk) => {
       if (
@@ -332,10 +393,22 @@ export function useKnowledgeChunkPanel(
                 pageSize,
                 keywords: debouncedKeywords || undefined,
               });
-              setPage(verified);
-              if (verified.fileVersionId !== activeVersionId) {
+              const verdict = validateChunkPageContract({
+                result: verified,
+                sourceFileId,
+                activeVersionId,
+                page: pageIndex,
+                pageSize,
+              });
+              if (verdict === "stale") {
+                setPage(verified);
                 setState("STALE");
+              } else if (verdict === "invalid") {
+                setPage(null);
+                setErrorCodeState(KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID);
+                setState("ERROR");
               } else {
+                setPage(verified);
                 setState(verified.items.length === 0 ? "EMPTY" : "READY");
               }
             } catch {
@@ -369,6 +442,7 @@ export function useKnowledgeChunkPanel(
   return {
     state,
     page,
+    sourceFileId,
     keywords,
     setKeywords,
     pageSize,
@@ -381,6 +455,7 @@ export function useKnowledgeChunkPanel(
     refresh,
     goPage,
     toggleAvailable,
+    getChunkImage,
     pageSizes: PAGE_SIZES,
   };
 }

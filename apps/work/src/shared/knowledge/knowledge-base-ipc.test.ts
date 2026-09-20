@@ -24,12 +24,15 @@ describe("knowledge base status matrix", () => {
 });
 
 describe("chunk IPC contract smoke", () => {
-  it("exposes list/set chunk channels", () => {
+  it("exposes list/set/get-image chunk channels", () => {
     expect(KNOWLEDGE_BASE_IPC_CHANNELS.listFileChunks).toBe(
       "knowledge-base:list-file-chunks",
     );
     expect(KNOWLEDGE_BASE_IPC_CHANNELS.setFileChunkAvailability).toBe(
       "knowledge-base:set-file-chunk-availability",
+    );
+    expect(KNOWLEDGE_BASE_IPC_CHANNELS.getFileChunkImage).toBe(
+      "knowledge-base:get-file-chunk-image",
     );
   });
 

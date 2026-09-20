@@ -32,6 +32,7 @@ export function unusedKnowledgeBaseOps(
   | "onBuildChanged"
   | "listFileChunks"
   | "setFileChunkAvailability"
+  | "getFileChunkImage"
 > {
   const unused = async (): Promise<never> => {
     throw new Error("unused");
@@ -72,6 +73,7 @@ export function unusedKnowledgeBaseOps(
       pageSize: input.pageSize ?? 50,
     })),
     setFileChunkAvailability: vi.fn(unused),
+    getFileChunkImage: vi.fn(unused),
     ...overrides,
   };
 }
@@ -180,6 +182,9 @@ export function makeBasesApi(
           page: input.page ?? 1,
           pageSize: input.pageSize ?? 50,
         };
+      }),
+      getFileChunkImage: vi.fn(async () => {
+        throw new Error("unused");
       }),
     }),
   };

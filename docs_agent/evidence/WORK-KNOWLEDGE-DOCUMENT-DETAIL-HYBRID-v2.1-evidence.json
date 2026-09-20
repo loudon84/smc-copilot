@@ -1,0 +1,35 @@
+{
+  "schema": "smc.evidence.manifest.v2",
+  "plan_id": "DOCUMENTDETAIL-HYBRID-V2.1-LAYOUT",
+  "prd_id": "PRD-WORK-KNOWLEDGE-DOCUMENT-DETAIL-HYBRID-v2.1-LAYOUT-PAGINATION-RICH-IMAGE",
+  "prd_version": "2.1",
+  "prd_status": "APPROVED_FOR_PLAN",
+  "baseline_note": "Plan baseline ed2824ef; Hybrid v2.1 layout/pagination/rich/image on apps/work only.",
+  "commit_at_evidence": "ed2824ef0062c9bfa9b37b4eff7ee8eafec11052",
+  "summary": "DocumentDetail 42/58 + More menu; Chunk sticky IA; pageSize default 10 + six-field page contract; hasImage + structured getFileChunkImage; ChunkRichContentRenderer allowlist; ChunkImage lazy/Blob/concurrency≤3. Golden Consumer live-only (not executed in this pass).",
+  "blocking_verifications": [
+    {
+      "verification_id": "V-UNIT-HYBRID-V21",
+      "command": "cd apps/work && npx vitest run components/knowledge/document-detail src/main/knowledge/knowledge-http-provider.test.ts src/shared/knowledge/knowledge-base-ipc.test.ts tests/knowledge-documents-page.test.ts",
+      "exit_code": 0,
+      "result": "PASS",
+      "note": "34 tests PASS / 0 FAIL"
+    },
+    {
+      "verification_id": "V-GOLDEN-LIVE",
+      "command": "manual live nodeskclaw Golden Consumer (pagination page1/2 + has_image image)",
+      "exit_code": null,
+      "result": "PENDING",
+      "note": "MUST NOT count product mock Chunk as Golden PASS"
+    }
+  ],
+  "delivered": [
+    "T1 DocumentDetail default 42/58 + More menu (Reparse/Archive/Delete) + reopen reset",
+    "T2 KnowledgeChunkPanel sticky Header/SearchToolbar/List/PaginationFooter",
+    "T3 pageSize default 10 + validateChunkPageContract + multi-page tests",
+    "T4 hasImage parse + getFileChunkImage schema/HTTP/IPC/preload",
+    "T5 ChunkRichContentRenderer DOMParser allowlist (no dangerouslySetInnerHTML)",
+    "T6 ChunkImage IntersectionObserver 200px + Blob revoke + semaphore max 3",
+    "T7 i18n en knowledge.chunk.* + availability preserve + evidence; Golden live-only PENDING"
+  ]
+}

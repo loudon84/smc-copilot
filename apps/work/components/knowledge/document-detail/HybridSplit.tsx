@@ -4,7 +4,7 @@ import { cn } from "@/utils/tailwind";
 type HybridSplitProps = {
   sourcePane: ReactElement;
   chunkPane: ReactElement;
-  /** Source pane width percent 30–70; default 45. */
+  /** Source pane width percent 30–70; default 42. */
   sourcePercent: number;
   onSourcePercentChange: (percent: number) => void;
   stacked: boolean;

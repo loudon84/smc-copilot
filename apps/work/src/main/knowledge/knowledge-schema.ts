@@ -13,6 +13,7 @@ import type {
   KnowledgeBuildProfileView,
   KnowledgeFileChunk,
   KnowledgeFileChunkAvailabilityResult,
+  KnowledgeFileChunkImageResult,
   KnowledgeFileChunkPage,
   KnowledgeFileParseStatus,
   KnowledgeFileVersionSnapshot,
@@ -636,6 +637,13 @@ export function parseKnowledgeFileChunk(
         : (() => {
             throw contractInvalid(operationId);
           })();
+  let hasImage = false;
+  if ("has_image" in raw) {
+    if (typeof raw.has_image !== "boolean") {
+      throw contractInvalid(operationId);
+    }
+    hasImage = raw.has_image;
+  }
   return {
     id,
     content: raw.content,
@@ -643,6 +651,7 @@ export function parseKnowledgeFileChunk(
     positions,
     importantKeywords: parseStringArray(raw.important_keywords, operationId),
     questions: parseStringArray(raw.questions, operationId),
+    hasImage,
   };
 }
 
@@ -709,4 +718,40 @@ export function parseKnowledgeFileChunkAvailabilityResult(
     chunkId,
     available: data.available,
   };
+}
+
+const CHUNK_IMAGE_MIME_ALLOWLIST = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+
+const CHUNK_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Normalize Content-Type header to a bare MIME (no params). */
+export function normalizeChunkImageMimeType(raw: string | null): string {
+  if (!raw) return "";
+  const base = raw.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "image/jpg") return "image/jpeg";
+  return base;
+}
+
+/**
+ * Fail-closed binary image result — MIME allowlist + ≤20MiB.
+ * Caller supplies already-normalized Uint8Array (not Node Buffer).
+ */
+export function parseKnowledgeFileChunkImageResult(
+  mimeTypeRaw: string | null,
+  bytes: Uint8Array,
+  operationId?: string,
+): KnowledgeFileChunkImageResult {
+  const mimeType = normalizeChunkImageMimeType(mimeTypeRaw);
+  if (!CHUNK_IMAGE_MIME_ALLOWLIST.has(mimeType)) {
+    throw contractInvalid(operationId);
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > CHUNK_IMAGE_MAX_BYTES) {
+    throw contractInvalid(operationId);
+  }
+  return { mimeType, bytes };
 }

@@ -297,6 +297,7 @@ describe("knowledge schema fail-closed", () => {
           positions: null,
           importantKeywords: ["a"],
           questions: [],
+          hasImage: false,
         },
       ],
       total: 1,
@@ -332,6 +333,68 @@ describe("knowledge schema fail-closed", () => {
       chunkId: "c1",
       available: false,
     });
+
+    const withImage = parseKnowledgeFileChunkPage({
+      data: {
+        source_file_id: "sf-1",
+        file_version_id: "ver-1",
+        items: [
+          {
+            id: "c2",
+            content: "img",
+            available: true,
+            positions: null,
+            important_keywords: [],
+            questions: [],
+            has_image: true,
+            image_id: "hidden-token",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 10,
+      },
+    });
+    expect(withImage.items[0]?.hasImage).toBe(true);
+    expect(withImage.items[0]).not.toHaveProperty("image_id");
+    expect(() =>
+      parseKnowledgeFileChunkPage({
+        data: {
+          source_file_id: "sf-1",
+          file_version_id: "ver-1",
+          items: [
+            {
+              id: "c3",
+              content: "bad",
+              available: true,
+              positions: null,
+              important_keywords: [],
+              questions: [],
+              has_image: "yes",
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 10,
+        },
+      }),
+    ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
+
+    const {
+      parseKnowledgeFileChunkImageResult,
+    } = await import("./knowledge-schema");
+    expect(
+      parseKnowledgeFileChunkImageResult("image/png", new Uint8Array([1, 2, 3])),
+    ).toEqual({ mimeType: "image/png", bytes: new Uint8Array([1, 2, 3]) });
+    expect(() =>
+      parseKnowledgeFileChunkImageResult("image/svg+xml", new Uint8Array([1])),
+    ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
+    expect(() =>
+      parseKnowledgeFileChunkImageResult(
+        "image/png",
+        new Uint8Array(20 * 1024 * 1024 + 1),
+      ),
+    ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
   });
 });
 
@@ -738,5 +801,37 @@ describe("KnowledgeHttpProvider source file and build", () => {
       file_version_id: "ver-1",
       available: false,
     });
+  });
+
+  it("GETs chunk image bytes with MIME allowlist", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const seen: string[] = [];
+    const provider = createKnowledgeHttpProvider(
+      transport(async (path, init) => {
+        seen.push(`${init?.method ?? "GET"} ${path}`);
+        if (path.includes("/image?")) {
+          return new Response(png, {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          });
+        }
+        return jsonResponse(404, { error: { code: "NOT_FOUND" } });
+      }),
+    );
+    const result = await provider.getFileChunkImage({
+      sourceFileId: "sf-1",
+      chunkId: "c1",
+      fileVersionId: "ver-1",
+    });
+    expect(result.mimeType).toBe("image/png");
+    expect(Array.from(result.bytes)).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(
+      seen.some(
+        (s) =>
+          s.startsWith("GET ") &&
+          s.includes("/chunks/c1/image?") &&
+          s.includes("file_version_id=ver-1"),
+      ),
+    ).toBe(true);
   });
 });

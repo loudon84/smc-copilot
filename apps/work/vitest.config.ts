@@ -53,6 +53,8 @@ export default defineConfig({
       "tests/**/*.test.tsx",
       "components/file-preview/**/*.test.ts",
       "components/file-preview/**/*.test.tsx",
+      "components/knowledge/document-detail/**/*.test.ts",
+      "components/knowledge/document-detail/**/*.test.tsx",
     ],
   },
 });

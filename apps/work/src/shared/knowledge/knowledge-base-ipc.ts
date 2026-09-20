@@ -31,6 +31,7 @@ export const KNOWLEDGE_BASE_IPC_CHANNELS = {
   buildChanged: "knowledge-base:build-changed",
   listFileChunks: "knowledge-base:list-file-chunks",
   setFileChunkAvailability: "knowledge-base:set-file-chunk-availability",
+  getFileChunkImage: "knowledge-base:get-file-chunk-image",
 } as const;
 
 export type KnowledgeBaseIpcChannel =
@@ -281,6 +282,8 @@ export interface KnowledgeFileChunk {
   positions: unknown[] | null;
   importantKeywords: string[];
   questions: string[];
+  /** True when provider advertises an image for this chunk; missing wire field → false. */
+  hasImage: boolean;
 }
 
 export interface KnowledgeFileChunkPage {
@@ -311,6 +314,17 @@ export interface KnowledgeFileChunkAvailabilityResult {
   fileVersionId: string;
   chunkId: string;
   available: boolean;
+}
+
+export interface KnowledgeGetFileChunkImageInput {
+  sourceFileId: string;
+  chunkId: string;
+  fileVersionId: string;
+}
+
+export interface KnowledgeFileChunkImageResult {
+  mimeType: string;
+  bytes: Uint8Array;
 }
 
 /**
@@ -396,4 +410,7 @@ export interface HermesKnowledgeBasesAPI {
   setFileChunkAvailability(
     input: KnowledgeSetFileChunkAvailabilityInput,
   ): Promise<KnowledgeFileChunkAvailabilityResult>;
+  getFileChunkImage(
+    input: KnowledgeGetFileChunkImageInput,
+  ): Promise<KnowledgeFileChunkImageResult>;
 }

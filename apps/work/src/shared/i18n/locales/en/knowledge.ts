@@ -219,6 +219,7 @@ export default {
     deleteFile: "Delete file",
     deleteFileConfirm: "Delete this source file from the knowledge base?",
     uploadAction: "Upload files",
+    moreActions: "More",
   },
   chunk: {
     result: "Chunk result",
@@ -243,6 +244,14 @@ export default {
     mutationUnsupported: "Chunk availability updates are not supported.",
     mutationVerifying: "Verifying chunk availability…",
     forbidden: "You do not have permission to change chunk availability.",
+    imageLoading: "Loading image…",
+    imageError: "Chunk image unavailable.",
+    imageRetry: "Retry image",
+    imageEmpty: "No image for this chunk.",
+    keywords: "Keywords",
+    questions: "Questions",
+    showQuestions: "Show questions",
+    hideQuestions: "Hide questions",
   },
   uploads: {
     title: "Uploads",
