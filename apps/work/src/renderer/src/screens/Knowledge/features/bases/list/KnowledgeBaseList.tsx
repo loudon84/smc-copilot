@@ -27,7 +27,7 @@ export function KnowledgeBaseCardGrid(props: {
 }): ReactElement {
   return (
     <div
-      className="grid grid-cols-1 gap-3 min-[640px]:grid-cols-2 min-[1000px]:grid-cols-3 min-[1400px]:grid-cols-4"
+      className="grid grid-cols-2 gap-2 min-[520px]:grid-cols-3 min-[760px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1240px]:grid-cols-6 min-[1480px]:grid-cols-7"
       data-testid="knowledge-base-list"
     >
       {props.items.map((item) => (
