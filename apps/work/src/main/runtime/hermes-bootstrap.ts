@@ -407,6 +407,27 @@ async function runBootstrapBody(
   const timeoutMs = deps.timeoutMs ?? BOOTSTRAP_TIMEOUT_MS;
   const installPs1 = deps.resolveInstallPs1();
   if (!installPs1) {
+    // Packaged builds may omit install.ps1 when Hermes is already on-machine.
+    // Allow READY when CLI exists and gateway is healthy so local chat is not
+    // blocked solely by a missing installer (softened A-INSTALL-003).
+    const hermesRoot = deps.getHermesRoot();
+    const cliPresent =
+      deps.existsSync(join(hermesRoot, "bin", "hermes.exe")) ||
+      deps.existsSync(join(hermesRoot, "bin", "hermes"));
+    if (cliPresent && (await deps.probeHealth())) {
+      log(
+        "SKIP: bundled install.ps1 missing but hermes CLI present and gateway healthy",
+      );
+      setBootstrapState("READY", {
+        operationId,
+        skippedReason: "installer-missing-but-runtime-ready",
+      });
+      return {
+        state: "READY",
+        operationId,
+        skipped: true,
+      };
+    }
     setBootstrapState("FAIL", {
       operationId,
       errorCode: "HERMES_INSTALLER_MISSING",

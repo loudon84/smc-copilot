@@ -35,6 +35,7 @@ import {
   assertLocalChatAllowed,
   canAcceptLocalChat,
   getBootstrapState,
+  getBootstrapStatus,
   resetBootstrapStateForTests,
   setBootstrapState,
 } from "../src/main/runtime/hermes-bootstrap-state";
@@ -185,6 +186,60 @@ describe("hermes-bootstrap", () => {
     expect(canAcceptLocalChat()).toBe(false);
     setBootstrapState("FAIL", { errorCode: "X", errorMessage: "boom" });
     expect(() => assertLocalChatAllowed()).toThrow(/boom/);
+  });
+
+  it("missing install.ps1 + hermes CLI + healthy gateway → READY skip", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    mkdirSync(join(root, "bin"), { recursive: true });
+    writeFileSync(join(root, "bin", "hermes.exe"), "");
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      resolveInstallPs1: () => null,
+      existsSync: (p: string) => existsSync(p),
+      probeHealth: async () => true,
+    });
+    expect(result.state).toBe("READY");
+    expect(result.skipped).toBe(true);
+    expect(calls).toHaveLength(0);
+    expect(getBootstrapState()).toBe("READY");
+    expect(getBootstrapStatus().skippedReason).toBe(
+      "installer-missing-but-runtime-ready",
+    );
+    expect(canAcceptLocalChat()).toBe(true);
+    expect(() => assertLocalChatAllowed()).not.toThrow();
+  });
+
+  it("missing install.ps1 without healthy runtime → HERMES_INSTALLER_MISSING", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      resolveInstallPs1: () => null,
+      existsSync: () => false,
+      probeHealth: async () => false,
+    });
+    expect(result.state).toBe("FAIL");
+    expect(result.errorCode).toBe("HERMES_INSTALLER_MISSING");
+    expect(calls).toHaveLength(0);
+    expect(canAcceptLocalChat()).toBe(false);
+    expect(() => assertLocalChatAllowed()).toThrow(/install\.ps1/);
+  });
+
+  it("missing install.ps1 with CLI but unhealthy gateway → HERMES_INSTALLER_MISSING", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    mkdirSync(join(root, "bin"), { recursive: true });
+    writeFileSync(join(root, "bin", "hermes.exe"), "");
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      resolveInstallPs1: () => null,
+      existsSync: (p: string) => existsSync(p),
+      probeHealth: async () => false,
+    });
+    expect(result.state).toBe("FAIL");
+    expect(result.errorCode).toBe("HERMES_INSTALLER_MISSING");
+    expect(canAcceptLocalChat()).toBe(false);
   });
 
   // @lat: A-INSTALL-005
