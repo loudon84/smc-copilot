@@ -28,6 +28,7 @@ import type {
   FilePreviewSource,
   ResolvedPreviewFile,
 } from "./types";
+import { filePreviewSourceIdentity } from "./types";
 
 export type FilePreviewProps = {
   source: FilePreviewSource;
@@ -80,6 +81,9 @@ export function FilePreview({
     };
   }, [providerOverrides, localDeps, httpDeps, knowledgeDeps]);
 
+  // Value identity — inline `source={{…}}` from parents must not retrigger load.
+  const sourceKey = filePreviewSourceIdentity(source);
+
   const load = useCallback(async () => {
     setState({ status: "loading", phase: initialPhase(source.type) });
     const provider = providers[source.type];
@@ -114,7 +118,9 @@ export function FilePreview({
       return;
     }
     setState({ status: "ready", resolved: result.resolved });
-  }, [providers, source, forceRefresh, refreshNonce]);
+    // Depend on sourceKey (value identity), not `source` object reference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- source covered by sourceKey
+  }, [providers, sourceKey, forceRefresh, refreshNonce]);
 
   useEffect(() => {
     void load();

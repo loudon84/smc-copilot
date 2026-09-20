@@ -217,6 +217,25 @@ export function DocumentDetail({
     };
   }, [resolveManagedFileId, loadPreview, bases, detail]);
 
+  const previewSource = useMemo(
+    () =>
+      detail
+        ? {
+            type: "knowledge" as const,
+            id: detail.id,
+            name: detail.fileName,
+            mime: detail.mimeType ?? undefined,
+            activeVersionId: detail.activeVersionId,
+          }
+        : null,
+    [
+      detail?.id,
+      detail?.fileName,
+      detail?.mimeType,
+      detail?.activeVersionId,
+    ],
+  );
+
   const refreshDetail = async (opts?: {
     reloadPreview?: boolean;
     afterReparse?: boolean;
@@ -481,20 +500,16 @@ export function DocumentDetail({
                 className="flex h-full min-h-0 flex-col"
                 data-testid="knowledge-document-preview"
               >
-                <FilePreview
-                  key={`${detail.id}:${detail.activeVersionId ?? ""}:${previewEpoch}`}
-                  testIdPrefix="knowledge-document-preview"
-                  className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-background"
-                  source={{
-                    type: "knowledge",
-                    id: detail.id,
-                    name: detail.fileName,
-                    mime: detail.mimeType ?? undefined,
-                    activeVersionId: detail.activeVersionId,
-                  }}
-                  forceRefresh={previewEpoch > 0}
-                  knowledgeDeps={knowledgeDeps}
-                />
+                {previewSource ? (
+                  <FilePreview
+                    key={`${detail.id}:${detail.activeVersionId ?? ""}:${previewEpoch}`}
+                    testIdPrefix="knowledge-document-preview"
+                    className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-md border border-border bg-background"
+                    source={previewSource}
+                    forceRefresh={previewEpoch > 0}
+                    knowledgeDeps={knowledgeDeps}
+                  />
+                ) : null}
               </div>
             }
             chunkPane={

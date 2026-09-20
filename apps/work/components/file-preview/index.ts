@@ -9,6 +9,7 @@ export type {
   FilePreviewLoadPhase,
   ResolvedPreviewFile,
 } from "./types";
+export { filePreviewSourceIdentity } from "./types";
 
 export { FilePreview } from "./FilePreview";
 export type { FilePreviewProps } from "./FilePreview";

@@ -16,6 +16,19 @@ export interface FilePreviewSource {
   activeVersionId?: string | null;
 }
 
+/** Stable identity for load effects — value-compare, not object reference. */
+export function filePreviewSourceIdentity(source: FilePreviewSource): string {
+  return [
+    source.type,
+    source.id,
+    source.name,
+    source.path ?? "",
+    source.url ?? "",
+    source.mime ?? "",
+    source.activeVersionId ?? "",
+  ].join("\0");
+}
+
 export type FilePreviewEngineCapability =
   | "must"
   | "should"
