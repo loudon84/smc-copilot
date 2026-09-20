@@ -14,15 +14,13 @@ import ProviderKeysSection from "../../components/ProviderKeysSection";
 import RegistryBrowserModal from "../../components/RegistryBrowserModal";
 import AuxiliaryTasksSection from "../../components/AuxiliaryTasksSection";
 import { useDiscoveredModels } from "../../hooks/useDiscoveredModels";
-import { KeyRound, Workflow, User } from "../../assets/icons";
+import { KeyRound, Workflow } from "../../assets/icons";
 import {
   ChevronDown,
   X,
   LayoutGrid,
-  RefreshCw,
   Eye,
   EyeOff,
-  Coins,
 } from "lucide-react";
 import {
   customProviderEnvKey,
@@ -209,8 +207,6 @@ function Providers({
   // Hermes account (device login). `account` is the signed-in profile or null.
   const [account, setAccount] = useState<HermesAccount | null>(null);
   const [showAccountModal, setShowAccountModal] = useState(false);
-  // AI-credit balance for the account card (null = signed out / unavailable).
-  const [credits, setCredits] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     void window.hermesAPI.getAccount(profile).then((a) => {
@@ -221,8 +217,8 @@ function Providers({
     };
   }, [profile]);
 
-  // SMC Copilot convenience layer: with a signed-in account, surface the
-  // credit balance and make sure the profile has an auto-provisioned
+  // SMC Copilot convenience layer: with a signed-in account, warm credit
+  // balance fetch and make sure the profile has an auto-provisioned
   // HERMESONE_API_KEY (no-op when one exists; the main process guards
   // remote/SSH modes). A freshly created key means the env just changed
   // under us — re-read it so the SMC Copilot card + picker appear now, not
@@ -230,15 +226,9 @@ function Providers({
   useEffect(() => {
     let cancelled = false;
     if (!account) {
-      setCredits(null);
       return;
     }
-    void window.hermesAPI
-      .getHermesOneCredits()
-      .then((r) => {
-        if (!cancelled) setCredits(r.balance);
-      })
-      .catch(() => {});
+    void window.hermesAPI.getHermesOneCredits().catch(() => {});
     void window.hermesAPI
       .ensureHermesOneKey(profile)
       .then(async (r) => {

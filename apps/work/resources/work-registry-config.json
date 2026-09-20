@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "registryId": "enterprise-smc-copilot-hermes-registry-main",
+  "indexUrl": "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main/index.json",
+  "modelsUrl": "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main/models.json",
+  "contentBaseUrl": "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main",
+  "treeUrl": "https://api.github.com/repos/smc-copilot/hermes-registry/git/trees/main?recursive=1",
+  "webBaseUrl": "https://github.com/smc-copilot/hermes-registry/tree/main"
+}

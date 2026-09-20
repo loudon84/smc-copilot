@@ -64,16 +64,16 @@ type RegistryResolution = ResolvedRegistry | RegistryResolutionFailure;
 
 const PUBLIC_DEFAULT_DESCRIPTOR: WorkRegistryEndpointDescriptor = {
   schemaVersion: REGISTRY_DESCRIPTOR_SCHEMA_VERSION,
-  registryId: "public-fathah-hermes-registry-main",
+  registryId: "public-smc-copilot-hermes-registry-main",
   indexUrl:
-    "https://raw.githubusercontent.com/fathah/hermes-registry/refs/heads/main/index.json",
+    "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main/index.json",
   modelsUrl:
-    "https://raw.githubusercontent.com/fathah/hermes-registry/refs/heads/main/models.json",
+    "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main/models.json",
   contentBaseUrl:
-    "https://raw.githubusercontent.com/fathah/hermes-registry/refs/heads/main",
+    "https://raw.githubusercontent.com/smc-copilot/hermes-registry/refs/heads/main",
   treeUrl:
-    "https://api.github.com/repos/fathah/hermes-registry/git/trees/main?recursive=1",
-  webBaseUrl: "https://github.com/fathah/hermes-registry/tree/main",
+    "https://api.github.com/repos/smc-copilot/hermes-registry/git/trees/main?recursive=1",
+  webBaseUrl: "https://github.com/smc-copilot/hermes-registry/tree/main",
   iconBaseUrl: "https://registry.hermesone.org/registry-icon",
 };
 
