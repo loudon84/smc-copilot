@@ -29,6 +29,7 @@ import {
 import {
   ingestBrowserFiles,
   ingestViaPicker,
+  resolveComposerDisplayError,
 } from "./composerFilePlatform";
 import { AttachmentTray } from "../../components/files";
 import { ContextGauge, type ContextUsage } from "./ContextGauge";
@@ -216,7 +217,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           setAttachments((prev) => [...prev, ...result.attachments]);
           setStatusById((prev) => ({ ...prev, ...result.statusById }));
         }
-        if (result.errors.length > 0) {
+        const contentDisplay = resolveComposerDisplayError(
+          result.errors,
+          result.platformErrors,
+          (name) => t("chat.attachContentUnreadable", { name }),
+        );
+        if (contentDisplay) {
+          setAttachmentError(contentDisplay);
+        } else if (result.errors.length > 0) {
           setAttachmentError(formatError(result.errors[0]));
         } else if (result.platformErrors.length > 0) {
           setAttachmentError(result.platformErrors[0]);
@@ -225,7 +233,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
         }
         return result.errors;
       },
-      [formatError],
+      [formatError, t],
     );
 
     const ingestFiles = useCallback(

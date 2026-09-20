@@ -88,6 +88,8 @@ export default {
   attachTextTooLarge: "{{name}}: file too large (max 256 KB)",
   attachTooMany: "Too many attachments (max 10 per message)",
   attachReadFailed: "{{name}}: could not be read",
+  attachContentUnreadable:
+    "{{name}}: content does not match its type, or may be protected. Try a readable copy.",
   attachRemoteModeBinary:
     "{{name}}: PDF/binary attachments require local mode — images and text files still work.",
   validation: {

@@ -15,8 +15,17 @@ export {
   isDeniedExtension,
   extensionFromName,
   detectMagicKind,
+  detectStrictContentKind,
   assertImportAllowed,
 } from "./file-security";
+
+export {
+  validateFileContent,
+  FILE_CONTENT_UNREADABLE_MESSAGE,
+  MAX_PREFIX_BYTES,
+  logContentCheckEvent,
+  type FileContentValidationResult,
+} from "./protected-file-detector";
 
 export {
   ensureFilesLayout,

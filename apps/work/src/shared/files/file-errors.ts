@@ -7,6 +7,7 @@ export type FileErrorCode =
   | "FILE_TOO_LARGE"
   | "FILE_TYPE_DENIED"
   | "FILE_READ_FAILED"
+  | "FILE_CONTENT_ENCRYPTED_OR_INVALID"
   | "FILE_PARSE_FAILED"
   | "FILE_PREVIEW_UNSUPPORTED"
   | "FILE_ENCODING_FAILED"
@@ -48,3 +49,8 @@ export function makeFileError(
     detail: options?.detail,
   };
 }
+
+/** Shared English prose for FILE_CONTENT_ENCRYPTED_OR_INVALID (en i18n aligned). */
+export const FILE_CONTENT_UNREADABLE_MESSAGE =
+  "File content does not match its declared format, or may be protected; try a readable plaintext copy";
+

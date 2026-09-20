@@ -219,4 +219,66 @@ describe("Knowledge upload panel", () => {
     });
     expect(createDraft).toHaveBeenCalledWith({ knowledgeBaseId: "kb-42" });
   });
+
+  it("cancels draft and shows content-unreadable on gate reject (A-PFC-008)", async () => {
+    const createDraft = vi.fn(async () =>
+      job({ jobId: "j-gate", status: "queued", progress: 0 }),
+    );
+    const cancelJob = vi.fn(async ({ jobId }: { jobId: string }) =>
+      job({ jobId, status: "cancelled", progress: 0 }),
+    );
+    const uploadBaseFile = vi.fn();
+    const pickFiles = vi.fn(async () => [
+      {
+        ok: false as const,
+        error: {
+          code: "FILE_CONTENT_ENCRYPTED_OR_INVALID" as const,
+          message: knowledgeEn.uploads.contentUnreadable,
+          retryable: false,
+        },
+      },
+    ]);
+    (
+      window as unknown as {
+        hermesAPI: { files: { pickFiles: typeof pickFiles } };
+      }
+    ).hermesAPI = { files: { pickFiles } };
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "kb-1",
+          baseName: "Alpha",
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          listSnapshots: async () => [],
+          createDraft,
+          cancelJob,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-upload-picker")).not.toBeDisabled();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-upload-picker"));
+    });
+
+    await waitFor(() => {
+      expect(cancelJob).toHaveBeenCalledWith({ jobId: "j-gate" });
+    });
+    expect(uploadBaseFile).not.toHaveBeenCalled();
+    expect(screen.getByTestId("knowledge-upload-pick-error").textContent).toBe(
+      knowledgeEn.uploads.contentUnreadable,
+    );
+    expect(screen.getByTestId("knowledge-upload-pick-error").textContent).not.toMatch(
+      /confirmed Eisoo|已确认亿赛通/i,
+    );
+  });
 });

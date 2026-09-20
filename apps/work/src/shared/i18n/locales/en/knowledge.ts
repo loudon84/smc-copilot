@@ -269,6 +269,8 @@ export default {
     targetBase: "Target base",
     drawerTitle: "Upload to",
     lockedTarget: "This upload is locked to the current knowledge base.",
+    contentUnreadable:
+      "File content does not match its declared format, or may be protected; try a readable plaintext copy",
   },
   chat: {
     title: "Knowledge Chat",

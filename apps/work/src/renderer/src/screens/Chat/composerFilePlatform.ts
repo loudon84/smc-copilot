@@ -9,11 +9,13 @@ import {
   type Attachment,
 } from "../../../../shared/attachments";
 import type {
+  FileErrorCode,
   FileImportContext,
   FileImportResult,
   ManagedFileStatus,
   ManagedFileView,
 } from "../../../../shared/files";
+import { FILE_CONTENT_UNREADABLE_MESSAGE } from "../../../../shared/files";
 import {
   compressImageToFit,
   processFiles,
@@ -47,7 +49,7 @@ function fileErrorToAttachmentError(
   name: string,
   code: string,
 ): AttachmentError {
-  switch (code) {
+  switch (code as FileErrorCode | string) {
     case "FILE_TOO_LARGE":
       return { code: "image-too-large", filename: name };
     case "FILE_TYPE_DENIED":
@@ -56,10 +58,34 @@ function fileErrorToAttachmentError(
     case "FILE_ENCODING_FAILED":
     case "FILE_READ_FAILED":
     case "FILE_STORAGE_FAILED":
+    case "FILE_CONTENT_ENCRYPTED_OR_INVALID":
       return { code: "read-failed", filename: name };
     default:
       return { code: "read-failed", filename: name };
   }
+}
+
+/**
+ * Prefer actionable content-gate platform message over generic read-failed i18n.
+ * Returns null when the caller should use formatError for typed AttachmentErrors.
+ */
+export function resolveComposerDisplayError(
+  errors: AttachmentError[],
+  platformErrors: string[],
+  translateContentUnreadable: (name: string) => string,
+): string | null {
+  const first = errors[0];
+  const platform = platformErrors[0];
+  if (
+    first?.code === "read-failed" &&
+    platform === FILE_CONTENT_UNREADABLE_MESSAGE
+  ) {
+    return translateContentUnreadable(first.filename);
+  }
+  if (first?.code === "read-failed" && platform) {
+    return platform;
+  }
+  return null;
 }
 
 async function maybeCompressImageAttachment(
@@ -96,7 +122,8 @@ async function maybeCompressImageAttachment(
   }
 }
 
-async function resolveManagedResults(
+/** Map FileImportResult[] → composer attachments/errors (exported for tests). */
+export async function resolveManagedResults(
   results: FileImportResult[],
   ctx: ComposerIngestContext,
   existingCount: number,

@@ -7,6 +7,7 @@ import { basename, extname } from "path";
 import { existsSync } from "fs";
 import {
   makeFileError,
+  FILE_CONTENT_UNREADABLE_MESSAGE,
   type ClipboardFileInput,
   type FileAssociation,
   type FileError,
@@ -25,6 +26,11 @@ import {
   assertImportAllowed,
   FilePlatformError,
 } from "./file-security";
+import {
+  logContentCheckEvent,
+  validateFileContent,
+  type FileContentValidationResult,
+} from "./protected-file-detector";
 import {
   ensureFilesLayout,
   stageClipboardBytes,
@@ -172,6 +178,54 @@ export async function importOnePath(
   const name = basename(canonical);
   const denied = assertImportAllowed(name, size, config);
   if (denied) return { ok: false, error: denied };
+
+  // P0 Content Readability Gate — before hash / File Platform mutation.
+  let validation: FileContentValidationResult;
+  try {
+    validation = await validateFileContent(canonical, name);
+  } catch {
+    logContentCheckEvent({
+      validation: {
+        status: "INVALID_OR_ENCRYPTED",
+        extension: extensionFromName(name),
+        expectedKinds: [],
+        actualKind: "unknown",
+        bytesInspected: 0,
+        reason: "signature-mismatch",
+      },
+      errorCode: "FILE_READ_FAILED",
+      fileName: name,
+    });
+    return {
+      ok: false,
+      error: makeFileError(
+        "FILE_READ_FAILED",
+        "Failed to read file content for validation",
+      ),
+    };
+  }
+
+  if (validation.status === "INVALID_OR_ENCRYPTED") {
+    logContentCheckEvent({
+      validation,
+      errorCode: "FILE_CONTENT_ENCRYPTED_OR_INVALID",
+      fileName: name,
+    });
+    return {
+      ok: false,
+      error: makeFileError(
+        "FILE_CONTENT_ENCRYPTED_OR_INVALID",
+        FILE_CONTENT_UNREADABLE_MESSAGE,
+        { detail: `${validation.extension}:${validation.actualKind}` },
+      ),
+    };
+  }
+
+  logContentCheckEvent({
+    validation,
+    errorCode: null,
+    fileName: name,
+  });
 
   const hashResult = await hashOrError(canonical);
   if ("error" in hashResult) return { ok: false, error: hashResult.error };

@@ -114,13 +114,48 @@ export function assertPathAllowed(
 
 export type MagicKind = "image" | "pdf" | "zip" | "text" | "unknown";
 
-/** Sniff common magic-byte signatures from a file prefix buffer. */
-export function detectMagicKind(buf: Buffer): MagicKind {
+/** Strict content kinds for P0 File Content Readability Gate (no text heuristic). */
+export type StrictContentKind =
+  | "pdf"
+  | "zip"
+  | "ole"
+  | "png"
+  | "jpeg"
+  | "gif"
+  | "webp"
+  | "bmp"
+  | "unknown";
+
+const OLE_SIGNATURE = Buffer.from([
+  0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1,
+]);
+
+const PDF_MARKER = Buffer.from("%PDF-");
+
+function hasZipSignature(buf: Buffer): boolean {
+  return (
+    buf.length >= 4 &&
+    buf[0] === 0x50 &&
+    buf[1] === 0x4b &&
+    (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07) &&
+    (buf[3] === 0x04 || buf[3] === 0x06 || buf[3] === 0x08)
+  );
+}
+
+function hasPdfMarkerWithin1024(buf: Buffer): boolean {
+  const window = buf.subarray(0, Math.min(buf.length, 1024));
+  return window.indexOf(PDF_MARKER) >= 0;
+}
+
+/**
+ * Strict binary signature sniff for P0 content gate.
+ * MUST NOT use text heuristic as a hard-block basis.
+ */
+export function detectStrictContentKind(buf: Buffer): StrictContentKind {
   if (!buf || buf.length === 0) return "unknown";
 
-  if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) {
-    return "pdf"; // %PDF
-  }
+  if (hasPdfMarkerWithin1024(buf)) return "pdf";
+
   if (
     buf.length >= 8 &&
     buf[0] === 0x89 &&
@@ -128,35 +163,59 @@ export function detectMagicKind(buf: Buffer): MagicKind {
     buf[2] === 0x4e &&
     buf[3] === 0x47
   ) {
-    return "image"; // PNG
+    return "png";
   }
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
-    return "image"; // JPEG
+    return "jpeg";
   }
   if (
     buf.length >= 6 &&
     buf[0] === 0x47 &&
     buf[1] === 0x49 &&
     buf[2] === 0x46 &&
-    buf[3] === 0x38
+    buf[3] === 0x38 &&
+    (buf[4] === 0x37 || buf[4] === 0x39) &&
+    buf[5] === 0x61
   ) {
-    return "image"; // GIF8
+    return "gif";
   }
   if (
     buf.length >= 12 &&
     buf.toString("ascii", 0, 4) === "RIFF" &&
     buf.toString("ascii", 8, 12) === "WEBP"
   ) {
+    return "webp";
+  }
+  if (buf.length >= 2 && buf[0] === 0x42 && buf[1] === 0x4d) {
+    return "bmp";
+  }
+  if (hasZipSignature(buf)) return "zip";
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(OLE_SIGNATURE)) {
+    return "ole";
+  }
+  return "unknown";
+}
+
+/** Sniff common magic-byte signatures from a file prefix buffer. */
+export function detectMagicKind(buf: Buffer): MagicKind {
+  if (!buf || buf.length === 0) return "unknown";
+
+  const strict = detectStrictContentKind(buf);
+  if (strict === "pdf") return "pdf";
+  if (
+    strict === "png" ||
+    strict === "jpeg" ||
+    strict === "gif" ||
+    strict === "webp" ||
+    strict === "bmp"
+  ) {
     return "image";
   }
-  if (
-    buf.length >= 4 &&
-    buf[0] === 0x50 &&
-    buf[1] === 0x4b &&
-    (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07) &&
-    (buf[3] === 0x04 || buf[3] === 0x06 || buf[3] === 0x08)
-  ) {
-    return "zip";
+  if (strict === "zip") return "zip";
+
+  // Offset-0 %PDF for legacy callers (strict also searches within 1024).
+  if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) {
+    return "pdf";
   }
 
   const sample = buf.subarray(0, Math.min(buf.length, 512));

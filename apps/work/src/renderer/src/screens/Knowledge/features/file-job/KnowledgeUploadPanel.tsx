@@ -65,6 +65,7 @@ export function KnowledgeUploadPanel({
     "loading" | "unavailable" | "empty" | "content" | "error"
   >("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [pickError, setPickError] = useState("");
   const subscribedRef = useRef(false);
 
   const createDraftFn =
@@ -167,6 +168,7 @@ export function KnowledgeUploadPanel({
     const createDraft = injectedCreateDraft ?? api?.createDraft?.bind(api);
     const cancel = injectedCancel ?? api?.cancel?.bind(api);
     if (!createDraft) return;
+    setPickError("");
     const draft = await createDraft({ knowledgeBaseId: lockedBaseId });
     upsertJob(draft);
 
@@ -180,6 +182,14 @@ export function KnowledgeUploadPanel({
     if (imported.length === 0 && cancel) {
       const cancelled = await cancel({ jobId: draft.jobId });
       upsertJob(cancelled);
+      const contentRejected = results.some(
+        (result) =>
+          !result.ok &&
+          result.error.code === "FILE_CONTENT_ENCRYPTED_OR_INVALID",
+      );
+      if (contentRejected) {
+        setPickError(t("knowledge.uploads.contentUnreadable"));
+      }
     }
   };
 
@@ -266,6 +276,15 @@ export function KnowledgeUploadPanel({
                 {t("knowledge.uploads.pickerDisabledProvider")}
               </p>
             )}
+            {pickError ? (
+              <p
+                data-testid="knowledge-upload-pick-error"
+                className="text-xs text-destructive"
+                role="alert"
+              >
+                {pickError}
+              </p>
+            ) : null}
           </div>
 
           <KnowledgeFileJobQueue

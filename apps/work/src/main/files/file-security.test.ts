@@ -115,4 +115,30 @@ describe("file-security", () => {
       "text",
     );
   });
+
+  it("detects strict content kinds including ole and bmp", async () => {
+    const sec = await load();
+    expect(sec.detectStrictContentKind(Buffer.from("%PDF-1.4"))).toBe("pdf");
+    expect(
+      sec.detectStrictContentKind(
+        Buffer.concat([Buffer.from("XXXX"), Buffer.from("%PDF-1.7")]),
+      ),
+    ).toBe("pdf");
+    expect(
+      sec.detectStrictContentKind(
+        Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+      ),
+    ).toBe("ole");
+    expect(sec.detectStrictContentKind(Buffer.from([0x42, 0x4d, 0x00, 0x00]))).toBe(
+      "bmp",
+    );
+    expect(
+      sec.detectStrictContentKind(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      ),
+    ).toBe("png");
+    expect(sec.detectStrictContentKind(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe(
+      "jpeg",
+    );
+  });
 });
