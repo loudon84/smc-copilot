@@ -2,13 +2,50 @@ appId: com.smc.copilot
 productName: SMC-Copilot
 directories:
   buildResources: build
+# Keep default **/* for dependency collection, but strip non-runtime project
+# trees. A previous pack included source/docs/.cursor (≈43k entries / 648MB)
+# and produced asar offset/integrity corruption (package.json unreadable).
+# Do NOT use a top-level "!**/*" allowlist — electron-builder also applies
+# files patterns to nodeModuleFilePatterns and would drop all dependencies.
 files:
+  - out/**/*
+  - package.json
+  - resources/**/*
+  - "!out/**/*.map"
   - "!**/.vscode/*"
-  - "!src/*"
+  - "!**/.cursor{,/**/*}"
+  - "!**/.agents{,/**/*}"
+  - "!**/.claude{,/**/*}"
+  - "!**/.codex{,/**/*}"
+  - "!**/.sandbox{,/**/*}"
+  - "!src{,/**/*}"
+  - "!components{,/**/*}"
+  - "!hooks{,/**/*}"
+  - "!utils{,/**/*}"
+  - "!tests{,/**/*}"
+  - "!scripts{,/**/*}"
+  - "!docs{,/**/*}"
+  - "!prd{,/**/*}"
+  - "!lat.md{,/**/*}"
+  - "!spikes{,/**/*}"
+  - "!artifacts{,/**/*}"
+  - "!changelogs{,/**/*}"
+  - "!assets{,/**/*}"
+  - "!build{,/**/*}"
+  - "!dist{,/**/*}"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
-  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
-  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  - "!{.env,.env.*,.npmrc,pnpm-lock.yaml,package-lock.json}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,components.json,vitest.config.ts,eslint.config.mjs}"
+  - "!*.md"
+  - "!AGENTS.md"
+  - "!CLAUDE.md"
+  - "!CONTRIBUTING*.md"
+  - "!Development.md"
+  - "!BASELINE_PASS.md"
+  - "!KANBAN_GAP_REPORT.md"
+  - "!PROFILE_MODAL_HANDOFF.md"
+  - "!LICENSE"
 asarUnpack:
   - resources/**
   - node_modules/better-sqlite3/build/Release/*.node

@@ -95,7 +95,7 @@ export function applyIdentityMigration(
   }
 
   let state = existing ?? createPendingState({
-    targetVersion: app.getVersion?.() ?? "0.7.5",
+    targetVersion: app.getVersion?.() ?? "0.7.6",
     targetPath: targetDir,
     sourcePath,
   });

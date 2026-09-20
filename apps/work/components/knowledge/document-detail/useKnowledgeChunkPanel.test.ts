@@ -38,6 +38,7 @@ function basesStub(
         parseStatus: "active" as const,
       },
     ]),
+    ...overrides,
   } as unknown as HermesKnowledgeBasesAPI;
 }
 

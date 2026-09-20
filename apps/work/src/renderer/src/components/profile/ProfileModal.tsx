@@ -81,6 +81,7 @@ const PROFILE_SECTIONS: ReadonlyArray<{
   { id: "profile", labelKey: "agents.sectionProfile", Icon: User },
   { id: "persona", labelKey: "agents.sectionPersona", Icon: Drama },
   { id: "agentMemory", labelKey: "agents.sectionAgentMemory", Icon: Database },
+  { id: "wallet", labelKey: "agents.sectionWallet", Icon: Wallet },
   { id: "sync", labelKey: "agents.sectionSync", Icon: Refresh },
   { id: "advanced", labelKey: "agents.sectionAdvanced", Icon: Settings },
 ];

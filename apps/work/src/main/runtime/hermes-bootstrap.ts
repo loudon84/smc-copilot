@@ -14,7 +14,6 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   writeFileSync,
 } from "fs";
 import { homedir } from "os";

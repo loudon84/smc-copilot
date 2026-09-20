@@ -7,7 +7,7 @@ import {
   statSync,
 } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
-import { getHermesRoot } from "./runtime/hermes-root";
+import { getHermesPluginRoot, getHermesRoot } from "./runtime/hermes-root";
 import { runHermesCliSync } from "./runtime/hermes-cli-runner";
 import { isValidNamedProfileName, profileHome } from "./utils";
 

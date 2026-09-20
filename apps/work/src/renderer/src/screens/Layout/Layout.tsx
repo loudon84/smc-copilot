@@ -839,8 +839,6 @@ function Layout(): React.JSX.Element {
             </div>
             <ProfileSwitcher
               activeProfile={activeProfile}
-              onSwitch={handleSelectProfile}
-              onManage={() => goTo("agents")}
               compact={sidebarCollapsed}
             />
           </div>

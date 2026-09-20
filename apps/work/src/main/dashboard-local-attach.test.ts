@@ -46,10 +46,10 @@ describe("resolveLocalDashboardAttachCandidates", () => {
   });
 
   it("reads token and default port 9119 from profile env", () => {
-    readEnv.mockImplementation((profile?: string) => {
-      if (!profile) return {};
+    readEnv.mockImplementation(((_profile?: string): Record<string, string> => {
+      if (!_profile) return {};
       return { HERMES_DASHBOARD_SESSION_TOKEN: "tok-profile" };
-    });
+    }) as () => Record<string, string>);
     const result = resolveLocalDashboardAttachCandidates("alfie");
     expect(result).toEqual({
       port: LOCAL_DASHBOARD_DEFAULT_PORT,

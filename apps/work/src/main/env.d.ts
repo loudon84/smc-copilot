@@ -3,4 +3,6 @@
 interface ImportMetaEnv {
   readonly MAIN_VITE_HERMES_API_URL?: string;
   readonly MAIN_VITE_HERMES_API_KEY?: string;
+  readonly VITE_SKIP_PORTAL_LOGIN?: string;
+  readonly HERMES_SKIP_PORTAL_LOGIN?: string;
 }
