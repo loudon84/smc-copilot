@@ -23,6 +23,8 @@ import { HIDDEN_SUBPROCESS_OPTIONS } from "../process-options";
 import { supportsHermesRunsTransport } from "../run-stream";
 import { withBootstrapLock } from "./hermes-bootstrap-lock";
 import {
+  canAcceptLocalChat,
+  getBootstrapState,
   HERMES_REPO_ORIGIN_MISMATCH,
   setBootstrapState,
   type HermesBootstrapState,
@@ -41,6 +43,12 @@ import { getGatewayBaseUrl } from "./hermes-runtime-config";
 import { ensureProfileGatewayStarted } from "./hermes-named-gateway";
 
 export const BOOTSTRAP_TIMEOUT_MS = 1_800_000;
+/** Soft-skip / reboot race: retry /health before falling through to install. */
+export const RUNTIME_READY_HEALTH_ATTEMPTS = 10;
+export const RUNTIME_READY_HEALTH_INTERVAL_MS = 1_000;
+/** After policy / failed start: shorter wait before declaring UNHEALTHY. */
+export const GATEWAY_HEALTH_SETTLE_ATTEMPTS = 5;
+export const GATEWAY_HEALTH_SETTLE_INTERVAL_MS = 1_000;
 
 export interface BootstrapSpawnCall {
   kind: "powershell" | "git";
@@ -114,6 +122,14 @@ export function powershellExe(): string {
   return join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
 }
 
+/**
+ * Installer resolution order (no machine-local hardcodes):
+ * 1. `HERMES_INSTALL_PS1` explicit override (dev / ops)
+ * 2. Packaged `resources/hermes-bootstrap/install.ps1` (extraResources)
+ * 3. App-relative / cwd copies used by `electron-vite` / unpackaged runs
+ *
+ * When none exist, bootstrap soft-skips to READY if CLI + gateway health ok.
+ */
 export function candidateInstallPs1Paths(): string[] {
   const out: string[] = [];
   if (process.env.HERMES_INSTALL_PS1?.trim()) {
@@ -141,9 +157,6 @@ export function candidateInstallPs1Paths(): string[] {
     join(__dirname, "../../../resources/hermes-bootstrap/install.ps1"),
   );
   out.push(join(process.cwd(), "resources/hermes-bootstrap/install.ps1"));
-  // Dev fallback: local enterprise fork working copy.
-  out.push("e:/git/hermes-agent/scripts/install.ps1");
-  out.push("E:\\git\\hermes-agent\\scripts\\install.ps1");
   return out;
 }
 
@@ -399,6 +412,136 @@ function createDefaultDeps(): HermesBootstrapDeps {
   };
 }
 
+/** CLI present under Hermes Root (packaged soft-skip / runtime-ready probe). */
+function hermesCliPresent(
+  deps: Pick<HermesBootstrapDeps, "getHermesRoot" | "existsSync">,
+): boolean {
+  const hermesRoot = deps.getHermesRoot();
+  return (
+    deps.existsSync(join(hermesRoot, "bin", "hermes.exe")) ||
+    deps.existsSync(join(hermesRoot, "bin", "hermes"))
+  );
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Poll gateway /health until 200 or attempts exhausted.
+ * Used to absorb reboot races where the process is up but HTTP is not yet.
+ */
+export async function waitForGatewayHealth(
+  deps: Pick<HermesBootstrapDeps, "probeHealth" | "sleep">,
+  opts: {
+    attempts: number;
+    intervalMs: number;
+    log?: (line: string) => void;
+    label?: string;
+  },
+): Promise<boolean> {
+  const sleep = deps.sleep ?? defaultSleep;
+  const label = opts.label ?? "HEALTH_WAIT";
+  for (let i = 1; i <= opts.attempts; i++) {
+    if (await deps.probeHealth()) {
+      opts.log?.(`${label} ok attempt=${i}/${opts.attempts}`);
+      return true;
+    }
+    opts.log?.(
+      `${label} not 200 attempt=${i}/${opts.attempts}; retry in ${opts.intervalMs}ms`,
+    );
+    if (i < opts.attempts) await sleep(opts.intervalMs);
+  }
+  return false;
+}
+
+function markRuntimeReady(
+  operationId: string,
+  skippedReason: string,
+  log: (line: string) => void,
+): BootstrapRunResult {
+  const apiKeyPresent = Boolean(getApiServerKey()?.trim());
+  log(
+    `SOFT_SKIP READY skippedReason=${skippedReason}; apiServerKeyPresent=${apiKeyPresent}`,
+  );
+  if (!apiKeyPresent) {
+    log(
+      "WARN: API_SERVER_KEY not resolved from Hermes home — /v1 chat may return invalid API_SERVER_KEY until key is set in HERMES_HOME/.env and gateway restarted",
+    );
+  }
+  setBootstrapState("READY", { operationId, skippedReason });
+  return {
+    state: "READY",
+    operationId,
+    skipped: true,
+  };
+}
+
+/**
+ * When Hermes is already installed and gateway /health is 200, allow local
+ * chat without waiting on the bootstrap lock or re-running install.ps1.
+ * Retries briefly so reboot + scheduled-task races do not false-negative.
+ * Does not mutate release-source / knowledge bake-ins.
+ */
+async function tryRuntimeAlreadyReadySkip(
+  deps: HermesBootstrapDeps,
+  operationId: string,
+  log: (line: string) => void,
+): Promise<BootstrapRunResult | null> {
+  const hermesRoot = deps.getHermesRoot();
+  const cliPresent = hermesCliPresent(deps);
+  log(
+    `RUNTIME_READY_PROBE hermesRoot=${hermesRoot} cliPresent=${cliPresent}`,
+  );
+  if (!cliPresent) return null;
+  const healthy = await waitForGatewayHealth(deps, {
+    attempts: RUNTIME_READY_HEALTH_ATTEMPTS,
+    intervalMs: RUNTIME_READY_HEALTH_INTERVAL_MS,
+    log,
+    label: "RUNTIME_READY_PROBE",
+  });
+  if (!healthy) {
+    log("RUNTIME_READY_PROBE gateway health not 200 after retries");
+    return null;
+  }
+  return markRuntimeReady(operationId, "runtime-already-ready", log);
+}
+
+/**
+ * If bootstrap left FAIL/INSTALLING but Gateway /health is now 200, promote to
+ * READY so chat is not stuck after a reboot race. Idempotent when already READY.
+ */
+export async function recoverBootstrapIfGatewayHealthy(
+  overrideDeps?: Partial<HermesBootstrapDeps>,
+): Promise<boolean> {
+  if (canAcceptLocalChat()) return true;
+  const current = getBootstrapState();
+  // Origin mismatch must stay blocked until explicit repair — health alone is not enough.
+  if (current === "REPO_MISMATCH") return false;
+  const deps: HermesBootstrapDeps = {
+    ...createDefaultDeps(),
+    ...overrideDeps,
+  };
+  const mode = deps.getConnectionMode();
+  if (mode === "remote" || mode === "ssh") {
+    setBootstrapState("READY", {
+      skippedReason: `connectionMode=${mode}`,
+    });
+    return true;
+  }
+  if (!hermesCliPresent(deps)) return false;
+  const healthy = await waitForGatewayHealth(deps, {
+    attempts: GATEWAY_HEALTH_SETTLE_ATTEMPTS,
+    intervalMs: GATEWAY_HEALTH_SETTLE_INTERVAL_MS,
+  });
+  if (!healthy) return false;
+  setBootstrapState("READY", {
+    operationId: randomUUID(),
+    skippedReason: "recover-health",
+  });
+  return true;
+}
+
 async function runBootstrapBody(
   deps: HermesBootstrapDeps,
   operationId: string,
@@ -406,38 +549,44 @@ async function runBootstrapBody(
 ): Promise<BootstrapRunResult> {
   const timeoutMs = deps.timeoutMs ?? BOOTSTRAP_TIMEOUT_MS;
   const installPs1 = deps.resolveInstallPs1();
+  log(
+    installPs1
+      ? `INSTALLER resolved=${redactForLog(installPs1)}`
+      : "INSTALLER missing — evaluating soft-skip (CLI + gateway health)",
+  );
   if (!installPs1) {
-    // Packaged builds may omit install.ps1 when Hermes is already on-machine.
-    // Allow READY when CLI exists and gateway is healthy so local chat is not
-    // blocked solely by a missing installer (softened A-INSTALL-003).
+    // Soft-skip (A-INSTALL-003 softened): when install.ps1 was not staged into
+    // resources/hermes-bootstrap, still READY if CLI exists and /health is 200.
     const hermesRoot = deps.getHermesRoot();
-    const cliPresent =
-      deps.existsSync(join(hermesRoot, "bin", "hermes.exe")) ||
-      deps.existsSync(join(hermesRoot, "bin", "hermes"));
-    if (cliPresent && (await deps.probeHealth())) {
-      log(
-        "SKIP: bundled install.ps1 missing but hermes CLI present and gateway healthy",
-      );
-      setBootstrapState("READY", {
-        operationId,
-        skippedReason: "installer-missing-but-runtime-ready",
+    const cliPresent = hermesCliPresent(deps);
+    log(`SOFT_SKIP probe hermesRoot=${hermesRoot} cliPresent=${cliPresent}`);
+    if (cliPresent) {
+      const healthy = await waitForGatewayHealth(deps, {
+        attempts: RUNTIME_READY_HEALTH_ATTEMPTS,
+        intervalMs: RUNTIME_READY_HEALTH_INTERVAL_MS,
+        log,
+        label: "SOFT_SKIP",
       });
-      return {
-        state: "READY",
-        operationId,
-        skipped: true,
-      };
+      if (healthy) {
+        return markRuntimeReady(
+          operationId,
+          "installer-missing-but-runtime-ready",
+          log,
+        );
+      }
     }
     setBootstrapState("FAIL", {
       operationId,
       errorCode: "HERMES_INSTALLER_MISSING",
-      errorMessage: "bundled install.ps1 not found",
+      errorMessage:
+        "install.ps1 not found and soft-skip failed (CLI missing or gateway unhealthy)",
     });
     return {
       state: "FAIL",
       operationId,
       errorCode: "HERMES_INSTALLER_MISSING",
-      errorMessage: "bundled install.ps1 not found",
+      errorMessage:
+        "install.ps1 not found and soft-skip failed (CLI missing or gateway unhealthy)",
     };
   }
 
@@ -624,22 +773,37 @@ async function runBootstrapBody(
   });
   log(`Applied policy ${source.policyVersion}`);
 
-  const gatewayOk = await deps.installAndStartGateway();
-  if (!gatewayOk) {
-    // Try one more health probe
-    const healthy = await deps.probeHealth();
-    if (!healthy) {
-      setBootstrapState("FAIL", {
-        operationId,
-        errorCode: "HERMES_GATEWAY_UNHEALTHY",
-        errorMessage: "Gateway health not 200 after install/start",
+  // Prefer not to disturb an already-healthy gateway (reboot / scheduled task).
+  const alreadyHealthy = await waitForGatewayHealth(deps, {
+    attempts: GATEWAY_HEALTH_SETTLE_ATTEMPTS,
+    intervalMs: GATEWAY_HEALTH_SETTLE_INTERVAL_MS,
+    log,
+    label: "GATEWAY_PRE_START",
+  });
+  if (alreadyHealthy) {
+    log("GATEWAY already healthy after policy — skip install/start");
+  } else {
+    const gatewayOk = await deps.installAndStartGateway();
+    if (!gatewayOk) {
+      const healthy = await waitForGatewayHealth(deps, {
+        attempts: GATEWAY_HEALTH_SETTLE_ATTEMPTS,
+        intervalMs: GATEWAY_HEALTH_SETTLE_INTERVAL_MS,
+        log,
+        label: "GATEWAY_POST_START",
       });
-      return {
-        state: "FAIL",
-        operationId,
-        errorCode: "HERMES_GATEWAY_UNHEALTHY",
-        errorMessage: "Gateway health not 200 after install/start",
-      };
+      if (!healthy) {
+        setBootstrapState("FAIL", {
+          operationId,
+          errorCode: "HERMES_GATEWAY_UNHEALTHY",
+          errorMessage: "Gateway health not 200 after install/start",
+        });
+        return {
+          state: "FAIL",
+          operationId,
+          errorCode: "HERMES_GATEWAY_UNHEALTHY",
+          errorMessage: "Gateway health not 200 after install/start",
+        };
+      }
     }
   }
 
@@ -699,12 +863,23 @@ export async function runHermesBootstrap(
     };
   }
 
-  setBootstrapState("INSTALLING", { operationId });
   const userData = deps.getUserDataPath();
   const { logPath, log } = createLogger(userData, operationId);
   log(
     `Bootstrap start user=${windowsUsername()} mutex=Local\\SMC-Work-HermesBootstrap-<user> via lockfile`,
   );
+
+  // Packaged + already-running Hermes: do not block chat on lock/install.
+  // Install source / knowledge bake-ins are untouched; cold machines still
+  // fall through to the locked install.ps1 path below.
+  // Defer INSTALLING until soft-skip fails so a healthy gateway after reboot
+  // never flashes FAIL/INSTALLING then recovers.
+  const runtimeReady = await tryRuntimeAlreadyReadySkip(deps, operationId, log);
+  if (runtimeReady) {
+    return { ...runtimeReady, logPath };
+  }
+
+  setBootstrapState("INSTALLING", { operationId });
 
   const cancelRef = { cancelled: false };
   activeBootstrap = {
@@ -754,22 +929,36 @@ export async function runHermesBootstrap(
   };
 
   if (deps.skipLock) {
+    log("LOCK_SKIP: deps.skipLock=true");
     return run();
   }
 
+  const waitMs = deps.timeoutMs ?? BOOTSTRAP_TIMEOUT_MS;
+  log(
+    `LOCK_WAIT path=${join(userData, "hermes-bootstrap.lock")} waitMs=${waitMs}`,
+  );
   try {
     return await withBootstrapLock(
       {
         userDataPath: userData,
         operationId,
-        waitMs: deps.timeoutMs ?? BOOTSTRAP_TIMEOUT_MS,
+        waitMs,
         sleep: deps.sleep,
         now: deps.now,
+        onWait: ({ holderPid, holderOperationId, waitedMs }) => {
+          log(
+            `LOCK_WAITING waitedMs=${waitedMs} holderPid=${holderPid ?? "none"} holderOp=${holderOperationId ?? "none"}`,
+          );
+        },
       },
-      run,
+      async () => {
+        log("LOCK_ACQUIRED");
+        return run();
+      },
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    log(`LOCK_FAIL: ${msg}`);
     setBootstrapState("FAIL", {
       operationId,
       errorCode: "HERMES_BOOTSTRAP_LOCK_TIMEOUT",

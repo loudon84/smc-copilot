@@ -280,7 +280,7 @@ describe("LegacyLocalRuntimeAdapter", () => {
     expect(probe.runtimeContextVerified).toBe(false);
   });
 
-  it("maps listen inspect failure to configuration_error, not ready", async () => {
+  it("maps listen inspect failure to ready with unverified ownership (EPERM soft)", async () => {
     vi.doMock("../src/main/runtime/hermes-runtime-locator", () => locatorMock());
     vi.doMock("../src/main/runtime/gateway-probe", () =>
       gatewayProbeMock({
@@ -297,10 +297,11 @@ describe("LegacyLocalRuntimeAdapter", () => {
       "../src/main/runtime/legacy-local-runtime-adapter"
     );
     const probe = await new LegacyLocalRuntimeAdapter().probe();
-    expect(probe.state).toBe("configuration_error");
-    expect(probe.errorMessage).toContain("access denied");
+    expect(probe.state).toBe("ready");
+    expect(probe.runtimeContextVerified).toBe(false);
     expect(probe.listenerOwnership).toBe("unknown");
     expect(probe.listenerOwnership).not.toBe("managed");
+    expect(probe.errorCode).toBeUndefined();
   });
 
   it("accepts %LOCALAPPDATA%\\hermes as a valid Native home when listen matches", async () => {

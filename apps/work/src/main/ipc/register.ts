@@ -79,6 +79,7 @@ import { MANAGED_GATEWAY_MESSAGE } from "../runtime/hermes-runtime-paths";
 import { getRuntimeManagementBackend } from "../runtime/runtime-management-backend";
 import {
   cancelHermesBootstrap,
+  recoverBootstrapIfGatewayHealthy,
   runHermesBootstrap,
   startHermesBootstrapAsync,
 } from "../runtime/hermes-bootstrap";
@@ -1492,19 +1493,35 @@ export function registerIpcHandlers(context: IpcContext): void {
       // to a generated id for legacy callers so the run is still tracked.
       const chatRunId = runId || `run-${randomUUID()}`;
       // A-INSTALL-003: local chat blocked until bootstrap READY.
-      if (!isRemoteMode()) {
-        assertLocalChatAllowed();
-        // C-004: named profile first local chat → gateway install/start.
-        if (profile && profile !== "default") {
-          await ensureProfileGatewayStarted(profile);
+      // Surface gate failures on chat-error — invoke rejection alone leaves the
+      // renderer stuck on "…" (sendToAgent used to assume onChatError always fired).
+      try {
+        if (!isRemoteMode()) {
+          // Reboot race: bootstrap may have FAILed while Gateway later became healthy.
+          await recoverBootstrapIfGatewayHealthy();
+          assertLocalChatAllowed();
+          // C-004: named profile first local chat → gateway install/start.
+          if (profile && profile !== "default") {
+            await ensureProfileGatewayStarted(profile);
+          }
+          const ready = await getRuntimeManager().ensureReady(profile);
+          if (!ready.ok) {
+            throw new Error(
+              ready.errorMessage ||
+                "Hermes Gateway is not ready. Reconnect and try again.",
+            );
+          }
         }
-        const ready = await getRuntimeManager().ensureReady(profile);
-        if (!ready.ok) {
-          throw new Error(
-            ready.errorMessage ||
-              "Hermes Gateway is not ready. Reconnect and try again.",
-          );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!event.sender.isDestroyed()) {
+          try {
+            event.sender.send("chat-error", chatRunId, msg);
+          } catch {
+            /* renderer gone */
+          }
         }
+        throw err;
       }
 
       const conn = getConnectionConfig();

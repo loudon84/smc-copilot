@@ -42,6 +42,12 @@ pnpm-debug.log*
 
 # Generated packaged identity (rebuilds on npm run build)
 resources/work-build-info.json
+# Generated enterprise Knowledge / Registry bake-ins (prepare:* scripts)
+resources/work-knowledge-config.json
+resources/work-registry-config.json
+
+# Staged at pack time by scripts/stage-hermes-bootstrap.mjs (not committed)
+resources/hermes-bootstrap/install.ps1
 
 .claude/worktrees
 

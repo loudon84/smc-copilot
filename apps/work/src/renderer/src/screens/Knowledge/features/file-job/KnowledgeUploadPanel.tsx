@@ -127,7 +127,7 @@ export function KnowledgeUploadPanel({
       unsubscribe = onSnapshotChanged((snapshot) => {
         setJobs((prev) => {
           const next = prev.filter((job) => job.jobId !== snapshot.jobId);
-          next.push(snapshot);
+          next.unshift(snapshot);
           return next;
         });
         if (snapshot.knowledgeBaseId === lockedBaseId) {
@@ -155,15 +155,23 @@ export function KnowledgeUploadPanel({
     injectedOnSnapshotChanged,
   ]);
 
-  const visibleJobs = useMemo(
-    () => jobs.filter((job) => job.knowledgeBaseId === lockedBaseId),
-    [jobs, lockedBaseId],
-  );
+  /** Newest first (updatedAt desc) so successive uploads appear at the top. */
+  const visibleJobs = useMemo(() => {
+    return jobs
+      .filter((job) => job.knowledgeBaseId === lockedBaseId)
+      .slice()
+      .sort((a, b) => {
+        const tb = Date.parse(b.updatedAt) || 0;
+        const ta = Date.parse(a.updatedAt) || 0;
+        if (tb !== ta) return tb - ta;
+        return b.jobId.localeCompare(a.jobId);
+      });
+  }, [jobs, lockedBaseId]);
 
   const upsertJob = (draft: KnowledgeJobSnapshot): void => {
     setJobs((prev) => {
       const next = prev.filter((job) => job.jobId !== draft.jobId);
-      next.push(draft);
+      next.unshift(draft);
       return next;
     });
     setLoadState("content");

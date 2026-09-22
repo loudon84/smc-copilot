@@ -1,0 +1,60 @@
+---
+description: Work Windows packaging hard controls — confirm before changing pack rules
+globs: apps/work/electron-builder.yml,apps/work/package.json,apps/work/scripts/stage-hermes-bootstrap.mjs,apps/work/scripts/run-electron-builder.mjs,apps/work/scripts/build-work-release.ps1,apps/work/scripts/generate-work-*.mjs,apps/work/scripts/lib/work-*-build*.mjs,apps/work/resources/README.md,apps/work/resources/hermes-native/**,apps/work/resources/hermes-bootstrap/**,apps/work/resources/hermes-policy/**,apps/work/build/registry-profiles/**,apps/work/src/main/runtime/hermes-bootstrap.ts,apps/work/src/main/runtime/hermes-release-source.ts,apps/work/src/main/knowledge/knowledge-service-url.ts
+alwaysApply: false
+---
+
+# Work packaging hard controls (smc-copilot)
+
+These rules were locked after the 0.7.6–0.7.8 packaging / chat-connect incident series.
+**Any change to packaging rules, bake-in sources, or electron-builder `files` / `extraResources` requires explicit user confirmation in the current chat before editing.**
+
+Canonical narrative: `apps/work/resources/README.md`.
+Entry reminder: `apps/work/AGENTS.md` → Packaging hard controls.
+
+## Gate (mandatory)
+
+Before modifying any file matched by this rule’s globs (or equivalent packaging behavior elsewhere):
+
+1. State the intended rule change in one short paragraph.
+2. Wait for the user to **explicitly approve**.
+3. Do not “drive-by” tidy `electron-builder.yml`, strip `extraResources`, or rewrite bake-in generators without that approval.
+
+Exception: pure version bumps (`package.json` `version` / `set-version.mjs`) and running an already-approved `npm run build:win` do not need re-approval.
+
+## Locked packaging constraints
+
+### electron-builder `files`
+
+- Keep an **explicit include** of runtime trees (`out/**/*`, `package.json`, `resources/**/*`) plus excludes for source/docs/tooling.
+- **Never** use a top-level `"!**/*"` allowlist. That pattern is also applied to `nodeModuleFilePatterns` and drops production `node_modules` (blank/Error window title).
+- Do not re-include `src/`, `.cursor/`, `docs/`, `prd/`, `tests/`, `build/` into asar — oversized asar corrupts integrity (`package.json` unreadable → instant exit).
+
+### Protected bake-ins (do not break)
+
+| Asset | Role | Do not |
+|-------|------|--------|
+| `resources/hermes-native/release-source.json` | Hermes **install source** (installUrl / commit pin) | Rewrite installUrl/commit without approval; remove `extraResources` hermes-native |
+| `resources/work-knowledge-config.json` (generated) | Knowledge **service origin** bake-in | Bypass `SMC_KNOWLEDGE_SERVICE_URL` flow; invent alternate packaged URL sources |
+| `resources/work-registry-config.json` (generated) | Discover Registry descriptor | Pass a raw git URL as the registry; skip `SMC_WORK_REGISTRY_BUILD_PROFILE_FILE` absolute-path profile |
+| `resources/hermes-policy/*` | SMC managed policy | Drop from `extraResources` without approval |
+| `resources/hermes-bootstrap/install.ps1` (staged) | Native Bootstrap installer | Hardcode machine paths like `e:/git/hermes-agent/...` into **runtime** `candidateInstallPs1Paths` |
+
+### Bootstrap / runtime packaging behavior
+
+- Stage installer via `prepare:hermes-bootstrap` (`scripts/stage-hermes-bootstrap.mjs`) → `extraResources` `hermes-bootstrap/install.ps1`. Staging may look at local forks; **runtime resolution must not**.
+- Packaged builds must not rely on `loadDotEnvForDev` / `apps/work/.env` for Gateway auth. Keys live under Hermes Home.
+- Prefer **runtime-already-ready** soft-skip (CLI + `/health` 200) so packaged chat is not blocked on lock/install when Hermes is already up.
+- After health+auth succeed, Windows **listen inspect** failures (including EPERM) must not force `configuration_error`; treat as unverified ready.
+
+### Build entry
+
+- Prefer `cd apps/work && npm run build:win` (or `release:build:win`). Do not assume Nx `work:package-win` works if desktop project is missing.
+- Enterprise registry: set `SMC_WORK_REGISTRY_BUILD_PROFILE_FILE` to an **absolute** profile path before pack.
+- Keep `package.json` `scripts` and `devDependencies` intact when editing packaging — a truncated `package.json` breaks builds.
+
+## Allowed without re-approval
+
+- Bumping `version` and producing `dist/smc-copilot-<version>-setup.exe` with the **current** locked rules.
+- Adding tests that assert the locked behavior.
+- Updating `resources/README.md` only to document an **already approved** rule change.

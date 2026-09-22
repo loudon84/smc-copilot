@@ -56,6 +56,50 @@ describe("Knowledge upload panel", () => {
     delete (window as unknown as { hermesAPI?: unknown }).hermesAPI;
   });
 
+  it("renders scoped jobs newest-first by updatedAt", async () => {
+    const listSnapshots = vi.fn(async () => [
+      job({
+        jobId: "older",
+        status: "uploading",
+        progress: 20,
+        updatedAt: "2026-01-01T10:00:00.000Z",
+        fileSummary: { displayName: "older.pdf" },
+      }),
+      job({
+        jobId: "newer",
+        status: "uploading",
+        progress: 80,
+        updatedAt: "2026-01-02T10:00:00.000Z",
+        fileSummary: { displayName: "newer.pdf" },
+      }),
+    ]);
+
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "kb-1",
+          baseName: "Alpha",
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "mock",
+            allowSyntheticData: true,
+            configSource: "env",
+          },
+          listSnapshots,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-upload-queue")).toBeTruthy();
+    });
+    const items = screen.getByTestId("knowledge-upload-queue").querySelectorAll(
+      "[data-testid^='knowledge-upload-job-']",
+    );
+    expect(items[0]?.getAttribute("data-testid")).toBe("knowledge-upload-job-newer");
+    expect(items[1]?.getAttribute("data-testid")).toBe("knowledge-upload-job-older");
+  });
+
   it("lists jobs via knowledgeJobs and observes mock completed snapshots", async () => {
     let listener: ((snapshot: KnowledgeJobSnapshot) => void) | null = null;
     const listSnapshots = vi.fn(async () => [

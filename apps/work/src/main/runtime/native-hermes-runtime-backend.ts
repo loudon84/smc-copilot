@@ -245,13 +245,15 @@ async function probeNative(profile?: string): Promise<HermesRuntimeProbe> {
         { listenerOwnership: "unknown" },
       );
     case "inspect_failed":
-      return fail(
-        "configuration_error",
-        RUNTIME_ERROR_CODES.CONFIGURATION_ERROR,
-        authenticated,
-        `Gateway listen inspect failed: ${listen.reason}`,
-        { listenerOwnership: "unknown" },
-      );
+      // Health + auth already passed. Listen inspect is best-effort OS diagnosis
+      // (Get-NetTCPConnection / CIM). EPERM/AccessDenied must not block ready.
+      return {
+        ...authenticated,
+        state: "ready",
+        probedAt: Date.now(),
+        runtimeContextVerified: false,
+        listenerOwnership: "unknown",
+      };
     default: {
       const _exhaustive: never = listen;
       return _exhaustive;

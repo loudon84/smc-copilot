@@ -4,6 +4,22 @@
 - When the user is changing Work product behavior and wants docs in sync, run `lat search` / `lat expand` for relevant `[[refs]]`, then keep `lat.md/` aligned.
 - i18n: add or change UI strings only in `src/shared/i18n/locales/en/**`. Do not create or edit other locale packages during feature work. Other languages are translated later by an administrator after English review. See [[i18n]].
 
+# Packaging hard controls (smc-copilot)
+
+Windows packaging rules for this app are **locked**. Full text: repo rule
+`.cursor/rules/work-packaging-hard-controls.mdc` and narrative
+`resources/README.md`.
+
+- **Before changing** `electron-builder.yml`, bake-in generators, `extraResources`,
+  install/knowledge/registry pack sources, or bootstrap pack-time behavior:
+  **propose the change and wait for explicit user confirmation**.
+- Do **not** break: `hermes-native/release-source.json` (install source),
+  Knowledge bake-in (`SMC_KNOWLEDGE_SERVICE_URL` → `work-knowledge-config.json`),
+  Registry profile bake-in (`SMC_WORK_REGISTRY_BUILD_PROFILE_FILE`).
+- Do **not** reintroduce runtime hardcodes like `e:/git/hermes-agent/...` for
+  `install.ps1`, or top-level electron-builder `"!**/*"` allowlists.
+- Normal pack entry: `npm run build:win` (set enterprise env vars as in README).
+
 # Post-task checklist
 
 After a task that **changed** Work functionality, architecture, tests, or `lat.md/`:

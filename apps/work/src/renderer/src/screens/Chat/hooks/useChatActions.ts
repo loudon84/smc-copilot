@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { ChatInputHandle } from "../ChatInput";
-import { createTurn, shouldSendToAgent } from "../chatMessages";
+import { createTurn, markActiveTurnFailed, shouldSendToAgent } from "../chatMessages";
 import type { SlashExecOutcome } from "../slashExec";
 import { handleSlashCommand } from "../slash/handleSlashCommand";
 import { parseSlashCommand } from "../slash/parseSlashCommand";
@@ -202,8 +202,17 @@ export function useChatActions({
           sessionModelRef.current || undefined,
           knowledgeRequired ? knowledgeContext ?? undefined : undefined,
         );
-      } catch {
-        // onChatError IPC already surfaces this to the user
+      } catch (err) {
+        // Prefer onChatError when main emitted it; still clear the loader if the
+        // invoke rejected before any chat-error event (bootstrap gate, etc.).
+        const message = err instanceof Error ? err.message : String(err);
+        const activeTurn = activeTurnRef.current;
+        if (activeTurn && activeTurn.status === "running") {
+          activeTurn.status = "failed";
+          setMessages((prev) => markActiveTurnFailed(prev, message, activeTurn));
+          activeTurnRef.current = null;
+          setIsLoading(false);
+        }
       }
     },
     [
@@ -214,6 +223,9 @@ export function useChatActions({
       sendViaDashboard,
       knowledgeRequired,
       knowledgeContext,
+      activeTurnRef,
+      setMessages,
+      setIsLoading,
     ],
   );
 
