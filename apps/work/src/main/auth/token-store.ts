@@ -15,6 +15,8 @@ const SESSION_FILE = (): string => join(AUTH_DIR(), "session.enc");
 
 let memorySession: StoredAuthSession | null = null;
 let cachedAccessToken: string | null = null;
+/** Bumped on every clear so in-flight refresh cannot resurrect a logged-out session. */
+let sessionEpoch = 0;
 
 type StoredSessionChangeListener = () => void;
 const storedSessionChangeListeners = new Set<StoredSessionChangeListener>();
@@ -39,6 +41,10 @@ export function resetStoredSessionChangeListenersForTests(): void {
   storedSessionChangeListeners.clear();
 }
 
+export function getSessionEpoch(): number {
+  return sessionEpoch;
+}
+
 type KeytarModule = {
   getPassword(service: string, account: string): Promise<string | null>;
   setPassword(
@@ -49,7 +55,16 @@ type KeytarModule = {
   deletePassword(service: string, account: string): Promise<boolean>;
 };
 
+type KeytarFactory = () => Promise<KeytarModule | null>;
+let keytarFactoryForTests: KeytarFactory | null = null;
+
+/** Test-only: inject keytar (or null to force memory-only). */
+export function setKeytarFactoryForTests(factory: KeytarFactory | null): void {
+  keytarFactoryForTests = factory;
+}
+
 async function loadKeytar(): Promise<KeytarModule | null> {
+  if (keytarFactoryForTests) return keytarFactoryForTests();
   try {
     // Optional native dependency — resolve at runtime without a hard package.json dep.
     const req = Function("return require")() as NodeRequire;
@@ -84,6 +99,45 @@ function setMemoryCache(session: StoredAuthSession | null): void {
 
 export function getCachedAccessToken(): string | null {
   return cachedAccessToken;
+}
+
+async function wipeDurableSession(): Promise<void> {
+  const keytar = await loadKeytar();
+  if (keytar) {
+    try {
+      await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const path = SESSION_FILE();
+  if (existsSync(path)) {
+    rmSync(path, { force: true });
+  }
+}
+
+async function persistDurableSession(payload: string): Promise<void> {
+  const keytar = await loadKeytar();
+  if (keytar) {
+    try {
+      await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, payload);
+      return;
+    } catch (err) {
+      console.warn("[auth] keytar write failed, falling back:", err);
+    }
+  }
+
+  if (safeStorage.isEncryptionAvailable()) {
+    mkdirSync(AUTH_DIR(), { recursive: true });
+    const encrypted = safeStorage.encryptString(payload);
+    writeFileSync(SESSION_FILE(), encrypted);
+    return;
+  }
+
+  console.warn(
+    "[auth] No keytar/safeStorage — session kept in memory only (not persisted)",
+  );
 }
 
 export async function readStoredSession(): Promise<StoredAuthSession | null> {
@@ -141,52 +195,67 @@ export function readEncryptedSession(): InternalAuthSession | null {
   };
 }
 
+export type WriteStoredSessionOptions = {
+  /**
+   * When set, abort if a clear/logout has advanced the session epoch since
+   * the caller started (e.g. in-flight token refresh after logout).
+   */
+  expectedEpoch?: number;
+};
+
+/**
+ * Persist session. Returns false when skipped because `expectedEpoch` is stale
+ * (logout won the race).
+ */
 export async function writeStoredSession(
   session: StoredAuthSession,
-): Promise<void> {
+  options?: WriteStoredSessionOptions,
+): Promise<boolean> {
+  if (
+    options?.expectedEpoch !== undefined &&
+    options.expectedEpoch !== sessionEpoch
+  ) {
+    return false;
+  }
+
+  const epoch = sessionEpoch;
   setMemoryCache(session);
+  if (epoch !== sessionEpoch) {
+    setMemoryCache(null);
+    return false;
+  }
+
   notifyStoredSessionChanges();
   const payload = serialize(session);
+  await persistDurableSession(payload);
 
-  const keytar = await loadKeytar();
-  if (keytar) {
-    try {
-      await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, payload);
-      return;
-    } catch (err) {
-      console.warn("[auth] keytar write failed, falling back:", err);
-    }
+  if (epoch !== sessionEpoch) {
+    // Logout cleared while we were persisting — wipe any durable resurrection.
+    setMemoryCache(null);
+    await wipeDurableSession();
+    return false;
   }
 
-  if (safeStorage.isEncryptionAvailable()) {
-    mkdirSync(AUTH_DIR(), { recursive: true });
-    const encrypted = safeStorage.encryptString(payload);
-    writeFileSync(SESSION_FILE(), encrypted);
-    return;
-  }
-
-  console.warn(
-    "[auth] No keytar/safeStorage — session kept in memory only (not persisted)",
-  );
+  return true;
 }
 
+/**
+ * Clear portal session. Durable storage is wiped BEFORE notifying listeners so
+ * concurrent LoginScreen getState() cannot rehydrate from keytar/session.enc
+ * and bounce the UI back to main.
+ */
 export async function clearStoredSession(): Promise<void> {
+  sessionEpoch += 1;
+  const epoch = sessionEpoch;
   setMemoryCache(null);
+
+  await wipeDurableSession();
+
+  // Defeat concurrent readStoredSession that rehydrated mid-wipe.
+  setMemoryCache(null);
+
+  if (epoch !== sessionEpoch) return;
   notifyStoredSessionChanges();
-
-  const keytar = await loadKeytar();
-  if (keytar) {
-    try {
-      await keytar.deletePassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const path = SESSION_FILE();
-  if (existsSync(path)) {
-    rmSync(path, { force: true });
-  }
 }
 
 /** @deprecated Use writeStoredSession */

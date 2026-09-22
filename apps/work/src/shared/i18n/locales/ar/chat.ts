@@ -165,11 +165,4 @@ export default {
   },
   showWorktree: "إظهار مستكشف الملفات",
   hideWorktree: "إخفاء مستكشف الملفات",
-  followUs: {
-    title: "تابعنا على X",
-    description:
-      "ابق على اطلاع بآخر ميزات ونصائح وتحديثات Hermes One. تابعنا على X!",
-    follow: "متابعة",
-    notNow: "ليس الآن",
-  },
 } as const;

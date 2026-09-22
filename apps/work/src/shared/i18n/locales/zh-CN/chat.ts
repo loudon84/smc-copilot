@@ -174,11 +174,4 @@ export default {
   },
   showWorktree: "显示文件资源管理器",
   hideWorktree: "隐藏文件资源管理器",
-  followUs: {
-    title: "在 X 上关注我们",
-    description:
-      "获取最新的 SMC Copilot 功能、技巧与更新。欢迎在 X 上关注我们！",
-    follow: "关注",
-    notNow: "暂不",
-  },
 } as const;
