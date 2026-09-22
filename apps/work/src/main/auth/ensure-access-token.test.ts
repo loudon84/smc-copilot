@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StoredAuthSession } from "../../shared/auth/auth-contract";
 
-const { readStoredSession, writeStoredSession, clearStoredSession, refreshMock } =
+const { readStoredSession, writeStoredSession, clearStoredSession, getSessionEpoch, refreshMock } =
   vi.hoisted(() => ({
     readStoredSession: vi.fn(),
     writeStoredSession: vi.fn(),
     clearStoredSession: vi.fn(),
+    getSessionEpoch: vi.fn(() => 0),
     refreshMock: vi.fn(),
   }));
 
@@ -13,6 +14,7 @@ vi.mock("./token-store", () => ({
   readStoredSession,
   writeStoredSession,
   clearStoredSession,
+  getSessionEpoch,
 }));
 
 vi.mock("./auth-endpoint-config-store", () => ({
@@ -38,6 +40,7 @@ import {
   isAccessTokenExpired,
   isAuthExpiredMessage,
   refreshStoredAccessToken,
+  resetAccessTokenRefreshForTests,
 } from "./ensure-access-token";
 
 function session(overrides: Partial<StoredAuthSession> = {}): StoredAuthSession {
@@ -53,7 +56,15 @@ function session(overrides: Partial<StoredAuthSession> = {}): StoredAuthSession 
 
 describe("ensure-access-token", () => {
   afterEach(() => {
+    resetAccessTokenRefreshForTests();
     vi.clearAllMocks();
+    writeStoredSession.mockResolvedValue(true);
+    getSessionEpoch.mockReturnValue(0);
+  });
+
+  beforeEach(() => {
+    writeStoredSession.mockResolvedValue(true);
+    getSessionEpoch.mockReturnValue(0);
   });
 
   it("treats expiresAt within skew as expired", () => {
@@ -89,6 +100,7 @@ describe("ensure-access-token", () => {
     refreshMock.mockResolvedValue(
       session({ accessToken: "access-new", refreshToken: "refresh-2" }),
     );
+    writeStoredSession.mockResolvedValue(true);
     await expect(ensureFreshAccessToken()).resolves.toBe("access-new");
     expect(writeStoredSession).toHaveBeenCalled();
   });

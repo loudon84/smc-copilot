@@ -12,6 +12,7 @@ import {
 } from "./auth-endpoint-config-store";
 import {
   clearStoredSession,
+  getSessionEpoch,
   readStoredSession,
   writeStoredSession,
 } from "./token-store";
@@ -30,6 +31,11 @@ export class AccessTokenError extends Error {
 }
 
 let refreshInFlight: Promise<string> | null = null;
+
+/** Test-only: drop shared refresh promise. */
+export function resetAccessTokenRefreshForTests(): void {
+  refreshInFlight = null;
+}
 
 export function isAccessTokenExpired(
   expiresAt: string | undefined,
@@ -58,6 +64,7 @@ function sessionAccessToken(session: StoredAuthSession | null): string {
 async function performRefresh(): Promise<string> {
   const endpointConfig =
     readAuthEndpointConfig() ?? getDefaultAuthEndpointConfig();
+  const epochAtStart = getSessionEpoch();
   const session = await readStoredSession();
   if (!session?.refreshToken) {
     await clearStoredSession();
@@ -68,9 +75,18 @@ async function performRefresh(): Promise<string> {
       endpointConfig,
       session.refreshToken,
     );
-    await writeStoredSession(refreshed);
+    const wrote = await writeStoredSession(refreshed, {
+      expectedEpoch: epochAtStart,
+    });
+    if (!wrote) {
+      throw new AccessTokenError(
+        "Authentication expired",
+        "AUTHENTICATION_EXPIRED",
+      );
+    }
     return sessionAccessToken(refreshed);
   } catch (err) {
+    if (err instanceof AccessTokenError) throw err;
     await clearStoredSession();
     const message =
       err instanceof Error && err.message.trim()
