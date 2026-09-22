@@ -13,6 +13,9 @@ import { RemoteFolderPicker } from "./RemoteFolderPicker";
 import { WebPreviewPanel } from "./WebPreviewPanel";
 import { FilePreviewPanel } from "../../components/files";
 import { SessionFilesPanel } from "./session-files/SessionFilesPanel";
+import {
+  CHAT_SESSION_FILES_PANEL_ENTRY_ENABLED,
+} from "./chat-ui-entry-gates";
 import { useFilePreview } from "../../hooks/files/useFilePreview";
 import { useDocumentPreview } from "../../hooks/files/useDocumentPreview";
 import type { FilePreviewState } from "../../hooks/files/useFilePreview";
@@ -35,7 +38,6 @@ import { useI18n } from "../../components/useI18n";
 import { buildChatTranscript } from "./transcriptUtils";
 import { ConfigHealthBanner } from "../../components/ConfigHealthBanner";
 import { FileServiceUnavailableBanner } from "../../components/files/FileServiceUnavailableBanner";
-import FollowUsModal from "../../components/FollowUsModal";
 import type { Attachment } from "../../../../shared/attachments";
 import { stripKnowledgeScopedPromptPrefix } from "../../../../shared/knowledge/chat-knowledge-context";
 import type { SessionModelOverride } from "../../../../shared/model-override";
@@ -490,7 +492,9 @@ function Chat({
   const handleOpenManagedPreview = useCallback(
     (fileId: string) => {
       closeDocumentPreview();
-      setSessionFilesVisible(true);
+      if (CHAT_SESSION_FILES_PANEL_ENTRY_ENABLED) {
+        setSessionFilesVisible(true);
+      }
       void openPreview(fileId, profile);
     },
     [closeDocumentPreview, openPreview, profile, setSessionFilesVisible],
@@ -2012,7 +2016,10 @@ function Chat({
               ))}
             <div ref={bottomRef} />
           </div>
-          {!sessionFilesVisible && hermesSessionId && !filePreviewMaximized && (
+          {CHAT_SESSION_FILES_PANEL_ENTRY_ENABLED &&
+            !sessionFilesVisible &&
+            hermesSessionId &&
+            !filePreviewMaximized && (
             <button
               type="button"
               className="session-files-show-button"
@@ -2033,7 +2040,9 @@ function Chat({
           />
         </div>
 
-        {hermesSessionId && sessionFilesVisible && (
+        {CHAT_SESSION_FILES_PANEL_ENTRY_ENABLED &&
+          hermesSessionId &&
+          sessionFilesVisible && (
           <SessionFilesPanel
             profile={profile}
             sessionId={hermesSessionId}
@@ -2292,8 +2301,6 @@ function Chat({
           setFolderPickerOpen(false);
         }}
       />
-      {/* Show follow-us modal only after setup is complete */}
-      {active && connectionModeLoaded && readiness.ok && <FollowUsModal />}
     </div>
   );
 }

@@ -3,6 +3,10 @@ import { Eye, FilePlus2, Download, Check, Loader2 } from "lucide-react";
 import type { MessageDocumentPreviewInput } from "../../../../../shared/files";
 import { extractDocumentTitle } from "./document-message-utils";
 import { formatDocumentActionError } from "./document-action-errors";
+import {
+  CHAT_MESSAGE_ADD_TO_SESSION_FILES_ENTRY_ENABLED,
+  CHAT_MESSAGE_SAVE_AS_MD_ENTRY_ENABLED,
+} from "../../../screens/Chat/chat-ui-entry-gates";
 
 export interface MessageDocumentActionsProps {
   profile?: string;
@@ -102,49 +106,53 @@ export function MessageDocumentActions({
           <Eye size={13} />
           Preview
         </button>
-        <button
-          type="button"
-          className="message-document-action-btn"
-          onClick={() => void createFile(true)}
-          disabled={busy || !canCreate}
-          title={
-            canCreate
-              ? "Save as Markdown"
-              : "Start a session before saving this report"
-          }
-        >
-          {busy ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
-          Save as .md
-        </button>
-        <button
-          type="button"
-          className="message-document-action-btn"
-          onClick={() => void createFile(false)}
-          disabled={busy || !canCreate || state === "created"}
-          title={
-            state === "created"
-              ? "Already in Agent Output"
-              : canCreate
-                ? "Add to session files"
-                : "Start a session before adding to Agent Output"
-          }
-        >
-          {state === "created" ? (
-            <>
-              <Check size={13} />
-              Added to Agent Output
-            </>
-          ) : (
-            <>
-              {busy ? (
-                <Loader2 size={13} className="spin" />
-              ) : (
-                <FilePlus2 size={13} />
-              )}
-              Add to session files
-            </>
-          )}
-        </button>
+        {CHAT_MESSAGE_SAVE_AS_MD_ENTRY_ENABLED ? (
+          <button
+            type="button"
+            className="message-document-action-btn"
+            onClick={() => void createFile(true)}
+            disabled={busy || !canCreate}
+            title={
+              canCreate
+                ? "Save as Markdown"
+                : "Start a session before saving this report"
+            }
+          >
+            {busy ? <Loader2 size={13} className="spin" /> : <Download size={13} />}
+            Save as .md
+          </button>
+        ) : null}
+        {CHAT_MESSAGE_ADD_TO_SESSION_FILES_ENTRY_ENABLED ? (
+          <button
+            type="button"
+            className="message-document-action-btn"
+            onClick={() => void createFile(false)}
+            disabled={busy || !canCreate || state === "created"}
+            title={
+              state === "created"
+                ? "Already in Agent Output"
+                : canCreate
+                  ? "Add to session files"
+                  : "Start a session before adding to Agent Output"
+            }
+          >
+            {state === "created" ? (
+              <>
+                <Check size={13} />
+                Added to Agent Output
+              </>
+            ) : (
+              <>
+                {busy ? (
+                  <Loader2 size={13} className="spin" />
+                ) : (
+                  <FilePlus2 size={13} />
+                )}
+                Add to session files
+              </>
+            )}
+          </button>
+        ) : null}
       </div>
       {error && (
         <div className="message-document-actions-error" role="alert">
