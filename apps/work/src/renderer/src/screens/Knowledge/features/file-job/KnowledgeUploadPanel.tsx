@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
 import { KnowledgeFileJobQueue } from "./KnowledgeFileJobQueue";
 import type { HermesKnowledgeBasesAPI } from "../../../../../../shared/knowledge/knowledge-base-ipc";
+import { FILE_UPLOAD_CONTENT_UNREADABLE_CODE } from "../../../../../../shared/files";
 
 export type KnowledgeUploadPanelProps = {
   knowledgeBaseId: string;
@@ -131,6 +132,12 @@ export function KnowledgeUploadPanel({
         });
         if (snapshot.knowledgeBaseId === lockedBaseId) {
           setLoadState("content");
+        }
+        if (
+          snapshot.status === "failed" &&
+          snapshot.errorCode === FILE_UPLOAD_CONTENT_UNREADABLE_CODE
+        ) {
+          setPickError(t("knowledge.uploads.uploadContentUnreadable"));
         }
       });
     }
@@ -278,7 +285,11 @@ export function KnowledgeUploadPanel({
             )}
             {pickError ? (
               <p
-                data-testid="knowledge-upload-pick-error"
+                data-testid={
+                  pickError === t("knowledge.uploads.uploadContentUnreadable")
+                    ? "knowledge-upload-byte-error"
+                    : "knowledge-upload-pick-error"
+                }
                 className="text-xs text-destructive"
                 role="alert"
               >

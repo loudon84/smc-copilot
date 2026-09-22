@@ -5,6 +5,11 @@
 
 import { readFile } from "fs/promises";
 import { getManagedFile } from "../files/file-association-store";
+import {
+  assertUploadBytesReadable,
+  logUploadByteCheckEvent,
+} from "../files/upload-byte-gate";
+import { FILE_UPLOAD_CONTENT_UNREADABLE_CODE } from "../../shared/files";
 import { KNOWLEDGE_ERROR_CODES } from "../../shared/knowledge/knowledge-base-ipc";
 import type { KnowledgeJobStatus } from "../../shared/knowledge/knowledge-job-ipc";
 import { getKnowledgeHttpProvider } from "./knowledge-http-provider";
@@ -15,6 +20,9 @@ import {
   updateJobRecord,
 } from "./knowledge-upload-job-store";
 import type { ParsedIngestionJob } from "./knowledge-schema";
+
+/** @deprecated use FILE_UPLOAD_CONTENT_UNREADABLE_CODE from shared/files */
+export const FILE_UPLOAD_CONTENT_UNREADABLE = FILE_UPLOAD_CONTENT_UNREADABLE_CODE;
 
 const POLL_MS = 1500;
 const POLL_MAX = 40;
@@ -96,6 +104,26 @@ export async function runProviderUpload(jobId: string): Promise<void> {
 
   try {
     const bytes = await readFile(filePath);
+    const gate = assertUploadBytesReadable(file.name, bytes);
+    if (gate.status === "REJECT") {
+      logUploadByteCheckEvent({
+        result: gate,
+        errorCode: FILE_UPLOAD_CONTENT_UNREADABLE_CODE,
+        fileName: file.name,
+      });
+      updateJobRecord({
+        jobId,
+        status: "failed",
+        attempt: snap.attempt,
+        errorCode: FILE_UPLOAD_CONTENT_UNREADABLE_CODE,
+      });
+      return;
+    }
+    logUploadByteCheckEvent({
+      result: gate,
+      errorCode: null,
+      fileName: file.name,
+    });
     const accepted = await getKnowledgeHttpProvider().uploadBaseFile({
       knowledgeBaseId: snap.knowledgeBaseId,
       fileName: file.name,

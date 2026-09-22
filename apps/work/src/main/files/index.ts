@@ -28,6 +28,13 @@ export {
 } from "./protected-file-detector";
 
 export {
+  assertUploadBytesReadable,
+  logUploadByteCheckEvent,
+  FILE_UPLOAD_CONTENT_UNREADABLE_MESSAGE,
+  type UploadByteGateResult,
+} from "./upload-byte-gate";
+
+export {
   ensureFilesLayout,
   hashFileStream,
   storeManagedCopy,

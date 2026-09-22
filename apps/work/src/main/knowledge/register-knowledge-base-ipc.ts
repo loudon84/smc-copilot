@@ -38,6 +38,11 @@ import { deriveKnowledgeJobPartition } from "./knowledge-upload-job-coordinator"
 import { getActiveProfileNameSync } from "../utils";
 import { readStoredSessionSync } from "../auth/token-store";
 import { getManagedFile } from "../files/file-association-store";
+import {
+  assertUploadBytesReadable,
+  logUploadByteCheckEvent,
+} from "../files/upload-byte-gate";
+import { FILE_UPLOAD_CONTENT_UNREADABLE_CODE } from "../../shared/files";
 import { KnowledgeBuildPoller } from "./knowledge-build-poller";
 import { resolveDocumentPreview } from "./knowledge-preview-resolve";
 
@@ -335,6 +340,20 @@ export function registerKnowledgeBaseIpcHandlers(ipcMain: IpcMain): void {
         const filePath = file?.managedPath || file?.originalPath;
         if (!file || !filePath) throw new Error("KNOWLEDGE_JOB_FILE_MISSING");
         const bytes = await readFile(filePath);
+        const gate = assertUploadBytesReadable(file.name, bytes);
+        if (gate.status === "REJECT") {
+          logUploadByteCheckEvent({
+            result: gate,
+            errorCode: FILE_UPLOAD_CONTENT_UNREADABLE_CODE,
+            fileName: file.name,
+          });
+          throw new Error(FILE_UPLOAD_CONTENT_UNREADABLE_CODE);
+        }
+        logUploadByteCheckEvent({
+          result: gate,
+          errorCode: null,
+          fileName: file.name,
+        });
         const accepted = await getKnowledgeHttpProvider().addFileVersion({
           sourceFileId: input.sourceFileId,
           fileName: file.name,

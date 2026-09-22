@@ -8,6 +8,7 @@ export type FileErrorCode =
   | "FILE_TYPE_DENIED"
   | "FILE_READ_FAILED"
   | "FILE_CONTENT_ENCRYPTED_OR_INVALID"
+  | "FILE_UPLOAD_CONTENT_UNREADABLE"
   | "FILE_PARSE_FAILED"
   | "FILE_PREVIEW_UNSUPPORTED"
   | "FILE_ENCODING_FAILED"
@@ -53,4 +54,12 @@ export function makeFileError(
 /** Shared English prose for FILE_CONTENT_ENCRYPTED_OR_INVALID (en i18n aligned). */
 export const FILE_CONTENT_UNREADABLE_MESSAGE =
   "File content does not match its declared format, or may be protected; try a readable plaintext copy";
+
+/** Shared English prose for FILE_UPLOAD_CONTENT_UNREADABLE (en i18n aligned). */
+export const FILE_UPLOAD_CONTENT_UNREADABLE_MESSAGE =
+  "Content cannot be read as its declared type; upload forbidden";
+
+/** Stable error code string for Job / IPC (matches FileErrorCode). */
+export const FILE_UPLOAD_CONTENT_UNREADABLE_CODE =
+  "FILE_UPLOAD_CONTENT_UNREADABLE" as const;
 

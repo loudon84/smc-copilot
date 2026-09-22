@@ -281,4 +281,55 @@ describe("Knowledge upload panel", () => {
       /confirmed Eisoo|已确认亿赛通/i,
     );
   });
+
+  it("shows upload-byte ban when job fails with FILE_UPLOAD_CONTENT_UNREADABLE (A-UBG-007)", async () => {
+    let listener: ((snapshot: KnowledgeJobSnapshot) => void) | null = null;
+    await act(async () => {
+      render(
+        React.createElement(KnowledgeUploadPanel, {
+          knowledgeBaseId: "kb-1",
+          baseName: "Alpha",
+          capability: { available: true, status: "available" },
+          mode: {
+            dataMode: "provider",
+            allowSyntheticData: false,
+            configSource: "default",
+          },
+          listSnapshots: async () => [],
+          createDraft: async () =>
+            job({ jobId: "j-up", status: "queued", progress: 0 }),
+          onSnapshotChanged: (callback) => {
+            listener = callback;
+            return () => {
+              listener = null;
+            };
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(listener).toBeTruthy();
+    });
+
+    await act(async () => {
+      listener?.(
+        job({
+          jobId: "j-up",
+          status: "failed",
+          progress: 20,
+          errorCode: "FILE_UPLOAD_CONTENT_UNREADABLE",
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-upload-byte-error").textContent).toBe(
+        knowledgeEn.uploads.uploadContentUnreadable,
+      );
+    });
+    expect(screen.getByTestId("knowledge-upload-byte-error").textContent).not.toMatch(
+      /confirmed Eisoo|已确认亿赛通/i,
+    );
+  });
 });
