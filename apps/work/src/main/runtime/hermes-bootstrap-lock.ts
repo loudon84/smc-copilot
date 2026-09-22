@@ -7,8 +7,11 @@
  * approximated: second waiter polls until lock release or wait timeout.
  */
 import {
+  closeSync,
+  constants,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
   renameSync,
   unlinkSync,
@@ -38,6 +41,12 @@ export interface BootstrapLockOptions {
   now?: () => number;
   isPidAlive?: (pid: number) => boolean;
   sleep?: (ms: number) => Promise<void>;
+  /** Optional progress while blocked on a peer lock (throttled by caller). */
+  onWait?: (info: {
+    holderPid: number | null;
+    holderOperationId: string | null;
+    waitedMs: number;
+  }) => void;
 }
 
 function defaultIsPidAlive(pid: number): boolean {
@@ -88,9 +97,32 @@ function isStale(
 
 function tryAcquire(path: string, payload: BootstrapLockPayload): boolean {
   mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.${payload.pid}.${Date.now()}.tmp`;
-  writeFileSync(tmp, JSON.stringify(payload), "utf-8");
+  const body = JSON.stringify(payload);
+  // Prefer O_EXCL create so Windows cannot "rename onto missing" race into a
+  // permanent fail loop when a peer briefly touches the path.
   try {
+    const fd = openSync(
+      path,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+    );
+    try {
+      writeFileSync(fd, body, "utf-8");
+    } finally {
+      closeSync(fd);
+    }
+    return true;
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code?: unknown }).code)
+        : "";
+    if (code === "EEXIST") return false;
+  }
+
+  // Fallback for environments that reject O_EXCL on the volume.
+  const tmp = `${path}.${payload.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(tmp, body, "utf-8");
     if (existsSync(path)) {
       unlinkSync(tmp);
       return false;
@@ -151,6 +183,8 @@ export async function withBootstrapLock<T>(
 
   const deadline = nowFn() + waitMs;
   let acquired = false;
+  const startedAt = nowFn();
+  let lastWaitLogAt = 0;
 
   while (nowFn() < deadline) {
     const existing = existsSync(path) ? readLock(path) : null;
@@ -165,12 +199,26 @@ export async function withBootstrapLock<T>(
       acquired = true;
       break;
     }
+    const waitedMs = nowFn() - startedAt;
+    if (opts.onWait && waitedMs - lastWaitLogAt >= 5_000) {
+      lastWaitLogAt = waitedMs;
+      const holder = existsSync(path) ? readLock(path) : null;
+      opts.onWait({
+        holderPid: holder?.pid ?? null,
+        holderOperationId: holder?.operationId ?? null,
+        waitedMs,
+      });
+    }
     await sleep(pollMs);
   }
 
   if (!acquired) {
+    const holder = existsSync(path) ? readLock(path) : null;
     throw new Error(
-      "HERMES_BOOTSTRAP_LOCK_TIMEOUT: another Work bootstrap is still running",
+      `HERMES_BOOTSTRAP_LOCK_TIMEOUT: another Work bootstrap is still running` +
+        (holder
+          ? ` (holderPid=${holder.pid} holderOp=${holder.operationId})`
+          : " (no lock file — acquire failed repeatedly)"),
     );
   }
 

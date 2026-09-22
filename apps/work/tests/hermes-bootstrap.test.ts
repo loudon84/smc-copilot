@@ -28,7 +28,9 @@ vi.mock("electron", () => ({
 }));
 
 import {
+  recoverBootstrapIfGatewayHealthy,
   runHermesBootstrap,
+  candidateInstallPs1Paths,
   type BootstrapSpawnCall,
 } from "../src/main/runtime/hermes-bootstrap";
 import {
@@ -58,6 +60,12 @@ const RELEASE_PATH = join(
 );
 
 describe("hermes-bootstrap", () => {
+  it("candidateInstallPs1Paths has no machine-local hardcoded forks", () => {
+    const paths = candidateInstallPs1Paths().map((p) => p.replace(/\\/g, "/"));
+    expect(
+      paths.some((p) => /\/git\/hermes-agent\/scripts\/install\.ps1$/i.test(p)),
+    ).toBe(false);
+  });
   let root: string;
   let userData: string;
 
@@ -123,6 +131,7 @@ describe("hermes-bootstrap", () => {
       }),
       skipLock: true,
       timeoutMs: 5_000,
+      sleep: async () => {},
     };
   }
 
@@ -203,11 +212,94 @@ describe("hermes-bootstrap", () => {
     expect(result.skipped).toBe(true);
     expect(calls).toHaveLength(0);
     expect(getBootstrapState()).toBe("READY");
-    expect(getBootstrapStatus().skippedReason).toBe(
-      "installer-missing-but-runtime-ready",
-    );
+    // Prefers pre-lock runtime-already-ready when CLI+health are up.
+    expect(getBootstrapStatus().skippedReason).toBe("runtime-already-ready");
     expect(canAcceptLocalChat()).toBe(true);
     expect(() => assertLocalChatAllowed()).not.toThrow();
+  });
+
+  it("install.ps1 present but runtime already healthy → READY without install spawn", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    mkdirSync(join(root, "bin"), { recursive: true });
+    writeFileSync(join(root, "bin", "hermes.exe"), "");
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      resolveInstallPs1: () => "C:\\fake\\install.ps1",
+      existsSync: (p: string) => existsSync(p),
+      probeHealth: async () => true,
+    });
+    expect(result.state).toBe("READY");
+    expect(result.skipped).toBe(true);
+    expect(getBootstrapStatus().skippedReason).toBe("runtime-already-ready");
+    expect(calls).toHaveLength(0);
+    expect(canAcceptLocalChat()).toBe(true);
+  });
+
+  it("runtime health fails then succeeds → READY soft-skip without install", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    mkdirSync(join(root, "bin"), { recursive: true });
+    writeFileSync(join(root, "bin", "hermes.exe"), "");
+    let probes = 0;
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      resolveInstallPs1: () => "C:\\fake\\install.ps1",
+      existsSync: (p: string) => existsSync(p),
+      probeHealth: async () => {
+        probes += 1;
+        return probes >= 3;
+      },
+    });
+    expect(result.state).toBe("READY");
+    expect(result.skipped).toBe(true);
+    expect(probes).toBe(3);
+    expect(calls).toHaveLength(0);
+    expect(getBootstrapStatus().skippedReason).toBe("runtime-already-ready");
+  });
+
+  it("after policy, healthy gateway skips installAndStartGateway", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    let gatewayStarts = 0;
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      // No hermes CLI → soft-skip misses; full path runs.
+      existsSync: (p: string) => {
+        if (p.endsWith("install.ps1")) return true;
+        if (p.includes(`${join(root, "git")}`)) return true;
+        if (/hermes(\.exe)?$/i.test(p)) return false;
+        return existsSync(p);
+      },
+      probeHealth: async () => true,
+      installAndStartGateway: async () => {
+        gatewayStarts += 1;
+        return false;
+      },
+    });
+    expect(result.state).toBe("READY");
+    expect(gatewayStarts).toBe(0);
+  });
+
+  it("recoverBootstrapIfGatewayHealthy promotes FAIL to READY", async () => {
+    mkdirSync(join(root, "bin"), { recursive: true });
+    writeFileSync(join(root, "bin", "hermes.exe"), "");
+    setBootstrapState("FAIL", {
+      errorCode: "HERMES_GATEWAY_UNHEALTHY",
+      errorMessage: "Gateway health not 200 after install/start",
+    });
+    expect(canAcceptLocalChat()).toBe(false);
+    const recovered = await recoverBootstrapIfGatewayHealthy({
+      getConnectionMode: () => "local",
+      getHermesRoot: () => root,
+      existsSync: (p: string) => existsSync(p),
+      probeHealth: async () => true,
+      sleep: async () => {},
+    });
+    expect(recovered).toBe(true);
+    expect(getBootstrapState()).toBe("READY");
+    expect(getBootstrapStatus().skippedReason).toBe("recover-health");
+    expect(canAcceptLocalChat()).toBe(true);
   });
 
   it("missing install.ps1 without healthy runtime → HERMES_INSTALLER_MISSING", async () => {

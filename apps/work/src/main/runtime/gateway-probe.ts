@@ -273,12 +273,16 @@ export async function inspectGatewayListener(
   }
   const script = [
     "$ErrorActionPreference = 'Stop'",
-    `try { $conns = @(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction Stop) } catch { if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { Write-Output '[]'; exit 0 }; throw }`,
+    `try { $conns = @(Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction Stop) } catch {`,
+    "  if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { Write-Output '[]'; exit 0 }",
+    "  if ($_.FullyQualifiedErrorId -match 'AccessDenied|UnauthorizedAccess' -or $_.Exception.Message -match 'Access is denied|EPERM|denied') { Write-Output '{\"error\":\"permission_denied\"}'; exit 0 }",
+    "  throw",
+    "}",
     "if ($conns.Count -eq 0) { Write-Output '[]'; exit 0 }",
     "$pids = @($conns | Select-Object -ExpandProperty OwningProcess -Unique)",
     "$rows = @()",
     "foreach ($procId in $pids) {",
-    "  $proc = Get-CimInstance Win32_Process -Filter \"ProcessId=$procId\"",
+    "  try { $proc = Get-CimInstance Win32_Process -Filter \"ProcessId=$procId\" -ErrorAction Stop } catch { Write-Output '{\"error\":\"permission_denied\"}'; exit 0 }",
     "  if (-not $proc -or [string]::IsNullOrWhiteSpace($proc.ExecutablePath)) { Write-Output '{\"error\":\"missing_executable_path\"}'; exit 0 }",
     "  $ancestors = @()",
     "  $walkId = $proc.ParentProcessId",
@@ -301,6 +305,10 @@ export async function inspectGatewayListener(
     );
     const parsed = parseInspectStdout(stdout);
     if (parsed.kind === "error") {
+      // Permission denials are inconclusive, not a hard ownership conflict.
+      if (parsed.error === "permission_denied") {
+        return { status: "inspect_failed", reason: "permission_denied" };
+      }
       return { status: "inspect_failed", reason: parsed.error };
     }
     return evaluateGatewayListeners(root, parsed.listeners);
@@ -308,6 +316,9 @@ export async function inspectGatewayListener(
     const message = err instanceof Error ? err.message : String(err);
     if (/ObjectNotFound|no matching|cannot find/i.test(message)) {
       return { status: "no_listener" };
+    }
+    if (/EPERM|EACCES|Access is denied|AccessDenied|UnauthorizedAccess|permission/i.test(message)) {
+      return { status: "inspect_failed", reason: `permission_denied: ${message}` };
     }
     return { status: "inspect_failed", reason: message };
   }

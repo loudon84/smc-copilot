@@ -56,11 +56,17 @@ extraResources:
     to: .
     filter:
       - work-registry-config.json
+      - work-knowledge-config.json
   - from: resources/hermes-native
     to: hermes-native
   - from: resources/hermes-policy
     to: hermes-policy
-  # hermes-bootstrap/install.ps1 is added by T5 release stage; path resolved at runtime.
+  # Native Bootstrap installer (staged by scripts/stage-hermes-bootstrap.mjs).
+  # When absent at pack time, runtime soft-skips if CLI + gateway are healthy.
+  - from: resources/hermes-bootstrap
+    to: hermes-bootstrap
+    filter:
+      - install.ps1
 win:
   executableName: smc-copilot
   icon: build/icon.ico
