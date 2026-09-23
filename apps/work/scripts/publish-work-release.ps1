@@ -181,7 +181,10 @@ if ($LASTEXITCODE -ne 0) {
   throw "Failed to upload release artifacts"
 }
 
-$promoteCommand = "RELEASE_ROOT='$remoteReleaseRoot' '$RemotePromoteScript' '$version' '$stagingId'"
+# Invoke via sh: scp from Windows drops Unix execute bits, and the host scripts
+# only source each other (read permission suffices). Requiring +x would turn
+# every script redeploy into a manual chmod step on the server.
+$promoteCommand = "RELEASE_ROOT='$remoteReleaseRoot' sh '$RemotePromoteScript' '$version' '$stagingId'"
 ssh "$RemoteUser@$RemoteHost" $promoteCommand
 if ($LASTEXITCODE -ne 0) {
   throw "Remote promote failed"
