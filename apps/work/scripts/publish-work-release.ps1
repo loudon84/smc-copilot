@@ -92,8 +92,14 @@ function Confirm-PublishedFeed {
     if ($latest.StatusCode -ne 200) {
       throw "latest.yml status $($latest.StatusCode)"
     }
+    # nginx serves .yml as octet-stream, so Content may be a byte array;
+    # -match on a collection acts as a filter and the check misfires.
+    $latestContent = $latest.Content
+    if ($latestContent -is [byte[]]) {
+      $latestContent = [System.Text.Encoding]::UTF8.GetString($latestContent)
+    }
     $escapedVersion = [regex]::Escape($Version)
-    if ($latest.Content -notmatch "(?m)^version:\s*$escapedVersion\s*$") {
+    if ($latestContent -notmatch "(?m)^version:\s*$escapedVersion\s*$") {
       throw "latest.yml version is not $Version"
     }
 

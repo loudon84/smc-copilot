@@ -105,7 +105,9 @@ function Add-ReleaseNotesToLatestYml {
     [Parameter(Mandatory = $true)][string]$NotesPath
   )
 
-  $notes = Get-Content -Raw -LiteralPath $NotesPath
+  # PS5.1 Get-Content defaults to ANSI for BOM-less files; the notes are
+  # UTF-8, so decode explicitly or Chinese text turns into mojibake.
+  $notes = [System.IO.File]::ReadAllText($NotesPath, [System.Text.Encoding]::UTF8)
   $yamlLines = New-Object System.Collections.Generic.List[string]
   $skipNotes = $false
   foreach ($line in Get-Content -LiteralPath $LatestPath) {
