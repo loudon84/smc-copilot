@@ -47,7 +47,7 @@ v2.2 / v2.3 将 Authenticode 签名设为生产发布的硬门（`PUBLISH_DENIED
 
 ## 4. Scope
 
-### In（全部改动，共两处 + 一项部署）
+### In（初始两处 + 一项部署；D4 追加第 4-5 项；首次实发暴露的链路缺陷修复见 §8）
 
 1. `apps/work/scripts/publish-work-release.ps1` — `Assert-PublishableRelease`：`ALLOW_UNSIGNED=1` 时由硬拒改为放行（要求 manifest 如实为 `signed: false`，打印 Warning）；签名路径逻辑不变。
 2. `infra/release-server/scripts/assert-work-release.sh` — `MANIFEST_UNSIGNED` 检查包入 `if [ "${SMC_WORK_REQUIRE_SIGNED:-0}" = "1" ]` 条件块，缺省不启用。
@@ -84,3 +84,35 @@ v2.2 / v2.3 将 Authenticode 签名设为生产发布的硬门（`PUBLISH_DENIED
 ## 7. 分支与合并
 
 按仓库惯例新建 `work/prd-v2.3.1` 分支实施，完成后合并回 `main`。构建脚本不限制分支（仅要求 git 树干净），`release-manifest.json` 会记录构建时的 branch 与 commit；为保证线上版本可追溯到 main，**先合并再正式发布**，或发布后立即合并且不回滚该 commit。合并用普通 merge / fast-forward，不用 squash（保持 manifest 中的 commit 哈希有效）。
+
+**实际状态（2026-09-23）**：实施者暂无远程推送权限（仓库属 owner），0.7.5 已从本地分支 `work/prd-v2.3.1` 构建并发布，manifest 记录的 commit 均在该分支上。待获得协作者权限后推送并按普通 merge 合并回 `main`，不回滚这些 commit。注意 `main` 上 `package.json` 版本为 0.7.6（手动分发版），本分支定为 0.7.5 系有意为之（低于现存用户版本，仅测试机收到提示）；**下一个正式版本应 ≥ 0.7.7**，使手动 0.7.6 用户也能进入官方更新轨道。
+
+## 8. 实施记录（2026-09-23 首次真实发布，按提交顺序）
+
+§4 所列改动之外，首次走完真实构建/发布/实机升级时暴露并修复了以下链路缺陷。全部为发布工具链 bug 修复，不改变任何产品设计；产品运行时代码零改动（唯一 src/ 变更为注释措辞，见 §4 第 5 项）。
+
+| # | 提交 | 修复 | 问题 |
+|---|---|---|---|
+| 1 | `85052ae2` | 版本定为 0.7.5 + 补 `release-notes/0.7.5.md` | 见 §7 |
+| 2 | `ca4fbdee` | `.gitignore` 忽略 `release/` 构建产物目录 | 产物不应入库 |
+| 3 | `fe1094b2` | latest.yml 注入 release notes 改写为无 BOM UTF-8 | PS5.1 写出的 BOM 同时破坏本地守卫与服务端 sed 门 |
+| 4 | `97275cba` | 发布构建未设 profile 时跳过 Registry 生成器，保留已提交描述符 | 官方包应与手动包产物一致（描述符 URL 与内置公共默认相同） |
+| 5 | `69afacbc` | `publish-work-release.ps1` 加载 `.env` 回退（与 build 脚本一致；显式环境变量优先；param 默认值在脚本体前绑定，加载后回填） | publish 此前不读 `.env`，豁免开关与服务器配置全部不可见，未签名发布被误判进签名通道（`PUBLISH_DENIED: EXPECTED_PUBLISHER`） |
+| 6 | `c4113dd3` | 远端 promote 改用 `sh` 显式调用 | scp 自 Windows 不带 Unix 执行位；promote/rollback 内部仅 source assert 脚本（读权限即可），改后执行位不再是前提，重新部署脚本无需 chmod |
+| 7 | `338ae950` | latest.yml 行尾双修：构建侧显式写 LF；服务端门 `assert-work-release.sh` 提取字段时 `tr -d '\r'` | Windows 产出的 CRLF 使服务端 sed 提取值带尾部 `\r`，promote 被 `LATEST_VERSION_MISMATCH` 误拒 |
+| 8 | `b13baebe` | ① 发布回读确认：`.yml` 被 nginx 作为 octet-stream 返回时 `Content` 为字节数组，先转 UTF-8 字符串再匹配；② release notes 读取改显式 UTF-8 | ① `-notmatch` 对数组是筛选语义导致版本检查误判（0.7.5 实际已发布成功）；② PS5.1 对无 BOM 文件默认 ANSI 解码，中文 notes 乱码 |
+| 9 | `86df7d04` | publish 远端 ssh 调用加 `-n`（stdin 重定向为空） | Windows OpenSSH 在交互终端下控制台输入线程不退出，远端命令已完成后进程仍挂起 |
+| 10 | `d8b7df77` | Registry 生成器入口未设 profile 时直接跳过（库函数 fail-closed 语义不变） | 此前普通 `npm run build` 每次删除已提交的 `resources/work-registry-config.json`，弄脏 git 树 |
+
+文档同步：豁免后的门禁行为已同步至 `apps/work/lat.md/desktop-updates.md`（门禁段落与失败案例描述），生成器行为已同步至 `apps/work/resources/README.md`（各一处，均为与代码一致的真实性更新）。
+
+### 验收记录（2026-09-23）
+
+- AC-1 ✅ `release:build:win` 通过，manifest `signed: false`，本地校验通过。
+- AC-2 ✅ `release:publish` 全流程通过（过程中暴露并已修复 #5-#9）；线上 `latest.yml` 200 且 version=0.7.5、安装包 HEAD 200 已独立复核。
+- AC-3 ⚠️ 未实机验证（服务器未设 `SMC_WORK_REQUIRE_SIGNED=1`；publish 侧拒绝路径有集成测试覆盖）。
+- AC-4 ✅ 实机 0.7.4 → 0.7.5：检测 → 提示 → 下载 → 安装 → 版本切换，全部通过。
+- AC-5 ⚠️ 未实机验证（未重复发布同版本；promote 脚本 `RELEASE_ALREADY_EXISTS` 逻辑未改动）。
+- AC-6 ✅ 构建日志打印跳过测试的 Warning；缺省行为不变有集成测试覆盖。
+
+已知遗留：线上 0.7.5 的 `latest.yml` 中 release notes 中文为乱码（#8② 修复前固化的内容）。仅影响更新弹窗文案，不影响下载安装；受众仅 0.7.4 测试机，不重发，下一版本（≥0.7.7）自然正常。
