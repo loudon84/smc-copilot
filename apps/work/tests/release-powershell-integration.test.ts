@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -18,7 +18,9 @@ const ROOT = join(__dirname, "..");
 const VALIDATE_SCRIPT = join(ROOT, "scripts", "validate-work-release.ps1");
 const PUBLISH_SCRIPT = join(ROOT, "scripts", "publish-work-release.ps1");
 const isWindows = process.platform === "win32";
-const PACKAGE_VERSION = "0.7.5";
+// publish-work-release.ps1 always reads the real apps/work/package.json,
+// so fixtures must match the current package version.
+const PACKAGE_VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version as string;
 
 let testDir = "";
 
@@ -173,10 +175,29 @@ describe.skipIf(!isWindows)("release powershell integration", () => {
     expect(result.status).not.toBe(0);
   });
 
-  it("publish-work-release.ps1 denies unsigned remote publish", () => {
+  it("publish-work-release.ps1 denies unsigned remote publish without ALLOW_UNSIGNED", () => {
     const root = setupTempDir();
     const releaseDir = join(root, "release");
     writeReleaseFixture(releaseDir, PACKAGE_VERSION, { signed: false });
+    const result = runPowerShell(
+      PUBLISH_SCRIPT,
+      ["-ReleaseDir", releaseDir],
+      {
+        SMC_WORK_RELEASE_ALLOW_UNSIGNED: "",
+        SMC_WORK_RELEASE_LOCAL_ROOT: "",
+        SMC_WORK_RELEASE_HOST: "release.superic.com",
+        SMC_WORK_RELEASE_USER: "publisher",
+        SMC_WORK_EXPECTED_PUBLISHER: "CN=SMC",
+      },
+    );
+    expect(result.status).not.toBe(0);
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/PUBLISH_DENIED/);
+  });
+
+  it("publish-work-release.ps1 denies ALLOW_UNSIGNED when the manifest claims signed", () => {
+    const root = setupTempDir();
+    const releaseDir = join(root, "release");
+    writeReleaseFixture(releaseDir, PACKAGE_VERSION, { signed: true });
     const result = runPowerShell(
       PUBLISH_SCRIPT,
       ["-ReleaseDir", releaseDir],

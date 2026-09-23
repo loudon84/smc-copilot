@@ -27,8 +27,14 @@ function Assert-PublishableRelease {
     [Parameter(Mandatory = $true)]$Manifest
   )
 
+  # PRD-WORK-v2.3.1: unsigned internal publish is allowed when explicitly
+  # opted in; the manifest must honestly report signed=false.
   if ($env:SMC_WORK_RELEASE_ALLOW_UNSIGNED -eq "1") {
-    throw "PUBLISH_DENIED: Unsigned release cannot be published"
+    if ($Manifest.signed -eq $true) {
+      throw "PUBLISH_DENIED: ALLOW_UNSIGNED=1 but release-manifest.json claims signed"
+    }
+    Write-Warning "Publishing unsigned release (SMC_WORK_RELEASE_ALLOW_UNSIGNED=1)"
+    return
   }
   if (-not $env:SMC_WORK_EXPECTED_PUBLISHER) {
     throw "PUBLISH_DENIED: SMC_WORK_EXPECTED_PUBLISHER is required"

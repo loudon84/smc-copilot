@@ -40,7 +40,7 @@ Packaged Windows releases use a static HTTPS Generic Provider at `https://releas
 
 `electron-builder.yml` points `publish` at `${env.SMC_WORK_UPDATE_URL}` with the `generic` provider. Local package scripts and `scripts/build-work-release.ps1` load `apps/work/.env` as a fallback, but explicit process env still wins. The build path is split into `scripts/build-work-release.ps1`, `scripts/validate-work-release.ps1`, and `scripts/publish-work-release.ps1` so a normal local package build cannot accidentally promote production `stable`.
 
-Production gates require hostname `release.superic.com`, a packaged `app-update.yml` with that feed, Authenticode `Valid` plus `SMC_WORK_EXPECTED_PUBLISHER`, `latest.yml.sha512`, and `manifest.signed=true` on remote publish. `SMC_WORK_RELEASE_ALLOW_UNSIGNED=1` is fixture-only and is `PUBLISH_DENIED` for remote publish. After promote, publish GETs `latest.yml` and HEADs the installer or reports `PUBLISH_NOT_CONFIRMED`.
+Production gates require hostname `release.superic.com`, a packaged `app-update.yml` with that feed, and `latest.yml.sha512`. Authenticode `Valid` plus `SMC_WORK_EXPECTED_PUBLISHER` and `manifest.signed=true` are required unless `SMC_WORK_RELEASE_ALLOW_UNSIGNED=1` (PRD-WORK-v2.3.1: signing is waived while the company has no code-signing certificate; the manifest must still honestly report `signed=false`). Host-side, `assert-work-release.sh` enforces the signed manifest only when `SMC_WORK_REQUIRE_SIGNED=1`. After promote, publish GETs `latest.yml` and HEADs the installer or reports `PUBLISH_NOT_CONFIRMED`.
 
 The static server lives under `infra/release-server/` and serves a read-only volume as `release.superic.com`. Host-side `promote-work-release.sh` and `rollback-work-stable.sh` call `assert-work-release.sh` before the atomic `stable` symlink swap. Rollback only repoints `stable`; it does not downgrade already-upgraded clients. `production-smoke.sh` checks DNS, TLS, Cache-Control, Range, and sha512 fields against the live feed.
 
@@ -62,7 +62,7 @@ Minimum matrix (not proven here), on Windows 10 x64 and Windows 11 x64:
 - D: Download then Later then Quit does **not** install
 - E: Install Now closes, installs, restarts on 0.7.5 with login/settings/chat DB intact
 
-Do not skip Windows certificate verification. Failure cases: unsigned publish denied, wrong feed host, rollback of `stable` hides the bad version from clients that have not upgraded.
+Do not skip Windows certificate verification. Failure cases: unsigned publish without the ALLOW_UNSIGNED opt-in denied, wrong feed host, rollback of `stable` hides the bad version from clients that have not upgraded.
 
 ## Stable and beta release channels
 

@@ -63,8 +63,12 @@ assert_work_release_dir() {
     echo "RELEASE_GATE_FAILED: MANIFEST_UPDATE_URL" >&2
     return 1
   fi
-  if ! grep -q '"signed"[[:space:]]*:[[:space:]]*true' "${DIR}/release-manifest.json"; then
-    echo "RELEASE_GATE_FAILED: MANIFEST_UNSIGNED" >&2
-    return 1
+  # PRD-WORK-v2.3.1: signature gate is optional while no code-signing
+  # certificate exists. Set SMC_WORK_REQUIRE_SIGNED=1 on the host to restore.
+  if [ "${SMC_WORK_REQUIRE_SIGNED:-0}" = "1" ]; then
+    if ! grep -q '"signed"[[:space:]]*:[[:space:]]*true' "${DIR}/release-manifest.json"; then
+      echo "RELEASE_GATE_FAILED: MANIFEST_UNSIGNED" >&2
+      return 1
+    fi
   fi
 }
