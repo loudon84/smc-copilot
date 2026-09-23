@@ -164,7 +164,14 @@ try {
   }
   if ($LASTEXITCODE -ne 0) { throw "generate-work-build-info.mjs failed" }
   Invoke-Step "Prepare Registry build profile" {
-    node (Join-Path $PSScriptRoot "generate-work-registry-config.mjs")
+    # PRD-WORK-v2.3.1: no profile override => keep the committed
+    # resources/work-registry-config.json untouched, so the official package
+    # matches a manual electron-builder build (descriptor present; same registry
+    # URLs as the built-in public default). Set SMC_WORK_REGISTRY_BUILD_PROFILE_FILE
+    # to regenerate the descriptor from an enterprise profile instead.
+    if ($env:SMC_WORK_REGISTRY_BUILD_PROFILE_FILE) {
+      node (Join-Path $PSScriptRoot "generate-work-registry-config.mjs")
+    }
   }
   if ($LASTEXITCODE -ne 0) { throw "generate-work-registry-config.mjs failed" }
   Invoke-Step "Install dependencies" { npm ci }
@@ -216,7 +223,9 @@ try {
     if ($env:SMC_WORK_REGISTRY_BUILD_PROFILE_FILE) {
       node $guardScript validate-registry-config $registryConfigPath enterprise $env:SMC_WORK_REGISTRY_BUILD_PROFILE_FILE
     } else {
-      node $guardScript validate-registry-config $registryConfigPath community
+      # Default build ships the committed descriptor (same as a manual build);
+      # verify the packaged copy matches it exactly.
+      node $guardScript validate-registry-config $registryConfigPath enterprise (Join-Path $repoRoot "resources\work-registry-config.json")
     }
     if ($LASTEXITCODE -ne 0) { throw "Packaged Registry descriptor verification failed" }
   }
