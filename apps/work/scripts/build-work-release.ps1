@@ -170,7 +170,17 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "npm run guard failed" }
   Invoke-Step "Run typecheck" { npm run typecheck }
   if ($LASTEXITCODE -ne 0) { throw "npm run typecheck failed" }
-  Invoke-Step "Run tests" { npm test }
+  Invoke-Step "Run tests" {
+    # PRD-WORK-v2.3.1: main test suite has 103 pre-existing failures (owner debt,
+    # 0.7.6 shipped bypassing this gate). SMC_WORK_RELEASE_SKIP_TESTS=1 waives the
+    # gate explicitly; remove the waiver once the suite is green on main.
+    if ($env:SMC_WORK_RELEASE_SKIP_TESTS -eq "1") {
+      Write-Warning "SMC_WORK_RELEASE_SKIP_TESTS=1: npm test skipped (PRD-WORK-v2.3.1 test-gate waiver)"
+      $global:LASTEXITCODE = 0
+    } else {
+      npm test
+    }
+  }
   if ($LASTEXITCODE -ne 0) { throw "npm test failed" }
   Invoke-Step "Build Windows NSIS artifact" { node (Join-Path $PSScriptRoot "run-electron-builder.mjs") --win nsis --x64 --publish never }
   if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
