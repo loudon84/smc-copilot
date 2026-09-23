@@ -123,7 +123,10 @@ function Add-ReleaseNotesToLatestYml {
   foreach ($noteLine in ($notes -split "`r?`n")) {
     $yamlLines.Add("  $noteLine")
   }
-  Set-Content -LiteralPath $LatestPath -Value $yamlLines -Encoding utf8
+  # PRD-WORK-v2.3.1: must be UTF-8 WITHOUT BOM. PS5.1 "utf8" emits a BOM,
+  # which breaks the anchored version/path parsers in work-release-guard.mjs
+  # and the server-side sed gate in assert-work-release.sh.
+  [System.IO.File]::WriteAllLines($LatestPath, $yamlLines, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 function Get-PackageVersion {
