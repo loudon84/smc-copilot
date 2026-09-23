@@ -108,7 +108,7 @@ dist/win-unpacked/resources/work-registry-config.json
 {"event":"work_registry_resolution","source":"build","registryId":"enterprise-smc-copilot-hermes-registry-main", ...}
 ```
 
-若看到 `"source":"default"` 且 `public-*-hermes-registry-main`，说明本次包未嵌入企业描述符（未设环境变量，或生成失败）。
+未设环境变量时打包的是已提交的描述符（`enterprise-smc-copilot-hermes-registry-main`，指向公共 registry，与内置默认同地址），日志为 `"source":"build"`。若看到 `"source":"default"`，说明包内没有描述符文件（生成失败或被手动删除）。
 
 ### 与「Open Registry」按钮
 
@@ -132,7 +132,7 @@ Discover 页「Open Registry」是前端链接；列表数据来自 Main `fetchR
 
 | 脚本 | 作用 |
 |------|------|
-| `scripts/generate-work-registry-config.mjs` | 读 profile → 写/清 `resources/work-registry-config.json` |
+| `scripts/generate-work-registry-config.mjs` | 设置了 profile：读 profile → 写/清 `resources/work-registry-config.json`；未设置：保留已提交文件不动 |
 | `scripts/lib/work-registry-build-profile.mjs` | profile 规范化与校验 |
 | `scripts/generate-work-build-info.mjs` | 写 `work-build-info.json` |
 | `scripts/run-electron-builder.mjs` | 调用 electron-builder |
