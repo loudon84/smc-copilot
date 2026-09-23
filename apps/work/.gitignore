@@ -8,6 +8,9 @@ node_modules/
 dist/
 out/
 
+# Release staging output (installers/blockmaps/manifests; hundreds of MB, never commit)
+release/
+
 # Accidental `tsc -b` / composite emit beside sources.
 # Typecheck must use `tsc --noEmit`; runtime build writes to out/dist only.
 src/**/*.js
