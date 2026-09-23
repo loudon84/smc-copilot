@@ -32,7 +32,7 @@ const IS_WINDOWS = process.platform === "win32";
  *   home        = %LOCALAPPDATA%\hermes
  *   agentRoot   = %LOCALAPPDATA%\hermes\hermes-agent
  *   cliPath     = %LOCALAPPDATA%\hermes\bin\hermes.exe (staged from venv\Scripts)
- *   programRoot = home (listen ownership covers bin + hermes-agent\venv)
+ *   programRoot = home (listen ownership covers bin + venv under hermes-agent)
  */
 function windowsNativeDefaults(): HermesRuntimeConfig {
   const localAppData =
