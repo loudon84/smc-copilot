@@ -147,6 +147,7 @@ describe.skipIf(!isWindows)("release powershell integration", () => {
       {
         SMC_WORK_RELEASE_ALLOW_UNSIGNED: "1",
         SMC_WORK_RELEASE_LOCAL_ROOT: localRoot,
+        SMC_WORK_RELEASE_SKIP_DOTENV: "1",
       },
     );
     expect(result.status, result.stderr || result.stdout).toBe(0);
@@ -170,6 +171,7 @@ describe.skipIf(!isWindows)("release powershell integration", () => {
         SMC_WORK_RELEASE_HOST: "",
         SMC_WORK_RELEASE_USER: "",
         SMC_WORK_EXPECTED_PUBLISHER: "CN=SMC",
+        SMC_WORK_RELEASE_SKIP_DOTENV: "1",
       },
     );
     expect(result.status).not.toBe(0);
@@ -188,6 +190,7 @@ describe.skipIf(!isWindows)("release powershell integration", () => {
         SMC_WORK_RELEASE_HOST: "release.superic.com",
         SMC_WORK_RELEASE_USER: "publisher",
         SMC_WORK_EXPECTED_PUBLISHER: "CN=SMC",
+        SMC_WORK_RELEASE_SKIP_DOTENV: "1",
       },
     );
     expect(result.status).not.toBe(0);
@@ -207,6 +210,7 @@ describe.skipIf(!isWindows)("release powershell integration", () => {
         SMC_WORK_RELEASE_HOST: "release.superic.com",
         SMC_WORK_RELEASE_USER: "publisher",
         SMC_WORK_EXPECTED_PUBLISHER: "CN=SMC",
+        SMC_WORK_RELEASE_SKIP_DOTENV: "1",
       },
     );
     expect(result.status).not.toBe(0);

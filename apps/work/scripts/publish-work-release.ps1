@@ -13,6 +13,40 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $packageJsonPath = Join-Path $repoRoot "package.json"
 $publicFeedUrl = "https://release.superic.com/work/stable/"
+$dotenvPath = Join-Path $repoRoot ".env"
+
+function Import-DotEnvFile {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return
+  }
+
+  foreach ($line in Get-Content -LiteralPath $Path) {
+    if ($line -match '^\s*(?:#.*)?$') {
+      continue
+    }
+    if ($line -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$') {
+      continue
+    }
+
+    $name = $matches[1]
+    $value = $matches[2].Trim()
+    if (
+      ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+      ($value.StartsWith("'") -and $value.EndsWith("'"))
+    ) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+
+    if (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name))) {
+      continue
+    }
+    Set-Item -Path "Env:$name" -Value $value
+  }
+}
 
 function Get-PackageVersion {
   $packageJson = Get-Content -Raw -LiteralPath $packageJsonPath | ConvertFrom-Json
@@ -76,6 +110,20 @@ function Confirm-PublishedFeed {
     throw "PUBLISH_NOT_CONFIRMED: $($_.Exception.Message)"
   }
 }
+
+# Load apps/work/.env as a fallback (explicit process env still wins), same as
+# build-work-release.ps1. Tests set SMC_WORK_RELEASE_SKIP_DOTENV=1 to stay
+# hermetic against a developer's local .env.
+if ($env:SMC_WORK_RELEASE_SKIP_DOTENV -ne "1") {
+  Import-DotEnvFile -Path $dotenvPath
+}
+# param defaults bind before the script body runs, so backfill from env after
+# the .env load.
+if (-not $RemoteHost) { $RemoteHost = $env:SMC_WORK_RELEASE_HOST }
+if (-not $RemoteUser) { $RemoteUser = $env:SMC_WORK_RELEASE_USER }
+if (-not $RemoteRoot) { $RemoteRoot = $env:SMC_WORK_RELEASE_REMOTE_ROOT }
+if (-not $LocalRoot) { $LocalRoot = $env:SMC_WORK_RELEASE_LOCAL_ROOT }
+if (-not $RemotePromoteScript) { $RemotePromoteScript = $env:SMC_WORK_RELEASE_PROMOTE_SCRIPT }
 
 $version = Get-PackageVersion
 if (-not $ReleaseDir) {
