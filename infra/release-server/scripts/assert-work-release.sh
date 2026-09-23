@@ -31,8 +31,10 @@ assert_work_release_dir() {
     sha256sum -c SHA256SUMS.txt >/dev/null
   )
 
-  LATEST_VERSION="$(sed -n 's/^version:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"'")"
-  LATEST_PATH="$(sed -n 's/^path:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"'")"
+  # latest.yml may carry CRLF line endings (Windows build host); strip \r so
+  # anchored sed extractions compare cleanly.
+  LATEST_VERSION="$(sed -n 's/^version:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"'\r")"
+  LATEST_PATH="$(sed -n 's/^path:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"'\r")"
   LATEST_PATH_BASE="${LATEST_PATH##*/}"
 
   if [ "${LATEST_VERSION}" != "${VERSION}" ]; then
@@ -44,7 +46,7 @@ assert_work_release_dir() {
     return 1
   fi
 
-  LATEST_SHA512="$(sed -n 's/^sha512:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"' ")"
+  LATEST_SHA512="$(sed -n 's/^sha512:[[:space:]]*//p' "${DIR}/latest.yml" | head -n 1 | tr -d "\"' \r")"
   if [ -z "${LATEST_SHA512}" ]; then
     echo "RELEASE_GATE_FAILED: LATEST_SHA512_MISSING" >&2
     return 1
