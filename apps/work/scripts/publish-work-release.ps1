@@ -177,7 +177,10 @@ if (-not $RemotePromoteScript) {
   throw "SMC_WORK_RELEASE_PROMOTE_SCRIPT is required for remote publish"
 }
 
-ssh "$RemoteUser@$RemoteHost" "mkdir -p '$remoteStagingDir'"
+# -n: stdin from NUL. Windows OpenSSH spawns a console-input thread that can
+# keep the process alive after the remote command exits (session hangs until
+# someone presses Enter). All remote calls here are non-interactive.
+ssh -n "$RemoteUser@$RemoteHost" "mkdir -p '$remoteStagingDir'"
 if ($LASTEXITCODE -ne 0) {
   throw "Failed to create remote staging directory"
 }
@@ -191,7 +194,7 @@ if ($LASTEXITCODE -ne 0) {
 # only source each other (read permission suffices). Requiring +x would turn
 # every script redeploy into a manual chmod step on the server.
 $promoteCommand = "RELEASE_ROOT='$remoteReleaseRoot' sh '$RemotePromoteScript' '$version' '$stagingId'"
-ssh "$RemoteUser@$RemoteHost" $promoteCommand
+ssh -n "$RemoteUser@$RemoteHost" $promoteCommand
 if ($LASTEXITCODE -ne 0) {
   throw "Remote promote failed"
 }
