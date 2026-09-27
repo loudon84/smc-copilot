@@ -30,12 +30,22 @@ interface SavedModelForPicker {
   providerRef?: string;
 }
 
+interface RuntimeSnapshot {
+  state: string;
+  backendState?: string | null;
+  errorCode?: string | null;
+  modelIds?: string[];
+}
+
 interface UseModelConfigResult {
   currentModel: string;
   currentProvider: string;
   currentBaseUrl: string;
   modelGroups: ModelGroup[];
   displayModel: string;
+  runtimeStatus: string;
+  showRuntimeRefresh: boolean;
+  refreshRuntime: () => Promise<void>;
   reload: () => Promise<void>;
   selectModel: (
     provider: string,
@@ -86,12 +96,43 @@ function groupModelsByProvider(models: SavedModelForPicker[]): ModelGroup[] {
   return Array.from(groupMap.values());
 }
 
+function runtimeStatusKey(snapshot: RuntimeSnapshot): string {
+  const backend: Record<string, string> = {
+    MODEL_NOT_CONFIGURED: "chat.runtimeProvider.modelNotConfigured",
+    MODEL_CREDENTIAL_DISABLED: "chat.runtimeProvider.modelCredentialDisabled",
+    MODEL_CREDENTIAL_CLOSING: "chat.runtimeProvider.modelCredentialClosing",
+    MODEL_SYNC_NOT_READY: "chat.runtimeProvider.modelSyncNotReady",
+    MODEL_LIST_EMPTY: "chat.runtimeProvider.modelListEmpty",
+    MODEL_DEFAULT_NOT_SET: "chat.runtimeProvider.modelDefaultNotSet",
+    MODEL_DEFAULT_INVALID: "chat.runtimeProvider.modelDefaultInvalid",
+    MODEL_PROVIDER_UNSUPPORTED: "chat.runtimeProvider.modelProviderUnsupported",
+    MODEL_CREDENTIAL_INVALID: "chat.runtimeProvider.modelCredentialInvalid",
+  };
+  if (snapshot.state === "FETCHING") return "chat.runtimeProvider.fetching";
+  if (snapshot.state === "APPLYING") return "chat.runtimeProvider.applying";
+  if (snapshot.state === "CLEARING") return "chat.runtimeProvider.clearing";
+  if (snapshot.state === "ACTIVE") return "chat.runtimeProvider.active";
+  if (snapshot.state === "STALE_ACTIVE") return "chat.runtimeProvider.staleActive";
+  if (snapshot.state === "UNBOUND") return "chat.runtimeProvider.unbound";
+  if (snapshot.state === "NOT_READY") {
+    return backend[snapshot.backendState || ""] || "chat.runtimeProvider.modelSyncNotReady";
+  }
+  if (snapshot.state === "ERROR") return "chat.runtimeProvider.error";
+  return "";
+}
+
+function currentProfileKey(profile?: string): string {
+  const value = (profile || "default").trim();
+  return value || "default";
+}
+
 export function useModelConfig(profile?: string): UseModelConfigResult {
   const { t } = useI18n();
   const [currentModel, setCurrentModel] = useState("");
   const [currentProvider, setCurrentProvider] = useState("auto");
   const [currentBaseUrl, setCurrentBaseUrl] = useState("");
   const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
+  const [runtime, setRuntime] = useState<RuntimeSnapshot>({ state: "UNBOUND" });
   const loadSeqRef = useRef(0);
 
   const reload = useCallback(async (): Promise<void> => {
@@ -107,6 +148,13 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
     setCurrentModel(mc.model);
     setCurrentProvider(mc.provider);
     setCurrentBaseUrl(mc.baseUrl);
+    setRuntime({
+      state: runtimeState.state,
+      backendState:
+        "backendState" in runtimeState ? runtimeState.backendState : null,
+      errorCode: "errorCode" in runtimeState ? runtimeState.errorCode : null,
+      modelIds: runtimeState.modelIds,
+    });
     const allowed = new Set(runtimeState.modelIds || []);
     const visible =
       runtimeState.state === "ACTIVE" || runtimeState.state === "STALE_ACTIVE"
@@ -138,6 +186,16 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
       void reload();
     });
   }, [reload]);
+
+  useEffect(() => {
+    const subscribe = window.hermesAPI.onRuntimeProviderStateChanged;
+    if (!subscribe) return;
+    return subscribe((event) => {
+      if (event.profile !== currentProfileKey(profile)) return;
+      setRuntime(event);
+      void reload();
+    });
+  }, [profile, reload]);
 
   const selectModel = useCallback(
     async (
@@ -189,6 +247,18 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
           : t("chat.noModel"),
     [currentModel, currentProvider, t],
   );
+  const runtimeStatus = runtimeStatusKey(runtime)
+    ? t(runtimeStatusKey(runtime), { code: runtime.errorCode || "" })
+    : "";
+  const showRuntimeRefresh =
+    runtime.state === "STALE_ACTIVE" ||
+    runtime.state === "NOT_READY" ||
+    runtime.state === "ERROR";
+  const refreshRuntime = useCallback(async (): Promise<void> => {
+    if (!window.hermesAPI.refreshRuntimeProvider) return;
+    await window.hermesAPI.refreshRuntimeProvider();
+    await reload();
+  }, [reload]);
 
   return {
     currentModel,
@@ -196,6 +266,9 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
     currentBaseUrl,
     modelGroups,
     displayModel,
+    runtimeStatus,
+    showRuntimeRefresh,
+    refreshRuntime,
     reload,
     selectModel,
   };

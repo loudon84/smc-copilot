@@ -927,6 +927,20 @@ interface HermesAPI {
     modelIds?: string[];
     modelCount?: number;
   }>;
+  refreshRuntimeProvider: () => Promise<{ state: string }>;
+  onRuntimeProviderStateChanged: (
+    callback: (event: {
+      profile: string;
+      state: string;
+      backendState: string | null;
+      errorCode: string | null;
+      revision: string | null;
+      providerRef: string | null;
+      defaultModel: string | null;
+      modelIds: string[];
+      modelCount: number;
+    }) => void,
+  ) => () => void;
 
   // Models
   listModels: (profile?: string) => Promise<

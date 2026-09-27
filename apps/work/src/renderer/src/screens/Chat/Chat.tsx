@@ -2214,6 +2214,11 @@ function Chat({
                     currentBaseUrl={chatCurrentBaseUrl}
                     modelGroups={modelConfig.modelGroups}
                     displayModel={chatDisplayModel}
+                    runtimeStatus={modelConfig.runtimeStatus}
+                    showRuntimeRefresh={modelConfig.showRuntimeRefresh}
+                    onRefreshRuntime={() => {
+                      void modelConfig.refreshRuntime();
+                    }}
                     onOpen={modelConfig.reload}
                     onSelectModel={handleSelectModel}
                   />

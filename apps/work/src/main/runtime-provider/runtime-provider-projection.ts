@@ -16,6 +16,7 @@ import {
   listSessionModelOverrides,
   setSessionModelOverride,
 } from "../session-model-override-store";
+import { listSessionProfileIds } from "../session-metadata-store";
 import { profileHome, profilePaths, safeWriteFile } from "../utils";
 import {
   NODESKCLAW_API_MODE,
@@ -115,6 +116,57 @@ export function readAdoption(profile?: string): { provider: string; model: strin
   }
 }
 
+export function adoptionContainsSecret(profile?: string): boolean {
+  const raw = readOptional(adoptionPath(profile));
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.keys(parsed).some((key) =>
+      /secret|api_key|authorization|token|fingerprint/i.test(key),
+    );
+  } catch {
+    return true;
+  }
+}
+
+export function normalizeRuntimeProfileId(profile?: string): string {
+  const value = (profile || "default").trim();
+  return value || "default";
+}
+
+export function sessionOverrideBelongsToOtherProfile(
+  profileIds: string[],
+  target?: string,
+): boolean {
+  const ids = profileIds.map((value) => normalizeRuntimeProfileId(value));
+  if (ids.length === 0) return false;
+  return !ids.includes(normalizeRuntimeProfileId(target));
+}
+
+export function captureRewritableSessionOverrides(profile?: string): Array<{
+  sessionId: string;
+  override: ReturnType<typeof listSessionModelOverrides>[number]["override"];
+}> {
+  return listSessionModelOverrides().filter(
+    (row) =>
+      !sessionOverrideBelongsToOtherProfile(
+        listSessionProfileIds(row.sessionId),
+        profile,
+      ),
+  );
+}
+
+export function restoreSessionOverrides(
+  rows: Array<{
+    sessionId: string;
+    override: ReturnType<typeof listSessionModelOverrides>[number]["override"];
+  }>,
+): void {
+  for (const row of rows) {
+    setSessionModelOverride(row.sessionId, row.override);
+  }
+}
+
 function rememberAdoption(profile: string | undefined): void {
   const current = getModelConfig(profile);
   if (current.provider === NODESKCLAW_PROVIDER_KEY) return;
@@ -193,6 +245,14 @@ export function projectManagedRuntime(
   }
   const allowed = new Set(input.models.map((model) => model.id));
   for (const row of listSessionModelOverrides()) {
+    if (
+      sessionOverrideBelongsToOtherProfile(
+        listSessionProfileIds(row.sessionId),
+        normalized,
+      )
+    ) {
+      continue;
+    }
     if (
       row.override.providerRef === NODESKCLAW_PROVIDER_REF &&
       allowed.has(row.override.model)

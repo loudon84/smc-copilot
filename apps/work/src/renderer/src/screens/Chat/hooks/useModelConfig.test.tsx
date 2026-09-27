@@ -226,4 +226,70 @@ describe("useModelConfig", () => {
       expect(window.hermesAPI.listModels).toHaveBeenCalled();
     });
   });
+
+  it("reloads only the current profile and shows refresh for failed states", async () => {
+    let emit: ((event: {
+      profile: string;
+      state: string;
+      modelIds?: string[];
+      backendState?: string | null;
+      errorCode?: string | null;
+      revision?: string | null;
+      providerRef?: string | null;
+      defaultModel?: string | null;
+      modelCount?: number;
+    }) => void) | null = null;
+    const listModels = vi.fn(async () => configuredModels);
+    Object.defineProperty(window, "hermesAPI", {
+      configurable: true,
+      value: {
+        getModelConfig: vi.fn(async () => ({
+          provider: "openai",
+          model: "gpt-4",
+          baseUrl: "",
+        })),
+        listModels,
+        getRuntimeProviderState: vi.fn(async () => ({ state: "ERROR", errorCode: "RUNTIME_GATEWAY_RESTART_FAILED" })),
+        onConnectionConfigChanged: vi.fn(() => vi.fn()),
+        onModelLibraryChanged: vi.fn(() => vi.fn()),
+        onRuntimeProviderStateChanged: vi.fn((callback) => {
+          emit = callback;
+          return vi.fn();
+        }),
+        refreshRuntimeProvider: vi.fn(async () => ({ state: "ACTIVE" })),
+        setModelConfig: vi.fn(async () => true),
+      },
+    });
+    function StatusHarness(): React.JSX.Element {
+      const config = useModelConfig("default");
+      return (
+        <output data-testid="status">
+          {`${config.runtimeStatus}|${config.showRuntimeRefresh}|${config.modelGroups.length}`}
+        </output>
+      );
+    }
+    render(<StatusHarness />);
+    await waitFor(() => {
+      expect(screen.getByTestId("status").textContent).toContain("true");
+    });
+    const calls = listModels.mock.calls.length;
+    act(() => emit?.({ profile: "research", state: "UNBOUND" }));
+    expect(listModels.mock.calls.length).toBe(calls);
+    act(() =>
+      emit?.({
+        profile: "default",
+        state: "ACTIVE",
+        modelIds: [],
+        backendState: null,
+        errorCode: null,
+        revision: "rev",
+        providerRef: "named:nodeskclaw",
+        defaultModel: "enterprise-a",
+        modelCount: 0,
+      }),
+    );
+    await waitFor(() => {
+      expect(listModels.mock.calls.length).toBeGreaterThan(calls);
+    });
+  });
 });

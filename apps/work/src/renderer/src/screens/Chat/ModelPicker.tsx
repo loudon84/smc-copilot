@@ -18,6 +18,9 @@ interface ModelPickerProps {
     baseUrl: string,
     providerRef?: string,
   ) => void;
+  runtimeStatus?: string;
+  showRuntimeRefresh?: boolean;
+  onRefreshRuntime?: () => void;
 }
 
 export const ModelPicker = memo(function ModelPicker({
@@ -29,6 +32,9 @@ export const ModelPicker = memo(function ModelPicker({
   displayModel,
   onOpen,
   onSelectModel,
+  runtimeStatus = "",
+  showRuntimeRefresh = false,
+  onRefreshRuntime,
 }: ModelPickerProps): React.JSX.Element {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
@@ -178,6 +184,18 @@ export const ModelPicker = memo(function ModelPicker({
         <span className="chat-model-name">{displayModel}</span>
         <ChevronDown size={12} />
       </button>
+      {runtimeStatus ? (
+        <span className="chat-runtime-provider-status">{runtimeStatus}</span>
+      ) : null}
+      {showRuntimeRefresh ? (
+        <button
+          type="button"
+          className="chat-runtime-provider-refresh"
+          onClick={() => onRefreshRuntime?.()}
+        >
+          {t("chat.runtimeProvider.refresh")}
+        </button>
+      ) : null}
 
       {isOpen && (
         <div

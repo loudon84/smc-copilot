@@ -1,7 +1,7 @@
-import { checkProviderProjection } from "../agent-config-providers";
-import { getConnectionConfig } from "../config";
-import { readModelsRaw } from "../models";
+import { randomUUID } from "crypto";
+import { getConnectionConfig, getModelConfig } from "../config";
 import { fetchRuntimeBootstrap } from "./nodeskclaw-bootstrap-client";
+import { checkManagedRuntimeProjection } from "./runtime-provider-integrity";
 import {
   clearManagedSecret,
   installManagedSecret,
@@ -10,20 +10,27 @@ import {
 } from "./managed-runtime-secret-store";
 import { logRuntimeProviderOperation } from "./runtime-provider-observability";
 import {
-  captureManagedFiles,
-  detectManagedIdentityConflict,
+  beginRuntimeIntent,
+  enqueueRuntimeMutation,
+  logoutIntentIsWaiting,
+  runtimeIntentCurrent,
+} from "./runtime-provider-operation-coordinator";
+import {
   projectManagedRuntime,
   restoreAdoptedActiveModel,
-  restoreManagedFiles,
 } from "./runtime-provider-projection";
 import {
-  NODESKCLAW_API_MODE,
-  NODESKCLAW_KEY_ENV,
+  captureManagedTransaction,
+  restoreManagedTransaction,
+  type ManagedTransactionSnapshot,
+} from "./runtime-provider-transaction";
+import {
   NODESKCLAW_PROVIDER_KEY,
   NODESKCLAW_PROVIDER_REF,
   type ReadyRuntimeContract,
   type RuntimeBootstrapErrorCode,
 } from "./runtime-provider-contract";
+import type { RuntimeProviderStateEvent } from "../../shared/runtime-provider-state";
 
 export type RuntimeProviderPublicState =
   | { state: "UNBOUND" }
@@ -50,7 +57,8 @@ interface Applied {
 
 const applied = new Map<string, Applied>();
 const publicState = new Map<string, RuntimeProviderPublicState>();
-let ticket = 0;
+const listeners = new Set<(event: RuntimeProviderStateEvent) => void>();
+let lastEvent = "";
 
 function profileKey(profile?: string): string {
   const value = (profile || "default").trim();
@@ -60,6 +68,41 @@ function profileKey(profile?: string): string {
 function fileProfile(profile?: string): string | undefined {
   const key = profileKey(profile);
   return key === "default" ? undefined : key;
+}
+
+function toEvent(
+  profile: string | undefined,
+  state: RuntimeProviderPublicState,
+): RuntimeProviderStateEvent {
+  const base: RuntimeProviderStateEvent = {
+    profile: profileKey(profile),
+    state: state.state,
+    backendState: null,
+    errorCode: null,
+    revision: null,
+    providerRef: null,
+    defaultModel: null,
+    modelIds: [],
+    modelCount: 0,
+  };
+  if (state.state === "NOT_READY") base.backendState = state.backendState;
+  if (state.state === "ERROR") base.errorCode = state.errorCode;
+  if (state.state === "ACTIVE" || state.state === "STALE_ACTIVE") {
+    base.revision = state.revision;
+    base.providerRef = state.providerRef;
+    base.defaultModel = state.defaultModel;
+    base.modelIds = state.modelIds;
+    base.modelCount = state.modelCount;
+    base.errorCode = state.errorCode || null;
+  }
+  return base;
+}
+
+export function subscribeRuntimeProviderState(
+  listener: (event: RuntimeProviderStateEvent) => void,
+): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 export function getRuntimeProviderPublicState(
@@ -75,6 +118,26 @@ export function isRuntimeSettingsLocked(profile?: string): boolean {
 
 function setState(profile: string | undefined, state: RuntimeProviderPublicState): void {
   publicState.set(profileKey(profile), state);
+  const event = toEvent(profile, state);
+  const encoded = JSON.stringify(event);
+  if (encoded === lastEvent) return;
+  lastEvent = encoded;
+  logRuntimeProviderOperation({
+    stage: "EMIT_STATE",
+    status: "PASS",
+    profile: event.profile,
+    runtime_state: event.state,
+    revision: event.revision,
+    errorCode: event.errorCode,
+    provider_ref: event.providerRef,
+  });
+  for (const listener of listeners) {
+    try {
+      listener(event);
+    } catch {
+      /* listener failure does not change Main state */
+    }
+  }
 }
 
 async function restartGateway(profile?: string): Promise<boolean> {
@@ -83,46 +146,57 @@ async function restartGateway(profile?: string): Promise<boolean> {
   return restarted.ok;
 }
 
-function sameProjection(profile: string | undefined, ready: ReadyRuntimeContract): boolean {
-  if (detectManagedIdentityConflict(profile)) return false;
-  const projected = checkProviderProjection(profile, {
-    providerKey: NODESKCLAW_PROVIDER_KEY,
-    baseUrl: ready.baseUrl,
-    keyEnv: NODESKCLAW_KEY_ENV,
-    apiMode: NODESKCLAW_API_MODE,
+function activeState(
+  ready: ReadyRuntimeContract,
+  modelIds: string[],
+): RuntimeProviderPublicState {
+  return {
+    state: "ACTIVE",
+    revision: ready.revision,
+    providerRef: "named:nodeskclaw",
+    defaultModel: ready.defaultModel,
+    modelIds,
+    modelCount: modelIds.length,
+  };
+}
+
+function rollbackOwned(
+  snapshot: ManagedTransactionSnapshot,
+  trace: Record<string, unknown>,
+): boolean {
+  logRuntimeProviderOperation({ ...trace, stage: "ROLLBACK", status: "START" });
+  const restored = restoreManagedTransaction(snapshot);
+  if (restored.ok) return true;
+  logRuntimeProviderOperation({
+    ...trace,
+    stage: "ROLLBACK",
+    status: "FAIL",
+    errorCode: "RUNTIME_PROVIDER_ROLLBACK_FAILED",
   });
-  if (!projected.ok) return false;
-  const ids = readModelsRaw(fileProfile(profile))
-    .filter((row) => row.providerRef === NODESKCLAW_PROVIDER_REF)
-    .map((row) => row.model)
-    .sort();
-  const desired = ready.models.map((model) => model.id).sort();
-  return ids.join("\n") === desired.join("\n");
+  if (!logoutIntentIsWaiting()) {
+    setState(snapshot.files.profile, {
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_ROLLBACK_FAILED",
+    });
+  }
+  return false;
 }
 
 async function purgeRuntime(
   reason: "logout" | "not_ready",
-  profile?: string,
+  profile: string | undefined,
+  generationId: number,
   backendState = "MODEL_NOT_CONFIGURED",
-  expectedTicket?: number,
+  trace: Record<string, unknown>,
 ): Promise<RuntimeProviderPublicState> {
   const normalized = fileProfile(profile);
-  if (expectedTicket !== undefined && expectedTicket !== ticket) {
-    return getRuntimeProviderPublicState(normalized);
-  }
+  if (!runtimeIntentCurrent(generationId)) return getRuntimeProviderPublicState(normalized);
   setState(normalized, { state: "CLEARING" });
-  logRuntimeProviderOperation({
-    reason,
-    stage: "CLEAR_SECRET",
-    status: "START",
-    profile: profileKey(profile),
-    provider_ref: NODESKCLAW_PROVIDER_REF,
-  });
+  logRuntimeProviderOperation({ ...trace, stage: "SECRET", status: "START" });
   clearManagedSecret(normalized);
+  logRuntimeProviderOperation({ ...trace, stage: "RESTART", status: "START" });
   const restarted = await restartGateway(normalized);
-  if (expectedTicket !== undefined && expectedTicket !== ticket) {
-    return getRuntimeProviderPublicState(normalized);
-  }
+  if (!runtimeIntentCurrent(generationId)) return getRuntimeProviderPublicState(normalized);
   if (reason === "logout") restoreAdoptedActiveModel(normalized);
   if (!restarted) {
     const failed = {
@@ -144,24 +218,125 @@ export async function clearRuntimeProvider(
   reason: "logout" | "not_ready",
   profile?: string,
 ): Promise<void> {
-  ticket += 1;
-  await purgeRuntime(reason, profile);
+  const mine = beginRuntimeIntent(reason);
+  const trace = {
+    operation_id: randomUUID(),
+    generation: mine,
+    reason,
+    profile: profileKey(profile),
+  };
+  logRuntimeProviderOperation({ ...trace, stage: "INTENT", status: "START" });
+  if (reason === "logout") setState(profile, { state: "CLEARING" });
+  await enqueueRuntimeMutation(mine, async () => {
+    logRuntimeProviderOperation({ ...trace, stage: "LOCK_ACQUIRED", status: "PASS" });
+    await purgeRuntime(reason, profile, mine, "MODEL_NOT_CONFIGURED", trace);
+    logRuntimeProviderOperation({ ...trace, stage: "COMPLETE", status: "PASS" });
+  });
+}
+
+async function applyReady(
+  ready: ReadyRuntimeContract,
+  profile: string | undefined,
+  generationId: number,
+  trace: Record<string, unknown>,
+  previous: RuntimeProviderPublicState,
+): Promise<RuntimeProviderPublicState> {
+  const normalized = fileProfile(profile);
+  logRuntimeProviderOperation({ ...trace, stage: "CHECK", status: "START" });
+  const integrity = checkManagedRuntimeProjection(normalized, ready);
+  const secret = readManagedSecret(normalized);
+  if (integrity.status === "IDENTITY_CONFLICT") {
+    setState(normalized, { state: "ERROR", errorCode: integrity.errorCode });
+    return getRuntimeProviderPublicState(normalized);
+  }
+  const modelIds = ready.models.map((model) => model.id);
+  if (
+    previous.state === "ACTIVE" &&
+    secret === ready.apiKey &&
+    readManagedRevision(normalized) === ready.revision &&
+    integrity.status === "MATCH"
+  ) {
+    const active = activeState(ready, modelIds);
+    setState(normalized, active);
+    return active;
+  }
+  logRuntimeProviderOperation({ ...trace, stage: "SNAPSHOT", status: "START" });
+  const snapshot = captureManagedTransaction(normalized, previous.state);
+  if (integrity.status === "MATCH" && secret && secret !== ready.apiKey) {
+    installManagedSecret({
+      profile: normalized,
+      apiKey: ready.apiKey,
+      revision: ready.revision,
+    });
+  } else {
+    setState(normalized, { state: "APPLYING" });
+    logRuntimeProviderOperation({ ...trace, stage: "PROJECT", status: "START" });
+    const projected = projectManagedRuntime(normalized, ready);
+    logRuntimeProviderOperation({ ...trace, stage: "SESSION_OVERRIDE", status: "PASS" });
+    if (!projected.ok) {
+      setState(normalized, { state: "ERROR", errorCode: projected.error });
+      return getRuntimeProviderPublicState(normalized);
+    }
+    if (!runtimeIntentCurrent(generationId)) {
+      rollbackOwned(snapshot, trace);
+      return getRuntimeProviderPublicState(normalized);
+    }
+    logRuntimeProviderOperation({ ...trace, stage: "SECRET", status: "START" });
+    installManagedSecret({
+      profile: normalized,
+      apiKey: ready.apiKey,
+      revision: ready.revision,
+    });
+  }
+  logRuntimeProviderOperation({ ...trace, stage: "RESTART", status: "START" });
+  const restarted = await restartGateway(normalized);
+  logRuntimeProviderOperation({ ...trace, stage: "VERIFY", status: restarted ? "PASS" : "FAIL" });
+  if (!runtimeIntentCurrent(generationId)) {
+    rollbackOwned(snapshot, trace);
+    return getRuntimeProviderPublicState(normalized);
+  }
+  if (!restarted) {
+    const restored = rollbackOwned(snapshot, trace);
+    if (restored && !logoutIntentIsWaiting()) {
+      setState(normalized, {
+        state: "ERROR",
+        errorCode: "RUNTIME_GATEWAY_RESTART_FAILED",
+      });
+    }
+    return getRuntimeProviderPublicState(normalized);
+  }
+  applied.set(profileKey(normalized), {
+    revision: ready.revision,
+    defaultModel: ready.defaultModel,
+    modelIds,
+  });
+  const active = activeState(ready, modelIds);
+  setState(normalized, active);
+  return active;
 }
 
 export async function bootstrapRuntimeProvider(
   reason: string,
   profile?: string,
 ): Promise<RuntimeProviderPublicState> {
+  const mine = beginRuntimeIntent(reason);
+  const trace = {
+    operation_id: randomUUID(),
+    generation: mine,
+    reason,
+    profile: profileKey(profile),
+  };
+  logRuntimeProviderOperation({ ...trace, stage: "INTENT", status: "START" });
   if (getConnectionConfig().mode !== "local") {
     setState(profile, { state: "UNBOUND" });
     return { state: "UNBOUND" };
   }
-  const mine = ++ticket;
   const normalized = fileProfile(profile);
   const previous = getRuntimeProviderPublicState(normalized);
   setState(normalized, { state: "FETCHING" });
+  logRuntimeProviderOperation({ ...trace, stage: "FETCH", status: "START" });
   const fetched = await fetchRuntimeBootstrap();
-  if (mine !== ticket) return getRuntimeProviderPublicState(normalized);
+  if (!runtimeIntentCurrent(mine)) return getRuntimeProviderPublicState(normalized);
   if (!fetched.ok) {
     if (
       (previous.state === "ACTIVE" || previous.state === "STALE_ACTIVE") &&
@@ -175,109 +350,25 @@ export async function bootstrapRuntimeProvider(
     setState(normalized, error);
     return error;
   }
-  if (!fetched.contract.ready) {
-    if (mine !== ticket) return getRuntimeProviderPublicState(normalized);
-    return purgeRuntime("not_ready", normalized, fetched.contract.state, mine);
-  }
-  const ready = fetched.contract;
-  const secret = readManagedSecret(normalized);
-  const revision = readManagedRevision(normalized);
-  if (
-    previous.state === "ACTIVE" &&
-    revision === ready.revision &&
-    secret === ready.apiKey &&
-    sameProjection(normalized, ready)
-  ) {
-    const active: RuntimeProviderPublicState = {
-      state: "ACTIVE",
-      revision: ready.revision,
-      providerRef: "named:nodeskclaw",
-      defaultModel: ready.defaultModel,
-      modelIds: ready.models.map((model) => model.id),
-      modelCount: ready.models.length,
-    };
-    applied.set(profileKey(normalized), {
-      revision: ready.revision,
-      defaultModel: ready.defaultModel,
-      modelIds: active.modelIds,
-    });
-    setState(normalized, active);
-    return active;
-  }
-  const snapshot = captureManagedFiles(normalized);
-  const previousSecret = secret;
-  if (revision === ready.revision && secret && secret !== ready.apiKey && sameProjection(normalized, ready)) {
-    installManagedSecret({
-      profile: normalized,
-      apiKey: ready.apiKey,
-      revision: ready.revision,
-    });
-  } else {
-    setState(normalized, { state: "APPLYING" });
-    const projected = projectManagedRuntime(normalized, ready);
-    if (!projected.ok) {
-      setState(normalized, { state: "ERROR", errorCode: projected.error });
-      return getRuntimeProviderPublicState(normalized);
+  logRuntimeProviderOperation({ ...trace, stage: "WAIT_LOCK", status: "START" });
+  const result = await enqueueRuntimeMutation(mine, async () => {
+    logRuntimeProviderOperation({ ...trace, stage: "LOCK_ACQUIRED", status: "PASS" });
+    if (!runtimeIntentCurrent(mine)) return getRuntimeProviderPublicState(normalized);
+    if (!fetched.contract.ready) {
+      return purgeRuntime("not_ready", normalized, mine, fetched.contract.state, trace);
     }
-    if (mine !== ticket) {
-      restoreManagedFiles(snapshot);
-      return getRuntimeProviderPublicState(normalized);
-    }
-    installManagedSecret({
-      profile: normalized,
-      apiKey: ready.apiKey,
-      revision: ready.revision,
-    });
-  }
-  const restarted = await restartGateway(normalized);
-  if (mine !== ticket) {
-    restoreManagedFiles(snapshot);
-    return getRuntimeProviderPublicState(normalized);
-  }
-  if (!restarted) {
-    restoreManagedFiles(snapshot);
-    if (previousSecret) {
-      installManagedSecret({
-        profile: normalized,
-        apiKey: previousSecret,
-        revision: revision || ready.revision,
-      });
-    } else {
-      clearManagedSecret(normalized);
-    }
-    setState(normalized, {
-      state: "ERROR",
-      errorCode: "RUNTIME_GATEWAY_RESTART_FAILED",
-    });
-    return getRuntimeProviderPublicState(normalized);
-  }
-  const modelIds = ready.models.map((model) => model.id);
-  applied.set(profileKey(normalized), {
-    revision: ready.revision,
-    defaultModel: ready.defaultModel,
-    modelIds,
+    return applyReady(fetched.contract, normalized, mine, trace, previous);
   });
-  const active: RuntimeProviderPublicState = {
-    state: "ACTIVE",
-    revision: ready.revision,
-    providerRef: "named:nodeskclaw",
-    defaultModel: ready.defaultModel,
-    modelIds,
-    modelCount: modelIds.length,
-  };
-  setState(normalized, active);
+  if (result && typeof result === "object" && "superseded" in result) {
+    return getRuntimeProviderPublicState(normalized);
+  }
   logRuntimeProviderOperation({
-    reason,
+    ...trace,
     stage: "COMPLETE",
     status: "PASS",
-    profile: profileKey(profile),
-    runtime_state: "ACTIVE",
-    revision: ready.revision,
-    provider_ref: NODESKCLAW_PROVIDER_REF,
-    model_count: modelIds.length,
-    default_model: ready.defaultModel,
+    runtime_state: getRuntimeProviderPublicState(normalized).state,
   });
-  return active;
+  return result as RuntimeProviderPublicState;
 }
 
 export function gateLocalRuntimeSend(input: {
@@ -286,6 +377,14 @@ export function gateLocalRuntimeSend(input: {
   providerRef?: string;
   model: string;
 }): { ok: true } | { ok: false; error: string } {
+  const providerIsManaged =
+    input.provider === NODESKCLAW_PROVIDER_KEY ||
+    input.providerRef === NODESKCLAW_PROVIDER_REF ||
+    (!input.provider && !input.providerRef &&
+      getModelConfig(input.profile).provider === NODESKCLAW_PROVIDER_KEY);
+  if (providerIsManaged && !readManagedSecret(input.profile)) {
+    return { ok: false, error: "RUNTIME_NOT_READY" };
+  }
   const state = getRuntimeProviderPublicState(input.profile);
   if (state.state === "UNBOUND") return { ok: true };
   if (state.state === "ERROR") return { ok: false, error: state.errorCode };

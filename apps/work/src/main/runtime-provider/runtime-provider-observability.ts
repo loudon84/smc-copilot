@@ -3,7 +3,11 @@ export function logRuntimeProviderOperation(
 ): void {
   const safe: Record<string, unknown> = { event: "runtime_provider_operation" };
   for (const [key, value] of Object.entries(fields)) {
-    if (/secret|api_key|authorization|token|fingerprint/i.test(key)) continue;
+    if (
+      /secret|api_key|authorization|token|fingerprint|prefix|length/i.test(key)
+    ) {
+      continue;
+    }
     safe[key] = value;
   }
   console.info(JSON.stringify(safe));

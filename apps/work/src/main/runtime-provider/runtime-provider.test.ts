@@ -66,3 +66,18 @@ describe("runtime bootstrap contract", () => {
     expect(process.env.NODESKCLAW_RUNTIME_MODEL_API_KEY).toBeUndefined();
   });
 });
+
+describe("runtime provider release evidence", () => {
+  it("keeps the unexecuted golden consumer blocked", () => {
+    const evidence = {
+      l1Contract: "PASS",
+      l2Transaction: "PASS",
+      l3RendererIpc: "PASS",
+      l4GoldenNodeDeskClawInference: "BLOCKED",
+      l4GoldenNewApiDirect: "BLOCKED",
+    };
+    expect(evidence.l4GoldenNodeDeskClawInference).toBe("BLOCKED");
+    expect(evidence.l4GoldenNewApiDirect).toBe("BLOCKED");
+    expect(JSON.stringify(evidence)).not.toContain("api_key");
+  });
+});

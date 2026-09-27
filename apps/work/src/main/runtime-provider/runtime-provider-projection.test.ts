@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openSqliteDatabase } from "../sqlite-database";
 
 let testHome: string;
 
@@ -31,7 +32,9 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
+afterEach(async () => {
+  const { closeDbConnection } = await import("../db");
+  closeDbConnection();
   vi.unstubAllEnvs();
   vi.resetModules();
   rmSync(testHome, { recursive: true, force: true });
@@ -101,5 +104,73 @@ describe("managed runtime projection", () => {
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).not.toContain(
       "nodeskclaw",
     );
+  });
+
+  it("rewrites missing metadata and keeps other-profile overrides", async () => {
+    const { getDbConnection } = await import("../db");
+    openSqliteDatabase(join(testHome, "state.db")).close();
+    const db = getDbConnection(false);
+    expect(db).toBeTruthy();
+    const {
+      CHAT_SESSION_CLASSIFICATION,
+      SKILL_RUN_SESSION_CLASSIFICATION,
+      createSessionScope,
+      upsertSessionMetadata,
+    } = await import("../session-metadata-store");
+    const { getSessionModelOverride, setSessionModelOverride } = await import(
+      "../session-model-override-store"
+    );
+    const scope = createSessionScope("local|default");
+    upsertSessionMetadata(
+      db!,
+      { sessionScope: scope, profileId: "research", sessionId: "other-profile" },
+      CHAT_SESSION_CLASSIFICATION,
+    );
+    upsertSessionMetadata(
+      db!,
+      { sessionScope: scope, profileId: "default", sessionId: "skill-session" },
+      SKILL_RUN_SESSION_CLASSIFICATION,
+    );
+    const foreign = {
+      provider: "openai",
+      model: "keep-me",
+      baseUrl: "",
+      providerRef: "builtin:openai",
+    };
+    setSessionModelOverride("other-profile", foreign);
+    setSessionModelOverride("missing-metadata", {
+      provider: "openai",
+      model: "old-local",
+      baseUrl: "",
+      providerRef: "builtin:openai",
+    });
+    setSessionModelOverride("skill-session", {
+      provider: "openai",
+      model: "old-skill",
+      baseUrl: "",
+      providerRef: "builtin:openai",
+    });
+    const { projectManagedRuntime } = await import("./runtime-provider-projection");
+    const result = projectManagedRuntime(undefined, {
+      baseUrl: "https://models.example.test/v1",
+      defaultModel: "enterprise-a",
+      models: [{ id: "enterprise-a", displayName: "Enterprise A" }],
+    });
+    expect(result.ok).toBe(true);
+    expect(getSessionModelOverride("other-profile")).toMatchObject(foreign);
+    expect(getSessionModelOverride("missing-metadata")).toMatchObject({
+      providerRef: "named:nodeskclaw",
+      model: "enterprise-a",
+    });
+    expect(getSessionModelOverride("skill-session")).toMatchObject({
+      providerRef: "named:nodeskclaw",
+      model: "enterprise-a",
+    });
+    const service = readFileSync(
+      join(process.cwd(), "src/main/skill-run/skill-run-service.ts"),
+      "utf-8",
+    );
+    expect(service).not.toContain("session-model-override-store");
+    expect(service).not.toContain("desktop_session_model_overrides");
   });
 });

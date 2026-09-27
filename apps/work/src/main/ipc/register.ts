@@ -211,7 +211,9 @@ import {
   bootstrapRuntimeProvider,
   getRuntimeProviderPublicState,
   isRuntimeSettingsLocked,
+  subscribeRuntimeProviderState,
 } from "../runtime-provider/runtime-provider-orchestrator";
+import { readStoredSessionSync } from "../auth/token-store";
 import { clearManagedSecret } from "../runtime-provider/managed-runtime-secret-store";
 import {
   getAuxiliaryConfig,
@@ -748,6 +750,14 @@ export function registerIpcHandlers(context: IpcContext): void {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
         win.webContents.send("runtime-status-changed", probe);
+      }
+    }
+  });
+
+  subscribeRuntimeProviderState((event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send("runtime-provider-state-changed", event);
       }
     }
   });
@@ -2862,6 +2872,13 @@ export function registerIpcHandlers(context: IpcContext): void {
   ipcMain.handle("get-runtime-provider-state", (_event, profile?: string) =>
     getRuntimeProviderPublicState(profile),
   );
+
+  ipcMain.handle("runtime-provider-refresh", async () => {
+    if (getConnectionConfig().mode !== "local" || !readStoredSessionSync()) {
+      return { state: "UNBOUND" as const };
+    }
+    return bootstrapRuntimeProvider("refresh");
+  });
 
   // Models
   ipcMain.handle("list-models", (_event, profile?: string) => {

@@ -1292,6 +1292,44 @@ const hermesAPI = {
     modelCount?: number;
   }> => ipcRenderer.invoke("get-runtime-provider-state", profile),
 
+  refreshRuntimeProvider: (): Promise<{ state: string }> =>
+    ipcRenderer.invoke("runtime-provider-refresh"),
+
+  onRuntimeProviderStateChanged: (
+    callback: (event: {
+      profile: string;
+      state: string;
+      backendState: string | null;
+      errorCode: string | null;
+      revision: string | null;
+      providerRef: string | null;
+      defaultModel: string | null;
+      modelIds: string[];
+      modelCount: number;
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: unknown,
+    ): void =>
+      callback(
+        payload as {
+          profile: string;
+          state: string;
+          backendState: string | null;
+          errorCode: string | null;
+          revision: string | null;
+          providerRef: string | null;
+          defaultModel: string | null;
+          modelIds: string[];
+          modelCount: number;
+        },
+      );
+    ipcRenderer.on("runtime-provider-state-changed", handler);
+    return () =>
+      ipcRenderer.removeListener("runtime-provider-state-changed", handler);
+  },
+
   listModels: (
     profile?: string,
   ): Promise<
