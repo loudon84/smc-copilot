@@ -110,8 +110,7 @@ describe("providers store", () => {
     expect(s.listCustomProviders("default")).toEqual([]);
   });
 
-  // @lat: [[provider-setup#Provider setup#Agent config sync for named providers#Terminal-added providers import on read]]
-  it("imports terminal-added providers: entries from config.yaml", async () => {
+  it("does not import config.yaml providers while listing", async () => {
     const { writeFileSync } = await import("fs");
     writeFileSync(
       join(mockState.hermesHome, "config.yaml"),
@@ -127,21 +126,15 @@ describe("providers store", () => {
     writeFileSync(join(mockState.hermesHome, ".env"), "MY_FAAB_KEY=sk-123\n");
 
     const s = await store();
-    const list = s.listCustomProviders("default");
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({
-      name: "Faab AI",
-      baseUrl: "https://faab.ai/v1",
-    });
-    // The terminal entry's key is aliased to the desktop's derived env var so
-    // the key field and the chat runtime's label-derived lookup both resolve.
+    expect(s.listCustomProviders("default")).toEqual([]);
     const env = readFileSync(join(mockState.hermesHome, ".env"), "utf-8");
-    expect(env).toContain("CUSTOM_PROVIDER_FAAB_AI_KEY=sk-123");
-    // Original stays — aliasing is additive.
-    expect(env).toContain("MY_FAAB_KEY=sk-123");
+    expect(env).toBe("MY_FAAB_KEY=sk-123\n");
+    expect(existsSync(join(mockState.hermesHome, "providers.json"))).toBe(
+      false,
+    );
   });
 
-  it("imports legacy custom_providers: list entries into providers.json", async () => {
+  it("does not import legacy custom_providers while listing", async () => {
     const { writeFileSync } = await import("fs");
     writeFileSync(
       join(mockState.hermesHome, "config.yaml"),
@@ -160,13 +153,10 @@ describe("providers store", () => {
     );
 
     const s = await store();
-    const list = s.listCustomProviders("default");
-    // deepseek host maps to DEEPSEEK_API_KEY — dedicated brand card, skipped.
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({
-      name: "qianfan-extract",
-      baseUrl: "https://qianfan.baidubce.com/v2",
-    });
+    expect(s.listCustomProviders("default")).toEqual([]);
+    expect(existsSync(join(mockState.hermesHome, "providers.json"))).toBe(
+      false,
+    );
   });
 
   it("skips config.yaml entries whose host has a dedicated brand card", async () => {
@@ -216,23 +206,15 @@ describe("providers store", () => {
     expect(config).not.toContain("faab-ai");
   });
 
-  // @lat: [[provider-setup#Provider setup#Agent config sync for named providers#First-party brands mirror as user providers]]
-  it("mirrors a keyed SMC Copilot into config.yaml providers: without a custom card", async () => {
+  it("does not write config.yaml when listing without a providers file", async () => {
     const { writeFileSync } = await import("fs");
     writeFileSync(
       join(mockState.hermesHome, ".env"),
       "HERMESONE_API_KEY=hs-live-abc\n",
     );
     const s = await store();
-    // No custom-provider card — SMC Copilot owns a dedicated brand card.
     expect(s.listCustomProviders("default")).toEqual([]);
-    const config = readFileSync(
-      join(mockState.hermesHome, "config.yaml"),
-      "utf-8",
-    );
-    expect(config).toContain("hermesone:");
-    expect(config).toContain('base_url: "http://llm.superic.com:3900/v1"');
-    expect(config).toContain('key_env: "HERMESONE_API_KEY"');
+    expect(existsSync(join(mockState.hermesHome, "config.yaml"))).toBe(false);
   });
 
   // @lat: [[provider-setup#Provider setup#Agent config sync for named providers#First-party brand cards are not duplicated]]

@@ -75,12 +75,14 @@ describe("agent-config providers (config.yaml bridge)", () => {
         name: "Faab AI",
         baseUrl: "https://faab.ai/v1",
         keyEnv: "FAAB_KEY",
+        apiMode: "",
       },
       {
         slug: "terse",
         name: "terse",
         baseUrl: "https://terse.example/v1",
         keyEnv: "",
+        apiMode: "",
       },
     ]);
   });
@@ -119,6 +121,7 @@ describe("agent-config providers (config.yaml bridge)", () => {
         name: "Faab AI",
         baseUrl: "https://faab.ai/v1",
         keyEnv: "CUSTOM_PROVIDER_FAAB_AI_KEY",
+        apiMode: "",
       },
     ]);
   });
@@ -154,6 +157,7 @@ describe("agent-config providers (config.yaml bridge)", () => {
         name: "SMC Copilot",
         baseUrl: "http://llm.superic.com:3900/v1",
         keyEnv: "HERMESONE_API_KEY",
+        apiMode: "",
       },
     ]);
   });

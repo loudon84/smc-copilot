@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { HERMES_HOME } from "./runtime/hermes-runtime-paths";
-import { safeWriteFile, profilePaths } from "./utils";
+import { profileHome, safeWriteFile, profilePaths } from "./utils";
 import { hostDerivedEnvKeyForUrl } from "./host-derived-env";
 import {
   mirrorFirstPartyAgentProviders,
@@ -15,10 +15,12 @@ import {
   expectedEnvKeyForUrl,
 } from "../shared/url-key-map";
 import { getModelConfig } from "./config";
+import { readProviderRegistry } from "./providers-store";
+import { canonicalBuiltinSlug } from "./provider-identity/canonical-builtins";
 import DEFAULT_MODELS from "./default-models";
 
-function modelsFile(): string {
-  return join(HERMES_HOME, "models.json");
+function modelsFile(profile?: string): string {
+  return join(profileHome(profile), "models.json");
 }
 
 function modelDefsFile(): string {
@@ -109,10 +111,10 @@ function normalizeContextLength(value: unknown): number | undefined {
  * written back onto a row. Legacy rows may still carry `contextLength`; it's
  * hoisted out by {@link ensureModelDefinitionsMigrated} and otherwise ignored.
  */
-export function readModelsRaw(): SavedModelRow[] {
+export function readModelsRaw(profile?: string): SavedModelRow[] {
   try {
-    if (!existsSync(modelsFile())) return [];
-    return JSON.parse(readFileSync(modelsFile(), "utf-8"));
+    if (!existsSync(modelsFile(profile))) return [];
+    return JSON.parse(readFileSync(modelsFile(profile), "utf-8"));
   } catch {
     return [];
   }
@@ -126,8 +128,8 @@ export function readModelsRaw(): SavedModelRow[] {
  * is safe on the per-spawn runtime hot path ([[src/main/hermes.ts]] uses the raw
  * store directly and doesn't need the merge, but callers via IPC do).
  */
-export function readModels(): SavedModel[] {
-  const rows = readModelsRaw();
+export function readModels(profile?: string): SavedModel[] {
+  const rows = readModelsRaw(profile);
   const defs = readModelDefinitions();
   return rows.map((row) => {
     const def = defs[row.model];
@@ -143,8 +145,41 @@ export function readModels(): SavedModel[] {
   });
 }
 
-function writeModels(models: SavedModelRow[]): void {
-  safeWriteFile(modelsFile(), JSON.stringify(models, null, 2));
+function writeModels(models: SavedModelRow[], profile?: string): void {
+  safeWriteFile(modelsFile(profile), JSON.stringify(models, null, 2));
+}
+
+function normalizeCatalogUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function patchCatalogProviderRefs(
+  profile: string | undefined,
+  rows: SavedModelRow[],
+): { rows: SavedModelRow[]; changed: boolean } {
+  const registry = readProviderRegistry(profile).providers.filter(
+    (row) => !!row.providerKey,
+  );
+  let changed = false;
+  const next = rows.map((row) => {
+    if (row.providerRef) return row;
+    const builtin = canonicalBuiltinSlug(row.provider);
+    if (builtin) {
+      changed = true;
+      return { ...row, providerRef: `builtin:${builtin}` };
+    }
+    if (row.provider !== "custom" && !row.provider.startsWith("custom:")) {
+      return row;
+    }
+    const url = normalizeCatalogUrl(row.baseUrl || "");
+    const byUrl = url
+      ? registry.filter((record) => normalizeCatalogUrl(record.baseUrl) === url)
+      : [];
+    if (byUrl.length !== 1) return row;
+    changed = true;
+    return { ...row, providerRef: `named:${byUrl[0].providerKey}` };
+  });
+  return { rows: next, changed };
 }
 
 /** Read the definitions map (`{ [modelId]: ModelDefinition }`), tolerant of a
@@ -479,34 +514,31 @@ export function syncAgentConfigModels(profile?: string): void {
 }
 
 function seedDefaults(profile?: string): SavedModelRow[] {
-  const models: SavedModelRow[] = DEFAULT_MODELS.map((m) => ({
-    id: randomUUID(),
-    name: m.name,
-    provider: m.provider,
-    model: m.model,
-    baseUrl: m.baseUrl,
-    createdAt: Date.now(),
-  }));
-  writeModels(models);
-  syncAgentConfigModels(profile);
-  return readModelsRaw();
+  const models: SavedModelRow[] = DEFAULT_MODELS.map((m) => {
+    const slug = canonicalBuiltinSlug(m.provider);
+    return {
+      id: randomUUID(),
+      name: m.name,
+      provider: m.provider,
+      model: m.model,
+      baseUrl: m.baseUrl,
+      createdAt: Date.now(),
+      ...(slug ? { providerRef: `builtin:${slug}` } : {}),
+    };
+  });
+  writeModels(models, profile);
+  return readModelsRaw(profile);
 }
 
 export function listModels(profile?: string): SavedModel[] {
-  if (!existsSync(modelsFile())) {
+  if (!existsSync(modelsFile(profile))) {
     seedDefaults(profile);
-  } else {
-    // Pick up providers/models added to config.yaml from the terminal since
-    // the library was first seeded ??keeps `hermes` CLI edits and the desktop
-    // library in sync instead of only honoring config.yaml on first run.
-    syncAgentConfigModels(profile);
   }
-  // Hoist any legacy per-row context overrides into shared definitions before
-  // the merged read. This is the renderer-facing entry point (Providers screen),
-  // which already performs writes via seedDefaults; the runtime path uses
-  // readModels() directly and never triggers this migration write.
   ensureModelDefinitionsMigrated();
-  return readModels();
+  const raw = readModelsRaw(profile);
+  const patched = patchCatalogProviderRefs(profile, raw);
+  if (patched.changed) writeModels(patched.rows, profile);
+  return readModels(profile);
 }
 
 /**
@@ -520,8 +552,6 @@ export function listModels(profile?: string): SavedModel[] {
  * rows) become visible to the strict picker.
  */
 export function listConfiguredAgentModels(profile?: string): SavedModel[] {
-  syncLibraryCustomModelsToAgentConfig(profile);
-
   const norm = (u: string): string =>
     (u || "").trim().replace(/\/+$/, "").toLowerCase();
   const keyOf = (provider: string, model: string, baseUrl: string): string =>
@@ -604,8 +634,9 @@ export function addModel(
   contextLength?: number,
   providerLabel?: string,
   providerRef?: string,
+  profile?: string,
 ): SavedModel {
-  const models = readModelsRaw();
+  const models = readModelsRaw(profile);
 
   // A context-window override is shared metadata keyed by model id ??persist it
   // to the definition, not onto this attachment row, so every provider serving
@@ -624,11 +655,32 @@ export function addModel(
       norm(m.baseUrl) === norm(baseUrl),
   );
   if (existing) {
-    syncCustomProviderModelToConfig(existing);
+    syncCustomProviderModelToConfig(existing, profile);
     return {
       ...existing,
       ...(ctx !== undefined ? { contextLength: ctx } : {}),
     };
+  }
+
+  let resolvedRef = providerRef;
+  if (!resolvedRef) {
+    const builtin = canonicalBuiltinSlug(provider);
+    if (builtin) resolvedRef = `builtin:${builtin}`;
+    else if (provider === "custom" || provider.startsWith("custom:")) {
+      const matched = patchCatalogProviderRefs(profile, [
+        {
+          id: "pending",
+          name,
+          provider,
+          model,
+          baseUrl: baseUrl || "",
+          providerLabel,
+          createdAt: 0,
+        },
+      ]);
+      resolvedRef = matched.rows[0].providerRef;
+      if (!resolvedRef) throw new Error("MODEL_PROVIDER_UNRESOLVED");
+    }
   }
 
   const entry: SavedModelRow = {
@@ -638,12 +690,12 @@ export function addModel(
     model,
     baseUrl: baseUrl || "",
     ...(providerLabel ? { providerLabel } : {}),
-    ...(providerRef ? { providerRef } : {}),
+    ...(resolvedRef ? { providerRef: resolvedRef } : {}),
     createdAt: Date.now(),
   };
   models.push(entry);
-  writeModels(models);
-  syncCustomProviderModelToConfig(entry);
+  writeModels(models, profile);
+  syncCustomProviderModelToConfig(entry, profile);
   return { ...entry, ...(ctx !== undefined ? { contextLength: ctx } : {}) };
 }
 
@@ -679,23 +731,6 @@ function syncCustomProviderModelToConfig(
     });
   } catch (e) {
     console.error("Failed to sync model into config.yaml custom_providers:", e);
-  }
-}
-
-/** Profiles already attempted for library-to-config mirror this process lifetime. */
-const libraryConfigSyncAttempted = new Set<string>();
-
-/** Push models.json custom rows into config.yaml so the strict picker sees them.
- *  Runs at most once per profile per process to avoid hammering ProgramData
- *  (and EPERM noise) on every ModelPicker refresh. Explicit add/remove still
- *  sync immediately via syncCustomProviderModelToConfig. */
-function syncLibraryCustomModelsToAgentConfig(profile?: string): void {
-  const key = profile || "default";
-  if (libraryConfigSyncAttempted.has(key)) return;
-  libraryConfigSyncAttempted.add(key);
-  if (!existsSync(modelsFile())) return;
-  for (const m of readModelsRaw()) {
-    syncCustomProviderModelToConfig(m, profile);
   }
 }
 

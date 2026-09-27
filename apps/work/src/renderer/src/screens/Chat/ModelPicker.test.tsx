@@ -33,12 +33,14 @@ const groups: ModelGroup[] = [
         model: "owl-alpha",
         label: "OWL Alpha",
         baseUrl: "",
+        providerRef: "builtin:openrouter",
       },
       {
         provider: "openrouter",
         model: "owl-beta",
         label: "OWL Beta",
         baseUrl: "",
+        providerRef: "builtin:openrouter",
       },
     ],
   },
@@ -51,6 +53,7 @@ const groups: ModelGroup[] = [
         model: "llama3",
         label: "Llama 3",
         baseUrl: "http://localhost:11434",
+        providerRef: "named:ollama",
       },
     ],
   },
@@ -218,6 +221,7 @@ describe("ModelPicker", () => {
       "ollama",
       "llama3",
       "http://localhost:11434",
+      "named:ollama",
     );
   });
 

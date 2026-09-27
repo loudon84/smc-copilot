@@ -62,7 +62,7 @@ describe("useModelConfig", () => {
           model: "gpt-5.5",
           baseUrl: "",
         })),
-        listConfiguredModels: vi.fn(async () => configuredModels),
+        listModels: vi.fn(async () => configuredModels),
         onConnectionConfigChanged: vi.fn(() => vi.fn()),
         onModelLibraryChanged: vi.fn((callback: () => void) => {
           emitModelLibraryChanged = callback;
@@ -173,13 +173,10 @@ describe("useModelConfig", () => {
     });
   });
 
-  it("loads via listConfiguredModels, not the full models.json library", async () => {
+  it("loads the local picker from the profile model catalog", async () => {
     render(<Harness />);
     await waitFor(() => {
-      expect(window.hermesAPI.listConfiguredModels).toHaveBeenCalled();
+      expect(window.hermesAPI.listModels).toHaveBeenCalled();
     });
-    expect(
-      (window.hermesAPI as { listModels?: unknown }).listModels,
-    ).toBeUndefined();
   });
 });

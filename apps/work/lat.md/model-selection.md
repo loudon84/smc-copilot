@@ -4,22 +4,17 @@ The in-chat (bottom) model picker selects a model for the **current conversation
 
 The override is held in renderer state on each `<Chat>` run ([[src/renderer/src/screens/Chat/Chat.tsx]]), persisted by session id, and sent with every message; it is cleared when the conversation is cleared/reset and is absent on a fresh chat, so new conversations start on the global default. This is distinct from the persisted [[model-context]] default that non-chat surfaces read.
 
-## Strict chat picker from agent config
+## Profile model catalog picker
 
-The Chat ModelPicker lists **only** models already declared in hermes-agent `config.yaml` for the active profile — not the desktop `models.json` library seed (`DEFAULT_MODELS`) and not live provider discovery (e.g. Ollama Cloud `/models`).
+The local Chat ModelPicker lists the current profile's `models.json` after a read that may fill a missing `providerRef`. A row without a resolvable `providerRef` stays visible and is not selectable.
 
-[[src/renderer/src/screens/Chat/hooks/useModelConfig.ts#useModelConfig]] loads via `hermesAPI.listConfiguredModels` → IPC `list-configured-models` → [[src/main/models.ts#listConfiguredAgentModels]]. That function unions:
+[[src/renderer/src/screens/Chat/hooks/useModelConfig.ts#useModelConfig]] loads via `hermesAPI.listModels`. Named profiles use `profileHome(profile)/models.json`. The default profile uses the Hermes root file.
 
-1. `model.default` / `model.provider` / `model.base_url` from [[src/main/config.ts#getModelConfig]] (also accepts top-level `provider`/`default` when the `model:` block is missing)
-2. Each `custom_providers:` entry — both its primary `model:` and every id under the nested `models:` map
+Selecting a resolvable model stores `providerRef` on the session override with `migrationStatus: canonical`.
 
-Dedup key is `provider + model + normalized baseUrl`. The Providers screen still uses `listModels()` / `models.json` for managing the broader library; only the in-chat picker is strict.
+### Providers UI models
 
-### Providers UI models sync into custom_providers
-
-Providers-UI model adds are mirrored into config.yaml `custom_providers:` so the strict chat picker can list them.
-
-[[src/main/models.ts#addModel]] upserts via [[src/main/agent-config-providers.ts#upsertAgentCustomProviderModel]]; `listConfiguredAgentModels` also mirrors any pre-existing `provider: "custom"` library rows **once per profile per process** (not on every picker refresh), so a locked `ProgramData` config.yaml cannot spam EPERM on each IPC list.
+A new custom model write requires a unique ProviderRecord or a pinned builtin slug. Unresolved writes throw `MODEL_PROVIDER_UNRESOLVED`.
 
 ### Duplicate configured rows collapse
 

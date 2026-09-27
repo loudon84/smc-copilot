@@ -308,8 +308,8 @@ import {
 import {
   listCustomProviders,
   removeCustomProvider,
-  upsertCustomProvider,
 } from "../providers-store";
+import { saveNamedProvider } from "../provider-identity/provider-save-transaction";
 import { syncWalletsForProfile } from "../wallet-sync";
 import { getWalletPortfolio, provisionAgentWallet } from "../wallet-actions";
 import { getTokenBalances } from "../wallet-balances";
@@ -2528,11 +2528,25 @@ export function registerIpcHandlers(context: IpcContext): void {
     (
       _event,
       profile: string | undefined,
-      input: { name: string; baseUrl: string },
+      input: {
+        id?: string;
+        name: string;
+        baseUrl: string;
+        secret?: string;
+        apiMode?: string;
+      },
     ) => {
-      const record = upsertCustomProvider(profile, input);
+      const saved = saveNamedProvider({
+        profile: (profile || "default").trim() || "default",
+        id: input.id,
+        name: input.name,
+        baseUrl: input.baseUrl,
+        secret: input.secret,
+        apiMode: input.apiMode,
+      });
+      if (!saved.ok) return null;
       notifyCustomProvidersChanged();
-      return record;
+      return saved.record;
     },
   );
   ipcMain.handle(
@@ -2804,7 +2818,7 @@ export function registerIpcHandlers(context: IpcContext): void {
   );
 
   // Models
-  ipcMain.handle("list-models", () => {
+  ipcMain.handle("list-models", (_event, profile?: string) => {
     const conn = getConnectionConfig();
     if (conn.mode === "remote") {
       if (conn.remoteChatTransport === "legacy") {
@@ -2827,7 +2841,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     }
     // Pass the active profile so terminal-added `custom_providers:` entries in
     // that profile's config.yaml are merged into the library on read.
-    return listModels(getActiveProfileNameSync());
+    return listModels(profile?.trim() || getActiveProfileNameSync());
   });
   // Chat ModelPicker strict source: config.yaml only (not models.json library).
   ipcMain.handle("list-configured-models", (_event, profile?: string) => {
@@ -2928,6 +2942,8 @@ export function registerIpcHandlers(context: IpcContext): void {
           baseUrl,
           contextLength,
           providerLabel,
+          undefined,
+          getActiveProfileNameSync(),
         );
       }
       notifyModelLibraryChanged();

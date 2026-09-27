@@ -1604,6 +1604,7 @@ export async function sendMessage(
     baseUrl: override?.baseUrl || activeModel?.baseUrl,
     providerRef: override?.providerRef,
     source: override ? "session" : "active-model",
+    sessionId: resumeSessionId,
   });
   if (!routed.ok) {
     cb.onError(routed.error);

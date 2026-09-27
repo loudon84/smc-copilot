@@ -6,6 +6,7 @@ import type {
   ProviderApiMode,
 } from "../../shared/custom-providers";
 import {
+  checkProviderProjection,
   listAgentUserProviders,
   listLegacyCustomProviders,
   upsertAgentUserProvider,
@@ -25,7 +26,8 @@ export type SaveNamedProviderError =
   | "PROVIDER_API_MODE_INVALID"
   | "PROFILE_SCOPE_MISMATCH"
   | "PROVIDER_SAVE_ROLLBACK_FAILED"
-  | "PROVIDER_SAVE_TRANSACTION_FAILED";
+  | "PROVIDER_SAVE_TRANSACTION_FAILED"
+  | "PROVIDER_PROJECTION_DRIFT";
 
 export type SaveNamedProviderResult =
   | { ok: true; record: CustomProviderRecord }
@@ -220,8 +222,15 @@ export function saveNamedProvider(
       (row) => row.id === record.id,
     );
     if (!projected || projected.providerKey !== providerKey) {
-      throw new Error("projection verification failed");
+      throw new Error("PROVIDER_SAVE_TRANSACTION_FAILED");
     }
+    const semantic = checkProviderProjection(profile, {
+      providerKey,
+      baseUrl,
+      keyEnv: keyEnv.keyEnv,
+      apiMode,
+    });
+    if (!semantic.ok) throw new Error("PROVIDER_PROJECTION_DRIFT");
     return { ok: true, record };
   } catch (error) {
     try {
@@ -229,7 +238,9 @@ export function saveNamedProvider(
     } catch {
       return { ok: false, error: "PROVIDER_SAVE_ROLLBACK_FAILED" };
     }
-    void error;
+    if (error instanceof Error && error.message === "PROVIDER_PROJECTION_DRIFT") {
+      return { ok: false, error: "PROVIDER_PROJECTION_DRIFT" };
+    }
     return { ok: false, error: "PROVIDER_SAVE_TRANSACTION_FAILED" };
   }
 }

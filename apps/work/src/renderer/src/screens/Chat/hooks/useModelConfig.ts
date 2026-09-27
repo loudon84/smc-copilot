@@ -27,6 +27,7 @@ interface SavedModelForPicker {
   model: string;
   name: string;
   baseUrl?: string;
+  providerRef?: string;
 }
 
 interface UseModelConfigResult {
@@ -79,6 +80,7 @@ function groupModelsByProvider(models: SavedModelForPicker[]): ModelGroup[] {
       model: m.model,
       label: m.name,
       baseUrl: m.baseUrl || "",
+      providerRef: m.providerRef,
     });
   }
   return Array.from(groupMap.values());
@@ -98,7 +100,7 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
       window.hermesAPI.getModelConfig(profile),
       // Strict: only hermes-agent config.yaml models (not models.json library /
       // DEFAULT_MODELS / Ollama live discovery).
-      window.hermesAPI.listConfiguredModels(profile),
+      window.hermesAPI.listModels(profile),
     ]);
     if (seq !== loadSeqRef.current) return;
     setCurrentModel(mc.model);

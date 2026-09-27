@@ -1282,7 +1282,9 @@ const hermesAPI = {
     ),
 
   // Models
-  listModels: (): Promise<
+  listModels: (
+    profile?: string,
+  ): Promise<
     Array<{
       id: string;
       name: string;
@@ -1290,12 +1292,13 @@ const hermesAPI = {
       model: string;
       baseUrl: string;
       providerLabel?: string;
+      providerRef?: string;
       contextLength?: number;
       capabilities?: string[];
       modalities?: { input?: string[]; output?: string[] };
       createdAt: number;
     }>
-  > => ipcRenderer.invoke("list-models"),
+  > => ipcRenderer.invoke("list-models", profile),
 
   /** Chat picker: models declared in hermes-agent config.yaml only. */
   listConfiguredModels: (

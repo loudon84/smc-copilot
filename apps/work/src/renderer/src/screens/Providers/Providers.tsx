@@ -182,7 +182,13 @@ function Providers({
   // Configured custom providers from the desktop store — so the model picker
   // lists a keyed custom provider even before any model is saved under it.
   const [customProviders, setCustomProviders] = useState<
-    { name: string; baseUrl: string }[]
+    {
+      name: string;
+      baseUrl: string;
+      providerKey?: string;
+      keyEnv?: string;
+      apiMode?: string;
+    }[]
   >([]);
   const [pickGroupKey, setPickGroupKey] = useState("");
   const [pickModel, setPickModel] = useState("");

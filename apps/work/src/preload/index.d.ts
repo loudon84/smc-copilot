@@ -919,7 +919,7 @@ interface HermesAPI {
   invalidateSecretsCache: () => Promise<void>;
 
   // Models
-  listModels: () => Promise<
+  listModels: (profile?: string) => Promise<
     Array<{
       id: string;
       name: string;
@@ -927,6 +927,7 @@ interface HermesAPI {
       model: string;
       baseUrl: string;
       providerLabel?: string;
+      providerRef?: string;
       contextLength?: number;
       capabilities?: string[];
       modalities?: { input?: string[]; output?: string[] };

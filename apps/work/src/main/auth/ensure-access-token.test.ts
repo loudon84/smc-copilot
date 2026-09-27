@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StoredAuthSession } from "../../shared/auth/auth-contract";
 
 const { readStoredSession, writeStoredSession, clearStoredSession, getSessionEpoch, refreshMock } =

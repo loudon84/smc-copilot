@@ -102,6 +102,7 @@ export interface ModelGroup {
     model: string;
     label: string;
     baseUrl: string;
+    providerRef?: string;
   }[];
 }
 

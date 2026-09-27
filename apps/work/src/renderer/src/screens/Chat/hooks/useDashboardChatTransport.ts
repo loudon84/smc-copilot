@@ -1462,7 +1462,8 @@ export function useDashboardChatTransport({
             providerRef?.startsWith("named:") ||
             providerRef?.startsWith("builtin:");
           const resolveRoute = window.hermesAPI.resolveLocalChatRoute;
-          if (needsRoute && resolveRoute) {
+          if (needsRoute) {
+            if (!resolveRoute) throw new Error("PROVIDER_ROUTE_UNRESOLVED");
             const route = await resolveRoute({
               profile,
               model: model || "",
@@ -1471,12 +1472,13 @@ export function useDashboardChatTransport({
               providerRef,
               source: "session",
             });
-            if (!route.ok) throw new Error(route.error);
-            if (route.action === "send") {
-              dashboardProvider = route.hermesProvider;
+            if (!route.ok || route.action !== "send") {
+              throw new Error(
+                route.ok ? "PROVIDER_ROUTE_UNRESOLVED" : route.error,
+              );
             }
-          }
-          if (!dashboardProvider) {
+            dashboardProvider = route.hermesProvider;
+          } else {
             const selected = selectDashboardProviderForSend({
               connectionMode,
               provider,

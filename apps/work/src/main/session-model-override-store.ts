@@ -144,15 +144,7 @@ export function migrateStoredSessionOverride(
     registry,
     builtinSlugs,
   });
-  if (!matched.ok) {
-    setSessionModelOverride(sessionId, {
-      ...current,
-      legacyProvider: current.legacyProvider || current.provider,
-      legacyBaseUrl: current.legacyBaseUrl || current.baseUrl,
-      migrationStatus: "unresolved",
-    });
-    return matched;
-  }
+  if (!matched.ok) return matched;
   const named = matched.providerRef.startsWith("named:")
     ? matched.providerRef.slice("named:".length)
     : current.provider;

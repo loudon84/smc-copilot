@@ -602,19 +602,39 @@ export function ProviderKeysSection({
   // excluded). Deduped by the derived env-key anchor.
   const loadStored = useCallback(async () => {
     const seen = new Set<string>();
-    const list: { name: string; baseUrl: string }[] = [];
-    const push = (name: string, baseUrl: string): void => {
+    const list: {
+      name: string;
+      baseUrl: string;
+      providerKey?: string;
+      keyEnv?: string;
+      apiMode?: string;
+    }[] = [];
+    const push = (
+      name: string,
+      baseUrl: string,
+      extra?: {
+        providerKey?: string;
+        keyEnv?: string;
+        apiMode?: string;
+      },
+    ): void => {
       if (!name) return;
       if (isDedicatedBrandCustomProvider(name, baseUrl)) return;
       const anchor = customProviderEnvKey(name);
       if (seen.has(anchor)) return;
       seen.add(anchor);
-      list.push({ name, baseUrl });
+      list.push({ name, baseUrl, ...extra });
     };
 
     try {
       const records = await window.hermesAPI.listCustomProviders(profile);
-      for (const r of records) push(r.name, r.baseUrl);
+      for (const r of records) {
+        push(r.name, r.baseUrl, {
+          providerKey: r.providerKey,
+          keyEnv: r.keyEnv,
+          apiMode: r.apiMode,
+        });
+      }
     } catch {
       /* store unavailable — fall back to the models-derived list below */
     }

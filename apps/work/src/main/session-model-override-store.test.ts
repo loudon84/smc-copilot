@@ -181,6 +181,7 @@ describe("session model override store", () => {
       ]),
     ).toEqual({ ok: false, error: "PROVIDER_IDENTITY_AMBIGUOUS" });
     expect(getSessionModelOverride("bad")?.providerRef).toBeUndefined();
-    expect(getSessionModelOverride("bad")?.migrationStatus).toBe("unresolved");
+    expect(getSessionModelOverride("bad")?.migrationStatus).toBeUndefined();
+    expect(getSessionModelOverride("bad")?.provider).toBe("custom");
   });
 });
