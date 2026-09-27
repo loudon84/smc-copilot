@@ -38,6 +38,8 @@ import { providerListSafe } from "./secrets";
 import { type Attachment, escapeXmlAttr } from "../shared/attachments";
 import { type SessionModelOverride } from "../shared/model-override";
 import { routeDesktopSend, redactRouteLog } from "./provider-identity/local-migrate-and-send";
+import { applyManagedRuntimeSecretOverlay } from "./runtime-provider/managed-runtime-secret-store";
+import { gateLocalRuntimeSend } from "./runtime-provider/runtime-provider-orchestrator";
 import {
   chatToolEventFromPayload,
   chatToolProgressLabel,
@@ -340,7 +342,7 @@ export function tuiGatewayEnv(profile?: string): Record<string, string> {
   for (const [key, value] of Object.entries(providerListSafe(profile))) {
     if (value && !env[key]) env[key] = value;
   }
-  return env;
+  return applyManagedRuntimeSecretOverlay(env, resolved) as Record<string, string>;
 }
 
 const CAPABILITIES_TIMEOUT_MS = 350;
@@ -1596,6 +1598,16 @@ export async function sendMessage(
   }
 
   const activeModel = override ? null : getModelConfig(profile);
+  const gate = gateLocalRuntimeSend({
+    profile,
+    provider: override?.provider || activeModel?.provider,
+    providerRef: override?.providerRef,
+    model: override?.model || activeModel?.model || "",
+  });
+  if (!gate.ok) {
+    cb.onError(gate.error);
+    return { abort: () => {} };
+  }
   const routed = await routeDesktopSend({
     mode: "local",
     profile,

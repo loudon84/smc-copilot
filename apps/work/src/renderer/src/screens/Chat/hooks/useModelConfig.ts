@@ -96,17 +96,28 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
 
   const reload = useCallback(async (): Promise<void> => {
     const seq = ++loadSeqRef.current;
-    const [mc, configuredModels] = await Promise.all([
+    const [mc, configuredModels, runtimeState] = await Promise.all([
       window.hermesAPI.getModelConfig(profile),
-      // Strict: only hermes-agent config.yaml models (not models.json library /
-      // DEFAULT_MODELS / Ollama live discovery).
       window.hermesAPI.listModels(profile),
+      window.hermesAPI.getRuntimeProviderState
+        ? window.hermesAPI.getRuntimeProviderState(profile)
+        : Promise.resolve({ state: "UNBOUND" as const, modelIds: [] as string[] }),
     ]);
     if (seq !== loadSeqRef.current) return;
     setCurrentModel(mc.model);
     setCurrentProvider(mc.provider);
     setCurrentBaseUrl(mc.baseUrl);
-    setModelGroups(groupModelsByProvider(configuredModels));
+    const allowed = new Set(runtimeState.modelIds || []);
+    const visible =
+      runtimeState.state === "ACTIVE" || runtimeState.state === "STALE_ACTIVE"
+        ? configuredModels.filter(
+            (row) =>
+              row.providerRef === "named:nodeskclaw" && allowed.has(row.model),
+          )
+        : runtimeState.state === "UNBOUND"
+          ? configuredModels.filter((row) => row.providerRef !== "named:nodeskclaw")
+          : [];
+    setModelGroups(groupModelsByProvider(visible));
   }, [profile]);
 
   // Initial load + reload whenever the profile changes (canonical

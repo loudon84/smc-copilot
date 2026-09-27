@@ -145,7 +145,7 @@ export function readModels(profile?: string): SavedModel[] {
   });
 }
 
-function writeModels(models: SavedModelRow[], profile?: string): void {
+export function writeModels(models: SavedModelRow[], profile?: string): void {
   safeWriteFile(modelsFile(profile), JSON.stringify(models, null, 2));
 }
 

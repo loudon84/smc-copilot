@@ -917,6 +917,16 @@ interface HermesAPI {
     profile?: string,
   ) => Promise<Array<CredentialPoolEntry>>;
   invalidateSecretsCache: () => Promise<void>;
+  getRuntimeProviderState: (profile?: string) => Promise<{
+    state: string;
+    backendState?: string;
+    errorCode?: string;
+    revision?: string;
+    providerRef?: string;
+    defaultModel?: string;
+    modelIds?: string[];
+    modelCount?: number;
+  }>;
 
   // Models
   listModels: (profile?: string) => Promise<

@@ -78,6 +78,53 @@ describe("useModelConfig", () => {
     Reflect.deleteProperty(window, "hermesAPI");
   });
 
+  it("lists only the active enterprise models", async () => {
+    configuredModels = [
+      {
+        id: "local-1",
+        name: "Local",
+        provider: "openai",
+        model: "gpt-4",
+        baseUrl: "",
+        createdAt: 1,
+      },
+      {
+        id: "nodeskclaw:enterprise-a",
+        name: "Enterprise A",
+        provider: "nodeskclaw",
+        model: "enterprise-a",
+        baseUrl: "https://models.example.test/v1",
+        createdAt: 2,
+        providerRef: "named:nodeskclaw",
+      } as SavedModel,
+    ];
+    Object.defineProperty(window, "hermesAPI", {
+      configurable: true,
+      value: {
+        getModelConfig: vi.fn(async () => ({
+          provider: "nodeskclaw",
+          model: "enterprise-a",
+          baseUrl: "",
+        })),
+        listModels: vi.fn(async () => configuredModels),
+        getRuntimeProviderState: vi.fn(async () => ({
+          state: "ACTIVE",
+          modelIds: ["enterprise-a"],
+        })),
+        onConnectionConfigChanged: vi.fn(() => vi.fn()),
+        onModelLibraryChanged: vi.fn(() => vi.fn()),
+        setModelConfig: vi.fn(async () => true),
+      },
+    });
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("models")).toHaveTextContent("Enterprise A");
+      expect(screen.getByTestId("models")).not.toHaveTextContent("Local");
+    });
+  });
+
   it("reloads the chat picker when the model library changes", async () => {
     render(<Harness />);
 

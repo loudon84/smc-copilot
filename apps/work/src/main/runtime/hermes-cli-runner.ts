@@ -16,6 +16,7 @@ import {
   getHermesRuntimeConfig,
 } from "./hermes-runtime-config";
 import { getActiveProfileHome, getHermesRoot } from "./hermes-root";
+import { applyManagedRuntimeSecretOverlay } from "../runtime-provider/managed-runtime-secret-store";
 
 export function cliPathExists(): boolean {
   return existsSync(getHermesCliPath());
@@ -48,13 +49,14 @@ export function buildHermesCliEnv(
   const hermesHome = profile
     ? getActiveProfileHome(profile)
     : getHermesRoot();
-  return {
+  const built = {
     ...process.env,
     ...extra,
     HERMES_HOME: hermesHome,
     HOME: homedir(),
     PATH: [...pathExtra, process.env.PATH || ""].filter(Boolean).join(delimiter),
   };
+  return applyManagedRuntimeSecretOverlay(built, profile);
 }
 
 export function runHermesCliSync(args: string[], timeoutMs = 30_000): string {

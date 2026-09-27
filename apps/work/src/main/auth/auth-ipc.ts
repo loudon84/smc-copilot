@@ -35,6 +35,11 @@ import {
 } from "../expert/expert-ipc";
 import { disposeSkillRunSubsystem } from "../skill-run/skill-run-ipc";
 import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
+import { getConnectionConfig } from "../config";
+import {
+  bootstrapRuntimeProvider,
+  clearRuntimeProvider,
+} from "../runtime-provider/runtime-provider-orchestrator";
 
 export type RegisterAuthIpcOptions = {
   getMainWindow?: () => BrowserWindow | null;
@@ -63,7 +68,11 @@ function pushPublicAuthState(getMainWindow: () => BrowserWindow | null): void {
 }
 
 export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
-  void hydrateTokenStore();
+  void hydrateTokenStore().then(() => {
+    if (getConnectionConfig().mode !== "local") return;
+    if (!readStoredSessionSync()) return;
+    void bootstrapRuntimeProvider("restore");
+  });
 
   const getMainWindow = options.getMainWindow ?? (() => null);
   unsubscribeSessionChanges?.();
@@ -92,11 +101,15 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
       endpointConfig: endpoint,
     });
     await writeStoredSession(session);
+    if (getConnectionConfig().mode === "local") {
+      await bootstrapRuntimeProvider("login");
+    }
     restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
   });
 
   ipcMain.handle("auth:logout", async () => {
+    await clearRuntimeProvider("logout");
     const endpointConfig =
       readAuthEndpointConfig() ?? getDefaultAuthEndpointConfig();
     const session = await readStoredSession();

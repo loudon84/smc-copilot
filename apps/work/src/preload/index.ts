@@ -1281,7 +1281,17 @@ const hermesAPI = {
       profile,
     ),
 
-  // Models
+  getRuntimeProviderState: (profile?: string): Promise<{
+    state: string;
+    backendState?: string;
+    errorCode?: string;
+    revision?: string;
+    providerRef?: string;
+    defaultModel?: string;
+    modelIds?: string[];
+    modelCount?: number;
+  }> => ipcRenderer.invoke("get-runtime-provider-state", profile),
+
   listModels: (
     profile?: string,
   ): Promise<

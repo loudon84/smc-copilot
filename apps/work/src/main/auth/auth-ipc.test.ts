@@ -36,6 +36,9 @@ const {
 });
 
 vi.mock("electron", () => ({
+  app: {
+    getPath: () => "",
+  },
   ipcMain: {
     handle: vi.fn(),
   },
@@ -74,6 +77,11 @@ vi.mock("./auth-client", () => ({
 vi.mock("./ensure-access-token", () => ({
   ensureFreshAccessToken: vi.fn(),
   refreshStoredAccessToken: vi.fn(),
+}));
+
+vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
+  bootstrapRuntimeProvider: vi.fn(async () => ({ state: "UNBOUND" })),
+  clearRuntimeProvider: vi.fn(async () => undefined),
 }));
 
 vi.mock("../expert/expert-ipc", () => ({
