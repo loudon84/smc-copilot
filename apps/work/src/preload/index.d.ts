@@ -415,6 +415,25 @@ interface HermesAPI {
   isSshTunnelActive: () => Promise<boolean>;
   startSshTunnel: () => Promise<boolean>;
   stopSshTunnel: () => Promise<boolean>;
+  resolveLocalChatRoute: (input: {
+    profile?: string;
+    model: string;
+    provider?: string;
+    baseUrl?: string;
+    providerRef?: string;
+    source: "session" | "active-model";
+  }) => Promise<
+    | { ok: true; action: "passthrough" }
+    | {
+        ok: true;
+        action: "send";
+        hermesProvider: string;
+        providerRef: string;
+        strategy: "builtin" | "named-config";
+        requests: 1;
+      }
+    | { ok: false; error: string; requests: 0 }
+  >;
 
   // Chat
   sendMessage: (

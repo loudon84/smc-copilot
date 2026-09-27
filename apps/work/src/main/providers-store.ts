@@ -61,7 +61,11 @@ function readProvidersFile(profile?: string): CustomProviderFile {
     const parsed = JSON.parse(
       readFileSync(file, "utf-8"),
     ) as Partial<CustomProviderFile>;
-    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.providers)) {
+    if (
+      !parsed ||
+      (parsed.version !== 1 && parsed.version !== 2) ||
+      !Array.isArray(parsed.providers)
+    ) {
       return { version: 1, providers: [] };
     }
     return { version: 1, providers: parsed.providers.filter(isRecord) };
@@ -76,6 +80,17 @@ function writeProvidersFile(
   data: CustomProviderFile,
 ): void {
   safeWriteFile(providersPath(profile), JSON.stringify(data, null, 2));
+}
+
+export function readProviderRegistry(profile?: string): CustomProviderFile {
+  return readProvidersFile(normalizeProfile(profile));
+}
+
+export function writeProviderRegistry(
+  profile: string | undefined,
+  data: CustomProviderFile,
+): void {
+  writeProvidersFile(normalizeProfile(profile), data);
 }
 
 /**
@@ -247,7 +262,7 @@ export function removeCustomProvider(
     (p) => customProviderEnvKey(p.name) !== anchor,
   );
   if (next.length !== data.providers.length) {
-    writeProvidersFile(normalized, { version: 1, providers: next });
+    writeProvidersFile(normalized, { version: data.version, providers: next });
   }
   try {
     removeAgentUserProvider(normalized, { name: trimmed, keyEnv: anchor });

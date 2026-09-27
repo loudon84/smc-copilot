@@ -47,6 +47,8 @@ export interface SavedModelRow {
    *  `customProviderEnvKey(providerLabel)` so every model under one provider
    *  shares that provider's key rather than the shared `CUSTOM_API_KEY`. */
   providerLabel?: string;
+  /** Canonical identity. Legacy rows omit this until migration. */
+  providerRef?: string;
   createdAt: number;
 }
 
@@ -601,6 +603,7 @@ export function addModel(
   baseUrl: string,
   contextLength?: number,
   providerLabel?: string,
+  providerRef?: string,
 ): SavedModel {
   const models = readModelsRaw();
 
@@ -635,6 +638,7 @@ export function addModel(
     model,
     baseUrl: baseUrl || "",
     ...(providerLabel ? { providerLabel } : {}),
+    ...(providerRef ? { providerRef } : {}),
     createdAt: Date.now(),
   };
   models.push(entry);

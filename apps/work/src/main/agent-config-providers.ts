@@ -29,6 +29,8 @@ export interface AgentUserProvider {
   baseUrl: string;
   /** Env var holding the API key (`key_env:`), empty when unset. */
   keyEnv: string;
+  /** `api_mode:` when the projection wrote one. */
+  apiMode?: string;
 }
 
 /** Slug used as the config.yaml `providers:` dict key for a display name —
@@ -174,7 +176,30 @@ export function listAgentUserProviders(profile?: string): AgentUserProvider[] {
       e.fields.get("base_url")?.value ||
       "",
     keyEnv: e.fields.get("key_env")?.value || "",
+    apiMode: e.fields.get("api_mode")?.value || "",
   }));
+}
+
+export function checkProviderProjection(
+  profile: string | undefined,
+  record: {
+    providerKey: string;
+    baseUrl: string;
+    keyEnv: string;
+    apiMode: string;
+  },
+): { ok: true } | { ok: false; error: "PROVIDER_PROJECTION_DRIFT" } {
+  const projected = listAgentUserProviders(profile).find(
+    (entry) => entry.slug === record.providerKey,
+  );
+  if (!projected) return { ok: false, error: "PROVIDER_PROJECTION_DRIFT" };
+  const same =
+    projected.baseUrl === record.baseUrl &&
+    projected.keyEnv === record.keyEnv &&
+    (projected.apiMode || "") === record.apiMode;
+  return same
+    ? { ok: true }
+    : { ok: false, error: "PROVIDER_PROJECTION_DRIFT" };
 }
 
 /** Double-quoted YAML scalar: backslashes and quotes escaped so a provider
@@ -185,14 +210,21 @@ function yamlQuote(value: string): string {
 
 function renderEntry(
   indent: string,
-  input: { slug: string; name: string; baseUrl: string; keyEnv: string },
+  input: {
+    slug: string;
+    name: string;
+    baseUrl: string;
+    keyEnv: string;
+    apiMode?: string;
+  },
 ): string {
   const sub = indent + "  ";
   return (
     `${indent}${input.slug}:\n` +
     `${sub}name: ${yamlQuote(input.name)}\n` +
     `${sub}base_url: ${yamlQuote(input.baseUrl)}\n` +
-    (input.keyEnv ? `${sub}key_env: ${yamlQuote(input.keyEnv)}\n` : "")
+    (input.keyEnv ? `${sub}key_env: ${yamlQuote(input.keyEnv)}\n` : "") +
+    (input.apiMode ? `${sub}api_mode: ${yamlQuote(input.apiMode)}\n` : "")
   );
 }
 
@@ -204,7 +236,13 @@ function renderEntry(
  */
 export function upsertAgentUserProvider(
   profile: string | undefined,
-  input: { name: string; baseUrl: string; keyEnv: string; slug?: string },
+  input: {
+    name: string;
+    baseUrl: string;
+    keyEnv: string;
+    slug?: string;
+    apiMode?: string;
+  },
 ): void {
   const name = (input.name || "").trim();
   const baseUrl = (input.baseUrl || "").trim();
@@ -213,7 +251,13 @@ export function upsertAgentUserProvider(
 
   const { file, content } = readConfig(profile);
   const block = findProvidersBlock(content);
-  const entry = { slug, name, baseUrl, keyEnv: input.keyEnv || "" };
+  const entry = {
+    slug,
+    name,
+    baseUrl,
+    keyEnv: input.keyEnv || "",
+    apiMode: input.apiMode || "",
+  };
 
   if (!block) {
     // The agent's config scaffold writes an inline empty dict (`providers: {}`),
@@ -270,6 +314,7 @@ export function upsertAgentUserProvider(
     ["name", name],
     [urlField, baseUrl],
     ...(entry.keyEnv ? [["key_env", entry.keyEnv] as [string, string]] : []),
+    ...(entry.apiMode ? [["api_mode", entry.apiMode] as [string, string]] : []),
   ];
   const patches: { start: number; end: number; text: string }[] = [];
   const fieldIndent = existing.fieldIndent || block.childIndent + "  ";

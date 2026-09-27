@@ -14,4 +14,9 @@ export interface SessionModelOverride {
   provider: string;
   model: string;
   baseUrl: string;
+  /** Canonical identity. Absent on legacy rows until migration. */
+  providerRef?: string;
+  legacyProvider?: string;
+  legacyBaseUrl?: string;
+  migrationStatus?: "canonical" | "migrated" | "unresolved";
 }

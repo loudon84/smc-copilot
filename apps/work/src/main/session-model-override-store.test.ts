@@ -3,6 +3,7 @@ import { getDbConnection } from "./db";
 import {
   deleteSessionModelOverrideForSession,
   getSessionModelOverride,
+  migrateStoredSessionOverride,
   setSessionModelOverride,
 } from "./session-model-override-store";
 
@@ -36,11 +37,24 @@ class FakeStatement {
       return;
     }
     if (this.sql.startsWith("INSERT")) {
-      const [sessionId, provider, model, baseUrl] = args;
+      const [
+        sessionId,
+        provider,
+        model,
+        baseUrl,
+        providerRef,
+        legacyProvider,
+        legacyBaseUrl,
+        migrationStatus,
+      ] = args;
       this.db.rows.set(sessionId, {
         provider,
         model,
         base_url: baseUrl,
+        provider_ref: providerRef || null,
+        legacy_provider: legacyProvider || null,
+        legacy_base_url: legacyBaseUrl || null,
+        migration_status: migrationStatus || null,
       });
     }
   }
@@ -58,7 +72,15 @@ class FakeStatement {
 class FakeDb {
   readonly rows = new Map<
     string,
-    { provider: string; model: string; base_url: string }
+    {
+      provider: string;
+      model: string;
+      base_url: string;
+      provider_ref?: string | null;
+      legacy_provider?: string | null;
+      legacy_base_url?: string | null;
+      migration_status?: string | null;
+    }
   >();
   tableCreated = false;
 
@@ -122,5 +144,43 @@ describe("session model override store", () => {
     });
     deleteSessionModelOverrideForSession(db as never, "s2");
     expect(getSessionModelOverride("s2")).toBeNull();
+  });
+
+  it("migrates one legacy session and leaves an ambiguous row unresolved", () => {
+    setSessionModelOverride("ok", {
+      provider: "custom",
+      model: "deepseek-v4-flash",
+      baseUrl: "https://new.example/v1",
+    });
+    const migrated = migrateStoredSessionOverride("ok", [
+      {
+        providerKey: "company",
+        name: "Company",
+        baseUrl: "https://new.example/v1",
+      },
+    ]);
+    expect(migrated).toMatchObject({
+      ok: true,
+      override: {
+        provider: "company",
+        providerRef: "named:company",
+        legacyProvider: "custom",
+        migrationStatus: "migrated",
+      },
+    });
+
+    setSessionModelOverride("bad", {
+      provider: "custom",
+      model: "m",
+      baseUrl: "https://shared.example/v1",
+    });
+    expect(
+      migrateStoredSessionOverride("bad", [
+        { providerKey: "a", name: "A", baseUrl: "https://shared.example/v1" },
+        { providerKey: "b", name: "B", baseUrl: "https://shared.example/v1" },
+      ]),
+    ).toEqual({ ok: false, error: "PROVIDER_IDENTITY_AMBIGUOUS" });
+    expect(getSessionModelOverride("bad")?.providerRef).toBeUndefined();
+    expect(getSessionModelOverride("bad")?.migrationStatus).toBe("unresolved");
   });
 });

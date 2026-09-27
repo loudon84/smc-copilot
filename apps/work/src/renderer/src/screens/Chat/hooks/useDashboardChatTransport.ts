@@ -92,6 +92,7 @@ interface UseDashboardChatTransportArgs {
   modelBaseUrl?: string;
   profile?: string;
   provider?: string;
+  providerRef?: string;
   setHermesSessionId: (id: string) => void;
   setIsLoading: (loading: boolean) => void;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -512,6 +513,43 @@ export async function syncDashboardAttachmentsForSubmit(
   }
 
   return { handled: true, refs };
+}
+
+export function selectDashboardProviderForSend(input: {
+  connectionMode: string;
+  provider?: string;
+  providerRef?: string;
+  model?: string;
+  modelBaseUrl?: string;
+  live?: ModelOptionsResponse | null;
+}): { ok: true; provider: string } | { ok: false; error: "SESSION_PROVIDER_UNRESOLVED" } {
+  if (input.connectionMode === "local") {
+    if (input.providerRef?.startsWith("named:")) {
+      const key = input.providerRef.slice("named:".length);
+      if (!key || key.startsWith("custom")) {
+        return { ok: false, error: "SESSION_PROVIDER_UNRESOLVED" };
+      }
+      return { ok: true, provider: key };
+    }
+    if (input.providerRef?.startsWith("builtin:")) {
+      return { ok: true, provider: input.providerRef.slice("builtin:".length) };
+    }
+    const provider = (input.provider || "").trim();
+    if (!provider || provider === "custom" || provider.startsWith("custom:")) {
+      return { ok: false, error: "SESSION_PROVIDER_UNRESOLVED" };
+    }
+    return { ok: true, provider };
+  }
+  const guessed = resolveDashboardProviderForModel(
+    input.provider,
+    input.model,
+    input.modelBaseUrl,
+    input.live,
+  );
+  if (!guessed || guessed === "custom" || guessed.startsWith("custom:")) {
+    return { ok: false, error: "SESSION_PROVIDER_UNRESOLVED" };
+  }
+  return { ok: true, provider: guessed };
 }
 
 export function resolveDashboardProviderForModel(
@@ -936,6 +974,7 @@ export function useDashboardChatTransport({
   modelBaseUrl,
   profile,
   provider,
+  providerRef,
   setHermesSessionId,
   setIsLoading,
   setMessages,
@@ -1415,12 +1454,46 @@ export function useDashboardChatTransport({
             session_id: targetSessionId,
           },
         );
-        let dashboardProvider = resolveDashboardProviderForModel(
-          provider,
-          model,
-          modelBaseUrl,
-          before,
-        );
+        let dashboardProvider: string | undefined;
+        if (connectionMode === "local") {
+          const needsRoute =
+            provider === "custom" ||
+            provider?.startsWith("custom:") ||
+            providerRef?.startsWith("named:") ||
+            providerRef?.startsWith("builtin:");
+          const resolveRoute = window.hermesAPI.resolveLocalChatRoute;
+          if (needsRoute && resolveRoute) {
+            const route = await resolveRoute({
+              profile,
+              model: model || "",
+              provider,
+              baseUrl: modelBaseUrl,
+              providerRef,
+              source: "session",
+            });
+            if (!route.ok) throw new Error(route.error);
+            if (route.action === "send") {
+              dashboardProvider = route.hermesProvider;
+            }
+          }
+          if (!dashboardProvider) {
+            const selected = selectDashboardProviderForSend({
+              connectionMode,
+              provider,
+              providerRef,
+              model,
+            });
+            if (!selected.ok) throw new Error(selected.error);
+            dashboardProvider = selected.provider;
+          }
+        } else {
+          dashboardProvider = resolveDashboardProviderForModel(
+            provider,
+            model,
+            modelBaseUrl,
+            before,
+          );
+        }
 
         if (
           storedSessionIdRef.current &&
@@ -1432,12 +1505,14 @@ export function useDashboardChatTransport({
           before = await client.request<ModelOptionsResponse>("model.options", {
             session_id: targetSessionId,
           });
-          dashboardProvider = resolveDashboardProviderForModel(
-            provider,
-            model,
-            modelBaseUrl,
-            before,
-          );
+          if (connectionMode !== "local") {
+            dashboardProvider = resolveDashboardProviderForModel(
+              provider,
+              model,
+              modelBaseUrl,
+              before,
+            );
+          }
           if (dashboardModelMatches(dashboardProvider, model, before)) {
             appliedModelRef.current = `${targetSessionId}\n${dashboardProvider}\n${model}`;
             return targetSessionId;
@@ -1508,7 +1583,7 @@ export function useDashboardChatTransport({
         return switchAndValidate(freshSessionId);
       }
     },
-    [ensureRuntimeSession, model, modelBaseUrl, provider],
+    [ensureRuntimeSession, model, modelBaseUrl, provider, providerRef, connectionMode],
   );
 
   const syncDashboardAttachments = useCallback(

@@ -1229,6 +1229,7 @@ function Chat({
     modelBaseUrl: chatCurrentBaseUrl,
     profile,
     provider: chatCurrentProvider,
+    providerRef: sessionModelOverride?.providerRef,
     setHermesSessionId,
     setIsLoading,
     setMessages,

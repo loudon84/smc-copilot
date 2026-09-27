@@ -10,19 +10,28 @@
  * re-derived solely from `models.json`, so a keyed-but-modelless provider was
  * invisible.
  */
+export type ProviderApiMode = "chat_completions" | "anthropic_messages";
+
 export interface CustomProviderRecord {
   /** Stable id (uuid). */
   id: string;
-  /** Display name; also the anchor from which the `.env` key name is derived. */
+  /** Display name. Changing it must not regenerate providerKey. */
   name: string;
   /** OpenAI-compatible endpoint base URL. */
   baseUrl: string;
   /** Epoch ms the record was first created. */
   createdAt: number;
+  /** Immutable Hermes `providers:` key. Absent on v1 rows until migration. */
+  providerKey?: string;
+  /** Env var name. Empty string means this provider carries no secret. */
+  keyEnv?: string;
+  /** Closed transport enum. Runtime reads this, not the model row. */
+  apiMode?: ProviderApiMode;
+  updatedAt?: number;
 }
 
 /** Versioned on-disk envelope for `providers.json`. */
 export interface CustomProviderFile {
-  version: 1;
+  version: 1 | 2;
   providers: CustomProviderRecord[];
 }

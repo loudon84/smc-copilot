@@ -1476,6 +1476,35 @@ export function registerIpcHandlers(context: IpcContext): void {
   );
 
   ipcMain.handle(
+    "resolve-local-chat-route",
+    async (
+      _event,
+      input: {
+        profile?: string;
+        model: string;
+        provider?: string;
+        baseUrl?: string;
+        providerRef?: string;
+        source: "session" | "active-model";
+      },
+    ) => {
+      const { routeDesktopSend } = await import(
+        "../provider-identity/local-migrate-and-send"
+      );
+      const mode = getConnectionConfig().mode;
+      return routeDesktopSend({
+        mode: mode === "remote" || mode === "ssh" ? mode : "local",
+        profile: input.profile,
+        model: input.model,
+        provider: input.provider,
+        baseUrl: input.baseUrl,
+        providerRef: input.providerRef,
+        source: input.source,
+      });
+    },
+  );
+
+  ipcMain.handle(
     "send-message",
     async (
       event,

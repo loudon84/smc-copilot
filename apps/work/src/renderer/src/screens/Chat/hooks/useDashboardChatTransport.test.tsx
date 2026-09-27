@@ -12,6 +12,7 @@ import type { Mock } from "vitest";
 import type { DashboardRpcEvent } from "../dashboardGatewayClient";
 import {
   knowledgeChatForcesLegacyTransport,
+  selectDashboardProviderForSend,
   useDashboardChatTransport,
 } from "./useDashboardChatTransport";
 import type { ActiveTurn, ChatMessage, UsageState } from "../types";
@@ -782,5 +783,26 @@ describe("useDashboardChatTransport context gauge estimate (no usage payload)", 
     });
 
     expect(setUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe("selectDashboardProviderForSend", () => {
+  it("does not guess a local custom provider from baseUrl", () => {
+    expect(
+      selectDashboardProviderForSend({
+        connectionMode: "local",
+        provider: "custom",
+        model: "deepseek-v4-flash",
+        modelBaseUrl: "https://new.example/v1",
+      }),
+    ).toEqual({ ok: false, error: "SESSION_PROVIDER_UNRESOLVED" });
+    expect(
+      selectDashboardProviderForSend({
+        connectionMode: "local",
+        provider: "custom",
+        providerRef: "named:company",
+        model: "deepseek-v4-flash",
+      }),
+    ).toEqual({ ok: true, provider: "company" });
   });
 });

@@ -37,6 +37,7 @@ import { getProfilePort } from "./gateway-ports";
 import { providerListSafe } from "./secrets";
 import { type Attachment, escapeXmlAttr } from "../shared/attachments";
 import { type SessionModelOverride } from "../shared/model-override";
+import { routeDesktopSend, redactRouteLog } from "./provider-identity/local-migrate-and-send";
 import {
   chatToolEventFromPayload,
   chatToolProgressLabel,
@@ -1591,6 +1592,44 @@ export async function sendMessage(
       attachments,
       contextFolder,
       override,
+    );
+  }
+
+  const activeModel = override ? null : getModelConfig(profile);
+  const routed = await routeDesktopSend({
+    mode: "local",
+    profile,
+    model: override?.model || activeModel?.model || "",
+    provider: override?.provider || activeModel?.provider,
+    baseUrl: override?.baseUrl || activeModel?.baseUrl,
+    providerRef: override?.providerRef,
+    source: override ? "session" : "active-model",
+  });
+  if (!routed.ok) {
+    cb.onError(routed.error);
+    return { abort: () => {} };
+  }
+  if (routed.action === "send") {
+    override = {
+      ...(override || {
+        provider: routed.hermesProvider,
+        model: activeModel?.model || "",
+        baseUrl: "",
+      }),
+      provider: routed.hermesProvider,
+      model: override?.model || activeModel?.model || "",
+      baseUrl: "",
+      providerRef: routed.providerRef,
+    };
+    console.info(
+      redactRouteLog(
+        {
+          providerRef: routed.providerRef,
+          hermesProvider: routed.hermesProvider,
+          strategy: routed.strategy,
+        },
+        "",
+      ),
     );
   }
 
