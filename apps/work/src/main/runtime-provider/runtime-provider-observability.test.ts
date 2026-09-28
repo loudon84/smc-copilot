@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { logRuntimeProviderOperation } from "./runtime-provider-observability";
+import {
+  logRuntimeProviderOperation,
+  logRuntimeProviderReconcile,
+} from "./runtime-provider-observability";
 
 describe("runtime provider observability", () => {
   it("keeps generation order and drops secret-derived fields", () => {
@@ -47,5 +50,45 @@ describe("runtime provider observability", () => {
     expect(text.indexOf('"generation":1')).toBeLessThan(
       text.indexOf('"generation":2'),
     );
+  });
+
+  it("keeps reconcile busy and backoff apart and drops secret fields", () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "info").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    logRuntimeProviderReconcile({
+      trigger: "resume_reconcile",
+      scheduler_state: "SCHEDULED",
+      result: "SKIPPED_BUSY",
+      runtime_state: "APPLYING",
+      consecutive_unavailable: 1,
+      api_key: "member-key",
+      Authorization: "Bearer secret",
+      jwt: "header.payload",
+      prefix: "mem",
+      length: 8,
+      fingerprint: "abc",
+    });
+    logRuntimeProviderReconcile({
+      trigger: "scheduled_reconcile",
+      scheduler_state: "BACKOFF",
+      result: "ERROR",
+      error_code: "RUNTIME_BOOTSTRAP_UNAVAILABLE",
+      next_due_delay_ms: 60000,
+      consecutive_unavailable: 1,
+    });
+    spy.mockRestore();
+    const text = lines.join("\n");
+    expect(text).toContain('"event":"runtime_provider_reconcile"');
+    expect(text).toContain('"result":"SKIPPED_BUSY"');
+    expect(text).toContain('"scheduler_state":"BACKOFF"');
+    expect(text).not.toContain("member-key");
+    expect(text).not.toContain("Bearer");
+    expect(text).not.toContain("header.payload");
+    expect(text).not.toContain("fingerprint");
+    expect(text).not.toContain('"prefix"');
+    expect(text).not.toContain('"length"');
+    expect(text).not.toContain('"jwt"');
   });
 });

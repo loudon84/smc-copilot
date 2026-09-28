@@ -16,6 +16,10 @@ export function runtimeIntentCurrent(generationId: number): boolean {
   return generationId === generation;
 }
 
+export function currentRuntimeReason(): string {
+  return latestReason;
+}
+
 export function logoutIntentIsWaiting(): boolean {
   return latestReason === "logout";
 }

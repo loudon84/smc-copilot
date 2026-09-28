@@ -67,8 +67,8 @@ describe("runtime provider orchestrator", () => {
     const first = await bootstrapRuntimeProvider("login");
     const digest = readFileSync(join(testHome, "config.yaml"), "utf-8");
     const second = await bootstrapRuntimeProvider("refresh");
-    expect(first.state).toBe("ACTIVE");
-    expect(second.state).toBe("ACTIVE");
+    expect(first.state.state).toBe("ACTIVE");
+    expect(second.state.state).toBe("ACTIVE");
     expect(restart).toHaveBeenCalledTimes(1);
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).toBe(digest);
     expect(digest).not.toContain("member-key");
@@ -86,7 +86,7 @@ describe("runtime provider orchestrator", () => {
     await bootstrapRuntimeProvider("login");
     const digest = readFileSync(join(testHome, "providers.json"), "utf-8");
     const next = await bootstrapRuntimeProvider("refresh");
-    expect(next.state).toBe("ACTIVE");
+    expect(next.state.state).toBe("ACTIVE");
     expect(readFileSync(join(testHome, "providers.json"), "utf-8")).toBe(digest);
     expect(restart).toHaveBeenCalledTimes(2);
     expect(
@@ -114,7 +114,7 @@ describe("runtime provider orchestrator", () => {
     await bootstrapRuntimeProvider("login");
     const digest = readFileSync(join(testHome, "config.yaml"), "utf-8");
     const next = await bootstrapRuntimeProvider("refresh");
-    expect(next).toMatchObject({
+    expect(next.state).toMatchObject({
       state: "NOT_READY",
       backendState: "MODEL_CREDENTIAL_DISABLED",
     });
@@ -141,7 +141,7 @@ describe("runtime provider orchestrator", () => {
     await bootstrapRuntimeProvider("login");
     const digest = readFileSync(join(testHome, "config.yaml"), "utf-8");
     const next = await bootstrapRuntimeProvider("refresh");
-    expect(next.state).toBe("STALE_ACTIVE");
+    expect(next.state.state).toBe("STALE_ACTIVE");
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).toBe(digest);
     expect(
       applyManagedRuntimeSecretOverlay({}).NODESKCLAW_RUNTIME_MODEL_API_KEY,
@@ -159,7 +159,7 @@ describe("runtime provider orchestrator", () => {
     );
     const before = readFileSync(join(testHome, "config.yaml"), "utf-8");
     const next = await bootstrapRuntimeProvider("login");
-    expect(next).toMatchObject({
+    expect(next.state).toMatchObject({
       state: "ERROR",
       errorCode: "RUNTIME_GATEWAY_RESTART_FAILED",
     });
@@ -205,7 +205,7 @@ describe("runtime provider orchestrator", () => {
       "./runtime-provider-orchestrator"
     );
     const next = await bootstrapRuntimeProvider("login");
-    expect(next.state).toBe("ERROR");
+    expect(next.state.state).toBe("ERROR");
     expect(getSessionModelOverride("chat-1")).toMatchObject(original);
   });
 
@@ -272,7 +272,7 @@ describe("runtime provider orchestrator", () => {
     );
     const before = readFileSync(join(testHome, "providers.json"), "utf-8");
     const conflicted = await bootstrapRuntimeProvider("refresh");
-    expect(conflicted).toMatchObject({
+    expect(conflicted.state).toMatchObject({
       state: "ERROR",
       errorCode: "MANAGED_PROVIDER_IDENTITY_CONFLICT",
     });
@@ -307,5 +307,61 @@ describe("runtime provider orchestrator", () => {
     expect(repeated.length).toBeGreaterThanOrEqual(1);
     const serialized = JSON.stringify(events);
     expect(serialized).not.toContain("member-key");
+  });
+
+  it("rejects a background fetch superseded by manual refresh", async () => {
+    let release: (value: { ok: boolean }) => void = () => {};
+    restart.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    fetchMock.mockResolvedValue(ready("rev-1"));
+    const { bootstrapRuntimeProvider } = await import(
+      "./runtime-provider-orchestrator"
+    );
+    const pending = bootstrapRuntimeProvider("scheduled_reconcile");
+    await vi.waitFor(() => expect(restart).toHaveBeenCalledTimes(1));
+    const manual = bootstrapRuntimeProvider("refresh");
+    release({ ok: true });
+    const background = await pending;
+    const foreground = await manual;
+    expect(background.accepted).toBe(false);
+    expect(foreground.accepted).toBe(true);
+    expect(foreground.state.state).toBe("ACTIVE");
+  });
+
+  it("rolls back a background reconcile superseded by quit without publishing ACTIVE", async () => {
+    let release: (value: { ok: boolean }) => void = () => {};
+    restart.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    fetchMock.mockResolvedValue(ready("rev-1"));
+    const events: string[] = [];
+    const { bootstrapRuntimeProvider, getRuntimeProviderPublicState, subscribeRuntimeProviderState } =
+      await import("./runtime-provider-orchestrator");
+    const { beginRuntimeIntent } = await import(
+      "./runtime-provider-operation-coordinator"
+    );
+    subscribeRuntimeProviderState((event) => events.push(event.state));
+    const pending = bootstrapRuntimeProvider("scheduled_reconcile");
+    await vi.waitFor(() => expect(restart).toHaveBeenCalledTimes(1));
+    beginRuntimeIntent("app-quit");
+    release({ ok: true });
+    const background = await pending;
+    expect(background.accepted).toBe(false);
+    expect(background.outcome).toBe("superseded");
+    expect(getRuntimeProviderPublicState().state).not.toBe("ACTIVE");
+    expect(events.filter((state) => state === "ACTIVE")).toHaveLength(0);
+    expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).toContain(
+      "provider: openai",
+    );
+    expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).not.toContain(
+      "member-key",
+    );
   });
 });

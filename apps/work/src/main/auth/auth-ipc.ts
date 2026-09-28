@@ -40,6 +40,10 @@ import {
   bootstrapRuntimeProvider,
   clearRuntimeProvider,
 } from "../runtime-provider/runtime-provider-orchestrator";
+import {
+  notifyAcceptedRuntimeBootstrap,
+  stopRuntimeReconcile,
+} from "../runtime-provider/runtime-provider-reconcile-bindings";
 
 export type RegisterAuthIpcOptions = {
   getMainWindow?: () => BrowserWindow | null;
@@ -71,13 +75,24 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
   void hydrateTokenStore().then(() => {
     if (getConnectionConfig().mode !== "local") return;
     if (!readStoredSessionSync()) return;
-    void bootstrapRuntimeProvider("restore");
+    void bootstrapRuntimeProvider("restore")
+      .then((result) => {
+        try {
+          notifyAcceptedRuntimeBootstrap(result);
+        } catch {
+          /* scheduler failure must not fail session restore */
+        }
+      })
+      .catch(() => {
+        /* scheduler failure must not fail session restore */
+      });
   });
 
   const getMainWindow = options.getMainWindow ?? (() => null);
   unsubscribeSessionChanges?.();
   unsubscribeSessionChanges = subscribeStoredSessionChanges(() => {
     pushPublicAuthState(getMainWindow);
+    if (!readStoredSessionSync()) stopRuntimeReconcile();
   });
 
   ipcMain.handle("auth:get-state", async () => buildAuthState());
@@ -101,14 +116,20 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
       endpointConfig: endpoint,
     });
     await writeStoredSession(session);
-    if (getConnectionConfig().mode === "local") {
-      await bootstrapRuntimeProvider("login");
+    try {
+      if (getConnectionConfig().mode === "local") {
+        const result = await bootstrapRuntimeProvider("login");
+        notifyAcceptedRuntimeBootstrap(result);
+      }
+    } catch {
+      /* scheduler failure must not fail portal login */
     }
     restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
   });
 
   ipcMain.handle("auth:logout", async () => {
+    stopRuntimeReconcile();
     await clearRuntimeProvider("logout");
     const endpointConfig =
       readAuthEndpointConfig() ?? getDefaultAuthEndpointConfig();

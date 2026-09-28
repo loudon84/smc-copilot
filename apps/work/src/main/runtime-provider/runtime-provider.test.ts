@@ -75,9 +75,11 @@ describe("runtime provider release evidence", () => {
       l3RendererIpc: "PASS",
       l4GoldenNodeDeskClawInference: "BLOCKED",
       l4GoldenNewApiDirect: "BLOCKED",
+      v13AutomaticReconcile: "BLOCKED",
     };
     expect(evidence.l4GoldenNodeDeskClawInference).toBe("BLOCKED");
     expect(evidence.l4GoldenNewApiDirect).toBe("BLOCKED");
+    expect(evidence.v13AutomaticReconcile).toBe("BLOCKED");
     expect(JSON.stringify(evidence)).not.toContain("api_key");
   });
 });

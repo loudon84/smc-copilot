@@ -3,6 +3,7 @@ import type { StoredAuthSession } from "../../shared/auth/auth-contract";
 import { AUTH_STATE_CHANGED_CHANNEL } from "../../shared/auth/auth-contract";
 
 const {
+  authLogin,
   clearStoredSession,
   hydrateTokenStore,
   readStoredSession,
@@ -32,6 +33,7 @@ const {
         listeners.delete(listener);
       };
     }),
+    authLogin: vi.fn(),
   };
 });
 
@@ -69,7 +71,7 @@ vi.mock("./auth-endpoint-config-store", () => ({
 
 vi.mock("./auth-client", () => ({
   getAuthClient: () => ({
-    login: vi.fn(),
+    login: authLogin,
     logout: vi.fn(),
   }),
 }));
@@ -93,10 +95,15 @@ vi.mock("../files/file-cleanup-service", () => ({
   runFilesCleanupBestEffort: vi.fn(),
 }));
 
+import { ipcMain } from "electron";
 import {
   registerAuthIpc,
   resetAuthIpcSessionForwarderForTests,
 } from "./auth-ipc";
+import {
+  bootstrapRuntimeProvider,
+  clearRuntimeProvider,
+} from "../runtime-provider/runtime-provider-orchestrator";
 
 describe("auth-ipc session state push", () => {
   afterEach(() => {
@@ -174,5 +181,65 @@ describe("auth-ipc session state push", () => {
     resetAuthIpcSessionForwarderForTests();
     await clearStoredSession();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("returns the login session when runtime bootstrap throws", async () => {
+    authLogin.mockResolvedValue({
+      accessToken: "secret-access",
+      refreshToken: "secret-refresh",
+      expiresAt: "2026-08-24T00:00:00.000Z",
+      tokenType: "Bearer",
+      user: { id: "u1", username: "alice" },
+    });
+    vi.mocked(bootstrapRuntimeProvider).mockRejectedValueOnce(
+      new Error("scheduler down"),
+    );
+    registerAuthIpc();
+    const login = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find((call) => call[0] === "auth:login")?.[1] as
+      | ((event: unknown, input: unknown) => Promise<{ authenticated: boolean }>)
+      | undefined;
+    const result = await login?.({}, {
+      endpointConfig: {
+        backendUrl: "http://expert.test:4510",
+        authPrefix: "/api/v1/auth",
+        aiosHomeUrl: "http://expert.test:4517",
+      },
+      password: "pw",
+    });
+    expect(result?.authenticated).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("secret-access");
+  });
+
+  it("stops the scheduler before the logout runtime clear", async () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, "info").mockImplementation((line) => {
+      lines.push(String(line));
+    });
+    vi.mocked(clearRuntimeProvider).mockImplementationOnce(async () => {
+      expect(lines.join("\n")).toContain("SCHEDULER_STOP");
+    });
+    registerAuthIpc();
+    const logout = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find((call) => call[0] === "auth:logout")?.[1] as
+      | (() => Promise<unknown>)
+      | undefined;
+    await logout?.();
+    spy.mockRestore();
+    expect(clearRuntimeProvider).toHaveBeenCalledWith("logout");
+  });
+
+  it("does not bootstrap while refreshing a stored jwt", async () => {
+    readStoredSessionSync.mockReturnValue(null);
+    registerAuthIpc();
+    const refresh = vi
+      .mocked(ipcMain.handle)
+      .mock.calls.find((call) => call[0] === "auth:refresh")?.[1] as
+      | (() => Promise<unknown>)
+      | undefined;
+    await refresh?.();
+    expect(bootstrapRuntimeProvider).not.toHaveBeenCalled();
   });
 });

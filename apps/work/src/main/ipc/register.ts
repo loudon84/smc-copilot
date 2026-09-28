@@ -213,6 +213,11 @@ import {
   isRuntimeSettingsLocked,
   subscribeRuntimeProviderState,
 } from "../runtime-provider/runtime-provider-orchestrator";
+import {
+  notifyAcceptedRuntimeBootstrap,
+  requestRuntimeLocalReentry,
+  stopRuntimeReconcile,
+} from "../runtime-provider/runtime-provider-reconcile-bindings";
 import { readStoredSessionSync } from "../auth/token-store";
 import { clearManagedSecret } from "../runtime-provider/managed-runtime-secret-store";
 import {
@@ -1358,10 +1363,11 @@ export function registerIpcHandlers(context: IpcContext): void {
       });
       resetSshDashboardAvailability();
       notifyConnectionConfigChanged();
-      // C-007: switching back to local while ABSENT/FAIL re-triggers Bootstrap.
-      if (mode === "local" && existing.mode !== "local") {
+      if (mode !== "local") {
+        stopRuntimeReconcile();
+      } else if (existing.mode !== "local") {
         startHermesBootstrapAsync();
-        void bootstrapRuntimeProvider("switch-local");
+        void requestRuntimeLocalReentry();
       }
       return true;
     },
@@ -2505,7 +2511,9 @@ export function registerIpcHandlers(context: IpcContext): void {
       }
     }
     if (getConnectionConfig().mode === "local") {
-      void bootstrapRuntimeProvider("profile_switch", name);
+      void bootstrapRuntimeProvider("profile_switch", name).then((result) => {
+        notifyAcceptedRuntimeBootstrap(result);
+      });
     }
     return true;
   });
@@ -2877,7 +2885,9 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (getConnectionConfig().mode !== "local" || !readStoredSessionSync()) {
       return { state: "UNBOUND" as const };
     }
-    return bootstrapRuntimeProvider("refresh");
+    const result = await bootstrapRuntimeProvider("refresh");
+    notifyAcceptedRuntimeBootstrap(result);
+    return result.state;
   });
 
   // Models

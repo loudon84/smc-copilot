@@ -49,6 +49,23 @@ export type RuntimeProviderPublicState =
     }
   | { state: "ERROR"; errorCode: string };
 
+export type RuntimeBootstrapOutcome =
+  | "noop"
+  | "reconciled"
+  | "not_ready"
+  | "stale"
+  | "error"
+  | "unbound"
+  | "superseded";
+
+export interface AcceptedRuntimeBootstrap {
+  accepted: boolean;
+  generation: number;
+  reason: string;
+  state: RuntimeProviderPublicState;
+  outcome: RuntimeBootstrapOutcome;
+}
+
 interface Applied {
   revision: string;
   defaultModel: string;
@@ -240,12 +257,14 @@ async function applyReady(
   generationId: number,
   trace: Record<string, unknown>,
   previous: RuntimeProviderPublicState,
+  mark: { outcome: "noop" | "reconciled" | "error" },
 ): Promise<RuntimeProviderPublicState> {
   const normalized = fileProfile(profile);
   logRuntimeProviderOperation({ ...trace, stage: "CHECK", status: "START" });
   const integrity = checkManagedRuntimeProjection(normalized, ready);
   const secret = readManagedSecret(normalized);
   if (integrity.status === "IDENTITY_CONFLICT") {
+    mark.outcome = "error";
     setState(normalized, { state: "ERROR", errorCode: integrity.errorCode });
     return getRuntimeProviderPublicState(normalized);
   }
@@ -257,6 +276,7 @@ async function applyReady(
     integrity.status === "MATCH"
   ) {
     const active = activeState(ready, modelIds);
+    mark.outcome = "noop";
     setState(normalized, active);
     return active;
   }
@@ -274,6 +294,7 @@ async function applyReady(
     const projected = projectManagedRuntime(normalized, ready);
     logRuntimeProviderOperation({ ...trace, stage: "SESSION_OVERRIDE", status: "PASS" });
     if (!projected.ok) {
+      mark.outcome = "error";
       setState(normalized, { state: "ERROR", errorCode: projected.error });
       return getRuntimeProviderPublicState(normalized);
     }
@@ -298,6 +319,7 @@ async function applyReady(
   if (!restarted) {
     const restored = rollbackOwned(snapshot, trace);
     if (restored && !logoutIntentIsWaiting()) {
+      mark.outcome = "error";
       setState(normalized, {
         state: "ERROR",
         errorCode: "RUNTIME_GATEWAY_RESTART_FAILED",
@@ -318,7 +340,7 @@ async function applyReady(
 export async function bootstrapRuntimeProvider(
   reason: string,
   profile?: string,
-): Promise<RuntimeProviderPublicState> {
+): Promise<AcceptedRuntimeBootstrap> {
   const mine = beginRuntimeIntent(reason);
   const trace = {
     operation_id: randomUUID(),
@@ -326,17 +348,29 @@ export async function bootstrapRuntimeProvider(
     reason,
     profile: profileKey(profile),
   };
+  const settle = (
+    state: RuntimeProviderPublicState,
+    outcome: RuntimeBootstrapOutcome,
+  ): AcceptedRuntimeBootstrap => ({
+    accepted: runtimeIntentCurrent(mine),
+    generation: mine,
+    reason,
+    state,
+    outcome: runtimeIntentCurrent(mine) ? outcome : "superseded",
+  });
   logRuntimeProviderOperation({ ...trace, stage: "INTENT", status: "START" });
   if (getConnectionConfig().mode !== "local") {
     setState(profile, { state: "UNBOUND" });
-    return { state: "UNBOUND" };
+    return settle({ state: "UNBOUND" }, "unbound");
   }
   const normalized = fileProfile(profile);
   const previous = getRuntimeProviderPublicState(normalized);
   setState(normalized, { state: "FETCHING" });
   logRuntimeProviderOperation({ ...trace, stage: "FETCH", status: "START" });
   const fetched = await fetchRuntimeBootstrap();
-  if (!runtimeIntentCurrent(mine)) return getRuntimeProviderPublicState(normalized);
+  if (!runtimeIntentCurrent(mine)) {
+    return settle(getRuntimeProviderPublicState(normalized), "superseded");
+  }
   if (!fetched.ok) {
     if (
       (previous.state === "ACTIVE" || previous.state === "STALE_ACTIVE") &&
@@ -344,31 +378,41 @@ export async function bootstrapRuntimeProvider(
     ) {
       const stale = { ...previous, state: "STALE_ACTIVE" as const, errorCode: fetched.error };
       setState(normalized, stale);
-      return stale;
+      return settle(stale, "stale");
     }
     const error = { state: "ERROR" as const, errorCode: fetched.error };
     setState(normalized, error);
-    return error;
+    return settle(error, "error");
   }
   logRuntimeProviderOperation({ ...trace, stage: "WAIT_LOCK", status: "START" });
+  const mark = { outcome: "reconciled" as "noop" | "reconciled" | "error" };
   const result = await enqueueRuntimeMutation(mine, async () => {
     logRuntimeProviderOperation({ ...trace, stage: "LOCK_ACQUIRED", status: "PASS" });
     if (!runtimeIntentCurrent(mine)) return getRuntimeProviderPublicState(normalized);
     if (!fetched.contract.ready) {
       return purgeRuntime("not_ready", normalized, mine, fetched.contract.state, trace);
     }
-    return applyReady(fetched.contract, normalized, mine, trace, previous);
+    return applyReady(fetched.contract, normalized, mine, trace, previous, mark);
   });
-  if (result && typeof result === "object" && "superseded" in result) {
-    return getRuntimeProviderPublicState(normalized);
+  if (!runtimeIntentCurrent(mine) || (result && typeof result === "object" && "superseded" in result)) {
+    return settle(getRuntimeProviderPublicState(normalized), "superseded");
   }
+  const state = result as RuntimeProviderPublicState;
+  const outcome: RuntimeBootstrapOutcome =
+    state.state === "NOT_READY"
+      ? "not_ready"
+      : state.state === "UNBOUND"
+        ? "unbound"
+        : state.state === "ERROR"
+          ? "error"
+          : mark.outcome;
   logRuntimeProviderOperation({
     ...trace,
     stage: "COMPLETE",
     status: "PASS",
-    runtime_state: getRuntimeProviderPublicState(normalized).state,
+    runtime_state: state.state,
   });
-  return result as RuntimeProviderPublicState;
+  return settle(state, outcome);
 }
 
 export function gateLocalRuntimeSend(input: {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme, session, shell } from "electron";
+import { app, BrowserWindow, nativeTheme, powerMonitor, session, shell } from "electron";
 import { join } from "path";
 import { electronApp, optimizer, is } from "@electron-toolkit/utils";
 import icon from "../../../resources/icon.png?asset";
@@ -38,6 +38,10 @@ import { registerArtifactProtocolHandler } from "../artifact-protocol";
 import { registerFilePreviewProtocolHandler } from "../files/file-preview-service";
 import { logWorkStartupIdentity } from "../build-info";
 import { readControlOwnerSnapshot } from "../hermes/control-owner";
+import {
+  noteRuntimeReconcileQuitting,
+  onRuntimeProviderResume,
+} from "../runtime-provider/runtime-provider-reconcile-bindings";
 import { startHermesBootstrapAsync } from "../runtime/hermes-bootstrap";
 
 const APP_NAME = process.env.HERMES_DESKTOP_APP_NAME?.trim() || "SMC-Copilot";
@@ -214,7 +218,12 @@ export function startMainProcess(): void {
     app.quit();
   });
 
+  powerMonitor.on("resume", () => {
+    onRuntimeProviderResume();
+  });
+
   app.on("before-quit", () => {
+    noteRuntimeReconcileQuitting();
     isQuitting = true;
     appTray?.destroy();
     appTray = null;
