@@ -141,6 +141,25 @@ describe("runtime provider reconcile scheduler", () => {
     expect(logs.some((line) => line.result === "STOPPED_INELIGIBLE")).toBe(true);
   });
 
+  it("records the armed due and keeps it when resume is busy", async () => {
+    const { scheduler, setClock, setPublicState } = harness();
+    setClock(1_000_000);
+    scheduler.notifyAccepted(accepted());
+    const due = scheduler.diagnostics().nextDueAt;
+    expect(due).toBe(1_000_000 + NORMAL_INTERVAL_MS);
+    expect(scheduler.diagnostics().lastSuccessfulFetchAt).toBe(1_000_000);
+    setPublicState({ state: "APPLYING" });
+    await scheduler.onResume();
+    expect(scheduler.activeTimerCount()).toBe(1);
+    expect(scheduler.diagnostics().nextDueAt).toBe(due);
+    expect(scheduler.diagnostics().lastResult).toBe("SKIPPED_BUSY");
+    expect(scheduler.diagnostics().lastTrigger).toBe("resume_reconcile");
+    expect(scheduler.lastAttemptAt()).toBe(1_000_000);
+    scheduler.stop();
+    expect(scheduler.diagnostics().nextDueAt).toBeNull();
+    expect(scheduler.diagnostics().lastResult).toBe("SKIPPED_BUSY");
+  });
+
   it("keeps a single armed timer across repeated accepted results", () => {
     const { scheduler, timers } = harness();
     scheduler.notifyAccepted(accepted());

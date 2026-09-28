@@ -249,7 +249,10 @@ describe("runtime provider orchestrator", () => {
       'default: "gpt-4"',
     );
     writeFileSync(join(testHome, "config.yaml"), drifted);
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now + 6_000);
     await bootstrapRuntimeProvider("refresh");
+    vi.mocked(Date.now).mockRestore();
     expect(restart).toHaveBeenCalledTimes(2);
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).toContain(
       'default: "enterprise-a"',
@@ -363,5 +366,42 @@ describe("runtime provider orchestrator", () => {
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).not.toContain(
       "member-key",
     );
+  });
+
+  it("rolls back when the post-apply projection check is not a match", async () => {
+    fetchMock.mockResolvedValue(ready("rev-drift"));
+    const events: string[] = [];
+    const {
+      bootstrapRuntimeProvider,
+      getLastProjectionCheck,
+      setPostApplyProjectionCheckForTests,
+      subscribeRuntimeProviderState,
+    } = await import("./runtime-provider-orchestrator");
+    setPostApplyProjectionCheckForTests(() => ({
+      status: "DRIFTED",
+      reasons: ["ACTIVE_DEFAULT_DRIFT"],
+    }));
+    subscribeRuntimeProviderState((event) => events.push(event.state));
+    const result = await bootstrapRuntimeProvider("login");
+    expect(result.state.state).toBe("ERROR");
+    if (result.state.state === "ERROR") {
+      expect(result.state.errorCode).toBe("RUNTIME_PROVIDER_POST_APPLY_DRIFT");
+    }
+    expect(events.filter((state) => state === "ACTIVE")).toHaveLength(0);
+    expect(getLastProjectionCheck().status).toBe("DRIFTED");
+  });
+
+  it("uses the drift error when the post-apply check throws", async () => {
+    fetchMock.mockResolvedValue(ready("rev-throw"));
+    const { bootstrapRuntimeProvider, setPostApplyProjectionCheckForTests } =
+      await import("./runtime-provider-orchestrator");
+    setPostApplyProjectionCheckForTests(() => {
+      throw new Error("projection checker failed");
+    });
+    const result = await bootstrapRuntimeProvider("login");
+    expect(result.state.state).toBe("ERROR");
+    if (result.state.state === "ERROR") {
+      expect(result.state.errorCode).toBe("RUNTIME_PROVIDER_POST_APPLY_DRIFT");
+    }
   });
 });

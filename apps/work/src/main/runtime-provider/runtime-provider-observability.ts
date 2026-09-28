@@ -1,13 +1,25 @@
+import { recordDiagnosticEvent } from "./runtime-provider-diagnostics-history";
+
 export function logRuntimeProviderOperation(
   fields: Record<string, unknown>,
 ): void {
-  console.info(JSON.stringify(sanitizeRuntimeLog("runtime_provider_operation", fields)));
+  publishRuntimeLog("runtime_provider_operation", fields);
 }
 
 export function logRuntimeProviderReconcile(
   fields: Record<string, unknown>,
 ): void {
-  console.info(JSON.stringify(sanitizeRuntimeLog("runtime_provider_reconcile", fields)));
+  publishRuntimeLog("runtime_provider_reconcile", fields);
+}
+
+function publishRuntimeLog(event: string, fields: Record<string, unknown>): void {
+  const safe = sanitizeRuntimeLog(event, fields);
+  try {
+    recordDiagnosticEvent(safe);
+  } catch {
+    /* recorder failure cannot affect runtime flow */
+  }
+  console.info(JSON.stringify(safe));
 }
 
 function sanitizeRuntimeLog(

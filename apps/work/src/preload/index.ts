@@ -1295,6 +1295,18 @@ const hermesAPI = {
   refreshRuntimeProvider: (): Promise<{ state: string }> =>
     ipcRenderer.invoke("runtime-provider-refresh"),
 
+  getRuntimeProviderDiagnostics: (
+    profile?: string,
+  ): Promise<
+    | { ok: true; snapshot: Record<string, unknown> }
+    | { ok: false; error: "RUNTIME_DIAGNOSTICS_UNAVAILABLE" }
+  > => ipcRenderer.invoke("runtime-provider-get-diagnostics", profile),
+
+  exportRuntimeProviderDiagnostics: (
+    profile?: string,
+  ): Promise<{ ok: true; path: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke("runtime-provider-export-diagnostics", profile),
+
   onRuntimeProviderStateChanged: (
     callback: (event: {
       profile: string;

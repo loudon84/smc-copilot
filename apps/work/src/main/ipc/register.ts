@@ -219,6 +219,11 @@ import {
   stopRuntimeReconcile,
 } from "../runtime-provider/runtime-provider-reconcile-bindings";
 import { readStoredSessionSync } from "../auth/token-store";
+import { getRuntimeProviderDiagnostics } from "../runtime-provider/runtime-provider-diagnostics";
+import {
+  currentRuntimeProduct,
+  exportRuntimeProviderDiagnostics,
+} from "../runtime-provider/runtime-provider-support-export";
 import { clearManagedSecret } from "../runtime-provider/managed-runtime-secret-store";
 import {
   getAuxiliaryConfig,
@@ -2889,6 +2894,27 @@ export function registerIpcHandlers(context: IpcContext): void {
     notifyAcceptedRuntimeBootstrap(result);
     return result.state;
   });
+
+  ipcMain.handle("runtime-provider-get-diagnostics", (_event, profile?: string) =>
+    getRuntimeProviderDiagnostics(profile),
+  );
+
+  ipcMain.handle(
+    "runtime-provider-export-diagnostics",
+    async (event, profile?: string) => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      return exportRuntimeProviderDiagnostics({
+        profile,
+        product: currentRuntimeProduct(),
+        choosePath: async (defaultName) => {
+          const choice = owner
+            ? await dialog.showSaveDialog(owner, { defaultPath: defaultName })
+            : await dialog.showSaveDialog({ defaultPath: defaultName });
+          return { canceled: choice.canceled, filePath: choice.filePath };
+        },
+      });
+    },
+  );
 
   // Models
   ipcMain.handle("list-models", (_event, profile?: string) => {

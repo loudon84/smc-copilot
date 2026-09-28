@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import { getConnectionConfig, getModelConfig } from "../config";
 import { fetchRuntimeBootstrap } from "./nodeskclaw-bootstrap-client";
-import { checkManagedRuntimeProjection } from "./runtime-provider-integrity";
+import {
+  checkManagedRuntimeProjection,
+  type ProjectionIntegrity,
+} from "./runtime-provider-integrity";
 import {
   clearManagedSecret,
   installManagedSecret,
@@ -74,6 +77,16 @@ interface Applied {
 
 const applied = new Map<string, Applied>();
 const publicState = new Map<string, RuntimeProviderPublicState>();
+const projectionChecks = new Map<
+  string,
+  {
+    status: "MATCH" | "DRIFTED" | "IDENTITY_CONFLICT";
+    checkedAt: string;
+    revision: string | null;
+    reasons: string[];
+  }
+>();
+let postApplyProjectionCheck: typeof checkManagedRuntimeProjection | null = null;
 const listeners = new Set<(event: RuntimeProviderStateEvent) => void>();
 let lastEvent = "";
 
@@ -161,6 +174,41 @@ async function restartGateway(profile?: string): Promise<boolean> {
   const { getRuntimeManager } = await import("../runtime/runtime-manager");
   const restarted = await getRuntimeManager().restart(fileProfile(profile));
   return restarted.ok;
+}
+
+export function getLastProjectionCheck(profile?: string): {
+  status: "UNKNOWN" | "MATCH" | "DRIFTED" | "IDENTITY_CONFLICT";
+  checkedAt: string | null;
+  revision: string | null;
+  reasons: string[];
+} {
+  return (
+    projectionChecks.get(profileKey(profile)) ?? {
+      status: "UNKNOWN",
+      checkedAt: null,
+      revision: null,
+      reasons: [],
+    }
+  );
+}
+
+export function setPostApplyProjectionCheckForTests(
+  check: typeof checkManagedRuntimeProjection | null,
+): void {
+  postApplyProjectionCheck = check;
+}
+
+function rememberProjection(
+  profile: string | undefined,
+  integrity: ProjectionIntegrity,
+  revision: string | null,
+): void {
+  projectionChecks.set(profileKey(profile), {
+    status: integrity.status,
+    checkedAt: new Date().toISOString(),
+    revision,
+    reasons: integrity.status === "DRIFTED" ? integrity.reasons : [],
+  });
 }
 
 function activeState(
@@ -262,6 +310,7 @@ async function applyReady(
   const normalized = fileProfile(profile);
   logRuntimeProviderOperation({ ...trace, stage: "CHECK", status: "START" });
   const integrity = checkManagedRuntimeProjection(normalized, ready);
+  rememberProjection(normalized, integrity, ready.revision);
   const secret = readManagedSecret(normalized);
   if (integrity.status === "IDENTITY_CONFLICT") {
     mark.outcome = "error";
@@ -323,6 +372,27 @@ async function applyReady(
       setState(normalized, {
         state: "ERROR",
         errorCode: "RUNTIME_GATEWAY_RESTART_FAILED",
+      });
+    }
+    return getRuntimeProviderPublicState(normalized);
+  }
+  let post: ProjectionIntegrity;
+  try {
+    post = (postApplyProjectionCheck ?? checkManagedRuntimeProjection)(
+      normalized,
+      ready,
+    );
+  } catch {
+    post = { status: "DRIFTED", reasons: ["ADOPTION_INVALID"] };
+  }
+  rememberProjection(normalized, post, ready.revision);
+  if (post.status !== "MATCH") {
+    const restored = rollbackOwned(snapshot, trace);
+    if (restored && !logoutIntentIsWaiting()) {
+      mark.outcome = "error";
+      setState(normalized, {
+        state: "ERROR",
+        errorCode: "RUNTIME_PROVIDER_POST_APPLY_DRIFT",
       });
     }
     return getRuntimeProviderPublicState(normalized);

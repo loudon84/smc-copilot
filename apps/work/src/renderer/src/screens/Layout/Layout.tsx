@@ -956,6 +956,7 @@ function Layout(): React.JSX.Element {
                 <Providers
                   profile={activeProfile}
                   visible={view === "providers"}
+                  onOpenGateway={() => goTo("gateway")}
                 />
               )}
             </div>

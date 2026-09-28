@@ -76,10 +76,16 @@ describe("runtime provider release evidence", () => {
       l4GoldenNodeDeskClawInference: "BLOCKED",
       l4GoldenNewApiDirect: "BLOCKED",
       v13AutomaticReconcile: "BLOCKED",
+      v14OperationsCard: "BLOCKED",
+      v14SupportBundle: "BLOCKED",
+      v14DataPlaneUnchanged: "BLOCKED",
     };
     expect(evidence.l4GoldenNodeDeskClawInference).toBe("BLOCKED");
     expect(evidence.l4GoldenNewApiDirect).toBe("BLOCKED");
     expect(evidence.v13AutomaticReconcile).toBe("BLOCKED");
+    expect(evidence.v14OperationsCard).toBe("BLOCKED");
+    expect(evidence.v14SupportBundle).toBe("BLOCKED");
+    expect(evidence.v14DataPlaneUnchanged).toBe("BLOCKED");
     expect(JSON.stringify(evidence)).not.toContain("api_key");
   });
 });

@@ -44,6 +44,10 @@ function scheduler(): ReconcileScheduler {
   return singleton;
 }
 
+export function readRuntimeReconcileDiagnostics() {
+  return scheduler().diagnostics();
+}
+
 export function notifyAcceptedRuntimeBootstrap(
   result: AcceptedRuntimeBootstrap,
 ): void {

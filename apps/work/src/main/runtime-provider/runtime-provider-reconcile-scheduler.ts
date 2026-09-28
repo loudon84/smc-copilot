@@ -46,6 +46,15 @@ export interface ReconcileScheduler {
   state: () => "STOPPED" | "SCHEDULED" | "RUNNING" | "BACKOFF";
   consecutiveUnavailable: () => number;
   lastAttemptAt: () => number | null;
+  diagnostics: () => {
+    schedulerState: "STOPPED" | "SCHEDULED" | "RUNNING" | "BACKOFF";
+    lastTrigger: string | null;
+    lastResult: string | null;
+    lastAttemptAt: number | null;
+    lastSuccessfulFetchAt: number | null;
+    nextDueAt: number | null;
+    consecutiveUnavailable: number;
+  };
 }
 
 export function createRuntimeReconcileScheduler(
@@ -57,6 +66,10 @@ export function createRuntimeReconcileScheduler(
   let phase: "STOPPED" | "SCHEDULED" | "RUNNING" | "BACKOFF" = "STOPPED";
   let unavailable = 0;
   let lastAttempt: number | null = null;
+  let lastSuccess: number | null = null;
+  let nextDueAt: number | null = null;
+  let lastTrigger: string | null = null;
+  let lastResult: string | null = null;
   let quitting = false;
   let running = false;
 
@@ -64,6 +77,12 @@ export function createRuntimeReconcileScheduler(
     timerVersion += 1;
     timer?.cancel();
     timer = null;
+    nextDueAt = null;
+  }
+
+  function noteSkip(reason: string): void {
+    lastTrigger = reason;
+    lastResult = "SKIPPED_BUSY";
   }
 
   function jitter(max: number): number {
@@ -82,9 +101,11 @@ export function createRuntimeReconcileScheduler(
     clearTimer();
     const version = timerVersion;
     phase = next;
+    nextDueAt = deps.now() + delayMs;
     timer = deps.schedule(delayMs, () => {
       if (version !== timerVersion) return;
       timer = null;
+      nextDueAt = null;
       void trigger("scheduled_reconcile");
     });
   }
@@ -134,6 +155,15 @@ export function createRuntimeReconcileScheduler(
       next_due_delay_ms: delay,
       consecutive_unavailable: unavailable,
     });
+    if (
+      logged === "NOOP_MATCH" ||
+      logged === "RECONCILED" ||
+      logged === "NOT_READY"
+    ) {
+      lastSuccess = lastAttempt;
+    }
+    lastTrigger = triggerName;
+    lastResult = logged;
     arm(delay, next);
   }
 
@@ -151,6 +181,7 @@ export function createRuntimeReconcileScheduler(
     const profile = deps.readProfile();
     const current = deps.readPublicState(profile);
     if (TRANSIENT.has(current.state)) {
+      noteSkip(reason);
       log({
         trigger: reason,
         scheduler_state: phase,
@@ -208,6 +239,7 @@ export function createRuntimeReconcileScheduler(
       const current = deps.readPublicState(profile);
       if (TRANSIENT.has(current.state) || running) {
         if (TRANSIENT.has(current.state)) {
+          noteSkip("resume_reconcile");
           log({
             trigger: "resume_reconcile",
             scheduler_state: phase,
@@ -232,6 +264,15 @@ export function createRuntimeReconcileScheduler(
     state: () => phase,
     consecutiveUnavailable: () => unavailable,
     lastAttemptAt: () => lastAttempt,
+    diagnostics: () => ({
+      schedulerState: phase,
+      lastTrigger,
+      lastResult,
+      lastAttemptAt: lastAttempt,
+      lastSuccessfulFetchAt: lastSuccess,
+      nextDueAt,
+      consecutiveUnavailable: unavailable,
+    }),
   };
 }
 

@@ -928,6 +928,13 @@ interface HermesAPI {
     modelCount?: number;
   }>;
   refreshRuntimeProvider: () => Promise<{ state: string }>;
+  getRuntimeProviderDiagnostics: (profile?: string) => Promise<
+    | { ok: true; snapshot: Record<string, unknown> }
+    | { ok: false; error: "RUNTIME_DIAGNOSTICS_UNAVAILABLE" }
+  >;
+  exportRuntimeProviderDiagnostics: (
+    profile?: string,
+  ) => Promise<{ ok: true; path: string } | { ok: false; error: string }>;
   onRuntimeProviderStateChanged: (
     callback: (event: {
       profile: string;

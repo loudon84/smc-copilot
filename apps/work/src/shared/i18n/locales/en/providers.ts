@@ -88,4 +88,16 @@ export default {
     successHint: "You're signed in. You can close this window.",
     failed: "Sign-in failed.",
   },
+  enterpriseRuntime: {
+    title: "SMC Enterprise Runtime",
+    managed: "This provider is managed by enterprise NodeDeskClaw.",
+    notReady: "This enterprise model is not ready. An administrator must fix it in NodeDeskClaw.",
+    unavailable: "Runtime diagnostics are unavailable.",
+    secretLoaded: "Credential loaded",
+    secretMissing: "Credential not loaded",
+    reconcile: "Reconcile now",
+    retry: "Retry reconcile",
+    export: "Export diagnostics",
+    openGateway: "Open Gateway",
+  },
 } as const;
