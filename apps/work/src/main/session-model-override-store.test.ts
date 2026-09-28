@@ -26,6 +26,14 @@ class FakeStatement {
         : undefined;
     }
     if (this.sql.includes("SELECT provider, model, base_url")) {
+      if (
+        this.sql.includes("provider_ref") &&
+        !this.db.columns.has("provider_ref")
+      ) {
+        const error = new Error("no such column: provider_ref");
+        (error as { code?: string }).code = "SQLITE_ERROR";
+        throw error;
+      }
       return sessionId ? this.db.rows.get(sessionId) : undefined;
     }
     return undefined;
@@ -61,9 +69,7 @@ class FakeStatement {
 
   all(): unknown[] {
     if (this.sql.startsWith("PRAGMA table_info")) {
-      return ["session_id", "provider", "model", "base_url", "updated_at"].map(
-        (name) => ({ name }),
-      );
+      return [...this.db.columns].map((name) => ({ name }));
     }
     return [];
   }
@@ -83,9 +89,26 @@ class FakeDb {
     }
   >();
   tableCreated = false;
+  columns = new Set<string>();
 
-  exec(): void {
-    this.tableCreated = true;
+  exec(sql: string): void {
+    const added = sql.match(/ADD COLUMN\s+(\w+)/i);
+    if (added) {
+      this.columns.add(added[1]);
+      return;
+    }
+    if (/CREATE TABLE/i.test(sql)) {
+      this.tableCreated = true;
+      for (const name of [
+        "session_id",
+        "provider",
+        "model",
+        "base_url",
+        "updated_at",
+      ]) {
+        this.columns.add(name);
+      }
+    }
   }
 
   prepare(sql: string): FakeStatement {
@@ -126,6 +149,29 @@ describe("session model override store", () => {
       .prepare("PRAGMA table_info(desktop_session_model_overrides)")
       .all() as Array<{ name: string }>;
     expect(columns.map((column) => column.name)).not.toContain("api_key");
+  });
+
+  it("reads a pre-identity row after adding the missing columns", () => {
+    db.tableCreated = true;
+    db.columns = new Set([
+      "session_id",
+      "provider",
+      "model",
+      "base_url",
+      "updated_at",
+    ]);
+    db.rows.set("legacy", {
+      provider: "custom",
+      model: "local-model",
+      base_url: "http://localhost:11434/v1",
+    });
+
+    expect(getSessionModelOverride("legacy")).toEqual({
+      provider: "custom",
+      model: "local-model",
+      baseUrl: "http://localhost:11434/v1",
+    });
+    expect(mockedGetDbConnection).toHaveBeenCalledWith(false);
   });
 
   it("clears and deletes saved overrides", () => {

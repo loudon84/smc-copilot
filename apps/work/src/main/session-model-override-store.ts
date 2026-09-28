@@ -93,7 +93,7 @@ export function listSessionModelOverrides(): Array<{
   sessionId: string;
   override: SessionModelOverride;
 }> {
-  const db = getDbConnection(true);
+  const db = getDbConnection(false);
   if (!db) return [];
   ensureTable(db);
   const rows = db
@@ -135,8 +135,9 @@ export function getSessionModelOverride(
   sessionId: string,
 ): SessionModelOverride | null {
   if (!sessionId) return null;
-  const db = getDbConnection(true);
+  const db = getDbConnection(false);
   if (!db || !tableExists(db)) return null;
+  ensureTable(db);
   const row = db
     .prepare(
       `SELECT provider, model, base_url, provider_ref, legacy_provider, legacy_base_url, migration_status FROM ${TABLE} WHERE session_id = ?`,
