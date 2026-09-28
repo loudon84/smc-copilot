@@ -15,6 +15,7 @@ export default {
   configDiffApply: "Apply",
   configDiffCancel: "Cancel",
   checkingSession: "Checking session…",
+  loadingUserProfile: "Loading user profile",
   account: "Account",
   accountPlaceholder: "Email / phone / username",
   accountRequired: "Account is required",

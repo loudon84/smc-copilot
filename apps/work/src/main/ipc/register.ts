@@ -219,6 +219,7 @@ import {
   stopRuntimeReconcile,
 } from "../runtime-provider/runtime-provider-reconcile-bindings";
 import { readStoredSessionSync } from "../auth/token-store";
+import { restoreRuntimeProviderForSplash } from "../auth/auth-ipc";
 import { getRuntimeProviderDiagnostics } from "../runtime-provider/runtime-provider-diagnostics";
 import {
   currentRuntimeProduct,
@@ -2884,6 +2885,10 @@ export function registerIpcHandlers(context: IpcContext): void {
 
   ipcMain.handle("get-runtime-provider-state", (_event, profile?: string) =>
     getRuntimeProviderPublicState(profile),
+  );
+
+  ipcMain.handle("runtime-provider-restore", () =>
+    restoreRuntimeProviderForSplash(),
   );
 
   ipcMain.handle("runtime-provider-refresh", async () => {

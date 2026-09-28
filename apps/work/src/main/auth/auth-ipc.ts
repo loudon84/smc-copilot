@@ -23,7 +23,6 @@ import {
 } from "./ensure-access-token";
 import {
   clearStoredSession,
-  hydrateTokenStore,
   readStoredSession,
   readStoredSessionSync,
   subscribeStoredSessionChanges,
@@ -39,6 +38,8 @@ import { getConnectionConfig } from "../config";
 import {
   bootstrapRuntimeProvider,
   clearRuntimeProvider,
+  getRuntimeProviderPublicState,
+  type RuntimeProviderPublicState,
 } from "../runtime-provider/runtime-provider-orchestrator";
 import {
   notifyAcceptedRuntimeBootstrap,
@@ -72,22 +73,6 @@ function pushPublicAuthState(getMainWindow: () => BrowserWindow | null): void {
 }
 
 export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
-  void hydrateTokenStore().then(() => {
-    if (getConnectionConfig().mode !== "local") return;
-    if (!readStoredSessionSync()) return;
-    void bootstrapRuntimeProvider("restore")
-      .then((result) => {
-        try {
-          notifyAcceptedRuntimeBootstrap(result);
-        } catch {
-          /* scheduler failure must not fail session restore */
-        }
-      })
-      .catch(() => {
-        /* scheduler failure must not fail session restore */
-      });
-  });
-
   const getMainWindow = options.getMainWindow ?? (() => null);
   unsubscribeSessionChanges?.();
   unsubscribeSessionChanges = subscribeStoredSessionChanges(() => {
@@ -168,6 +153,29 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
       return toPublicState(null, endpointConfig);
     }
   });
+}
+
+/**
+ * Cold-start restore owned by the splash screen. Skips the bootstrap request
+ * when the desktop is not local or no portal session is in memory.
+ */
+export async function restoreRuntimeProviderForSplash(): Promise<RuntimeProviderPublicState> {
+  if (getConnectionConfig().mode !== "local" || !readStoredSessionSync()) {
+    return getRuntimeProviderPublicState();
+  }
+  try {
+    const result = await bootstrapRuntimeProvider("restore");
+    if (result.accepted) {
+      try {
+        notifyAcceptedRuntimeBootstrap(result);
+      } catch {
+        /* scheduler failure must not fail session restore */
+      }
+    }
+    return result.state;
+  } catch {
+    return getRuntimeProviderPublicState();
+  }
 }
 
 /** Test-only: drop session-change forwarder. */

@@ -95,6 +95,29 @@ describe("runtime provider orchestrator", () => {
     expect(digest).not.toContain("rotated-key");
   });
 
+  it("locks settings when restore receives an empty model list", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      contract: {
+        ready: false,
+        state: "MODEL_LIST_EMPTY",
+        revision: null,
+      },
+    });
+    const {
+      bootstrapRuntimeProvider,
+      getRuntimeProviderPublicState,
+      isRuntimeSettingsLocked,
+    } = await import("./runtime-provider-orchestrator");
+    const result = await bootstrapRuntimeProvider("restore");
+    expect(result.state).toEqual({
+      state: "NOT_READY",
+      backendState: "MODEL_LIST_EMPTY",
+    });
+    expect(getRuntimeProviderPublicState()).toEqual(result.state);
+    expect(isRuntimeSettingsLocked()).toBe(true);
+  });
+
   it("keeps the projection and drops the secret on NOT_READY", async () => {
     fetchMock.mockResolvedValueOnce(ready("rev-1"));
     fetchMock.mockResolvedValueOnce({

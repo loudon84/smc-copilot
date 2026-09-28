@@ -209,6 +209,8 @@ describe("auth-ipc session state push", () => {
       password: "pw",
     });
     expect(result?.authenticated).toBe(true);
+    expect(bootstrapRuntimeProvider).toHaveBeenCalledTimes(1);
+    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("login");
     expect(JSON.stringify(result)).not.toContain("secret-access");
   });
 
@@ -229,6 +231,19 @@ describe("auth-ipc session state push", () => {
     await logout?.();
     spy.mockRestore();
     expect(clearRuntimeProvider).toHaveBeenCalledWith("logout");
+  });
+
+  it("does not bootstrap restore when registering ipc with a stored session", async () => {
+    readStoredSessionSync.mockReturnValue({
+      accessToken: "secret-access",
+      refreshToken: "secret-refresh",
+      expiresAt: "2026-08-24T00:00:00.000Z",
+      tokenType: "Bearer",
+      user: { id: "u1", username: "alice" },
+    });
+    registerAuthIpc();
+    await Promise.resolve();
+    expect(bootstrapRuntimeProvider).not.toHaveBeenCalled();
   });
 
   it("does not bootstrap while refreshing a stored jwt", async () => {

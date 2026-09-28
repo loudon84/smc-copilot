@@ -4,6 +4,7 @@ import splashBg from "../../assets/hermes-one.png";
 interface SplashScreenProps {
   onFinished: () => void;
   status?: string;
+  busy?: boolean;
   // When provided, a "Switch to local mode" escape hatch appears after a delay
   // so a stuck remote/SSH connect (e.g. an unresponsive "Starting SSH tunnel…")
   // never traps the user on the splash. Omitted in local mode.
@@ -18,6 +19,7 @@ const ESCAPE_HATCH_DELAY_MS = 12000;
 function SplashScreen({
   onFinished,
   status,
+  busy = false,
   onSwitchToLocal,
 }: SplashScreenProps): React.JSX.Element {
   const [showEscape, setShowEscape] = useState(false);
@@ -46,7 +48,14 @@ function SplashScreen({
           </button>
         </div>
       )}
-      {status && <div className="splash-status">{status}</div>}
+      {status ? (
+        <div className="splash-status">
+          {busy ? (
+            <span className="splash-status-spinner" aria-hidden="true" />
+          ) : null}
+          {status}
+        </div>
+      ) : null}
     </div>
   );
 }

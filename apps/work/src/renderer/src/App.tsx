@@ -19,6 +19,7 @@ import { UpdateReadyDialog } from "./update/UpdateReadyDialog";
 import { captureScreenView } from "./utils/analytics";
 import type { HermesRuntimeProbe } from "../../shared/runtime/runtime-contract";
 import { skipPortalLogin } from "../../shared/auth/auth-url";
+import { useI18n } from "./components/useI18n";
 
 // @lat: [[runtime-connection#Startup]]
 type AppScreen = "splash" | "login" | "main" | "connection-error";
@@ -27,8 +28,10 @@ const SPLASH_MIN_MS = 3000;
 
 function AppBootstrap(): React.JSX.Element {
   const runtime = useRuntime();
+  const { t } = useI18n();
   const { openSettings } = useSettingsModal();
   const [screen, setScreen] = useState<AppScreen>("splash");
+  const [splashBusy, setSplashBusy] = useState(false);
   const [connectionMode, setConnectionMode] = useState<
     "local" | "remote" | "ssh"
   >("local");
@@ -93,7 +96,7 @@ function AppBootstrap(): React.JSX.Element {
     return "connection-error";
   }, [runtime]);
 
-  const runBootstrap = useCallback(async () => {
+  const runBootstrap = useCallback(async (options?: { restore?: boolean }) => {
     const myRun = ++runIdRef.current;
     const startedAt = Date.now();
     let next: AppScreen = "connection-error";
@@ -105,6 +108,19 @@ function AppBootstrap(): React.JSX.Element {
         if (!authState.authenticated) {
           next = "login";
         } else {
+          if (options?.restore) {
+            const conn = await window.hermesAPI.getConnectionConfig();
+            setConnectionMode(conn.mode);
+            if (conn.mode === "local") {
+              setSplashStatus(t("auth.loadingUserProfile"));
+              setSplashBusy(true);
+              try {
+                await window.hermesAPI.restoreRuntimeProvider();
+              } finally {
+                setSplashBusy(false);
+              }
+            }
+          }
           next = await runRuntimeConnect();
         }
       } else {
@@ -125,10 +141,10 @@ function AppBootstrap(): React.JSX.Element {
     }
     if (myRun !== runIdRef.current) return;
     setScreen(next);
-  }, [runRuntimeConnect]);
+  }, [runRuntimeConnect, t]);
 
   useEffect(() => {
-    void runBootstrap();
+    void runBootstrap({ restore: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -224,6 +240,7 @@ function AppBootstrap(): React.JSX.Element {
           <SplashScreen
             onFinished={() => undefined}
             status={splashStatus}
+            busy={splashBusy}
             onSwitchToLocal={
               connectionMode !== "local" ? handleSwitchToLocal : undefined
             }

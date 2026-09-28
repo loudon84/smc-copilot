@@ -1292,6 +1292,9 @@ const hermesAPI = {
     modelCount?: number;
   }> => ipcRenderer.invoke("get-runtime-provider-state", profile),
 
+  restoreRuntimeProvider: (): Promise<{ state: string }> =>
+    ipcRenderer.invoke("runtime-provider-restore"),
+
   refreshRuntimeProvider: (): Promise<{ state: string }> =>
     ipcRenderer.invoke("runtime-provider-refresh"),
 

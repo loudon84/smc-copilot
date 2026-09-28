@@ -16185,11 +16185,30 @@ body:has(.shell-vibrant),
   left: 0;
   right: 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
   color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   letter-spacing: 0.3px;
   animation: splashFadeIn 0.6s ease-out forwards;
+}
+
+.splash-status-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  animation: splashStatusSpin 0.8s linear infinite;
+}
+
+@keyframes splashStatusSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes splashFadeIn {

@@ -927,6 +927,7 @@ interface HermesAPI {
     modelIds?: string[];
     modelCount?: number;
   }>;
+  restoreRuntimeProvider: () => Promise<{ state: string }>;
   refreshRuntimeProvider: () => Promise<{ state: string }>;
   getRuntimeProviderDiagnostics: (profile?: string) => Promise<
     | { ok: true; snapshot: Record<string, unknown> }
