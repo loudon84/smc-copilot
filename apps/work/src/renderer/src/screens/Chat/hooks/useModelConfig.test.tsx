@@ -4,7 +4,8 @@ import { useModelConfig } from "./useModelConfig";
 
 vi.mock("../../../components/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string, params?: { code?: string }) =>
+      params && "code" in params ? `${key}:${params.code}` : key,
   }),
 }));
 
@@ -416,6 +417,117 @@ describe("useModelConfig", () => {
     );
     await waitFor(() => {
       expect(listModels.mock.calls.length).toBeGreaterThan(calls);
+    });
+  });
+
+  async function expectRuntimePresentation(
+    state: {
+      state: string;
+      backendState?: string | null;
+      errorCode?: string | null;
+      modelIds?: string[];
+    },
+    expected: string,
+  ): Promise<void> {
+    Object.defineProperty(window, "hermesAPI", {
+      configurable: true,
+      value: {
+        getModelConfig: vi.fn(async () => ({
+          provider: "nodeskclaw",
+          model: "",
+          baseUrl: "",
+        })),
+        listModels: vi.fn(async () => []),
+        getRuntimeProviderState: vi.fn(async () => state),
+        onConnectionConfigChanged: vi.fn(() => vi.fn()),
+        onModelLibraryChanged: vi.fn(() => vi.fn()),
+        onRuntimeProviderStateChanged: vi.fn(() => vi.fn()),
+        setModelConfig: vi.fn(async () => true),
+      },
+    });
+    function PresentationHarness(): React.JSX.Element {
+      const config = useModelConfig();
+      return (
+        <output data-testid="presentation">
+          {`${config.currentProvider}|${config.runtimeStatus}|${config.showRuntimeRefresh}|${config.composerPlaceholder}`}
+        </output>
+      );
+    }
+    render(<PresentationHarness />);
+    await waitFor(() => {
+      expect(screen.getByTestId("presentation").textContent).toBe(expected);
+    });
+  }
+
+  it("hides the ready status when enterprise models are active", async () => {
+    await expectRuntimePresentation(
+      { state: "ACTIVE", modelIds: ["enterprise-a"] },
+      "nodeskclaw||false|",
+    );
+  });
+
+  it("puts the empty model list in the composer placeholder", async () => {
+    await expectRuntimePresentation(
+      {
+        state: "NOT_READY",
+        backendState: "MODEL_LIST_EMPTY",
+        modelIds: [],
+      },
+      "nodeskclaw||false|chat.runtimeProvider.modelListEmpty",
+    );
+  });
+
+  it("falls back when the not-ready backend state is unknown", async () => {
+    await expectRuntimePresentation(
+      { state: "NOT_READY", backendState: "SOMETHING_ELSE", modelIds: [] },
+      "nodeskclaw||false|chat.runtimeProvider.modelSyncNotReady",
+    );
+    cleanup();
+    await expectRuntimePresentation(
+      { state: "NOT_READY", modelIds: [] },
+      "nodeskclaw||false|chat.runtimeProvider.modelSyncNotReady",
+    );
+  });
+
+  it("keeps the toolbar error and puts the code in the placeholder", async () => {
+    await expectRuntimePresentation(
+      {
+        state: "ERROR",
+        errorCode: "RUNTIME_GATEWAY_RESTART_FAILED",
+        modelIds: [],
+      },
+      "nodeskclaw|chat.runtimeProvider.error:RUNTIME_GATEWAY_RESTART_FAILED|true|chat.runtimeProvider.error:RUNTIME_GATEWAY_RESTART_FAILED",
+    );
+  });
+
+  it("puts an unreachable bootstrap in the placeholder without a toolbar status", async () => {
+    await expectRuntimePresentation(
+      {
+        state: "ERROR",
+        errorCode: "RUNTIME_BOOTSTRAP_UNAVAILABLE",
+        modelIds: [],
+      },
+      "nodeskclaw||false|chat.runtimeProvider.error:RUNTIME_BOOTSTRAP_UNAVAILABLE",
+    );
+  });
+
+  it("keeps stale active on the toolbar and the default placeholder", async () => {
+    await expectRuntimePresentation(
+      { state: "STALE_ACTIVE", modelIds: [] },
+      "nodeskclaw|chat.runtimeProvider.staleActive:|true|",
+    );
+  });
+
+  it("leaves the placeholder empty when the runtime is unbound", async () => {
+    function PlaceholderHarness(): React.JSX.Element {
+      const config = useModelConfig();
+      return (
+        <output data-testid="placeholder">{config.composerPlaceholder}</output>
+      );
+    }
+    render(<PlaceholderHarness />);
+    await waitFor(() => {
+      expect(screen.getByTestId("placeholder").textContent).toBe("");
     });
   });
 });

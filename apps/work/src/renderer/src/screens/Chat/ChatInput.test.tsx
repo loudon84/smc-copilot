@@ -155,3 +155,40 @@ describe("ChatInput — skill mode attachments", () => {
     ]);
   });
 });
+
+describe("ChatInput placeholder", () => {
+  it("uses the message placeholder by default", () => {
+    renderInput();
+    expect(screen.getByPlaceholderText("chat.typeMessage")).toBeTruthy();
+  });
+
+  it("uses an enterprise placeholder when one is provided", () => {
+    render(
+      <ChatInput
+        isLoading={false}
+        hasSession={true}
+        placeholder="chat.runtimeProvider.modelListEmpty"
+        onSubmit={vi.fn()}
+        onQuickAsk={vi.fn()}
+        onAbort={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByPlaceholderText("chat.runtimeProvider.modelListEmpty"),
+    ).toBeTruthy();
+  });
+
+  it("keeps the message placeholder when the override is empty", () => {
+    render(
+      <ChatInput
+        isLoading={false}
+        hasSession={true}
+        placeholder=""
+        onSubmit={vi.fn()}
+        onQuickAsk={vi.fn()}
+        onAbort={vi.fn()}
+      />,
+    );
+    expect(screen.getByPlaceholderText("chat.typeMessage")).toBeTruthy();
+  });
+});

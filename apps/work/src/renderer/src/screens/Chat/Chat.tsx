@@ -2138,6 +2138,7 @@ function Chat({
         <ChatInput
           ref={chatInputRef}
           isLoading={chatBusy}
+          placeholder={modelConfig.composerPlaceholder}
           hasSession={!!hermesSessionId}
           sessionId={hermesSessionId}
           remoteMode={remoteMode}

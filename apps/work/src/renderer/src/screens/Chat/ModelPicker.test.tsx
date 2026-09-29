@@ -70,6 +70,7 @@ function renderPicker(
     displayModel?: string;
     onOpen?: () => void;
     onSelectModel?: (provider: string, model: string, baseUrl: string) => void;
+    runtimeStatus?: string;
   } = {},
 ): { container: HTMLElement; onOpen: Mock; onSelectModel: Mock } {
   const onOpen = vi.fn();
@@ -82,6 +83,7 @@ function renderPicker(
       currentBaseUrl={overrides.currentBaseUrl ?? ""}
       modelGroups={overrides.modelGroups ?? groups}
       displayModel={overrides.displayModel ?? "OWL Alpha"}
+      runtimeStatus={overrides.runtimeStatus}
       onOpen={overrides.onOpen ?? onOpen}
       onSelectModel={overrides.onSelectModel ?? onSelectModel}
     />,
@@ -112,6 +114,20 @@ describe("ModelPicker", () => {
   it("does not show the dropdown initially", () => {
     const { container } = renderPicker();
     expect(container.querySelector(".chat-model-dropdown")).toBeNull();
+  });
+
+  it("omits the runtime status row when the status is empty", () => {
+    const { container } = renderPicker({ runtimeStatus: "" });
+    expect(container.querySelector(".chat-runtime-provider-status")).toBeNull();
+  });
+
+  it("renders a non-empty runtime status", () => {
+    const { container } = renderPicker({
+      runtimeStatus: "chat.runtimeProvider.staleActive",
+    });
+    expect(
+      container.querySelector(".chat-runtime-provider-status")?.textContent,
+    ).toBe("chat.runtimeProvider.staleActive");
   });
 
   // ── open / close ────────────────────────────────────────────────

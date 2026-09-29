@@ -7,7 +7,6 @@ export default {
     fetching: "Loading enterprise models…",
     applying: "Applying enterprise models…",
     clearing: "Clearing enterprise model credentials…",
-    active: "Enterprise models are ready",
     staleActive:
       "Enterprise model control plane is unavailable. Using the last applied configuration.",
     modelNotConfigured: "An administrator has not configured an enterprise model",

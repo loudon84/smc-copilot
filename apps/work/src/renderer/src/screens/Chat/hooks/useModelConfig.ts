@@ -44,6 +44,7 @@ interface UseModelConfigResult {
   modelGroups: ModelGroup[];
   displayModel: string;
   runtimeStatus: string;
+  composerPlaceholder: string;
   showRuntimeRefresh: boolean;
   refreshRuntime: () => Promise<void>;
   reload: () => Promise<void>;
@@ -107,15 +108,45 @@ function syncFailureLeavesLocalChat(snapshot: {
   );
 }
 
+const NOT_READY_PLACEHOLDER_KEYS: Record<string, string> = {
+  MODEL_NOT_CONFIGURED: "chat.runtimeProvider.modelNotConfigured",
+  MODEL_CREDENTIAL_DISABLED: "chat.runtimeProvider.modelCredentialDisabled",
+  MODEL_CREDENTIAL_CLOSING: "chat.runtimeProvider.modelCredentialClosing",
+  MODEL_SYNC_NOT_READY: "chat.runtimeProvider.modelSyncNotReady",
+  MODEL_LIST_EMPTY: "chat.runtimeProvider.modelListEmpty",
+  MODEL_DEFAULT_NOT_SET: "chat.runtimeProvider.modelDefaultNotSet",
+  MODEL_DEFAULT_INVALID: "chat.runtimeProvider.modelDefaultInvalid",
+  MODEL_PROVIDER_UNSUPPORTED: "chat.runtimeProvider.modelProviderUnsupported",
+  MODEL_CREDENTIAL_INVALID: "chat.runtimeProvider.modelCredentialInvalid",
+};
+
 function runtimeStatusKey(snapshot: RuntimeSnapshot): string {
   if (snapshot.state === "FETCHING") return "chat.runtimeProvider.fetching";
   if (snapshot.state === "APPLYING") return "chat.runtimeProvider.applying";
   if (snapshot.state === "CLEARING") return "chat.runtimeProvider.clearing";
-  if (snapshot.state === "ACTIVE") return "chat.runtimeProvider.active";
+  if (snapshot.state === "ACTIVE") return "";
   if (snapshot.state === "STALE_ACTIVE") return "chat.runtimeProvider.staleActive";
-  // Unbound and other enterprise sync results stay on the diagnostics card.
+  // Toolbar stays quiet for unbound and not-ready sync. Unavailable copy is the placeholder.
   if (snapshot.state === "UNBOUND" || syncFailureLeavesLocalChat(snapshot)) return "";
   if (snapshot.state === "ERROR") return "chat.runtimeProvider.error";
+  return "";
+}
+
+function composerPlaceholderText(
+  snapshot: RuntimeSnapshot,
+  translate: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (snapshot.state === "NOT_READY") {
+    const key =
+      (snapshot.backendState && NOT_READY_PLACEHOLDER_KEYS[snapshot.backendState]) ||
+      "chat.runtimeProvider.modelSyncNotReady";
+    return translate(key);
+  }
+  if (snapshot.state === "ERROR") {
+    return translate("chat.runtimeProvider.error", {
+      code: snapshot.errorCode || "",
+    });
+  }
   return "";
 }
 
@@ -252,6 +283,7 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
   const runtimeStatus = runtimeStatusKey(runtime)
     ? t(runtimeStatusKey(runtime), { code: runtime.errorCode || "" })
     : "";
+  const composerPlaceholder = composerPlaceholderText(runtime, t);
   const showRuntimeRefresh =
     runtime.state === "STALE_ACTIVE" ||
     (runtime.state === "ERROR" && !syncFailureLeavesLocalChat(runtime));
@@ -268,6 +300,7 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
     modelGroups,
     displayModel,
     runtimeStatus,
+    composerPlaceholder,
     showRuntimeRefresh,
     refreshRuntime,
     reload,
