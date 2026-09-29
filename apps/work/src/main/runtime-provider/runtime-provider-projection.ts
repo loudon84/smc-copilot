@@ -18,6 +18,7 @@ import {
 } from "../session-model-override-store";
 import { listSessionProfileIds } from "../session-metadata-store";
 import { profileHome, profilePaths, safeWriteFile } from "../utils";
+import { auxiliaryAdoptionPath } from "./runtime-provider-auxiliary-adoption";
 import {
   NODESKCLAW_API_MODE,
   NODESKCLAW_DISPLAY_NAME,
@@ -41,6 +42,7 @@ export interface ManagedFileSnapshot {
   providers: string | null;
   models: string | null;
   adoption: string | null;
+  auxiliarySidecar?: string | null;
 }
 
 function profileForFiles(profile?: string): string | undefined {
@@ -69,6 +71,7 @@ export function captureManagedFiles(profile?: string): ManagedFileSnapshot {
     providers: readOptional(providersFile),
     models: readOptional(modelsFile),
     adoption: readOptional(adoptionPath(normalized)),
+    auxiliarySidecar: readOptional(auxiliaryAdoptionPath(normalized)),
   };
 }
 
@@ -86,6 +89,9 @@ export function restoreManagedFiles(snapshot: ManagedFileSnapshot): void {
   writeOrLeave(join(home, "providers.json"), snapshot.providers);
   writeOrLeave(join(home, "models.json"), snapshot.models);
   writeOrLeave(adoptionPath(snapshot.profile), snapshot.adoption);
+  if (snapshot.auxiliarySidecar !== undefined) {
+    writeOrLeave(auxiliaryAdoptionPath(snapshot.profile), snapshot.auxiliarySidecar);
+  }
 }
 
 export function detectManagedIdentityConflict(profile?: string): boolean {

@@ -1,5 +1,7 @@
+import { existsSync, readFileSync } from "fs";
 import { randomUUID } from "crypto";
 import { getConnectionConfig, getModelConfig } from "../config";
+import { profilePaths, safeWriteFile } from "../utils";
 import { fetchRuntimeBootstrap } from "./nodeskclaw-bootstrap-client";
 import {
   checkManagedRuntimeProjection,
@@ -22,6 +24,15 @@ import {
   projectManagedRuntime,
   restoreAdoptedActiveModel,
 } from "./runtime-provider-projection";
+import {
+  auxiliaryAdoptionPath,
+  deleteAuxiliaryAdoption,
+  inspectAuxiliaryAdoption,
+  projectContainedAuxiliary,
+  readAuxiliaryAdoption,
+  restoreAuxiliaryFromAdoption,
+  writeAuxiliaryAdoption,
+} from "./runtime-provider-auxiliary-adoption";
 import {
   captureManagedTransaction,
   restoreManagedTransaction,
@@ -269,24 +280,62 @@ async function purgeRuntime(
   setState(normalized, { state: "CLEARING" });
   logRuntimeProviderOperation({ ...trace, stage: "SECRET", status: "START" });
   clearManagedSecret(normalized);
+  let auxiliaryRestored = reason !== "logout";
+  if (reason === "logout") {
+    const adoptionPath = auxiliaryAdoptionPath(normalized);
+    const adopted = readAuxiliaryAdoption(normalized);
+    if (!existsSync(adoptionPath)) {
+      if (getModelConfig(normalized).provider === NODESKCLAW_PROVIDER_KEY) {
+        setState(normalized, {
+          state: "ERROR",
+          errorCode: "RUNTIME_AUXILIARY_ADOPTION_MISSING",
+        });
+      } else {
+        auxiliaryRestored = true;
+      }
+    } else if (!adopted) {
+      setState(normalized, {
+        state: "ERROR",
+        errorCode: "RUNTIME_AUXILIARY_ADOPTION_INVALID",
+      });
+    } else {
+      try {
+        restoreAdoptedActiveModel(normalized);
+        const configFile = profilePaths(normalized).configFile;
+        const content = existsSync(configFile) ? readFileSync(configFile, "utf-8") : "";
+        safeWriteFile(configFile, restoreAuxiliaryFromAdoption(content, adopted));
+        auxiliaryRestored = true;
+      } catch {
+        setState(normalized, { state: "ERROR", errorCode: "RUNTIME_AUXILIARY_RESTORE_FAILED" });
+      }
+    }
+  }
   logRuntimeProviderOperation({ ...trace, stage: "RESTART", status: "START" });
   const restarted = await restartGateway(normalized);
   if (!runtimeIntentCurrent(generationId)) return getRuntimeProviderPublicState(normalized);
-  if (reason === "logout") restoreAdoptedActiveModel(normalized);
   if (!restarted) {
-    const failed = {
-      state: "ERROR" as const,
-      errorCode: "RUNTIME_SECRET_PURGE_UNVERIFIED",
-    };
-    setState(normalized, failed);
-    return failed;
+    if (auxiliaryRestored) {
+      setState(normalized, { state: "ERROR", errorCode: "RUNTIME_SECRET_PURGE_UNVERIFIED" });
+    }
+    return getRuntimeProviderPublicState(normalized);
   }
-  const next =
-    reason === "logout"
-      ? ({ state: "UNBOUND" } as const)
-      : ({ state: "NOT_READY", backendState } as const);
-  setState(normalized, next);
-  return next;
+  if (reason !== "logout") {
+    const ready = { state: "NOT_READY" as const, backendState };
+    setState(normalized, ready);
+    return ready;
+  }
+  if (!auxiliaryRestored) return getRuntimeProviderPublicState(normalized);
+  try {
+    deleteAuxiliaryAdoption(normalized);
+  } catch {
+    setState(normalized, {
+      state: "ERROR",
+      errorCode: "RUNTIME_AUXILIARY_ADOPTION_CLEANUP_FAILED",
+    });
+    return getRuntimeProviderPublicState(normalized);
+  }
+  setState(normalized, { state: "UNBOUND" });
+  return { state: "UNBOUND" };
 }
 
 export async function clearRuntimeProvider(
@@ -321,6 +370,12 @@ async function applyReady(
   logRuntimeProviderOperation({ ...trace, stage: "CHECK", status: "START" });
   const integrity = checkManagedRuntimeProjection(normalized, ready);
   rememberProjection(normalized, integrity, ready.revision);
+  const adoption = inspectAuxiliaryAdoption(normalized);
+  if (adoption.action === "block") {
+    mark.outcome = "error";
+    setState(normalized, { state: "ERROR", errorCode: adoption.error });
+    return getRuntimeProviderPublicState(normalized);
+  }
   const secret = readManagedSecret(normalized);
   if (integrity.status === "IDENTITY_CONFLICT") {
     mark.outcome = "error";
@@ -341,6 +396,9 @@ async function applyReady(
   }
   logRuntimeProviderOperation({ ...trace, stage: "SNAPSHOT", status: "START" });
   const snapshot = captureManagedTransaction(normalized, previous.state);
+  if (adoption.action === "capture") {
+    writeAuxiliaryAdoption(normalized, snapshot.files.config || "");
+  }
   if (integrity.status === "MATCH" && secret && secret !== ready.apiKey) {
     installManagedSecret({
       profile: normalized,
@@ -368,6 +426,9 @@ async function applyReady(
       revision: ready.revision,
     });
   }
+  const configFile = profilePaths(normalized).configFile;
+  const current = existsSync(configFile) ? readFileSync(configFile, "utf-8") : "";
+  safeWriteFile(configFile, projectContainedAuxiliary(current));
   logRuntimeProviderOperation({ ...trace, stage: "RESTART", status: "START" });
   const restarted = await restartGateway(normalized);
   logRuntimeProviderOperation({ ...trace, stage: "VERIFY", status: restarted ? "PASS" : "FAIL" });

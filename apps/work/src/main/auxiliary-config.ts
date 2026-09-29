@@ -136,6 +136,54 @@ export function setAuxiliaryField(
   return lines.join("\n");
 }
 
+export function removeAuxiliaryField(
+  content: string,
+  task: string,
+  field: string,
+): string {
+  const lines = content.split("\n");
+  const auxIdx = lines.findIndex((line) => /^auxiliary:[ \t]*$/.test(line));
+  if (auxIdx === -1) return content;
+  let auxEnd = lines.length;
+  for (let i = auxIdx + 1; i < lines.length; i++) {
+    if (lines[i].trim() !== "" && !/^\s/.test(lines[i])) {
+      auxEnd = i;
+      break;
+    }
+  }
+  const taskRe = new RegExp(`^([ \\t]+)${task}:[ \\t]*$`);
+  let taskIdx = -1;
+  let taskIndent = "  ";
+  for (let i = auxIdx + 1; i < auxEnd; i++) {
+    const match = lines[i].match(taskRe);
+    if (match) {
+      taskIdx = i;
+      taskIndent = match[1];
+      break;
+    }
+  }
+  if (taskIdx === -1) return content;
+  let taskEnd = auxEnd;
+  for (let i = taskIdx + 1; i < auxEnd; i++) {
+    const line = lines[i];
+    if (line.trim() === "") continue;
+    const indent = line.match(/^[ \t]*/)![0];
+    if (indent.length <= taskIndent.length) {
+      taskEnd = i;
+      break;
+    }
+  }
+  const fieldRe = new RegExp(`^([ \\t]+)${field}:[ \\t]*.*$`);
+  for (let i = taskIdx + 1; i < taskEnd; i++) {
+    const match = lines[i].match(fieldRe);
+    if (match && match[1].length > taskIndent.length) {
+      lines.splice(i, 1);
+      return lines.join("\n");
+    }
+  }
+  return content;
+}
+
 export function setAuxiliaryTask(
   task: string,
   cfg: { provider: string; model: string; baseUrl: string },

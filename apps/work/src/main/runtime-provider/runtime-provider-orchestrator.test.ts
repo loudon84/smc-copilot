@@ -165,6 +165,29 @@ describe("runtime provider orchestrator", () => {
     ).toEqual({ ok: false, error: "RUNTIME_NOT_READY" });
   });
 
+  it("returns to unbound on logout when enterprise sync never captured auxiliary routes", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      contract: {
+        ready: false,
+        state: "MODEL_LIST_EMPTY",
+        revision: null,
+      },
+    });
+    const {
+      bootstrapRuntimeProvider,
+      clearRuntimeProvider,
+      getRuntimeProviderPublicState,
+    } = await import("./runtime-provider-orchestrator");
+    await bootstrapRuntimeProvider("login");
+    expect(getRuntimeProviderPublicState()).toEqual({
+      state: "NOT_READY",
+      backendState: "MODEL_LIST_EMPTY",
+    });
+    await clearRuntimeProvider("logout");
+    expect(getRuntimeProviderPublicState()).toEqual({ state: "UNBOUND" });
+  });
+
   it("keeps the projection and drops the secret on NOT_READY", async () => {
     fetchMock.mockResolvedValueOnce(ready("rev-1"));
     fetchMock.mockResolvedValueOnce({
@@ -473,5 +496,48 @@ describe("runtime provider orchestrator", () => {
     if (result.state.state === "ERROR") {
       expect(result.state.errorCode).toBe("RUNTIME_PROVIDER_POST_APPLY_DRIFT");
     }
+  });
+
+  it("captures auxiliary routing once, removes slot keys, and restores only the route", async () => {
+    const { existsSync } = await import("fs");
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      [
+        "model:",
+        "  provider: openai",
+        "  default: gpt",
+        "auxiliary:",
+        "  vision:",
+        "    provider: custom",
+        "    model: fast",
+        "    base_url: https://local.test/v1",
+        "    api_key: slot-secret",
+        "    timeout: 9",
+        "",
+      ].join("\n"),
+    );
+    fetchMock.mockResolvedValue(ready("rev-aux"));
+    const {
+      bootstrapRuntimeProvider,
+      clearRuntimeProvider,
+      getLastProjectionCheck,
+      getRuntimeProviderPublicState,
+    } = await import("./runtime-provider-orchestrator");
+    const applied = await bootstrapRuntimeProvider("login");
+    expect(getLastProjectionCheck().status).toBe("MATCH");
+    expect(applied.state.state).toBe("ACTIVE");
+    const managed = readFileSync(join(testHome, "config.yaml"), "utf-8");
+    expect(managed).not.toContain("slot-secret");
+    expect(managed).toContain("timeout: 9");
+    const sidecarPath = join(testHome, "runtime-provider-auxiliary-adoption.json");
+    const sidecar = readFileSync(sidecarPath, "utf-8");
+    expect(sidecar).not.toContain("slot-secret");
+    expect(sidecar).toContain("custom");
+    await clearRuntimeProvider("logout");
+    expect(getRuntimeProviderPublicState().state).toBe("UNBOUND");
+    const restored = readFileSync(join(testHome, "config.yaml"), "utf-8");
+    expect(restored).toContain("custom");
+    expect(restored).not.toContain("slot-secret");
+    expect(existsSync(sidecarPath)).toBe(false);
   });
 });

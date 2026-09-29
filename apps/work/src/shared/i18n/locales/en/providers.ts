@@ -100,4 +100,8 @@ export default {
     export: "Export diagnostics",
     openGateway: "Open Gateway",
   },
+  auxiliary: {
+    managed:
+      "These auxiliary tasks follow the enterprise model. Route changes are unavailable while enterprise runtime is managed.",
+  },
 } as const;

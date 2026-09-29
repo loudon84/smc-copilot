@@ -79,6 +79,7 @@ describe("runtime provider release evidence", () => {
       v14OperationsCard: "BLOCKED",
       v14SupportBundle: "BLOCKED",
       v14DataPlaneUnchanged: "BLOCKED",
+      v15EnterpriseExecutionContainment: "BLOCKED",
     };
     expect(evidence.l4GoldenNodeDeskClawInference).toBe("BLOCKED");
     expect(evidence.l4GoldenNewApiDirect).toBe("BLOCKED");
@@ -86,6 +87,7 @@ describe("runtime provider release evidence", () => {
     expect(evidence.v14OperationsCard).toBe("BLOCKED");
     expect(evidence.v14SupportBundle).toBe("BLOCKED");
     expect(evidence.v14DataPlaneUnchanged).toBe("BLOCKED");
+    expect(evidence.v15EnterpriseExecutionContainment).toBe("BLOCKED");
     expect(JSON.stringify(evidence)).not.toContain("api_key");
   });
 });

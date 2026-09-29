@@ -1281,6 +1281,9 @@ export function registerIpcHandlers(context: IpcContext): void {
         // TODO: SSH path for auxiliary config (requires sshSetAuxiliaryTask)
         return false;
       }
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       setAuxiliaryTask(task, cfg, profile);
 
       // Restart gateway so it picks up the new auxiliary config
@@ -1297,6 +1300,9 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "ssh" && conn.ssh) {
       // TODO: SSH path for auxiliary config (requires sshResetAuxiliaryConfig)
       return false;
+    }
+    if (isRuntimeSettingsLocked(profile)) {
+      throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
     }
     resetAuxiliaryToAuto(profile);
 

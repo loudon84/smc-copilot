@@ -9,6 +9,9 @@ import {
   NODESKCLAW_PROVIDER_REF,
   type ReadyRuntimeContract,
 } from "./runtime-provider-contract";
+import { profilePaths } from "../utils";
+import { existsSync, readFileSync } from "fs";
+import { auxiliaryRouteDrift } from "./runtime-provider-auxiliary-adoption";
 import {
   adoptionContainsSecret,
   captureRewritableSessionOverrides,
@@ -23,7 +26,8 @@ export type ProjectionDriftReason =
   | "ACTIVE_PROVIDER_DRIFT"
   | "ACTIVE_DEFAULT_DRIFT"
   | "SESSION_OVERRIDE_DRIFT"
-  | "ADOPTION_INVALID";
+  | "ADOPTION_INVALID"
+  | "AUXILIARY_ROUTING_DRIFT";
 
 export type ProjectionIntegrity =
   | { status: "MATCH" }
@@ -104,12 +108,13 @@ export function checkManagedRuntimeProjection(
   if (overrideDrift) reasons.push("SESSION_OVERRIDE_DRIFT");
 
   const adoption = readAdoption(profile);
-  if (
-    adoptionContainsSecret(profile) ||
-    (adoption && (adoption.provider.length === 0 || adoption.model.length === 0))
-  ) {
+  if (adoptionContainsSecret(profile)) reasons.push("ADOPTION_INVALID");
+  if (adoption && (adoption.provider.length === 0 || adoption.model.length === 0)) {
     reasons.push("ADOPTION_INVALID");
   }
+  const { configFile } = profilePaths(profile);
+  const config = existsSync(configFile) ? readFileSync(configFile, "utf-8") : "";
+  if (auxiliaryRouteDrift(config)) reasons.push("AUXILIARY_ROUTING_DRIFT");
 
   return reasons.length === 0 ? { status: "MATCH" } : { status: "DRIFTED", reasons };
 }
