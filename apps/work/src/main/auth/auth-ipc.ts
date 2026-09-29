@@ -155,11 +155,23 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
   });
 }
 
+let restoreInFlight: Promise<RuntimeProviderPublicState> | null = null;
+
 /**
  * Cold-start restore owned by the splash screen. Skips the bootstrap request
  * when the desktop is not local or no portal session is in memory.
+ * Overlapping callers share one bootstrap so a double splash start cannot
+ * supersede itself.
  */
-export async function restoreRuntimeProviderForSplash(): Promise<RuntimeProviderPublicState> {
+export function restoreRuntimeProviderForSplash(): Promise<RuntimeProviderPublicState> {
+  if (restoreInFlight) return restoreInFlight;
+  restoreInFlight = restoreRuntimeProviderOnce().finally(() => {
+    restoreInFlight = null;
+  });
+  return restoreInFlight;
+}
+
+async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState> {
   if (getConnectionConfig().mode !== "local" || !readStoredSessionSync()) {
     return getRuntimeProviderPublicState();
   }

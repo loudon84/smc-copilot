@@ -59,6 +59,7 @@ export type RuntimeBootstrapOutcome =
   | "stale"
   | "error"
   | "unbound"
+  | "deferred"
   | "superseded";
 
 export interface AcceptedRuntimeBootstrap {
@@ -141,9 +142,18 @@ export function getRuntimeProviderPublicState(
   return publicState.get(profileKey(profile)) || { state: "UNBOUND" };
 }
 
+function localChatSurvivesEnterpriseSync(profile?: string): boolean {
+  const state = getRuntimeProviderPublicState(profile);
+  if (state.state === "UNBOUND" || state.state === "NOT_READY") return true;
+  return (
+    state.state === "ERROR" &&
+    state.errorCode === "RUNTIME_BOOTSTRAP_UNAVAILABLE"
+  );
+}
+
 export function isRuntimeSettingsLocked(profile?: string): boolean {
   if (getConnectionConfig().mode !== "local") return false;
-  return getRuntimeProviderPublicState(profile).state !== "UNBOUND";
+  return !localChatSurvivesEnterpriseSync(profile);
 }
 
 function setState(profile: string | undefined, state: RuntimeProviderPublicState): void {
@@ -442,13 +452,14 @@ export async function bootstrapRuntimeProvider(
     return settle(getRuntimeProviderPublicState(normalized), "superseded");
   }
   if (!fetched.ok) {
-    if (
-      (previous.state === "ACTIVE" || previous.state === "STALE_ACTIVE") &&
-      fetched.error === "RUNTIME_BOOTSTRAP_UNAVAILABLE"
-    ) {
-      const stale = { ...previous, state: "STALE_ACTIVE" as const, errorCode: fetched.error };
-      setState(normalized, stale);
-      return settle(stale, "stale");
+    if (fetched.error === "RUNTIME_BOOTSTRAP_UNAVAILABLE") {
+      if (previous.state === "ACTIVE" || previous.state === "STALE_ACTIVE") {
+        const stale = { ...previous, state: "STALE_ACTIVE" as const, errorCode: fetched.error };
+        setState(normalized, stale);
+        return settle(stale, "stale");
+      }
+      setState(normalized, previous);
+      return settle(previous, "deferred");
     }
     const error = { state: "ERROR" as const, errorCode: fetched.error };
     setState(normalized, error);
@@ -500,6 +511,9 @@ export function gateLocalRuntimeSend(input: {
     return { ok: false, error: "RUNTIME_NOT_READY" };
   }
   const state = getRuntimeProviderPublicState(input.profile);
+  if (!providerIsManaged && localChatSurvivesEnterpriseSync(input.profile)) {
+    return { ok: true };
+  }
   if (state.state === "UNBOUND") return { ok: true };
   if (state.state === "ERROR") return { ok: false, error: state.errorCode };
   if (state.state !== "ACTIVE" && state.state !== "STALE_ACTIVE") {

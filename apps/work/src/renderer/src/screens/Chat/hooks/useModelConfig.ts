@@ -96,27 +96,25 @@ function groupModelsByProvider(models: SavedModelForPicker[]): ModelGroup[] {
   return Array.from(groupMap.values());
 }
 
+function syncFailureLeavesLocalChat(snapshot: {
+  state: string;
+  errorCode?: string | null;
+}): boolean {
+  return (
+    snapshot.state === "NOT_READY" ||
+    (snapshot.state === "ERROR" &&
+      snapshot.errorCode === "RUNTIME_BOOTSTRAP_UNAVAILABLE")
+  );
+}
+
 function runtimeStatusKey(snapshot: RuntimeSnapshot): string {
-  const backend: Record<string, string> = {
-    MODEL_NOT_CONFIGURED: "chat.runtimeProvider.modelNotConfigured",
-    MODEL_CREDENTIAL_DISABLED: "chat.runtimeProvider.modelCredentialDisabled",
-    MODEL_CREDENTIAL_CLOSING: "chat.runtimeProvider.modelCredentialClosing",
-    MODEL_SYNC_NOT_READY: "chat.runtimeProvider.modelSyncNotReady",
-    MODEL_LIST_EMPTY: "chat.runtimeProvider.modelListEmpty",
-    MODEL_DEFAULT_NOT_SET: "chat.runtimeProvider.modelDefaultNotSet",
-    MODEL_DEFAULT_INVALID: "chat.runtimeProvider.modelDefaultInvalid",
-    MODEL_PROVIDER_UNSUPPORTED: "chat.runtimeProvider.modelProviderUnsupported",
-    MODEL_CREDENTIAL_INVALID: "chat.runtimeProvider.modelCredentialInvalid",
-  };
   if (snapshot.state === "FETCHING") return "chat.runtimeProvider.fetching";
   if (snapshot.state === "APPLYING") return "chat.runtimeProvider.applying";
   if (snapshot.state === "CLEARING") return "chat.runtimeProvider.clearing";
   if (snapshot.state === "ACTIVE") return "chat.runtimeProvider.active";
   if (snapshot.state === "STALE_ACTIVE") return "chat.runtimeProvider.staleActive";
-  if (snapshot.state === "UNBOUND") return "chat.runtimeProvider.unbound";
-  if (snapshot.state === "NOT_READY") {
-    return backend[snapshot.backendState || ""] || "chat.runtimeProvider.modelSyncNotReady";
-  }
+  // Unbound and other enterprise sync results stay on the diagnostics card.
+  if (snapshot.state === "UNBOUND" || syncFailureLeavesLocalChat(snapshot)) return "";
   if (snapshot.state === "ERROR") return "chat.runtimeProvider.error";
   return "";
 }
@@ -156,14 +154,18 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
       modelIds: runtimeState.modelIds,
     });
     const allowed = new Set(runtimeState.modelIds || []);
+    const localModels = configuredModels.filter(
+      (row) => row.providerRef !== "named:nodeskclaw",
+    );
     const visible =
       runtimeState.state === "ACTIVE" || runtimeState.state === "STALE_ACTIVE"
         ? configuredModels.filter(
             (row) =>
               row.providerRef === "named:nodeskclaw" && allowed.has(row.model),
           )
-        : runtimeState.state === "UNBOUND"
-          ? configuredModels.filter((row) => row.providerRef !== "named:nodeskclaw")
+        : runtimeState.state === "UNBOUND" ||
+            syncFailureLeavesLocalChat(runtimeState)
+          ? localModels
           : [];
     setModelGroups(groupModelsByProvider(visible));
   }, [profile]);
@@ -252,8 +254,7 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
     : "";
   const showRuntimeRefresh =
     runtime.state === "STALE_ACTIVE" ||
-    runtime.state === "NOT_READY" ||
-    runtime.state === "ERROR";
+    (runtime.state === "ERROR" && !syncFailureLeavesLocalChat(runtime));
   const refreshRuntime = useCallback(async (): Promise<void> => {
     if (!window.hermesAPI.refreshRuntimeProvider) return;
     await window.hermesAPI.refreshRuntimeProvider();

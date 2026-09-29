@@ -95,7 +95,7 @@ describe("runtime provider orchestrator", () => {
     expect(digest).not.toContain("rotated-key");
   });
 
-  it("locks settings when restore receives an empty model list", async () => {
+  it("keeps local chat usable when restore receives an empty model list", async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       contract: {
@@ -106,6 +106,7 @@ describe("runtime provider orchestrator", () => {
     });
     const {
       bootstrapRuntimeProvider,
+      gateLocalRuntimeSend,
       getRuntimeProviderPublicState,
       isRuntimeSettingsLocked,
     } = await import("./runtime-provider-orchestrator");
@@ -115,7 +116,53 @@ describe("runtime provider orchestrator", () => {
       backendState: "MODEL_LIST_EMPTY",
     });
     expect(getRuntimeProviderPublicState()).toEqual(result.state);
-    expect(isRuntimeSettingsLocked()).toBe(true);
+    expect(isRuntimeSettingsLocked()).toBe(false);
+    expect(
+      gateLocalRuntimeSend({
+        provider: "custom",
+        providerRef: "named:localhost",
+        model: "deepseek-v4-pro",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      gateLocalRuntimeSend({
+        provider: "nodeskclaw",
+        providerRef: "named:nodeskclaw",
+        model: "enterprise-a",
+      }),
+    ).toEqual({ ok: false, error: "RUNTIME_NOT_READY" });
+  });
+
+  it("keeps local chat usable when restore cannot reach the backend", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      error: "RUNTIME_BOOTSTRAP_UNAVAILABLE",
+    });
+    const {
+      bootstrapRuntimeProvider,
+      gateLocalRuntimeSend,
+      getRuntimeProviderPublicState,
+      isRuntimeSettingsLocked,
+    } = await import("./runtime-provider-orchestrator");
+    const result = await bootstrapRuntimeProvider("restore");
+    expect(result.outcome).toBe("deferred");
+    expect(result.state).toEqual({ state: "UNBOUND" });
+    expect(getRuntimeProviderPublicState()).toEqual({ state: "UNBOUND" });
+    expect(isRuntimeSettingsLocked()).toBe(false);
+    expect(
+      gateLocalRuntimeSend({
+        provider: "custom",
+        providerRef: "named:localhost",
+        model: "deepseek-v4-pro",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      gateLocalRuntimeSend({
+        provider: "nodeskclaw",
+        providerRef: "named:nodeskclaw",
+        model: "enterprise-a",
+      }),
+    ).toEqual({ ok: false, error: "RUNTIME_NOT_READY" });
   });
 
   it("keeps the projection and drops the secret on NOT_READY", async () => {

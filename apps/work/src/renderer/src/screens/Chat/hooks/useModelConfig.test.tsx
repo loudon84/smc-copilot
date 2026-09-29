@@ -15,6 +15,7 @@ interface SavedModel {
   model: string;
   baseUrl: string;
   createdAt: number;
+  providerRef?: string;
 }
 
 function Harness(): React.JSX.Element {
@@ -217,6 +218,131 @@ describe("useModelConfig", () => {
       expect(groups[0].models).toEqual([
         { model: "deepseek-v4-flash", provider: "custom" },
       ]);
+    });
+  });
+
+  it("keeps local models in the composer when enterprise sync is not ready", async () => {
+    configuredModels = [
+      {
+        id: "local",
+        name: "deepseek-v4-pro",
+        provider: "custom",
+        model: "deepseek-v4-pro",
+        baseUrl: "http://127.0.0.1:3000/v1",
+        createdAt: 1,
+        providerRef: "named:localhost",
+      },
+      {
+        id: "enterprise",
+        name: "enterprise-a",
+        provider: "nodeskclaw",
+        model: "enterprise-a",
+        baseUrl: "",
+        createdAt: 2,
+        providerRef: "named:nodeskclaw",
+      },
+    ];
+    Object.defineProperty(window, "hermesAPI", {
+      configurable: true,
+      value: {
+        getModelConfig: vi.fn(async () => ({
+          provider: "custom",
+          model: "deepseek-v4-pro",
+          baseUrl: "http://127.0.0.1:3000/v1",
+        })),
+        listModels: vi.fn(async () => configuredModels),
+        getRuntimeProviderState: vi.fn(async () => ({
+          state: "NOT_READY",
+          backendState: "MODEL_LIST_EMPTY",
+          modelIds: [],
+        })),
+        onConnectionConfigChanged: vi.fn(() => vi.fn()),
+        onModelLibraryChanged: vi.fn(() => vi.fn()),
+        onRuntimeProviderStateChanged: vi.fn(() => vi.fn()),
+        refreshRuntimeProvider: vi.fn(async () => ({ state: "NOT_READY" })),
+        setModelConfig: vi.fn(async () => true),
+      },
+    });
+    function LocalComposerHarness(): React.JSX.Element {
+      const config = useModelConfig("default");
+      const labels = config.modelGroups.flatMap((group) =>
+        group.models.map((model) => model.label),
+      );
+      return (
+        <output data-testid="composer">
+          {`${labels.join(",")}|${config.runtimeStatus}|${config.showRuntimeRefresh}`}
+        </output>
+      );
+    }
+    render(<LocalComposerHarness />);
+    await waitFor(() => {
+      expect(screen.getByTestId("composer").textContent).toBe(
+        "deepseek-v4-pro||false",
+      );
+    });
+  });
+
+  it("keeps local models when enterprise bootstrap is unreachable", async () => {
+    configuredModels = [
+      {
+        id: "local",
+        name: "deepseek-v4-pro",
+        provider: "custom",
+        model: "deepseek-v4-pro",
+        baseUrl: "http://127.0.0.1:3000/v1",
+        createdAt: 1,
+        providerRef: "named:localhost",
+      },
+    ];
+    Object.defineProperty(window, "hermesAPI", {
+      configurable: true,
+      value: {
+        getModelConfig: vi.fn(async () => ({
+          provider: "custom",
+          model: "deepseek-v4-pro",
+          baseUrl: "http://127.0.0.1:3000/v1",
+        })),
+        listModels: vi.fn(async () => configuredModels),
+        getRuntimeProviderState: vi.fn(async () => ({
+          state: "ERROR",
+          errorCode: "RUNTIME_BOOTSTRAP_UNAVAILABLE",
+          modelIds: [],
+        })),
+        onConnectionConfigChanged: vi.fn(() => vi.fn()),
+        onModelLibraryChanged: vi.fn(() => vi.fn()),
+        onRuntimeProviderStateChanged: vi.fn(() => vi.fn()),
+        setModelConfig: vi.fn(async () => true),
+      },
+    });
+    function LocalComposerHarness(): React.JSX.Element {
+      const config = useModelConfig("default");
+      const labels = config.modelGroups.flatMap((group) =>
+        group.models.map((model) => model.label),
+      );
+      return (
+        <output data-testid="composer">
+          {`${labels.join(",")}|${config.runtimeStatus}|${config.showRuntimeRefresh}`}
+        </output>
+      );
+    }
+    render(<LocalComposerHarness />);
+    await waitFor(() => {
+      expect(screen.getByTestId("composer").textContent).toBe(
+        "deepseek-v4-pro||false",
+      );
+    });
+  });
+
+  it("does not put the unbound enterprise status in the composer", async () => {
+    function StatusHarness(): React.JSX.Element {
+      const config = useModelConfig();
+      return (
+        <output data-testid="composer-status">{config.runtimeStatus}</output>
+      );
+    }
+    render(<StatusHarness />);
+    await waitFor(() => {
+      expect(screen.getByTestId("composer-status").textContent).toBe("");
     });
   });
 

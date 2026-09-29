@@ -29,11 +29,13 @@ supersedes: null
 
 # 0. PRD 使用原则
 
-本文件是 Runtime Provider 主链的 **hotfix delta**。它不改 NodeDeskClaw Bootstrap 合同，不改 `NOT_READY` 的清密钥与锁设置语义。它只把已保存登录态的 `TRIGGER-002` 改成：启动页在进入主界面之前发起唯一一次 `bootstrapRuntimeProvider("restore")`。
+本文件是 Runtime Provider 主链的 **hotfix delta**。它不改 NodeDeskClaw Bootstrap 合同，也不改 `NOT_READY` 时清除企业密钥的语义。它把已保存登录态的 `TRIGGER-002` 改成：启动页在进入主界面之前发起唯一一次 `bootstrapRuntimeProvider("restore")`。§0.5 另将 `NOT_READY` 从聊天栏和企业设置锁上挪开：Composer 继续使用本地模型。
 
 ## 0.1 Delta Priority
 
 ```text
+§0.5 Composer 与企业同步分离
+  >
 §0.4 Grilling 决定 HF-G-01～HF-G-05
   >
 本 PRD HF-D-01～HF-D-12
@@ -77,11 +79,32 @@ profile 是否为 `default`、IPC 是否调用 `notifyAcceptedRuntimeBootstrap`�
 
 | ID | 决定 |
 |---|---|
-| HF-G-01 | 以登录路径为准。已登录重启必须 bootstrap。`MODEL_LIST_EMPTY` 仍进入 `NOT_READY`，文案与设置锁与登录后相同。 |
+| HF-G-01 | 以登录路径为准。已登录重启必须 bootstrap。`MODEL_LIST_EMPTY` 仍进入 `NOT_READY`。聊天栏文案与设置锁改由 §0.5 规定，两条路径相同，且都不关掉本地 Composer。 |
 | HF-G-02 | 主界面等这次 restore 结束再出现。等待期间使用现有启动页。 |
 | HF-G-03 | 在现有启动页状态行旁加转圈，不新增第二块全屏。 |
 | HF-G-04 | 这次只加英文源 `Loading user profile`。`加载用户资料` 是以后的中文翻译，本次不改中文语言包。 |
 | HF-G-05 | 只由启动页发起这一次 restore。应用就绪前的 restore 删除。hydrate 只读会话，不发 Bootstrap。 |
+
+## 0.5 Composer 与企业同步分离
+
+2026-09-29 用户纠正：Chat Composer 读取本地模型目录。登录和 restore 的 `model-bootstrap` 只做与远程用户 backend 的同步校验。
+
+`MODEL_LIST_EMPTY` 仍写入公开状态 `NOT_READY`，`backendState=MODEL_LIST_EMPTY`。该结果只出现在企业运行时诊断卡。聊天栏不显示 “An administrator has not configured runtime models”，也不显示 “Refresh enterprise models”。公开状态为 `UNBOUND` 时，聊天栏不显示 “Enterprise runtime is not bound”。
+
+门户 backend 不可达，且当前没有已生效的企业绑定（冷启动公开状态为 `UNBOUND`）时，不发布 `ERROR` / `RUNTIME_BOOTSTRAP_UNAVAILABLE`。公开状态回到请求前的值，调度结果记为 `DEFERRED` 并稍后重试。已经是 `ACTIVE` 时的传输失败仍进入 `STALE_ACTIVE`。重叠的启动页 restore 共用一次 `bootstrapRuntimeProvider("restore")`，开发模式的二次挂载不得再开一轮 generation。
+
+`NOT_READY` 时，本地 Composer：
+
+```text
+Chat Picker 列出本地 catalog，不含 providerRef=named:nodeskclaw
+本地模型发送放行
+named:nodeskclaw 发送仍返回 RUNTIME_NOT_READY
+isRuntimeSettingsLocked() 为 false，本地 set-model-config 与 add-model 可写
+```
+
+企业密钥清除、Gateway restart、诊断卡上的 `ACTION_REQUIRED` / `MODEL_LIST_EMPTY` 保持不变。同步成功后的 `ACTIVE` / `STALE_ACTIVE` 仍只使用已应用的企业模型，设置锁仍在。本纠正覆盖 v1.0 `RPB-D-03`、`RPB-D-07`、`RPB-D-16`、`RPB-D-17` 里把 `NOT_READY` 当成整窗不可选、不可发送、不可改设置的句子，也覆盖本文中要求聊天栏文案和设置锁与旧登录呈现对齐的句子。
+
+落点：`runtime-provider-orchestrator.ts` 的发送门与设置锁，`useModelConfig.ts` 的本地模型列表与聊天栏状态。
 
 # 1. 现场
 
@@ -96,7 +119,7 @@ runtime_state=NOT_READY
 backend_state=MODEL_LIST_EMPTY
 ```
 
-聊天栏显示 “An administrator has not configured runtime models”，并出现 “Refresh enterprise models”。随后 `set-model-config` 与 `add-model` 抛 `RUNTIME_PROVIDER_SETTINGS_LOCKED`。这是 `state !== UNBOUND` 的既有锁，本 hotfix 不改这把锁。
+当时聊天栏显示 “An administrator has not configured runtime models”，并出现 “Refresh enterprise models”。随后 `set-model-config` 与 `add-model` 抛 `RUNTIME_PROVIDER_SETTINGS_LOCKED`。§0.5 已纠正这一呈现：空列表留在企业诊断卡，本地 Composer 继续可发送、可改本地模型。
 
 路径 B：会话已经在磁盘上，再执行 `npm run dev`。界面进入已登录主界面，但聊天栏不出现路径 A 的 `MODEL_LIST_EMPTY` 文案。启动日志里没有 `reason=restore` 的 `runtime_provider_operation`。
 
@@ -116,7 +139,7 @@ Windows 上，`app ready` 之前 `safeStorage.isEncryptionAvailable()` 为 false
 
 `app.whenReady()` 里的第二次 `hydrateTokenStore()` 只调用 `startKnowledgeProviderAfterAuth()`。会话这时可以解密，渲染进程 `auth:get-state` 判定已登录，但没有人再调用 `bootstrapRuntimeProvider("restore")`。公开状态保持默认 `{ state: "UNBOUND" }`。
 
-`auth:login` 发生在应用就绪之后。`writeStoredSession` 已经把会话放进内存，因此 `bootstrapRuntimeProvider("login")` 一定会请求 `POST /api/v1/runtime/model-bootstrap`。后端返回 `MODEL_LIST_EMPTY` 时，状态变成 `NOT_READY`，文案和设置锁一起出现。登录不传 profile，`fileProfile(undefined)` 落到 `default`。
+`auth:login` 发生在应用就绪之后。`writeStoredSession` 已经把会话放进内存，因此 `bootstrapRuntimeProvider("login")` 一定会请求 `POST /api/v1/runtime/model-bootstrap`。后端返回 `MODEL_LIST_EMPTY` 时，公开状态变成 `NOT_READY`。登录不传 profile，`fileProfile(undefined)` 落到 `default`。聊天栏与设置锁按 §0.5，不随该状态关闭本地模型。
 
 父 PRD 已经要求：
 
@@ -162,9 +185,9 @@ UNBOUND + authenticated + connection mode=local → FETCHING，MUST bootstrap
 
 ## HF-D-03 与 login 同一合同
 
-`restore` 与 `login` 都必须调用现有 `bootstrapRuntimeProvider`，且都不传 profile，公开状态键为 `default`。后端 `ready: false` 且 `state` 属于既有 NOT_READY 集合（含 `MODEL_LIST_EMPTY`）时，两条路径的公开状态、`backendState`、聊天栏文案、Refresh 按钮、设置锁必须一致。
+`restore` 与 `login` 都必须调用现有 `bootstrapRuntimeProvider`，且都不传 profile，公开状态键为 `default`。后端 `ready: false` 且 `state` 属于既有 NOT_READY 集合（含 `MODEL_LIST_EMPTY`）时，两条路径的公开状态与 `backendState` 必须一致。聊天栏与设置锁按 §0.5：两条路径都不在 Composer 显示企业空列表，也都不锁本地模型编辑。
 
-本 hotfix 不得把 `MODEL_LIST_EMPTY` 显示成 `UNBOUND`，也不得在 `NOT_READY` 时放开 `RUNTIME_PROVIDER_SETTINGS_LOCKED`。
+本 hotfix 不得把 `MODEL_LIST_EMPTY` 显示成 `UNBOUND`。公开状态保持 `NOT_READY`。
 
 ## HF-D-04 跳过条件
 
@@ -188,9 +211,9 @@ readStoredSessionSync() 为 null
 ## HF-D-07 不在范围内
 
 ```text
-POST /api/v1/runtime/model-bootstrap 的请求体、响应 schema、MODEL_LIST_EMPTY 的产品含义
+POST /api/v1/runtime/model-bootstrap 的请求体、响应 schema、MODEL_LIST_EMPTY 的后端含义
 NOT_READY 时 purge secret、CLEARING、Gateway restart
-isRuntimeSettingsLocked 的判定（state !== UNBOUND 且 mode=local）
+ACTIVE / STALE_ACTIVE 时的企业模型列表与设置锁
 add-model 的 MODEL_PROVIDER_UNRESOLVED
 logout 的 RUNTIME_AUXILIARY_ADOPTION_MISSING
 desktop_session_model_overrides 的列迁移
@@ -199,7 +222,7 @@ desktop_session_model_overrides 的列迁移
 把历史启动页文案（Checking account…、Connecting to Hermes Agent…）迁入 i18n
 ```
 
-管理员模型列表为空时，hotfix 之后登录与已登录重启都会显示这句文案。这是合同对齐。
+管理员模型列表为空时，登录与已登录重启的公开状态都是 `NOT_READY` / `MODEL_LIST_EMPTY`。企业诊断卡显示该结果。Composer 按 §0.5 继续使用本地模型。
 
 ## HF-D-08 实现边界
 
@@ -249,7 +272,7 @@ IPC 返回后，转圈与这句文案撤下，随后仍使用现有 “Connectin
 | A-HF-001 | 冷启动，ready 前会话不可读，hydrate 后会话在且 mode=local | 恰好一次 `bootstrapRuntimeProvider("restore")`，发生在启动页 IPC 内，且在 hydrate settle 之后；`registerAuthIpc` 不再调用它 |
 | A-HF-002 | hydrate 之后没有会话 | restore IPC 不请求 model-bootstrap，公开状态为 `UNBOUND`，进入登录页 |
 | A-HF-003 | 有会话但 connection mode 不是 local | 不请求 model-bootstrap，公开状态为 `UNBOUND`，不显示 “Loading user profile” |
-| A-HF-004 | restore 收到 `ready: false, state: MODEL_LIST_EMPTY` | 公开状态 `NOT_READY`，`backendState=MODEL_LIST_EMPTY`，`isRuntimeSettingsLocked()==true`；与一次 login 收到同一响应后的断言一致 |
+| A-HF-004 | restore 收到 `ready: false, state: MODEL_LIST_EMPTY` | 公开状态 `NOT_READY`，`backendState=MODEL_LIST_EMPTY`。本地模型发送成功，`named:nodeskclaw` 发送为 `RUNTIME_NOT_READY`，`isRuntimeSettingsLocked()==false`。login 收到同一响应后公开状态相同 |
 | A-HF-005 | 无会话时用户在登录页登录 | 仍恰好走 `bootstrapRuntimeProvider("login")`；登录成功后的启动页不得显示 “Loading user profile” |
 | A-HF-006 | restore 进行中又发生 login | login generation 胜出；restore 的 superseded 结果不得把公开状态写回旧值 |
 | A-HF-007 | restore 返回 accepted 且 mode=local、会话仍在 | 同一次 IPC 调用 `notifyAcceptedRuntimeBootstrap` |

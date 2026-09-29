@@ -126,7 +126,9 @@ export function createRuntimeReconcileScheduler(
           ? result.state.errorCode || null
           : null;
     const unavailableResult =
-      errorCode === "RUNTIME_BOOTSTRAP_UNAVAILABLE" || result.outcome === "stale";
+      errorCode === "RUNTIME_BOOTSTRAP_UNAVAILABLE" ||
+      result.outcome === "stale" ||
+      result.outcome === "deferred";
     let delay = NORMAL_INTERVAL_MS + jitter(NORMAL_JITTER_MAX_MS);
     let next: "SCHEDULED" | "BACKOFF" = "SCHEDULED";
     let logged: string = "ERROR";
@@ -135,7 +137,12 @@ export function createRuntimeReconcileScheduler(
       const step = Math.min(unavailable, TRANSIENT_BACKOFF_MS.length) - 1;
       delay = TRANSIENT_BACKOFF_MS[step] + jitter(BACKOFF_JITTER_MAX_MS);
       next = "BACKOFF";
-      logged = result.state.state === "STALE_ACTIVE" ? "STALE_ACTIVE" : "ERROR";
+      logged =
+        result.outcome === "deferred"
+          ? "DEFERRED"
+          : result.state.state === "STALE_ACTIVE"
+            ? "STALE_ACTIVE"
+            : "ERROR";
     } else if (result.outcome === "noop" || result.state.state === "ACTIVE") {
       unavailable = 0;
       logged = result.outcome === "noop" ? "NOOP_MATCH" : "RECONCILED";

@@ -112,6 +112,29 @@ describe("restoreRuntimeProviderForSplash", () => {
     expect(notifyAcceptedRuntimeBootstrap).not.toHaveBeenCalled();
   });
 
+  it("shares one bootstrap across overlapping splash calls", async () => {
+    let release: (value: unknown) => void = () => undefined;
+    const state = { state: "UNBOUND" as const };
+    bootstrapRuntimeProvider.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const first = restoreRuntimeProviderForSplash();
+    const second = restoreRuntimeProviderForSplash();
+    expect(bootstrapRuntimeProvider).toHaveBeenCalledTimes(1);
+    release({
+      accepted: true,
+      generation: 1,
+      reason: "restore",
+      state,
+      outcome: "unbound",
+    });
+    await expect(Promise.all([first, second])).resolves.toEqual([state, state]);
+    expect(notifyAcceptedRuntimeBootstrap).toHaveBeenCalledTimes(1);
+  });
+
   it("bootstraps restore without a profile and notifies when accepted", async () => {
     const state = {
       state: "NOT_READY" as const,

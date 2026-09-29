@@ -101,8 +101,9 @@ MUST NOT 调用 saveNamedProvider(secret=...) 保存成员密钥。
   mutation=0
 
 RPB-D-03
-NodeDeskClaw 会话存在且 connection mode=local 时，
+NodeDeskClaw 会话存在且 connection mode=local，且公开状态为 ACTIVE 或 STALE_ACTIVE 时，
 Chat Picker 只列企业模型。本地模型行留在 catalog，这次会话不可选。
+公开状态为 NOT_READY 时按本节 2026-09-29 纠正：Picker 列本地模型。
 
 RPB-D-04
 显式 NOT_READY 与 logout MUST 保留：
@@ -124,11 +125,13 @@ MUST NOT 把这份 base_url 写入 model 块作为身份。
 RPB-D-07
 connection mode=local 且 NodeDeskClaw 会话存在：
   ACTIVE / STALE_ACTIVE：Picker 只列上次成功应用的 models[]，可选。
-  FETCHING / NOT_READY / ERROR / CLEARING：无可选模型。
-    发送错误：NOT_READY、FETCHING、APPLYING、CLEARING = RUNTIME_NOT_READY
+  FETCHING / ERROR / CLEARING：无可选模型。
+    发送错误：FETCHING、APPLYING、CLEARING = RUNTIME_NOT_READY
     ERROR = 当前 errorCode
 UNBOUND：Picker 列出其余 catalog 行，不列 providerRef=named:nodeskclaw。
 listModels MUST 仍返回完整 catalog。过滤只发生在 Chat Picker。
+
+2026-09-29 纠正，见 v1.6 §0.5。NOT_READY 只表示企业同步未就绪。Chat Composer 继续列出并发送本地 catalog（不含 providerRef=named:nodeskclaw）。企业同步文案留在企业诊断卡。此时设置锁放开。ACTIVE / STALE_ACTIVE 仍只用已同步的企业模型。
 
 RPB-D-08
 READY apply 到该 profile 时：
@@ -189,11 +192,13 @@ RPB-D-16
   消息平台
 error=RUNTIME_PROVIDER_SETTINGS_LOCKED
 mutation=0
+公开状态为 UNBOUND 或 NOT_READY 时不拒绝上述本地写入。见本节 2026-09-29 纠正。
 编排器对受管 Registry、YAML、受管模型行和内存密钥的写入不受此拒绝。
 辅助任务写入不受此拒绝。
 
 RPB-D-17
-本地发送在 FETCHING、APPLYING、CLEARING、NOT_READY 时错误码为 RUNTIME_NOT_READY。
+本地发送在 FETCHING、APPLYING、CLEARING 时错误码为 RUNTIME_NOT_READY。
+NOT_READY 时本地模型放行；named:nodeskclaw 仍为 RUNTIME_NOT_READY。见本节 2026-09-29 纠正。
 ERROR 时使用该状态上的 errorCode。
 
 RPB-D-18

@@ -18,6 +18,7 @@ import { getModelConfig } from "./config";
 import { readProviderRegistry } from "./providers-store";
 import { canonicalBuiltinSlug } from "./provider-identity/canonical-builtins";
 import DEFAULT_MODELS from "./default-models";
+import { readStoredSessionSync } from "./auth/token-store";
 
 function modelsFile(profile?: string): string {
   return join(profileHome(profile), "models.json");
@@ -514,6 +515,9 @@ export function syncAgentConfigModels(profile?: string): void {
 }
 
 function seedDefaults(profile?: string): SavedModelRow[] {
+  // A missing catalog is initialized only after a portal session exists.
+  // Logged-out startup must not create the built-in rows that are not configured.
+  if (!readStoredSessionSync()) return [];
   const models: SavedModelRow[] = DEFAULT_MODELS.map((m) => {
     const slug = canonicalBuiltinSlug(m.provider);
     return {
