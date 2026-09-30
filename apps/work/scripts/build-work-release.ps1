@@ -75,16 +75,16 @@ function Invoke-NpmTestIsolatedFromDotEnv {
     Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
   }
   $exit = 0
+  $savedPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   try {
-    # Capture stdout so this function returns only the numeric exit code.
-    $npmOutput = & npm.cmd test 2>&1
+    # Host the log so this function returns only the numeric exit code.
+    & npm.cmd test | Out-Host
     if ($null -ne $LASTEXITCODE) {
       $exit = $LASTEXITCODE
     }
-    if ($null -ne $npmOutput) {
-      $npmOutput | Out-Host
-    }
   } finally {
+    $ErrorActionPreference = $savedPreference
     # Restore injected .env keys after npm test.
     foreach ($entry in @($saved.GetEnumerator())) {
       if ([string]::IsNullOrEmpty($entry.Value)) {
