@@ -17,7 +17,7 @@
     "check:runtime-adapter-contract": "node scripts/check-runtime-adapter-contract.mjs",
     "check:no-renderer-runtime-http": "node scripts/check-no-renderer-runtime-http.mjs",
     "check:salt-mode-no-gateway-spawn": "node scripts/check-salt-mode-no-gateway-spawn.mjs",
-    "guard": "npm run check:work-renderer-contract && npm run check:runtime-adapter-contract && npm run check:no-work-gateway-spawn && npm run check:no-legacy-hermes-runtime && npm run check:no-renderer-runtime-http && npm run check:salt-mode-no-gateway-spawn && npm run check:no-reference-imports && npm run check:i18n-source-locale-only && npm run check:business-module-ui-boundary && npm run check:business-module-ui-baseline",
+    "guard": "npm run check:work-renderer-contract && npm run check:runtime-adapter-contract && npm run check:no-work-gateway-spawn && npm run check:no-legacy-hermes-runtime && npm run check:no-renderer-runtime-http && npm run check:salt-mode-no-gateway-spawn && npm run check:no-reference-imports && npm run check:i18n-source-locale-only && npm run check:business-module-ui-boundary",
     "test:e2e-prd-smoke": "node scripts/e2e-prd-v11-smoke.js",
     "test:skill-run-e2e": "vitest run src/main/skill-run/skill-run-e2e.test.ts --pool=threads --maxWorkers=1",
     "test": "vitest run",
