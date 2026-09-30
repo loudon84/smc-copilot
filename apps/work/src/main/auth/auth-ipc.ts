@@ -23,7 +23,6 @@ import {
 } from "./ensure-access-token";
 import {
   clearStoredSession,
-  hydrateTokenStore,
   readStoredSession,
   readStoredSessionSync,
   subscribeStoredSessionChanges,
@@ -35,6 +34,17 @@ import {
 } from "../expert/expert-ipc";
 import { disposeSkillRunSubsystem } from "../skill-run/skill-run-ipc";
 import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
+import { getConnectionConfig } from "../config";
+import {
+  bootstrapRuntimeProvider,
+  clearRuntimeProvider,
+  getRuntimeProviderPublicState,
+  type RuntimeProviderPublicState,
+} from "../runtime-provider/runtime-provider-orchestrator";
+import {
+  notifyAcceptedRuntimeBootstrap,
+  stopRuntimeReconcile,
+} from "../runtime-provider/runtime-provider-reconcile-bindings";
 
 export type RegisterAuthIpcOptions = {
   getMainWindow?: () => BrowserWindow | null;
@@ -63,12 +73,11 @@ function pushPublicAuthState(getMainWindow: () => BrowserWindow | null): void {
 }
 
 export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
-  void hydrateTokenStore();
-
   const getMainWindow = options.getMainWindow ?? (() => null);
   unsubscribeSessionChanges?.();
   unsubscribeSessionChanges = subscribeStoredSessionChanges(() => {
     pushPublicAuthState(getMainWindow);
+    if (!readStoredSessionSync()) stopRuntimeReconcile();
   });
 
   ipcMain.handle("auth:get-state", async () => buildAuthState());
@@ -92,11 +101,21 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
       endpointConfig: endpoint,
     });
     await writeStoredSession(session);
+    try {
+      if (getConnectionConfig().mode === "local") {
+        const result = await bootstrapRuntimeProvider("login");
+        notifyAcceptedRuntimeBootstrap(result);
+      }
+    } catch {
+      /* scheduler failure must not fail portal login */
+    }
     restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
   });
 
   ipcMain.handle("auth:logout", async () => {
+    stopRuntimeReconcile();
+    await clearRuntimeProvider("logout");
     const endpointConfig =
       readAuthEndpointConfig() ?? getDefaultAuthEndpointConfig();
     const session = await readStoredSession();
@@ -134,6 +153,41 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
       return toPublicState(null, endpointConfig);
     }
   });
+}
+
+let restoreInFlight: Promise<RuntimeProviderPublicState> | null = null;
+
+/**
+ * Cold-start restore owned by the splash screen. Skips the bootstrap request
+ * when the desktop is not local or no portal session is in memory.
+ * Overlapping callers share one bootstrap so a double splash start cannot
+ * supersede itself.
+ */
+export function restoreRuntimeProviderForSplash(): Promise<RuntimeProviderPublicState> {
+  if (restoreInFlight) return restoreInFlight;
+  restoreInFlight = restoreRuntimeProviderOnce().finally(() => {
+    restoreInFlight = null;
+  });
+  return restoreInFlight;
+}
+
+async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState> {
+  if (getConnectionConfig().mode !== "local" || !readStoredSessionSync()) {
+    return getRuntimeProviderPublicState();
+  }
+  try {
+    const result = await bootstrapRuntimeProvider("restore");
+    if (result.accepted) {
+      try {
+        notifyAcceptedRuntimeBootstrap(result);
+      } catch {
+        /* scheduler failure must not fail session restore */
+      }
+    }
+    return result.state;
+  } catch {
+    return getRuntimeProviderPublicState();
+  }
 }
 
 /** Test-only: drop session-change forwarder. */

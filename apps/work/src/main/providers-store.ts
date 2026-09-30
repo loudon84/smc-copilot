@@ -9,17 +9,12 @@ import {
 import {
   customProviderEnvKey,
   isDedicatedBrandCustomProvider,
-  isFirstPartyMirroredProvider,
 } from "../shared/url-key-map";
 import {
-  listAgentUserProviders,
-  listLegacyCustomProviders,
-  mirrorFirstPartyAgentProviders,
   removeAgentCustomProviderEntry,
   removeAgentUserProvider,
   upsertAgentUserProvider,
 } from "./agent-config-providers";
-import { readEnv, setEnvValue } from "./config";
 import { isValidProfileName, profileHome, safeWriteFile } from "./utils";
 
 // Per-profile store of user-configured custom providers. Sits alongside the
@@ -93,79 +88,7 @@ export function writeProviderRegistry(
   writeProvidersFile(normalizeProfile(profile), data);
 }
 
-/**
- * Import providers the user added from the terminal — the `providers:` dict in
- * the profile's config.yaml — into the desktop's `providers.json`, so they
- * render as cards and appear in the active-model picker like desktop-added
- * ones. Runs on every list read; each step is an idempotent no-op once synced.
- *
- * Endpoints whose host maps to a first-class brand key (Groq, SMC Copilot, …)
- * are skipped — those already surface through their dedicated key cards.
- *
- * When a terminal entry keeps its key under a custom `key_env`, the value is
- * aliased to the desktop's derived `CUSTOM_PROVIDER_<NAME>_KEY` (never the
- * other way round), so the desktop key field and the chat runtime's
- * label-derived lookup both resolve without renderer changes — the same
- * additive dual-write convention `models.ts` uses for vendor-host keys.
- */
-function importAgentConfigProviders(profile: string | undefined): void {
-  let agentProviders: ReturnType<typeof listAgentUserProviders> = [];
-  try {
-    agentProviders = listAgentUserProviders(profile);
-  } catch {
-    /* unreadable providers: block — still try custom_providers below */
-  }
-
-  // Also import legacy `custom_providers:` list entries (name/base_url/key_env).
-  // Terminal / agent configs often use this list instead of the `providers:`
-  // dict; without it, Providers cards stay empty while Chat can still see them.
-  try {
-    agentProviders = agentProviders.concat(listLegacyCustomProviders(profile));
-  } catch {
-    /* best-effort — dict import above still applies */
-  }
-
-  if (agentProviders.length === 0) return;
-
-  let env: Record<string, string> | null = null;
-  for (const ap of agentProviders) {
-    const name = (ap.name || "").trim();
-    const baseUrl = (ap.baseUrl || "").trim();
-    if (!name || !baseUrl) continue;
-    // First-party brand hosts, names, and the mirrored hermesone slug/key
-    // already have dedicated key cards — skip so we don't duplicate SMC
-    // Copilot/DeepSeek/etc. as a generic custom card. Still import when the
-    // URL maps only to CUSTOM_API_KEY and the row is not the first-party mirror.
-    if (
-      isFirstPartyMirroredProvider({
-        slug: ap.slug,
-        name,
-        baseUrl,
-        keyEnv: ap.keyEnv,
-      })
-    )
-      continue;
-
-    upsertCustomProviderRecordOnly(profile, { name, baseUrl });
-
-    const derived = customProviderEnvKey(name);
-    if (ap.keyEnv && ap.keyEnv !== derived) {
-      try {
-        env = env ?? readEnv(profile);
-        const value = (env[ap.keyEnv] || "").trim();
-        if (value && !(env[derived] || "").trim()) {
-          setEnvValue(derived, value, profile);
-          env[derived] = value;
-        }
-      } catch {
-        /* best-effort aliasing — key stays reachable via the terminal */
-      }
-    }
-  }
-}
-
-/** Upsert into providers.json only — no config.yaml mirror. Used by the
- *  import path, where config.yaml is the side that already has the entry. */
+/** Upsert into providers.json only — no config.yaml mirror. */
 function upsertCustomProviderRecordOnly(
   profile: string | undefined,
   input: { name: string; baseUrl: string },
@@ -203,13 +126,8 @@ function upsertCustomProviderRecordOnly(
  *  so the returned list covers both origins. */
 export function listCustomProviders(profile?: string): CustomProviderRecord[] {
   const normalized = normalizeProfile(profile);
-  // Keyed first-party brands (SMC Copilot) must exist as named `providers:`
-  // entries so gateway model switches can route them by slug.
-  mirrorFirstPartyAgentProviders(normalized);
-  importAgentConfigProviders(normalized);
-  // Hide leftover records that duplicate a dedicated brand card (e.g. a
-  // previously imported `SMC Copilot` / host-named `llm.superic.com:3900`
-  // row sitting beside the HERMESONE_API_KEY card).
+  // P0.1-D-16: this call is a pure read. Registry intake happens only through
+  // saveNamedProvider(), not through listing.
   return readProvidersFile(normalized).providers.filter(
     (p) => !isDedicatedBrandCustomProvider(p.name, p.baseUrl),
   );

@@ -68,6 +68,41 @@ describe("saveNamedProvider", () => {
     expect(existsSync(join(mockState.hermesHome, "models.json"))).toBe(false);
   });
 
+  it("rolls back when the projection writer stores a different baseUrl", async () => {
+    const { saveNamedProvider } = await txn();
+    const { safeWriteFile } = await import("../utils");
+    const result = saveNamedProvider(
+      {
+        profile: "default",
+        name: "Company",
+        baseUrl: "https://new.example/v1",
+      },
+      {
+        project: () => {
+          safeWriteFile(
+            join(mockState.hermesHome, "config.yaml"),
+            [
+              "providers:",
+              "  company:",
+              '    name: "Company"',
+              '    base_url: "https://wrong.example/v1"',
+              '    key_env: "PROVIDER_COMPANY_API_KEY"',
+              '    api_mode: "chat_completions"',
+              "",
+            ].join("\n"),
+          );
+        },
+      },
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: "PROVIDER_PROJECTION_DRIFT",
+    });
+    expect(existsSync(join(mockState.hermesHome, "providers.json"))).toBe(
+      false,
+    );
+  });
+
   it("keeps providerKey when the display name changes", async () => {
     const { saveNamedProvider } = await txn();
     const first = saveNamedProvider({

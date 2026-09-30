@@ -89,12 +89,55 @@ export function setSessionModelOverride(
   );
 }
 
+export function listSessionModelOverrides(): Array<{
+  sessionId: string;
+  override: SessionModelOverride;
+}> {
+  const db = getDbConnection(false);
+  if (!db) return [];
+  ensureTable(db);
+  const rows = db
+    .prepare(
+      `SELECT session_id, provider, model, base_url, provider_ref,
+              legacy_provider, legacy_base_url, migration_status
+       FROM ${TABLE}`,
+    )
+    .all() as Array<{
+    session_id: string;
+    provider: string;
+    model: string;
+    base_url: string;
+    provider_ref: string | null;
+    legacy_provider: string | null;
+    legacy_base_url: string | null;
+    migration_status: string | null;
+  }>;
+  return rows.map((row) => ({
+    sessionId: row.session_id,
+    override: {
+      provider: row.provider,
+      model: row.model,
+      baseUrl: row.base_url || "",
+      providerRef: row.provider_ref || undefined,
+      legacyProvider: row.legacy_provider || undefined,
+      legacyBaseUrl: row.legacy_base_url || undefined,
+      migrationStatus:
+        row.migration_status === "canonical" ||
+        row.migration_status === "migrated" ||
+        row.migration_status === "unresolved"
+          ? row.migration_status
+          : undefined,
+    },
+  }));
+}
+
 export function getSessionModelOverride(
   sessionId: string,
 ): SessionModelOverride | null {
   if (!sessionId) return null;
-  const db = getDbConnection(true);
+  const db = getDbConnection(false);
   if (!db || !tableExists(db)) return null;
+  ensureTable(db);
   const row = db
     .prepare(
       `SELECT provider, model, base_url, provider_ref, legacy_provider, legacy_base_url, migration_status FROM ${TABLE} WHERE session_id = ?`,
@@ -144,15 +187,7 @@ export function migrateStoredSessionOverride(
     registry,
     builtinSlugs,
   });
-  if (!matched.ok) {
-    setSessionModelOverride(sessionId, {
-      ...current,
-      legacyProvider: current.legacyProvider || current.provider,
-      legacyBaseUrl: current.legacyBaseUrl || current.baseUrl,
-      migrationStatus: "unresolved",
-    });
-    return matched;
-  }
+  if (!matched.ok) return matched;
   const named = matched.providerRef.startsWith("named:")
     ? matched.providerRef.slice("named:".length)
     : current.provider;

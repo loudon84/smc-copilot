@@ -53,10 +53,11 @@ function AuxiliaryTasksSection({
       ? auxFormBaseUrl
       : undefined;
   const [auxDiscoveryRefresh, setAuxDiscoveryRefresh] = useState(0);
+  const [routeLocked, setRouteLocked] = useState(false);
   const auxDiscovery = useDiscoveredModels({
     provider: auxFormProvider,
     baseUrl: auxDiscoveryBaseUrl,
-    enabled: showAuxModal && auxFormProvider !== "auto",
+    enabled: showAuxModal && !routeLocked && auxFormProvider !== "auto",
     refreshToken: auxDiscoveryRefresh,
   });
   const auxDiscoveryListId = "aux-modal-discovery";
@@ -81,6 +82,24 @@ function AuxiliaryTasksSection({
       void loadAuxConfig();
     });
   }, [loadAuxConfig]);
+
+  const loadRouteLock = useCallback(async () => {
+    const [connection, runtime] = await Promise.all([
+      window.hermesAPI.getConnectionConfig(),
+      window.hermesAPI.getRuntimeProviderState(),
+    ]);
+    setRouteLocked(connection.mode === "local" && runtime.state !== "UNBOUND");
+  }, []);
+
+  useEffect(() => {
+    if (visible) void loadRouteLock();
+  }, [visible, loadRouteLock]);
+
+  useEffect(() => {
+    return window.hermesAPI.onRuntimeProviderStateChanged(() => {
+      void loadRouteLock();
+    });
+  }, [loadRouteLock]);
 
   const auxTaskLabels: Record<
     string,
@@ -144,6 +163,7 @@ function AuxiliaryTasksSection({
   };
 
   function openAuxEdit(task: string): void {
+    if (routeLocked) return;
     const current = auxConfig.find((c) => c.task === task);
     setAuxEditingTask(task);
     setAuxFormProvider(current?.provider || "auto");
@@ -158,7 +178,7 @@ function AuxiliaryTasksSection({
   }
 
   async function handleAuxSave(): Promise<void> {
-    if (!auxEditingTask) return;
+    if (routeLocked || !auxEditingTask) return;
     await window.hermesAPI.setAuxiliaryTask(auxEditingTask, {
       provider: auxFormProvider,
       model: auxFormModel,
@@ -171,6 +191,7 @@ function AuxiliaryTasksSection({
   }
 
   async function handleResetAux(): Promise<void> {
+    if (routeLocked) return;
     await window.hermesAPI.resetAuxiliaryConfig();
     const updated = await window.hermesAPI.getAuxiliaryConfig();
     setAuxConfig(updated);
@@ -183,10 +204,16 @@ function AuxiliaryTasksSection({
         <div className="settings-field-hint" style={{ marginBottom: 10 }}>
           {t("constants.auxiliaryDescription")}
         </div>
+        {routeLocked ? (
+          <div className="settings-field-hint" style={{ marginBottom: 10 }}>
+            {t("providers.auxiliary.managed")}
+          </div>
+        ) : null}
         <button
           className="btn btn-secondary btn-sm"
           style={{ marginBottom: 15 }}
           onClick={handleResetAux}
+          disabled={routeLocked}
         >
           {t("constants.auxiliaryResetAll")}
         </button>
@@ -207,6 +234,7 @@ function AuxiliaryTasksSection({
                   className="btn btn-ghost btn-sm"
                   onClick={() => openAuxEdit(task.task)}
                   title={t("common.edit")}
+                  disabled={routeLocked}
                 >
                   <Pencil size={14} />
                 </button>

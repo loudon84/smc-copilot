@@ -418,6 +418,19 @@ export function getSessionMetadataBySessionId(
   );
 }
 
+export function listSessionProfileIds(sessionId: string): string[] {
+  const id = sessionId?.trim();
+  const db = getDbConnection(true);
+  if (!id || !db || !tableExists(db)) return [];
+  ensureTable(db);
+  const rows = db
+    .prepare(`SELECT profile_id FROM ${TABLE} WHERE session_id = ?`)
+    .all(id) as Array<{ profile_id?: unknown }>;
+  return rows
+    .map((row) => (typeof row.profile_id === "string" ? row.profile_id : ""))
+    .filter((value) => value.length > 0);
+}
+
 /** Trusted Chat repair preserves durable Skill Run / kb-set classifications. */
 export function ensureChatSessionMetadata(
   db: Database.Database,

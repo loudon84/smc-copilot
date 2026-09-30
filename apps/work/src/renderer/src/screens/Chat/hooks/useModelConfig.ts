@@ -27,6 +27,14 @@ interface SavedModelForPicker {
   model: string;
   name: string;
   baseUrl?: string;
+  providerRef?: string;
+}
+
+interface RuntimeSnapshot {
+  state: string;
+  backendState?: string | null;
+  errorCode?: string | null;
+  modelIds?: string[];
 }
 
 interface UseModelConfigResult {
@@ -35,6 +43,10 @@ interface UseModelConfigResult {
   currentBaseUrl: string;
   modelGroups: ModelGroup[];
   displayModel: string;
+  runtimeStatus: string;
+  composerPlaceholder: string;
+  showRuntimeRefresh: boolean;
+  refreshRuntime: () => Promise<void>;
   reload: () => Promise<void>;
   selectModel: (
     provider: string,
@@ -79,9 +91,68 @@ function groupModelsByProvider(models: SavedModelForPicker[]): ModelGroup[] {
       model: m.model,
       label: m.name,
       baseUrl: m.baseUrl || "",
+      providerRef: m.providerRef,
     });
   }
   return Array.from(groupMap.values());
+}
+
+function syncFailureLeavesLocalChat(snapshot: {
+  state: string;
+  errorCode?: string | null;
+}): boolean {
+  return (
+    snapshot.state === "NOT_READY" ||
+    (snapshot.state === "ERROR" &&
+      snapshot.errorCode === "RUNTIME_BOOTSTRAP_UNAVAILABLE")
+  );
+}
+
+const NOT_READY_PLACEHOLDER_KEYS: Record<string, string> = {
+  MODEL_NOT_CONFIGURED: "chat.runtimeProvider.modelNotConfigured",
+  MODEL_CREDENTIAL_DISABLED: "chat.runtimeProvider.modelCredentialDisabled",
+  MODEL_CREDENTIAL_CLOSING: "chat.runtimeProvider.modelCredentialClosing",
+  MODEL_SYNC_NOT_READY: "chat.runtimeProvider.modelSyncNotReady",
+  MODEL_LIST_EMPTY: "chat.runtimeProvider.modelListEmpty",
+  MODEL_DEFAULT_NOT_SET: "chat.runtimeProvider.modelDefaultNotSet",
+  MODEL_DEFAULT_INVALID: "chat.runtimeProvider.modelDefaultInvalid",
+  MODEL_PROVIDER_UNSUPPORTED: "chat.runtimeProvider.modelProviderUnsupported",
+  MODEL_CREDENTIAL_INVALID: "chat.runtimeProvider.modelCredentialInvalid",
+};
+
+function runtimeStatusKey(snapshot: RuntimeSnapshot): string {
+  if (snapshot.state === "FETCHING") return "chat.runtimeProvider.fetching";
+  if (snapshot.state === "APPLYING") return "chat.runtimeProvider.applying";
+  if (snapshot.state === "CLEARING") return "chat.runtimeProvider.clearing";
+  if (snapshot.state === "ACTIVE") return "";
+  if (snapshot.state === "STALE_ACTIVE") return "chat.runtimeProvider.staleActive";
+  // Toolbar stays quiet for unbound and not-ready sync. Unavailable copy is the placeholder.
+  if (snapshot.state === "UNBOUND" || syncFailureLeavesLocalChat(snapshot)) return "";
+  if (snapshot.state === "ERROR") return "chat.runtimeProvider.error";
+  return "";
+}
+
+function composerPlaceholderText(
+  snapshot: RuntimeSnapshot,
+  translate: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (snapshot.state === "NOT_READY") {
+    const key =
+      (snapshot.backendState && NOT_READY_PLACEHOLDER_KEYS[snapshot.backendState]) ||
+      "chat.runtimeProvider.modelSyncNotReady";
+    return translate(key);
+  }
+  if (snapshot.state === "ERROR") {
+    return translate("chat.runtimeProvider.error", {
+      code: snapshot.errorCode || "",
+    });
+  }
+  return "";
+}
+
+function currentProfileKey(profile?: string): string {
+  const value = (profile || "default").trim();
+  return value || "default";
 }
 
 export function useModelConfig(profile?: string): UseModelConfigResult {
@@ -90,21 +161,44 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
   const [currentProvider, setCurrentProvider] = useState("auto");
   const [currentBaseUrl, setCurrentBaseUrl] = useState("");
   const [modelGroups, setModelGroups] = useState<ModelGroup[]>([]);
+  const [runtime, setRuntime] = useState<RuntimeSnapshot>({ state: "UNBOUND" });
   const loadSeqRef = useRef(0);
 
   const reload = useCallback(async (): Promise<void> => {
     const seq = ++loadSeqRef.current;
-    const [mc, configuredModels] = await Promise.all([
+    const [mc, configuredModels, runtimeState] = await Promise.all([
       window.hermesAPI.getModelConfig(profile),
-      // Strict: only hermes-agent config.yaml models (not models.json library /
-      // DEFAULT_MODELS / Ollama live discovery).
-      window.hermesAPI.listConfiguredModels(profile),
+      window.hermesAPI.listModels(profile),
+      window.hermesAPI.getRuntimeProviderState
+        ? window.hermesAPI.getRuntimeProviderState(profile)
+        : Promise.resolve({ state: "UNBOUND" as const, modelIds: [] as string[] }),
     ]);
     if (seq !== loadSeqRef.current) return;
     setCurrentModel(mc.model);
     setCurrentProvider(mc.provider);
     setCurrentBaseUrl(mc.baseUrl);
-    setModelGroups(groupModelsByProvider(configuredModels));
+    setRuntime({
+      state: runtimeState.state,
+      backendState:
+        "backendState" in runtimeState ? runtimeState.backendState : null,
+      errorCode: "errorCode" in runtimeState ? runtimeState.errorCode : null,
+      modelIds: runtimeState.modelIds,
+    });
+    const allowed = new Set(runtimeState.modelIds || []);
+    const localModels = configuredModels.filter(
+      (row) => row.providerRef !== "named:nodeskclaw",
+    );
+    const visible =
+      runtimeState.state === "ACTIVE" || runtimeState.state === "STALE_ACTIVE"
+        ? configuredModels.filter(
+            (row) =>
+              row.providerRef === "named:nodeskclaw" && allowed.has(row.model),
+          )
+        : runtimeState.state === "UNBOUND" ||
+            syncFailureLeavesLocalChat(runtimeState)
+          ? localModels
+          : [];
+    setModelGroups(groupModelsByProvider(visible));
   }, [profile]);
 
   // Initial load + reload whenever the profile changes (canonical
@@ -125,6 +219,16 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
       void reload();
     });
   }, [reload]);
+
+  useEffect(() => {
+    const subscribe = window.hermesAPI.onRuntimeProviderStateChanged;
+    if (!subscribe) return;
+    return subscribe((event) => {
+      if (event.profile !== currentProfileKey(profile)) return;
+      setRuntime(event);
+      void reload();
+    });
+  }, [profile, reload]);
 
   const selectModel = useCallback(
     async (
@@ -176,6 +280,18 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
           : t("chat.noModel"),
     [currentModel, currentProvider, t],
   );
+  const runtimeStatus = runtimeStatusKey(runtime)
+    ? t(runtimeStatusKey(runtime), { code: runtime.errorCode || "" })
+    : "";
+  const composerPlaceholder = composerPlaceholderText(runtime, t);
+  const showRuntimeRefresh =
+    runtime.state === "STALE_ACTIVE" ||
+    (runtime.state === "ERROR" && !syncFailureLeavesLocalChat(runtime));
+  const refreshRuntime = useCallback(async (): Promise<void> => {
+    if (!window.hermesAPI.refreshRuntimeProvider) return;
+    await window.hermesAPI.refreshRuntimeProvider();
+    await reload();
+  }, [reload]);
 
   return {
     currentModel,
@@ -183,6 +299,10 @@ export function useModelConfig(profile?: string): UseModelConfigResult {
     currentBaseUrl,
     modelGroups,
     displayModel,
+    runtimeStatus,
+    composerPlaceholder,
+    showRuntimeRefresh,
+    refreshRuntime,
     reload,
     selectModel,
   };

@@ -12,7 +12,15 @@ interface ModelPickerProps {
   modelGroups: ModelGroup[];
   displayModel: string;
   onOpen: () => void;
-  onSelectModel: (provider: string, model: string, baseUrl: string) => void;
+  onSelectModel: (
+    provider: string,
+    model: string,
+    baseUrl: string,
+    providerRef?: string,
+  ) => void;
+  runtimeStatus?: string;
+  showRuntimeRefresh?: boolean;
+  onRefreshRuntime?: () => void;
 }
 
 export const ModelPicker = memo(function ModelPicker({
@@ -24,6 +32,9 @@ export const ModelPicker = memo(function ModelPicker({
   displayModel,
   onOpen,
   onSelectModel,
+  runtimeStatus = "",
+  showRuntimeRefresh = false,
+  onRefreshRuntime,
 }: ModelPickerProps): React.JSX.Element {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
@@ -146,8 +157,14 @@ export const ModelPicker = memo(function ModelPicker({
     setSelectedBrand(null);
   }
 
-  function select(provider: string, model: string, baseUrl: string): void {
-    onSelectModel(provider, model, baseUrl);
+  function select(
+    provider: string,
+    model: string,
+    baseUrl: string,
+    providerRef?: string,
+  ): void {
+    if (!providerRef) return;
+    onSelectModel(provider, model, baseUrl, providerRef);
     setIsOpen(false);
     setSearchInput("");
     setSelectedBrand(null);
@@ -167,6 +184,18 @@ export const ModelPicker = memo(function ModelPicker({
         <span className="chat-model-name">{displayModel}</span>
         <ChevronDown size={12} />
       </button>
+      {runtimeStatus ? (
+        <span className="chat-runtime-provider-status">{runtimeStatus}</span>
+      ) : null}
+      {showRuntimeRefresh ? (
+        <button
+          type="button"
+          className="chat-runtime-provider-refresh"
+          onClick={() => onRefreshRuntime?.()}
+        >
+          {t("chat.runtimeProvider.refresh")}
+        </button>
+      ) : null}
 
       {isOpen && (
         <div
@@ -261,7 +290,9 @@ export const ModelPicker = memo(function ModelPicker({
                       type="button"
                       key={`${m.provider}:${m.model}:${url}:${idx}`}
                       className={`chat-model-row ${isActive ? "active" : ""}`}
-                      onClick={() => select(m.provider, m.model, m.baseUrl)}
+                      onClick={() =>
+                        select(m.provider, m.model, m.baseUrl, m.providerRef)
+                      }
                     >
                       <span className="chat-model-row-body">
                         <span className="chat-model-row-title">{m.label}</span>

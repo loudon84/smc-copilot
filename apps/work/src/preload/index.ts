@@ -1281,8 +1281,73 @@ const hermesAPI = {
       profile,
     ),
 
-  // Models
-  listModels: (): Promise<
+  getRuntimeProviderState: (profile?: string): Promise<{
+    state: string;
+    backendState?: string;
+    errorCode?: string;
+    revision?: string;
+    providerRef?: string;
+    defaultModel?: string;
+    modelIds?: string[];
+    modelCount?: number;
+  }> => ipcRenderer.invoke("get-runtime-provider-state", profile),
+
+  restoreRuntimeProvider: (): Promise<{ state: string }> =>
+    ipcRenderer.invoke("runtime-provider-restore"),
+
+  refreshRuntimeProvider: (): Promise<{ state: string }> =>
+    ipcRenderer.invoke("runtime-provider-refresh"),
+
+  getRuntimeProviderDiagnostics: (
+    profile?: string,
+  ): Promise<
+    | { ok: true; snapshot: Record<string, unknown> }
+    | { ok: false; error: "RUNTIME_DIAGNOSTICS_UNAVAILABLE" }
+  > => ipcRenderer.invoke("runtime-provider-get-diagnostics", profile),
+
+  exportRuntimeProviderDiagnostics: (
+    profile?: string,
+  ): Promise<{ ok: true; path: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke("runtime-provider-export-diagnostics", profile),
+
+  onRuntimeProviderStateChanged: (
+    callback: (event: {
+      profile: string;
+      state: string;
+      backendState: string | null;
+      errorCode: string | null;
+      revision: string | null;
+      providerRef: string | null;
+      defaultModel: string | null;
+      modelIds: string[];
+      modelCount: number;
+    }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      payload: unknown,
+    ): void =>
+      callback(
+        payload as {
+          profile: string;
+          state: string;
+          backendState: string | null;
+          errorCode: string | null;
+          revision: string | null;
+          providerRef: string | null;
+          defaultModel: string | null;
+          modelIds: string[];
+          modelCount: number;
+        },
+      );
+    ipcRenderer.on("runtime-provider-state-changed", handler);
+    return () =>
+      ipcRenderer.removeListener("runtime-provider-state-changed", handler);
+  },
+
+  listModels: (
+    profile?: string,
+  ): Promise<
     Array<{
       id: string;
       name: string;
@@ -1290,12 +1355,13 @@ const hermesAPI = {
       model: string;
       baseUrl: string;
       providerLabel?: string;
+      providerRef?: string;
       contextLength?: number;
       capabilities?: string[];
       modalities?: { input?: string[]; output?: string[] };
       createdAt: number;
     }>
-  > => ipcRenderer.invoke("list-models"),
+  > => ipcRenderer.invoke("list-models", profile),
 
   /** Chat picker: models declared in hermes-agent config.yaml only. */
   listConfiguredModels: (

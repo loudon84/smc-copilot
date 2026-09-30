@@ -1759,19 +1759,24 @@ function Chat({
   // Stable toolbar callbacks so the memoized ModelPicker / ContextFolderChip
   // don't re-render on every streaming chunk (each chunk re-renders <Chat>).
   const handleSelectModel = useCallback(
-    (provider: string, model: string, baseUrl: string) => {
+    (
+      provider: string,
+      model: string,
+      baseUrl: string,
+      providerRef?: string,
+    ) => {
+      if (!providerRef) return;
       void modelConfig.selectModel(provider, model, baseUrl, {
         persist: false,
       });
-      // Carry the full identity (not just the model name) so a cross-provider
-      // switch reaches the right backend. Mirror the baseUrl rule selectModel
-      // applies so they can't drift.
       setSessionModelOverride(
         model
           ? {
               provider,
               model,
               baseUrl: effectiveOverrideBaseUrl(provider, baseUrl),
+              providerRef,
+              migrationStatus: "canonical",
             }
           : undefined,
       );
@@ -2133,6 +2138,7 @@ function Chat({
         <ChatInput
           ref={chatInputRef}
           isLoading={chatBusy}
+          placeholder={modelConfig.composerPlaceholder}
           hasSession={!!hermesSessionId}
           sessionId={hermesSessionId}
           remoteMode={remoteMode}
@@ -2209,6 +2215,11 @@ function Chat({
                     currentBaseUrl={chatCurrentBaseUrl}
                     modelGroups={modelConfig.modelGroups}
                     displayModel={chatDisplayModel}
+                    runtimeStatus={modelConfig.runtimeStatus}
+                    showRuntimeRefresh={modelConfig.showRuntimeRefresh}
+                    onRefreshRuntime={() => {
+                      void modelConfig.refreshRuntime();
+                    }}
                     onOpen={modelConfig.reload}
                     onSelectModel={handleSelectModel}
                   />

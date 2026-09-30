@@ -13,6 +13,7 @@ import HermesAccountModal from "../../components/HermesAccountModal";
 import ProviderKeysSection from "../../components/ProviderKeysSection";
 import RegistryBrowserModal from "../../components/RegistryBrowserModal";
 import AuxiliaryTasksSection from "../../components/AuxiliaryTasksSection";
+import EnterpriseRuntimeCard from "./EnterpriseRuntimeCard";
 import { useDiscoveredModels } from "../../hooks/useDiscoveredModels";
 import { KeyRound, Workflow } from "../../assets/icons";
 import {
@@ -152,9 +153,11 @@ interface CredentialPoolEntry {
 function Providers({
   profile,
   visible,
+  onOpenGateway,
 }: {
   profile?: string;
   visible?: boolean;
+  onOpenGateway?: () => void;
 }): React.JSX.Element {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<"providers" | "auxiliary">(
@@ -182,7 +185,13 @@ function Providers({
   // Configured custom providers from the desktop store — so the model picker
   // lists a keyed custom provider even before any model is saved under it.
   const [customProviders, setCustomProviders] = useState<
-    { name: string; baseUrl: string }[]
+    {
+      name: string;
+      baseUrl: string;
+      providerKey?: string;
+      keyEnv?: string;
+      apiMode?: string;
+    }[]
   >([]);
   const [pickGroupKey, setPickGroupKey] = useState("");
   const [pickModel, setPickModel] = useState("");
@@ -683,7 +692,12 @@ function Providers({
       </div>
 
       {activeTab === "providers" && (
-        <>         
+        <>
+          <EnterpriseRuntimeCard
+            profile={profile}
+            visible={visible}
+            onOpenGateway={onOpenGateway}
+          />         
           <div className="settings-section">
             <div className="settings-section-title settings-section-title-row">
               <span>

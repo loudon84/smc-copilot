@@ -75,6 +75,8 @@ interface ChatInputProps {
   attachmentsDisabled?: boolean;
   /** Open managed-file preview for a composer attachment id. */
   onPreviewFile?: (fileId: string) => void;
+  /** Replaces the default message placeholder when non-empty. */
+  placeholder?: string;
   onSubmit: (text: string, attachments: Attachment[]) => void;
   onQuickAsk: (text: string, attachments: Attachment[]) => void;
   onAbort: () => void;
@@ -94,6 +96,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       slashCommands = SLASH_COMMANDS,
       attachmentsDisabled = false,
       onPreviewFile,
+      placeholder,
       onSubmit,
       onQuickAsk,
       onAbort,
@@ -802,7 +805,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           <textarea
             ref={inputRef}
             className="chat-input"
-            placeholder={t("chat.typeMessage")}
+            placeholder={placeholder || t("chat.typeMessage")}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}

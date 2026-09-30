@@ -917,9 +917,41 @@ interface HermesAPI {
     profile?: string,
   ) => Promise<Array<CredentialPoolEntry>>;
   invalidateSecretsCache: () => Promise<void>;
+  getRuntimeProviderState: (profile?: string) => Promise<{
+    state: string;
+    backendState?: string;
+    errorCode?: string;
+    revision?: string;
+    providerRef?: string;
+    defaultModel?: string;
+    modelIds?: string[];
+    modelCount?: number;
+  }>;
+  restoreRuntimeProvider: () => Promise<{ state: string }>;
+  refreshRuntimeProvider: () => Promise<{ state: string }>;
+  getRuntimeProviderDiagnostics: (profile?: string) => Promise<
+    | { ok: true; snapshot: Record<string, unknown> }
+    | { ok: false; error: "RUNTIME_DIAGNOSTICS_UNAVAILABLE" }
+  >;
+  exportRuntimeProviderDiagnostics: (
+    profile?: string,
+  ) => Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+  onRuntimeProviderStateChanged: (
+    callback: (event: {
+      profile: string;
+      state: string;
+      backendState: string | null;
+      errorCode: string | null;
+      revision: string | null;
+      providerRef: string | null;
+      defaultModel: string | null;
+      modelIds: string[];
+      modelCount: number;
+    }) => void,
+  ) => () => void;
 
   // Models
-  listModels: () => Promise<
+  listModels: (profile?: string) => Promise<
     Array<{
       id: string;
       name: string;
@@ -927,6 +959,7 @@ interface HermesAPI {
       model: string;
       baseUrl: string;
       providerLabel?: string;
+      providerRef?: string;
       contextLength?: number;
       capabilities?: string[];
       modalities?: { input?: string[]; output?: string[] };

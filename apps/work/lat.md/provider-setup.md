@@ -113,13 +113,13 @@ Config.yaml is effectively the shared source of truth: desktop edits land there,
 
 A desktop `upsertCustomProvider` leaves a terminal-visible `providers:` entry carrying the provider's derived `CUSTOM_PROVIDER_<NAME>_KEY` as `key_env`.
 
-### Terminal-added providers import on read
+### Terminal-added providers stay out of list
 
-A config.yaml `providers:` entry surfaces as a desktop provider card/record on the next list read, with its custom `key_env` value aliased additively into the derived env var; entries pointing at dedicated-brand hosts (e.g. Groq) are skipped.
+`listCustomProviders` does not write `providers.json`, `.env`, or `config.yaml`. A terminal `providers:` entry becomes a desktop card only through `saveNamedProvider`.
 
-### Model library merges custom_providers on every read
+### Catalog reads do not merge custom_providers
 
-`custom_providers:` entries added from the terminal **after** the library was first seeded appear via `listModels`, exactly once (idempotent dedup), with their API key persisted under the derived env var.
+`listModels` does not copy `custom_providers` rows into `models.json` and does not persist their API keys. It may add a missing `providerRef` on an existing row when that row uniquely matches a registry record or a pinned Hermes builtin slug.
 
 ### Desktop deletion cleans the agent config
 
@@ -131,11 +131,11 @@ Removing a provider in the desktop also deletes its `providers:` entry, so it st
 
 ### Desktop model adds sync into custom_providers
 
-`addModel` / `removeModel` mirror custom endpoint models into config.yaml `custom_providers:` ([[src/main/agent-config-providers.ts#upsertAgentCustomProviderModel]]) so the strict chat picker sees Providers-UI additions without requiring a terminal edit.
+`addModel` for a resolved custom endpoint can still mirror that model into config.yaml `custom_providers:` ([[src/main/agent-config-providers.ts#upsertAgentCustomProviderModel]]). The local chat picker reads the profile `models.json` catalog, not that list.
 
 ### First-party brands mirror as user providers
 
-A keyed SMC Copilot is mirrored into config.yaml as `providers: hermesone:` ([[src/main/agent-config-providers.ts#mirrorFirstPartyAgentProviders]], run on every model-library / provider-list read) — without creating a custom card, since the brand owns a dedicated key card.
+`mirrorFirstPartyAgentProviders` can write `providers: hermesone:` when a model-library sync path runs. Provider list and catalog reads do not call it.
 
 This exists because desktop models on `inference.hermesone.org` are saved as bare `custom` + base URL, and the agent resolves `/model … --provider custom` against the **session's current** base URL — a session sitting on another provider (e.g. Nous) would send the SMC Copilot model to the wrong endpoint (the hermesone-swift → Nous-proxy 404). The named entry gives the switch a slug that always carries the right URL and `HERMESONE_API_KEY`; the dashboard transport's [[src/renderer/src/screens/Chat/hooks/useDashboardChatTransport.ts#resolveDashboardProviderForModel]] correspondingly matches **any** gateway provider row by base URL (named user providers included, not just `custom:*` rows) before ever falling back to bare `custom`.
 

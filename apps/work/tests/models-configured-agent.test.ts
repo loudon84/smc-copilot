@@ -112,8 +112,7 @@ describe("listConfiguredAgentModels", () => {
     ]);
   });
 
-  // @lat: [[model-selection#Session model override#Strict chat picker from agent config#Providers UI models sync into custom_providers]]
-  it("lists models added via addModel after syncing into custom_providers", async () => {
+  it("rejects a new custom model that has no ProviderRecord", async () => {
     writeFileSync(
       join(testHome, "config.yaml"),
       [
@@ -126,34 +125,15 @@ describe("listConfiguredAgentModels", () => {
     );
 
     const models = await freshModels();
-    models.addModel(
-      "deepseek-v4-flash",
-      "custom",
-      "deepseek-v4-flash",
-      "http://llm.superic.com:3900/v1",
-      undefined,
-      "SMC Copilot",
-    );
-    models.addModel(
-      "deepseek-v4-pro",
-      "custom",
-      "deepseek-v4-pro",
-      "http://llm.superic.com:3900/v1",
-      undefined,
-      "SMC Copilot",
-    );
-
-    const configured = models.listConfiguredAgentModels();
-    const enterprise = configured.filter(
-      (m) => m.baseUrl === "http://llm.superic.com:3900/v1",
-    );
-    expect(enterprise.map((m) => m.model).sort()).toEqual([
-      "deepseek-v4-flash",
-      "deepseek-v4-pro",
-    ]);
-    const yaml = readFileSync(join(testHome, "config.yaml"), "utf-8");
-    expect(yaml).toContain("custom_providers:");
-    expect(yaml).toContain("deepseek-v4-flash");
-    expect(yaml).toContain("deepseek-v4-pro");
+    expect(() =>
+      models.addModel(
+        "deepseek-v4-flash",
+        "custom",
+        "deepseek-v4-flash",
+        "http://llm.superic.com:3900/v1",
+        undefined,
+        "SMC Copilot",
+      ),
+    ).toThrow("MODEL_PROVIDER_UNRESOLVED");
   });
 });

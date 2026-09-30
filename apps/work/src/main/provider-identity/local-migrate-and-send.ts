@@ -4,6 +4,10 @@ import {
   matchLegacyProvider,
   type LegacyRegistryRecord,
 } from "./legacy-identity";
+import {
+  canonicalBuiltinSlug,
+  canonicalBuiltinSlugs,
+} from "./canonical-builtins";
 
 export type LocalChatRouteError =
   | "SESSION_PROVIDER_UNRESOLVED"
@@ -53,6 +57,7 @@ export async function prepareLocalChatRoute(input: {
   wroteProjection?: boolean;
   gatewayLoadedProjection?: boolean;
   fillProjection?: () => Promise<{ wrote: boolean }>;
+  persistCanonical?: (providerRef: string) => Promise<boolean>;
   restart?: () => Promise<boolean>;
 }): Promise<LocalChatRouteResult> {
   if (input.mode !== "local") return { ok: true, action: "passthrough" };
@@ -113,7 +118,24 @@ export async function prepareLocalChatRoute(input: {
       return { ok: false, requests: 0, error: "PROVIDER_PROJECTION_DRIFT" };
     }
     const filled = await input.fillProjection();
-    wrote = filled.wrote || wrote;
+    if (!filled.wrote) {
+      return { ok: false, requests: 0, error: "PROVIDER_PROJECTION_DRIFT" };
+    }
+    wrote = true;
+  }
+
+  if (input.persistCanonical) {
+    const persisted = await input.persistCanonical(providerRef);
+    if (!persisted) {
+      return {
+        ok: false,
+        requests: 0,
+        error:
+          input.source === "active-model"
+            ? "ACTIVE_MODEL_PROVIDER_UNRESOLVED"
+            : "SESSION_PROVIDER_UNRESOLVED",
+      };
+    }
   }
 
   if (wrote && !input.gatewayLoadedProjection) {
@@ -141,6 +163,7 @@ export async function routeDesktopSend(input: {
   baseUrl?: string;
   providerRef?: string;
   source: "session" | "active-model";
+  sessionId?: string;
 }): Promise<LocalChatRouteResult> {
   if (
     input.mode !== "local" ||
@@ -177,9 +200,10 @@ export async function routeDesktopSend(input: {
   let providerRef = input.providerRef;
   if (!providerRef) {
     const matched = matchLegacyProvider({
-      provider: input.provider || "",
+      provider: canonicalBuiltinSlug(input.provider || "") || input.provider || "",
       baseUrl: input.baseUrl,
       registry: legacyRegistry,
+      builtinSlugs: canonicalBuiltinSlugs(),
     });
     if (!matched.ok) {
       return {
@@ -220,6 +244,19 @@ export async function routeDesktopSend(input: {
     ? readEnv(profile)[record.keyEnv] || ""
     : undefined;
 
+  const log = redactRouteLog(
+    {
+      profile: input.profile || "default",
+      providerRef,
+      strategy: providerRef.startsWith("builtin:") ? "builtin" : "named-config",
+      source: input.providerRef ? "canonical" : "migrated-legacy",
+      model: input.model,
+      modelRequestCount: 0,
+    },
+    secretValue || "",
+  );
+  console.info(log);
+
   return prepareLocalChatRoute({
     mode: "local",
     model: input.model,
@@ -231,6 +268,50 @@ export async function routeDesktopSend(input: {
     legacyRegistry,
     projectionOk,
     secretValue,
+    persistCanonical: input.providerRef
+      ? undefined
+      : async (ref) => {
+      if (input.source === "active-model") {
+        const { getModelConfig, setModelConfig, removeBlockChild } =
+          await import("../config");
+        const { profilePaths, safeWriteFile } = await import("../utils");
+        const { existsSync, readFileSync } = await import("fs");
+        const current = getModelConfig(profile);
+        const key = ref.startsWith("named:")
+          ? ref.slice("named:".length)
+          : ref.startsWith("builtin:")
+            ? ref.slice("builtin:".length)
+            : current.provider;
+        setModelConfig(key, current.model || input.model, "", profile);
+        const { configFile } = profilePaths(profile);
+        if (existsSync(configFile)) {
+          safeWriteFile(
+            configFile,
+            removeBlockChild(readFileSync(configFile, "utf-8"), "model", "base_url"),
+          );
+        }
+        return true;
+      }
+      if (!input.sessionId) return true;
+      const { getSessionModelOverride, setSessionModelOverride } =
+        await import("../session-model-override-store");
+      const current = getSessionModelOverride(input.sessionId);
+      if (!current) return false;
+      const named = ref.startsWith("named:")
+        ? ref.slice("named:".length)
+        : ref.startsWith("builtin:")
+          ? ref.slice("builtin:".length)
+          : current.provider;
+      setSessionModelOverride(input.sessionId, {
+        ...current,
+        provider: named,
+        providerRef: ref,
+        legacyProvider: current.legacyProvider || current.provider,
+        legacyBaseUrl: current.legacyBaseUrl || current.baseUrl,
+        migrationStatus: input.providerRef ? "canonical" : "migrated",
+      });
+      return true;
+    },
     restart: async () => {
       const { getRuntimeManager } = await import("../runtime/runtime-manager");
       const restarted = await getRuntimeManager().restart(profile);

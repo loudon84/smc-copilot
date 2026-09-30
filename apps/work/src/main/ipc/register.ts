@@ -208,6 +208,25 @@ import {
   type ConnectionConfig,
 } from "../config";
 import {
+  bootstrapRuntimeProvider,
+  getRuntimeProviderPublicState,
+  isRuntimeSettingsLocked,
+  subscribeRuntimeProviderState,
+} from "../runtime-provider/runtime-provider-orchestrator";
+import {
+  notifyAcceptedRuntimeBootstrap,
+  requestRuntimeLocalReentry,
+  stopRuntimeReconcile,
+} from "../runtime-provider/runtime-provider-reconcile-bindings";
+import { readStoredSessionSync } from "../auth/token-store";
+import { restoreRuntimeProviderForSplash } from "../auth/auth-ipc";
+import { getRuntimeProviderDiagnostics } from "../runtime-provider/runtime-provider-diagnostics";
+import {
+  currentRuntimeProduct,
+  exportRuntimeProviderDiagnostics,
+} from "../runtime-provider/runtime-provider-support-export";
+import { clearManagedSecret } from "../runtime-provider/managed-runtime-secret-store";
+import {
   getAuxiliaryConfig,
   setAuxiliaryTask,
   resetAuxiliaryToAuto,
@@ -308,8 +327,8 @@ import {
 import {
   listCustomProviders,
   removeCustomProvider,
-  upsertCustomProvider,
 } from "../providers-store";
+import { saveNamedProvider } from "../provider-identity/provider-save-transaction";
 import { syncWalletsForProfile } from "../wallet-sync";
 import { getWalletPortfolio, provisionAgentWallet } from "../wallet-actions";
 import { getTokenBalances } from "../wallet-balances";
@@ -746,6 +765,14 @@ export function registerIpcHandlers(context: IpcContext): void {
     }
   });
 
+  subscribeRuntimeProviderState((event) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send("runtime-provider-state-changed", event);
+      }
+    }
+  });
+
   ipcMain.handle("quit-app", () => {
     if (requestQuit) requestQuit();
     else app.quit();
@@ -894,6 +921,9 @@ export function registerIpcHandlers(context: IpcContext): void {
   // OAuth provider sign-in �?spawns `hermes auth add <provider> --type
   // oauth`, streaming the CLI's output to the renderer's sign-in modal.
   ipcMain.handle("oauth-login", (event, provider: string, profile?: string) => {
+    if (isRuntimeSettingsLocked(profile)) {
+      throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+    }
     // Codex uses a device-code flow: it prints a URL + code instead
     // of opening a browser. Watch the stream for that prompt, then
     // open the page and pre-copy the code so the user just pastes.
@@ -966,6 +996,9 @@ export function registerIpcHandlers(context: IpcContext): void {
   // to the local profile `.env`, which remote/SSH chat doesn't read �?issuing
   // one there would strand an orphan key on the backend every screen visit.
   ipcMain.handle("hermesone-ensure-key", (_event, profile?: string) => {
+    if (isRuntimeSettingsLocked(profile)) {
+      throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+    }
     if (getConnectionConfig().mode !== "local") {
       return { status: "error", error: "Local connections only." };
     }
@@ -1046,6 +1079,9 @@ export function registerIpcHandlers(context: IpcContext): void {
         await sshSetEnvValue(conn.ssh, key, value, profile);
         return true;
       }
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       setEnvValue(key, value, profile);
       // Restart gateway so it picks up the new API key.
       // The earlier condition had a precedence bug �?
@@ -1080,6 +1116,9 @@ export function registerIpcHandlers(context: IpcContext): void {
       if (conn.mode === "ssh" && conn.ssh) {
         await sshSetConfigValue(conn.ssh, key, value, profile);
         return true;
+      }
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
       }
       setConfigValue(key, value, profile);
       return true;
@@ -1126,6 +1165,9 @@ export function registerIpcHandlers(context: IpcContext): void {
       baseUrl: string,
       profile?: string,
     ) => {
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       const conn = getConnectionConfig();
       if (conn.mode === "remote") {
         return withRemoteDashboard(
@@ -1239,6 +1281,9 @@ export function registerIpcHandlers(context: IpcContext): void {
         // TODO: SSH path for auxiliary config (requires sshSetAuxiliaryTask)
         return false;
       }
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       setAuxiliaryTask(task, cfg, profile);
 
       // Restart gateway so it picks up the new auxiliary config
@@ -1255,6 +1300,9 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "ssh" && conn.ssh) {
       // TODO: SSH path for auxiliary config (requires sshResetAuxiliaryConfig)
       return false;
+    }
+    if (isRuntimeSettingsLocked(profile)) {
+      throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
     }
     resetAuxiliaryToAuto(profile);
 
@@ -1327,9 +1375,11 @@ export function registerIpcHandlers(context: IpcContext): void {
       });
       resetSshDashboardAvailability();
       notifyConnectionConfigChanged();
-      // C-007: switching back to local while ABSENT/FAIL re-triggers Bootstrap.
-      if (mode === "local" && existing.mode !== "local") {
+      if (mode !== "local") {
+        stopRuntimeReconcile();
+      } else if (existing.mode !== "local") {
         startHermesBootstrapAsync();
+        void requestRuntimeLocalReentry();
       }
       return true;
     },
@@ -2110,6 +2160,9 @@ export function registerIpcHandlers(context: IpcContext): void {
         await sshSetPlatformEnabled(conn.ssh, platform, enabled, profile);
         return true;
       }
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       setPlatformEnabled(platform, enabled, profile);
       // Restart gateway so it picks up the new platform config
       if (isGatewayRunning(profile)) {
@@ -2449,6 +2502,8 @@ export function registerIpcHandlers(context: IpcContext): void {
     return deleteProfile(name);
   });
   ipcMain.handle("set-active-profile", async (_event, name: string) => {
+    const previous = getActiveProfileNameSync();
+    clearManagedSecret(previous);
     // Persist the selection LOCALLY in every mode (incl. SSH) �?the desktop
     // tracks "which profile is active" via the local ~/.hermes/active_profile,
     // so without this an SSH session forgot the choice and reset to `default`
@@ -2466,6 +2521,11 @@ export function registerIpcHandlers(context: IpcContext): void {
       if (!(await sshGatewayStatus(conn.ssh, name))) {
         await sshStartGateway(conn.ssh, name);
       }
+    }
+    if (getConnectionConfig().mode === "local") {
+      void bootstrapRuntimeProvider("profile_switch", name).then((result) => {
+        notifyAcceptedRuntimeBootstrap(result);
+      });
     }
     return true;
   });
@@ -2528,16 +2588,36 @@ export function registerIpcHandlers(context: IpcContext): void {
     (
       _event,
       profile: string | undefined,
-      input: { name: string; baseUrl: string },
-    ) => {
-      const record = upsertCustomProvider(profile, input);
+      input: {
+        id?: string;
+        name: string;
+        baseUrl: string;
+        secret?: string;
+        apiMode?: string;
+      },
+      ) => {
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
+      const saved = saveNamedProvider({
+        profile: (profile || "default").trim() || "default",
+        id: input.id,
+        name: input.name,
+        baseUrl: input.baseUrl,
+        secret: input.secret,
+        apiMode: input.apiMode,
+      });
+      if (!saved.ok) return null;
       notifyCustomProvidersChanged();
-      return record;
+      return saved.record;
     },
   );
   ipcMain.handle(
     "remove-custom-provider",
     (_event, profile: string | undefined, name: string) => {
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       removeCustomProvider(profile, name);
       notifyCustomProvidersChanged();
     },
@@ -2781,6 +2861,9 @@ export function registerIpcHandlers(context: IpcContext): void {
       entries: Array<Record<string, unknown>>,
       profile?: string,
     ) => {
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       setCredentialPool(provider, entries, profile);
       return true;
     },
@@ -2799,12 +2882,53 @@ export function registerIpcHandlers(context: IpcContext): void {
       label: string,
       profile?: string,
     ) => {
+      if (isRuntimeSettingsLocked(profile)) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       return addCredentialPoolEntry(provider, apiKey, label, profile);
     },
   );
 
+  ipcMain.handle("get-runtime-provider-state", (_event, profile?: string) =>
+    getRuntimeProviderPublicState(profile),
+  );
+
+  ipcMain.handle("runtime-provider-restore", () =>
+    restoreRuntimeProviderForSplash(),
+  );
+
+  ipcMain.handle("runtime-provider-refresh", async () => {
+    if (getConnectionConfig().mode !== "local" || !readStoredSessionSync()) {
+      return { state: "UNBOUND" as const };
+    }
+    const result = await bootstrapRuntimeProvider("refresh");
+    notifyAcceptedRuntimeBootstrap(result);
+    return result.state;
+  });
+
+  ipcMain.handle("runtime-provider-get-diagnostics", (_event, profile?: string) =>
+    getRuntimeProviderDiagnostics(profile),
+  );
+
+  ipcMain.handle(
+    "runtime-provider-export-diagnostics",
+    async (event, profile?: string) => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      return exportRuntimeProviderDiagnostics({
+        profile,
+        product: currentRuntimeProduct(),
+        choosePath: async (defaultName) => {
+          const choice = owner
+            ? await dialog.showSaveDialog(owner, { defaultPath: defaultName })
+            : await dialog.showSaveDialog({ defaultPath: defaultName });
+          return { canceled: choice.canceled, filePath: choice.filePath };
+        },
+      });
+    },
+  );
+
   // Models
-  ipcMain.handle("list-models", () => {
+  ipcMain.handle("list-models", (_event, profile?: string) => {
     const conn = getConnectionConfig();
     if (conn.mode === "remote") {
       if (conn.remoteChatTransport === "legacy") {
@@ -2827,7 +2951,7 @@ export function registerIpcHandlers(context: IpcContext): void {
     }
     // Pass the active profile so terminal-added `custom_providers:` entries in
     // that profile's config.yaml are merged into the library on read.
-    return listModels(getActiveProfileNameSync());
+    return listModels(profile?.trim() || getActiveProfileNameSync());
   });
   // Chat ModelPicker strict source: config.yaml only (not models.json library).
   ipcMain.handle("list-configured-models", (_event, profile?: string) => {
@@ -2902,6 +3026,9 @@ export function registerIpcHandlers(context: IpcContext): void {
       contextLength?: number,
       providerLabel?: string,
     ) => {
+      if (isRuntimeSettingsLocked()) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       const conn = getConnectionConfig();
       let addedModel: Awaited<ReturnType<typeof addModel>>;
       if (conn.mode === "remote") {
@@ -2928,6 +3055,8 @@ export function registerIpcHandlers(context: IpcContext): void {
           baseUrl,
           contextLength,
           providerLabel,
+          undefined,
+          getActiveProfileNameSync(),
         );
       }
       notifyModelLibraryChanged();
@@ -2935,6 +3064,9 @@ export function registerIpcHandlers(context: IpcContext): void {
     },
   );
   ipcMain.handle("remove-model", async (_event, id: string) => {
+    if (isRuntimeSettingsLocked()) {
+      throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+    }
     const conn = getConnectionConfig();
     let removed: boolean;
     if (conn.mode === "remote") {
@@ -2967,6 +3099,9 @@ export function registerIpcHandlers(context: IpcContext): void {
       // can't ride inside the string-only `fields`). Local-mode only for now.
       contextLength?: number | null,
     ) => {
+      if (isRuntimeSettingsLocked()) {
+        throw new Error("RUNTIME_PROVIDER_SETTINGS_LOCKED");
+      }
       const conn = getConnectionConfig();
       let updated: boolean;
       if (conn.mode === "remote") {
