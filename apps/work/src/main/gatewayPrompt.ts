@@ -38,6 +38,8 @@ export function secretRespond(requestId: string, answer: string): {
   };
 }
 
+let parentWindowGetter: () => BrowserWindow | null = () => null;
+
 /** Wire the provider that returns the window to parent the modal to. Called
  *  once from index.ts after the main window is created. */
 export function setGatewayPromptParent(
