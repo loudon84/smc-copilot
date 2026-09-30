@@ -13,7 +13,9 @@ const {
     connection,
     bootstrapRuntimeProvider: vi.fn(),
     clearStoredSession: vi.fn(async () => undefined),
-    getRuntimeProviderPublicState: vi.fn(() => ({ state: "UNBOUND" as const })),
+    getRuntimeProviderPublicState: vi.fn((): { state: string } => ({
+      state: "UNBOUND",
+    })),
     notifyAcceptedRuntimeBootstrap: vi.fn(),
     readStoredSessionSync: vi.fn((): { accessToken: string } | null => ({
       accessToken: "token",
