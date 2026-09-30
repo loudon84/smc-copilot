@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
 import { basename, join } from "path";
+import { normalizeKnowledgeServiceUrl } from "./work-knowledge-build-config.mjs";
 import { normalizeRegistryBuildProfile } from "./work-registry-build-profile.mjs";
 
 export const RELEASE_MANIFEST_SCHEMA = "smc.work.release.v1";
@@ -116,6 +117,45 @@ export function assertPackagedRegistryConfig(path, expectedMode, expectedDescrip
     return actual;
   } catch {
     throw new Error("Packaged Registry descriptor is invalid");
+  }
+}
+
+export function assertPackagedKnowledgeConfig(path, expectedMode, serviceUrl) {
+  if (expectedMode === "community") {
+    if (existsSync(path)) {
+      throw new Error("Packaged Knowledge descriptor must be absent for Community mode");
+    }
+    return;
+  }
+  if (expectedMode !== "enterprise") {
+    throw new Error("Packaged Knowledge descriptor is invalid");
+  }
+
+  let expectedOrigin;
+  try {
+    expectedOrigin = normalizeKnowledgeServiceUrl(serviceUrl);
+  } catch {
+    throw new Error("Packaged Knowledge descriptor is invalid");
+  }
+
+  try {
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      throw new Error("missing");
+    }
+    const actual = readJson(path);
+    if (
+      actual?.schemaVersion !== 1 ||
+      actual.serviceUrl !== expectedOrigin ||
+      Object.keys(actual).length !== 2
+    ) {
+      throw new Error("mismatch");
+    }
+    return actual;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Packaged Knowledge descriptor is invalid") {
+      throw error;
+    }
+    throw new Error("Packaged Knowledge descriptor is invalid");
   }
 }
 
@@ -301,6 +341,17 @@ function main() {
       throw new Error("Usage: validate-build-info <path> <version> [gitCommit]");
     }
     assertWorkBuildInfo(infoPath, version, gitCommit ?? "");
+    return;
+  }
+
+  if (command === "validate-knowledge-config") {
+    const [configPath, mode, serviceUrl] = args;
+    if (!configPath || !mode || (mode === "enterprise" && !serviceUrl)) {
+      throw new Error(
+        "Usage: validate-knowledge-config <path> <enterprise|community> [serviceUrl]",
+      );
+    }
+    assertPackagedKnowledgeConfig(configPath, mode, serviceUrl);
     return;
   }
 

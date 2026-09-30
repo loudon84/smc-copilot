@@ -49,7 +49,7 @@ Exception: pure version bumps (`package.json` `version` / `set-version.mjs`) and
 
 ### Build entry
 
-- Prefer `cd apps/work && npm run build:win` (or `release:build:win`). Do not assume Nx `work:package-win` works if desktop project is missing.
+- Release pack entry is `cd apps/work && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-work-release.ps1` (`npm run release:build:win`). `npm run build:win` is the local installer only. Do not assume Nx `work:package-win` works if desktop project is missing.
 - Enterprise registry: set `SMC_WORK_REGISTRY_BUILD_PROFILE_FILE` to an **absolute** profile path before pack.
 - Keep `package.json` `scripts` and `devDependencies` intact when editing packaging — a truncated `package.json` breaks builds.
 

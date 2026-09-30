@@ -26,10 +26,15 @@ function Import-DotEnvFile {
   )
 
   if (-not (Test-Path -LiteralPath $Path)) {
-    return
+    Write-Host "apps/work/.env not found; using the current process environment"
+    return 0
   }
 
-  foreach ($line in Get-Content -LiteralPath $Path) {
+  $loaded = 0
+  foreach ($line in Get-Content -LiteralPath $Path -Encoding utf8) {
+    if ($line -match '^\uFEFF') {
+      $line = $line.TrimStart([char]0xFEFF)
+    }
     if ($line -match '^\s*(?:#.*)?$') {
       continue
     }
@@ -46,11 +51,15 @@ function Import-DotEnvFile {
       $value = $value.Substring(1, $value.Length - 2)
     }
 
-    if (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name))) {
+    $existing = [Environment]::GetEnvironmentVariable($name, "Process")
+    if (-not [string]::IsNullOrEmpty($existing)) {
       continue
     }
     Set-Item -Path "Env:$name" -Value $value
+    $loaded += 1
   }
+  Write-Host "Loaded $loaded keys from apps/work/.env into the release process"
+  return $loaded
 }
 
 function Require-CleanGitTree {
@@ -136,7 +145,7 @@ function Get-PackageVersion {
 
 Push-Location $repoRoot
 try {
-  Import-DotEnvFile -Path $dotenvPath
+  Invoke-Step "Load apps/work/.env" { Import-DotEnvFile -Path $dotenvPath }
   $version = Get-PackageVersion
   if (-not $ReleaseNotesPath) {
     $ReleaseNotesPath = Join-Path $repoRoot "release-notes\$version.md"
@@ -164,6 +173,14 @@ try {
     node (Join-Path $PSScriptRoot "generate-work-registry-config.mjs")
   }
   if ($LASTEXITCODE -ne 0) { throw "generate-work-registry-config.mjs failed" }
+  Invoke-Step "Prepare Knowledge build config" {
+    node (Join-Path $PSScriptRoot "generate-work-knowledge-config.mjs")
+  }
+  if ($LASTEXITCODE -ne 0) { throw "generate-work-knowledge-config.mjs failed" }
+  Invoke-Step "Stage Hermes bootstrap installer" {
+    node (Join-Path $PSScriptRoot "stage-hermes-bootstrap.mjs")
+  }
+  if ($LASTEXITCODE -ne 0) { throw "stage-hermes-bootstrap.mjs failed" }
   Invoke-Step "Install dependencies" { npm ci }
   if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
   Invoke-Step "Run guards" { npm run guard }
@@ -172,6 +189,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "npm run typecheck failed" }
   Invoke-Step "Run tests" { npm test }
   if ($LASTEXITCODE -ne 0) { throw "npm test failed" }
+  Invoke-Step "Compile application" { npx electron-vite build }
+  if ($LASTEXITCODE -ne 0) { throw "electron-vite build failed" }
   Invoke-Step "Build Windows NSIS artifact" { node (Join-Path $PSScriptRoot "run-electron-builder.mjs") --win nsis --x64 --publish never }
   if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 
@@ -196,6 +215,16 @@ try {
   Invoke-Step "Verify packaged build identity" {
     node $guardScript validate-build-info $buildInfoPath $version $gitCommit
     if ($LASTEXITCODE -ne 0) { throw "Packaged work-build-info.json verification failed" }
+  }
+
+  $knowledgeConfigPath = Join-Path $unpackedResources "work-knowledge-config.json"
+  Invoke-Step "Verify packaged Knowledge descriptor" {
+    if ($env:SMC_KNOWLEDGE_SERVICE_URL) {
+      node $guardScript validate-knowledge-config $knowledgeConfigPath enterprise "$env:SMC_KNOWLEDGE_SERVICE_URL"
+    } else {
+      node $guardScript validate-knowledge-config $knowledgeConfigPath community
+    }
+    if ($LASTEXITCODE -ne 0) { throw "Packaged Knowledge descriptor verification failed" }
   }
 
   $registryConfigPath = Join-Path $unpackedResources "work-registry-config.json"

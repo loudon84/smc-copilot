@@ -110,8 +110,13 @@ describe("work v2.2 builder configuration", () => {
     expect(buildScript.trimStart().startsWith("param(")).toBe(true);
     expect(buildScript).toContain("ReleaseNotesPath");
     expect(buildScript).toContain("Import-DotEnvFile");
+    expect(buildScript).toContain("Load apps/work/.env");
     expect(buildScript).toContain("generate-work-build-info.mjs");
     expect(buildScript).toContain("generate-work-registry-config.mjs");
+    expect(buildScript).toContain("generate-work-knowledge-config.mjs");
+    expect(buildScript).toContain("stage-hermes-bootstrap.mjs");
+    expect(buildScript).toContain("electron-vite build");
+    expect(buildScript).toContain("validate-knowledge-config");
     expect(buildScript).toContain("run-electron-builder.mjs");
     expect(buildScript).toContain("validate-build-info");
     expect(buildScript).toContain("validate-registry-config");

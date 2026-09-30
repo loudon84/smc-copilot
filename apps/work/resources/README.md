@@ -25,8 +25,10 @@ Agent 强制规则：仓库 `.cursor/rules/work-packaging-hard-controls.mdc`；�
 
 ```powershell
 cd E:\git\smc-copilot\apps\work
-npm run build:win
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-work-release.ps1
 ```
+
+`npm run release:build:win` 调用同一脚本。`npm run build:win` 只做本地安装包，不走签名、更新清单和版本目录校验。
 
 产物：
 
@@ -35,7 +37,7 @@ npm run build:win
 | `dist/smc-copilot-<version>-setup.exe` | NSIS 安装包 |
 | `dist/win-unpacked/` | 未压缩目录，便于冒烟 |
 
-正式发版入口（更严校验）：`npm run release:build:win` → `scripts/build-work-release.ps1`。
+上面的命令就是正式发版入口。安装包同时复制到 `release/work/<version>/`。
 
 版本号来自 `package.json` 的 `version`（可用 `node scripts/set-version.mjs <semver>` 改写）。
 

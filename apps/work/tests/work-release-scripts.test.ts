@@ -8,6 +8,7 @@ import {
   assertPackagedAppUpdateYml,
   assertReleaseArtifacts,
   assertReleaseDirectoryAbsent,
+  assertPackagedKnowledgeConfig,
   assertPackagedRegistryConfig,
   assertWorkBuildInfo,
   buildReleaseManifest,
@@ -76,6 +77,25 @@ describe("work release guard helpers", () => {
     );
     rmSync(configPath);
     expect(assertPackagedRegistryConfig(configPath, "community")).toBeUndefined();
+  });
+
+  it("requires the Knowledge origin in enterprise packages and omits it in Community", () => {
+    testDir = mkdtempSync(join(tmpdir(), "work-knowledge-package-"));
+    const configPath = join(testDir, "work-knowledge-config.json");
+    const config = { schemaVersion: 1, serviceUrl: "http://agent.example:4530" };
+
+    expect(() =>
+      assertPackagedKnowledgeConfig(configPath, "enterprise", "http://agent.example:4530/v1"),
+    ).toThrow(/Packaged Knowledge descriptor is invalid/);
+    writeFileSync(configPath, JSON.stringify(config));
+    expect(
+      assertPackagedKnowledgeConfig(configPath, "enterprise", "http://agent.example:4530/v1"),
+    ).toEqual(config);
+    expect(() => assertPackagedKnowledgeConfig(configPath, "community")).toThrow(
+      /must be absent/,
+    );
+    rmSync(configPath);
+    expect(assertPackagedKnowledgeConfig(configPath, "community")).toBeUndefined();
   });
 
   it("accepts only the production HTTPS stable update URL", () => {

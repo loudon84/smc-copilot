@@ -5,10 +5,12 @@
 import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { loadDotEnvFile } from "./lib/load-dotenv.mjs";
 import { fileURLToPath } from "node:url";
 import { readPackageVersion } from "./lib/work-release-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+loadDotEnvFile(join(root, ".env"));
 const outPath = join(root, "resources", "work-build-info.json");
 
 function git(args) {

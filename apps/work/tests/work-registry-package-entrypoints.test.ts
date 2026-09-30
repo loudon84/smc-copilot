@@ -19,6 +19,9 @@ describe("work Registry package entry points", () => {
       expect(packageJson.scripts[script]).toContain("prepare:registry-profile");
     }
     expect(release).toContain("generate-work-registry-config.mjs");
+    expect(release).toContain("generate-work-knowledge-config.mjs");
+    expect(release).toContain("stage-hermes-bootstrap.mjs");
+    expect(release).toContain("electron-vite build");
   });
 
   it("uses an isolated enterprise-to-Community Windows unpacked proof without publishing", () => {

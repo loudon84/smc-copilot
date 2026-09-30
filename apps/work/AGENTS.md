@@ -18,7 +18,7 @@ Windows packaging rules for this app are **locked**. Full text: repo rule
   Registry profile bake-in (`SMC_WORK_REGISTRY_BUILD_PROFILE_FILE`).
 - Do **not** reintroduce runtime hardcodes like `e:/git/hermes-agent/...` for
   `install.ps1`, or top-level electron-builder `"!**/*"` allowlists.
-- Normal pack entry: `npm run build:win` (set enterprise env vars as in README).
+- Release pack entry: `scripts/build-work-release.ps1` (`npm run release:build:win`). Set enterprise env vars as in README. `npm run build:win` is the local installer only.
 
 # Post-task checklist
 

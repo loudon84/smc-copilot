@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadDotEnvFile } from "./lib/load-dotenv.mjs";
 import { prepareRegistryBuildProfile, REGISTRY_CONFIG_FILE } from "./lib/work-registry-build-profile.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+loadDotEnvFile(join(root, ".env"));
 const outputFile = join(root, "resources", REGISTRY_CONFIG_FILE);
 
 try {

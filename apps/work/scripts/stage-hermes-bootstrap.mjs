@@ -13,8 +13,10 @@
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadDotEnvFile } from "./lib/load-dotenv.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+loadDotEnvFile(join(root, ".env"));
 const destDir = join(root, "resources", "hermes-bootstrap");
 const dest = join(destDir, "install.ps1");
 
