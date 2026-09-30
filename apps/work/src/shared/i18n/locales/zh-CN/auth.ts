@@ -15,6 +15,7 @@ export default {
   configDiffApply: "应用",
   configDiffCancel: "取消",
   checkingSession: "正在检查会话…",
+  loadingUserProfile: "正在加载用户资料",
   account: "账户",
   accountPlaceholder: "邮箱 / 手机号 / 用户名",
   accountRequired: "请输入账号",

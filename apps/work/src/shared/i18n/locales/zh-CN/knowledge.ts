@@ -259,6 +259,9 @@ export default {
     targetBase: "目标知识库",
     drawerTitle: "上传到",
     lockedTarget: "此次上传已锁定到当前知识库。",
+    contentUnreadable:
+      "文件内容与声明的格式不符，或可能受保护；请改用可读取的纯文本副本",
+    uploadContentUnreadable: "内容无法按声明类型读取，禁止上传",
   },
   chat: {
     title: "知识库对话",

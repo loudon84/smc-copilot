@@ -3,6 +3,24 @@ export default {
   sessionTitle: "会话 {{id}}",
   noModel: "未设置模型",
   auto: "自动",
+  runtimeProvider: {
+    fetching: "正在加载企业模型…",
+    applying: "正在应用企业模型…",
+    clearing: "正在清除企业模型凭据…",
+    staleActive: "企业模型控制面不可用。正在使用上次已应用的配置。",
+    modelNotConfigured: "管理员尚未配置企业模型",
+    modelCredentialDisabled: "企业模型凭据已禁用",
+    modelCredentialClosing: "企业模型凭据正在关闭",
+    modelSyncNotReady: "企业模型配置尚未完成同步",
+    modelListEmpty: "管理员尚未配置运行时模型",
+    modelDefaultNotSet: "管理员尚未设置默认模型",
+    modelDefaultInvalid: "默认模型配置无效",
+    modelProviderUnsupported: "当前模型提供商不受支持",
+    modelCredentialInvalid: "企业模型凭据无效",
+    error: "企业模型设置失败：{{code}}",
+    unbound: "企业运行时尚未绑定",
+    refresh: "刷新企业模型",
+  },
   commandsTitle: "命令",
   typeMessage: "输入消息...（Shift+Enter 换行）",
   quickAskTitle: "快速提问（/btw）—— 不会影响当前对话上下文的旁支问题",
@@ -87,6 +105,8 @@ export default {
   attachTextTooLarge: "{{name}}：文件过大（最大 256 KB）",
   attachTooMany: "附件数量过多（每条消息最多 10 个）",
   attachReadFailed: "{{name}}：无法读取",
+  attachContentUnreadable:
+    "{{name}}：内容与其类型不符，或可能受保护。请改用可读取的副本。",
   attachRemoteModeBinary:
     "{{name}}：PDF/二进制附件需要本地模式 — 图片和文本文件仍可使用。",
   validation: {

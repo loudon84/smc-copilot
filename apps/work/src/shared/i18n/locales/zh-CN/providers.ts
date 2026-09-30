@@ -87,4 +87,20 @@ export default {
     successHint: "你已登录。可以关闭此窗口。",
     failed: "登录失败。",
   },
+  enterpriseRuntime: {
+    title: "SMC 企业运行时",
+    managed: "此提供商由企业 NodeDeskClaw 管理。",
+    notReady: "此企业模型尚未就绪。管理员须在 NodeDeskClaw 中修复。",
+    unavailable: "运行时诊断不可用。",
+    secretLoaded: "凭据已加载",
+    secretMissing: "凭据未加载",
+    reconcile: "立即对账",
+    retry: "重试对账",
+    export: "导出诊断",
+    openGateway: "打开 Gateway",
+  },
+  auxiliary: {
+    managed:
+      "这些辅助任务跟随企业模型。企业运行时受管期间无法更改路由。",
+  },
 } as const;

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { t, getLocaleDirection } from "./index";
+import { DEFAULT_ACTIVE_LOCALE, getLocaleDirection, setLocale, t } from "./index";
 
 describe("shared i18n", () => {
-  it("returns zh-CN text by default", () => {
+  it("returns zh-CN text for the product default locale", () => {
+    setLocale(DEFAULT_ACTIVE_LOCALE);
     expect(t("welcome.title")).toBe("欢迎使用 SMC Copilot");
   });
 
