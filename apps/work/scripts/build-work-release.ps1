@@ -76,9 +76,13 @@ function Invoke-NpmTestIsolatedFromDotEnv {
   }
   $exit = 0
   try {
-    npm test
+    # Capture stdout so this function returns only the numeric exit code.
+    $npmOutput = & npm.cmd test 2>&1
     if ($null -ne $LASTEXITCODE) {
       $exit = $LASTEXITCODE
+    }
+    if ($null -ne $npmOutput) {
+      $npmOutput | Out-Host
     }
   } finally {
     # Restore injected .env keys after npm test.
