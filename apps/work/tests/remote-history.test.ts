@@ -64,7 +64,7 @@ describe("Remote/SSH Mode History Preservation", () => {
   it("sendMessage passes history to the best API transport in remote mode", () => {
     // Extract the sendMessage function's remote mode branch
     const remoteModeBranch = hermesSrc.match(
-      /\/\/ Remote mode: always use API, no CLI fallback[\s\S]*?if \(isRemoteMode\(\)\) \{[\s\S]*?return sendMessageViaBestApi\([\s\S]*?\);[\s\S]*?\}/,
+      /if \(isRemoteMode\(\)\) \{\s*return sendMessageViaBestApi\([\s\S]*?\);/,
     );
 
     expect(remoteModeBranch).toBeDefined();

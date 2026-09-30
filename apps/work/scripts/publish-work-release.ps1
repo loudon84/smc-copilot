@@ -85,13 +85,17 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
   throw "release-manifest.json not found"
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+$version = [string]$manifest.version
+if (-not $version) {
+  throw "release-manifest.json missing version"
+}
 $isLocalStaging = [bool]$LocalRoot
 
 if (-not $isLocalStaging) {
   Assert-PublishableRelease -Manifest $manifest
 }
 
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "validate-work-release.ps1") -ReleaseDir $ReleaseDir
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "validate-work-release.ps1") -ReleaseDir $ReleaseDir -Version $version
 if ($LASTEXITCODE -ne 0) {
   throw "Local release validation failed"
 }

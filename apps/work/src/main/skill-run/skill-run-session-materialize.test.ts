@@ -37,6 +37,15 @@ type MessageRow = {
   active: number;
 };
 
+type MetadataRow = {
+  session_scope: string;
+  profile_id: string;
+  session_id: string;
+  session_kind: string;
+  execution_provider: string;
+  knowledge_set_id: string | null;
+};
+
 class FakeStmt {
   constructor(
     private readonly db: FakeDb,
@@ -78,7 +87,33 @@ class FakeStmt {
         ).length,
       };
     }
+    if (this.sql.includes("FROM sqlite_master WHERE type = 'table' AND name")) {
+      return this.db.metadataReady
+        ? { name: "desktop_session_metadata", sql: this.db.metadataSql }
+        : undefined;
+    }
+    if (this.sql.includes("SELECT sql FROM sqlite_master")) {
+      return this.db.metadataReady ? { sql: this.db.metadataSql } : undefined;
+    }
+    if (this.sql.includes("FROM desktop_session_metadata")) {
+      const [scope, profileId, sessionId] = args as [string, string, string];
+      return (
+        this.db.metadata.find(
+          (row) =>
+            row.session_scope === scope &&
+            row.profile_id === profileId &&
+            row.session_id === sessionId,
+        ) ?? undefined
+      );
+    }
     return undefined;
+  }
+
+  all(): Array<{ name: string }> {
+    if (this.sql.includes("PRAGMA table_info(desktop_session_metadata)")) {
+      return [{ name: "knowledge_set_id" }];
+    }
+    return [];
   }
 
   run(...args: unknown[]): void {
@@ -148,6 +183,25 @@ class FakeStmt {
         row.message_count = count;
         row.last_activity_at = lastActivityAt;
       }
+      return;
+    }
+    if (this.sql.startsWith("INSERT INTO desktop_session_metadata")) {
+      const [
+        sessionScope,
+        profileId,
+        sessionId,
+        sessionKind,
+        executionProvider,
+        knowledgeSetId,
+      ] = args as [string, string, string, string, string, string | null];
+      this.db.metadata.push({
+        session_scope: sessionScope,
+        profile_id: profileId,
+        session_id: sessionId,
+        session_kind: sessionKind,
+        execution_provider: executionProvider,
+        knowledge_set_id: knowledgeSetId,
+      });
     }
   }
 }
@@ -155,9 +209,16 @@ class FakeStmt {
 class FakeDb {
   sessions = new Map<string, SessionRow>();
   messages: MessageRow[] = [];
+  metadata: MetadataRow[] = [];
+  metadataReady = false;
+  metadataSql = "session_kind IN ('chat', 'work', 'kb-set')";
   nextMessageId = 1;
 
-  exec(): void {}
+  exec(sql: string): void {
+    if (sql.includes("CREATE TABLE") && sql.includes("desktop_session_metadata")) {
+      this.metadataReady = true;
+    }
+  }
 
   prepare(sql: string): FakeStmt {
     return new FakeStmt(this, sql);

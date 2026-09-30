@@ -10,7 +10,6 @@ const gatewayPromptSrc = readFileSync(
   join(ROOT, "src/main/gatewayPrompt.ts"),
   "utf-8",
 );
-const hermesSrc = readFileSync(join(ROOT, "src/main/hermes.ts"), "utf-8");
 const askpassPreloadSrc = readFileSync(
   join(ROOT, "src/preload/askpass.ts"),
   "utf-8",
@@ -116,13 +115,12 @@ describe("gateway sudo/secret prompt handling", () => {
 
   it("forwards answers with the gateway's exact respond shapes", () => {
     // sudo.respond carries `password`; secret.respond carries `value`.
-    expect(hermesSrc).toContain('"sudo.respond"');
-    expect(hermesSrc).toContain('"secret.respond"');
-    expect(hermesSrc).toContain("password: answer");
-    expect(hermesSrc).toContain("value: answer");
-    // Both keyed by request_id, mirroring clarify.respond.
-    expect(hermesSrc).toContain("request_id: requestId, password");
-    expect(hermesSrc).toContain("request_id: requestId, value");
+    expect(gatewayPromptSrc).toContain('"sudo.respond"');
+    expect(gatewayPromptSrc).toContain('"secret.respond"');
+    expect(gatewayPromptSrc).toContain("password: answer");
+    expect(gatewayPromptSrc).toContain("value: answer");
+    expect(gatewayPromptSrc).toContain("request_id: requestId, password");
+    expect(gatewayPromptSrc).toContain("request_id: requestId, value");
   });
 
   it("maps cancel to an empty answer (safe skip), never blocking the turn", () => {

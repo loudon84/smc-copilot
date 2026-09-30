@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 
-const USER_DATA = "E:/tmp/work-skill-run-telemetry-test";
+const TEST_TMP_ROOT = "C:/tmp";
+const USER_DATA = `${TEST_TMP_ROOT}/work-skill-run-telemetry-test`;
 
 vi.mock("electron", () => ({
   app: {
@@ -20,6 +21,7 @@ const TELEMETRY_FILE = join(USER_DATA, "logs", "skill-run-telemetry.jsonl");
 
 describe("skill-run-telemetry", () => {
   beforeEach(() => {
+    mkdirSync(TEST_TMP_ROOT, { recursive: true });
     mkdirSync(join(USER_DATA, "logs"), { recursive: true });
     if (existsSync(TELEMETRY_FILE)) {
       rmSync(TELEMETRY_FILE);

@@ -163,11 +163,6 @@ describe("useDashboardChatTransport recovery", () => {
       configurable: true,
       value: {
         freshDashboardWsUrl: vi.fn(async () => "ws://fresh-dashboard"),
-        materializeChatSessionTurn: vi.fn(async () => ({
-          sessionId: "stored",
-          title: "hello",
-          wroteMessages: true,
-        })),
         recordSessionContinuation: vi.fn(async () => true),
         recordSessionLocalError: vi.fn(async () => true),
         startDashboard: vi.fn(async () => ({
@@ -179,7 +174,7 @@ describe("useDashboardChatTransport recovery", () => {
     });
   });
 
-  it("materializes a successful turn into state.db via Main", async () => {
+  it("does not call removed chat session materialize IPC on complete", async () => {
     dashboardMock.request.mockImplementation(async (method) => {
       if (method === "session.create") {
         return { session_id: "live-1", stored_session_id: "stored-1" };
@@ -228,13 +223,11 @@ describe("useDashboardChatTransport recovery", () => {
       });
     });
 
-    expect(window.hermesAPI.materializeChatSessionTurn).toHaveBeenCalledWith({
-      sessionId: "stored-1",
-      userContent: "hello durable",
-      assistantContent: "hi from gateway",
-      profileId: undefined,
-    });
-    expect(window.hermesAPI.syncSessionCache).toHaveBeenCalled();
+    expect(
+      (window.hermesAPI as { materializeChatSessionTurn?: unknown })
+        .materializeChatSessionTurn,
+    ).toBeUndefined();
+    expect(window.hermesAPI.syncSessionCache).not.toHaveBeenCalled();
   });
 
   it("requests a fresh WebSocket URL immediately before connecting", async () => {

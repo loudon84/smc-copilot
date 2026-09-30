@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StoredAuthSession } from "../../shared/auth/auth-contract";
 
+const { USER_DATA } = vi.hoisted(() => {
+  const { mkdirSync: mkdir } = require("fs") as typeof import("fs");
+  const root = "C:/tmp";
+  const userData = `${root}/work-auth-test-userdata`;
+  mkdir(root, { recursive: true });
+  mkdir(userData, { recursive: true });
+  return { USER_DATA: userData };
+});
+
 vi.mock("electron", () => ({
   app: {
-    getPath: () => "E:/tmp/work-auth-test-userdata",
+    getPath: () => USER_DATA,
   },
   safeStorage: {
     isEncryptionAvailable: () => false,

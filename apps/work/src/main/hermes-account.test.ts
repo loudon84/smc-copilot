@@ -11,6 +11,9 @@ vi.mock("./installer", () => ({
   },
 }));
 vi.mock("electron", () => ({
+  app: {
+    getPath: () => "C:/tmp/work-hermes-account-test",
+  },
   safeStorage: {
     isEncryptionAvailable: () => true,
     encryptString: (v: string) => Buffer.from(v),
@@ -112,6 +115,8 @@ describe("apiHeaders", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it("omits x-api-key when no client key is configured", () => {
+    vi.stubEnv("HERMES_API_KEY", "");
+    vi.stubEnv("MAIN_VITE_HERMES_API_KEY", "");
     expect(apiHeaders()).toEqual({ "content-type": "application/json" });
     expect(apiHeaders(false)).toEqual({});
   });

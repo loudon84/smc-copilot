@@ -1,6 +1,7 @@
 param(
   [string]$ReleaseDir,
-  [string]$PackageJsonPath = (Join-Path (Split-Path -Parent $PSScriptRoot) "package.json")
+  [string]$PackageJsonPath = (Join-Path (Split-Path -Parent $PSScriptRoot) "package.json"),
+  [string]$Version
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,7 +43,7 @@ function Assert-Authenticode {
 }
 
 if (-not $ReleaseDir) {
-  $version = Get-PackageVersion
+  $version = if ($Version) { $Version } else { Get-PackageVersion }
   $ReleaseDir = Join-Path (Split-Path -Parent $PSScriptRoot) "release/work/$version"
 }
 
@@ -50,7 +51,7 @@ if (-not (Test-Path -LiteralPath $ReleaseDir)) {
   throw "Release directory not found: $ReleaseDir"
 }
 
-$version = Get-PackageVersion
+$version = if ($Version) { $Version } else { Get-PackageVersion }
 $installerName = "smc-copilot-$version-setup.exe"
 $installerPath = Join-Path $ReleaseDir $installerName
 $manifestPath = Join-Path $ReleaseDir "release-manifest.json"

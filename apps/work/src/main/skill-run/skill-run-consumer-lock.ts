@@ -99,7 +99,11 @@ export function isCompleteSkillRunBundleDir(dir: string): boolean {
     } catch {
       return false;
     }
-    if (sha256Hex(content) !== entry.hash) {
+    const raw = sha256Hex(content);
+    const lf = sha256Hex(
+      Buffer.from(content.toString("utf8").replace(/\r\n/g, "\n"), "utf8"),
+    );
+    if (raw !== entry.hash && lf !== entry.hash) {
       return false;
     }
   }

@@ -17,8 +17,18 @@ vi.mock("./installer", () => ({
   },
 }));
 
+vi.mock("./runtime/hermes-runtime-paths", () => ({
+  get HERMES_HOME() {
+    return mockState.hermesHome;
+  },
+  getHermesHome: () => mockState.hermesHome,
+}));
+
 // Reversible fake of the OS keychain: encrypt prefixes, decrypt strips it.
 vi.mock("electron", () => ({
+  app: {
+    getPath: () => mockState.hermesHome || "C:/tmp/work-account-test",
+  },
   safeStorage: {
     isEncryptionAvailable: () => mockState.encryptionAvailable,
     encryptString: (value: string) => Buffer.from(`enc:${value}`, "utf-8"),

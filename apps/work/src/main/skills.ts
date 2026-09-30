@@ -144,7 +144,10 @@ function isProfileSkillFile(skillFile: string): boolean {
 }
 
 function isAllowedSkillFile(skillFile: string): boolean {
-  const allowedRoots = [join(getHermesRoot(), "skills")].map(realOrResolved);
+  const allowedRoots = [
+    join(getHermesRoot(), "skills"),
+    join(getHermesRoot(), "hermes-agent", "skills"),
+  ].map(realOrResolved);
 
   return (
     allowedRoots.some((root) => pathIsInside(root, skillFile)) ||

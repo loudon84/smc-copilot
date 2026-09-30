@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 
-const USER_DATA = "E:/tmp/work-skill-run-mode-test";
+const TEST_TMP_ROOT = "C:/tmp";
+const USER_DATA = `${TEST_TMP_ROOT}/work-skill-run-mode-test`;
 
 vi.mock("electron", () => ({
   app: {
@@ -19,6 +20,7 @@ describe("feature-mode-store", () => {
 
   beforeEach(() => {
     delete process.env.SMC_WORK_SKILL_RUN_MODE;
+    mkdirSync(TEST_TMP_ROOT, { recursive: true });
     mkdirSync(USER_DATA, { recursive: true });
     if (existsSync(STORE_FILE)) {
       rmSync(STORE_FILE);

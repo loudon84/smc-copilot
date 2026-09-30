@@ -13,6 +13,7 @@ import {
 } from "../src/renderer/src/screens/Knowledge/knowledge-route-scope";
 import { KnowledgeView } from "../src/renderer/src/screens/Knowledge/KnowledgeView";
 import { KnowledgePages } from "../src/renderer/src/screens/Knowledge/KnowledgePages";
+import { asChatWindowApi } from "./knowledge-chat-window";
 import { KnowledgeBaseDetailPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeBaseDetailPage";
 import { makeBasesApi } from "./helpers/knowledge-bases-api";
 import type {
@@ -122,15 +123,38 @@ function mockKnowledgeJobs(
       : undefined,
     skillRun: {
       start: vi.fn(),
-      getFeatureMode: vi.fn(),
+      getFeatureMode: vi.fn(async () => ({ mode: "off" })),
+      onProjectionChanged: vi.fn(() => () => undefined),
+      cancel: vi.fn(),
     },
     createSession: vi.fn(),
     sendMessage: vi.fn(),
+    getConnectionConfig: vi.fn(async () => ({ mode: "local", remoteUrl: "" })),
+    onConnectionConfigChanged: vi.fn(() => () => undefined),
+    getSessionMessages: vi.fn(async () => []),
+    getSessionContextFolder: vi.fn(async () => null),
+    setSessionContextFolder: vi.fn(async () => true),
+    getSessionModelOverride: vi.fn(async () => null),
+    setSessionModelOverride: vi.fn(async () => undefined),
+    validateChatReadiness: vi.fn(async () => ({ ready: true })),
+    onContextMenuCopyChat: vi.fn(() => () => undefined),
+    onContextMenuSelectBubble: vi.fn(() => () => undefined),
+  };
+  (
+    window as unknown as {
+      desktopAuth: {
+        getState: ReturnType<typeof vi.fn>;
+        onStateChanged: ReturnType<typeof vi.fn>;
+      };
+    }
+  ).desktopAuth = {
+    getState: vi.fn(async () => ({ user: null })),
+    onStateChanged: vi.fn(() => () => undefined),
   };
 
   (
     window as unknown as { hermesAPI: typeof hermesAPI }
-  ).hermesAPI = hermesAPI;
+  ).hermesAPI = asChatWindowApi(hermesAPI);
 
   return { getCapability, listSnapshots, createDraft, getMode };
 }
@@ -162,7 +186,28 @@ describe("Knowledge fail-closed pages (V05)", () => {
   let scope: KnowledgeRouteScope;
 
   beforeEach(() => {
+    HTMLElement.prototype.scrollIntoView = () => undefined;
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver;
     scope = createKnowledgeRouteScope({ routeScopeId: "fail-closed" });
+    (
+      window as unknown as { hermesAPI: Record<string, unknown> }
+    ).hermesAPI = asChatWindowApi({
+      getConnectionConfig: vi.fn(async () => ({ mode: "local", remoteUrl: "" })),
+      onConnectionConfigChanged: vi.fn(() => () => undefined),
+      getSessionMessages: vi.fn(async () => []),
+      getSessionContextFolder: vi.fn(async () => null),
+      setSessionContextFolder: vi.fn(async () => true),
+      skillRun: {
+        getFeatureMode: vi.fn(async () => ({ mode: "off" })),
+        onProjectionChanged: vi.fn(() => () => undefined),
+      },
+      onContextMenuCopyChat: vi.fn(() => () => undefined),
+      onContextMenuSelectBubble: vi.fn(() => () => undefined),
+    });
     window.desktopAuth = {
       getState: async () => ({
         authenticated: false,
@@ -233,10 +278,12 @@ describe("Knowledge fail-closed pages (V05)", () => {
       await waitFor(() => {
         const panel = screen.getByTestId(`knowledge-page-${page}`);
         expect(panel.getAttribute("data-state")).toBe("unavailable");
-        expect(panel.textContent).toContain(knowledgeEn.unavailableTitle);
         if (page === "chat") {
-          expect(panel.textContent).toContain(knowledgeEn.chat.composerBlocked);
+          expect(panel.textContent).toContain(
+            "Select a Knowledge Set before sending.",
+          );
         } else {
+          expect(panel.textContent).toContain(knowledgeEn.unavailableTitle);
           expect(panel.textContent).toContain(knowledgeEn.unavailableDescription);
         }
         expect(panel.textContent).not.toMatch(/fixture|mock q&a|sample file/i);

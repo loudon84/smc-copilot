@@ -240,6 +240,24 @@ interface HermesAPI {
   runtimeValidateHome: (dir: string) => Promise<boolean>;
   runtimeAdoptHome: (dir: string) => Promise<boolean>;
   getControlOwner: () => Promise<ControlOwnerSnapshot>;
+  getHermesBootstrapStatus: () => Promise<{
+    state: string;
+    operationId: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+    skippedReason: string | null;
+    allowsLocalChat: boolean;
+  }>;
+  cancelHermesBootstrap: () => Promise<boolean>;
+  runHermesBootstrap: () => Promise<unknown>;
+  repairHermesOrigin: (confirm: boolean) => Promise<{
+    success: boolean;
+    errorCode?: string;
+    errorMessage?: string;
+    backupPath?: string;
+    backupDigest?: string;
+    operationId?: string;
+  }>;
   onRuntimeStatusChanged: (
     callback: (probe: HermesRuntimeProbe) => void,
   ) => () => void;
@@ -637,18 +655,6 @@ interface HermesAPI {
         }
     >
   >;
-  materializeChatSessionTurn: (payload: {
-    sessionId: string;
-    userContent: string;
-    assistantContent: string;
-    profileId?: string;
-  }) => Promise<{
-    sessionId: string;
-    title: string;
-    wroteMessages: boolean;
-    cacheOnly?: boolean;
-    gatewayOwned?: boolean;
-  } | null>;
   recordSessionContinuation: (
     sessionId: string,
     items: DesktopSessionContinuationItem[],

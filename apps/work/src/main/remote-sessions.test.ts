@@ -1,6 +1,10 @@
 import http from "http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { remoteListCachedSessions } from "./remote-sessions";
+
+vi.mock("./db", () => ({
+  getDbConnection: () => null,
+}));
 
 const servers: http.Server[] = [];
 

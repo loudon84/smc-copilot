@@ -1,5 +1,5 @@
 import { execFileSync } from "child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
@@ -81,7 +81,12 @@ function runWithHermesShim(command: string): Buffer {
     ].join("\n"),
   );
   chmodSync(hermes, 0o755);
-  return execFileSync("bash", ["-lc", command], {
+  const bash =
+    [
+      "C:\\Program Files\\Git\\bin\\bash.exe",
+      "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+    ].find((candidate) => existsSync(candidate)) ?? "bash";
+  return execFileSync(bash, ["-lc", command], {
     env: {
       ...process.env,
       HOME: home,

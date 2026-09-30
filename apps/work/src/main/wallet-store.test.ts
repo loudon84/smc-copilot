@@ -17,7 +17,17 @@ vi.mock("./installer", () => ({
   },
 }));
 
+vi.mock("./runtime/hermes-runtime-paths", () => ({
+  get HERMES_HOME() {
+    return mockState.hermesHome;
+  },
+  getHermesHome: () => mockState.hermesHome,
+}));
+
 vi.mock("electron", () => ({
+  app: {
+    getPath: () => mockState.hermesHome || "C:/tmp/work-wallet-test",
+  },
   safeStorage: {
     isEncryptionAvailable: () => mockState.encryptionAvailable,
     encryptString: (value: string) =>

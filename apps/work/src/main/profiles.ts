@@ -373,10 +373,13 @@ export function setActiveProfile(name: string): void {
     }
   }
 
-  // C-004: named profile activation → gateway install + start if needed.
   if (name !== "default") {
-    void ensureProfileGatewayStarted(name).catch((err) => {
-      console.warn(`[gateway] named profile ensure failed for ${name}:`, err);
+    // Gateway CLI runs after this call returns so the profile-use invocation
+    // is the only synchronous Hermes command.
+    queueMicrotask(() => {
+      void ensureProfileGatewayStarted(name).catch((err) => {
+        console.warn(`[gateway] named profile ensure failed for ${name}:`, err);
+      });
     });
   }
 }

@@ -17,6 +17,11 @@ const mainSrc = readFileSync(join(ROOT, "src/main/app/start.ts"), "utf-8");
 const menuSrc = readFileSync(join(ROOT, "src/main/app/menu.ts"), "utf-8");
 const preloadSrc = readFileSync(join(ROOT, "src/preload/index.ts"), "utf-8");
 const installerSrc = readFileSync(join(ROOT, "src/main/installer.ts"), "utf-8");
+const cliRunnerSrc = readFileSync(
+  join(ROOT, "src/main/runtime/hermes-cli-runner.ts"),
+  "utf-8",
+);
+const sudoCredsSrc = readFileSync(join(ROOT, "src/main/sudoCreds.ts"), "utf-8");
 
 describe("Electron main process hardening", () => {
   it("keeps the main renderer isolated from Node privileges", () => {
@@ -78,20 +83,18 @@ describe("Electron main process hardening", () => {
   });
 
   it("runs hermes doctor without a shell-built command string", () => {
-    expect(installerSrc).toContain(
-      'execFileSync(HERMES_PYTHON, hermesCliArgs(["doctor"])',
-    );
+    expect(installerSrc).toContain('runHermesCliSync(["doctor"])');
     expect(installerSrc).not.toContain("execSync(`");
+    expect(cliRunnerSrc).toContain("execFileSync(getHermesCliPath(), args");
+    expect(cliRunnerSrc).not.toContain("execSync(`");
   });
 
   it("keeps the Linux sudo precache install flow wired in", () => {
-    expect(installerSrc).toContain(
-      'import { precacheSudoCredentials } from "./sudoCreds"',
+    expect(sudoCredsSrc).toContain(
+      "export async function precacheSudoCredentials(",
     );
-    expect(installerSrc).toContain(
-      "const sudoPrecache = await precacheSudoCredentials(",
-    );
-    expect(installerSrc).toContain("sudoPrecache.stop();");
+    expect(sudoCredsSrc).toContain("stop: () => {}");
+    expect(sudoCredsSrc).toContain('spawn("sudo", ["-k"]');
   });
 });
 

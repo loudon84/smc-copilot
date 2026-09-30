@@ -9,6 +9,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $packageJsonPath = Join-Path $repoRoot "package.json"
 $guardScript = Join-Path $PSScriptRoot "lib/work-release-guard.mjs"
 $dotenvPath = Join-Path $repoRoot ".env"
+$script:InjectedDotEnvKeys = @()
 
 function Invoke-Step {
   param(
@@ -31,6 +32,7 @@ function Import-DotEnvFile {
   }
 
   $loaded = 0
+  $injected = New-Object System.Collections.Generic.List[string]
   foreach ($line in Get-Content -LiteralPath $Path -Encoding utf8) {
     if ($line -match '^\uFEFF') {
       $line = $line.TrimStart([char]0xFEFF)
@@ -56,10 +58,39 @@ function Import-DotEnvFile {
       continue
     }
     Set-Item -Path "Env:$name" -Value $value
+    $injected.Add($name)
     $loaded += 1
   }
+  # Save injected .env keys so npm test can run without them.
+  $script:InjectedDotEnvKeys = @($injected)
   Write-Host "Loaded $loaded keys from apps/work/.env into the release process"
   return $loaded
+}
+
+function Invoke-NpmTestIsolatedFromDotEnv {
+  # Clear injected .env keys for npm test. The .env file is not rewritten.
+  $saved = @{}
+  foreach ($name in @($script:InjectedDotEnvKeys)) {
+    $saved[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+    Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
+  }
+  $exit = 0
+  try {
+    npm test
+    if ($null -ne $LASTEXITCODE) {
+      $exit = $LASTEXITCODE
+    }
+  } finally {
+    # Restore injected .env keys after npm test.
+    foreach ($entry in @($saved.GetEnumerator())) {
+      if ([string]::IsNullOrEmpty($entry.Value)) {
+        Remove-Item -Path "Env:$($entry.Key)" -ErrorAction SilentlyContinue
+      } else {
+        Set-Item -Path "Env:$($entry.Key)" -Value $entry.Value
+      }
+    }
+  }
+  return $exit
 }
 
 function Require-CleanGitTree {
@@ -187,8 +218,12 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "npm run guard failed" }
   Invoke-Step "Run typecheck" { npm run typecheck }
   if ($LASTEXITCODE -ne 0) { throw "npm run typecheck failed" }
-  Invoke-Step "Run tests" { npm test }
-  if ($LASTEXITCODE -ne 0) { throw "npm test failed" }
+  $npmTestExit = 0
+  Invoke-Step "Run tests" {
+    $script:NpmTestExitCode = Invoke-NpmTestIsolatedFromDotEnv
+  }
+  $npmTestExit = $script:NpmTestExitCode
+  if ($npmTestExit -ne 0) { throw "npm test failed" }
   Invoke-Step "Compile application" { npx electron-vite build }
   if ($LASTEXITCODE -ne 0) { throw "electron-vite build failed" }
   Invoke-Step "Build Windows NSIS artifact" { node (Join-Path $PSScriptRoot "run-electron-builder.mjs") --win nsis --x64 --publish never }

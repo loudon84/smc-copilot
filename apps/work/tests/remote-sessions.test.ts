@@ -362,17 +362,22 @@ describe("remote session REST bridge", () => {
     const sessions = await remoteListCachedSessions(config());
 
     expect(sessions).toEqual([
-      {
+      expect.objectContaining({
         id: "sess-cache",
         title: "Cached remote preview",
         startedAt: 1700000002,
         source: "chat",
         messageCount: 2,
         model: "custom/deepseek-v4-pro",
-        // Remote sessions have no local desktop folder binding (issue #27).
         contextFolder: null,
-      },
+        executionProvider: "hermes-chat",
+        knowledgeSetId: null,
+        profileId: "default",
+        sessionId: "sess-cache",
+        sessionKind: "chat",
+      }),
     ]);
+    expect(sessions[0]?.sessionScope).toMatch(/^scope_[a-f0-9]{64}$/);
   });
 
   it("uses the persistent OAuth session for direct Remote session lists", async () => {

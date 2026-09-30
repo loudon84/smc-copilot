@@ -30,6 +30,11 @@ vi.mock("../src/main/installer", () => ({
   getEnhancedPath: () => process.env.PATH || "",
 }));
 
+vi.mock("../src/main/runtime/hermes-runtime-paths", () => ({
+  HERMES_HOME: TEST_HOME,
+  getHermesHome: () => TEST_HOME,
+}));
+
 vi.mock("../src/main/utils", () => {
   const actual =
     vi.importActual<typeof import("../src/main/utils")>("../src/main/utils");

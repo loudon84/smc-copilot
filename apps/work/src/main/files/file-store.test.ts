@@ -13,10 +13,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockState = vi.hoisted(() => ({ hermesHome: "" }));
 
-vi.mock("../installer", () => ({
+vi.mock("../runtime/hermes-runtime-paths", () => ({
   get HERMES_HOME() {
     return mockState.hermesHome;
   },
+  getHermesHome: () => mockState.hermesHome,
 }));
 
 describe("file-store", () => {

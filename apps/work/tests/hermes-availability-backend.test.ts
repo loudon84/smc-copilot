@@ -21,9 +21,15 @@ vi.mock("../src/main/hermes/transport/gateway-http", () => ({
   isRemoteMode: (): boolean => false,
 }));
 
-vi.mock("../src/main/config", () => ({
-  getApiServerKey: (): string => "",
-}));
+vi.mock("../src/main/runtime/hermes-cli-runner", async () => {
+  const actual = await vi.importActual<
+    typeof import("../src/main/runtime/hermes-cli-runner")
+  >("../src/main/runtime/hermes-cli-runner");
+  return {
+    ...actual,
+    cliPathExists: () => false,
+  };
+});
 
 describe("HermesAvailabilityBackend", () => {
   const home = join(tmpdir(), `avail-${Date.now()}`);

@@ -17,7 +17,9 @@ describe("knowledge-frontend-contract consumer lock", () => {
     );
     for (const [relative, meta] of Object.entries(lock.files)) {
       const bytes = readFileSync(join(ROOT, relative));
-      const digest = createHash("sha256").update(bytes).digest("hex");
+      const digest = createHash("sha256")
+        .update(bytes.toString("utf8").replace(/\r\n/g, "\n"))
+        .digest("hex");
       expect(digest).toBe(meta.sha256);
     }
   });

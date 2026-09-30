@@ -85,8 +85,12 @@ function platformDefaults(): HermesRuntimeConfig {
 }
 
 function workRuntimeConfigPath(): string {
-  const userData = app?.getPath?.("userData");
-  return userData ? join(userData, "runtime.json") : "";
+  try {
+    const userData = app?.getPath?.("userData");
+    return userData ? join(userData, "runtime.json") : "";
+  } catch {
+    return "";
+  }
 }
 
 function enterpriseDescriptorPath(): string {

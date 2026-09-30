@@ -111,6 +111,10 @@ describe("work v2.2 builder configuration", () => {
     expect(buildScript).toContain("ReleaseNotesPath");
     expect(buildScript).toContain("Import-DotEnvFile");
     expect(buildScript).toContain("Load apps/work/.env");
+    expect(buildScript).toContain("Save injected .env keys");
+    expect(buildScript).toContain("Clear injected .env keys for npm test");
+    expect(buildScript).toContain("Restore injected .env keys after npm test");
+    expect(buildScript).not.toMatch(/Set-Content[^\r\n]*\.env/);
     expect(buildScript).toContain("generate-work-build-info.mjs");
     expect(buildScript).toContain("generate-work-registry-config.mjs");
     expect(buildScript).toContain("generate-work-knowledge-config.mjs");

@@ -22,6 +22,11 @@ vi.mock("../src/main/installer", () => ({
   getEnhancedPath: () => "",
 }));
 
+vi.mock("../src/main/runtime/hermes-runtime-paths", () => ({
+  HERMES_HOME: TEST_HOME,
+  getHermesHome: () => TEST_HOME,
+}));
+
 import { getSkillContent } from "../src/main/skills";
 
 function writeSkill(root: string, content: string): string {

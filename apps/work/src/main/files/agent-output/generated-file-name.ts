@@ -5,21 +5,18 @@
 import { existsSync } from "fs";
 import { join } from "path";
 
-/** Strip Windows-illegal / control characters, path segments, and cap length. */
+/** Strip Windows-illegal / control characters, drive and UNC prefixes, and cap length. */
 export function sanitizeGeneratedFileName(title: string): string {
   const base = title
     .normalize("NFKC")
     .replace(/^\\\\[^\\]+\\[^\\]+\\?/, "") // UNC
-    .replace(/^[a-zA-Z]:[\\/]?/, "") // drive root
-    .replace(/\\/g, "/")
-    .split("/")
-    .pop() ?? "";
+    .replace(/^[a-zA-Z]:[\\/]?/, ""); // drive root
   const cleaned = base
     .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
     .replace(/\s+/g, " ")
     .replace(/\.+$/g, "")
     .trim()
-    .slice(0, 180);
+    .slice(0, 80);
 
   return cleaned || "generated-report";
 }

@@ -194,7 +194,6 @@ describe("Legacy APIs preserved (backward compat)", () => {
     // Sessions
     "listSessions",
     "getSessionMessages",
-    "materializeChatSessionTurn",
     "recordSessionContinuation",
     "recordSessionLocalError",
     "deleteSessions",

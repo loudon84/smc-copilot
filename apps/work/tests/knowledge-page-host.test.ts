@@ -8,6 +8,7 @@ import {
   type KnowledgePageId,
 } from "../src/renderer/src/screens/Knowledge/knowledge-route-descriptor";
 import { KnowledgePages } from "../src/renderer/src/screens/Knowledge/KnowledgePages";
+import { asChatWindowApi } from "./knowledge-chat-window";
 import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
@@ -140,9 +141,14 @@ function mockJobs(options: {
           createDraft: ReturnType<typeof vi.fn>;
           onSnapshotChanged: () => () => undefined;
         };
+        onConnectionConfigChanged: ReturnType<typeof vi.fn>;
+      };
+      desktopAuth: {
+        getState: ReturnType<typeof vi.fn>;
+        onStateChanged: ReturnType<typeof vi.fn>;
       };
     }
-  ).hermesAPI = {
+  ).hermesAPI = asChatWindowApi({
     knowledgeJobs: {
       getCapability: vi.fn(async () => {
         if (!capability) throw new Error("capability missing");
@@ -158,11 +164,39 @@ function mockJobs(options: {
       }),
       onSnapshotChanged: () => () => undefined,
     },
+    onConnectionConfigChanged: vi.fn(() => () => undefined),
+    getConnectionConfig: vi.fn(async () => ({ mode: "local", remoteUrl: "" })),
+    getSessionMessages: vi.fn(async () => []),
+    getSessionContextFolder: vi.fn(async () => null),
+    setSessionContextFolder: vi.fn(async () => true),
+    skillRun: {
+      getFeatureMode: vi.fn(async () => ({ mode: "off" })),
+      onProjectionChanged: vi.fn(() => () => undefined),
+    },
+    onContextMenuCopyChat: vi.fn(() => () => undefined),
+    onContextMenuSelectBubble: vi.fn(() => () => undefined),
+  });
+  (
+    window as unknown as {
+      desktopAuth: {
+        getState: ReturnType<typeof vi.fn>;
+        onStateChanged: ReturnType<typeof vi.fn>;
+      };
+    }
+  ).desktopAuth = {
+    getState: vi.fn(async () => ({ user: null })),
+    onStateChanged: vi.fn(() => () => undefined),
   };
 }
 
 describe("Knowledge page host (V01)", () => {
   beforeEach(() => {
+    HTMLElement.prototype.scrollIntoView = () => undefined;
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver;
     mockJobs({
       capability: { available: true, status: "available" },
       mode: {

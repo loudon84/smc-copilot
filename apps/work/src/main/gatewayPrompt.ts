@@ -18,7 +18,25 @@ import { showPasswordDialog } from "./askpass";
  * skipped and lets a terminal sudo prompt fail cleanly, so cancel maps to "".
  */
 
-let parentWindowGetter: () => BrowserWindow | null = () => null;
+export function sudoRespond(requestId: string, answer: string): {
+  method: "sudo.respond";
+  params: { request_id: string; password: string };
+} {
+  return {
+    method: "sudo.respond",
+    params: { request_id: requestId, password: answer },
+  };
+}
+
+export function secretRespond(requestId: string, answer: string): {
+  method: "secret.respond";
+  params: { request_id: string; value: string };
+} {
+  return {
+    method: "secret.respond",
+    params: { request_id: requestId, value: answer },
+  };
+}
 
 /** Wire the provider that returns the window to parent the modal to. Called
  *  once from index.ts after the main window is created. */

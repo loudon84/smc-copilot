@@ -50,7 +50,7 @@ describe("work Knowledge build config preparation", () => {
     );
 
     const result = prepareKnowledgeBuildConfig({
-      serviceUrl: undefined,
+      serviceUrl: "",
       outputFile: outputPath,
     });
 

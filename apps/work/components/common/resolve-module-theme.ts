@@ -6,7 +6,10 @@ export type ModuleTheme = ThemeAppearance;
 
 export function resolveModuleTheme(workThemeId: string | null | undefined): ModuleTheme {
   if (!workThemeId) return "dark";
-  return APPEARANCE.get(workThemeId) ?? "dark";
+  const known = APPEARANCE.get(workThemeId);
+  if (known) return known;
+  if (workThemeId.endsWith("-light")) return "light";
+  return "dark";
 }
 
 export function readRootWorkThemeId(

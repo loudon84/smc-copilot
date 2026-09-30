@@ -21,6 +21,11 @@ vi.mock("../src/main/installer", () => ({
   HERMES_HOME: TEST_HOME,
 }));
 
+vi.mock("../src/main/runtime/hermes-runtime-paths", () => ({
+  HERMES_HOME: TEST_HOME,
+  getHermesHome: () => TEST_HOME,
+}));
+
 vi.mock("../src/main/utils", () => ({
   activeStateDbPath: () => DB_PATH,
   profileHome: () => TEST_HOME,
