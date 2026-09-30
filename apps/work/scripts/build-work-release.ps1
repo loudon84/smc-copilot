@@ -167,7 +167,9 @@ function Add-ReleaseNotesToLatestYml {
   foreach ($noteLine in ($notes -split "`r?`n")) {
     $yamlLines.Add("  $noteLine")
   }
-  Set-Content -LiteralPath $LatestPath -Value $yamlLines -Encoding utf8
+  $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+  $text = (($yamlLines -join "`n") + "`n")
+  [System.IO.File]::WriteAllText($LatestPath, $text, $utf8NoBom)
 }
 
 function Get-PackageVersion {
