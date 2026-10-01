@@ -28,6 +28,7 @@ import {
   isDedicatedBrandCustomProvider,
 } from "../../../../shared/url-key-map";
 import type { HermesAccount } from "../../../../shared/account";
+import { runtimeProviderSettingsLocked } from "../../../../shared/runtime-provider-diagnostics";
 
 /** Preview a stored key as prefix + dots + last 4, so a set key is recognisable
  * without exposing it. */
@@ -50,6 +51,20 @@ function displayProviderFromConfig(provider: string, baseUrl: string): string {
     ([, url]) => url === baseUrl,
   );
   return match ? match[0] : provider;
+}
+
+async function localModelWritesLocked(profile?: string): Promise<boolean> {
+  const api = window.hermesAPI;
+  if (!api.getConnectionConfig || !api.getRuntimeProviderState) return false;
+  const [connection, runtime] = await Promise.all([
+    api.getConnectionConfig(),
+    api.getRuntimeProviderState(profile),
+  ]);
+  return runtimeProviderSettingsLocked({
+    mode: connection.mode,
+    runtimeState: runtime.state,
+    errorCode: runtime.errorCode,
+  });
 }
 
 // A library model as returned by `listModels()`.
@@ -335,6 +350,7 @@ function Providers({
       !persistedCustomUrl.current
     )
       return;
+    if (await localModelWritesLocked(profile)) return;
     await window.hermesAPI.setModelConfig(
       configProvider,
       modelName,
@@ -371,14 +387,17 @@ function Providers({
     if (!modelName.trim()) return;
     if (modelLibTimer.current) clearTimeout(modelLibTimer.current);
     modelLibTimer.current = setTimeout(() => {
-      const displayName = modelName.split("/").pop() || modelName;
-      const libProvider =
-        modelProvider in OPENAI_COMPATIBLE_BASE_URLS ? "custom" : modelProvider;
-      window.hermesAPI
-        .addModel(displayName, libProvider, modelName, modelBaseUrl)
-        .catch(() => {
-          /* non-fatal — library write is best-effort */
-        });
+      void (async () => {
+        if (await localModelWritesLocked(profile)) return;
+        const displayName = modelName.split("/").pop() || modelName;
+        const libProvider =
+          modelProvider in OPENAI_COMPATIBLE_BASE_URLS ? "custom" : modelProvider;
+        window.hermesAPI
+          .addModel(displayName, libProvider, modelName, modelBaseUrl)
+          .catch(() => {
+            /* non-fatal — library write is best-effort */
+          });
+      })();
     }, 2000);
     return () => {
       if (modelLibTimer.current) clearTimeout(modelLibTimer.current);

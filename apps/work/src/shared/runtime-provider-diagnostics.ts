@@ -137,6 +137,43 @@ export function summaryStatus(input: {
   return "READY";
 }
 
+/** Healthy enterprise runtime: the provider card stays a status line, not a diagnostic log. */
+export function enterpriseRuntimeHidesDiagnostics(input: {
+  summaryStatus: string;
+  runtimeState: string;
+  projectionStatus: string;
+  gatewayHealthy: boolean | null | undefined;
+}): boolean {
+  return (
+    input.summaryStatus === "READY" &&
+    input.runtimeState === "ACTIVE" &&
+    input.projectionStatus === "MATCH" &&
+    input.gatewayHealthy === true
+  );
+}
+
+/**
+ * Same gate as Main `isRuntimeSettingsLocked`: local enterprise ownership
+ * refuses model writes. UNBOUND, NOT_READY, and bootstrap-unavailable stay writable.
+ */
+export function runtimeProviderSettingsLocked(input: {
+  mode: string;
+  runtimeState: string;
+  errorCode?: string | null;
+}): boolean {
+  if (input.mode !== "local") return false;
+  if (input.runtimeState === "UNBOUND" || input.runtimeState === "NOT_READY") {
+    return false;
+  }
+  if (
+    input.runtimeState === "ERROR" &&
+    input.errorCode === "RUNTIME_BOOTSTRAP_UNAVAILABLE"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function recoveryActions(input: {
   runtimeState: string;
   errorCode: string | null;

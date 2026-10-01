@@ -72,6 +72,36 @@ describe("enterprise runtime card", () => {
     expect(screen.queryByText("Delete provider")).toBeNull();
   });
 
+  it("hides the diagnostic log while enterprise runtime is healthy", async () => {
+    const getDiagnostics = vi.fn(async () =>
+      snapshot({
+        summaryStatus: "READY",
+        gateway: {
+          observed: true,
+          state: "ready",
+          gatewayHealthy: true,
+          authenticated: true,
+          errorCode: null,
+          endpoint: "http://127.0.0.1:8642/",
+          homePath: "<USER_HOME>/.hermes",
+          executablePath: null,
+        },
+      }),
+    );
+    (window as unknown as { hermesAPI: unknown }).hermesAPI = {
+      getRuntimeProviderDiagnostics: getDiagnostics,
+      exportRuntimeProviderDiagnostics: vi.fn(),
+      refreshRuntimeProvider: vi.fn(),
+      onRuntimeProviderStateChanged: () => () => undefined,
+    };
+    render(<EnterpriseRuntimeCard visible />);
+    expect(await screen.findByText("providers.enterpriseRuntime.managed")).toBeTruthy();
+    expect(screen.getByText("providers.enterpriseRuntime.secretLoaded")).toBeTruthy();
+    expect(screen.queryByText("Summary")).toBeNull();
+    expect(screen.queryByText("providers.enterpriseRuntime.reconcile")).toBeNull();
+    expect(screen.queryByText("providers.enterpriseRuntime.export")).toBeNull();
+  });
+
   it("does not poll diagnostics while the snapshot stays unchanged", async () => {
     vi.useFakeTimers();
     const getDiagnostics = vi.fn(async () =>

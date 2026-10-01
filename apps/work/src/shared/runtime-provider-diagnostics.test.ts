@@ -4,6 +4,8 @@ import {
   projectDiagnosticEvent,
   recoveryActions,
   redactHomePath,
+  runtimeProviderSettingsLocked,
+  enterpriseRuntimeHidesDiagnostics,
   sanitizeDiagnosticUrl,
   summaryStatus,
 } from "./runtime-provider-diagnostics";
@@ -64,6 +66,40 @@ describe("runtime provider diagnostics schema", () => {
         gatewayHealthy: false,
       }),
     ).toEqual([]);
+    expect(
+      enterpriseRuntimeHidesDiagnostics({
+        summaryStatus: "READY",
+        runtimeState: "ACTIVE",
+        projectionStatus: "MATCH",
+        gatewayHealthy: true,
+      }),
+    ).toBe(true);
+    expect(
+      enterpriseRuntimeHidesDiagnostics({
+        summaryStatus: "ACTION_REQUIRED",
+        runtimeState: "ACTIVE",
+        projectionStatus: "MATCH",
+        gatewayHealthy: false,
+      }),
+    ).toBe(false);
+    expect(
+      runtimeProviderSettingsLocked({
+        mode: "local",
+        runtimeState: "ACTIVE",
+      }),
+    ).toBe(true);
+    expect(
+      runtimeProviderSettingsLocked({
+        mode: "local",
+        runtimeState: "UNBOUND",
+      }),
+    ).toBe(false);
+    expect(
+      runtimeProviderSettingsLocked({
+        mode: "remote",
+        runtimeState: "ACTIVE",
+      }),
+    ).toBe(false);
   });
 
   it("projects events through the allowlist", () => {
