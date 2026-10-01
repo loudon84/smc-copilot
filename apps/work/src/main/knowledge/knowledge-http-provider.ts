@@ -6,7 +6,6 @@
 import { randomUUID } from "crypto";
 import { AccessTokenError } from "../auth/ensure-access-token";
 import { AuthorizedBackendTransportError } from "../auth/authorized-backend-transport";
-import { resolveKnowledgeServiceUrl } from "./knowledge-service-url";
 import type {
   KnowledgeActivateFileVersionInput,
   KnowledgeBaseCreateInput,
@@ -173,20 +172,6 @@ export type KnowledgeHttpProvider = {
   ): Promise<KnowledgeFileChunkImageResult>;
 };
 
-function logSanitized(
-  operationId: string,
-  stage: string,
-  code: string,
-): void {
-  let origin = "unknown";
-  try {
-    origin = new URL(resolveKnowledgeServiceUrl()).origin;
-  } catch {
-    origin = "invalid";
-  }
-  console.info("[knowledge-http]", { operationId, stage, code, origin });
-}
-
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return null;
@@ -256,7 +241,6 @@ export function createKnowledgeHttpProvider(
             retryable: false,
             operationId,
           });
-          logSanitized(operationId, stage, err.code);
           throw err;
         }
         const envelope = parseErrorEnvelope(body);
@@ -265,7 +249,6 @@ export function createKnowledgeHttpProvider(
           envelope.messageKey,
           operationId,
         );
-        logSanitized(operationId, stage, err.code);
         throw err;
       }
       if (body && typeof body === "object" && "_malformed" in body) {
@@ -275,15 +258,12 @@ export function createKnowledgeHttpProvider(
           retryable: false,
           operationId,
         });
-        logSanitized(operationId, stage, err.code);
         throw err;
       }
-      logSanitized(operationId, stage, "OK");
       return { status: response.status, body };
     } catch (err) {
       if (err instanceof KnowledgeFacadeError) throw err;
       const mapped = mapTransportError(err, operationId);
-      logSanitized(operationId, stage, mapped.code);
       throw mapped;
     }
   }
@@ -565,7 +545,6 @@ export function createKnowledgeHttpProvider(
             null,
             operationId,
           );
-          logSanitized(operationId, "downloadSourceFile", err.code);
           throw err;
         }
         const buffer = new Uint8Array(await response.arrayBuffer());
@@ -583,12 +562,10 @@ export function createKnowledgeHttpProvider(
             }
           }
         }
-        logSanitized(operationId, "downloadSourceFile", "OK");
         return { bytes: buffer, fileName };
       } catch (err) {
         if (err instanceof KnowledgeFacadeError) throw err;
         const mapped = mapTransportError(err, operationId);
-        logSanitized(operationId, "downloadSourceFile", mapped.code);
         throw mapped;
       }
     },
@@ -1010,7 +987,6 @@ export function createKnowledgeHttpProvider(
             envelope.messageKey,
             operationId,
           );
-          logSanitized(operationId, "getFileChunkImage", err.code);
           throw err;
         }
         const contentType = response.headers.get("content-type");
@@ -1021,12 +997,10 @@ export function createKnowledgeHttpProvider(
           bytes,
           operationId,
         );
-        logSanitized(operationId, "getFileChunkImage", "OK");
         return result;
       } catch (err) {
         if (err instanceof KnowledgeFacadeError) throw err;
         const mapped = mapTransportError(err, operationId);
-        logSanitized(operationId, "getFileChunkImage", mapped.code);
         throw mapped;
       }
     },

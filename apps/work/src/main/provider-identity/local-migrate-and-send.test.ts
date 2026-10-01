@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   prepareLocalChatRoute,
   redactRouteLog,
+  resolveRouteSecret,
 } from "./local-migrate-and-send";
+import { MANAGED_RUNTIME_KEY_ENV } from "../runtime-provider/managed-runtime-secret-store";
 
 const registry = [
   {
@@ -20,6 +22,38 @@ const legacyRegistry = [
     baseUrl: "https://new.example/v1",
   },
 ];
+
+describe("resolveRouteSecret", () => {
+  it("uses the in-memory enterprise key instead of the disk env", () => {
+    expect(
+      resolveRouteSecret({
+        keyEnv: MANAGED_RUNTIME_KEY_ENV,
+        envValue: "",
+        managedSecret: "sk-memory",
+      }),
+    ).toBe("sk-memory");
+  });
+
+  it("keeps a named provider key from the env file", () => {
+    expect(
+      resolveRouteSecret({
+        keyEnv: "PROVIDER_COMPANY_API_KEY",
+        envValue: "sk-file",
+        managedSecret: "sk-memory",
+      }),
+    ).toBe("sk-file");
+  });
+
+  it("stays empty when the enterprise key is not installed", () => {
+    expect(
+      resolveRouteSecret({
+        keyEnv: MANAGED_RUNTIME_KEY_ENV,
+        envValue: "stale-disk",
+        managedSecret: "",
+      }),
+    ).toBe("");
+  });
+});
 
 describe("prepareLocalChatRoute", () => {
   it("leaves remote custom traffic unchanged", async () => {

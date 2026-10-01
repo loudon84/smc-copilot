@@ -1,3 +1,4 @@
+import { MANAGED_RUNTIME_KEY_ENV, readManagedSecret } from "../runtime-provider/managed-runtime-secret-store";
 import type { RegistryProviderView } from "./runtime-provider-resolver";
 import { resolveRuntimeProvider } from "./runtime-provider-resolver";
 import {
@@ -29,6 +30,18 @@ export type LocalChatRouteResult =
       requests: 1;
     }
   | { ok: false; error: LocalChatRouteError; requests: 0 };
+
+export function resolveRouteSecret(input: {
+  keyEnv?: string;
+  envValue?: string;
+  managedSecret?: string | null;
+}): string | undefined {
+  if (!input.keyEnv) return undefined;
+  if (input.keyEnv === MANAGED_RUNTIME_KEY_ENV) {
+    return (input.managedSecret || "").trim();
+  }
+  return (input.envValue || "").trim();
+}
 
 function needsCanonicalRoute(provider: string | undefined, providerRef?: string): boolean {
   if (providerRef) return true;
@@ -240,9 +253,11 @@ export async function routeDesktopSend(input: {
     return { ok: false, requests: 0, error: "PROVIDER_PROJECTION_DRIFT" };
   }
   const projectionOk = !record || (!!projected && !!record);
-  const secretValue = record?.keyEnv
-    ? readEnv(profile)[record.keyEnv] || ""
-    : undefined;
+  const secretValue = resolveRouteSecret({
+    keyEnv: record?.keyEnv,
+    envValue: record?.keyEnv ? readEnv(profile)[record.keyEnv] : undefined,
+    managedSecret: readManagedSecret(profile),
+  });
 
   const log = redactRouteLog(
     {
