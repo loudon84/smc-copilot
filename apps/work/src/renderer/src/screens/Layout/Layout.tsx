@@ -624,6 +624,17 @@ function Layout(): React.JSX.Element {
             (await window.hermesAPI.skillRun.getSessionMode(sessionId)) ?? null;
         }
         const resolved = resolveResumeExecutionMode(resumeTarget, skillRunMode);
+        if (resolved.executionMode === "remote-expert") {
+          try {
+            await window.hermesAPI.remoteExpert.resume({
+              sessionId,
+              profileId: activeProfile,
+              sessionScope: "",
+            });
+          } catch {
+            /* resume_blocked is reflected by binding state */
+          }
+        }
         const run = buildResumedChatRun(
           activeProfile,
           { ...resumeTarget, sessionId },

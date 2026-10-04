@@ -65,8 +65,7 @@ import { importOnePath, stageClipboardImport } from "./file-import-service";
 import { nowIso, toManagedFileView } from "./file-metadata";
 import { createFromMessage as createAgentOutputFromMessage } from "./agent-output/agent-output-service";
 import { materializeRemoteExpertArtifact } from "./materialize-remote-expert-artifact";
-import { streamExpertArtifactBytes } from "./expert-artifact-transfer";
-import { streamSkillRunArtifactBytes } from "./skill-run-artifact-transfer";
+import { streamManagedRemoteBytes } from "./stream-managed-remote-bytes";
 
 function profileOrDefault(profile?: string): string {
   return normalizeProfileId(profile);
@@ -134,22 +133,11 @@ async function saveRemoteArtifactAs(
 
   const destination = result.filePath;
   const profileArg = profileOrDefault(profile) === "default" ? undefined : profile;
-  if (file.provider === "skill-run") {
-    await streamSkillRunArtifactBytes({
-      artifactId: file.remoteArtifactId,
-      runId: file.remoteRunId,
-      expectedSha256: file.contentHash,
-      profile: profileArg,
-      destinationPath: destination,
-    });
-  } else {
-    await streamExpertArtifactBytes({
-      artifactId: file.remoteArtifactId,
-      expectedSha256: file.contentHash,
-      profile: profileArg,
-      destinationPath: destination,
-    });
-  }
+  await streamManagedRemoteBytes({
+    file,
+    profileArg,
+    destinationPath: destination,
+  });
   return destination;
 }
 

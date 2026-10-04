@@ -30,7 +30,7 @@ interface RecentSession {
   title: string;
   contextFolder?: string | null;
   sessionKind: "chat" | "work";
-  executionProvider: "hermes-chat" | "skill-run";
+  executionProvider: "hermes-chat" | "skill-run" | "remote-expert-acp";
 }
 
 type CacheSessionInput = {
@@ -46,6 +46,7 @@ function isExactHistoryPair(
 ): row is RecentSession {
   return (
     (row.sessionKind === "chat" && row.executionProvider === "hermes-chat") ||
+    (row.sessionKind === "chat" && row.executionProvider === "remote-expert-acp") ||
     (row.sessionKind === "work" && row.executionProvider === "skill-run")
   );
 }
@@ -233,7 +234,7 @@ const SidebarRecentSessions = memo(function SidebarRecentSessions({
     sessionId: string;
     title?: string;
     sessionKind?: "chat" | "work";
-    executionProvider?: "hermes-chat" | "skill-run";
+    executionProvider?: "hermes-chat" | "skill-run" | "remote-expert-acp";
   }) => void;
   /** Notifies Layout when a row is deleted so it can leave a stale active chat. */
   onSessionDeleted?: (sessionId: string) => void;

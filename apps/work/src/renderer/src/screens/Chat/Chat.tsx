@@ -91,6 +91,12 @@ import {
   shouldMountExpertDefaultEntry,
   shouldSubmitNewExpertStart,
 } from "./expertDefaultEntry";
+import { RemoteExpertContextControl } from "./remote-expert/RemoteExpertContextControl";
+import { RemoteExpertPermissionView } from "./remote-expert/RemoteExpertPermissionView";
+import { useRemoteExpertTransport } from "./remote-expert/useRemoteExpertTransport";
+import type { RemoteExpertCatalogItem } from "../../../../shared/remote-expert-acp/contract";
+import type { RemoteExpertBindingSnapshot } from "../../../../shared/remote-expert-acp/contract";
+import type { RemoteExpertSemanticEvent } from "../../../../shared/remote-expert-acp/events";
 import "../../modules/expert/expert.css";
 import "../../modules/expert/expert-artifacts.css";
 import {
@@ -305,6 +311,7 @@ function Chat({
   const [isLoading, setIsLoading] = useState(false);
   const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
   const isSkillRunMode = executionMode === "skill-run";
+  const isRemoteExpertMode = executionMode === "remote-expert";
   const [featureMode, setFeatureMode] = useState<SkillRunFeatureMode | null>(
     null,
   );
@@ -331,13 +338,174 @@ function Chat({
       cancelled = true;
     };
   }, []);
+  const [remoteExpertEnabled, setRemoteExpertEnabled] = useState(false);
+  const [remoteExpertSelected, setRemoteExpertSelected] =
+    useState<RemoteExpertCatalogItem | null>(null);
+  const [remoteExpertBinding, setRemoteExpertBinding] =
+    useState<RemoteExpertBindingSnapshot | null>(null);
+  const [remotePermission, setRemotePermission] = useState<{
+    requestId: string;
+    title?: string;
+    summary?: string;
+  } | null>(null);
+  const [remoteExpertBusy, setRemoteExpertBusy] = useState(false);
+  const [remoteResumeBlocked, setRemoteResumeBlocked] = useState(false);
+  const remoteAssistantByTurnRef = useRef(new Map<string, string>());
+  const remoteSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.hermesAPI.remoteExpert
+      ?.getAvailability?.()
+      .then((availability) => {
+        if (!cancelled) setRemoteExpertEnabled(Boolean(availability?.enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setRemoteExpertEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isRemoteExpertMode || !initialSessionId) return;
+    let cancelled = false;
+    void window.hermesAPI.remoteExpert
+      ?.getBinding?.(initialSessionId)
+      .then((binding) => {
+        if (cancelled) return;
+        setRemoteExpertBinding(binding);
+        setRemoteResumeBlocked(binding?.state === "resume_blocked");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [isRemoteExpertMode, initialSessionId]);
+
+  useRemoteExpertTransport({
+    enabled: remoteExpertEnabled || isRemoteExpertMode,
+    onEvent: (event: RemoteExpertSemanticEvent) => {
+      const currentSession = remoteSessionIdRef.current;
+      if (event.sessionId && currentSession && event.sessionId !== currentSession) {
+        return;
+      }
+      if (event.type === "permission.requested") {
+        setRemotePermission({
+          requestId: event.requestId,
+          title: event.title,
+          summary: event.summary,
+        });
+      }
+      if (event.type === "permission.resolved") {
+        setRemotePermission(null);
+      }
+      if (event.type === "lifecycle" && event.state === "resume_blocked") {
+        setRemoteResumeBlocked(true);
+      }
+      if (event.type === "assistant.delta") {
+        const assistantId = remoteAssistantByTurnRef.current.get(event.turnId);
+        if (!assistantId) return;
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId && "content" in message
+              ? { ...message, content: `${message.content}${event.text}` }
+              : message,
+          ),
+        );
+      }
+      if (event.type === "reasoning.delta") {
+        const assistantId = remoteAssistantByTurnRef.current.get(event.turnId);
+        if (!assistantId) return;
+        setMessages((prev) => {
+          const reasoningId = `${assistantId}:reasoning`;
+          const exists = prev.some((message) => message.id === reasoningId);
+          if (exists) {
+            return prev.map((message) =>
+              message.id === reasoningId && message.kind === "reasoning"
+                ? { ...message, text: `${message.text}${event.text}` }
+                : message,
+            );
+          }
+          const index = prev.findIndex((message) => message.id === assistantId);
+          if (index < 0) return prev;
+          const next = [...prev];
+          next.splice(index, 0, {
+            id: reasoningId,
+            kind: "reasoning",
+            role: "agent",
+            text: event.text,
+          });
+          return next;
+        });
+      }
+      if (event.type === "tool.call") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `remote-tool-${event.toolCallId}`,
+            kind: "tool_call",
+            role: "agent",
+            callId: event.toolCallId,
+            name: event.toolName,
+            args: event.title || "",
+            status: "running",
+          },
+        ]);
+      }
+      if (event.type === "tool.result") {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.kind === "tool_call" && message.callId === event.toolCallId
+              ? { ...message, status: "completed" }
+              : message,
+          ).concat(
+            event.content
+              ? [
+                  {
+                    id: `remote-tool-result-${event.toolCallId}`,
+                    kind: "tool_result",
+                    role: "agent",
+                    callId: event.toolCallId,
+                    name: "",
+                    content: event.content,
+                  },
+                ]
+              : [],
+          ),
+        );
+      }
+      if (event.type === "turn.end") {
+        setRemoteExpertBusy(false);
+        const assistantId = remoteAssistantByTurnRef.current.get(event.turnId);
+        if (assistantId) {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? {
+                    ...message,
+                    pending: false,
+                    error:
+                      event.outcome === "completed"
+                        ? undefined
+                        : event.errorCode || event.outcome,
+                  }
+                : message,
+            ),
+          );
+        }
+      }
+    },
+  });
+
   const skillRunBusy = useMemo(
     () =>
       activeSkillProjection != null &&
       !isSkillRunTerminalPhase(activeSkillProjection.phase),
     [activeSkillProjection],
   );
-  const chatBusy = isLoading || skillRunBusy;
+  const chatBusy = isLoading || skillRunBusy || remoteExpertBusy;
 
   useEffect(() => {
     onLoadingChange?.(runId, chatBusy);
@@ -355,6 +523,7 @@ function Chat({
   const [hermesSessionId, setHermesSessionId] = useState<string | null>(
     initialSessionId ?? null,
   );
+  remoteSessionIdRef.current = hermesSessionId || initialSessionId || null;
   // Surface the gateway session id upward whenever it resolves/changes.
   useEffect(() => {
     onSessionIdChange?.(runId, hermesSessionId);
@@ -1633,6 +1802,82 @@ function Chat({
         return;
       }
       if (
+        remoteExpertEnabled &&
+        (isRemoteExpertMode || remoteExpertSelected || remoteExpertBinding)
+      ) {
+        if (remoteResumeBlocked) {
+          toast.error(t("remoteExpert.cannotContinue"));
+          return;
+        }
+        const agentRef =
+          remoteExpertSelected?.agent_ref || remoteExpertBinding?.agentRef;
+        if (!agentRef) {
+          toast.error(t("remoteExpert.selectBeforeSending"));
+          return;
+        }
+        if (remoteExpertSelected && remoteExpertSelected.status !== "ready") {
+          toast.error(t("remoteExpert.unavailableExpert"));
+          return;
+        }
+        setRemoteExpertBusy(true);
+        const sessionId =
+          hermesSessionId || initialSessionId || crypto.randomUUID();
+        if (!hermesSessionId) setHermesSessionId(sessionId);
+        remoteSessionIdRef.current = sessionId;
+        const turnId = crypto.randomUUID();
+        const assistantId = `remote-acp:${turnId}:assistant:0`;
+        remoteAssistantByTurnRef.current.set(turnId, assistantId);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `remote-acp:${turnId}:user:0`,
+            role: "user",
+            content: text,
+            attachments,
+            timestamp: Date.now(),
+          },
+          {
+            id: assistantId,
+            role: "agent",
+            content: "",
+            pending: true,
+            turnId,
+            timestamp: Date.now(),
+          },
+        ]);
+        onTitleChange?.(runId, text.slice(0, 80));
+        onSessionIdChange?.(runId, sessionId);
+        onSessionStarted?.();
+        void window.hermesAPI.remoteExpert
+          .submit({
+            sessionId,
+            turnId,
+            profileId: profile ?? "default",
+            sessionScope: "",
+            text,
+            fileIds: attachments.map((attachment) => attachment.id),
+            profile: {
+              name:
+                remoteExpertSelected?.display_name ||
+                remoteExpertBinding?.profileName ||
+                agentRef,
+              agent_ref: agentRef,
+              knowledge_refs: remoteExpertBinding?.knowledgeRefs,
+              connector_binding_refs: remoteExpertBinding?.connectorBindingRefs,
+              integration_account_refs:
+                remoteExpertBinding?.integrationAccountRefs,
+            },
+          })
+          .catch((err: unknown) => {
+            setRemoteExpertBusy(false);
+            toast.error(
+              err instanceof Error ? err.message : "Remote Expert request failed",
+            );
+          });
+        return;
+      }
+      if (
+        !remoteExpertEnabled &&
         expertSelection.expertSlug != null &&
         !shouldSubmitNewExpertStart({
           featureMode,
@@ -1644,11 +1889,16 @@ function Chat({
         );
         return;
       }
-      if (expertSelection.expertSlug != null && !expertSelection.skillName) {
+      if (
+        !remoteExpertEnabled &&
+        expertSelection.expertSlug != null &&
+        !expertSelection.skillName
+      ) {
         toast.error("Select an expert skill before sending.");
         return;
       }
       if (
+        !remoteExpertEnabled &&
         expertModeActive &&
         shouldSubmitNewExpertStart({
           featureMode,
@@ -1713,6 +1963,18 @@ function Chat({
       submitExpert,
       submitSkill,
       t,
+      isRemoteExpertMode,
+      remoteExpertEnabled,
+      remoteExpertSelected,
+      remoteExpertBinding,
+      remoteResumeBlocked,
+      hermesSessionId,
+      initialSessionId,
+      profile,
+      onTitleChange,
+      onSessionIdChange,
+      onSessionStarted,
+      runId,
     ],
   );
 
@@ -2135,6 +2397,15 @@ function Chat({
           messages={queuedMessages}
           onRemove={handleRemoveQueued}
         />
+        {remotePermission && (hermesSessionId || initialSessionId) ? (
+          <RemoteExpertPermissionView
+            sessionId={hermesSessionId || initialSessionId || ""}
+            requestId={remotePermission.requestId}
+            title={remotePermission.title}
+            summary={remotePermission.summary}
+            onResolved={() => setRemotePermission(null)}
+          />
+        ) : null}
         <ChatInput
           ref={chatInputRef}
           isLoading={chatBusy}
@@ -2180,16 +2451,54 @@ function Chat({
                     });
                   }
                 }
-              : actions.handleAbort
+              : remoteExpertBusy || isRemoteExpertMode
+                ? () => {
+                    const sessionId = hermesSessionId || initialSessionId;
+                    if (sessionId) {
+                      void window.hermesAPI.remoteExpert.cancel({ sessionId });
+                    }
+                  }
+                : actions.handleAbort
           }
           onPreviewFile={(fileId) => handleOpenManagedPreview(fileId)}
           toolbarExtras={
             isSkillRunMode ? null : (
               <>
-                {shouldMountExpertDefaultEntry({
-                  isSkillRunMode,
-                  featureMode,
-                }) ? (
+                {remoteExpertEnabled ? (
+                  <RemoteExpertContextControl
+                    selected={remoteExpertSelected}
+                    binding={remoteExpertBinding}
+                    blocked={remoteResumeBlocked}
+                    disabled={isLoading || remoteExpertBusy || remoteResumeBlocked}
+                    onChange={(item) => {
+                      if (
+                        remoteExpertBinding &&
+                        item?.agent_ref &&
+                        item.agent_ref !== remoteExpertBinding.agentRef
+                      ) {
+                        if (window.confirm(t("remoteExpert.confirmChangeContext"))) {
+                          onNewChat?.();
+                        }
+                        return;
+                      }
+                      if (
+                        !isRemoteExpertMode &&
+                        messages.length > 0 &&
+                        item &&
+                        !remoteExpertBinding
+                      ) {
+                        if (window.confirm(t("remoteExpert.confirmNewChat"))) {
+                          onNewChat?.();
+                        }
+                        return;
+                      }
+                      setRemoteExpertSelected(item);
+                    }}
+                  />
+                ) : shouldMountExpertDefaultEntry({
+                    isSkillRunMode,
+                    featureMode,
+                  }) ? (
                   <ExpertContextControl
                     value={expertSelection}
                     onChange={setExpertSelection}

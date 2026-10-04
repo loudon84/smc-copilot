@@ -155,4 +155,29 @@ describe("file-preview-service", () => {
     expect(result.type).toBe("office");
     expect(result.content).toBe("Parsed office text");
   });
+
+  it("does not call the Expert gateway preview for remote-expert-acp files", async () => {
+    const getArtifactPreview = vi.fn();
+    vi.doMock("../expert/expert-gateway-client", () => ({
+      getExpertGatewayClient: () => ({ getArtifactPreview }),
+      ExpertGatewayError: class extends Error {},
+    }));
+    mockState.files.set(
+      "file-1",
+      baseFile({
+        id: "file-1",
+        locality: "remote",
+        provider: "remote-expert-acp",
+        remoteArtifactId: "art-1",
+        remoteRunId: "run-1",
+        providerPreviewSupported: true,
+        canPreview: true,
+        category: "text",
+      }),
+    );
+    const { getPreviewDescriptor } = await import("./file-preview-service");
+    const result = await getPreviewDescriptor(undefined, "file-1");
+    expect(getArtifactPreview).not.toHaveBeenCalled();
+    expect("error" in result || ("type" in result && result.type !== undefined)).toBe(true);
+  });
 });

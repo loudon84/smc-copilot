@@ -865,7 +865,7 @@ interface HermesAPI {
       model: string;
       contextFolder: string | null;
       sessionKind: "chat" | "work";
-      executionProvider: "hermes-chat" | "skill-run";
+      executionProvider: "hermes-chat" | "skill-run" | "remote-expert-acp";
     }>
   >;
   syncSessionCache: () => Promise<
@@ -878,7 +878,7 @@ interface HermesAPI {
       model: string;
       contextFolder: string | null;
       sessionKind: "chat" | "work";
-      executionProvider: "hermes-chat" | "skill-run";
+      executionProvider: "hermes-chat" | "skill-run" | "remote-expert-acp";
     }>
   >;
   onSessionCacheChanged: (
@@ -1404,6 +1404,7 @@ interface HermesAPI {
 
   // Skill Run
   skillRun: import("../shared/skill-run").SkillRunApi;
+  remoteExpert: import("../shared/remote-expert-acp").RemoteExpertApi;
 }
 
 declare global {

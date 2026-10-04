@@ -11,12 +11,14 @@ const indexSrc = [
   "src/main/ipc/register.ts",
   "src/main/app/updater.ts",
   "src/main/files/register-file-ipc.ts",
+  "src/main/remote-expert-acp/register-ipc.ts",
 ]
   .map((p) => readFileSync(join(ROOT, p), "utf-8"))
   .join("\n");
 const preloadSrc = [
   "src/preload/index.ts",
   "src/preload/files-api.ts",
+  "src/preload/remote-expert-api.ts",
 ]
   .map((p) => readFileSync(join(ROOT, p), "utf-8"))
   .join("\n");
@@ -26,6 +28,10 @@ const filesIpcContractSrc = readFileSync(
 );
 const appUpdateContractSrc = readFileSync(
   join(ROOT, "src/shared/app-update.ts"),
+  "utf-8",
+);
+const remoteExpertIpcSrc = readFileSync(
+  join(ROOT, "src/shared/remote-expert-acp/ipc.ts"),
   "utf-8",
 );
 
@@ -51,6 +57,12 @@ function extractIpcHandleChannels(src: string): string[] {
   const appUpdateRefRe = /ipcMain\.handle\(\s*APP_UPDATE_CHANNELS\.(\w+)/g;
   while ((m = appUpdateRefRe.exec(src)) !== null) {
     const resolved = appUpdateMap[m[1]];
+    if (resolved) channels.push(resolved);
+  }
+  const remoteMap = extractFilesIpcChannelMap(remoteExpertIpcSrc);
+  const remoteRe = /ipcMain\.handle\(\s*REMOTE_EXPERT_IPC_CHANNELS\.(\w+)/g;
+  while ((m = remoteRe.exec(src)) !== null) {
+    const resolved = remoteMap[m[1]];
     if (resolved) channels.push(resolved);
   }
   return [...new Set(channels)];
@@ -96,6 +108,12 @@ function extractPreloadInvokeChannels(src: string): string[] {
   const appUpdateRefRe = /ipcRenderer\.invoke\(\s*APP_UPDATE_CHANNELS\.(\w+)/g;
   while ((m = appUpdateRefRe.exec(src)) !== null) {
     const resolved = appUpdateMap[m[1]];
+    if (resolved) channels.push(resolved);
+  }
+  const remoteMap = extractFilesIpcChannelMap(remoteExpertIpcSrc);
+  const remoteRe = /ipcRenderer\.invoke\(\s*REMOTE_EXPERT_IPC_CHANNELS\.(\w+)/g;
+  while ((m = remoteRe.exec(src)) !== null) {
+    const resolved = remoteMap[m[1]];
     if (resolved) channels.push(resolved);
   }
   return [...new Set(channels)];

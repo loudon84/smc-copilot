@@ -30,9 +30,8 @@ import { FilePlatformError } from "./file-security";
 import {
   invalidatePreviewCache,
   resolvePreviewCachePath,
-  streamExpertArtifactBytes,
 } from "./expert-artifact-transfer";
-import { streamSkillRunArtifactBytes } from "./skill-run-artifact-transfer";
+import { streamManagedRemoteBytes } from "./stream-managed-remote-bytes";
 import { nowIso } from "./file-metadata";
 
 /** Text preview cap — larger files are truncated, never fully buffered. */
@@ -298,7 +297,9 @@ async function getRemotePreviewDescriptor(
 
   const textTypes: PreviewType[] = ["text", "markdown", "code", "html"];
   const useProviderPreview =
-    file.providerPreviewSupported === true && textTypes.includes(type);
+    file.provider === "expert" &&
+    file.providerPreviewSupported === true &&
+    textTypes.includes(type);
 
   if (useProviderPreview) {
     try {
@@ -383,21 +384,11 @@ async function getRemotePreviewDescriptor(
 
   try {
     const maxBytes = Math.max(1, config.preview.maxPreviewMb) * 1024 * 1024;
-    const transferred =
-      file.provider === "skill-run"
-        ? await streamSkillRunArtifactBytes({
-            artifactId,
-            runId: file.remoteRunId,
-            expectedSha256: file.contentHash,
-            profile: profileId === "default" ? undefined : profileId,
-            maxBytes,
-          })
-        : await streamExpertArtifactBytes({
-            artifactId,
-            expectedSha256: file.contentHash,
-            profile: profileId === "default" ? undefined : profileId,
-            maxBytes,
-          });
+    const transferred = await streamManagedRemoteBytes({
+      file,
+      profileArg: profileId === "default" ? undefined : profileId,
+      maxBytes,
+    });
     try {
       if (existsSync(cachePath)) rmSync(cachePath, { force: true });
       renameSync(transferred.path, cachePath);

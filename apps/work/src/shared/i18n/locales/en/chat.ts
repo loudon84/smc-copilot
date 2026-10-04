@@ -198,4 +198,19 @@ export default {
   },
   showWorktree: "Show file explorer",
   hideWorktree: "Hide file explorer",
+  remoteExpert: {
+    label: "Remote Expert",
+    localChat: "Local chat",
+    unavailable: "unavailable",
+    resumeBlocked: "Remote Expert resume blocked",
+    selectBeforeSending: "Select a Remote Expert before sending.",
+    unavailableExpert: "That Remote Expert is unavailable.",
+    cannotContinue: "This Remote Expert session cannot continue.",
+    confirmNewChat:
+      "This chat already has messages. Start a new chat to use Remote Expert?",
+    confirmChangeContext:
+      "Durable Remote Expert context cannot change in place. Start a new chat?",
+    allowOnce: "Allow once",
+    rejectOnce: "Reject once",
+  },
 } as const;

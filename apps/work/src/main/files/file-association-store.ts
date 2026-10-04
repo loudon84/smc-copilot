@@ -504,7 +504,7 @@ export function findByRemoteIdentity(opts: {
   if (!artifactId) return null;
   const db = openFileIndexDb(pid === "default" ? undefined : pid);
 
-  if (opts.provider === "skill-run") {
+  if (opts.provider === "skill-run" || opts.provider === "remote-expert-acp") {
     const runId = opts.remoteRunId?.trim() ?? "";
     if (!runId) return null;
     const row = db
@@ -512,12 +512,12 @@ export function findByRemoteIdentity(opts: {
         `SELECT * FROM managed_files
          WHERE profile_id = ?
            AND locality = 'remote'
-           AND provider = 'skill-run'
+           AND provider = ?
            AND remote_run_id = ?
            AND remote_artifact_id = ?
          LIMIT 1`,
       )
-      .get(pid, runId, artifactId) as Record<string, unknown> | undefined;
+      .get(pid, opts.provider, runId, artifactId) as Record<string, unknown> | undefined;
     return row ? rowToManagedFile(row) : null;
   }
 

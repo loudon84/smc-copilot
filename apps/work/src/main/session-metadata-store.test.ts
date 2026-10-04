@@ -55,13 +55,16 @@ class MetadataDb {
             ? {
                 name: "desktop_session_metadata",
                 sql: this.migrated
-                  ? "CREATE TABLE desktop_session_metadata (session_kind IN ('chat', 'work', 'kb-set'))"
+                  ? "CREATE TABLE desktop_session_metadata (session_kind IN ('chat', 'work', 'kb-set') execution_provider IN ('hermes-chat', 'skill-run', 'remote-expert-acp'))"
                   : "CREATE TABLE desktop_session_metadata (session_kind IN ('chat', 'work'))",
               }
             : undefined;
         }
         if (sql.includes("PRAGMA table_info")) {
           return undefined;
+        }
+        if (sql.includes("COUNT(*)")) {
+          return { n: this.rowsByIdentity.size };
         }
         if (sql.includes("FROM desktop_session_metadata") && sql.includes("LIMIT 1")) {
           const sessionId = String(args[0]);
@@ -189,10 +192,16 @@ function openDb(): { db: Database.Database; raw: MetadataDb } {
 }
 
 describe("session metadata classification", () => {
-  it("accepts chat, work, and kb-set pairs only", () => {
+  it("accepts chat, work, kb-set, and remote-expert-acp pairs only", () => {
     expect(isSessionClassification(CHAT_SESSION_CLASSIFICATION)).toBe(true);
     expect(isSessionClassification(SKILL_RUN_SESSION_CLASSIFICATION)).toBe(true);
     expect(isSessionClassification(KB_SET_SESSION_CLASSIFICATION)).toBe(true);
+    expect(
+      isSessionClassification({
+        sessionKind: "chat",
+        executionProvider: "remote-expert-acp",
+      }),
+    ).toBe(true);
     expect(
       isSessionClassification({
         sessionKind: "chat",

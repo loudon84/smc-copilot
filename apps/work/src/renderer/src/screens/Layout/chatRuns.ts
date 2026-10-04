@@ -1,6 +1,6 @@
 import type { ChatMessage } from "../Chat/Chat";
 
-export type ChatExecutionMode = "local-chat" | "skill-run";
+export type ChatExecutionMode = "local-chat" | "skill-run" | "remote-expert";
 
 /**
  * One concurrently-running (or open) conversation. Several runs coexist so the
@@ -214,7 +214,7 @@ export interface ResumeSessionTarget {
   sessionId: string;
   title?: string;
   sessionKind?: "chat" | "work" | "kb-set";
-  executionProvider?: "hermes-chat" | "skill-run";
+  executionProvider?: "hermes-chat" | "skill-run" | "remote-expert-acp";
 }
 
 /**
@@ -235,7 +235,10 @@ export function resolveResumeExecutionMode(
   const fromPair =
     target.sessionKind === "work" && target.executionProvider === "skill-run"
       ? ("skill-run" as const)
-      : ("local-chat" as const);
+      : target.sessionKind === "chat" &&
+          target.executionProvider === "remote-expert-acp"
+        ? ("remote-expert" as const)
+        : ("local-chat" as const);
   const executionMode =
     skillRunMode?.executionMode === "skill-run" ? "skill-run" : fromPair;
   const skillTitle = skillRunMode?.toolTitle?.trim();

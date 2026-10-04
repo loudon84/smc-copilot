@@ -48,6 +48,7 @@ import {
 import { createFilesApi } from "./files-api";
 import { createExpertApi } from "./expert-api";
 import { createSkillRunApi } from "./skill-run-api";
+import { createRemoteExpertApi } from "./remote-expert-api";
 import {
   createKnowledgeJobApi,
   type HermesKnowledgeJobsSurface,
@@ -1178,7 +1179,7 @@ const hermesAPI = {
       model: string;
       contextFolder: string | null;
       sessionKind: "chat" | "work";
-      executionProvider: "hermes-chat" | "skill-run";
+      executionProvider: "hermes-chat" | "skill-run" | "remote-expert-acp";
     }>
   > => ipcRenderer.invoke("list-cached-sessions", limit, offset),
 
@@ -1192,7 +1193,7 @@ const hermesAPI = {
       model: string;
       contextFolder: string | null;
       sessionKind: "chat" | "work";
-      executionProvider: "hermes-chat" | "skill-run";
+      executionProvider: "hermes-chat" | "skill-run" | "remote-expert-acp";
     }>
   > => ipcRenderer.invoke("sync-session-cache"),
 
@@ -1893,6 +1894,7 @@ const hermesAPI = {
 
   // Skill Run (WORK-SKILL-RUN-CONTRACT Checkpoint A)
   skillRun: createSkillRunApi(),
+  remoteExpert: createRemoteExpertApi(),
 };
 
 if (process.contextIsolated) {

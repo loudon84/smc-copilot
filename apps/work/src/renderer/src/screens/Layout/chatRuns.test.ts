@@ -247,6 +247,18 @@ describe("resume session to run", () => {
     expect(
       resolveResumeExecutionMode({
         sessionId: "s",
+        sessionKind: "chat",
+        executionProvider: "remote-expert-acp",
+        title: "Sales",
+      }),
+    ).toEqual({
+      executionMode: "remote-expert",
+      title: "Sales",
+    });
+
+    expect(
+      resolveResumeExecutionMode({
+        sessionId: "s",
         sessionKind: "work",
         executionProvider: "skill-run",
         title: "Sidebar title",

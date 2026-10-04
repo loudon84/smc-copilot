@@ -28,6 +28,10 @@ import {
   disposeSkillRunSubsystem,
   registerSkillRunIpc,
 } from "../skill-run/skill-run-ipc";
+import {
+  disposeRemoteExpertSubsystem,
+  registerRemoteExpertIpc,
+} from "../remote-expert-acp/register-ipc";
 import { getExpertRunService } from "../expert/expert-run-service";
 import { setGatewayPromptParent } from "../gatewayPrompt";
 import { showChatContextMenu } from "./context-menu";
@@ -88,6 +92,7 @@ export function startMainProcess(): void {
   void getExpertRunService();
   registerExpertIpc({ getMainWindow: () => mainWindow });
   registerSkillRunIpc();
+  registerRemoteExpertIpc({ getMainWindow: () => mainWindow });
 
   setupUpdater({ getMainWindow: () => mainWindow });
 
@@ -234,6 +239,7 @@ export function startMainProcess(): void {
     disposeExpertSubsystem();
     // Skill Run: stop and dispose
     disposeSkillRunSubsystem();
+    disposeRemoteExpertSubsystem();
     // File Platform temp/preview retention (covers former Expert artifact temps).
     try {
       runFilesCleanupBestEffort();

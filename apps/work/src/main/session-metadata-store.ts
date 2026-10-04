@@ -5,7 +5,7 @@ import { getDbConnection } from "./db";
 const TABLE = "desktop_session_metadata";
 
 export type SessionKind = "chat" | "work" | "kb-set";
-export type ExecutionProvider = "hermes-chat" | "skill-run";
+export type ExecutionProvider = "hermes-chat" | "skill-run" | "remote-expert-acp";
 
 export interface SessionClassification {
   sessionKind: SessionKind;
@@ -35,6 +35,10 @@ export const KB_SET_SESSION_CLASSIFICATION: SessionClassification = {
   sessionKind: "kb-set",
   executionProvider: "hermes-chat",
 };
+export const REMOTE_EXPERT_SESSION_CLASSIFICATION: SessionClassification = {
+  sessionKind: "chat",
+  executionProvider: "remote-expert-acp",
+};
 
 export const KNOWLEDGE_SESSION_SCOPE_CONFLICT = "KNOWLEDGE_SESSION_SCOPE_CONFLICT";
 export const KNOWLEDGE_BINDING_PERSIST_FAILED = "KNOWLEDGE_BINDING_PERSIST_FAILED";
@@ -52,6 +56,8 @@ export function isSessionClassification(
   return (
     (candidate.sessionKind === "chat" &&
       candidate.executionProvider === "hermes-chat") ||
+    (candidate.sessionKind === "chat" &&
+      candidate.executionProvider === "remote-expert-acp") ||
     (candidate.sessionKind === "work" &&
       candidate.executionProvider === "skill-run") ||
     (candidate.sessionKind === "kb-set" &&
@@ -142,13 +148,21 @@ function tableHasKnowledgeSetColumn(db: Database.Database): boolean {
   return cols.some((c) => c.name === "knowledge_set_id");
 }
 
-function tableAllowsKbSet(db: Database.Database): boolean {
+function tableSql(db: Database.Database): string {
   const row = db
     .prepare(
       "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
     )
     .get(TABLE) as { sql?: string } | undefined;
-  return Boolean(row?.sql?.includes("'kb-set'"));
+  return row?.sql ?? "";
+}
+
+function tableAllowsKbSet(db: Database.Database): boolean {
+  return tableSql(db).includes("'kb-set'");
+}
+
+function tableAllowsRemoteExpert(db: Database.Database): boolean {
+  return tableSql(db).includes("remote-expert-acp");
 }
 
 function tableHasKnowledgeSetColumnOn(
@@ -168,12 +182,13 @@ export function ensureTable(db: Database.Database): void {
       profile_id TEXT NOT NULL,
       session_id TEXT NOT NULL,
       session_kind TEXT NOT NULL CHECK (session_kind IN ('chat', 'work', 'kb-set')),
-      execution_provider TEXT NOT NULL CHECK (execution_provider IN ('hermes-chat', 'skill-run')),
+      execution_provider TEXT NOT NULL CHECK (execution_provider IN ('hermes-chat', 'skill-run', 'remote-expert-acp')),
       knowledge_set_id TEXT,
       updated_at REAL NOT NULL DEFAULT (strftime('%s', 'now')),
       PRIMARY KEY (session_scope, profile_id, session_id),
       CHECK (
         (session_kind = 'chat' AND execution_provider = 'hermes-chat' AND knowledge_set_id IS NULL)
+        OR (session_kind = 'chat' AND execution_provider = 'remote-expert-acp' AND knowledge_set_id IS NULL)
         OR (session_kind = 'work' AND execution_provider = 'skill-run' AND knowledge_set_id IS NULL)
         OR (session_kind = 'kb-set' AND execution_provider = 'hermes-chat'
             AND knowledge_set_id IS NOT NULL AND trim(knowledge_set_id) <> '')
@@ -185,33 +200,55 @@ export function ensureTable(db: Database.Database): void {
     return;
   }
 
-  if (tableHasKnowledgeSetColumn(db) && tableAllowsKbSet(db)) {
+  if (
+    tableHasKnowledgeSetColumn(db) &&
+    tableAllowsKbSet(db) &&
+    tableAllowsRemoteExpert(db)
+  ) {
     return;
   }
 
-  db.exec(`ALTER TABLE ${TABLE} RENAME TO ${TABLE}_old`);
-  db.exec(`CREATE TABLE ${TABLE} ${createBody}`);
-  const hasOldKs = (() => {
-    try {
-      return tableHasKnowledgeSetColumnOn(db, `${TABLE}_old`);
-    } catch {
-      return false;
+  const rebuild = () => {
+    const before = db
+      .prepare(`SELECT COUNT(*) AS n FROM ${TABLE}`)
+      .get() as { n: number } | undefined;
+    db.exec(`ALTER TABLE ${TABLE} RENAME TO ${TABLE}_old`);
+    db.exec(`CREATE TABLE ${TABLE} ${createBody}`);
+    const hasOldKs = (() => {
+      try {
+        return tableHasKnowledgeSetColumnOn(db, `${TABLE}_old`);
+      } catch {
+        return false;
+      }
+    })();
+    if (hasOldKs) {
+      db.exec(`
+        INSERT INTO ${TABLE} (session_scope, profile_id, session_id, session_kind, execution_provider, knowledge_set_id, updated_at)
+        SELECT session_scope, profile_id, session_id, session_kind, execution_provider, knowledge_set_id, updated_at
+        FROM ${TABLE}_old
+      `);
+    } else {
+      db.exec(`
+        INSERT INTO ${TABLE} (session_scope, profile_id, session_id, session_kind, execution_provider, knowledge_set_id, updated_at)
+        SELECT session_scope, profile_id, session_id, session_kind, execution_provider, NULL, updated_at
+        FROM ${TABLE}_old
+      `);
     }
-  })();
-  if (hasOldKs) {
-    db.exec(`
-      INSERT INTO ${TABLE} (session_scope, profile_id, session_id, session_kind, execution_provider, knowledge_set_id, updated_at)
-      SELECT session_scope, profile_id, session_id, session_kind, execution_provider, knowledge_set_id, updated_at
-      FROM ${TABLE}_old
-    `);
-  } else {
-    db.exec(`
-      INSERT INTO ${TABLE} (session_scope, profile_id, session_id, session_kind, execution_provider, knowledge_set_id, updated_at)
-      SELECT session_scope, profile_id, session_id, session_kind, execution_provider, NULL, updated_at
-      FROM ${TABLE}_old
-    `);
-  }
-  db.exec(`DROP TABLE ${TABLE}_old`);
+    const after = db
+      .prepare(`SELECT COUNT(*) AS n FROM ${TABLE}`)
+      .get() as { n: number } | undefined;
+    if (
+      before &&
+      after &&
+      typeof before.n === "number" &&
+      typeof after.n === "number" &&
+      Number(before.n) !== Number(after.n)
+    ) {
+      throw new Error("REMOTE_METADATA_MIGRATION_FAILED");
+    }
+    db.exec(`DROP TABLE ${TABLE}_old`);
+  };
+  db.transaction(rebuild)();
 }
 
 function sameBinding(a: SessionMetadata, b: SessionMetadata): boolean {
@@ -253,6 +290,12 @@ export function upsertSessionMetadata(
     if (
       existing.sessionKind === "kb-set" ||
       classification.sessionKind === "kb-set"
+    ) {
+      throw new Error(KNOWLEDGE_SESSION_SCOPE_CONFLICT);
+    }
+    if (
+      existing.executionProvider === "remote-expert-acp" ||
+      classification.executionProvider === "remote-expert-acp"
     ) {
       throw new Error(KNOWLEDGE_SESSION_SCOPE_CONFLICT);
     }

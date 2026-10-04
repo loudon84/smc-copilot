@@ -8,8 +8,10 @@ import type { SkillRunFeatureMode } from "../../../../shared/skill-run";
 export function shouldMountExpertDefaultEntry(input: {
   isSkillRunMode: boolean;
   featureMode: SkillRunFeatureMode | null;
+  remoteExpertEnabled?: boolean;
 }): boolean {
   if (input.isSkillRunMode) return false;
+  if (input.remoteExpertEnabled) return false;
   return input.featureMode === "expert-compat";
 }
 

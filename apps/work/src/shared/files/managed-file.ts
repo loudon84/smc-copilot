@@ -47,7 +47,7 @@ export type FileTransportMode = "local" | "remote";
 /** Resource locality on the ManagedFile record (not Hermes attachment transport). */
 export type ManagedFileLocality = "local" | "remote";
 
-export type ManagedFileRemoteProvider = "expert" | "skill-run";
+export type ManagedFileRemoteProvider = "expert" | "skill-run" | "remote-expert-acp";
 
 export type ManagedFileAvailability =
   | "available"

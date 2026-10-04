@@ -41,6 +41,7 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[rich-content]] — RichContentRenderer extracted from AgentMarkdown: Mermaid/SVG/Artifact fences, streaming fence gating, and sandboxed HTML preview.
 - [[file-config]] — `desktop.files.*` Main-only config and Local/Remote attachment transport rules.
 - [[expert-execution]] — Explicit Expert HermesTask runs: NoDeskClaw Gateway client, SSE lifecycle, narrow IPC, Chat integration, continuation, and Main-only artifact download.
+- [[remote-expert-acp]] — Original Chat Compose ACP v1 Remote Expert: Main-owned adapter process, contract lock, and no legacy Expert fallback.
 - [[expert-execution-tests]] — unit/component coverage for Gateway client, run lifecycle, IPC validation, continuation, SSE framing, and minimum-stage UI.
 - [[skill-run]] — Checkpoint B Skill Run architecture: lifecycle coordinator, SSE/poll, continuation, File Platform remote identity, and fail-closed M0 gate.
 - [[skill-run-integration]] — approved target architecture and gated roadmap for the Layout-level Skill mode, Main-owned Run lifecycle, and File Platform output path.
