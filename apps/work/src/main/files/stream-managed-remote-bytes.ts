@@ -1,7 +1,6 @@
 import type { ManagedFile } from "../../shared/files";
-import { streamExpertArtifactBytes } from "./expert-artifact-transfer";
 import { streamSkillRunArtifactBytes } from "./skill-run-artifact-transfer";
-import { streamRemoteExpertAcpArtifactBytes } from "../remote-expert-acp/remote-artifact-bridge";
+import { streamRemoteExpertAcpArtifactBytes } from "../remote-expert/remote-artifact-client";
 import { FilePlatformError } from "./file-security";
 
 export async function streamManagedRemoteBytes(input: {
@@ -25,6 +24,7 @@ export async function streamManagedRemoteBytes(input: {
   }
   if (provider === "remote-expert-acp") {
     return streamRemoteExpertAcpArtifactBytes({
+      agentRef: input.file.remoteTaskId ?? "",
       artifactId: input.file.remoteArtifactId!,
       runId: input.file.remoteRunId ?? "",
       expectedSha256: input.file.contentHash,
@@ -34,18 +34,8 @@ export async function streamManagedRemoteBytes(input: {
       signal: input.signal,
     });
   }
-  if (provider === "expert") {
-    return streamExpertArtifactBytes({
-      artifactId: input.file.remoteArtifactId!,
-      expectedSha256: input.file.contentHash,
-      profile: input.profileArg,
-      destinationPath: input.destinationPath,
-      maxBytes: input.maxBytes,
-    });
-  }
-  const _never: never = provider;
   throw FilePlatformError.fromCode(
-    "FILE_NOT_FOUND",
-    `unsupported remote provider: ${String(_never)}`,
+    "FILE_REMOTE_UNAVAILABLE",
+    `unsupported remote provider: ${provider}`,
   );
 }

@@ -16,10 +16,6 @@ import {
   type PreviewType,
 } from "../../shared/files";
 import {
-  ExpertGatewayError,
-  getExpertGatewayClient,
-} from "../expert/expert-gateway-client";
-import {
   getManagedFile,
   getParsedDocument,
   normalizeProfileId,
@@ -30,7 +26,7 @@ import { FilePlatformError } from "./file-security";
 import {
   invalidatePreviewCache,
   resolvePreviewCachePath,
-} from "./expert-artifact-transfer";
+} from "./preview-cache";
 import { streamManagedRemoteBytes } from "./stream-managed-remote-bytes";
 import { nowIso } from "./file-metadata";
 
@@ -209,31 +205,6 @@ function mapRemotePreviewError(
   err: unknown,
   file: ManagedFile,
 ): { error: FileError } {
-  if (err instanceof ExpertGatewayError) {
-    if (err.status === 403) {
-      markAvailability(file, "forbidden");
-      return {
-        error: makeFileError("FILE_REMOTE_FORBIDDEN", err.message, {
-          detail: err.errorCode ?? undefined,
-        }),
-      };
-    }
-    if (err.status === 404) {
-      markAvailability(file, "not-found");
-      return {
-        error: makeFileError("FILE_REMOTE_NOT_FOUND", err.message, {
-          detail: err.errorCode ?? undefined,
-        }),
-      };
-    }
-    markAvailability(file, "unavailable");
-    return {
-      error: makeFileError("FILE_REMOTE_UNAVAILABLE", err.message, {
-        retryable: true,
-        detail: err.errorCode ?? undefined,
-      }),
-    };
-  }
   if (err instanceof FilePlatformError) {
     if (err.fileError.code === "FILE_REMOTE_FORBIDDEN") {
       markAvailability(file, "forbidden");
@@ -260,7 +231,7 @@ function mapRemotePreviewError(
 async function getRemotePreviewDescriptor(
   profileId: string,
   file: ManagedFile,
-  options?: FilePreviewOptions,
+  _options?: FilePreviewOptions,
 ): Promise<FilePreviewDescriptor | { error: FileError }> {
   if (file.availability === "forbidden") {
     return {
@@ -296,48 +267,18 @@ async function getRemotePreviewDescriptor(
   }
 
   const textTypes: PreviewType[] = ["text", "markdown", "code", "html"];
-  const useProviderPreview =
+  if (
     file.provider === "expert" &&
     file.providerPreviewSupported === true &&
-    textTypes.includes(type);
-
-  if (useProviderPreview) {
-    try {
-      const gateway = getExpertGatewayClient();
-      const preview = await gateway.getArtifactPreview(artifactId);
-      const limit = Math.max(1, options?.limit ?? PREVIEW_TEXT_LIMIT);
-      const offset = Math.max(0, options?.offset ?? 0);
-      const full = preview.content;
-      const slice = full.slice(offset, offset + limit);
-      const truncated =
-        preview.truncated === true || offset + limit < full.length;
-      if (file.availability !== "available") {
-        markAvailability(file, "available");
-      }
-      return {
-        fileId: file.id,
-        type,
-        title: file.name,
-        mime: file.mime,
-        content: slice,
-        truncated,
-        offset,
-        nextOffset: truncated ? offset + slice.length : undefined,
-        totalBytes: full.length,
-        encoding: preview.encoding || "utf-8",
-        language:
-          type === "code"
-            ? EXTENSION_TO_LANGUAGE[file.extension] || undefined
-            : undefined,
-        canOpenExternal: false,
-        canSaveAs: true,
-        canCopyText: true,
-        canAddToContext: true,
-        canRetryParse: false,
-      };
-    } catch (err) {
-      return mapRemotePreviewError(err, file);
-    }
+    textTypes.includes(type)
+  ) {
+    return {
+      error: makeFileError(
+        "FILE_REMOTE_UNAVAILABLE",
+        "Historical Expert artifacts are no longer available for remote preview",
+        { retryable: false },
+      ),
+    };
   }
 
   // Binary/rich client preview via authorized Download → preview cache.

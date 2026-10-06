@@ -9,7 +9,7 @@
 
 import type { SkillRunProjection } from "../../shared/skill-run";
 import { getDbConnection } from "../db";
-import { resolveUniqueSessionTitle } from "../expert/expert-session-materialize";
+import { resolveUniqueSessionTitle } from "../session-title";
 import {
   sessionTitleFromUserMessage,
   upsertCachedSession,

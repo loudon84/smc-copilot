@@ -53,16 +53,6 @@ import { SLASH_COMMANDS, type SlashCommand } from "./slashCommands";
 import { reconcileSlashCatalog } from "./slash/commandCatalog";
 import { useRuntimeOptional } from "../../runtime/use-runtime";
 import {
-  ExpertContextControl,
-  ExpertRunCard,
-  ExpertArtifactCards,
-  ensureExpertProjectionSubscription,
-  getExpertProjectionsForSession,
-  subscribeExpertProjections,
-  upsertExpertProjection,
-  type ExpertSelection,
-} from "../../modules/expert";
-import {
   SkillCatalogPanel,
   SkillSelectionBar,
   SkillRunStatusBar,
@@ -81,34 +71,21 @@ import {
 import "../../modules/skill-run/skill-run.css";
 import type {
   SkillCatalogToolItem,
-  SkillRunFeatureMode,
   SkillRunProjection,
   SkillRunStartInput,
 } from "../../../../shared/skill-run";
-import { isSkillRunTerminalPhase } from "../../../../shared/skill-run";
+import { createClientRequestId, isSkillRunTerminalPhase } from "../../../../shared/skill-run";
 import type { ChatExecutionMode } from "../Layout/chatRuns";
+import { RemoteExpertContextControl } from "../../modules/remote-expert/RemoteExpertContextControl";
+import { RemoteExpertPermissionCard } from "../../modules/remote-expert/RemoteExpertPermissionCard";
+import { RemoteExpertArtifactCards } from "../../modules/remote-expert/RemoteExpertArtifactCards";
+import { useRemoteExpertTransport } from "../../modules/remote-expert/useRemoteExpertTransport";
 import {
-  shouldMountExpertDefaultEntry,
-  shouldSubmitNewExpertStart,
-} from "./expertDefaultEntry";
-import { RemoteExpertContextControl } from "./remote-expert/RemoteExpertContextControl";
-import { RemoteExpertPermissionView } from "./remote-expert/RemoteExpertPermissionView";
-import { useRemoteExpertTransport } from "./remote-expert/useRemoteExpertTransport";
-import type { RemoteExpertCatalogItem } from "../../../../shared/remote-expert-acp/contract";
-import type { RemoteExpertBindingSnapshot } from "../../../../shared/remote-expert-acp/contract";
-import type { RemoteExpertSemanticEvent } from "../../../../shared/remote-expert-acp/events";
-import "../../modules/expert/expert.css";
-import "../../modules/expert/expert-artifacts.css";
-import {
-  buildExpertTranscriptAssistantContent,
-  createClientRequestId,
-  describeSilentCallDenial,
-  expertTranscriptBubbleIds,
-  isExpertTerminalPhase,
-  type ExpertGatewayStatus,
-  type ExpertRequest,
-  type SelectedCallability,
-} from "../../../../shared/expert";
+  isRemoteExpertCallable,
+  type RemoteAcpSessionRef,
+  type RemoteExpertCatalogItem,
+  type RemoteExpertSemanticEvent,
+} from "../../../../shared/remote-expert";
 import {
   DESKTOP_SLASH_COMMANDS,
   LOCAL_DESKTOP_SLASH_COMMANDS,
@@ -130,9 +107,6 @@ import { usePromptNavigator } from "./prompt-navigator/usePromptNavigator";
 interface QueuedMessage {
   text: string;
   attachments: Attachment[];
-  /** Immutable Expert snapshot when queued under Expert mode. */
-  expertRequest?: ExpertRequest;
-  /** Immutable Skill snapshot when queued under Skill mode. */
   skillRequest?: {
     toolName: string;
     prompt: string;
@@ -312,42 +286,18 @@ function Chat({
   const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
   const isSkillRunMode = executionMode === "skill-run";
   const isRemoteExpertMode = executionMode === "remote-expert";
-  const [featureMode, setFeatureMode] = useState<SkillRunFeatureMode | null>(
-    null,
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const getFeatureMode = window.hermesAPI?.skillRun?.getFeatureMode;
-    if (typeof getFeatureMode !== "function") {
-      setFeatureMode(null);
-      return;
-    }
-    void getFeatureMode()
-      .then((result) => {
-        if (!cancelled) {
-          setFeatureMode(result?.mode ?? null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFeatureMode(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
   const [remoteExpertEnabled, setRemoteExpertEnabled] = useState(false);
   const [remoteExpertSelected, setRemoteExpertSelected] =
     useState<RemoteExpertCatalogItem | null>(null);
-  const [remoteExpertBinding, setRemoteExpertBinding] =
-    useState<RemoteExpertBindingSnapshot | null>(null);
+  const [remoteExpertSession, setRemoteExpertSession] =
+    useState<RemoteAcpSessionRef | null>(null);
   const [remotePermission, setRemotePermission] = useState<{
     requestId: string;
     title?: string;
-    summary?: string;
   } | null>(null);
+  const [remoteArtifacts, setRemoteArtifacts] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   const [remoteExpertBusy, setRemoteExpertBusy] = useState(false);
   const [remoteResumeBlocked, setRemoteResumeBlocked] = useState(false);
   const remoteAssistantByTurnRef = useRef(new Map<string, string>());
@@ -372,11 +322,14 @@ function Chat({
     if (!isRemoteExpertMode || !initialSessionId) return;
     let cancelled = false;
     void window.hermesAPI.remoteExpert
-      ?.getBinding?.(initialSessionId)
-      .then((binding) => {
+      ?.getSession?.(initialSessionId)
+      .then((session) => {
         if (cancelled) return;
-        setRemoteExpertBinding(binding);
-        setRemoteResumeBlocked(binding?.state === "resume_blocked");
+        setRemoteExpertSession(session);
+        setRemoteResumeBlocked(
+          session?.connectionState === "closed" ||
+            session?.connectionState === "expired",
+        );
       })
       .catch(() => undefined);
     return () => {
@@ -395,14 +348,37 @@ function Chat({
         setRemotePermission({
           requestId: event.requestId,
           title: event.title,
-          summary: event.summary,
         });
       }
       if (event.type === "permission.resolved") {
         setRemotePermission(null);
       }
-      if (event.type === "lifecycle" && event.state === "resume_blocked") {
+      if (event.type === "connection") {
+        if (event.state === "expired" || event.state === "closed") {
+          setRemoteResumeBlocked(true);
+          setRemoteExpertSession((prev) =>
+            prev ? { ...prev, connectionState: event.state } : prev,
+          );
+        } else if (event.state === "active") {
+          setRemoteResumeBlocked(false);
+          setRemoteExpertSession((prev) =>
+            prev ? { ...prev, connectionState: "active" } : prev,
+          );
+        } else if (event.state === "disconnected") {
+          setRemoteExpertSession((prev) =>
+            prev ? { ...prev, connectionState: "disconnected" } : prev,
+          );
+        }
+      }
+      if (event.type === "lifecycle" && event.state === "disconnected") {
         setRemoteResumeBlocked(true);
+      }
+      if (event.type === "artifact.ready") {
+        setRemoteArtifacts((prev) =>
+          prev.some((file) => file.id === event.managedFileId)
+            ? prev
+            : [...prev, { id: event.managedFileId, name: event.name }],
+        );
       }
       if (event.type === "assistant.delta") {
         const assistantId = remoteAssistantByTurnRef.current.get(event.turnId);
@@ -458,7 +434,7 @@ function Chat({
         setMessages((prev) =>
           prev.map((message) =>
             message.kind === "tool_call" && message.callId === event.toolCallId
-              ? { ...message, status: "completed" }
+              ? { ...message, status: "completed" as const }
               : message,
           ).concat(
             event.content
@@ -728,20 +704,7 @@ function Chat({
   const chatInputRef = useRef<ChatInputHandle>(null);
   const queueRef = useRef<QueuedMessage[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
-  const [expertSelection, setExpertSelection] = useState<ExpertSelection>({
-    expertSlug: null,
-    skillName: null,
-  });
   const [authGeneration, setAuthGeneration] = useState("user:unknown");
-  const [gatewayStatus, setGatewayStatus] =
-    useState<ExpertGatewayStatus>("unknown");
-  const [selectedCallability, setSelectedCallability] =
-    useState<SelectedCallability | null>(null);
-  const [expertProjections, setExpertProjections] = useState(() =>
-    getExpertProjectionsForSession(initialSessionId || ""),
-  );
-  /** Client request ids submitted from this Chat instance — live transcript only. */
-  const liveExpertTranscriptIdsRef = useRef(new Set<string>());
   const [selectedSkill, setSelectedSkill] = useState<SkillCatalogToolItem | null>(null);
   const [skillSessionLocked, setSkillSessionLocked] = useState(false);
   const [extraParameterValues, setExtraParameterValues] = useState<
@@ -826,10 +789,6 @@ function Chat({
       });
   }, [hermesSessionId, initialSessionId]);
 
-  const expertModeActive = Boolean(
-    !isSkillRunMode && expertSelection.expertSlug && expertSelection.skillName,
-  );
-  const expertSelected = expertSelection.expertSlug != null;
   const activeTurnRef = useRef<ActiveTurn | null>(null);
   const dashboardChatEnabled = knowledgeChatForcesLegacyTransport(
     knowledgeRequired,
@@ -842,103 +801,6 @@ function Chat({
         connectionMode,
         chatTransportPreference,
       );
-
-  useEffect(() => {
-    ensureExpertProjectionSubscription();
-    const sync = (): void => {
-      setExpertProjections(
-        getExpertProjectionsForSession(
-          hermesSessionId || initialSessionId || "",
-        ),
-      );
-    };
-    sync();
-    return subscribeExpertProjections(sync);
-  }, [hermesSessionId, initialSessionId]);
-
-  // When an Expert run has a taskId, mirror user/assistant bubbles into the
-  // live transcript (running progress → assistant body) and refresh sidebar.
-  // Only for requests started in this Chat instance — resumed sessions load
-  // the same rows from state.db via getSessionMessages (avoid duplicates).
-  useEffect(() => {
-    const tracked = expertProjections.filter(
-      (p) =>
-        p.taskId != null &&
-        liveExpertTranscriptIdsRef.current.has(p.clientRequestId),
-    );
-    if (tracked.length === 0) return;
-
-    setMessages((prev) => {
-      let next = prev;
-      for (const projection of tracked) {
-        const ids = expertTranscriptBubbleIds(projection.clientRequestId);
-        const assistantBody = buildExpertTranscriptAssistantContent(projection);
-        if (!assistantBody) continue;
-        const hasUser = next.some((m) => m.id === ids.user);
-        if (!hasUser) {
-          if (next === prev) next = [...prev];
-          next.push({
-            id: ids.user,
-            kind: "user",
-            role: "user",
-            content: projection.prompt,
-            timestamp: Date.now(),
-          });
-        }
-        const isFailure =
-          projection.phase === "failed" || projection.phase === "unauthorized";
-        const assistantIndex = next.findIndex((m) => m.id === ids.assistant);
-        if (assistantIndex >= 0) {
-          const existing = next[assistantIndex];
-          // Only bubble rows carry content; skip reasoning/tool variants.
-          if (existing.kind !== "user" && existing.kind !== "assistant") {
-            continue;
-          }
-          if (
-            existing.content !== assistantBody ||
-            existing.error !== (isFailure ? assistantBody : undefined)
-          ) {
-            if (next === prev) next = [...next];
-            next[assistantIndex] = {
-              ...existing,
-              content: assistantBody,
-              error: isFailure ? assistantBody : undefined,
-              pending: !isExpertTerminalPhase(projection.phase),
-              timestamp: Date.now(),
-            };
-          }
-        } else {
-          if (next === prev) next = [...next];
-          next.push({
-            id: ids.assistant,
-            kind: "assistant",
-            role: "agent",
-            content: assistantBody,
-            error: isFailure ? assistantBody : undefined,
-            pending: !isExpertTerminalPhase(projection.phase),
-            timestamp: Date.now(),
-          });
-        }
-      }
-      return next;
-    });
-
-    window.dispatchEvent(
-      new CustomEvent("hermes-session-context-folder-changed", {
-        detail: {
-          sessionId: hermesSessionId || initialSessionId || "",
-        },
-      }),
-    );
-  }, [expertProjections, hermesSessionId, initialSessionId]);
-
-  useEffect(() => {
-    const ready = expertProjections.some(
-      (p) =>
-        p.artifactDiscovery === "ready" && p.artifactFileIds.length > 0,
-    );
-    if (ready) setSessionFilesRefreshKey((k) => k + 1);
-  }, [expertProjections]);
 
   useEffect(() => {
     let cancelled = false;
@@ -954,19 +816,6 @@ function Chat({
       unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    const sessionId = hermesSessionId || initialSessionId;
-    if (!sessionId || !window.hermesAPI.expert?.rehydrateSession) return;
-    void window.hermesAPI.expert
-      .rehydrateSession(sessionId)
-      .then((items) => {
-        for (const item of items) upsertExpertProjection(item);
-      })
-      .catch(() => {
-        /* missing continuation table / empty new session */
-      });
-  }, [hermesSessionId, initialSessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1539,73 +1388,6 @@ function Chat({
     handleBackgroundRef.current = actions.handleBackground;
   });
 
-  const buildExpertRequest = useCallback(
-    (prompt: string, attachmentRefs: string[] = []): ExpertRequest | null => {
-      if (!expertSelection.expertSlug || !expertSelection.skillName)
-        return null;
-      // Match local chat: new empty chats have no session until first send.
-      // Expert runs still need a stable sessionId for projection/continuation.
-      let sessionId = hermesSessionId || initialSessionId || "";
-      if (!sessionId) {
-        sessionId = `desk-${Date.now()}-${crypto.randomUUID()}`;
-        setHermesSessionId(sessionId);
-      }
-      return {
-        kind: "expert",
-        expertSlug: expertSelection.expertSlug,
-        skillName: expertSelection.skillName,
-        prompt,
-        attachmentRefs,
-        sessionId,
-        profileId: profile ?? "default",
-        clientRequestId: createClientRequestId(),
-        authGeneration,
-      };
-    },
-    [
-      authGeneration,
-      expertSelection.expertSlug,
-      expertSelection.skillName,
-      hermesSessionId,
-      initialSessionId,
-      profile,
-    ],
-  );
-
-  const submitExpert = useCallback(
-    async (request: ExpertRequest) => {
-      if (request.authGeneration !== authGeneration) {
-        toast.error("Account changed since submit — please retry.");
-        return;
-      }
-      try {
-        const projection = await window.hermesAPI.expert.start({ request });
-        liveExpertTranscriptIdsRef.current.add(request.clientRequestId);
-        upsertExpertProjection(projection);
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Expert request failed",
-        );
-      }
-    },
-    [authGeneration],
-  );
-
-  const handleExpertCancel = useCallback(
-    async (clientRequestId: string, taskId: string | null) => {
-      try {
-        const projection = await window.hermesAPI.expert.cancel({
-          clientRequestId,
-          taskId,
-        });
-        if (projection) upsertExpertProjection(projection);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Cancel failed");
-      }
-    },
-    [],
-  );
-
   const submitSkill = useCallback(
     async (request: {
       toolName: string;
@@ -1681,40 +1463,16 @@ function Chat({
       void submitSkill(next.skillRequest);
       return;
     }
-    if (next.expertRequest) {
-      if (
-        !shouldSubmitNewExpertStart({
-          featureMode,
-          hasLeftoverExpertSelection: true,
-        })
-      ) {
-        toast.error(
-          "Expert start is disabled unless feature mode is expert-compat.",
-        );
-        return;
-      }
-      if (next.expertRequest.authGeneration !== authGeneration) {
-        toast.error("Queued expert request expired after account change.");
-        return;
-      }
-      void submitExpert(next.expertRequest);
-      return;
-    }
     handleSendRef.current(next.text, next.attachments, true).catch(() => {
       // Put the message back at the front so it isn't silently lost if
       // the send fails (e.g. IPC error before onChatError fires).
       queueRef.current.unshift(next);
       setQueuedMessages([...queueRef.current]);
     });
-  }, [chatBusy, authGeneration, featureMode, submitExpert, submitSkill]);
+  }, [chatBusy, submitSkill]);
 
   const handleRemoveQueued = useCallback((index: number) => {
     const item = queueRef.current[index];
-    if (item?.expertRequest) {
-      void window.hermesAPI.expert.cancel({
-        clientRequestId: item.expertRequest.clientRequestId,
-      });
-    }
     if (item?.skillRequest) {
       const sessionId = hermesSessionId || initialSessionId || "";
       void window.hermesAPI.skillRun.cancel({
@@ -1737,12 +1495,6 @@ function Chat({
       }
       const bgQuestion = parseBackgroundCommand(text);
       if (bgQuestion !== null) {
-        if (expertSelection.expertSlug != null) {
-          toast.error(
-            "Background questions are not available while an expert is selected.",
-          );
-          return;
-        }
         if (bgQuestion)
           void handleBackgroundRef.current(bgQuestion, attachments);
         return;
@@ -1801,21 +1553,29 @@ function Chat({
         void submitSkill(request);
         return;
       }
-      if (
-        remoteExpertEnabled &&
-        (isRemoteExpertMode || remoteExpertSelected || remoteExpertBinding)
-      ) {
+      if (isRemoteExpertMode || remoteExpertSelected || remoteExpertSession) {
+        if (!remoteExpertEnabled) {
+          toast.error(t("remoteExpert.gateUnavailable"));
+          return;
+        }
         if (remoteResumeBlocked) {
-          toast.error(t("remoteExpert.cannotContinue"));
+          toast.error(
+            remoteExpertSession?.connectionState === "expired"
+              ? t("remoteExpert.sessionExpired")
+              : t("remoteExpert.cannotContinue"),
+          );
           return;
         }
         const agentRef =
-          remoteExpertSelected?.agent_ref || remoteExpertBinding?.agentRef;
+          remoteExpertSelected?.agentRef || remoteExpertSession?.agentRef;
         if (!agentRef) {
           toast.error(t("remoteExpert.selectBeforeSending"));
           return;
         }
-        if (remoteExpertSelected && remoteExpertSelected.status !== "ready") {
+        if (
+          remoteExpertSelected &&
+          !isRemoteExpertCallable(remoteExpertSelected)
+        ) {
           toast.error(t("remoteExpert.unavailableExpert"));
           return;
         }
@@ -1850,92 +1610,32 @@ function Chat({
         onSessionStarted?.();
         void window.hermesAPI.remoteExpert
           .submit({
-            sessionId,
-            turnId,
+            kind: "remote-expert",
+            agentRef,
+            desktopSessionId: sessionId,
+            requestId: turnId,
+            promptText: text,
+            managedFileIds: attachments.map((attachment) => attachment.id),
+            authGeneration,
             profileId: profile ?? "default",
-            sessionScope: "",
-            text,
-            fileIds: attachments.map((attachment) => attachment.id),
-            profile: {
-              name:
-                remoteExpertSelected?.display_name ||
-                remoteExpertBinding?.profileName ||
-                agentRef,
-              agent_ref: agentRef,
-              knowledge_refs: remoteExpertBinding?.knowledgeRefs,
-              connector_binding_refs: remoteExpertBinding?.connectorBindingRefs,
-              integration_account_refs:
-                remoteExpertBinding?.integrationAccountRefs,
-            },
           })
           .catch((err: unknown) => {
             setRemoteExpertBusy(false);
-            toast.error(
-              err instanceof Error ? err.message : "Remote Expert request failed",
-            );
+            const errorText =
+              err instanceof Error ? err.message : "Remote Expert request failed";
+            toast.error(errorText);
+            const assistantId = remoteAssistantByTurnRef.current.get(turnId);
+            if (assistantId) {
+              setMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantId && "content" in message
+                    ? { ...message, pending: false, content: errorText }
+                    : message,
+                ),
+              );
+              remoteAssistantByTurnRef.current.delete(turnId);
+            }
           });
-        return;
-      }
-      if (
-        !remoteExpertEnabled &&
-        expertSelection.expertSlug != null &&
-        !shouldSubmitNewExpertStart({
-          featureMode,
-          hasLeftoverExpertSelection: true,
-        })
-      ) {
-        toast.error(
-          "Expert start is disabled unless feature mode is expert-compat.",
-        );
-        return;
-      }
-      if (
-        !remoteExpertEnabled &&
-        expertSelection.expertSlug != null &&
-        !expertSelection.skillName
-      ) {
-        toast.error("Select an expert skill before sending.");
-        return;
-      }
-      if (
-        !remoteExpertEnabled &&
-        expertModeActive &&
-        shouldSubmitNewExpertStart({
-          featureMode,
-          hasLeftoverExpertSelection: true,
-        })
-      ) {
-        if (selectedCallability?.canSilentCall !== true) {
-          toast.error(describeSilentCallDenial(selectedCallability));
-          return;
-        }
-        if (gatewayStatus === "unavailable" || gatewayStatus === "error") {
-          toast.error("Expert Gateway unavailable.");
-          return;
-        }
-        if (gatewayStatus === "checking" || gatewayStatus === "unknown") {
-          toast.error("Expert Gateway is still checking.");
-          return;
-        }
-        if (gatewayStatus !== "ready") {
-          toast.error("Expert Gateway unavailable.");
-          return;
-        }
-        const request = buildExpertRequest(text, []);
-        if (!request) return;
-        const expertBusy = expertProjections.some(
-          (p) =>
-            p.sessionId === request.sessionId &&
-            (p.phase === "queued" ||
-              p.phase === "starting" ||
-              p.phase === "running"),
-        );
-        if (expertBusy) {
-          queueRef.current.push({ text, attachments, expertRequest: request });
-          setQueuedMessages([...queueRef.current]);
-          return;
-        }
-        void submitExpert(request);
         return;
       }
       if (chatBusy) {
@@ -1946,27 +1646,18 @@ function Chat({
       void handleSendRef.current(text, attachments);
     },
     [
-      buildExpertRequest,
       chatBusy,
-      expertModeActive,
-      expertProjections,
-      featureMode,
-      expertSelection.expertSlug,
-      expertSelection.skillName,
-      gatewayStatus,
       isSkillRunMode,
       runtimeReady,
       runtime?.error,
-      selectedCallability,
       selectedSkill,
       extraParameterValues,
-      submitExpert,
       submitSkill,
       t,
       isRemoteExpertMode,
       remoteExpertEnabled,
       remoteExpertSelected,
-      remoteExpertBinding,
+      remoteExpertSession,
       remoteResumeBlocked,
       hermesSessionId,
       initialSessionId,
@@ -2266,22 +1957,6 @@ function Chat({
                 sessionId={hermesSessionId}
               />
             )}
-            {expertProjections
-              .filter(
-                (p) =>
-                  p.phase === "succeeded" &&
-                  (p.artifactDiscovery !== "idle" ||
-                    p.artifactFileIds.length > 0),
-              )
-              .map((projection) => (
-                <ExpertArtifactCards
-                  key={`artifacts-${projection.clientRequestId}`}
-                  projection={projection}
-                  profile={profile}
-                  sessionId={hermesSessionId}
-                  onPreview={(fileId) => handleOpenManagedPreview(fileId)}
-                />
-              ))}
             <div ref={bottomRef} />
           </div>
           {CHAT_SESSION_FILES_PANEL_ENTRY_ENABLED &&
@@ -2376,36 +2051,23 @@ function Chat({
             }}
           />
         )}
-        {!isSkillRunMode && expertProjections.filter((p) => p.taskId == null).length > 0 ? (
-          <div className="expert-runs-panel">
-            {expertProjections
-              .filter((p) => p.taskId == null)
-              .map((projection) => (
-                <ExpertRunCard
-                  key={projection.clientRequestId}
-                  projection={projection}
-                  authGeneration={authGeneration}
-                  onCancel={handleExpertCancel}
-                  onLiveTranscriptRequest={(clientRequestId) => {
-                    liveExpertTranscriptIdsRef.current.add(clientRequestId);
-                  }}
-                />
-              ))}
-          </div>
-        ) : null}
         <QueuedMessages
           messages={queuedMessages}
           onRemove={handleRemoveQueued}
         />
         {remotePermission && (hermesSessionId || initialSessionId) ? (
-          <RemoteExpertPermissionView
+          <RemoteExpertPermissionCard
             sessionId={hermesSessionId || initialSessionId || ""}
             requestId={remotePermission.requestId}
             title={remotePermission.title}
-            summary={remotePermission.summary}
+            authGeneration={authGeneration}
             onResolved={() => setRemotePermission(null)}
           />
         ) : null}
+        <RemoteExpertArtifactCards
+          files={remoteArtifacts}
+          onOpen={(fileId) => handleOpenManagedPreview(fileId)}
+        />
         <ChatInput
           ref={chatInputRef}
           isLoading={chatBusy}
@@ -2430,12 +2092,6 @@ function Chat({
             if (isSkillRunMode) {
               toast.error(
                 "Background questions are not available in Skill mode.",
-              );
-              return;
-            }
-            if (expertSelection.expertSlug != null) {
-              toast.error(
-                "Background questions are not available while an expert is selected.",
               );
               return;
             }
@@ -2464,17 +2120,18 @@ function Chat({
           toolbarExtras={
             isSkillRunMode ? null : (
               <>
-                {remoteExpertEnabled ? (
+                {isRemoteExpertMode || remoteExpertEnabled ? (
                   <RemoteExpertContextControl
                     selected={remoteExpertSelected}
-                    binding={remoteExpertBinding}
+                    session={remoteExpertSession}
                     blocked={remoteResumeBlocked}
+                    gateUnavailable={!remoteExpertEnabled}
                     disabled={isLoading || remoteExpertBusy || remoteResumeBlocked}
                     onChange={(item) => {
                       if (
-                        remoteExpertBinding &&
-                        item?.agent_ref &&
-                        item.agent_ref !== remoteExpertBinding.agentRef
+                        remoteExpertSession &&
+                        item?.agentRef &&
+                        item.agentRef !== remoteExpertSession.agentRef
                       ) {
                         if (window.confirm(t("remoteExpert.confirmChangeContext"))) {
                           onNewChat?.();
@@ -2485,7 +2142,7 @@ function Chat({
                         !isRemoteExpertMode &&
                         messages.length > 0 &&
                         item &&
-                        !remoteExpertBinding
+                        !remoteExpertSession
                       ) {
                         if (window.confirm(t("remoteExpert.confirmNewChat"))) {
                           onNewChat?.();
@@ -2495,26 +2152,11 @@ function Chat({
                       setRemoteExpertSelected(item);
                     }}
                   />
-                ) : shouldMountExpertDefaultEntry({
-                    isSkillRunMode,
-                    featureMode,
-                  }) ? (
-                  <ExpertContextControl
-                    value={expertSelection}
-                    onChange={setExpertSelection}
-                    authGeneration={authGeneration}
-                    active={active}
-                    disabled={isLoading}
-                    onGatewayStatusChange={setGatewayStatus}
-                    onSelectedCallabilityChange={setSelectedCallability}
-                  />
                 ) : null}
                 <div
                   className="chat-toolbar-local-controls"
                   style={{
                     display: "contents",
-                    opacity: expertSelected ? 0.45 : 1,
-                    pointerEvents: expertSelected ? "none" : "auto",
                   }}
                 >
                   <ModelPicker

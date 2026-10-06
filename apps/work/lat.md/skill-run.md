@@ -201,5 +201,5 @@ The following capabilities remain intentionally outside the current Work slice a
 Related architecture docs for Skill Run integration, Expert compatibility, and File Platform artifacts.
 
 - [[skill-run-integration]] — Approved target architecture and roadmap.
-- [[expert-execution]] — Expert compatibility client and lifecycle boundaries.
+- [[remote-expert]] — Remote ACP v2 consumer and File Platform artifacts.
 - [[file-platform]] — Managed files and remote artifact transfer subsystem.

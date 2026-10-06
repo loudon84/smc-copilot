@@ -3,7 +3,7 @@ import { normalizeContinuationItems } from "../src/main/session-continuation-sto
 
 describe("session continuation expert-run", () => {
   // @lat: [[expert-execution-tests#Continuation normalize whitelist]]
-  it("preserves versioned expert-run items and drops invalid ones", () => {
+  it("drops historical expert-run continuation rows", () => {
     const items = normalizeContinuationItems([
       {
         kind: "expert-run",
@@ -27,11 +27,7 @@ describe("session continuation expert-run", () => {
       },
       { kind: "user", content: "hi" },
     ]);
-    expect(items).toHaveLength(2);
-    expect(items[0]?.kind).toBe("expert-run");
-    if (items[0]?.kind === "expert-run") {
-      expect(items[0].schemaVersion).toBe(1);
-      expect(items[0].taskId).toBe("task-1");
-    }
+    expect(items).toHaveLength(1);
+    expect(items[0]?.kind).toBe("user");
   });
 });

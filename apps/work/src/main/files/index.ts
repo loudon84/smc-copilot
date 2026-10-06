@@ -123,17 +123,11 @@ export {
   sanitizeSessionDirSegment,
 } from "./agent-output/generated-file-name";
 
-export {
-  computeRemoteCanPreview,
-  upsertExpertRemoteArtifact,
-} from "./upsert-expert-remote-artifact";
-
 export { materializeRemoteExpertArtifact } from "./materialize-remote-expert-artifact";
 export {
-  streamExpertArtifactBytes,
   invalidatePreviewCache,
   resolvePreviewCachePath,
-} from "./expert-artifact-transfer";
+} from "./preview-cache";
 
 export {
   emitFileDomainEvent,

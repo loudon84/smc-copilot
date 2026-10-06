@@ -11,7 +11,7 @@ const indexSrc = [
   "src/main/ipc/register.ts",
   "src/main/app/updater.ts",
   "src/main/files/register-file-ipc.ts",
-  "src/main/remote-expert-acp/register-ipc.ts",
+  "src/main/remote-expert/remote-expert-ipc.ts",
 ]
   .map((p) => readFileSync(join(ROOT, p), "utf-8"))
   .join("\n");
@@ -31,7 +31,7 @@ const appUpdateContractSrc = readFileSync(
   "utf-8",
 );
 const remoteExpertIpcSrc = readFileSync(
-  join(ROOT, "src/shared/remote-expert-acp/ipc.ts"),
+  join(ROOT, "src/shared/remote-expert.ts"),
   "utf-8",
 );
 
@@ -243,4 +243,15 @@ describe("Runtime IPC replaces install gate", () => {
       expect(preloadChannels).not.toContain(ch);
     });
   }
+});
+
+describe("[A-MIGRATE-001] Local Chat remains; Work Expert IPC is gone", () => {
+  it("[A-MIGRATE-001] keeps send-message and has no expert.start / HermesTask channels", () => {
+    expect(mainChannels).toContain("send-message");
+    expect(preloadChannels).toContain("send-message");
+    expect(mainChannels.some((ch) => ch.includes("expert.start"))).toBe(false);
+    expect(preloadChannels.some((ch) => ch.includes("expert.start"))).toBe(false);
+    expect(indexSrc).not.toContain("HermesTask");
+    expect(preloadSrc).not.toContain("HermesTask");
+  });
 });

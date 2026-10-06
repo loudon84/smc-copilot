@@ -68,7 +68,7 @@ Renderer IPC handlers are isolated from app bootstrap so the registry can be spl
 
 Wallet and token-balance handlers sit in the same registry: `list-wallets`, `create-wallet`, `import-wallet`, `rename-wallet`, `delete-wallet` (backed by [[wallet-token-balances#Wallet Store]]) and `get-token-balances` (backed by [[wallet-token-balances#Token Balances]]).
 
-Expert execution handlers are registered separately via [[src/main/expert/expert-ipc.ts#registerExpertIpc]] during [[src/main/app/start.ts#startMainProcess]] — catalog/skill, run start/cancel/retry, projection events, and Main-only artifact download. Logout and `before-quit` call [[src/main/expert/expert-ipc.ts#disposeExpertSubsystem]] to abort in-flight runs. See [[expert-execution]].
+Expert execution handlers are gone. Remote ACP handlers are registered via [[src/main/remote-expert/remote-expert-ipc.ts#registerRemoteExpertIpc]] during [[src/main/app/start.ts#startMainProcess]]. Logout and `before-quit` call [[src/main/remote-expert/remote-expert-turn-service.ts#disposeRemoteExpertSubsystem]]. See [[remote-expert]].
 
 ## Voice transcription IPC
 

@@ -160,7 +160,8 @@ function groupSessionsByWorkspace(sessions: RecentSession[]): {
     }
     if (
       session.sessionKind === "chat" &&
-      session.executionProvider === "hermes-chat"
+      (session.executionProvider === "hermes-chat" ||
+        session.executionProvider === "remote-expert-acp")
     ) {
       chats.push(session);
       continue;

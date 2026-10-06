@@ -1,2 +1,3 @@
 *.sh text eol=lf
 contracts/skill-run/**/SHA256SUMS text eol=lf
+contracts/remote-expert-frontend/**/SHA256SUMS text eol=lf

@@ -4,7 +4,6 @@ import type {
   DesktopSessionContinuationItem,
   DesktopSessionLocalError,
 } from "../shared/session-continuation";
-import type { ExpertLocalPhase } from "../shared/expert";
 import { getDbConnection } from "./db";
 import type { HistoryItem } from "./sessions";
 
@@ -129,58 +128,6 @@ export function normalizeContinuationItems(
     }
 
     if (kind === "expert-run") {
-      const schemaVersion = item.schemaVersion === 1 ? 1 : null;
-      const taskId = typeof item.taskId === "string" ? item.taskId.trim() : "";
-      const clientRequestId =
-        typeof item.clientRequestId === "string"
-          ? item.clientRequestId.trim()
-          : "";
-      const expertSlug =
-        typeof item.expertSlug === "string" ? item.expertSlug.trim() : "";
-      const skillName =
-        typeof item.skillName === "string" ? item.skillName.trim() : "";
-      const sessionId =
-        typeof item.sessionId === "string" ? item.sessionId.trim() : "";
-      const profileId =
-        typeof item.profileId === "string" ? item.profileId.trim() : "";
-      const authGeneration =
-        typeof item.authGeneration === "string"
-          ? item.authGeneration.trim()
-          : "";
-      const phase = typeof item.phase === "string" ? item.phase : "";
-      if (
-        schemaVersion !== 1 ||
-        !taskId ||
-        !clientRequestId ||
-        !expertSlug ||
-        !skillName ||
-        !sessionId ||
-        !profileId ||
-        !authGeneration ||
-        !phase
-      ) {
-        continue;
-      }
-      out.push({
-        kind: "expert-run",
-        schemaVersion: 1,
-        taskId,
-        clientRequestId,
-        expertSlug,
-        skillName,
-        promptSummary:
-          typeof item.promptSummary === "string" ? item.promptSummary : "",
-        sessionId,
-        profileId,
-        authGeneration,
-        lastEventId:
-          typeof item.lastEventId === "string" ? item.lastEventId : null,
-        phase: phase as ExpertLocalPhase,
-        updatedAt:
-          typeof item.updatedAt === "string"
-            ? item.updatedAt
-            : new Date().toISOString(),
-      });
       continue;
     }
 
@@ -483,9 +430,6 @@ export function continuationItemsToHistory(
             ? { attachments: item.attachments }
             : {}),
         });
-        break;
-      case "expert-run":
-        // Restart projection only — not chat history transcript rows.
         break;
       case "skill-run":
         // Restart projection only — not chat history transcript rows.

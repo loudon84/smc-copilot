@@ -81,14 +81,14 @@ vi.mock("./ensure-access-token", () => ({
   refreshStoredAccessToken: vi.fn(),
 }));
 
+vi.mock("../remote-expert/remote-expert-turn-service", () => ({
+  disposeRemoteExpertSubsystem: vi.fn(),
+  invalidateRemoteExpertAuth: vi.fn(),
+}));
+
 vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
   bootstrapRuntimeProvider: vi.fn(async () => ({ state: "UNBOUND" })),
   clearRuntimeProvider: vi.fn(async () => undefined),
-}));
-
-vi.mock("../expert/expert-ipc", () => ({
-  disposeExpertSubsystem: vi.fn(),
-  restoreExpertSubsystemAfterAuth: vi.fn(),
 }));
 
 vi.mock("../files/file-cleanup-service", () => ({
@@ -104,6 +104,7 @@ import {
   bootstrapRuntimeProvider,
   clearRuntimeProvider,
 } from "../runtime-provider/runtime-provider-orchestrator";
+import { invalidateRemoteExpertAuth } from "../remote-expert/remote-expert-turn-service";
 
 describe("auth-ipc session state push", () => {
   afterEach(() => {
@@ -244,6 +245,40 @@ describe("auth-ipc session state push", () => {
     registerAuthIpc();
     await Promise.resolve();
     expect(bootstrapRuntimeProvider).not.toHaveBeenCalled();
+  });
+
+  it("[A-SEC-001] invalidates ACP only when identity changes, not on token refresh", async () => {
+    const send = vi.fn();
+    const win = {
+      isDestroyed: () => false,
+      webContents: { send },
+    };
+    registerAuthIpc({ getMainWindow: () => win as never });
+    const alice: StoredAuthSession = {
+      accessToken: "a1",
+      tokenType: "Bearer",
+      user: { id: "u1", username: "alice", tenantId: "org-1" },
+    };
+    readStoredSessionSync.mockReturnValue(alice);
+    await writeStoredSession(alice);
+    expect(invalidateRemoteExpertAuth).not.toHaveBeenCalled();
+
+    const refreshed: StoredAuthSession = {
+      ...alice,
+      accessToken: "a2",
+    };
+    readStoredSessionSync.mockReturnValue(refreshed);
+    await writeStoredSession(refreshed);
+    expect(invalidateRemoteExpertAuth).not.toHaveBeenCalled();
+
+    const bob: StoredAuthSession = {
+      accessToken: "b1",
+      tokenType: "Bearer",
+      user: { id: "u2", username: "bob", tenantId: "org-1" },
+    };
+    readStoredSessionSync.mockReturnValue(bob);
+    await writeStoredSession(bob);
+    expect(invalidateRemoteExpertAuth).toHaveBeenCalledWith("auth");
   });
 
   it("does not bootstrap while refreshing a stored jwt", async () => {

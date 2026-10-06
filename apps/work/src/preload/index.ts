@@ -46,7 +46,6 @@ import {
   type AppUpdateState,
 } from "../shared/app-update";
 import { createFilesApi } from "./files-api";
-import { createExpertApi } from "./expert-api";
 import { createSkillRunApi } from "./skill-run-api";
 import { createRemoteExpertApi } from "./remote-expert-api";
 import {
@@ -1888,9 +1887,6 @@ const hermesAPI = {
 
   // Knowledge Upload Jobs + sanitized mode/facade (WORK-KNOWLEDGE-MOCK-01)
   knowledgeJobs: createKnowledgeJobApi() as HermesKnowledgeJobsSurface,
-
-  // Explicit Expert (WORK-EXPERT-CONTRACT v1.0.1)
-  expert: createExpertApi(),
 
   // Skill Run (WORK-SKILL-RUN-CONTRACT Checkpoint A)
   skillRun: createSkillRunApi(),

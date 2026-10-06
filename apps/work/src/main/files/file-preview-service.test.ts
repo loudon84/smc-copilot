@@ -156,12 +156,7 @@ describe("file-preview-service", () => {
     expect(result.content).toBe("Parsed office text");
   });
 
-  it("does not call the Expert gateway preview for remote-expert-acp files", async () => {
-    const getArtifactPreview = vi.fn();
-    vi.doMock("../expert/expert-gateway-client", () => ({
-      getExpertGatewayClient: () => ({ getArtifactPreview }),
-      ExpertGatewayError: class extends Error {},
-    }));
+  it("does not use Expert gateway preview for remote-expert-acp files", async () => {
     mockState.files.set(
       "file-1",
       baseFile({
@@ -177,7 +172,6 @@ describe("file-preview-service", () => {
     );
     const { getPreviewDescriptor } = await import("./file-preview-service");
     const result = await getPreviewDescriptor(undefined, "file-1");
-    expect(getArtifactPreview).not.toHaveBeenCalled();
     expect("error" in result || ("type" in result && result.type !== undefined)).toBe(true);
   });
 });

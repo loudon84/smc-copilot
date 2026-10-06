@@ -17,11 +17,11 @@ Electron starts from [[src/main/index.ts]], which performs pre-ready setup befor
 The Main process is organized by capability rather than by one monolithic service.
 
 - `app/` owns desktop lifecycle, menu, tray, and updater wiring; see [[main-process]].
-- `ipc/` owns the generic Main IPC registry, while `auth/`, `expert/`, `files/`, and `skill-run/` retain their capability-specific handlers and services.
+- `ipc/` owns the generic Main IPC registry, while `auth/`, `remote-expert/`, `files/`, and `skill-run/` retain their capability-specific handlers and services.
 - `hermes/` and `runtime/` adapt configured Hermes connectivity and control ownership; the renderer consumes their sanitized IPC contract, as described by [[runtime-connection]].
 - `migration/`, `secrets/`, persistence stores, and security helpers support durable local state and privileged operations without leaking them to renderer code.
 
-Feature documents remain the authority for detailed behavior: [[chat-runtime-contract]] defines transcript projection, [[file-platform]] owns file and artifact handling, [[expert-execution]] documents the compatibility execution path, and [[skill-run]] documents the gated Skill Run lifecycle.
+Feature documents remain the authority for detailed behavior: [[chat-runtime-contract]] defines transcript projection, [[file-platform]] owns file and artifact handling, [[remote-expert]] documents Remote ACP Chat, and [[skill-run]] documents the gated Skill Run lifecycle.
 
 ## Build and verification layout
 

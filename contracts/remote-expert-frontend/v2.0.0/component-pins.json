@@ -1,0 +1,12 @@
+{
+  "remoteExpertCatalog": {
+    "version": "1.1.0",
+    "path": "nodeskclaw-backend/contracts/remote-expert-catalog/v1.1.0",
+    "consumerDigest": "d51d27a33e6776be780bf3556ffa4ef4f6dab7f731c0a48421683708364efd2c"
+  },
+  "remoteAcpGateway": {
+    "version": "1.0.0",
+    "path": "nodeskclaw-backend/contracts/remote-acp-gateway/v1.0.0",
+    "consumerDigest": "8a48e74e363c71875739c33b2bcdcb6f6f2ea7ee15897ae9fb9b8e9407ee9d06"
+  }
+}

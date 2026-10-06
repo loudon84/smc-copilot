@@ -56,6 +56,7 @@ vi.mock("./ensure-access-token", () => ({
 
 vi.mock("../config", () => ({
   getConnectionConfig: () => connection,
+  readWorkSettings: () => ({}),
 }));
 
 vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
@@ -69,13 +70,13 @@ vi.mock("../runtime-provider/runtime-provider-reconcile-bindings", () => ({
   stopRuntimeReconcile: vi.fn(),
 }));
 
-vi.mock("../expert/expert-ipc", () => ({
-  disposeExpertSubsystem: vi.fn(),
-  restoreExpertSubsystemAfterAuth: vi.fn(),
-}));
-
 vi.mock("../skill-run/skill-run-ipc", () => ({
   disposeSkillRunSubsystem: vi.fn(),
+}));
+
+vi.mock("../remote-expert/remote-expert-turn-service", () => ({
+  disposeRemoteExpertSubsystem: vi.fn(),
+  invalidateRemoteExpertAuth: vi.fn(),
 }));
 
 vi.mock("../files/file-cleanup-service", () => ({

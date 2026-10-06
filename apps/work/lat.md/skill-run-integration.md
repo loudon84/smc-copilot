@@ -18,7 +18,7 @@ The architecture extends existing owners and adds one dedicated Main lifecycle o
 - Renderer owns Catalog and activity presentation only; it does not receive raw Provider events, URLs, credentials, or Artifact bytes.
 - Existing Session/continuation persists mode, transcript, and non-terminal recovery rather than adding a Skill conversation database.
 - [[file-platform|File Platform]] remains the only Artifact preview, download, Save As, materialize, and Session Files owner.
-- [[expert-execution|Expert execution]] remains an explicit compatibility reader during migration; Skill failure never silently falls back to Expert.
+- [[remote-expert|Remote Expert]] is a separate Chat execution owner; Skill failure never silently falls back to it.
 - Local Chat, Runtime ChatRun, and the local bundled Skills management screen remain separate capabilities.
 
 ## Provider contract gate

@@ -1399,12 +1399,9 @@ interface HermesAPI {
   // Knowledge Upload Jobs + sanitized mode/facade
   knowledgeJobs: import("./knowledge-job-api").HermesKnowledgeJobsSurface;
 
-  // Explicit Expert
-  expert: import("../shared/expert").ExpertApi;
-
   // Skill Run
   skillRun: import("../shared/skill-run").SkillRunApi;
-  remoteExpert: import("../shared/remote-expert-acp").RemoteExpertApi;
+  remoteExpert: import("../shared/remote-expert").RemoteExpertApi;
 }
 
 declare global {

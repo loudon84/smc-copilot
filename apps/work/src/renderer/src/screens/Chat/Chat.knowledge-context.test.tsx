@@ -132,16 +132,6 @@ vi.mock("../../modules/skill-run/SkillCatalogPanel", () => ({
   SkillCatalogPanel: () => null,
 }));
 
-vi.mock("../../modules/expert", () => ({
-  ExpertContextControl: () => null,
-  ExpertRunCard: () => null,
-  ExpertArtifactCards: () => null,
-  ensureExpertProjectionSubscription: () => undefined,
-  getExpertProjectionsForSession: () => [],
-  subscribeExpertProjections: () => () => undefined,
-  upsertExpertProjection: () => undefined,
-}));
-
 import Chat from "./Chat";
 import { resetSkillRunStoreForTests } from "../../modules/skill-run/store";
 
@@ -179,9 +169,13 @@ function installHermes(): void {
       cancel: vi.fn(async () => undefined),
       decideApproval: vi.fn(async () => undefined),
     },
-    expert: {
-      rehydrateSession: vi.fn(async () => []),
-      onProjectionChanged: vi.fn(() => () => undefined),
+    remoteExpert: {
+      getAvailability: vi.fn(async () => ({ enabled: false })),
+      getSession: vi.fn(async () => null),
+      onEvent: vi.fn(() => () => undefined),
+      listCatalog: vi.fn(async () => []),
+      submit: vi.fn(async () => undefined),
+      cancel: vi.fn(async () => undefined),
     },
   } as unknown as typeof window.hermesAPI;
   window.desktopAuth = {

@@ -203,6 +203,8 @@ export default {
     localChat: "Local chat",
     unavailable: "unavailable",
     resumeBlocked: "Remote Expert resume blocked",
+    sessionExpired: "This Remote Expert session expired. Start a new request.",
+    gateUnavailable: "Remote Expert is unavailable. Sending is blocked.",
     selectBeforeSending: "Select a Remote Expert before sending.",
     unavailableExpert: "That Remote Expert is unavailable.",
     cannotContinue: "This Remote Expert session cannot continue.",

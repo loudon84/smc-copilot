@@ -28,11 +28,11 @@ import {
   subscribeStoredSessionChanges,
   writeStoredSession,
 } from "./token-store";
-import {
-  disposeExpertSubsystem,
-  restoreExpertSubsystemAfterAuth,
-} from "../expert/expert-ipc";
 import { disposeSkillRunSubsystem } from "../skill-run/skill-run-ipc";
+import {
+  disposeRemoteExpertSubsystem,
+  invalidateRemoteExpertAuth,
+} from "../remote-expert/remote-expert-turn-service";
 import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
 import { getConnectionConfig } from "../config";
 import {
@@ -51,6 +51,42 @@ export type RegisterAuthIpcOptions = {
 };
 
 let unsubscribeSessionChanges: (() => void) | null = null;
+
+type AuthIdentity = { userId: string; tenantId: string };
+let lastRemoteExpertAuthIdentity: AuthIdentity | null | undefined;
+
+function readAuthIdentity(): AuthIdentity | null {
+  const session = readStoredSessionSync();
+  if (!session) return null;
+  return {
+    userId: session.user.id,
+    tenantId: session.user.tenantId ?? session.user.currentOrgId ?? "",
+  };
+}
+
+function maybeInvalidateRemoteExpertAuth(): void {
+  const next = readAuthIdentity();
+  if (lastRemoteExpertAuthIdentity === undefined) {
+    lastRemoteExpertAuthIdentity = next;
+    if (next === null) {
+      invalidateRemoteExpertAuth("auth");
+    }
+    return;
+  }
+  const prev = lastRemoteExpertAuthIdentity;
+  lastRemoteExpertAuthIdentity = next;
+  if (next === null) {
+    if (prev !== null) invalidateRemoteExpertAuth("auth");
+    return;
+  }
+  if (
+    prev === null ||
+    prev.userId !== next.userId ||
+    prev.tenantId !== next.tenantId
+  ) {
+    invalidateRemoteExpertAuth("auth");
+  }
+}
 
 async function buildAuthState(): Promise<ReturnType<typeof toPublicState>> {
   const endpointConfig = readAuthEndpointConfig();
@@ -78,6 +114,7 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
   unsubscribeSessionChanges = subscribeStoredSessionChanges(() => {
     pushPublicAuthState(getMainWindow);
     if (!readStoredSessionSync()) stopRuntimeReconcile();
+    maybeInvalidateRemoteExpertAuth();
   });
 
   ipcMain.handle("auth:get-state", async () => buildAuthState());
@@ -109,7 +146,6 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
     } catch {
       /* scheduler failure must not fail portal login */
     }
-    restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
   });
 
@@ -126,15 +162,13 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
         /* ignore remote logout errors */
       }
     }
-    // Same idempotent Expert dispose path as before-quit; File Platform
-    // cleans temp/preview caches that replaced Expert artifact temps.
     try {
       runFilesCleanupBestEffort();
     } catch {
       // Best-effort — never block logout.
     }
-    disposeExpertSubsystem();
     disposeSkillRunSubsystem();
+    disposeRemoteExpertSubsystem();
     const endpoint = readAuthEndpointConfig();
     await clearStoredSession();
     return toPublicState(null, endpoint);
@@ -194,4 +228,5 @@ async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState>
 export function resetAuthIpcSessionForwarderForTests(): void {
   unsubscribeSessionChanges?.();
   unsubscribeSessionChanges = null;
+  lastRemoteExpertAuthIdentity = undefined;
 }

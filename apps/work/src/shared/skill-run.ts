@@ -145,6 +145,10 @@ export function skillRunNativeUserMessageId(clientRequestId: string): string {
   return `skill-run:${clientRequestId}:user`;
 }
 
+export function createClientRequestId(): string {
+  return crypto.randomUUID();
+}
+
 export function skillRunNativeAssistantMessageId(clientRequestId: string): string {
   return `skill-run:${clientRequestId}:assistant`;
 }

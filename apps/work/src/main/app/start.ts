@@ -21,18 +21,13 @@ import { registerAuthIpc } from "../auth/auth-ipc";
 import { startKnowledgeProviderAfterAuth } from "../knowledge/register-knowledge-job-ipc";
 import { hydrateTokenStore } from "../auth/token-store";
 import {
-  disposeExpertSubsystem,
-  registerExpertIpc,
-} from "../expert/expert-ipc";
-import {
   disposeSkillRunSubsystem,
   registerSkillRunIpc,
 } from "../skill-run/skill-run-ipc";
 import {
   disposeRemoteExpertSubsystem,
   registerRemoteExpertIpc,
-} from "../remote-expert-acp/register-ipc";
-import { getExpertRunService } from "../expert/expert-run-service";
+} from "../remote-expert/remote-expert-ipc";
 import { setGatewayPromptParent } from "../gatewayPrompt";
 import { showChatContextMenu } from "./context-menu";
 import { buildMenu } from "./menu";
@@ -88,9 +83,6 @@ export function startMainProcess(): void {
     requestQuit,
   });
   registerAuthIpc({ getMainWindow: () => mainWindow });
-  // Construct Expert singleton before registering its IPC surface.
-  void getExpertRunService();
-  registerExpertIpc({ getMainWindow: () => mainWindow });
   registerSkillRunIpc();
   registerRemoteExpertIpc({ getMainWindow: () => mainWindow });
 
@@ -235,9 +227,6 @@ export function startMainProcess(): void {
     stopHealthPolling();
     for (const abort of activeRuns.values()) abort();
     activeRuns.clear();
-    // Expert: stop new requests → abort SSE/polling → dispose
-    disposeExpertSubsystem();
-    // Skill Run: stop and dispose
     disposeSkillRunSubsystem();
     disposeRemoteExpertSubsystem();
     // File Platform temp/preview retention (covers former Expert artifact temps).
