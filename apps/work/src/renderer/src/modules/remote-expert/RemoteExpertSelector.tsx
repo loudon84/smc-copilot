@@ -1,59 +1,53 @@
-import { useEffect, useState } from "react";
 import { useI18n } from "../../components/useI18n";
 import {
   isRemoteExpertCallable,
   type RemoteExpertCatalogItem,
 } from "../../../../shared/remote-expert";
+import type { AvailabilityStatus, CatalogStatus } from "./useRemoteExpertEntryState";
 
 interface Props {
-  selected: RemoteExpertCatalogItem | null;
+  selectedAgentRef: string | null;
+  items: RemoteExpertCatalogItem[];
+  availabilityStatus: AvailabilityStatus;
+  catalogStatus: CatalogStatus;
   disabled?: boolean;
-  gateUnavailable?: boolean;
-  onChange: (item: RemoteExpertCatalogItem | null) => void;
+  onChange: (agentRef: string | null) => void;
 }
 
 export function RemoteExpertSelector({
-  selected,
+  selectedAgentRef,
+  items,
+  availabilityStatus,
+  catalogStatus,
   disabled,
-  gateUnavailable,
   onChange,
 }: Props) {
   const { t } = useI18n();
-  const [items, setItems] = useState<RemoteExpertCatalogItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const gateBlocked = availabilityStatus !== "compatible";
+  const blocked = Boolean(disabled || gateBlocked);
 
-  useEffect(() => {
-    let cancelled = false;
-    void window.hermesAPI.remoteExpert
-      ?.listCatalog()
-      .then((list) => {
-        if (!cancelled) setItems(list.items);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : t("remoteExpert.unavailable"));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [t]);
-
-  const blocked = Boolean(disabled || gateUnavailable);
+  let title: string | undefined;
+  if (availabilityStatus === "checking") {
+    title = t("remoteExpert.checking");
+  } else if (availabilityStatus === "incompatible") {
+    title = t("remoteExpert.incompatible");
+  } else if (availabilityStatus === "unavailable") {
+    title = t("remoteExpert.unavailableEntry");
+  } else if (catalogStatus === "empty") {
+    title = t("remoteExpert.noExperts");
+  } else if (catalogStatus === "error") {
+    title = t("remoteExpert.catalogUnavailable");
+  }
 
   return (
-    <label
-      className="remote-expert-selector"
-      title={gateUnavailable ? t("remoteExpert.gateUnavailable") : undefined}
-    >
+    <label className="remote-expert-selector" title={title}>
       <span className="sr-only">{t("remoteExpert.label")}</span>
       <select
         disabled={blocked}
-        value={selected?.agentRef ?? ""}
+        value={selectedAgentRef ?? ""}
         onChange={(event) => {
-          const next =
-            items.find((item) => item.agentRef === event.target.value) ?? null;
-          onChange(next);
+          const value = event.target.value;
+          onChange(value ? value : null);
         }}
       >
         <option value="">{t("remoteExpert.localChat")}</option>
@@ -61,7 +55,7 @@ export function RemoteExpertSelector({
           <option
             key={item.agentRef}
             value={item.agentRef}
-            disabled={gateUnavailable || !isRemoteExpertCallable(item)}
+            disabled={gateBlocked || !isRemoteExpertCallable(item)}
           >
             {item.displayName}
             {item.status === "unavailable"
@@ -70,7 +64,6 @@ export function RemoteExpertSelector({
           </option>
         ))}
       </select>
-      {error ? <span>{error}</span> : null}
     </label>
   );
 }

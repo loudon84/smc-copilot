@@ -14,6 +14,12 @@ export interface ChatRun {
   profile: string;
   /** Execution mode: standard local chat vs skill run */
   executionMode?: ChatExecutionMode;
+  /**
+   * Scratch-only Remote Expert target agent_ref (Layout-owned).
+   * MUST be undefined unless executionMode === "remote-expert".
+   * After ACP session exists, durable binding wins over this field.
+   */
+  remoteExpertAgentRef?: string;
   /** Gateway session id, known once the first turn reports it. */
   sessionId: string | null;
   /** True while the agent is generating for this run. */
@@ -23,6 +29,26 @@ export interface ChatRun {
   /** Seed transcript when the run was opened from history. */
   seed?: ChatMessage[];
 }
+
+export type RemoteExpertSelectTarget =
+  | { kind: "remote"; agentRef: string }
+  | { kind: "local" };
+
+export type RemoteExpertModeTransitionResult =
+  | { kind: "noop"; activeRunId: string; runs: ChatRun[] }
+  | { kind: "in-place"; activeRunId: string; runs: ChatRun[] }
+  | {
+      kind: "requires-confirm";
+      activeRunId: string;
+      runs: ChatRun[];
+      confirmKey: "remoteExpert.confirmNewChat" | "remoteExpert.confirmChangeContext";
+    }
+  | {
+      kind: "invalid";
+      activeRunId: string;
+      runs: ChatRun[];
+      errorCode: "REMOTE_EXPERT_RUN_TRANSITION_INVALID";
+    };
 
 /** A blank chat that can be reassigned to another profile/mode without losing work. */
 export function isScratchRun(
@@ -43,18 +69,24 @@ export function mintRun(
   profile: string,
   seed?: ChatMessage[],
   executionMode?: ChatExecutionMode,
+  remoteExpertAgentRef?: string,
 ): ChatRun {
-  return {
+  const mode = executionMode ?? "local-chat";
+  const next: ChatRun = {
     runId:
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? `run-${crypto.randomUUID()}`
         : `run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     profile,
-    executionMode: executionMode ?? "local-chat",
+    executionMode: mode,
     sessionId: null,
     loading: false,
     seed,
   };
+  if (mode === "remote-expert") {
+    next.remoteExpertAgentRef = remoteExpertAgentRef;
+  }
+  return next;
 }
 
 /** Immutably patch one run's fields by id. */
@@ -182,7 +214,11 @@ export function selectSkillModeTransition(
         activeRunId,
         runs: runs.map((r) =>
           r.runId === active.runId
-            ? { ...r, executionMode: "skill-run" as const }
+            ? {
+                ...r,
+                executionMode: "skill-run" as const,
+                remoteExpertAgentRef: undefined,
+              }
             : r,
         ),
       };
@@ -198,6 +234,173 @@ export function selectSkillModeTransition(
 
   const next = mintRun(profile, undefined, "skill-run");
   return { activeRunId: next.runId, runs: [...runs, next] };
+}
+
+function stripRemoteAgentRef(run: ChatRun): ChatRun {
+  if (run.remoteExpertAgentRef === undefined) return run;
+  const { remoteExpertAgentRef: _drop, ...rest } = run;
+  return rest;
+}
+
+function asRemoteScratch(run: ChatRun, agentRef: string | undefined): ChatRun {
+  return {
+    ...run,
+    executionMode: "remote-expert",
+    remoteExpertAgentRef: agentRef,
+  };
+}
+
+function asLocalScratch(run: ChatRun): ChatRun {
+  return stripRemoteAgentRef({
+    ...run,
+    executionMode: "local-chat",
+  });
+}
+
+function findMatchingRemoteScratch(
+  runs: ChatRun[],
+  profile: string,
+  agentRef: string | undefined,
+): ChatRun | undefined {
+  return runs.find(
+    (r) =>
+      r.profile === profile &&
+      isScratchRun(r, "remote-expert") &&
+      (r.remoteExpertAgentRef ?? undefined) === (agentRef ?? undefined),
+  );
+}
+
+/**
+ * Layout-owned Remote Expert selection transition (PRD REQ-STATE-002 / REQ-UI-002).
+ * Bound runs never mutate context in place; they return requires-confirm with a
+ * computed next scratch state for the caller to commit after user confirmation.
+ */
+export function selectRemoteExpertModeTransition(
+  runs: ChatRun[],
+  activeRunId: string,
+  profile: string,
+  target: RemoteExpertSelectTarget,
+  options?: { hasTranscript?: boolean },
+): RemoteExpertModeTransitionResult {
+  const active = runs.find((r) => r.runId === activeRunId);
+  if (!active) {
+    return {
+      kind: "invalid",
+      activeRunId,
+      runs,
+      errorCode: "REMOTE_EXPERT_RUN_TRANSITION_INVALID",
+    };
+  }
+
+  const mode = active.executionMode ?? "local-chat";
+  // Transcript in Chat state counts as bound even before title/sessionId land.
+  const scratch =
+    isScratchRun(active) &&
+    !(options?.hasTranscript === true) &&
+    !(active.seed && active.seed.length > 0);
+
+  if (target.kind === "local") {
+    if (mode === "local-chat" && scratch) {
+      return { kind: "noop", activeRunId, runs };
+    }
+    if (scratch) {
+      return {
+        kind: "in-place",
+        activeRunId,
+        runs: runs.map((r) =>
+          r.runId === activeRunId ? asLocalScratch(r) : r,
+        ),
+      };
+    }
+    const existingLocal = runs.find(
+      (r) => r.profile === profile && isScratchRun(r, "local-chat"),
+    );
+    if (existingLocal) {
+      return {
+        kind: "requires-confirm",
+        activeRunId: existingLocal.runId,
+        runs,
+        confirmKey:
+          mode === "remote-expert"
+            ? "remoteExpert.confirmChangeContext"
+            : "remoteExpert.confirmNewChat",
+      };
+    }
+    const next = mintRun(profile, undefined, "local-chat");
+    return {
+      kind: "requires-confirm",
+      activeRunId: next.runId,
+      runs: [...runs, next],
+      confirmKey:
+        mode === "remote-expert"
+          ? "remoteExpert.confirmChangeContext"
+          : "remoteExpert.confirmNewChat",
+    };
+  }
+
+  const agentRef = target.agentRef.trim();
+  if (!agentRef) {
+    return {
+      kind: "invalid",
+      activeRunId,
+      runs,
+      errorCode: "REMOTE_EXPERT_RUN_TRANSITION_INVALID",
+    };
+  }
+
+  if (
+    scratch &&
+    mode === "remote-expert" &&
+    active.remoteExpertAgentRef === agentRef
+  ) {
+    return { kind: "noop", activeRunId, runs };
+  }
+
+  if (scratch) {
+    return {
+      kind: "in-place",
+      activeRunId,
+      runs: runs.map((r) =>
+        r.runId === activeRunId ? asRemoteScratch(r, agentRef) : r,
+      ),
+    };
+  }
+
+  const existing = findMatchingRemoteScratch(runs, profile, agentRef);
+  if (existing) {
+    return {
+      kind: "requires-confirm",
+      activeRunId: existing.runId,
+      runs,
+      confirmKey:
+        mode === "remote-expert"
+          ? "remoteExpert.confirmChangeContext"
+          : "remoteExpert.confirmNewChat",
+    };
+  }
+  const next = mintRun(profile, undefined, "remote-expert", agentRef);
+  return {
+    kind: "requires-confirm",
+    activeRunId: next.runId,
+    runs: [...runs, next],
+    confirmKey:
+      mode === "remote-expert"
+        ? "remoteExpert.confirmChangeContext"
+        : "remoteExpert.confirmNewChat",
+  };
+}
+
+/** Clear scratch agent_ref while keeping remote-expert mode (catalog refresh miss). */
+export function clearRemoteExpertScratchSelection(
+  runs: ChatRun[],
+  runId: string,
+): ChatRun[] {
+  return runs.map((r) => {
+    if (r.runId !== runId) return r;
+    if ((r.executionMode ?? "local-chat") !== "remote-expert") return r;
+    if (r.sessionId) return r;
+    return { ...r, remoteExpertAgentRef: undefined };
+  });
 }
 
 /** Session ids of every currently-loading run (for sidebar spinners). */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { RemoteExpertSelector } from "./RemoteExpertSelector";
 
 vi.mock("../../components/useI18n", () => ({
@@ -10,79 +10,69 @@ vi.mock("../../components/useI18n", () => ({
         "remoteExpert.label": "Remote Expert",
         "remoteExpert.localChat": "Local chat",
         "remoteExpert.unavailable": "unavailable",
-        "remoteExpert.gateUnavailable": "Remote Expert is unavailable. Sending is blocked.",
+        "remoteExpert.checking": "Checking Remote Experts…",
+        "remoteExpert.unavailableEntry": "Remote Expert unavailable",
+        "remoteExpert.incompatible": "Remote Expert contract incompatible",
+        "remoteExpert.noExperts": "No Remote Experts available",
+        "remoteExpert.catalogUnavailable": "Catalog unavailable",
+        "remoteExpert.gateUnavailable":
+          "Remote Expert is unavailable. Sending is blocked.",
       }[key] ?? key),
   }),
 }));
 
-describe("RemoteExpertSelector", () => {
-  it("[A-UI-001] fetches catalog on mount and shows local chat option", async () => {
-    const catalog = vi.fn(async () => ({
-      items: [
-        {
-          agentRef: "sales-expert",
-          displayName: "Sales Expert",
-          description: null,
-          category: "sales",
-          tags: [],
-          avatar: null,
-          status: "ready" as const,
-          capabilities: {
-            acp: { protocolVersion: 1 as const, remoteTransport: true },
-            sessionResume: true,
-            attachments: "resource_link",
-            artifacts: "resource_link",
-            permissions: true,
-          },
-        },
-      ],
-    }));
-    window.hermesAPI = {
-      ...window.hermesAPI,
-      remoteExpert: {
-        listCatalog: catalog,
-        getAvailability: async () => ({
-          enabled: true,
-          gateState: "COMPATIBLE",
-          packed: false,
-        }),
-        getSession: async () => null,
-        submit: async () => ({ requestId: "t", sessionId: "s" }),
-        cancel: async () => undefined,
-        close: async () => undefined,
-        resume: async () => null,
-        decidePermission: async () => undefined,
-        onEvent: () => () => undefined,
-      },
-    } as typeof window.hermesAPI;
-    render(<RemoteExpertSelector selected={null} onChange={() => undefined} />);
-    expect(screen.getByText("Local chat")).toBeTruthy();
-    await waitFor(() => expect(catalog).toHaveBeenCalled());
-  });
+const sales = {
+  agentRef: "sales-expert",
+  displayName: "Sales Expert",
+  description: null,
+  category: "sales",
+  tags: [],
+  avatar: null,
+  status: "ready" as const,
+  capabilities: {
+    acp: { protocolVersion: 1 as const, remoteTransport: true },
+    sessionResume: true,
+    attachments: "resource_link",
+    artifacts: "resource_link",
+    permissions: true,
+  },
+};
 
-  it("[A-NEG-UI-001] greys out the selector when the contract gate is unavailable", async () => {
-    window.hermesAPI = {
-      ...window.hermesAPI,
-      remoteExpert: {
-        listCatalog: async () => ({ items: [] }),
-        getAvailability: async () => ({
-          enabled: false,
-          gateState: "INCOMPATIBLE",
-          packed: false,
-        }),
-        getSession: async () => null,
-        submit: async () => ({ requestId: "t", sessionId: "s" }),
-        cancel: async () => undefined,
-        close: async () => undefined,
-        resume: async () => null,
-        decidePermission: async () => undefined,
-        onEvent: () => () => undefined,
-      },
-    } as typeof window.hermesAPI;
+const unavailable = {
+  ...sales,
+  agentRef: "down-expert",
+  displayName: "Down Expert",
+  status: "unavailable" as const,
+};
+
+describe("RemoteExpertSelector", () => {
+  it("[A-UI-001] [A-CATALOG-READY-001] renders ready enabled and unavailable disabled", () => {
     render(
       <RemoteExpertSelector
-        selected={null}
-        gateUnavailable
+        selectedAgentRef={null}
+        items={[sales, unavailable]}
+        availabilityStatus="compatible"
+        catalogStatus="ready"
+        onChange={() => undefined}
+      />,
+    );
+    const ready = screen.getByRole("option", {
+      name: "Sales Expert",
+    }) as HTMLOptionElement;
+    const down = screen.getByRole("option", {
+      name: /Down Expert/,
+    }) as HTMLOptionElement;
+    expect(ready.disabled).toBe(false);
+    expect(down.disabled).toBe(true);
+  });
+
+  it("[A-NEG-UI-ENTRY-001] greys out the selector when gate is unavailable", () => {
+    render(
+      <RemoteExpertSelector
+        selectedAgentRef={null}
+        items={[]}
+        availabilityStatus="unavailable"
+        catalogStatus="idle"
         onChange={() => undefined}
       />,
     );
@@ -91,6 +81,64 @@ describe("RemoteExpertSelector", () => {
     );
     expect(
       screen.getByRole("combobox").closest("label")?.getAttribute("title"),
-    ).toBe("Remote Expert is unavailable. Sending is blocked.");
+    ).toBe("Remote Expert unavailable");
+  });
+
+  it("[A-NEG-CATALOG-GATE-001] does not call listCatalog (pure presentational)", () => {
+    const listCatalog = vi.fn();
+    window.hermesAPI = {
+      ...window.hermesAPI,
+      remoteExpert: {
+        ...(window.hermesAPI?.remoteExpert ?? {}),
+        listCatalog,
+      },
+    } as typeof window.hermesAPI;
+    render(
+      <RemoteExpertSelector
+        selectedAgentRef={null}
+        items={[]}
+        availabilityStatus="incompatible"
+        catalogStatus="idle"
+        onChange={() => undefined}
+      />,
+    );
+    expect(listCatalog).not.toHaveBeenCalled();
+  });
+
+  it("[A-NEG-SEC-CLOSURE-004] renders catalog labels as text, not HTML", () => {
+    const evil = {
+      ...sales,
+      agentRef: "evil",
+      displayName: "<img src=x onerror=alert(1)>",
+    };
+    render(
+      <RemoteExpertSelector
+        selectedAgentRef={null}
+        items={[evil]}
+        availabilityStatus="compatible"
+        catalogStatus="ready"
+        onChange={() => undefined}
+      />,
+    );
+    expect(screen.getByText("<img src=x onerror=alert(1)>")).toBeTruthy();
+    expect(document.querySelector("img")).toBeNull();
+  });
+
+  it("[A-CATALOG-EMPTY-001] keeps local chat option when catalog empty", () => {
+    const onChange = vi.fn();
+    render(
+      <RemoteExpertSelector
+        selectedAgentRef={null}
+        items={[]}
+        availabilityStatus="compatible"
+        catalogStatus="empty"
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByText("Local chat")).toBeTruthy();
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "" },
+    });
+    expect(onChange).toHaveBeenCalledWith(null);
   });
 });

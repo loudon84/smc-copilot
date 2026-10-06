@@ -20,7 +20,7 @@ afterEach(() => {
   rmSync(testHome, { recursive: true, force: true });
 });
 
-// @lat: [[model-selection#Session model override#Strict chat picker from agent config]]
+// @lat: [[model-selection#Profile model catalog picker]]
 describe("listConfiguredAgentModels", () => {
   it("returns only model.default and custom_providers, ignoring models.json", async () => {
     writeFileSync(

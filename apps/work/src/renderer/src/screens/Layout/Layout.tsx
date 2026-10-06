@@ -21,6 +21,7 @@ import {
   resolveResumeExecutionMode,
   fetchWithEmptyRetry,
 } from "./chatRuns";
+import { useRemoteExpertRunTransition } from "./useRemoteExpertRunTransition";
 import { ActiveSessionsBar } from "./ActiveSessionsBar";
 import { StatusBar } from "./StatusBar";
 import Sessions from "../Sessions/Sessions";
@@ -400,6 +401,18 @@ function Layout(): React.JSX.Element {
     setActiveRunId(next.activeRunId);
     goTo("chat");
   }, [runs, activeRunId, activeProfile, goTo]);
+
+  const { selectRemoteExpert, clearScratchSelection } =
+    useRemoteExpertRunTransition({
+      runs,
+      activeRunId,
+      setRuns,
+      setActiveRunId,
+      profile: activeProfile,
+      confirm: (message) => window.confirm(message),
+      t,
+      goToChat: () => goTo("chat"),
+    });
 
   // Listen for menu IPC events (Cmd+N, Cmd+K from app menu)
   useEffect(() => {
@@ -885,11 +898,18 @@ function Layout(): React.JSX.Element {
                 <Chat
                   runId={run.runId}
                   executionMode={run.executionMode}
+                  remoteExpertAgentRef={run.remoteExpertAgentRef}
                   initialMessages={run.seed}
                   initialSessionId={run.sessionId}
                   active={run.runId === activeRunId}
                   profile={run.profile}
                   onNewChat={handleNewChat}
+                  onSelectRemoteExpert={(target, options) =>
+                    selectRemoteExpert(run.runId, target, options)
+                  }
+                  onClearRemoteExpertSelection={() =>
+                    clearScratchSelection(run.runId)
+                  }
                   onOpenDiagnose={(section?: string) =>
                     openSettings(section, { profile: run.profile })
                   }

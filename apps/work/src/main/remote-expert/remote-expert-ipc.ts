@@ -67,8 +67,16 @@ export function registerRemoteExpertIpc(options?: {
   });
 
   ipcMain.handle(REMOTE_EXPERT_IPC_CHANNELS.LIST_CATALOG, async () => {
-    const list = await fetchRemoteExpertCatalog();
-    return sanitizeRemoteExpertDto(list);
+    try {
+      const list = await fetchRemoteExpertCatalog();
+      return sanitizeRemoteExpertDto(list);
+    } catch (err) {
+      if (err instanceof RemoteExpertError) {
+        throw new Error(`${err.code}: ${err.message}`);
+      }
+      const mapped = sanitizeError(err);
+      throw new Error(`${mapped.code}: ${mapped.error}`);
+    }
   });
 
   ipcMain.handle(

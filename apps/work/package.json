@@ -1,6 +1,6 @@
 {
   "name": "smc-copilot",
-  "version": "0.7.11",
+  "version": "0.7.12",
   "description": "SMC-Copilot Desktop",
   "main": "./out/main/index.js",
   "author": "SMC",

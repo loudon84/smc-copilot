@@ -5,7 +5,7 @@ import { getSidebarOpen } from "@/lib/storage";
 import { AppSidebar } from "./app-sidebar";
 import { PageLayout } from "./page-layout";
 
-// @lat: [[features#Shell and navigation]]
+// @lat: [[sidebar-navigation]]
 export function AppShell() {
   return (
     <TooltipProvider>

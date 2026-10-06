@@ -77,6 +77,11 @@ export const REMOTE_EXPERT_ERROR_CODES = [
   "ACP_PROTOCOL_ERROR",
   "REMOTE_IPC_INVALID_INPUT",
   "ACP_CONTRACT_LOCK_MISSING",
+  "REMOTE_EXPERT_UI_AVAILABILITY_FAILED",
+  "REMOTE_EXPERT_SELECTION_REQUIRED",
+  "REMOTE_EXPERT_RUN_TRANSITION_INVALID",
+  "REMOTE_EXPERT_CONTEXT_CONFLICT",
+  "REMOTE_EXPERT_EVIDENCE_SECRET_LEAK",
 ] as const;
 
 export type RemoteExpertErrorCode = (typeof REMOTE_EXPERT_ERROR_CODES)[number];
@@ -123,17 +128,23 @@ export type ContractGateState =
   | "INCOMPATIBLE";
 
 export type RemoteExpertObsStage =
+  | "ENTRY"
   | "DISCOVER"
   | "CATALOG"
+  | "SELECT"
+  | "ROUTE"
   | "CONNECT"
   | "INITIALIZE"
   | "SESSION"
   | "PROMPT"
   | "PERMISSION"
   | "RESUME"
+  | "CANCEL"
   | "ATTACHMENT"
   | "ARTIFACT"
-  | "CLOSE";
+  | "CLOSE"
+  | "G6"
+  | "G7";
 
 export interface RemoteExpertAcpCapabilities {
   protocolVersion: 1;

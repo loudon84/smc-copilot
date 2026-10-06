@@ -46,6 +46,4 @@ Because the bar doubles as the drag strip, [[src/renderer/src/screens/Layout/Lay
 
 ## Follow-us modal
 
-A one-time modal prompting the user to follow Hermes on X. Dismissed permanently via localStorage after either button is clicked.
-
-[[src/renderer/src/components/FollowUsModal.tsx]] stores the dismissal flag in `localStorage` under `hermes-follow-x-dismissed`. Both "Follow" (opens `https://x.com/HermesOneApp` via `openExternal`) and "Not Now" write the flag and close the modal. It renders in [[src/renderer/src/screens/Chat/Chat.tsx]] only when `connectionModeLoaded && readiness.ok`, so it appears after setup is complete. The modal reuses the `.models-modal-overlay` / `.models-modal` pattern for consistent styling.
+The one-time follow-us modal was removed from the Work renderer. The prior `hermes-follow-x-dismissed` localStorage flag is no longer written or read by current Chat chrome.

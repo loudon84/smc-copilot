@@ -361,7 +361,7 @@ describe("ModelPicker", () => {
     expect(within(dropdown).queryByText("Llama 3")).toBeNull();
   });
 
-  // @lat: [[model-selection#Session model override#Strict chat picker from agent config#Duplicate configured rows collapse]]
+  // @lat: [[model-selection#Profile model catalog picker#Duplicate configured rows collapse]]
   it("shows a duplicate provider/model/url row only once", () => {
     const modelGroups: ModelGroup[] = [
       {

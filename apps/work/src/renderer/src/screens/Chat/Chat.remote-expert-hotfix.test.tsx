@@ -293,6 +293,7 @@ describe("Chat remote-expert hotfix routing", () => {
       <Chat
         runId="run-re-1"
         executionMode="remote-expert"
+        remoteExpertAgentRef="sales-expert"
         initialMessages={[]}
       />,
     );

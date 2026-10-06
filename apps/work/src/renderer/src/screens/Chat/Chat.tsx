@@ -75,15 +75,19 @@ import type {
   SkillRunStartInput,
 } from "../../../../shared/skill-run";
 import { createClientRequestId, isSkillRunTerminalPhase } from "../../../../shared/skill-run";
-import type { ChatExecutionMode } from "../Layout/chatRuns";
+import type {
+  ChatExecutionMode,
+  RemoteExpertSelectTarget,
+} from "../Layout/chatRuns";
 import { RemoteExpertContextControl } from "../../modules/remote-expert/RemoteExpertContextControl";
 import { RemoteExpertPermissionCard } from "../../modules/remote-expert/RemoteExpertPermissionCard";
 import { RemoteExpertArtifactCards } from "../../modules/remote-expert/RemoteExpertArtifactCards";
 import { useRemoteExpertTransport } from "../../modules/remote-expert/useRemoteExpertTransport";
+import { useRemoteExpertEntryState } from "../../modules/remote-expert/useRemoteExpertEntryState";
+import { isRemoteExpertEntryVisible } from "../../modules/remote-expert/entry-eligibility";
 import {
   isRemoteExpertCallable,
   type RemoteAcpSessionRef,
-  type RemoteExpertCatalogItem,
   type RemoteExpertSemanticEvent,
 } from "../../../../shared/remote-expert";
 import {
@@ -208,6 +212,8 @@ interface ChatProps {
    *  remain mounted (background sessions) and only the active one is shown. */
   runId: string;
   executionMode?: ChatExecutionMode;
+  /** Layout-owned scratch Remote Expert agent_ref (undefined when local/skill). */
+  remoteExpertAgentRef?: string;
   /** Seed transcript when re-opening a session from history; empty for new chats. */
   initialMessages?: ChatMessage[];
   /** Gateway session id when resuming a known session; null for a new chat. */
@@ -219,6 +225,13 @@ interface ChatProps {
   profile?: string;
   onSessionStarted?: () => void;
   onNewChat?: () => void;
+  /** Layout-owned Remote Expert mode / agent_ref transition. */
+  onSelectRemoteExpert?: (
+    target: RemoteExpertSelectTarget,
+    options?: { hasTranscript?: boolean },
+  ) => void;
+  /** Clear scratch agent_ref after catalog refresh proves it absent. */
+  onClearRemoteExpertSelection?: () => void;
   /** Optional callback to open Settings — from the config-health banner's
    *  "Show details" (no section) or a `/settings <section>` command, which
    *  passes the section name to scroll to. */
@@ -248,6 +261,7 @@ interface ChatProps {
 function Chat({
   runId,
   executionMode = "local-chat",
+  remoteExpertAgentRef,
   initialMessages,
   initialSessionId,
   initialTitle,
@@ -255,6 +269,8 @@ function Chat({
   profile,
   onSessionStarted,
   onNewChat,
+  onSelectRemoteExpert,
+  onClearRemoteExpertSelection,
   onOpenDiagnose,
   onLoadingChange,
   onSessionIdChange,
@@ -286,9 +302,15 @@ function Chat({
   const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
   const isSkillRunMode = executionMode === "skill-run";
   const isRemoteExpertMode = executionMode === "remote-expert";
-  const [remoteExpertEnabled, setRemoteExpertEnabled] = useState(false);
-  const [remoteExpertSelected, setRemoteExpertSelected] =
-    useState<RemoteExpertCatalogItem | null>(null);
+  const showRemoteExpertEntry = isRemoteExpertEntryVisible({
+    executionMode,
+    knowledgeRequired,
+  });
+  const remoteExpertEntry = useRemoteExpertEntryState();
+  const remoteExpertSelected =
+    remoteExpertEntry.items.find(
+      (item) => item.agentRef === remoteExpertAgentRef,
+    ) ?? null;
   const [remoteExpertSession, setRemoteExpertSession] =
     useState<RemoteAcpSessionRef | null>(null);
   const [remotePermission, setRemotePermission] = useState<{
@@ -304,19 +326,28 @@ function Chat({
   const remoteSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    void window.hermesAPI.remoteExpert
-      ?.getAvailability?.()
-      .then((availability) => {
-        if (!cancelled) setRemoteExpertEnabled(Boolean(availability?.enabled));
-      })
-      .catch(() => {
-        if (!cancelled) setRemoteExpertEnabled(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (
+      !isRemoteExpertMode ||
+      !remoteExpertAgentRef ||
+      remoteExpertEntry.availabilityStatus !== "compatible" ||
+      remoteExpertEntry.catalogStatus !== "ready"
+    ) {
+      return;
+    }
+    const stillPresent = remoteExpertEntry.items.some(
+      (item) => item.agentRef === remoteExpertAgentRef,
+    );
+    if (!stillPresent) {
+      onClearRemoteExpertSelection?.();
+    }
+  }, [
+    isRemoteExpertMode,
+    remoteExpertAgentRef,
+    remoteExpertEntry.availabilityStatus,
+    remoteExpertEntry.catalogStatus,
+    remoteExpertEntry.items,
+    onClearRemoteExpertSelection,
+  ]);
 
   useEffect(() => {
     if (!isRemoteExpertMode || !initialSessionId) return;
@@ -338,10 +369,12 @@ function Chat({
   }, [isRemoteExpertMode, initialSessionId]);
 
   useRemoteExpertTransport({
-    enabled: remoteExpertEnabled || isRemoteExpertMode,
+    // Only remote-expert runs subscribe. Scratch local chats must not receive
+    // background remote events (multi-run Layout keeps every Chat mounted).
+    enabled: isRemoteExpertMode,
     onEvent: (event: RemoteExpertSemanticEvent) => {
       const currentSession = remoteSessionIdRef.current;
-      if (event.sessionId && currentSession && event.sessionId !== currentSession) {
+      if (!currentSession || event.sessionId !== currentSession) {
         return;
       }
       if (event.type === "permission.requested") {
@@ -1553,8 +1586,8 @@ function Chat({
         void submitSkill(request);
         return;
       }
-      if (isRemoteExpertMode || remoteExpertSelected || remoteExpertSession) {
-        if (!remoteExpertEnabled) {
+      if (isRemoteExpertMode || remoteExpertSession) {
+        if (remoteExpertEntry.availabilityStatus !== "compatible") {
           toast.error(t("remoteExpert.gateUnavailable"));
           return;
         }
@@ -1566,18 +1599,37 @@ function Chat({
           );
           return;
         }
-        const agentRef =
-          remoteExpertSelected?.agentRef || remoteExpertSession?.agentRef;
+        const durableRef = remoteExpertSession?.agentRef;
+        const scratchRef = remoteExpertAgentRef;
+        if (
+          durableRef &&
+          scratchRef &&
+          durableRef !== scratchRef
+        ) {
+          console.info(
+            "[remote-expert-ui]",
+            JSON.stringify({
+              stage: "ROUTE",
+              status: "FAIL",
+              error_code: "REMOTE_EXPERT_CONTEXT_CONFLICT",
+              durable: durableRef,
+              scratch: scratchRef,
+            }),
+          );
+        }
+        const agentRef = durableRef ?? scratchRef;
         if (!agentRef) {
           toast.error(t("remoteExpert.selectBeforeSending"));
           return;
         }
-        if (
-          remoteExpertSelected &&
-          !isRemoteExpertCallable(remoteExpertSelected)
-        ) {
-          toast.error(t("remoteExpert.unavailableExpert"));
-          return;
+        if (!durableRef) {
+          const catalogItem = remoteExpertEntry.items.find(
+            (item) => item.agentRef === agentRef,
+          );
+          if (catalogItem && !isRemoteExpertCallable(catalogItem)) {
+            toast.error(t("remoteExpert.unavailableExpert"));
+            return;
+          }
         }
         setRemoteExpertBusy(true);
         const sessionId =
@@ -1624,11 +1676,12 @@ function Chat({
             const errorText =
               err instanceof Error ? err.message : "Remote Expert request failed";
             toast.error(errorText);
-            const assistantId = remoteAssistantByTurnRef.current.get(turnId);
-            if (assistantId) {
+            const failedAssistantId =
+              remoteAssistantByTurnRef.current.get(turnId);
+            if (failedAssistantId) {
               setMessages((prev) =>
                 prev.map((message) =>
-                  message.id === assistantId && "content" in message
+                  message.id === failedAssistantId && "content" in message
                     ? { ...message, pending: false, content: errorText }
                     : message,
                 ),
@@ -1655,8 +1708,9 @@ function Chat({
       submitSkill,
       t,
       isRemoteExpertMode,
-      remoteExpertEnabled,
-      remoteExpertSelected,
+      remoteExpertEntry.availabilityStatus,
+      remoteExpertEntry.items,
+      remoteExpertAgentRef,
       remoteExpertSession,
       remoteResumeBlocked,
       hermesSessionId,
@@ -2120,36 +2174,30 @@ function Chat({
           toolbarExtras={
             isSkillRunMode ? null : (
               <>
-                {isRemoteExpertMode || remoteExpertEnabled ? (
+                {showRemoteExpertEntry ? (
                   <RemoteExpertContextControl
+                    selectedAgentRef={remoteExpertAgentRef ?? null}
                     selected={remoteExpertSelected}
                     session={remoteExpertSession}
+                    items={remoteExpertEntry.items}
+                    availabilityStatus={remoteExpertEntry.availabilityStatus}
+                    catalogStatus={remoteExpertEntry.catalogStatus}
+                    errorCode={
+                      remoteExpertEntry.catalogErrorCode ||
+                      remoteExpertEntry.availability?.errorCode ||
+                      remoteExpertEntry.lastOperation?.errorCode
+                    }
                     blocked={remoteResumeBlocked}
-                    gateUnavailable={!remoteExpertEnabled}
                     disabled={isLoading || remoteExpertBusy || remoteResumeBlocked}
-                    onChange={(item) => {
-                      if (
-                        remoteExpertSession &&
-                        item?.agentRef &&
-                        item.agentRef !== remoteExpertSession.agentRef
-                      ) {
-                        if (window.confirm(t("remoteExpert.confirmChangeContext"))) {
-                          onNewChat?.();
-                        }
-                        return;
-                      }
-                      if (
-                        !isRemoteExpertMode &&
-                        messages.length > 0 &&
-                        item &&
-                        !remoteExpertSession
-                      ) {
-                        if (window.confirm(t("remoteExpert.confirmNewChat"))) {
-                          onNewChat?.();
-                        }
-                        return;
-                      }
-                      setRemoteExpertSelected(item);
+                    onRetryAvailability={remoteExpertEntry.retryAvailability}
+                    onRefreshCatalog={remoteExpertEntry.refreshCatalog}
+                    onChange={(agentRef) => {
+                      onSelectRemoteExpert?.(
+                        agentRef
+                          ? { kind: "remote", agentRef }
+                          : { kind: "local" },
+                        { hasTranscript: messages.length > 0 },
+                      );
                     }}
                   />
                 ) : null}

@@ -4,8 +4,9 @@
  */
 export function resolveUniqueSessionTitle(
   db: {
+    // Structural type must accept better-sqlite3 Statement.get bindings.
     prepare: (sql: string) => {
-      get: (...args: unknown[]) => unknown;
+      get: (...args: any[]) => unknown;
     };
   },
   sessionId: string,

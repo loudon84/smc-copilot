@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildResumedChatRun,
+  clearRemoteExpertScratchSelection,
   cycleRunId,
   fetchWithEmptyRetry,
   isScratchRun,
@@ -9,6 +10,7 @@ import {
   resolveResumeExecutionMode,
   runIdAtOrdinal,
   selectProfileRunTransition,
+  selectRemoteExpertModeTransition,
   selectSkillModeTransition,
   type ChatRun,
 } from "./chatRuns";
@@ -373,3 +375,139 @@ describe("skill mode tab transition", () => {
     expect(next.runs).toBe(runs);
   });
 });
+
+describe("remote expert run transitions", () => {
+  it("[A-RUN-TRANSITION-001] converts blank local scratch to remote scratch in place", () => {
+    const runs = [run("run-a", "alfie")];
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "remote",
+      agentRef: "sales-expert",
+    });
+    expect(next.kind).toBe("in-place");
+    expect(next.activeRunId).toBe("run-a");
+    expect(next.runs).toHaveLength(1);
+    expect(next.runs[0]).toMatchObject({
+      runId: "run-a",
+      executionMode: "remote-expert",
+      remoteExpertAgentRef: "sales-expert",
+    });
+  });
+
+  it("[A-RUN-TRANSITION-002] swaps expert on remote scratch without minting", () => {
+    const runs = [
+      run("run-a", "alfie", {
+        executionMode: "remote-expert",
+        remoteExpertAgentRef: "sales-expert",
+      }),
+    ];
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "remote",
+      agentRef: "finance-expert",
+    });
+    expect(next.kind).toBe("in-place");
+    expect(next.activeRunId).toBe("run-a");
+    expect(next.runs[0]?.remoteExpertAgentRef).toBe("finance-expert");
+    expect(next.runs).toHaveLength(1);
+  });
+
+  it("[A-RUN-TRANSITION-003] remote scratch can return to local chat", () => {
+    const runs = [
+      run("run-a", "alfie", {
+        executionMode: "remote-expert",
+        remoteExpertAgentRef: "sales-expert",
+      }),
+    ];
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "local",
+    });
+    expect(next.kind).toBe("in-place");
+    expect(next.runs[0]?.executionMode).toBe("local-chat");
+    expect(next.runs[0]?.remoteExpertAgentRef).toBeUndefined();
+  });
+
+  it("[A-NEG-RUN-TRANSITION-001] session-bound remote run cannot mutate in place", () => {
+    const runs = [
+      run("run-a", "alfie", {
+        executionMode: "remote-expert",
+        remoteExpertAgentRef: "sales-expert",
+        sessionId: "sess-a",
+        title: "bound",
+      }),
+    ];
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "remote",
+      agentRef: "finance-expert",
+    });
+    expect(next.kind).toBe("requires-confirm");
+    expect(runs[0]?.remoteExpertAgentRef).toBe("sales-expert");
+    expect(runs[0]?.sessionId).toBe("sess-a");
+    expect(next.runs.some((r) => r.remoteExpertAgentRef === "finance-expert")).toBe(
+      true,
+    );
+  });
+
+  it("[A-UI-SWITCH-001] non-empty local requires confirm and mints remote scratch", () => {
+    const runs = [
+      run("run-a", "alfie", { sessionId: "sess-local", title: "hello" }),
+    ];
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "remote",
+      agentRef: "finance-expert",
+    });
+    expect(next.kind).toBe("requires-confirm");
+    if (next.kind !== "requires-confirm") throw new Error("expected confirm");
+    expect(next.confirmKey).toBe("remoteExpert.confirmNewChat");
+    expect(next.runs).toHaveLength(2);
+    const created = next.runs.find((r) => r.runId === next.activeRunId);
+    expect(created).toMatchObject({
+      executionMode: "remote-expert",
+      remoteExpertAgentRef: "finance-expert",
+      sessionId: null,
+    });
+  });
+
+  it("[A-UI-SWITCH-002] bound remote switch creates new scratch", () => {
+    const runs = [
+      run("run-a", "alfie", {
+        executionMode: "remote-expert",
+        remoteExpertAgentRef: "sales-expert",
+        sessionId: "sess-a",
+        title: "bound",
+      }),
+    ];
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "remote",
+      agentRef: "finance-expert",
+    });
+    expect(next.kind).toBe("requires-confirm");
+    if (next.kind !== "requires-confirm") throw new Error("expected confirm");
+    expect(next.confirmKey).toBe("remoteExpert.confirmChangeContext");
+    expect(runs[0]?.remoteExpertAgentRef).toBe("sales-expert");
+  });
+
+  it("[A-NEG-UI-SWITCH-001] cancel path leaves transition result unused (0 mutation)", () => {
+    const runs = [
+      run("run-a", "alfie", { sessionId: "sess-local", title: "hello" }),
+    ];
+    const snapshot = structuredClone(runs);
+    const next = selectRemoteExpertModeTransition(runs, "run-a", "alfie", {
+      kind: "remote",
+      agentRef: "finance-expert",
+    });
+    expect(next.kind).toBe("requires-confirm");
+    expect(runs).toEqual(snapshot);
+  });
+
+  it("clearRemoteExpertScratchSelection keeps mode and clears agentRef", () => {
+    const runs = [
+      run("run-a", "alfie", {
+        executionMode: "remote-expert",
+        remoteExpertAgentRef: "gone",
+      }),
+    ];
+    const next = clearRemoteExpertScratchSelection(runs, "run-a");
+    expect(next[0]?.executionMode).toBe("remote-expert");
+    expect(next[0]?.remoteExpertAgentRef).toBeUndefined();
+  });
+});
+
