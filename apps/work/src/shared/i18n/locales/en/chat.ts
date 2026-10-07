@@ -221,6 +221,8 @@ export default {
     turnInProgress: "A Remote Expert turn is still in progress.",
     connectionLost:
       "Connection lost. Waiting to resume this Remote Expert turn…",
+    executionContextDenied:
+      "Remote Expert execution context was denied. Try sending again.",
     confirmNewChat:
       "This chat already has messages. Start a new chat to use Remote Expert?",
     confirmChangeContext:

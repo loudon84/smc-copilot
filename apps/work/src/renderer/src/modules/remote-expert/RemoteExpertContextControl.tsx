@@ -97,17 +97,6 @@ export function RemoteExpertContextControl(props: {
         disabled={props.disabled || props.blocked}
         onChange={props.onChange}
       />
-      {statusText ? <span title={mismatchTitle || undefined}>{statusText}</span> : null}
-      {showRetry && props.onRetryAvailability ? (
-        <button type="button" className="btn-ghost" onClick={props.onRetryAvailability}>
-          {t("chat.remoteExpert.retry")}
-        </button>
-      ) : null}
-      {showRefresh && props.onRefreshCatalog ? (
-        <button type="button" className="btn-ghost" onClick={props.onRefreshCatalog}>
-          {t("chat.remoteExpert.refreshCatalog")}
-        </button>
-      ) : null}
     </div>
   );
 }

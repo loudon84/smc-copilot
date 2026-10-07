@@ -14,7 +14,7 @@ export interface RemoteExpertLogRecord {
   operation_id: string;
   trace_id: string;
   stage: RemoteExpertObsStage;
-  status: "STARTED" | "PASS" | "FAIL";
+  status: "STARTED" | "PASS" | "FAIL" | "RETRY";
   timestamp: string;
   agent_ref?: string;
   desktop_session_id?: string;

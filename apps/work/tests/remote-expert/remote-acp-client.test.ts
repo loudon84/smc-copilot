@@ -2,9 +2,28 @@ import { describe, expect, it } from "vitest";
 import { randomUUID } from "crypto";
 import {
   buildAcpWebSocketUrl,
+  isExecutionContextDenied,
+  mapAcpRpcError,
   RemoteAcpClient,
 } from "../../src/main/remote-expert/remote-acp-client";
 import { startFakeRemoteAcpServer } from "./fake-remote-acp-server";
+
+describe("mapAcpRpcError", () => {
+  it("maps ACP_CONTEXT_REVALIDATION_DENIED and symbol forms to FORBIDDEN", () => {
+    const byCode = mapAcpRpcError({
+      message: "execution context denied",
+      data: { error_code: "ACP_CONTEXT_REVALIDATION_DENIED" },
+    });
+    expect(byCode.code).toBe("REMOTE_EXPERT_FORBIDDEN");
+    expect(isExecutionContextDenied(byCode)).toBe(true);
+
+    const bySymbol = mapAcpRpcError({
+      message: "execution context denied",
+      data: { symbol: "ACP_CONTEXT_REVALIDATION_DENIED" },
+    });
+    expect(bySymbol.code).toBe("REMOTE_EXPERT_FORBIDDEN");
+  });
+});
 
 describe("RemoteAcpClient transport", () => {
   it("[A-TRANSPORT-001] rejects leftover query in constructed ACP URL", () => {

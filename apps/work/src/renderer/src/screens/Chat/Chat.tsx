@@ -1695,6 +1695,8 @@ function Chat({
             setRemoteExpertBusy(false);
             if (/session unconfirmed/i.test(errorText)) {
               toast.error(t("chat.remoteExpert.sessionUnconfirmed"));
+            } else if (/execution context denied/i.test(errorText)) {
+              toast.error(t("chat.remoteExpert.executionContextDenied"));
             } else {
               toast.error(errorText);
             }
@@ -2002,7 +2004,8 @@ function Chat({
                 }}
               />
             ) : messages.length === 0 ? (
-              initialSessionId ? (
+              initialSessionId &&
+              (!isRemoteExpertMode || (initialMessages?.length ?? 0) > 0) ? (
                 <ChatResumeEmptyState
                   title={initialTitle}
                   retrying={resumeRetrying}

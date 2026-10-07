@@ -34,9 +34,62 @@ export type JsonRpcFrame = {
   method?: string;
   params?: Record<string, unknown>;
   result?: unknown;
-  error?: { code: number; message: string; data?: { error_code?: string } };
+  error?: {
+    code: number;
+    message: string;
+    data?: {
+      error_code?: string;
+      symbol?: string;
+      remote_error_code?: string;
+      message?: string;
+    };
+  };
   _meta?: { nodeskclaw?: { after_seq?: number } };
 };
+
+/** Provider capability / run-context denial (TTL ~90s on open WS). */
+export function isExecutionContextDenied(err: unknown): boolean {
+  if (!(err instanceof RemoteExpertError)) return false;
+  if (err.code === "REMOTE_EXPERT_FORBIDDEN") {
+    return /execution context denied/i.test(err.message);
+  }
+  return /execution context denied/i.test(err.message);
+}
+
+export function mapAcpRpcError(error: {
+  message?: string;
+  data?: {
+    error_code?: string;
+    symbol?: string;
+    remote_error_code?: string;
+  };
+}): RemoteExpertError {
+  const message = String(error.message ?? "ACP protocol error").trim() ||
+    "ACP protocol error";
+  const raw = String(
+    error.data?.error_code ||
+      error.data?.symbol ||
+      error.data?.remote_error_code ||
+      "",
+  ).trim();
+  if (raw === "ACP_SESSION_BUSY") {
+    return new RemoteExpertError("REMOTE_EXPERT_PROMPT_REJECTED", message);
+  }
+  if (
+    raw === "ACP_CONTEXT_REVALIDATION_DENIED" ||
+    /execution context denied/i.test(message)
+  ) {
+    return new RemoteExpertError("REMOTE_EXPERT_FORBIDDEN", message);
+  }
+  if (
+    raw === "ACP_SESSION_NOT_FOUND" ||
+    raw === "REMOTE_EXPERT_SESSION_LOST" ||
+    raw === "ACP_SESSION_RESUME_FORBIDDEN"
+  ) {
+    return new RemoteExpertError("REMOTE_EXPERT_SESSION_LOST", message);
+  }
+  return new RemoteExpertError(raw || "ACP_PROTOCOL_ERROR", message);
+}
 
 export interface RemoteAcpClientOptions {
   baseUrl: string;
@@ -99,6 +152,8 @@ export class RemoteAcpClient extends EventEmitter {
   lastSeq = 0;
   acpSessionId: string | null = null;
   traceId = "";
+  /** Wall clock when the current WSS became CONNECTED (capability mint time). */
+  connectedAt = 0;
   private socket: WsClient | null = null;
   private pending = new Map<
     string,
@@ -174,6 +229,7 @@ export class RemoteAcpClient extends EventEmitter {
           return;
         }
         this.phase = "CONNECTED";
+        this.connectedAt = Date.now();
         resolve();
       });
       setTimeout(() => {
@@ -191,6 +247,7 @@ export class RemoteAcpClient extends EventEmitter {
       ws.on("close", () => {
         const wasClosed = this.phase === "CLOSED";
         this.phase = wasClosed ? "CLOSED" : "DISCONNECTED";
+        this.connectedAt = 0;
         this.acpSessionId = null;
         this.rejectAll(
           new RemoteExpertError(
@@ -251,9 +308,18 @@ export class RemoteAcpClient extends EventEmitter {
     return sessionId;
   }
 
-  async sessionResume(sessionId: string, afterSeq: number): Promise<string> {
+  async sessionResume(
+    sessionId: string,
+    afterSeq: number,
+    cwd?: string,
+  ): Promise<string> {
     this.assertInitializedForMutation("session/resume");
     const params: Record<string, unknown> = { sessionId };
+    const absoluteCwd = String(cwd ?? "").trim();
+    if (absoluteCwd) {
+      params.cwd = absoluteCwd;
+      params.mcpServers = [];
+    }
     if (afterSeq > 0) {
       params._meta = { nodeskclaw: { after_seq: afterSeq } };
     }
@@ -479,15 +545,7 @@ export class RemoteAcpClient extends EventEmitter {
     if (!pending) return;
     this.pending.delete(String(frame.id));
     if (frame.error) {
-      const code = frame.error.data?.error_code || "ACP_PROTOCOL_ERROR";
-      pending.reject(
-        new RemoteExpertError(
-          code === "ACP_SESSION_BUSY"
-            ? "REMOTE_EXPERT_PROMPT_REJECTED"
-            : code,
-          frame.error.message,
-        ),
-      );
+      pending.reject(mapAcpRpcError(frame.error));
       return;
     }
     pending.resolve(frame.result);

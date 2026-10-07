@@ -21,7 +21,10 @@ import {
   fetchRemoteExpertByRef,
   fetchRemoteExpertCatalog,
 } from "./remote-expert-catalog-client";
-import { RemoteAcpClient } from "./remote-acp-client";
+import {
+  isExecutionContextDenied,
+  RemoteAcpClient,
+} from "./remote-acp-client";
 import {
   collectArtifactResourceLinks,
   mapAcpSessionUpdate,
@@ -30,6 +33,7 @@ import {
   getRemoteAcpSessionRef,
   upsertRemoteAcpSessionRef,
 } from "./remote-expert-session-store";
+import { ensureRemoteExpertSessionCwd } from "./remote-expert-session-cwd";
 import { materializeRemoteExpertTurn } from "./remote-expert-transcript";
 import {
   buildPromptBlocks,
@@ -37,6 +41,9 @@ import {
 } from "./remote-attachment-client";
 import { upsertRemoteExpertAcpArtifact } from "./remote-artifact-client";
 import { emitRemoteExpertLog, logRemoteExpertError } from "./remote-expert-log";
+
+/** Remint capability before Provider TTL (~90s) elapses on a long-lived WSS. */
+const CAPABILITY_REFRESH_MS = 60_000;
 
 type Runtime = {
   client: RemoteAcpClient;
@@ -206,6 +213,53 @@ async function bootClient(input: {
   return promise;
 }
 
+/**
+ * Drop the open WSS (expired capability) and reconnect so Backend remints
+ * X-NodeSkClaw-Execution-Capability, then resume the ACP session.
+ */
+async function refreshAcpCapability(runtime: Runtime): Promise<Runtime> {
+  const desktopSessionId = runtime.desktopSessionId;
+  const agentRef = runtime.agentRef;
+  const authGeneration = runtime.authGeneration;
+  const stored = getRemoteAcpSessionRef(desktopSessionId);
+  const acpSessionId =
+    runtime.client.acpSessionId ?? stored?.acpSessionId ?? null;
+  const lastSeq = Math.max(runtime.client.lastSeq, stored?.lastSeq ?? 0);
+  const carry = {
+    submitLock: runtime.submitLock,
+    assistantText: runtime.assistantText,
+    reasoningText: runtime.reasoningText,
+    turnId: runtime.turnId,
+  };
+  runtime.client.disconnect();
+  runtimes.delete(desktopSessionId);
+  const next = await bootClient({
+    desktopSessionId,
+    agentRef,
+    authGeneration,
+  });
+  next.submitLock = carry.submitLock;
+  next.assistantText = carry.assistantText;
+  next.reasoningText = carry.reasoningText;
+  next.turnId = carry.turnId;
+  if (acpSessionId && acpSessionId !== "pending") {
+    const cwd = ensureRemoteExpertSessionCwd(desktopSessionId);
+    await next.client.sessionResume(acpSessionId, lastSeq, cwd);
+    persistRef(next, "active");
+  }
+  return next;
+}
+
+async function ensureFreshCapability(runtime: Runtime): Promise<Runtime> {
+  if (
+    runtime.client.connectedAt > 0 &&
+    Date.now() - runtime.client.connectedAt < CAPABILITY_REFRESH_MS
+  ) {
+    return runtime;
+  }
+  return refreshAcpCapability(runtime);
+}
+
 async function bootClientInner(input: {
   desktopSessionId: string;
   agentRef: string;
@@ -278,7 +332,7 @@ export async function submitRemoteExpertTurn(
     desktop_session_id: input.desktopSessionId,
     request_id: input.requestId,
   });
-  const runtime = await bootClient({
+  let runtime = await bootClient({
     desktopSessionId: input.desktopSessionId,
     agentRef: input.agentRef,
     authGeneration: input.authGeneration,
@@ -321,6 +375,8 @@ export async function submitRemoteExpertTurn(
       fileIds: input.managedFileIds,
     });
     const blocks = buildPromptBlocks(input.promptText, links);
+    runtime = await ensureFreshCapability(runtime);
+    const sessionCwd = ensureRemoteExpertSessionCwd(input.desktopSessionId);
     if (!runtime.client.acpSessionId) {
       const stored = getRemoteAcpSessionRef(input.desktopSessionId);
       if (stored?.connectionState === "expired") {
@@ -337,7 +393,11 @@ export async function submitRemoteExpertTurn(
       }
       if (stored?.acpSessionId) {
         try {
-          await runtime.client.sessionResume(stored.acpSessionId, stored.lastSeq);
+          await runtime.client.sessionResume(
+            stored.acpSessionId,
+            stored.lastSeq,
+            sessionCwd,
+          );
         } catch (err) {
           if (isSessionLost(err)) {
             persistExpired(runtime, stored);
@@ -350,7 +410,7 @@ export async function submitRemoteExpertTurn(
         }
       } else {
         try {
-          await runtime.client.sessionNew();
+          await runtime.client.sessionNew(sessionCwd);
         } catch (err) {
           if (isSessionNewTimeout(err)) {
             // Unknown commit: do not blind-retry. Late result may still bind via
@@ -420,9 +480,10 @@ export async function submitRemoteExpertTurn(
       });
     }
     let result: { stopReason: string };
+    let promptSessionId = acpSessionId;
     try {
       result = await runtime.client.sessionPrompt(
-        acpSessionId,
+        promptSessionId,
         blocks,
         input.requestId,
       );
@@ -434,7 +495,7 @@ export async function submitRemoteExpertTurn(
           stored?.connectionState !== "closed" &&
           runtime.client.phase !== "CLOSED"
         ) {
-          persistRef(runtime, "disconnected", acpSessionId);
+          persistRef(runtime, "disconnected", promptSessionId);
           emitToRenderer({
             type: "connection",
             sessionId: input.desktopSessionId,
@@ -448,7 +509,7 @@ export async function submitRemoteExpertTurn(
           status: "FAIL",
           agent_ref: input.agentRef,
           desktop_session_id: input.desktopSessionId,
-          acp_session_id: acpSessionId,
+          acp_session_id: promptSessionId,
           request_id: input.requestId,
           last_seq: runtime.client.lastSeq,
           error_code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
@@ -460,7 +521,29 @@ export async function submitRemoteExpertTurn(
           { retryable: true },
         );
       }
-      throw err;
+      if (isExecutionContextDenied(err)) {
+        // Capability TTL elapsed on the open WSS — remint and retry once.
+        emitRemoteExpertLog({
+          operation_id: input.requestId,
+          trace_id: runtime.client.traceId,
+          stage: "PROMPT",
+          status: "RETRY",
+          agent_ref: input.agentRef,
+          desktop_session_id: input.desktopSessionId,
+          acp_session_id: promptSessionId,
+          request_id: input.requestId,
+          error_code: "REMOTE_EXPERT_FORBIDDEN",
+        });
+        runtime = await refreshAcpCapability(runtime);
+        promptSessionId = runtime.client.acpSessionId ?? promptSessionId;
+        result = await runtime.client.sessionPrompt(
+          promptSessionId,
+          blocks,
+          input.requestId,
+        );
+      } else {
+        throw err;
+      }
     }
     try {
       materializeRemoteExpertTurn({
@@ -524,7 +607,12 @@ export async function resumeRemoteExpertSession(input: {
   });
   runtime.client.markReconnecting(true);
   try {
-    await runtime.client.sessionResume(stored.acpSessionId, stored.lastSeq);
+    const cwd = ensureRemoteExpertSessionCwd(input.sessionId);
+    await runtime.client.sessionResume(
+      stored.acpSessionId,
+      stored.lastSeq,
+      cwd,
+    );
     persistRef(runtime, "active");
     return getRemoteAcpSessionRef(input.sessionId);
   } catch (err) {

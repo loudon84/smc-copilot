@@ -211,4 +211,18 @@ describe("Chat resume empty vs new-chat empty", () => {
     expect(screen.queryByTestId("chat-resume-empty")).toBeNull();
     expect(screen.getByText("chat.suggestionSearch")).toBeTruthy();
   });
+
+  it("remote-expert scratch (desktop session id, no seed) shows new-chat, not resume-empty", () => {
+    render(
+      <Chat
+        runId="run-re-scratch"
+        executionMode="remote-expert"
+        initialSessionId="desktop-acp-id"
+        initialMessages={[]}
+      />,
+    );
+
+    expect(screen.queryByTestId("chat-resume-empty")).toBeNull();
+    expect(screen.getByText("chat.suggestionSearch")).toBeTruthy();
+  });
 });

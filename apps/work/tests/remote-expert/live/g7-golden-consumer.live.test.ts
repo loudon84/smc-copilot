@@ -83,7 +83,11 @@ vi.mock("electron", () => ({
     }
     webContents = { send: vi.fn() };
   },
-  app: { isPackaged: false },
+  app: {
+    isPackaged: false,
+    getPath: (name: string) =>
+      name === "userData" ? join(tmpdir(), "smc-work-g7-userdata") : "",
+  },
 }));
 
 vi.mock("../../../src/main/session-cache", () => ({

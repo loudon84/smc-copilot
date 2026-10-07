@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
+import { tmpdir } from "os";
+import { join } from "path";
 import { startFakeRemoteAcpServer } from "./fake-remote-acp-server";
 import type { RemoteAcpSessionRef } from "../../src/shared/remote-expert";
 
@@ -9,6 +11,13 @@ let backendUrl = "http://127.0.0.1:9";
 
 vi.mock("electron", () => ({
   BrowserWindow: class {},
+  app: {
+    isPackaged: false,
+    getPath: (name: string) =>
+      name === "userData"
+        ? join(tmpdir(), "smc-work-re-test-userdata")
+        : "",
+  },
 }));
 
 vi.mock("../../src/main/remote-expert/remote-expert-contract-gate", () => ({
