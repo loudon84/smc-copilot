@@ -2,6 +2,7 @@
 
 - Do **not** auto-run `lat search` / `lat expand` / `lat check` on every prompt. Ignore Stop-hook follow-ups about `lat.md/` not being updated.
 - When the user is changing Work product behavior and wants docs in sync, run `lat search` / `lat expand` for relevant `[[refs]]`, then keep `lat.md/` aligned.
+- **Chat execution context (MUST):** bound Original Chat Local / Remote Expert selection is immutable. Follow repo `docs/architecture/work-chat-execution-context.md` and `docs/adr/ADR-039-work-chat-execution-context-immutable.md`. Do not re-enable expert switching on history or non-empty runs.
 - i18n: add or change UI strings only in `src/shared/i18n/locales/en/**`. Do not create or edit other locale packages during feature work. Other languages are translated later by an administrator after English review. See [[i18n]].
 
 # Packaging hard controls (smc-copilot)

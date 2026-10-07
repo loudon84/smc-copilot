@@ -250,6 +250,25 @@ describe("remote-expert turn service", () => {
     }
   }, 20_000);
 
+  it("[A-PROMPT-TERM-001] remote run failed error with streamed text completes turn", async () => {
+    const server = await startFakeRemoteAcpServer({
+      scenario: "remote-run-failed",
+    });
+    backendUrl = server.url;
+    const sessionId = randomUUID();
+    try {
+      await expect(
+        submitRemoteExpertTurn(turnInput(sessionId)),
+      ).resolves.toMatchObject({ sessionId });
+      const ends = rendererEvents.filter((e) => e.type === "turn.end");
+      expect(ends).toHaveLength(1);
+      expect(ends[0]?.outcome).toBe("completed");
+      expect(store.get(sessionId)?.connectionState).toBe("active");
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
+
   it("[A-SESSION-LOST-001] prompt 'prior runtime session binding missing' marks expired", async () => {
     const server = await startFakeRemoteAcpServer({ scenario: "binding-missing" });
     backendUrl = server.url;

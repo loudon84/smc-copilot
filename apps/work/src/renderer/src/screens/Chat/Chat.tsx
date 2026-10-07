@@ -1754,10 +1754,26 @@ function Chat({
               return;
             }
             setRemoteExpertBusy(false);
+            const sessionLost =
+              /REMOTE_EXPERT_SESSION_LOST/i.test(errorText) ||
+              /prior runtime session binding missing/i.test(errorText) ||
+              /session not found/i.test(errorText) ||
+              /resume sessionId mismatch/i.test(errorText);
+            let userFacing = errorText;
             if (/session unconfirmed/i.test(errorText)) {
-              toast.error(t("chat.remoteExpert.sessionUnconfirmed"));
+              userFacing = t("chat.remoteExpert.sessionUnconfirmed");
+              toast.error(userFacing);
             } else if (/execution context denied/i.test(errorText)) {
-              toast.error(t("chat.remoteExpert.executionContextDenied"));
+              userFacing = t("chat.remoteExpert.executionContextDenied");
+              toast.error(userFacing);
+            } else if (sessionLost) {
+              // ADR-039: binding-missing / session lost → expire UX, not raw Provider text.
+              setRemoteResumeBlocked(true);
+              setRemoteExpertSession((prev) =>
+                prev ? { ...prev, connectionState: "expired" } : prev,
+              );
+              userFacing = t("chat.remoteExpert.sessionExpired");
+              toast.error(userFacing);
             } else {
               toast.error(errorText);
             }
@@ -1765,11 +1781,19 @@ function Chat({
               remoteAssistantByTurnRef.current.get(turnId);
             if (failedAssistantId) {
               setMessages((prev) =>
-                prev.map((message) =>
-                  message.id === failedAssistantId && "content" in message
-                    ? { ...message, pending: false, content: errorText }
-                    : message,
-                ),
+                prev.map((message) => {
+                  if (message.id !== failedAssistantId || !("content" in message)) {
+                    return message;
+                  }
+                  const existing = String(message.content ?? "").trim();
+                  // Keep streamed answer if Provider already pushed deltas before
+                  // closing the prompt with an error frame.
+                  return {
+                    ...message,
+                    pending: false,
+                    content: existing || userFacing,
+                  };
+                }),
               );
               remoteAssistantByTurnRef.current.delete(turnId);
             }

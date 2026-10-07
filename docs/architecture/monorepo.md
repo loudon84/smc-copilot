@@ -35,6 +35,10 @@ npm run contracts:generate
 npm run client:generate
 ```
 
+## Work Chat execution context
+
+Original Chat Local / Remote Expert binding rules (immutable after bind, history resume restores expert): [work-chat-execution-context.md](./work-chat-execution-context.md) and [ADR-039](../adr/ADR-039-work-chat-execution-context-immutable.md).
+
 ## Artifacts
 
 Desktop, Runtime, and Contracts publish independent versions and tags

@@ -26,13 +26,15 @@ Layout owns scratch `remoteExpertAgentRef` via [[src/renderer/src/screens/Layout
 
 Blank scratch converts in place; bound runs require confirm and mint a new scratch. After ACP session exists, durable `RemoteAcpSessionRef.agentRef` wins over any stale scratch field.
 
+**Immutable bound context (ADR-039):** once a run has transcript or was opened from history (`initialSessionId`), the expert selector MUST stay disabled — no Local↔Expert or Expert↔Expert change on that run. Normative architecture: repo `docs/architecture/work-chat-execution-context.md` and `docs/adr/ADR-039-work-chat-execution-context-immutable.md`.
+
 ## Session identity
 
 SMC `desktopSessionId` is local history identity; Provider `acpSessionId` is remote continuity.
 
 For Remote Expert runs, Layout mints desktop id into `ChatRun.sessionId` at run create and remints on Local↔Remote mode switch. Rows live in `desktop_remote_acp_sessions` with state `active | disconnected | closed | expired`. Session class is `chat/remote-expert-acp`.
 
-Resume uses `session/resume` with `_meta.nodeskclaw.after_seq` and never silent `session/new`. Provider session-not-found and `session/new` control-plane timeout (unknown commit) mark `expired` without blind retry; a late `session/new` result may still bind.
+Resume uses `session/resume` with turn-scoped `afterSeq=0` and never silent `session/new`. History resume MUST restore `remoteExpertAgentRef` from the durable ACP session ref after `remoteExpert.resume` ([[src/renderer/src/screens/Layout/chatRuns.ts#buildResumedChatRun]]). Provider session-not-found, resume-forbidden, `prior runtime session binding missing`, and `session/new` control-plane timeout (unknown commit) mark `expired` without blind retry; a late `session/new` result may still bind.
 
 Closing a Remote Expert Chat tab best-effort `session/cancel` then `session/close`. Disconnected runtimes are discarded and rebuilt before resume. `closed` is not overwritten by a later socket `disconnected`. Token refresh does not drop ACP; logout or a change of `(userId, tenantId)` does.
 

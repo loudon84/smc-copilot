@@ -337,6 +337,46 @@ describe("Chat remote-expert hotfix routing", () => {
     expect(handleSend).not.toHaveBeenCalled();
   });
 
+  it("[A-SESSION-LOST-UI-001] maps binding-missing to sessionExpired toast/copy", async () => {
+    remoteSubmit.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'remote-expert:submit': RemoteExpertError: prior runtime session binding missing",
+      ),
+    );
+    installHermes({
+      enabled: true,
+      submit: remoteSubmit,
+      session: {
+        schemaVersion: 1,
+        desktopSessionId: "sess-lost",
+        agentRef: "marketing",
+        acpSessionId: "acp-lost",
+        lastSeq: 1,
+        connectionState: "active",
+        updatedAt: 1,
+      },
+    });
+    render(
+      <Chat
+        runId="run-re-lost"
+        executionMode="remote-expert"
+        remoteExpertAgentRef="marketing"
+        initialSessionId="sess-lost"
+        initialMessages={[]}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("send-remote")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("send-remote"));
+    await waitFor(() => expect(remoteSubmit).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("chat.remoteExpert.sessionExpired"),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("chat.remoteExpert.sessionExpired")).toBeTruthy(),
+    );
+    expect(screen.queryByText(/prior runtime session binding missing/i)).toBeNull();
+  });
+
   it("[A-NEG-TL-ROUTE-001] hard-rejects a second submit while remoteExpertBusy", async () => {
     let resolveSubmit: (() => void) | undefined;
     remoteSubmit.mockImplementation(

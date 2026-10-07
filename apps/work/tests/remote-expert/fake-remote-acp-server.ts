@@ -15,7 +15,8 @@ export type FakeAcpScenario =
   | "resume-lost"
   | "turn-seq-reset"
   | "prompt-error"
-  | "binding-missing";
+  | "binding-missing"
+  | "remote-run-failed";
 
 export interface FakeAcpServer {
   url: string;
@@ -164,6 +165,29 @@ export async function startFakeRemoteAcpServer(options?: {
           error: {
             code: -32000,
             message: "prior runtime session binding missing",
+          },
+        });
+        return;
+      }
+      if (scenario === "remote-run-failed") {
+        // Stream assistant text then close prompt via JSON-RPC error
+        // (Provider mis-channel; Consumer must still complete the turn).
+        seq += 1;
+        send(ws, {
+          method: "session/update",
+          params: {
+            sessionId,
+            seq,
+            sessionUpdate: "agent_message_chunk",
+            content: { type: "text", text: "answer from agent" },
+          },
+        });
+        send(ws, {
+          id,
+          error: {
+            code: -32000,
+            message: "remote run failed",
+            data: { error_code: "ACP_REMOTE_RUN_FAILED" },
           },
         });
         return;

@@ -56,6 +56,13 @@ export function isExecutionContextDenied(err: unknown): boolean {
   return /execution context denied/i.test(err.message);
 }
 
+/** Contract maps run.failed / run.timed_out → ACP_REMOTE_RUN_FAILED (prompt terminal). */
+export function isAcpRemoteRunFailedTerminal(err: unknown): boolean {
+  if (!(err instanceof RemoteExpertError)) return false;
+  if (err.code === "ACP_REMOTE_RUN_FAILED") return true;
+  return /remote run failed/i.test(err.message);
+}
+
 export function mapAcpRpcError(error: {
   message?: string;
   data?: {
@@ -91,6 +98,10 @@ export function mapAcpRpcError(error: {
     // Treat as session lost so the turn service marks expired instead of
     // surfacing a raw ACP_PROTOCOL_ERROR.
     return new RemoteExpertError("REMOTE_EXPERT_SESSION_LOST", message);
+  }
+  if (raw === "ACP_REMOTE_RUN_FAILED" || /remote run failed/i.test(message)) {
+    // Prompt-terminal (contract remote-event-to-acp), not a transport fault.
+    return new RemoteExpertError("ACP_REMOTE_RUN_FAILED", message);
   }
   return new RemoteExpertError(raw || "ACP_PROTOCOL_ERROR", message);
 }
@@ -391,6 +402,12 @@ export class RemoteAcpClient extends EventEmitter {
     } catch (err) {
       if (this.phase === "PROMPT_ACTIVE") {
         this.phase = "SESSION_ACTIVE";
+      }
+      // Some Provider builds close prompt via JSON-RPC error instead of
+      // result.stopReason. Normalize to terminal stopReason so streamed
+      // content can still materialize + turn.end (do not treat as transport loss).
+      if (isAcpRemoteRunFailedTerminal(err)) {
+        return { stopReason: "ACP_REMOTE_RUN_FAILED" };
       }
       throw err;
     }

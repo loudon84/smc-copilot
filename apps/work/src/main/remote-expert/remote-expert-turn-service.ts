@@ -619,10 +619,19 @@ export async function submitRemoteExpertTurn(
         desktop_session_id: input.desktopSessionId,
       });
     }
+    // If Provider ACP errored the prompt RPC as ACP_REMOTE_RUN_FAILED but we
+    // already received assistant deltas, prefer completed (ops often shows run OK).
+    let stopReason = result.stopReason;
+    if (
+      stopReason === "ACP_REMOTE_RUN_FAILED" &&
+      runtime.assistantText.trim().length > 0
+    ) {
+      stopReason = "end_turn";
+    }
     const outcome =
-      result.stopReason === "cancelled"
+      stopReason === "cancelled"
         ? "cancelled"
-        : result.stopReason === "end_turn"
+        : stopReason === "end_turn"
           ? "completed"
           : "failed";
     if (!turnEndEmitted) {
@@ -632,7 +641,7 @@ export async function submitRemoteExpertTurn(
         turnId: input.requestId,
         sessionId: input.desktopSessionId,
         outcome,
-        stopReason: result.stopReason,
+        stopReason,
       });
     }
     emitRemoteExpertLog({

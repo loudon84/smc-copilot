@@ -223,6 +223,8 @@ export default {
       "Connection lost. Waiting to resume this Remote Expert turn…",
     executionContextDenied:
       "Remote Expert execution context was denied. Try sending again.",
+    promptFailed:
+      "Remote Expert run failed on the provider. Check the expert runtime logs.",
     confirmNewChat:
       "This chat already has messages. Start a new chat to use Remote Expert?",
     confirmChangeContext:
