@@ -660,15 +660,17 @@ function Layout(): React.JSX.Element {
             (await window.hermesAPI.skillRun.getSessionMode(sessionId)) ?? null;
         }
         const resolved = resolveResumeExecutionMode(resumeTarget, skillRunMode);
+        let resumedAgentRef: string | undefined;
         if (resolved.executionMode === "remote-expert") {
           try {
             const auth = (await window.desktopAuth.getState()) as {
               user?: { id?: string } | null;
             };
-            await window.hermesAPI.remoteExpert.resume({
+            const ref = await window.hermesAPI.remoteExpert.resume({
               sessionId,
               authGeneration: auth?.user?.id ? `user:${auth.user.id}` : "",
             });
+            resumedAgentRef = ref?.agentRef?.trim() || undefined;
           } catch {
             /* session lost is reflected by getSession */
           }
@@ -680,6 +682,7 @@ function Layout(): React.JSX.Element {
           {
             executionMode: resolved.executionMode,
             title: resolved.title,
+            remoteExpertAgentRef: resumedAgentRef,
           },
         );
         setRuns(

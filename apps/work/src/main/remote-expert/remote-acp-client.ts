@@ -84,8 +84,12 @@ export function mapAcpRpcError(error: {
   if (
     raw === "ACP_SESSION_NOT_FOUND" ||
     raw === "REMOTE_EXPERT_SESSION_LOST" ||
-    raw === "ACP_SESSION_RESUME_FORBIDDEN"
+    raw === "ACP_SESSION_RESUME_FORBIDDEN" ||
+    /prior runtime session binding missing/i.test(message)
   ) {
+    // Provider lost the runtime↔session binding (e.g. after restart/resume).
+    // Treat as session lost so the turn service marks expired instead of
+    // surfacing a raw ACP_PROTOCOL_ERROR.
     return new RemoteExpertError("REMOTE_EXPERT_SESSION_LOST", message);
   }
   return new RemoteExpertError(raw || "ACP_PROTOCOL_ERROR", message);

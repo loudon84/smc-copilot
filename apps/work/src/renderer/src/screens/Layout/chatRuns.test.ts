@@ -425,6 +425,26 @@ describe("remote expert run transitions", () => {
     expect(next.runs[0]?.remoteExpertAgentRef).toBeUndefined();
   });
 
+  it("[A-RESUME-REF-001] resumed remote-expert run restores agentRef binding", () => {
+    const run = buildResumedChatRun(
+      "alfie",
+      {
+        sessionId: "sess-remote",
+        title: "marketing",
+        sessionKind: "chat",
+        executionProvider: "remote-expert-acp",
+      },
+      [],
+      {
+        executionMode: "remote-expert",
+        remoteExpertAgentRef: "marketing",
+      },
+    );
+    expect(run.executionMode).toBe("remote-expert");
+    expect(run.remoteExpertAgentRef).toBe("marketing");
+    expect(run.sessionId).toBe("sess-remote");
+  });
+
   it("[A-NEG-RUN-TRANSITION-001] session-bound remote run cannot mutate in place", () => {
     const runs = [
       run("run-a", "alfie", {

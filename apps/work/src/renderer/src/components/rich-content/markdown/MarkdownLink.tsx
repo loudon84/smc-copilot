@@ -1,3 +1,5 @@
+import { shouldOpenUrlExternally } from "../../../../../shared/web-preview-url";
+
 export function MarkdownLink({
   href,
   children,
@@ -17,6 +19,12 @@ export function MarkdownLink({
             return;
           }
           if (url.protocol === "http:" || url.protocol === "https:") {
+            // LAN HTTP / attachment downloads are blocked from <webview>;
+            // open in the system browser instead of mounting a dead preview.
+            if (shouldOpenUrlExternally(href)) {
+              void window.hermesAPI.openExternal(href);
+              return;
+            }
             const event = new CustomEvent("web-preview:navigate", {
               detail: href,
             });
@@ -26,7 +34,7 @@ export function MarkdownLink({
         } catch {
           return;
         }
-        window.hermesAPI.openExternal(href);
+        void window.hermesAPI.openExternal(href);
       }}
     >
       {children}

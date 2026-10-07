@@ -237,8 +237,15 @@ export const WebPreviewPanel = memo(function WebPreviewPanel({
   useEffect(() => {
     setCurrentUrl(initialUrl);
     setInputUrl(initialUrl);
-    if (webviewRef.current) {
-      webviewRef.current.src = initialUrl;
+    setIsDomReady(false);
+    // Only assign src when the element is attached; blocked attach never
+    // emits dom-ready and calling methods throws.
+    const webview = webviewRef.current;
+    if (!webview) return;
+    try {
+      webview.src = initialUrl;
+    } catch (err) {
+      console.warn("[WEBVIEW] Failed to set src:", err);
     }
   }, [initialUrl]);
 
@@ -266,10 +273,12 @@ export const WebPreviewPanel = memo(function WebPreviewPanel({
 
     const updateNavigationState = (): void => {
       try {
+        // Throws if will-attach-webview was prevented (URL blocked).
         setCanGoBack(webview.canGoBack());
         setCanGoForward(webview.canGoForward());
       } catch {
-        // webview methods might not be ready yet
+        setCanGoBack(false);
+        setCanGoForward(false);
       }
     };
 
@@ -370,20 +379,29 @@ export const WebPreviewPanel = memo(function WebPreviewPanel({
   }, [onInspectElement]);
 
   const handleBack = (): void => {
-    if (webviewRef.current && canGoBack) {
+    if (!isDomReady || !webviewRef.current || !canGoBack) return;
+    try {
       webviewRef.current.goBack();
+    } catch {
+      /* webview not attached */
     }
   };
 
   const handleForward = (): void => {
-    if (webviewRef.current && canGoForward) {
+    if (!isDomReady || !webviewRef.current || !canGoForward) return;
+    try {
       webviewRef.current.goForward();
+    } catch {
+      /* webview not attached */
     }
   };
 
   const handleReload = (): void => {
-    if (webviewRef.current) {
+    if (!isDomReady || !webviewRef.current) return;
+    try {
       webviewRef.current.reload();
+    } catch {
+      /* webview not attached */
     }
   };
 
@@ -409,8 +427,13 @@ export const WebPreviewPanel = memo(function WebPreviewPanel({
 
     setInputUrl(targetUrl);
     setCurrentUrl(targetUrl);
+    setIsDomReady(false);
     if (webviewRef.current) {
-      webviewRef.current.src = targetUrl;
+      try {
+        webviewRef.current.src = targetUrl;
+      } catch (err) {
+        console.warn("[WEBVIEW] Failed to navigate:", err);
+      }
     }
   };
 

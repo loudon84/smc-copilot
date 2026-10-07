@@ -2,7 +2,7 @@
 
 The chat screen can open a split-screen [[src/renderer/src/screens/Chat/WebPreviewPanel.tsx#WebPreviewPanel]] — an embedded Electron `<webview>` with a browser toolbar and an inspect-element mode — so the agent's links and locally served apps render in-app instead of an external browser.
 
-It auto-opens when an in-app link is clicked or a web tool reports a URL, via the `web-preview:navigate` `CustomEvent` that [[src/renderer/src/screens/Chat/Chat.tsx]] listens for. Inspect mode injects a hover/click overlay into the page and feeds the picked element's pretty-printed HTML back into the chat input.
+It auto-opens when an in-app link is clicked or a web tool reports a URL, via the `web-preview:navigate` `CustomEvent` that [[src/renderer/src/screens/Chat/Chat.tsx]] listens for. [[src/shared/web-preview-url.ts#shouldOpenUrlExternally]] routes LAN HTTP (non-loopback) and attachment/download URLs to `openExternal` instead — Main `will-attach-webview` would block them and leave a blank panel (`dom-ready` never fires). Inspect mode injects a hover/click overlay into the page and feeds the picked element's pretty-printed HTML back into the chat input.
 
 The panel's width is free-resizable: a drag handle on its left edge sets a `width` clamped between `MIN_PANEL_WIDTH` and `window.innerWidth - 360`, persisted to `localStorage` under `hermes:webPreviewWidth`. During a drag the webview's `pointer-events` are disabled so it doesn't swallow the move stream.
 

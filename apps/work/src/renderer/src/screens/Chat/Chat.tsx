@@ -41,6 +41,7 @@ import { FileServiceUnavailableBanner } from "../../components/files/FileService
 import type { Attachment } from "../../../../shared/attachments";
 import { stripKnowledgeScopedPromptPrefix } from "../../../../shared/knowledge/chat-knowledge-context";
 import type { SessionModelOverride } from "../../../../shared/model-override";
+import { shouldOpenUrlExternally } from "../../../../shared/web-preview-url";
 import type { ActiveTurn, ChatMessage, UsageState } from "./types";
 import {
   dbItemsToChatMessages,
@@ -1193,10 +1194,14 @@ function Chat({
     const handleNavigate = (e: Event): void => {
       const customEvent = e as CustomEvent<string>;
       const url = customEvent.detail;
-      if (url) {
-        setWebPreviewUrl(url);
-        setWebPreviewVisible(true);
+      if (!url) return;
+      // Defense in depth: Main blocks LAN HTTP webviews; never mount them here.
+      if (shouldOpenUrlExternally(url)) {
+        void window.hermesAPI.openExternal(url);
+        return;
       }
+      setWebPreviewUrl(url);
+      setWebPreviewVisible(true);
     };
     document.addEventListener("web-preview:navigate", handleNavigate);
     return () => {
@@ -2270,7 +2275,15 @@ function Chat({
                       remoteExpertEntry.lastOperation?.errorCode
                     }
                     blocked={remoteResumeBlocked}
-                    disabled={isLoading || remoteExpertBusy || remoteResumeBlocked}
+                    disabled={
+                      isLoading ||
+                      remoteExpertBusy ||
+                      remoteResumeBlocked ||
+                      // Once a conversation is bound (has transcript / session),
+                      // execution context is immutable: no local↔expert switching.
+                      messages.length > 0 ||
+                      Boolean(initialSessionId)
+                    }
                     onRetryAvailability={remoteExpertEntry.retryAvailability}
                     onRefreshCatalog={remoteExpertEntry.refreshCatalog}
                     onChange={(agentRef) => {

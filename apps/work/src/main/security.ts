@@ -1,5 +1,6 @@
 import type { WebContents, WebPreferences } from "electron";
 import { pathToFileURL } from "url";
+import { isWebPreviewableUrl } from "../shared/web-preview-url";
 
 const EXTERNAL_PROTOCOLS = new Set(["https:", "http:", "mailto:"]);
 const LOCAL_WEBVIEW_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -41,10 +42,22 @@ export function isAllowedAppNavigationUrl(
   );
 }
 
+/**
+ * Webview URL allowlist. When `allowHttps` is true (web-preview partition),
+ * delegates to shared `isWebPreviewableUrl` so Renderer routing stays in sync.
+ */
 export function isAllowedWebviewUrl(
   rawUrl: unknown,
   allowHttps = false,
 ): rawUrl is string {
+  if (allowHttps) {
+    const ok = isWebPreviewableUrl(rawUrl);
+    if (!ok && typeof rawUrl === "string") {
+      console.warn(`[SECURITY] Blocked webview URL: ${rawUrl}`);
+    }
+    return ok;
+  }
+
   if (
     typeof rawUrl === "string" &&
     (rawUrl === "about:blank" || rawUrl.startsWith("about:blank"))
@@ -70,9 +83,6 @@ export function isAllowedWebviewUrl(
   }
 
   if (url.protocol === "https:") {
-    if (allowHttps) {
-      return true;
-    }
     console.warn(
       `[SECURITY] Blocked HTTPS webview URL (not allowed for this webview): ${rawUrl}`,
     );

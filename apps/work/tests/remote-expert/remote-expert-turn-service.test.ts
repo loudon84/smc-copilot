@@ -250,6 +250,32 @@ describe("remote-expert turn service", () => {
     }
   }, 20_000);
 
+  it("[A-SESSION-LOST-001] prompt 'prior runtime session binding missing' marks expired", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "binding-missing" });
+    backendUrl = server.url;
+    const sessionId = randomUUID();
+    store.set(sessionId, {
+      schemaVersion: 1,
+      desktopSessionId: sessionId,
+      agentRef: "sales-expert",
+      acpSessionId: server.sessionId,
+      lastSeq: 1,
+      connectionState: "active",
+      updatedAt: Date.now(),
+    });
+    try {
+      await expect(
+        submitRemoteExpertTurn(turnInput(sessionId)),
+      ).rejects.toBeTruthy();
+      expect(store.get(sessionId)?.connectionState).toBe("expired");
+      const ends = rendererEvents.filter((e) => e.type === "turn.end");
+      expect(ends).toHaveLength(1);
+      expect(ends[0]?.outcome).toBe("failed");
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
+
   it("[A-NEG-RECONNECT-001] resume session-not-found marks expired", async () => {
     const server = await startFakeRemoteAcpServer({ scenario: "resume-lost" });
     backendUrl = server.url;

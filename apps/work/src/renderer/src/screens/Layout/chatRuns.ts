@@ -477,13 +477,22 @@ export function buildResumedChatRun(
   profile: string,
   target: ResumeSessionTarget,
   seed: ChatMessage[],
-  options?: { executionMode?: ChatExecutionMode; title?: string },
+  options?: {
+    executionMode?: ChatExecutionMode;
+    title?: string;
+    remoteExpertAgentRef?: string;
+  },
 ): ChatRun {
   const executionMode = options?.executionMode ?? "local-chat";
   const run = mintRun(profile, seed, executionMode);
   run.sessionId = target.sessionId;
   const title = options?.title?.trim() || target.title?.trim();
   if (title) run.title = title;
+  // Resume must restore the durable expert binding; otherwise the UI falls
+  // back to local-chat display and submit uses a missing scratch ref.
+  if (executionMode === "remote-expert" && options?.remoteExpertAgentRef) {
+    run.remoteExpertAgentRef = options.remoteExpertAgentRef;
+  }
   return run;
 }
 

@@ -14,7 +14,8 @@ export type FakeAcpScenario =
   | "replay"
   | "resume-lost"
   | "turn-seq-reset"
-  | "prompt-error";
+  | "prompt-error"
+  | "binding-missing";
 
 export interface FakeAcpServer {
   url: string;
@@ -153,6 +154,16 @@ export async function startFakeRemoteAcpServer(options?: {
             code: -32000,
             message: "execution context denied",
             data: { error_code: "ACP_CONTEXT_REVALIDATION_DENIED" },
+          },
+        });
+        return;
+      }
+      if (scenario === "binding-missing") {
+        send(ws, {
+          id,
+          error: {
+            code: -32000,
+            message: "prior runtime session binding missing",
           },
         });
         return;

@@ -293,6 +293,7 @@ export function useChatIPC({
             const event = new CustomEvent("web-preview:navigate", {
               detail: urlMatch[0],
             });
+            // Chat listener routes non-previewable URLs to openExternal.
             document.dispatchEvent(event);
           }
         }

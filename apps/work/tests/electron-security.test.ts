@@ -171,6 +171,10 @@ describe("Electron webview policy", () => {
     // HTTPS is allowed when explicitly permitted
     expect(isAllowedWebviewUrl("https://localhost:3000", true)).toBe(true);
     expect(isAllowedWebviewUrl("https://example.com/docs", true)).toBe(true);
+    // LAN HTTP stays blocked even for web-preview (Renderer opens externally).
+    expect(isAllowedWebviewUrl("http://192.168.102.247:9010/file.md", true)).toBe(
+      false,
+    );
   });
 
   it("blocks remote HTTP, invalid ports, and non-HTTP/HTTPS webview URLs", () => {

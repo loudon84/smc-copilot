@@ -583,6 +583,17 @@ export async function submitRemoteExpertTurn(
           throw retryErr;
         }
       } else {
+        if (isSessionLost(err)) {
+          const stored = getRemoteAcpSessionRef(input.desktopSessionId);
+          if (stored) {
+            persistExpired(runtime, stored);
+          }
+          emitToRenderer({
+            type: "connection",
+            sessionId: input.desktopSessionId,
+            state: "expired",
+          });
+        }
         const code =
           err instanceof RemoteExpertError
             ? err.code
