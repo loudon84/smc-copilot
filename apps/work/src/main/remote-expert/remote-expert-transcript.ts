@@ -73,16 +73,27 @@ export function materializeRemoteExpertTurn(input: {
         null,
       );
 
-      const insertIfMissing = (
+      const upsertContent = (
         role: string,
         content: string,
         platform: string,
         ts: number,
+        options?: { skipEmptyInsert?: boolean },
       ) => {
         const existingMsg = db
-          .prepare(`SELECT id FROM messages WHERE platform_message_id = ? LIMIT 1`)
-          .get(platform) as { id: number } | undefined;
-        if (existingMsg) return;
+          .prepare(
+            `SELECT id, content FROM messages WHERE platform_message_id = ? LIMIT 1`,
+          )
+          .get(platform) as { id: number; content: string } | undefined;
+        if (existingMsg) {
+          if (content && content !== existingMsg.content) {
+            db.prepare(
+              `UPDATE messages SET content = ?, timestamp = ? WHERE platform_message_id = ?`,
+            ).run(content, ts, platform);
+          }
+          return;
+        }
+        if (options?.skipEmptyInsert && !content) return;
         db.prepare(
           `INSERT INTO messages (
              session_id, role, content, timestamp, platform_message_id, active
@@ -90,25 +101,27 @@ export function materializeRemoteExpertTurn(input: {
         ).run(input.sessionId, role, content, ts, platform);
       };
 
-      insertIfMissing(
+      upsertContent(
         "user",
         input.userContent,
         remoteAcpPlatformMessageId(input.turnId, "user"),
         nowSec,
       );
-      if (input.reasoningContent) {
-        insertIfMissing(
+      if (input.reasoningContent !== undefined) {
+        upsertContent(
           "reasoning",
           input.reasoningContent,
           remoteAcpPlatformMessageId(input.turnId, "reasoning"),
           nowSec + 0.0005,
+          { skipEmptyInsert: true },
         );
       }
-      insertIfMissing(
+      upsertContent(
         "assistant",
         input.assistantContent,
         remoteAcpPlatformMessageId(input.turnId, "assistant"),
         nowSec + 0.001,
+        { skipEmptyInsert: true },
       );
 
       const countRow = db

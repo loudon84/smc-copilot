@@ -55,6 +55,13 @@ class FakeDb {
           this.sessions.set(String(args[0]), { title: String(args[3]) });
           return;
         }
+        if (sql.includes("UPDATE messages SET content")) {
+          const content = String(args[0]);
+          const platform = String(args[2]);
+          const row = this.messages.find((m) => m.platform_message_id === platform);
+          if (row) row.content = content;
+          return;
+        }
         if (sql.includes("INSERT INTO messages")) {
           this.messages.push({
             id: this.nextId++,
@@ -95,5 +102,44 @@ describe("remote-expert transcript", () => {
     expect(mockDb.messages.filter((m) => m.role === "user")).toHaveLength(1);
     expect(mockDb.messages.filter((m) => m.role === "assistant")).toHaveLength(1);
     expect(upsertCachedSession).toHaveBeenCalled();
+  });
+
+  it("[A-TL-TRANSCRIPT-001] skips empty assistant insert then upserts final content", () => {
+    materializeRemoteExpertTurn({
+      sessionId: "s1",
+      profileId: "default",
+      turnId: "t1",
+      userContent: "hello world",
+      assistantContent: "",
+    });
+    expect(mockDb.messages.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(mockDb.messages.filter((m) => m.role === "assistant")).toHaveLength(0);
+
+    materializeRemoteExpertTurn({
+      sessionId: "s1",
+      profileId: "default",
+      turnId: "t1",
+      userContent: "hello world",
+      assistantContent: "final answer",
+      reasoningContent: "think",
+    });
+    const assistants = mockDb.messages.filter((m) => m.role === "assistant");
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0]?.content).toBe("final answer");
+    expect(mockDb.messages.find((m) => m.role === "reasoning")?.content).toBe(
+      "think",
+    );
+
+    materializeRemoteExpertTurn({
+      sessionId: "s1",
+      profileId: "default",
+      turnId: "t1",
+      userContent: "hello world",
+      assistantContent: "final answer v2",
+    });
+    expect(mockDb.messages.filter((m) => m.role === "assistant")).toHaveLength(1);
+    expect(mockDb.messages.find((m) => m.role === "assistant")?.content).toBe(
+      "final answer v2",
+    );
   });
 });

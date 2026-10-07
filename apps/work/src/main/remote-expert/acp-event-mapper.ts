@@ -14,16 +14,51 @@ function extractText(update: Record<string, unknown>): string {
   return "";
 }
 
+function resolveUpdate(params: Record<string, unknown>): Record<string, unknown> {
+  if (isRecord(params.sessionUpdate)) {
+    return params.sessionUpdate;
+  }
+  if (isRecord(params.update)) {
+    return params.update;
+  }
+  return params;
+}
+
+function resolveToolCallFields(update: Record<string, unknown>): {
+  toolCallId: string;
+  toolName: string;
+  title?: string;
+} {
+  const nested = isRecord(update.toolCall) ? update.toolCall : null;
+  const toolCallId = String(
+    update.toolCallId ?? nested?.toolCallId ?? "",
+  );
+  const title =
+    typeof update.title === "string"
+      ? update.title
+      : typeof nested?.title === "string"
+        ? nested.title
+        : undefined;
+  const toolName = String(
+    update.toolName ?? title ?? nested?.title ?? "tool",
+  );
+  return { toolCallId, toolName, title };
+}
+
 export function mapAcpSessionUpdate(input: {
   turnId: string;
   sessionId: string;
   params: Record<string, unknown>;
 }): RemoteExpertSemanticEvent[] {
-  const update = isRecord(input.params.sessionUpdate)
-    ? (input.params.sessionUpdate as Record<string, unknown>)
-    : input.params;
+  const update = resolveUpdate(input.params);
   const kind = String(
-    update.sessionUpdate ?? input.params.sessionUpdate ?? update.type ?? "",
+    update.sessionUpdate ??
+      input.params.sessionUpdate ??
+      (isRecord(input.params.update)
+        ? input.params.update.sessionUpdate
+        : undefined) ??
+      update.type ??
+      "",
   );
   if (kind === "agent_message_chunk" || kind === "agent_message") {
     const text = extractText(update.content && isRecord(update.content) ? update.content : update);
@@ -42,22 +77,24 @@ export function mapAcpSessionUpdate(input: {
       : [];
   }
   if (kind === "tool_call") {
+    const fields = resolveToolCallFields(update);
     return [
       {
         type: "tool.call",
         turnId: input.turnId,
-        toolCallId: String(update.toolCallId ?? ""),
-        toolName: String(update.toolName ?? update.title ?? "tool"),
-        title: typeof update.title === "string" ? update.title : undefined,
+        toolCallId: fields.toolCallId,
+        toolName: fields.toolName,
+        title: fields.title,
       },
     ];
   }
   if (kind === "tool_call_update") {
+    const fields = resolveToolCallFields(update);
     return [
       {
         type: "tool.result",
         turnId: input.turnId,
-        toolCallId: String(update.toolCallId ?? ""),
+        toolCallId: fields.toolCallId,
         content: extractText(update),
       },
     ];

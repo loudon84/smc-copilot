@@ -228,10 +228,17 @@ export class RemoteAcpClient extends EventEmitter {
 
   async sessionNew(cwd?: string): Promise<string> {
     this.assertInitializedForMutation("session/new");
-    const result = (await this.request("session/new", {
-      cwd: cwd ?? "",
-      mcpServers: [],
-    })) as { sessionId?: string };
+    // Keep pending after control-plane timeout so a late result can still bind
+    // acpSessionId (unknown-commit recovery). Do not blind-retry session/new.
+    const result = (await this.request(
+      "session/new",
+      {
+        cwd: cwd ?? "",
+        mcpServers: [],
+      },
+      undefined,
+      { keepPendingOnTimeout: true },
+    )) as { sessionId?: string };
     const sessionId = String(result?.sessionId ?? "").trim();
     if (!sessionId) {
       throw new RemoteExpertError(
@@ -362,7 +369,8 @@ export class RemoteAcpClient extends EventEmitter {
   private request(
     method: string,
     params: Record<string, unknown>,
-    id: string = randomUUID(),
+    id?: string,
+    options?: { keepPendingOnTimeout?: boolean },
   ): Promise<unknown> {
     if (!this.socket || this.socket.readyState !== WsImpl.OPEN) {
       throw new RemoteExpertError(
@@ -371,24 +379,60 @@ export class RemoteAcpClient extends EventEmitter {
         { retryable: true },
       );
     }
+    const requestId = id && id.trim() ? id : randomUUID();
+    // Long turns / tool chains are bounded by socket lifecycle, not an RPC timer.
+    const isPrompt = method === "session/prompt";
+    const keepPendingOnTimeout = options?.keepPendingOnTimeout === true;
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(id);
-        reject(
-          new RemoteExpertError("ACP_PROTOCOL_ERROR", `${method} timeout`),
-        );
-      }, 10_000);
-      this.pending.set(id, {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      if (!isPrompt) {
+        timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          if (!keepPendingOnTimeout) {
+            this.pending.delete(requestId);
+          }
+          reject(
+            new RemoteExpertError("ACP_PROTOCOL_ERROR", `${method} timeout`),
+          );
+        }, 10_000);
+      }
+      this.pending.set(requestId, {
         resolve: (value) => {
-          clearTimeout(timer);
+          if (settled && !keepPendingOnTimeout) return;
+          const wasSettled = settled;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          this.pending.delete(requestId);
+          if (wasSettled && keepPendingOnTimeout) {
+            // Late session/new result after control-plane timeout: bind only.
+            if (
+              method === "session/new" &&
+              !this.acpSessionId &&
+              isRecord(value) &&
+              typeof value.sessionId === "string" &&
+              value.sessionId.trim()
+            ) {
+              this.acpSessionId = value.sessionId.trim();
+              if (this.phase === "INITIALIZED") {
+                this.phase = "SESSION_ACTIVE";
+              }
+              this.emit("session/new-late", this.acpSessionId);
+            }
+            return;
+          }
           resolve(value);
         },
         reject: (err) => {
-          clearTimeout(timer);
+          if (settled) return;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          this.pending.delete(requestId);
           reject(err);
         },
       });
-      this.send({ jsonrpc: "2.0", id, method, params });
+      this.send({ jsonrpc: "2.0", id: requestId, method, params });
     });
   }
 

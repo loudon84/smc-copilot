@@ -44,6 +44,8 @@ type Runtime = {
   orgId: string;
   agentRef: string;
   desktopSessionId: string;
+  /** Synchronous submit lock — closes race before PROMPT_ACTIVE is set. */
+  submitLock: boolean;
   pendingPermission?: {
     requestId: string;
     meta: unknown;
@@ -56,6 +58,7 @@ type Runtime = {
 };
 
 const runtimes = new Map<string, Runtime>();
+const bootInFlight = new Map<string, Promise<Runtime>>();
 let getMainWindow: () => BrowserWindow | null = () => null;
 
 export function setRemoteExpertWindowGetter(
@@ -193,6 +196,21 @@ async function bootClient(input: {
   agentRef: string;
   authGeneration: string;
 }): Promise<Runtime> {
+  const inflight = bootInFlight.get(input.desktopSessionId);
+  if (inflight) return inflight;
+
+  const promise = bootClientInner(input).finally(() => {
+    bootInFlight.delete(input.desktopSessionId);
+  });
+  bootInFlight.set(input.desktopSessionId, promise);
+  return promise;
+}
+
+async function bootClientInner(input: {
+  desktopSessionId: string;
+  agentRef: string;
+  authGeneration: string;
+}): Promise<Runtime> {
   await ensureCompatibleContract();
   const expert = await fetchRemoteExpertByRef(input.agentRef);
   if (!isRemoteExpertCallable(expert)) {
@@ -229,6 +247,7 @@ async function bootClient(input: {
     orgId: currentOrgId(),
     agentRef: input.agentRef,
     desktopSessionId: input.desktopSessionId,
+    submitLock: false,
     assistantText: "",
     reasoningText: "",
     turnId: "",
@@ -264,125 +283,230 @@ export async function submitRemoteExpertTurn(
     agentRef: input.agentRef,
     authGeneration: input.authGeneration,
   });
-  if (runtime.client.isReconnecting) {
+  if (
+    runtime.submitLock ||
+    runtime.client.isReconnecting ||
+    runtime.client.phase === "PROMPT_ACTIVE" ||
+    runtime.client.phase === "WAITING_PERMISSION" ||
+    runtime.client.phase === "CANCELLING"
+  ) {
     throw new RemoteExpertError(
       "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
-      "reconnect in progress",
+      "turn in progress",
       { retryable: true },
     );
   }
+  // Bind turn identity only after single-flight / busy checks pass.
+  runtime.submitLock = true;
   runtime.turnId = input.requestId;
   runtime.assistantText = "";
   runtime.reasoningText = "";
-  const catalog = await fetchRemoteExpertCatalog();
-  const item = catalog.items.find((entry) => entry.agentRef === input.agentRef);
-  if (!item || !isRemoteExpertCallable(item)) {
-    throw new RemoteExpertError(
-      "REMOTE_EXPERT_UNAVAILABLE",
-      "expert not callable",
-    );
-  }
-  if (item.capabilities.attachments !== "resource_link" && input.managedFileIds.length) {
-    throw new RemoteExpertError(
-      "REMOTE_EXPERT_RESOURCE_DENIED",
-      "attachments not supported",
-    );
-  }
-  const links = await prepareAttachmentResourceLinks({
-    profileId: input.profileId ?? "default",
-    fileIds: input.managedFileIds,
-  });
-  const blocks = buildPromptBlocks(input.promptText, links);
-  if (!runtime.client.acpSessionId) {
-    const stored = getRemoteAcpSessionRef(input.desktopSessionId);
-    if (stored?.connectionState === "expired") {
+  try {
+    const catalog = await fetchRemoteExpertCatalog();
+    const item = catalog.items.find((entry) => entry.agentRef === input.agentRef);
+    if (!item || !isRemoteExpertCallable(item)) {
       throw new RemoteExpertError(
         "REMOTE_EXPERT_UNAVAILABLE",
-        "session expired; start a new request",
+        "expert not callable",
       );
     }
-    if (stored?.acpSessionId) {
-      try {
-        await runtime.client.sessionResume(stored.acpSessionId, stored.lastSeq);
-      } catch (err) {
-        if (isSessionLost(err)) {
-          persistExpired(runtime, stored);
-          throw new RemoteExpertError(
-            "REMOTE_EXPERT_UNAVAILABLE",
-            "session expired; start a new request",
-          );
-        }
-        throw err;
-      }
-    } else {
-      await runtime.client.sessionNew();
+    if (item.capabilities.attachments !== "resource_link" && input.managedFileIds.length) {
+      throw new RemoteExpertError(
+        "REMOTE_EXPERT_RESOURCE_DENIED",
+        "attachments not supported",
+      );
     }
-    persistRef(runtime, "active");
-  }
-  const acpSessionId = runtime.client.acpSessionId!;
-  try {
-    materializeRemoteExpertTurn({
-      sessionId: input.desktopSessionId,
+    const links = await prepareAttachmentResourceLinks({
       profileId: input.profileId ?? "default",
+      fileIds: input.managedFileIds,
+    });
+    const blocks = buildPromptBlocks(input.promptText, links);
+    if (!runtime.client.acpSessionId) {
+      const stored = getRemoteAcpSessionRef(input.desktopSessionId);
+      if (stored?.connectionState === "expired") {
+        throw new RemoteExpertError(
+          "REMOTE_EXPERT_UNAVAILABLE",
+          "session expired; start a new request",
+        );
+      }
+      if (stored?.connectionState === "closed") {
+        throw new RemoteExpertError(
+          "REMOTE_EXPERT_UNAVAILABLE",
+          "session closed; start a new request",
+        );
+      }
+      if (stored?.acpSessionId) {
+        try {
+          await runtime.client.sessionResume(stored.acpSessionId, stored.lastSeq);
+        } catch (err) {
+          if (isSessionLost(err)) {
+            persistExpired(runtime, stored);
+            throw new RemoteExpertError(
+              "REMOTE_EXPERT_UNAVAILABLE",
+              "session expired; start a new request",
+            );
+          }
+          throw err;
+        }
+      } else {
+        try {
+          await runtime.client.sessionNew();
+        } catch (err) {
+          if (isSessionNewTimeout(err)) {
+            // Unknown commit: do not blind-retry. Late result may still bind via
+            // keepPendingOnTimeout; until then block this desktop id.
+            const placeholder: RemoteAcpSessionRef = {
+              schemaVersion: 1,
+              desktopSessionId: input.desktopSessionId,
+              agentRef: input.agentRef,
+              acpSessionId: runtime.client.acpSessionId ?? "pending",
+              lastSeq: runtime.client.lastSeq,
+              connectionState: "expired",
+              updatedAt: Date.now(),
+            };
+            const onLate = (acpSessionId: string) => {
+              try {
+                upsertRemoteAcpSessionRef({
+                  schemaVersion: 1,
+                  desktopSessionId: input.desktopSessionId,
+                  agentRef: input.agentRef,
+                  acpSessionId,
+                  lastSeq: runtime.client.lastSeq,
+                  connectionState: "active",
+                  updatedAt: Date.now(),
+                });
+              } catch (persistErr) {
+                logRemoteExpertError(persistErr, {
+                  operation_id: input.requestId,
+                  trace_id: runtime.client.traceId,
+                  stage: "SESSION",
+                  desktop_session_id: input.desktopSessionId,
+                });
+              }
+            };
+            runtime.client.once("session/new-late", onLate);
+            if (runtime.client.acpSessionId) {
+              runtime.client.off("session/new-late", onLate);
+              persistRef(runtime, "active");
+            } else {
+              persistExpired(runtime, placeholder);
+              throw new RemoteExpertError(
+                "REMOTE_EXPERT_UNAVAILABLE",
+                "session unconfirmed; start a new chat",
+              );
+            }
+          } else {
+            throw err;
+          }
+        }
+      }
+      persistRef(runtime, "active");
+    }
+    const acpSessionId = runtime.client.acpSessionId!;
+    try {
+      materializeRemoteExpertTurn({
+        sessionId: input.desktopSessionId,
+        profileId: input.profileId ?? "default",
+        turnId: input.requestId,
+        userContent: input.promptText,
+        assistantContent: "",
+      });
+    } catch (err) {
+      logRemoteExpertError(err, {
+        operation_id: input.requestId,
+        trace_id: runtime.client.traceId,
+        stage: "SESSION",
+        desktop_session_id: input.desktopSessionId,
+      });
+    }
+    let result: { stopReason: string };
+    try {
+      result = await runtime.client.sessionPrompt(
+        acpSessionId,
+        blocks,
+        input.requestId,
+      );
+    } catch (err) {
+      if (isInFlightDisconnect(err)) {
+        const stored = getRemoteAcpSessionRef(input.desktopSessionId);
+        // Do not overwrite a closed session with disconnected (close-during-prompt).
+        if (
+          stored?.connectionState !== "closed" &&
+          runtime.client.phase !== "CLOSED"
+        ) {
+          persistRef(runtime, "disconnected", acpSessionId);
+          emitToRenderer({
+            type: "connection",
+            sessionId: input.desktopSessionId,
+            state: "disconnected",
+          });
+        }
+        emitRemoteExpertLog({
+          operation_id: input.requestId,
+          trace_id: runtime.client.traceId,
+          stage: "PROMPT",
+          status: "FAIL",
+          agent_ref: input.agentRef,
+          desktop_session_id: input.desktopSessionId,
+          acp_session_id: acpSessionId,
+          request_id: input.requestId,
+          last_seq: runtime.client.lastSeq,
+          error_code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+        });
+        // Do not emit turn.end / final materialize — Renderer keeps the turn.
+        throw new RemoteExpertError(
+          "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+          `IN_FLIGHT_DISCONNECTED: ${(err as Error).message}`,
+          { retryable: true },
+        );
+      }
+      throw err;
+    }
+    try {
+      materializeRemoteExpertTurn({
+        sessionId: input.desktopSessionId,
+        profileId: input.profileId ?? "default",
+        turnId: input.requestId,
+        userContent: input.promptText,
+        assistantContent: runtime.assistantText,
+        reasoningContent: runtime.reasoningText || undefined,
+      });
+    } catch (err) {
+      logRemoteExpertError(err, {
+        operation_id: input.requestId,
+        trace_id: runtime.client.traceId,
+        stage: "PROMPT",
+        desktop_session_id: input.desktopSessionId,
+      });
+    }
+    const outcome =
+      result.stopReason === "cancelled"
+        ? "cancelled"
+        : result.stopReason === "end_turn"
+          ? "completed"
+          : "failed";
+    emitToRenderer({
+      type: "turn.end",
       turnId: input.requestId,
-      userContent: input.promptText,
-      assistantContent: "",
-    });
-  } catch (err) {
-    logRemoteExpertError(err, {
-      operation_id: input.requestId,
-      trace_id: runtime.client.traceId,
-      stage: "SESSION",
-      desktop_session_id: input.desktopSessionId,
-    });
-  }
-  const result = await runtime.client.sessionPrompt(
-    acpSessionId,
-    blocks,
-    input.requestId,
-  );
-  try {
-    materializeRemoteExpertTurn({
       sessionId: input.desktopSessionId,
-      profileId: input.profileId ?? "default",
-      turnId: input.requestId,
-      userContent: input.promptText,
-      assistantContent: runtime.assistantText,
-      reasoningContent: runtime.reasoningText || undefined,
+      outcome,
+      stopReason: result.stopReason,
     });
-  } catch (err) {
-    logRemoteExpertError(err, {
+    emitRemoteExpertLog({
       operation_id: input.requestId,
       trace_id: runtime.client.traceId,
       stage: "PROMPT",
+      status: "PASS",
+      agent_ref: input.agentRef,
       desktop_session_id: input.desktopSessionId,
+      acp_session_id: acpSessionId,
+      request_id: input.requestId,
+      last_seq: runtime.client.lastSeq,
     });
+    return { requestId: input.requestId, sessionId: input.desktopSessionId };
+  } finally {
+    runtime.submitLock = false;
   }
-  const outcome =
-    result.stopReason === "cancelled"
-      ? "cancelled"
-      : result.stopReason === "end_turn"
-        ? "completed"
-        : "failed";
-  emitToRenderer({
-    type: "turn.end",
-    turnId: input.requestId,
-    sessionId: input.desktopSessionId,
-    outcome,
-    stopReason: result.stopReason,
-  });
-  emitRemoteExpertLog({
-    operation_id: input.requestId,
-    trace_id: runtime.client.traceId,
-    stage: "PROMPT",
-    status: "PASS",
-    agent_ref: input.agentRef,
-    desktop_session_id: input.desktopSessionId,
-    acp_session_id: acpSessionId,
-    request_id: input.requestId,
-    last_seq: runtime.client.lastSeq,
-  });
-  return { requestId: input.requestId, sessionId: input.desktopSessionId };
 }
 
 export async function resumeRemoteExpertSession(input: {
@@ -432,7 +556,36 @@ export async function closeRemoteExpertSession(sessionId: string): Promise<void>
     const acpSessionId = runtime.client.acpSessionId;
     if (acpSessionId) {
       persistRef(runtime, "closed");
-      await runtime.client.sessionClose(acpSessionId);
+      try {
+        await runtime.client.sessionClose(acpSessionId);
+      } catch (err) {
+        logRemoteExpertError(err, {
+          operation_id: sessionId,
+          trace_id: runtime.client.traceId,
+          stage: "SESSION",
+          desktop_session_id: sessionId,
+        });
+        runtime.client.disconnect();
+      }
+    } else {
+      runtime.client.disconnect();
+      const stored = getRemoteAcpSessionRef(sessionId);
+      if (stored?.acpSessionId && stored.connectionState !== "closed") {
+        try {
+          upsertRemoteAcpSessionRef({
+            ...stored,
+            connectionState: "closed",
+            updatedAt: Date.now(),
+          });
+        } catch (persistErr) {
+          logRemoteExpertError(persistErr, {
+            operation_id: sessionId,
+            trace_id: runtime.client.traceId,
+            stage: "SESSION",
+            desktop_session_id: sessionId,
+          });
+        }
+      }
     }
     runtimes.delete(sessionId);
   }
@@ -491,6 +644,21 @@ function isSessionLost(err: unknown): boolean {
   return (
     err.code === "REMOTE_EXPERT_SESSION_LOST" ||
     /session not found/i.test(err.message)
+  );
+}
+
+function isSessionNewTimeout(err: unknown): boolean {
+  if (!(err instanceof RemoteExpertError)) return false;
+  return (
+    err.code === "ACP_PROTOCOL_ERROR" &&
+    /session\/new timeout/i.test(err.message)
+  );
+}
+
+function isInFlightDisconnect(err: unknown): boolean {
+  if (!(err instanceof RemoteExpertError)) return false;
+  return (
+    err.code === "REMOTE_EXPERT_SESSION_NOT_ACTIVE" && err.retryable === true
   );
 }
 

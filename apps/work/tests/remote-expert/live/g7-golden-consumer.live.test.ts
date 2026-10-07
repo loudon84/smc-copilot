@@ -783,6 +783,51 @@ describeLive("G7 Golden Consumer live", () => {
     });
   });
 
+  it("[A-G7-LIVE-016] Long turn (>10s) completes without RPC timeout", async () => {
+    if (!longPrompt) {
+      blockedCase(
+        "A-G7-LIVE-016",
+        "G7_ENV_INCOMPLETE",
+        "SMC_REMOTE_EXPERT_G7_LONG_PROMPT missing",
+      );
+      return;
+    }
+    if (gateFailed || !client || !acpSessionId) {
+      blockedCase("A-G7-LIVE-016", "G7_LIVE_CASE_FAILED", "prereq");
+      return;
+    }
+    const started = Date.now();
+    const operationId = `${runId}:A-G7-LIVE-016`;
+    try {
+      const result = await client.sessionPrompt(
+        acpSessionId,
+        [{ type: "text", text: longPrompt }],
+        randomUUID(),
+      );
+      const elapsedMs = Date.now() - started;
+      expect(result.stopReason).toBeTruthy();
+      writeCase({
+        id: "A-G7-LIVE-016",
+        status: "PASS",
+        operationId,
+        oracleExpected: "prompt resolves without consumer RPC timeout",
+        oracleActual: `stop=${result.stopReason};elapsedMs=${elapsedMs}`,
+        elapsedMs,
+      });
+    } catch (err) {
+      writeCase({
+        id: "A-G7-LIVE-016",
+        status: "FAIL",
+        operationId,
+        errorCode: "G7_LIVE_CASE_FAILED",
+        oracleExpected: "prompt resolves without consumer RPC timeout",
+        oracleActual: err instanceof Error ? err.message : String(err),
+        elapsedMs: Date.now() - started,
+      });
+      throw err;
+    }
+  });
+
   it("[A-G7-LIVE-015] Local Chat isolation after remote outage", async () => {
     if (!localHermesUrl) {
       blockedCase(

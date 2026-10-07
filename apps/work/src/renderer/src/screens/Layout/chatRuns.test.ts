@@ -456,14 +456,26 @@ describe("remote expert run transitions", () => {
     });
     expect(next.kind).toBe("requires-confirm");
     if (next.kind !== "requires-confirm") throw new Error("expected confirm");
-    expect(next.confirmKey).toBe("remoteExpert.confirmNewChat");
+    expect(next.confirmKey).toBe("chat.remoteExpert.confirmNewChat");
     expect(next.runs).toHaveLength(2);
     const created = next.runs.find((r) => r.runId === next.activeRunId);
     expect(created).toMatchObject({
       executionMode: "remote-expert",
       remoteExpertAgentRef: "finance-expert",
-      sessionId: null,
     });
+    // Remote Expert mints desktop sessionId at run create (not on first send).
+    expect(created?.sessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it("[A-TL-SESSION-001] mintRun remote-expert mints desktop sessionId; local stays null", () => {
+    const remote = mintRun("alfie", undefined, "remote-expert", "sales-expert");
+    const local = mintRun("alfie", undefined, "local-chat");
+    expect(remote.sessionId).toBeTruthy();
+    expect(local.sessionId).toBeNull();
+    expect(isScratchRun(remote)).toBe(true);
+    expect(isScratchRun(local)).toBe(true);
   });
 
   it("[A-UI-SWITCH-002] bound remote switch creates new scratch", () => {
@@ -481,7 +493,7 @@ describe("remote expert run transitions", () => {
     });
     expect(next.kind).toBe("requires-confirm");
     if (next.kind !== "requires-confirm") throw new Error("expected confirm");
-    expect(next.confirmKey).toBe("remoteExpert.confirmChangeContext");
+    expect(next.confirmKey).toBe("chat.remoteExpert.confirmChangeContext");
     expect(runs[0]?.remoteExpertAgentRef).toBe("sales-expert");
   });
 

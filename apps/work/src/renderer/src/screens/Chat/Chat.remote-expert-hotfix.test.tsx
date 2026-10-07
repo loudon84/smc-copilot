@@ -301,7 +301,7 @@ describe("Chat remote-expert hotfix routing", () => {
     fireEvent.click(screen.getByTestId("send-remote"));
     expect(handleSend).not.toHaveBeenCalled();
     expect(remoteSubmit).not.toHaveBeenCalled();
-    expect(toastError).toHaveBeenCalledWith("remoteExpert.gateUnavailable");
+    expect(toastError).toHaveBeenCalledWith("chat.remoteExpert.gateUnavailable");
   });
 
   it("[A-NEG-PROMPT-001] marks the optimistic bubble failed when submit rejects", async () => {
@@ -334,6 +334,88 @@ describe("Chat remote-expert hotfix routing", () => {
     fireEvent.click(screen.getByTestId("send-remote"));
     await waitFor(() => expect(remoteSubmit).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText("ACP down")).toBeTruthy());
+    expect(handleSend).not.toHaveBeenCalled();
+  });
+
+  it("[A-NEG-TL-ROUTE-001] hard-rejects a second submit while remoteExpertBusy", async () => {
+    let resolveSubmit: (() => void) | undefined;
+    remoteSubmit.mockImplementation(
+      () =>
+        new Promise<{ requestId: string; sessionId: string }>((resolve) => {
+          resolveSubmit = () =>
+            resolve({ requestId: "req", sessionId: "sess-busy" });
+        }),
+    );
+    installHermes({
+      enabled: true,
+      submit: remoteSubmit,
+      session: {
+        schemaVersion: 1,
+        desktopSessionId: "sess-busy",
+        agentRef: "sales-expert",
+        acpSessionId: "acp-1",
+        lastSeq: 1,
+        connectionState: "active",
+        updatedAt: 1,
+      },
+    });
+    render(
+      <Chat
+        runId="run-re-busy"
+        executionMode="remote-expert"
+        initialSessionId="sess-busy"
+        initialMessages={[]}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("send-remote")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("send-remote"));
+    await waitFor(() => expect(remoteSubmit).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId("send-remote"));
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith("chat.remoteExpert.turnInProgress"),
+    );
+    expect(remoteSubmit).toHaveBeenCalledTimes(1);
+    resolveSubmit?.();
+  });
+
+  it("[A-TL-ROUTE-001] in-flight disconnect keeps streamed content and turn mapping", async () => {
+    // Electron wraps handler errors — matcher must be unanchored.
+    remoteSubmit.mockRejectedValue(
+      new Error(
+        "Error occurred in handler for 'remote-expert:submit': RemoteExpertError: IN_FLIGHT_DISCONNECTED: socket closed",
+      ),
+    );
+    installHermes({
+      enabled: true,
+      submit: remoteSubmit,
+      session: {
+        schemaVersion: 1,
+        desktopSessionId: "sess-inflight",
+        agentRef: "sales-expert",
+        acpSessionId: "acp-1",
+        lastSeq: 1,
+        connectionState: "active",
+        updatedAt: 1,
+      },
+    });
+    render(
+      <Chat
+        runId="run-re-inflight"
+        executionMode="remote-expert"
+        initialSessionId="sess-inflight"
+        initialMessages={[]}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId("send-remote")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("send-remote"));
+    await waitFor(() => expect(remoteSubmit).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "chat.remoteExpert.connectionLost",
+      ),
+    );
+    // Must not replace the optimistic bubble with the error string.
+    expect(screen.queryByText(/IN_FLIGHT_DISCONNECTED/i)).toBeNull();
     expect(handleSend).not.toHaveBeenCalled();
   });
 });

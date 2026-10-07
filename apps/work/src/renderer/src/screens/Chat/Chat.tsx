@@ -1587,15 +1587,19 @@ function Chat({
         return;
       }
       if (isRemoteExpertMode || remoteExpertSession) {
+        if (remoteExpertBusy) {
+          toast.error(t("chat.remoteExpert.turnInProgress"));
+          return;
+        }
         if (remoteExpertEntry.availabilityStatus !== "compatible") {
-          toast.error(t("remoteExpert.gateUnavailable"));
+          toast.error(t("chat.remoteExpert.gateUnavailable"));
           return;
         }
         if (remoteResumeBlocked) {
           toast.error(
             remoteExpertSession?.connectionState === "expired"
-              ? t("remoteExpert.sessionExpired")
-              : t("remoteExpert.cannotContinue"),
+              ? t("chat.remoteExpert.sessionExpired")
+              : t("chat.remoteExpert.cannotContinue"),
           );
           return;
         }
@@ -1619,7 +1623,7 @@ function Chat({
         }
         const agentRef = durableRef ?? scratchRef;
         if (!agentRef) {
-          toast.error(t("remoteExpert.selectBeforeSending"));
+          toast.error(t("chat.remoteExpert.selectBeforeSending"));
           return;
         }
         if (!durableRef) {
@@ -1627,14 +1631,20 @@ function Chat({
             (item) => item.agentRef === agentRef,
           );
           if (catalogItem && !isRemoteExpertCallable(catalogItem)) {
-            toast.error(t("remoteExpert.unavailableExpert"));
+            toast.error(t("chat.remoteExpert.unavailableExpert"));
             return;
           }
         }
         setRemoteExpertBusy(true);
-        const sessionId =
-          hermesSessionId || initialSessionId || crypto.randomUUID();
-        if (!hermesSessionId) setHermesSessionId(sessionId);
+        // Desktop id is minted at ChatRun create for remote-expert; submit only reads.
+        let sessionId = hermesSessionId || initialSessionId || null;
+        if (!sessionId) {
+          sessionId = crypto.randomUUID();
+          setHermesSessionId(sessionId);
+          onSessionIdChange?.(runId, sessionId);
+        } else if (!hermesSessionId) {
+          setHermesSessionId(sessionId);
+        }
         remoteSessionIdRef.current = sessionId;
         const turnId = crypto.randomUUID();
         const assistantId = `remote-acp:${turnId}:assistant:0`;
@@ -1672,10 +1682,22 @@ function Chat({
             profileId: profile ?? "default",
           })
           .catch((err: unknown) => {
-            setRemoteExpertBusy(false);
             const errorText =
               err instanceof Error ? err.message : "Remote Expert request failed";
-            toast.error(errorText);
+            // Electron wraps IPC errors; match unanchored. Keep turnId mapping +
+            // streamed content (no error overwrite). Clear busy so the run is not
+            // wedged — resume continues via next submit / history reopen.
+            if (errorText.includes("IN_FLIGHT_DISCONNECTED")) {
+              toast.error(t("chat.remoteExpert.connectionLost"));
+              setRemoteExpertBusy(false);
+              return;
+            }
+            setRemoteExpertBusy(false);
+            if (/session unconfirmed/i.test(errorText)) {
+              toast.error(t("chat.remoteExpert.sessionUnconfirmed"));
+            } else {
+              toast.error(errorText);
+            }
             const failedAssistantId =
               remoteAssistantByTurnRef.current.get(turnId);
             if (failedAssistantId) {
@@ -2182,6 +2204,7 @@ function Chat({
                     items={remoteExpertEntry.items}
                     availabilityStatus={remoteExpertEntry.availabilityStatus}
                     catalogStatus={remoteExpertEntry.catalogStatus}
+                    availability={remoteExpertEntry.availability}
                     errorCode={
                       remoteExpertEntry.catalogErrorCode ||
                       remoteExpertEntry.availability?.errorCode ||

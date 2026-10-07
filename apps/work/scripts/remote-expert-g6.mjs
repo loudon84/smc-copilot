@@ -52,6 +52,19 @@ const LEGACY_ACCEPTANCE = [
   "A-NEG-OBS-001",
 ];
 
+const TURN_LIFECYCLE_ACCEPTANCE = [
+  "A-TL-PROMPT-001",
+  "A-NEG-TL-PROMPT-001",
+  "A-TL-RECONNECT-001",
+  "A-TL-SESSION-001",
+  "A-NEG-TL-SESSION-001",
+  "A-NEG-TL-SESSION-002",
+  "A-TL-TRANSCRIPT-001",
+  "A-TL-MAPPER-001",
+  "A-TL-ROUTE-001",
+  "A-NEG-TL-ROUTE-001",
+];
+
 const CLOSURE_ACCEPTANCE = [
   "A-UI-ENTRY-001",
   "A-NEG-UI-ENTRY-001",
@@ -88,7 +101,11 @@ const CLOSURE_ACCEPTANCE = [
   "A-NEG-G7-RUNNER-002",
 ];
 
-const ACCEPTANCE = [...LEGACY_ACCEPTANCE, ...CLOSURE_ACCEPTANCE];
+const ACCEPTANCE = [
+  ...LEGACY_ACCEPTANCE,
+  ...CLOSURE_ACCEPTANCE,
+  ...TURN_LIFECYCLE_ACCEPTANCE,
+];
 
 const args = process.argv.slice(2);
 const releaseWorktree = args.includes("--release-worktree");

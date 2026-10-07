@@ -205,16 +205,22 @@ export default {
     checking: "Checking Remote Experts…",
     unavailableEntry: "Remote Expert unavailable",
     incompatible: "Remote Expert contract incompatible",
+    mismatchFields: "Mismatch: {{fields}}",
     noExperts: "No Remote Experts available",
     catalogUnavailable: "Catalog unavailable",
     retry: "Retry",
     refreshCatalog: "Refresh catalog",
     resumeBlocked: "Remote Expert resume blocked",
     sessionExpired: "This Remote Expert session expired. Start a new request.",
+    sessionUnconfirmed:
+      "Remote Expert session was not confirmed. Start a new chat.",
     gateUnavailable: "Remote Expert is unavailable. Sending is blocked.",
     selectBeforeSending: "Select a Remote Expert before sending.",
     unavailableExpert: "That Remote Expert is unavailable.",
     cannotContinue: "This Remote Expert session cannot continue.",
+    turnInProgress: "A Remote Expert turn is still in progress.",
+    connectionLost:
+      "Connection lost. Waiting to resume this Remote Expert turn…",
     confirmNewChat:
       "This chat already has messages. Start a new chat to use Remote Expert?",
     confirmChangeContext:

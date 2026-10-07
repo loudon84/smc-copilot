@@ -119,4 +119,58 @@ describe("RemoteAcpClient transport", () => {
       await server.close();
     }
   }, 20_000);
+
+  it("[A-TL-PROMPT-001] session/prompt survives beyond the 10s control-plane timer", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "slow-prompt" });
+    try {
+      const client = new RemoteAcpClient({
+        baseUrl: server.url,
+        agentRef: "sales-expert",
+        getAccessToken: () => "tok",
+        getOrgId: () => "org-1",
+      });
+      await client.connect();
+      await client.initialize();
+      const sid = await client.sessionNew();
+      const started = Date.now();
+      const result = await client.sessionPrompt(
+        sid,
+        [{ type: "text", text: "long" }],
+        randomUUID(),
+      );
+      expect(Date.now() - started).toBeGreaterThan(10_000);
+      expect(result.stopReason).toBe("end_turn");
+      client.disconnect();
+    } finally {
+      await server.close();
+    }
+  }, 30_000);
+
+  it("[A-NEG-TL-PROMPT-001] prompt-period socket close rejects retryable without hanging", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "hang-prompt" });
+    try {
+      const client = new RemoteAcpClient({
+        baseUrl: server.url,
+        agentRef: "sales-expert",
+        getAccessToken: () => "tok",
+        getOrgId: () => "org-1",
+      });
+      await client.connect();
+      await client.initialize();
+      const sid = await client.sessionNew();
+      const pending = client.sessionPrompt(
+        sid,
+        [{ type: "text", text: "hang" }],
+        randomUUID(),
+      );
+      await new Promise((r) => setTimeout(r, 50));
+      server.dropClients();
+      await expect(pending).rejects.toMatchObject({
+        code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+        retryable: true,
+      });
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
 });

@@ -500,6 +500,29 @@ function Layout(): React.JSX.Element {
   // open so the chat view is never empty.
   const handleCloseRun = useCallback(
     (runId: string) => {
+      const closing = runs.find((r) => r.runId === runId);
+      if (
+        closing?.executionMode === "remote-expert" &&
+        closing.sessionId
+      ) {
+        const sessionId = closing.sessionId;
+        const busy = closing.loading;
+        // Best-effort: cancel first, then close (G-Q7). Do not block UI close.
+        void (async () => {
+          try {
+            if (busy) {
+              await window.hermesAPI.remoteExpert?.cancel?.({ sessionId });
+            }
+          } catch {
+            /* ignore */
+          }
+          try {
+            await window.hermesAPI.remoteExpert?.close?.({ sessionId });
+          } catch {
+            /* ignore */
+          }
+        })();
+      }
       window.hermesAPI.abortChat(runId);
       const idx = runs.findIndex((r) => r.runId === runId);
       const remaining = runs.filter((r) => r.runId !== runId);

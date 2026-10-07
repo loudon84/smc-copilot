@@ -41,7 +41,7 @@ export type RemoteExpertModeTransitionResult =
       kind: "requires-confirm";
       activeRunId: string;
       runs: ChatRun[];
-      confirmKey: "remoteExpert.confirmNewChat" | "remoteExpert.confirmChangeContext";
+      confirmKey: "chat.remoteExpert.confirmNewChat" | "chat.remoteExpert.confirmChangeContext";
     }
   | {
       kind: "invalid";
@@ -55,13 +55,24 @@ export function isScratchRun(
   r: ChatRun,
   mode?: ChatExecutionMode,
 ): boolean {
-  const isBlank = !r.sessionId && !r.loading && !r.title;
+  const rMode = r.executionMode ?? "local-chat";
+  // Remote Expert mints desktop sessionId at run create; scratch is still
+  // "no title / not loading" until the first turn binds transcript.
+  const isBlank =
+    rMode === "remote-expert"
+      ? !r.loading && !r.title
+      : !r.sessionId && !r.loading && !r.title;
   if (!isBlank) return false;
   if (mode !== undefined) {
-    const rMode = r.executionMode ?? "local-chat";
     return rMode === mode;
   }
   return true;
+}
+
+function mintDesktopSessionId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `desktop-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 /** Mint a fresh, empty run under the given profile. */
@@ -79,7 +90,9 @@ export function mintRun(
         : `run-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     profile,
     executionMode: mode,
-    sessionId: null,
+    // Remote Expert: sessionId is the durable desktop ACP session id (mint at create).
+    // Local/Hermes: sessionId stays null until the gateway reports one.
+    sessionId: mode === "remote-expert" ? mintDesktopSessionId() : null,
     loading: false,
     seed,
   };
@@ -243,10 +256,12 @@ function stripRemoteAgentRef(run: ChatRun): ChatRun {
 }
 
 function asRemoteScratch(run: ChatRun, agentRef: string | undefined): ChatRun {
+  // Mode switch must not reuse a Local/Hermes gateway id as desktop ACP id.
   return {
     ...run,
     executionMode: "remote-expert",
     remoteExpertAgentRef: agentRef,
+    sessionId: mintDesktopSessionId(),
   };
 }
 
@@ -254,6 +269,8 @@ function asLocalScratch(run: ChatRun): ChatRun {
   return stripRemoteAgentRef({
     ...run,
     executionMode: "local-chat",
+    // Local path will mint/receive a gateway session id on first send.
+    sessionId: null,
   });
 }
 
@@ -322,8 +339,8 @@ export function selectRemoteExpertModeTransition(
         runs,
         confirmKey:
           mode === "remote-expert"
-            ? "remoteExpert.confirmChangeContext"
-            : "remoteExpert.confirmNewChat",
+            ? "chat.remoteExpert.confirmChangeContext"
+            : "chat.remoteExpert.confirmNewChat",
       };
     }
     const next = mintRun(profile, undefined, "local-chat");
@@ -333,8 +350,8 @@ export function selectRemoteExpertModeTransition(
       runs: [...runs, next],
       confirmKey:
         mode === "remote-expert"
-          ? "remoteExpert.confirmChangeContext"
-          : "remoteExpert.confirmNewChat",
+          ? "chat.remoteExpert.confirmChangeContext"
+          : "chat.remoteExpert.confirmNewChat",
     };
   }
 
@@ -374,8 +391,8 @@ export function selectRemoteExpertModeTransition(
       runs,
       confirmKey:
         mode === "remote-expert"
-          ? "remoteExpert.confirmChangeContext"
-          : "remoteExpert.confirmNewChat",
+          ? "chat.remoteExpert.confirmChangeContext"
+          : "chat.remoteExpert.confirmNewChat",
     };
   }
   const next = mintRun(profile, undefined, "remote-expert", agentRef);
@@ -385,8 +402,8 @@ export function selectRemoteExpertModeTransition(
     runs: [...runs, next],
     confirmKey:
       mode === "remote-expert"
-        ? "remoteExpert.confirmChangeContext"
-        : "remoteExpert.confirmNewChat",
+        ? "chat.remoteExpert.confirmChangeContext"
+        : "chat.remoteExpert.confirmNewChat",
   };
 }
 

@@ -28,15 +28,27 @@ Blank scratch converts in place; bound runs require confirm and mint a new scrat
 
 ## Session identity
 
-SMC `desktopSessionId` is local history identity. Provider `acpSessionId` is remote continuity in `desktop_remote_acp_sessions`. Connection state is `active | disconnected | closed | expired`.
+SMC `desktopSessionId` is local history identity; Provider `acpSessionId` is remote continuity.
 
-Resume uses `session/resume` with `_meta.nodeskclaw.after_seq` and never silent `session/new`. Provider session-not-found marks the row `expired` and the UI asks the user to start a new request. Session class is `chat/remote-expert-acp`.
+For Remote Expert runs, Layout mints desktop id into `ChatRun.sessionId` at run create and remints on Local↔Remote mode switch. Rows live in `desktop_remote_acp_sessions` with state `active | disconnected | closed | expired`. Session class is `chat/remote-expert-acp`.
 
-Disconnected runtimes are discarded and rebuilt before resume. `closed` is not overwritten by a later socket `disconnected`. Token refresh does not drop ACP; logout or a change of `(userId, tenantId)` does.
+Resume uses `session/resume` with `_meta.nodeskclaw.after_seq` and never silent `session/new`. Provider session-not-found and `session/new` control-plane timeout (unknown commit) mark `expired` without blind retry; a late `session/new` result may still bind.
+
+Closing a Remote Expert Chat tab best-effort `session/cancel` then `session/close`. Disconnected runtimes are discarded and rebuilt before resume. `closed` is not overwritten by a later socket `disconnected`. Token refresh does not drop ACP; logout or a change of `(userId, tenantId)` does.
+
+## Turn lifecycle
+
+`session/prompt` has no RPC timer; long turns follow the socket lifecycle.
+
+Only socket close, `session/cancel`, or a Provider error frame ends the prompt Promise. Control methods keep a short timeout. Overlapping submit while `PROMPT_ACTIVE` / reconnecting is hard-rejected (toast). After prompt is in flight, Renderer keeps the turn mapping on disconnect until real `turn.end` or `expired` (HF-6 cleanup is pre-prompt only).
+
+Transcript materialize skips empty assistant/reasoning inserts and upserts final content on the second write. [[src/main/remote-expert/acp-event-mapper.ts]] accepts top-level `sessionUpdate` strings and nested `params.update.sessionUpdate`, plus nested `toolCall.{toolCallId,title}`.
 
 ## Transport
 
-[[src/main/remote-expert/remote-acp-client.ts]] opens WSS with `ws`, Bearer, `X-Org-Id`, and `X-Trace-Id`. The negotiated subprotocol must equal `nodeskclaw.remote-acp.v1` (empty is rejected). Query credentials are rejected locally.
+[[src/main/remote-expert/remote-acp-client.ts]] opens WSS with `ws`, Bearer, `X-Org-Id`, and `X-Trace-Id`.
+
+The negotiated subprotocol must equal `nodeskclaw.remote-acp.v1` (empty is rejected). Query credentials are rejected locally. `bootClient` is single-flight per desktop session id.
 
 ## Files
 

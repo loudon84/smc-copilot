@@ -306,4 +306,111 @@ describe("remote-expert turn service", () => {
       await server.close();
     }
   }, 20_000);
+
+  it("[A-TL-RECONNECT-001] disconnect resume does not issue a new session/prompt for the prior turn", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "prompt" });
+    backendUrl = server.url;
+    const sessionId = randomUUID();
+    try {
+      await submitRemoteExpertTurn(turnInput(sessionId));
+      const promptCountAfterFirst = server.mutatingFrames.filter(
+        (f) => f.method === "session/prompt",
+      ).length;
+      server.dropClients();
+      await new Promise((r) => setTimeout(r, 80));
+      await resumeRemoteExpertSession({
+        sessionId,
+        authGeneration: "g1",
+      });
+      const prompts = server.mutatingFrames.filter(
+        (f) => f.method === "session/prompt",
+      );
+      const resumes = server.mutatingFrames.filter(
+        (f) => f.method === "session/resume",
+      );
+      expect(prompts).toHaveLength(promptCountAfterFirst);
+      expect(resumes.length).toBeGreaterThan(0);
+      expect(
+        server.mutatingFrames.filter((f) => f.method === "session/new"),
+      ).toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
+
+  it("[A-TL-SESSION-001] concurrent submits share one session/new; second is rejected while busy", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "hang-prompt" });
+    backendUrl = server.url;
+    const sessionId = randomUUID();
+    try {
+      const first = submitRemoteExpertTurn(turnInput(sessionId));
+      await new Promise((r) => setTimeout(r, 120));
+      await expect(submitRemoteExpertTurn(turnInput(sessionId))).rejects.toMatchObject({
+        code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+        message: /turn in progress/i,
+      });
+      expect(
+        server.mutatingFrames.filter((f) => f.method === "session/new"),
+      ).toHaveLength(1);
+      server.dropClients();
+      await expect(first).rejects.toMatchObject({
+        code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+        message: /IN_FLIGHT_DISCONNECTED/i,
+      });
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
+
+  it("[A-NEG-TL-SESSION-001] session/new timeout marks expired and blocks retry", async () => {
+    const server = await startFakeRemoteAcpServer({
+      scenario: "hang-session-new",
+    });
+    backendUrl = server.url;
+    const sessionId = randomUUID();
+    try {
+      await expect(submitRemoteExpertTurn(turnInput(sessionId))).rejects.toMatchObject({
+        code: "REMOTE_EXPERT_UNAVAILABLE",
+        message: /session unconfirmed/i,
+      });
+      expect(store.get(sessionId)?.connectionState).toBe("expired");
+      await expect(submitRemoteExpertTurn(turnInput(sessionId))).rejects.toMatchObject({
+        code: "REMOTE_EXPERT_UNAVAILABLE",
+      });
+      expect(
+        server.mutatingFrames.filter((f) => f.method === "session/new"),
+      ).toHaveLength(1);
+    } finally {
+      await server.close();
+    }
+  }, 30_000);
+
+  it("[A-NEG-TL-SESSION-002] reconnecting submit is rejected", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "slow-resume" });
+    backendUrl = server.url;
+    const sessionId = randomUUID();
+    store.set(sessionId, {
+      schemaVersion: 1,
+      desktopSessionId: sessionId,
+      agentRef: "sales-expert",
+      acpSessionId: server.sessionId,
+      lastSeq: 1,
+      connectionState: "disconnected",
+      updatedAt: Date.now(),
+    });
+    try {
+      const resumeP = resumeRemoteExpertSession({
+        sessionId,
+        authGeneration: "g1",
+      });
+      await new Promise((r) => setTimeout(r, 80));
+      await expect(submitRemoteExpertTurn(turnInput(sessionId))).rejects.toMatchObject({
+        code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+        message: /turn in progress|reconnect/i,
+      });
+      await resumeP;
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
 });

@@ -4,6 +4,10 @@ import { randomUUID } from "crypto";
 
 export type FakeAcpScenario =
   | "prompt"
+  | "slow-prompt"
+  | "slow-resume"
+  | "hang-session-new"
+  | "hang-prompt"
   | "permission"
   | "cancel"
   | "artifact"
@@ -91,6 +95,10 @@ export async function startFakeRemoteAcpServer(options?: {
       return;
     }
     if (method === "session/new") {
+      if (scenario === "hang-session-new") {
+        // Never respond — control-plane timeout path.
+        return;
+      }
       send(ws, { id, result: { sessionId } });
       return;
     }
@@ -107,10 +115,17 @@ export async function startFakeRemoteAcpServer(options?: {
         });
         return;
       }
-      send(ws, {
-        id,
-        result: { sessionId: params.sessionId ?? sessionId },
-      });
+      const replyResume = () => {
+        send(ws, {
+          id,
+          result: { sessionId: params.sessionId ?? sessionId },
+        });
+      };
+      if (scenario === "slow-resume") {
+        setTimeout(replyResume, 500);
+        return;
+      }
+      replyResume();
       if (scenario === "replay") {
         seq += 1;
         send(ws, {
@@ -127,6 +142,20 @@ export async function startFakeRemoteAcpServer(options?: {
     }
     if (method === "session/prompt") {
       lastPromptId = id;
+      if (scenario === "hang-prompt") {
+        seq += 1;
+        send(ws, {
+          method: "session/update",
+          params: {
+            sessionId,
+            seq,
+            sessionUpdate: "agent_message_chunk",
+            content: { type: "text", text: "partial" },
+          },
+        });
+        // Leave prompt Promise hanging until socket close / cancel.
+        return;
+      }
       if (scenario === "permission") {
         seq += 1;
         send(ws, {
@@ -144,17 +173,7 @@ export async function startFakeRemoteAcpServer(options?: {
         });
         return;
       }
-      seq += 1;
-      send(ws, {
-        method: "session/update",
-        params: {
-          sessionId,
-          seq,
-          sessionUpdate: "agent_message_chunk",
-          content: { type: "text", text: "hello" },
-        },
-      });
-      if (scenario === "artifact") {
+      const finishPrompt = () => {
         seq += 1;
         send(ws, {
           method: "session/update",
@@ -162,22 +181,40 @@ export async function startFakeRemoteAcpServer(options?: {
             sessionId,
             seq,
             sessionUpdate: "agent_message_chunk",
-            content: {
-              type: "resource_link",
-              uri: `nodeskclaw://artifact/${randomUUID()}/${randomUUID()}`,
-              name: "out.txt",
-              downloadPath:
-                "/api/v1/remote-experts/sales-expert/acp/runs/r/artifacts/a",
-            },
+            content: { type: "text", text: "hello" },
           },
         });
+        if (scenario === "artifact") {
+          seq += 1;
+          send(ws, {
+            method: "session/update",
+            params: {
+              sessionId,
+              seq,
+              sessionUpdate: "agent_message_chunk",
+              content: {
+                type: "resource_link",
+                uri: `nodeskclaw://artifact/${randomUUID()}/${randomUUID()}`,
+                name: "out.txt",
+                downloadPath:
+                  "/api/v1/remote-experts/sales-expert/acp/runs/r/artifacts/a",
+              },
+            },
+          });
+        }
+        send(ws, {
+          id,
+          result: {
+            stopReason: scenario === "cancel" ? "cancelled" : "end_turn",
+          },
+        });
+      };
+      if (scenario === "slow-prompt") {
+        // Longer than the former 10s RPC timer; prompt must still resolve.
+        setTimeout(finishPrompt, 11_000);
+        return;
       }
-      send(ws, {
-        id,
-        result: {
-          stopReason: scenario === "cancel" ? "cancelled" : "end_turn",
-        },
-      });
+      finishPrompt();
       return;
     }
     if (method === "session/cancel") {

@@ -26,7 +26,7 @@ const outPath = join(ROOT, "test-results", "remote-expert-g7.json");
 const vitestJsonPath = join(ROOT, "test-results", "remote-expert-g7-vitest.json");
 const casesJsonlPath = join(ROOT, "test-results", "remote-expert-g7-cases.jsonl");
 
-const LIVE_IDS = Array.from({ length: 15 }, (_, i) =>
+const LIVE_IDS = Array.from({ length: 16 }, (_, i) =>
   `A-G7-LIVE-${String(i + 1).padStart(3, "0")}`,
 );
 
