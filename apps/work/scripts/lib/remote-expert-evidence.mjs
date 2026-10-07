@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmdirSync,
   rmSync,
@@ -13,7 +14,6 @@ import {
   unlinkSync,
   writeFileSync,
 } from "fs";
-import { tmpdir } from "os";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -180,9 +180,17 @@ export function runInReleaseWorktree({
   runnerRel,
   args = [],
 }) {
-  const worktreeRoot = mkdtempSync(join(tmpdir(), "remote-expert-g6-"));
+  // Keep the worktree on the same drive/path form as the repo. Windows TEMP
+  // 8.3 short paths break Vite's /@fs/ setupFiles resolution.
+  const worktreeParent = join(repoRoot, ".tmp");
+  mkdirSync(worktreeParent, { recursive: true });
+  const worktreeRoot = realpathSync(
+    mkdtempSync(join(worktreeParent, "remote-expert-g6-")),
+  );
   const linkedPaths = [];
   try {
+    // mkdtemp created an empty dir; replace it with a git worktree checkout.
+    rmSync(worktreeRoot, { recursive: true, force: true });
     execSync(`git worktree add --detach "${worktreeRoot}" HEAD`, {
       cwd: repoRoot,
       encoding: "utf8",
