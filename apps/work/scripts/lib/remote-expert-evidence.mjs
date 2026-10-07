@@ -233,7 +233,12 @@ export function runInReleaseWorktree({
     const dstEvidence = join(repoRoot, workPackageRel, "test-results");
     mkdirSync(dstEvidence, { recursive: true });
     if (existsSync(srcEvidence)) {
-      for (const name of ["remote-expert-g6.json", "remote-expert-g7.json"]) {
+      for (const name of [
+        "remote-expert-g6.json",
+        "remote-expert-g7.json",
+        "remote-expert-g7-prerun.json",
+        "claim-authorized.json",
+      ]) {
         const from = join(srcEvidence, name);
         if (existsSync(from)) copyFileSync(from, join(dstEvidence, name));
       }

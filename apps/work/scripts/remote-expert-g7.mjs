@@ -6,7 +6,6 @@ import {
   mkdirSync,
   readFileSync,
   unlinkSync,
-  writeFileSync,
 } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -19,19 +18,38 @@ import {
   toolVersions,
 } from "./lib/remote-expert-evidence.mjs";
 import { evaluateG7Prerequisites } from "./lib/remote-expert-g7-prereq.mjs";
+import {
+  FULL_LIVE_IDS,
+  PRERUN_LIVE_IDS,
+  buildProviderBlock,
+  computeGateTimestamps,
+  readDesktopVersion,
+  resolveConsumerLock,
+} from "./lib/remote-expert-g7-evidence.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPO = join(ROOT, "..", "..");
-const outPath = join(ROOT, "test-results", "remote-expert-g7.json");
-const vitestJsonPath = join(ROOT, "test-results", "remote-expert-g7-vitest.json");
-const casesJsonlPath = join(ROOT, "test-results", "remote-expert-g7-cases.jsonl");
-
-const LIVE_IDS = Array.from({ length: 16 }, (_, i) =>
-  `A-G7-LIVE-${String(i + 1).padStart(3, "0")}`,
-);
-
 const args = process.argv.slice(2);
 const releaseWorktree = args.includes("--release-worktree");
+const prerun = args.includes("--prerun");
+
+const LIVE_IDS = prerun ? PRERUN_LIVE_IDS : FULL_LIVE_IDS;
+const outPath = join(
+  ROOT,
+  "test-results",
+  prerun ? "remote-expert-g7-prerun.json" : "remote-expert-g7.json",
+);
+const vitestJsonPath = join(
+  ROOT,
+  "test-results",
+  prerun ? "remote-expert-g7-prerun-vitest.json" : "remote-expert-g7-vitest.json",
+);
+const casesJsonlPath = join(
+  ROOT,
+  "test-results",
+  prerun ? "remote-expert-g7-prerun-cases.jsonl" : "remote-expert-g7-cases.jsonl",
+);
+const gateName = prerun ? "G7-PRERUN" : "G7";
 
 if (
   releaseWorktree &&
@@ -52,27 +70,34 @@ const prereq = evaluateG7Prerequisites({
   env: process.env,
   dirty: meta.dirty,
 });
+const lock = resolveConsumerLock(REPO);
+const desktopVersion = readDesktopVersion(ROOT);
 
 function writeBlocked(errorCode, reason) {
   const evidence = {
-    gate: "G7",
+    gate: gateName,
     overall: "BLOCKED",
     errorCode,
     reason,
+    productionGate: "unpassed",
+    claimAuthorized: false,
+    passedAt: null,
+    expiresAt: null,
+    desktopVersion,
     consumer: {
       repo: meta.repo,
       branch: meta.branch,
       sha: meta.sha,
       dirty: meta.dirty,
     },
-    provider: {
-      frontendContractVersion: "2.1.0",
-      frontendContractDigest: null,
-      agentRef: process.env.SMC_REMOTE_EXPERT_G7_AGENT_REF ?? null,
-    },
+    provider: buildProviderBlock(lock, process.env.SMC_REMOTE_EXPERT_G7_AGENT_REF),
     topology: {
       backend: null,
       orgIdHash: null,
+      envId: prereq.envId ?? null,
+      k8sContext: prereq.k8sContext ?? null,
+      k8sNamespace: prereq.k8sNamespace ?? null,
+      backendUrlEnv: "SMC_REMOTE_EXPERT_G7_BACKEND_URL",
     },
     cases: Object.fromEntries(LIVE_IDS.map((id) => [id, "BLOCKED"])),
     traceIds: [],
@@ -92,7 +117,7 @@ function writeBlocked(errorCode, reason) {
   }
   atomicWriteJson(outPath, evidence);
   process.stdout.write(
-    `${JSON.stringify({ overall: "BLOCKED", errorCode, outPath, reason }, null, 2)}\n`,
+    `${JSON.stringify({ overall: "BLOCKED", errorCode, outPath, reason, gate: gateName }, null, 2)}\n`,
   );
   process.exit(1);
 }
@@ -115,7 +140,7 @@ try {
   /* ignore */
 }
 
-const runId = `g7-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const runId = `${prerun ? "g7-prerun" : "g7"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const vitestLocal = join(
   ROOT,
   "node_modules",
@@ -128,28 +153,21 @@ const vitestCmd = existsSync(vitestLocal)
   : existsSync(vitestMjs)
     ? process.execPath
     : "npx";
+const baseVitestArgs = [
+  "run",
+  "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
+  "--reporter=json",
+  `--outputFile=${vitestJsonPath}`,
+];
+if (prerun) {
+  baseVitestArgs.push("-t", "A-G7-LIVE-00[123]");
+}
 const vitestArgs = existsSync(vitestLocal)
-  ? [
-      "run",
-      "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
-      "--reporter=json",
-      `--outputFile=${vitestJsonPath}`,
-    ]
+  ? baseVitestArgs
   : existsSync(vitestMjs)
-    ? [
-        vitestMjs,
-        "run",
-        "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
-        "--reporter=json",
-        `--outputFile=${vitestJsonPath}`,
-      ]
-    : [
-        "vitest",
-        "run",
-        "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
-        "--reporter=json",
-        `--outputFile=${vitestJsonPath}`,
-      ];
+    ? [vitestMjs, ...baseVitestArgs]
+    : ["vitest", ...baseVitestArgs];
+
 const vitest = spawnSync(vitestCmd, vitestArgs, {
   cwd: ROOT,
   encoding: "utf8",
@@ -229,24 +247,36 @@ try {
   backendOrigin = "redacted-origin-only";
 }
 
+// prerun must never set productionGate=passed (L1 cannot authorize)
+const gateFields = prerun
+  ? {
+      productionGate: "unpassed",
+      claimAuthorized: false,
+      passedAt: null,
+      expiresAt: null,
+    }
+  : computeGateTimestamps(overall);
+
 const evidence = {
-  gate: "G7",
+  gate: gateName,
   overall,
   errorCode,
+  ...gateFields,
+  desktopVersion,
   consumer: {
     repo: meta.repo,
     branch: meta.branch,
     sha: meta.sha,
     dirty: meta.dirty,
   },
-  provider: {
-    frontendContractVersion: "2.1.0",
-    frontendContractDigest: null,
-    agentRef: prereq.agentRef,
-  },
+  provider: buildProviderBlock(lock, prereq.agentRef),
   topology: {
     backend: backendOrigin,
     orgIdHash,
+    envId: prereq.envId ?? null,
+    k8sContext: prereq.k8sContext ?? null,
+    k8sNamespace: prereq.k8sNamespace ?? null,
+    backendUrlEnv: "SMC_REMOTE_EXPERT_G7_BACKEND_URL",
   },
   cases,
   byId,
@@ -277,6 +307,14 @@ if (evidenceContainsSecrets(serialized, [token])) {
 
 atomicWriteJson(outPath, evidence);
 process.stdout.write(
-  `${JSON.stringify({ overall, errorCode, outPath, runId }, null, 2)}\n`,
+  `${JSON.stringify({
+    overall,
+    errorCode,
+    outPath,
+    runId,
+    gate: gateName,
+    productionGate: evidence.productionGate,
+    claimAuthorized: evidence.claimAuthorized,
+  }, null, 2)}\n`,
 );
 if (overall !== "PASS") process.exit(1);

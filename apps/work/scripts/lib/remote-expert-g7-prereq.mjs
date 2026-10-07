@@ -8,6 +8,11 @@ export function evaluateG7Prerequisites({ env, dirty }) {
   const designated = String(
     env.SMC_REMOTE_EXPERT_G7_DESIGNATED_TEST_EXPERT ?? "",
   ).trim();
+  const envId = String(env.SMC_REMOTE_EXPERT_G7_ENV_ID ?? "").trim() || null;
+  const k8sContext =
+    String(env.SMC_REMOTE_EXPERT_G7_K8S_CONTEXT ?? "").trim() || null;
+  const k8sNamespace =
+    String(env.SMC_REMOTE_EXPERT_G7_K8S_NAMESPACE ?? "").trim() || null;
 
   if (
     !enabled ||
@@ -22,6 +27,9 @@ export function evaluateG7Prerequisites({ env, dirty }) {
       overall: "BLOCKED",
       errorCode: "G7_ENV_INCOMPLETE",
       ready: false,
+      envId,
+      k8sContext,
+      k8sNamespace,
     };
   }
   if (dirty) {
@@ -29,6 +37,9 @@ export function evaluateG7Prerequisites({ env, dirty }) {
       overall: "BLOCKED",
       errorCode: "G7_CONSUMER_DIRTY",
       ready: false,
+      envId,
+      k8sContext,
+      k8sNamespace,
     };
   }
   if (designated !== agentRef) {
@@ -36,6 +47,9 @@ export function evaluateG7Prerequisites({ env, dirty }) {
       overall: "BLOCKED",
       errorCode: "G7_EXPERT_NOT_DESIGNATED",
       ready: false,
+      envId,
+      k8sContext,
+      k8sNamespace,
     };
   }
   return {
@@ -48,6 +62,9 @@ export function evaluateG7Prerequisites({ env, dirty }) {
     userId,
     agentRef,
     designated,
+    envId,
+    k8sContext,
+    k8sNamespace,
     permissionPrompt: String(
       env.SMC_REMOTE_EXPERT_G7_PERMISSION_PROMPT ?? "",
     ).trim(),
