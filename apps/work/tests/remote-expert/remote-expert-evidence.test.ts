@@ -80,6 +80,11 @@ describe("remote-expert evidence helpers", () => {
     expect(
       evidenceContainsSecrets(JSON.stringify({ overall: "PASS", commitSha: "a" })),
     ).toBe(false);
+    expect(
+      evidenceContainsSecrets(
+        JSON.stringify({ title: "[A-OBS-001] redacts bearer tokens" }),
+      ),
+    ).toBe(false);
   });
 
   it("parses multi-segment acceptance ids", () => {

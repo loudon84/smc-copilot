@@ -19,8 +19,9 @@ import { fileURLToPath } from "url";
 
 export const ACCEPTANCE_ID_RE = /\[(A-(?:[A-Z0-9]+-)+\d{3})\]/g;
 
+// Match credential material, not English phrases like "bearer tokens" in test titles.
 export const SECRET_RE =
-  /(?:authorization\s*:\s*bearer\s+\S+|Bearer\s+\S+|access_token|refresh_token|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|execution_capability|internal_token)/gi;
+  /(?:authorization\s*:\s*bearer\s+[A-Za-z0-9._\-+/=]{8,}|Bearer\s+(?!tokens\b)[A-Za-z0-9._\-+/=]{8,}|(?:access_token|refresh_token)\s*[:=]\s*\S+|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|"execution_capability"\s*:|"internal_token"\s*:)/gi;
 
 export function gitMeta(cwd) {
   try {
