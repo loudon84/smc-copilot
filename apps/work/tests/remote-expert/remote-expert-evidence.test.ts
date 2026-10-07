@@ -98,6 +98,12 @@ describe("remote-expert evidence helpers", () => {
     expect(byId["A-NEG-UI-ENTRY-001"].status).toBe("PASS");
   });
 
+  it("parses EXT-G5 4-digit acceptance ids without truncating", () => {
+    const title = "[A-SMC-2101] [A-MIG-2102] [A-SMC-001]";
+    const ids = [...title.matchAll(ACCEPTANCE_ID_RE)].map((m) => m[1]);
+    expect(ids).toEqual(["A-SMC-2101", "A-MIG-2102", "A-SMC-001"]);
+  });
+
   it("verifyEvidenceSha detects stale evidence", () => {
     const dir = mkdtempSync(join(tmpdir(), "g6-evid-"));
     const path = join(dir, "remote-expert-g6.json");

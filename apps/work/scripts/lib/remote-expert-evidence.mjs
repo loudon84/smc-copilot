@@ -17,7 +17,8 @@ import {
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-export const ACCEPTANCE_ID_RE = /\[(A-(?:[A-Z0-9]+-)+\d{3})\]/g;
+/** EXT-G5 uses 4-digit IDs (A-SMC-2101); legacy stays 3-digit (A-SMC-001). */
+export const ACCEPTANCE_ID_RE = /\[(A-(?:[A-Z0-9]+-)+\d{3,4})\]/g;
 
 // Match credential material, not English phrases like "bearer tokens" in test titles.
 export const SECRET_RE =
