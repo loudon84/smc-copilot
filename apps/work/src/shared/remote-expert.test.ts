@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   FRONTEND_BUNDLE_DIGEST,
   FRONTEND_CONTRACT_DIGEST,
+  listDiscoveryMismatches,
+  pinnedDiscovery,
   REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION,
   sanitizeRemoteExpertDto,
   RemoteExpertError,
@@ -27,6 +29,21 @@ describe("shared remote-expert contract", () => {
     expect(REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION).toBe(lock.contractVersion);
     expect(FRONTEND_CONTRACT_DIGEST).toBe(lock.frontendContractDigest);
     expect(FRONTEND_CONTRACT_DIGEST).not.toBe(FRONTEND_BUNDLE_DIGEST);
+  });
+
+  it("[A-NEG-CONTRACT-001] lists only mismatched discovery fields", () => {
+    const discovery = {
+      ...pinnedDiscovery(),
+      frontendContractDigest:
+        "b0d4018c2b064224e45ff81024dabf9f21fff77dc85dffd4a8fa018f5362faa2",
+    };
+    expect(listDiscoveryMismatches(discovery)).toEqual([
+      {
+        field: "frontendContractDigest",
+        expected: FRONTEND_CONTRACT_DIGEST,
+        observed: discovery.frontendContractDigest,
+      },
+    ]);
   });
 
   it("[A-NEG-SEC-001] [A-NEG-OBS-001] sanitizer rejects secret and legacy execution fields", () => {

@@ -279,12 +279,20 @@ export type RemoteExpertSemanticEvent = {
     }
 );
 
+export interface RemoteExpertDiscoveryMismatch {
+  field: keyof RemoteExpertDiscovery;
+  expected: string | number;
+  observed: string | number;
+}
+
 export interface RemoteExpertAvailability {
   enabled: boolean;
   gateState: ContractGateState;
   packed: boolean;
   reason?: string;
   errorCode?: string;
+  /** Present when gate is INCOMPATIBLE; digests/versions are public pins. */
+  mismatches?: RemoteExpertDiscoveryMismatch[];
 }
 
 export const REMOTE_EXPERT_IPC_CHANNELS = {
@@ -374,18 +382,53 @@ export function isRemoteExpertCallable(item: RemoteExpertCatalogItem): boolean {
   );
 }
 
+export function pinnedDiscovery(): RemoteExpertDiscovery {
+  return {
+    frontendContractVersion: REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION,
+    frontendContractDigest: FRONTEND_CONTRACT_DIGEST,
+    catalogContractVersion: CATALOG_CONTRACT_VERSION,
+    catalogContractDigest: CATALOG_CONTRACT_DIGEST,
+    remoteAcpContractVersion: REMOTE_ACP_CONTRACT_VERSION,
+    remoteAcpContractDigest: REMOTE_ACP_CONTRACT_DIGEST,
+    acpProtocolVersion: ACP_PROTOCOL_VERSION,
+    transportProfile: TRANSPORT_PROFILE,
+  };
+}
+
+export function listDiscoveryMismatches(
+  discovery: RemoteExpertDiscovery,
+): RemoteExpertDiscoveryMismatch[] {
+  const pinned = pinnedDiscovery();
+  const fields = Object.keys(pinned) as Array<keyof RemoteExpertDiscovery>;
+  const mismatches: RemoteExpertDiscoveryMismatch[] = [];
+  for (const field of fields) {
+    if (discovery[field] !== pinned[field]) {
+      mismatches.push({
+        field,
+        expected: pinned[field],
+        observed: discovery[field],
+      });
+    }
+  }
+  return mismatches;
+}
+
+export function formatDiscoveryMismatchReason(
+  mismatches: RemoteExpertDiscoveryMismatch[],
+): string {
+  if (mismatches.length === 0) {
+    return "provider discovery does not match pinned consumer lock";
+  }
+  return mismatches
+    .map(
+      (m) =>
+        `${m.field}: expected ${String(m.expected)}, got ${String(m.observed)}`,
+    )
+    .join("; ");
+}
+
 export function discoveryExactMatch(
   discovery: RemoteExpertDiscovery,
 ): boolean {
-  return (
-    discovery.frontendContractVersion ===
-      REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION &&
-    discovery.frontendContractDigest === FRONTEND_CONTRACT_DIGEST &&
-    discovery.catalogContractVersion === CATALOG_CONTRACT_VERSION &&
-    discovery.catalogContractDigest === CATALOG_CONTRACT_DIGEST &&
-    discovery.remoteAcpContractVersion === REMOTE_ACP_CONTRACT_VERSION &&
-    discovery.remoteAcpContractDigest === REMOTE_ACP_CONTRACT_DIGEST &&
-    discovery.acpProtocolVersion === ACP_PROTOCOL_VERSION &&
-    discovery.transportProfile === TRANSPORT_PROFILE
-  );
+  return listDiscoveryMismatches(discovery).length === 0;
 }

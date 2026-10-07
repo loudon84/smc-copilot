@@ -1,10 +1,12 @@
 import {
-  discoveryExactMatch,
+  formatDiscoveryMismatchReason,
+  listDiscoveryMismatches,
   RemoteExpertError,
   type ContractGateState,
   type RemoteExpertDiscovery,
 } from "../../shared/remote-expert";
 import { resolveBackendBaseUrl } from "../auth/authorized-backend-transport";
+import { emitRemoteExpertLog } from "./remote-expert-log";
 
 const DISCOVERY_PATH = "/api/v1/remote-experts/contracts";
 
@@ -90,14 +92,32 @@ export async function ensureCompatibleContract(options?: {
   }
   const discovery = parseDiscovery(await res.json());
   cached = { state: "DISCOVERED", discovery };
-  if (!discoveryExactMatch(discovery)) {
+  const mismatches = listDiscoveryMismatches(discovery);
+  if (mismatches.length > 0) {
     cached = { state: "INCOMPATIBLE", discovery };
+    const reason = formatDiscoveryMismatchReason(mismatches);
+    emitRemoteExpertLog({
+      operation_id: "contract-gate",
+      trace_id: "contract-gate",
+      stage: "DISCOVER",
+      status: "FAIL",
+      error_code: "REMOTE_EXPERT_PROVIDER_INCOMPATIBLE",
+      mismatch_fields: mismatches.map((m) => m.field),
+      mismatch_detail: mismatches,
+    });
     throw new RemoteExpertError(
       "REMOTE_EXPERT_PROVIDER_INCOMPATIBLE",
-      "provider discovery does not match pinned consumer lock",
+      reason,
+      { details: { mismatches } },
     );
   }
   cached = { state: "COMPATIBLE", discovery };
+  emitRemoteExpertLog({
+    operation_id: "contract-gate",
+    trace_id: "contract-gate",
+    stage: "DISCOVER",
+    status: "PASS",
+  });
   return discovery;
 }
 

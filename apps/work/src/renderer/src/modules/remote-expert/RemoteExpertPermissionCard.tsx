@@ -40,14 +40,14 @@ export function RemoteExpertPermissionCard(props: {
     <div
       className="remote-expert-permission"
       role="dialog"
-      aria-label={t("remoteExpert.label")}
+      aria-label={t("chat.remoteExpert.label")}
     >
-      <div>{props.title || t("remoteExpert.label")}</div>
+      <div>{props.title || t("chat.remoteExpert.label")}</div>
       <button type="button" onClick={() => decide("allow_once")}>
-        {t("remoteExpert.allowOnce")}
+        {t("chat.remoteExpert.allowOnce")}
       </button>
       <button type="button" onClick={() => decide("reject_once")}>
-        {t("remoteExpert.rejectOnce")}
+        {t("chat.remoteExpert.rejectOnce")}
       </button>
     </div>
   );

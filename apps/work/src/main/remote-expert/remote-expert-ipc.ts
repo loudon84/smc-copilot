@@ -56,13 +56,19 @@ export function registerRemoteExpertIpc(options?: {
       });
     } catch (err) {
       const mapped = sanitizeError(err);
-      return {
+      const mismatches =
+        err instanceof RemoteExpertError &&
+        Array.isArray(err.details?.mismatches)
+          ? err.details.mismatches
+          : undefined;
+      return sanitizeRemoteExpertDto({
         enabled: false,
         gateState: getContractGateState(),
         packed: isPackagedApp(),
         reason: mapped.error,
         errorCode: mapped.code,
-      };
+        ...(mismatches ? { mismatches } : {}),
+      });
     }
   });
 

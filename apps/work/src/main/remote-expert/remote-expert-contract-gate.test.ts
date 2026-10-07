@@ -50,7 +50,18 @@ describe("remote expert contract gate", () => {
     ) as unknown as typeof fetch;
     await expect(
       ensureCompatibleContract({ fetchImpl, baseUrl: "http://127.0.0.1:9" }),
-    ).rejects.toMatchObject({ code: "REMOTE_EXPERT_PROVIDER_INCOMPATIBLE" });
+    ).rejects.toMatchObject({
+      code: "REMOTE_EXPERT_PROVIDER_INCOMPATIBLE",
+      message: expect.stringContaining("frontendContractDigest"),
+      details: {
+        mismatches: [
+          expect.objectContaining({
+            field: "frontendContractDigest",
+            observed: tampered.frontendContractDigest,
+          }),
+        ],
+      },
+    });
     expect(getContractGateState()).toBe("INCOMPATIBLE");
   });
 

@@ -28,20 +28,20 @@ export function RemoteExpertSelector({
 
   let title: string | undefined;
   if (availabilityStatus === "checking") {
-    title = t("remoteExpert.checking");
+    title = t("chat.remoteExpert.checking");
   } else if (availabilityStatus === "incompatible") {
-    title = t("remoteExpert.incompatible");
+    title = t("chat.remoteExpert.incompatible");
   } else if (availabilityStatus === "unavailable") {
-    title = t("remoteExpert.unavailableEntry");
+    title = t("chat.remoteExpert.unavailableEntry");
   } else if (catalogStatus === "empty") {
-    title = t("remoteExpert.noExperts");
+    title = t("chat.remoteExpert.noExperts");
   } else if (catalogStatus === "error") {
-    title = t("remoteExpert.catalogUnavailable");
+    title = t("chat.remoteExpert.catalogUnavailable");
   }
 
   return (
     <label className="remote-expert-selector" title={title}>
-      <span className="sr-only">{t("remoteExpert.label")}</span>
+      <span className="sr-only">{t("chat.remoteExpert.label")}</span>
       <select
         disabled={blocked}
         value={selectedAgentRef ?? ""}
@@ -50,7 +50,7 @@ export function RemoteExpertSelector({
           onChange(value ? value : null);
         }}
       >
-        <option value="">{t("remoteExpert.localChat")}</option>
+        <option value="">{t("chat.remoteExpert.localChat")}</option>
         {items.map((item) => (
           <option
             key={item.agentRef}
@@ -59,7 +59,7 @@ export function RemoteExpertSelector({
           >
             {item.displayName}
             {item.status === "unavailable"
-              ? ` (${t("remoteExpert.unavailable")})`
+              ? ` (${t("chat.remoteExpert.unavailable")})`
               : ""}
           </option>
         ))}

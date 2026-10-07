@@ -41,6 +41,13 @@ function logUiOperation(record: {
   stage: RemoteExpertObsStage;
   status: "STARTED" | "PASS" | "FAIL";
   errorCode?: string;
+  mismatchFields?: string[];
+  mismatchDetail?: Array<{
+    field: string;
+    expected: string | number;
+    observed: string | number;
+  }>;
+  reason?: string;
 }): void {
   console.info(
     "[remote-expert-ui]",
@@ -49,6 +56,9 @@ function logUiOperation(record: {
       stage: record.stage,
       status: record.status,
       error_code: record.errorCode,
+      mismatch_fields: record.mismatchFields,
+      mismatch_detail: record.mismatchDetail,
+      reason: record.reason,
       timestamp: new Date().toISOString(),
     }),
   );
@@ -260,6 +270,9 @@ export function useRemoteExpertEntryState(): RemoteExpertEntryState & {
         stage: "DISCOVER",
         status: mapped.status === "compatible" ? "PASS" : "FAIL",
         errorCode: mapped.errorCode,
+        mismatchFields: availability.mismatches?.map((m) => m.field),
+        mismatchDetail: availability.mismatches,
+        reason: availability.reason,
       });
       setState((prev) => ({
         ...prev,

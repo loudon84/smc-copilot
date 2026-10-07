@@ -22,6 +22,13 @@ export interface RemoteExpertLogRecord {
   request_id?: string;
   last_seq?: number;
   error_code?: string;
+  /** Public contract pin fields that failed exact-match. */
+  mismatch_fields?: string[];
+  mismatch_detail?: Array<{
+    field: string;
+    expected: string | number;
+    observed: string | number;
+  }>;
 }
 
 const records: RemoteExpertLogRecord[] = [];

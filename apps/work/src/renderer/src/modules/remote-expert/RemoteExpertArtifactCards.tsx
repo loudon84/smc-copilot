@@ -8,7 +8,7 @@ export function RemoteExpertArtifactCards(props: {
   if (props.files.length === 0) return null;
   return (
     <div className="remote-expert-artifacts">
-      <div>{t("remoteExpert.label")}</div>
+      <div>{t("chat.remoteExpert.label")}</div>
       <ul>
         {props.files.map((file) => (
           <li key={file.id}>

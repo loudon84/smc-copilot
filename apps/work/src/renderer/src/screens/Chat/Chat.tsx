@@ -2204,6 +2204,7 @@ function Chat({
                     items={remoteExpertEntry.items}
                     availabilityStatus={remoteExpertEntry.availabilityStatus}
                     catalogStatus={remoteExpertEntry.catalogStatus}
+                    availability={remoteExpertEntry.availability}
                     errorCode={
                       remoteExpertEntry.catalogErrorCode ||
                       remoteExpertEntry.availability?.errorCode ||
