@@ -185,8 +185,10 @@ export function runInReleaseWorktree({
   // 8.3 short paths break Vite's /@fs/ setupFiles resolution.
   const worktreeParent = join(repoRoot, ".tmp");
   mkdirSync(worktreeParent, { recursive: true });
+  // Avoid "remote-expert" in the directory name — source scanners that match
+  // path substrings would otherwise treat every file under the worktree as in-scope.
   const worktreeRoot = realpathSync(
-    mkdtempSync(join(worktreeParent, "remote-expert-g6-")),
+    mkdtempSync(join(worktreeParent, "re-g6-")),
   );
   const linkedPaths = [];
   try {

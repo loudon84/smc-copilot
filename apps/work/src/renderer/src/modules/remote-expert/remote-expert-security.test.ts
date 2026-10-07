@@ -27,7 +27,12 @@ describe("Remote Expert security source scan", () => {
     const files = roots.flatMap((root) => walk(root));
     const hits: string[] = [];
     for (const file of files) {
-      if (!file.includes("remote-expert") && !file.includes("remote-expert-api")) {
+      // Match path segments only — a worktree dir like remote-expert-g6-* must not match.
+      const norm = file.replace(/\\/g, "/");
+      if (
+        !/\/remote-expert(?:\/|$)/.test(norm) &&
+        !norm.includes("remote-expert-api")
+      ) {
         continue;
       }
       const text = readFileSync(file, "utf8");
