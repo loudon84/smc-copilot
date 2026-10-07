@@ -116,26 +116,50 @@ try {
 }
 
 const runId = `g7-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const vitest = spawnSync(
-  "npx",
-  [
-    "vitest",
-    "run",
-    "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
-    "--reporter=json",
-    `--outputFile=${vitestJsonPath}`,
-  ],
-  {
-    cwd: ROOT,
-    encoding: "utf8",
-    shell: process.platform === "win32",
-    env: {
-      ...process.env,
-      SMC_REMOTE_EXPERT_G7_RUN_ID: runId,
-      SMC_REMOTE_EXPERT_G7_CASES_JSONL: casesJsonlPath,
-    },
-  },
+const vitestLocal = join(
+  ROOT,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "vitest.cmd" : "vitest",
 );
+const vitestMjs = join(ROOT, "node_modules", "vitest", "vitest.mjs");
+const vitestCmd = existsSync(vitestLocal)
+  ? vitestLocal
+  : existsSync(vitestMjs)
+    ? process.execPath
+    : "npx";
+const vitestArgs = existsSync(vitestLocal)
+  ? [
+      "run",
+      "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
+      "--reporter=json",
+      `--outputFile=${vitestJsonPath}`,
+    ]
+  : existsSync(vitestMjs)
+    ? [
+        vitestMjs,
+        "run",
+        "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
+        "--reporter=json",
+        `--outputFile=${vitestJsonPath}`,
+      ]
+    : [
+        "vitest",
+        "run",
+        "tests/remote-expert/live/g7-golden-consumer.live.test.ts",
+        "--reporter=json",
+        `--outputFile=${vitestJsonPath}`,
+      ];
+const vitest = spawnSync(vitestCmd, vitestArgs, {
+  cwd: ROOT,
+  encoding: "utf8",
+  shell: process.platform === "win32",
+  env: {
+    ...process.env,
+    SMC_REMOTE_EXPERT_G7_RUN_ID: runId,
+    SMC_REMOTE_EXPERT_G7_CASES_JSONL: casesJsonlPath,
+  },
+});
 
 let report = { testResults: [] };
 try {

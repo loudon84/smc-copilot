@@ -2,12 +2,15 @@ import { execSync, spawnSync } from "child_process";
 import {
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "fs";
 import { tmpdir } from "os";
@@ -151,6 +154,26 @@ export function verifyEvidenceSha(evidencePath, expectedSha) {
   return { ok: true, sha };
 }
 
+/**
+ * Remove a junction/symlink without deleting the link target contents.
+ * Must run before recursive worktree cleanup on Windows.
+ */
+export function unlinkWorktreeLink(linkPath) {
+  try {
+    if (!existsSync(linkPath)) return false;
+    const st = lstatSync(linkPath);
+    if (st.isSymbolicLink()) {
+      unlinkSync(linkPath);
+      return true;
+    }
+    // Directory junction: rmdir removes the reparse point only.
+    rmdirSync(linkPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function runInReleaseWorktree({
   repoRoot,
   workPackageRel = "apps/work",
@@ -158,6 +181,7 @@ export function runInReleaseWorktree({
   args = [],
 }) {
   const worktreeRoot = mkdtempSync(join(tmpdir(), "remote-expert-g6-"));
+  const linkedPaths = [];
   try {
     execSync(`git worktree add --detach "${worktreeRoot}" HEAD`, {
       cwd: repoRoot,
@@ -177,6 +201,7 @@ export function runInReleaseWorktree({
           );
         }
       }
+      linkedPaths.push(to);
     };
     linkNodeModules(
       join(repoRoot, "node_modules"),
@@ -208,6 +233,12 @@ export function runInReleaseWorktree({
       worktreeRoot,
     };
   } finally {
+    for (const linkPath of linkedPaths) {
+      unlinkWorktreeLink(linkPath);
+    }
+    // Also clear known link locations if linkNodeModules failed mid-way.
+    unlinkWorktreeLink(join(worktreeRoot, "node_modules"));
+    unlinkWorktreeLink(join(worktreeRoot, workPackageRel, "node_modules"));
     try {
       execSync(`git worktree remove --force "${worktreeRoot}"`, {
         cwd: repoRoot,

@@ -136,8 +136,25 @@ function run(cmd, cmdArgs) {
   return {
     status: result.status ?? 1,
     stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
+    stderr: (result.stderr ?? "") + (result.error ? String(result.error) : ""),
   };
+}
+
+function resolveNodeTool(binName, mjsParts) {
+  const localCmd = join(
+    ROOT,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? `${binName}.cmd` : binName,
+  );
+  if (existsSync(localCmd)) {
+    return { cmd: localCmd, prefix: [] };
+  }
+  const mjs = join(ROOT, ...mjsParts);
+  if (existsSync(mjs)) {
+    return { cmd: process.execPath, prefix: [mjs] };
+  }
+  return { cmd: binName, prefix: [] };
 }
 
 mkdirSync(dirname(vitestJsonPath), { recursive: true });
@@ -145,8 +162,9 @@ const meta = gitMeta(REPO);
 const versions = toolVersions(ROOT);
 
 const typecheck = run("npm", ["run", "typecheck"]);
-const vitest = run("npx", [
-  "vitest",
+const vitestTool = resolveNodeTool("vitest", ["node_modules", "vitest", "vitest.mjs"]);
+const vitest = run(vitestTool.cmd, [
+  ...vitestTool.prefix,
   "run",
   "src/main/remote-expert",
   "src/renderer/src/modules/remote-expert",
@@ -164,10 +182,15 @@ const vitest = run("npx", [
   "--reporter=json",
   `--outputFile=${vitestJsonPath}`,
 ]);
-const lat = run(
-  process.platform === "win32" ? "node_modules\\.bin\\lat.cmd" : "npx",
-  process.platform === "win32" ? ["check"] : ["lat", "check"],
+const latLocal = join(
+  ROOT,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "lat.cmd" : "lat",
 );
+const lat = existsSync(latLocal)
+  ? run(latLocal, ["check"])
+  : run(process.platform === "win32" ? "lat.cmd" : "npx", process.platform === "win32" ? ["check"] : ["lat", "check"]);
 
 let report = { testResults: [] };
 try {

@@ -4,9 +4,17 @@ import {
   evaluateG6,
   evidenceContainsSecrets,
   mapAcceptanceById,
+  unlinkWorktreeLink,
   verifyEvidenceSha,
 } from "../../scripts/lib/remote-expert-evidence.mjs";
-import { writeFileSync, unlinkSync, mkdtempSync } from "fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
@@ -96,6 +104,19 @@ describe("remote-expert evidence helpers", () => {
     expect(verifyEvidenceSha(path, "bbb").ok).toBe(false);
     expect(verifyEvidenceSha(path, "aaa").ok).toBe(true);
     unlinkSync(path);
+  });
+
+  it("unlinking worktree junction keeps target contents", () => {
+    const root = mkdtempSync(join(tmpdir(), "g6-junc-"));
+    const target = join(root, "target");
+    const link = join(root, "link");
+    mkdirSync(target);
+    const marker = join(target, "keep.txt");
+    writeFileSync(marker, "safe", "utf8");
+    symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+    expect(unlinkWorktreeLink(link)).toBe(true);
+    expect(existsSync(link)).toBe(false);
+    expect(existsSync(marker)).toBe(true);
   });
 
   it("[A-NEG-G7-RUNNER-001] missing env blocks G7", () => {
