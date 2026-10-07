@@ -377,7 +377,7 @@ describe("Chat remote-expert entry (real components)", () => {
     render(<Chat runId="run-2" executionMode="local-chat" />);
     await waitFor(() => expect(getAvailability).toHaveBeenCalled());
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.unavailableEntry")).toBeTruthy(),
+      expect(screen.getByText("chat.remoteExpert.unavailableEntry")).toBeTruthy(),
     );
     expectRemoteExpertEntryVisible();
     expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
@@ -410,7 +410,7 @@ describe("Chat remote-expert entry (real components)", () => {
     });
     render(<Chat runId="run-3" executionMode="local-chat" />);
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.incompatible")).toBeTruthy(),
+      expect(screen.getByText("chat.remoteExpert.incompatible")).toBeTruthy(),
     );
     expect(listCatalog).toHaveBeenCalledTimes(0);
   });
@@ -432,7 +432,7 @@ describe("Chat remote-expert entry (real components)", () => {
     });
     render(<Chat runId="run-5" executionMode="local-chat" />);
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.noExperts")).toBeTruthy(),
+      expect(screen.getByText("chat.remoteExpert.noExperts")).toBeTruthy(),
     );
   });
 
@@ -450,10 +450,10 @@ describe("Chat remote-expert entry (real components)", () => {
     });
     render(<Chat runId="run-6" executionMode="local-chat" />);
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.unavailableEntry")).toBeTruthy(),
+      expect(screen.getByText("chat.remoteExpert.unavailableEntry")).toBeTruthy(),
     );
     expect(listCatalog).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "remoteExpert.retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "chat.remoteExpert.retry" }));
     await waitFor(() => expect(listCatalog).toHaveBeenCalled());
     expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
       false,
@@ -484,10 +484,10 @@ describe("Chat remote-expert entry (real components)", () => {
     render(<Chat runId="run-7" executionMode="local-chat" />);
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "remoteExpert.retry" }),
+        screen.getByRole("button", { name: "chat.remoteExpert.retry" }),
       ).toBeTruthy(),
     );
-    fireEvent.click(screen.getByRole("button", { name: "remoteExpert.retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "chat.remoteExpert.retry" }));
     await waitFor(() => expect(getAvailability).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listCatalog).toHaveBeenCalled());
     slow.resolve({
@@ -497,7 +497,7 @@ describe("Chat remote-expert entry (real components)", () => {
       errorCode: "REMOTE_EXPERT_PROVIDER_INCOMPATIBLE",
     });
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByText("remoteExpert.incompatible")).toBeNull();
+    expect(screen.queryByText("chat.remoteExpert.incompatible")).toBeNull();
     expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
       false,
     );
@@ -557,7 +557,7 @@ describe("Chat remote-expert entry (real components)", () => {
     fireEvent.click(screen.getByTestId("send-remote"));
     expect(handleSend).not.toHaveBeenCalled();
     expect(remoteSubmit).not.toHaveBeenCalled();
-    expect(toastError).toHaveBeenCalledWith("remoteExpert.gateUnavailable");
+    expect(toastError).toHaveBeenCalledWith("chat.remoteExpert.gateUnavailable");
   });
 
   it("[A-NEG-UI-SWITCH-002] durable session agent_ref wins over scratch", async () => {
