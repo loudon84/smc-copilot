@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { mapAcpSessionUpdate } from "../../src/main/remote-expert/acp-event-mapper";
 
+const FORBIDDEN = [
+  "runtime_session_id",
+  "runtime_run_id",
+  "executionCapability",
+  "access_token",
+  "refresh_token",
+];
+
+function assertNoForbidden(value: unknown): void {
+  const raw = JSON.stringify(value);
+  for (const key of FORBIDDEN) {
+    expect(raw.includes(key)).toBe(false);
+  }
+}
+
 describe("acp-event-mapper", () => {
   it("[A-TL-MAPPER-001] maps top-level and nested sessionUpdate shapes", () => {
     const topLevel = mapAcpSessionUpdate({
@@ -46,6 +61,10 @@ describe("acp-event-mapper", () => {
         toolCallId: "tc-1",
         toolName: "Search",
         title: "Search",
+        status: "in_progress",
+        rawInput: undefined,
+        redacted: undefined,
+        truncated: undefined,
       },
     ]);
 
@@ -65,7 +84,13 @@ describe("acp-event-mapper", () => {
         type: "tool.result",
         turnId: "t1",
         toolCallId: "tc-1",
+        status: "completed",
         content: "done",
+        structuredContent: undefined,
+        errorCode: undefined,
+        errorMessage: undefined,
+        redacted: undefined,
+        truncated: undefined,
       },
     ]);
 
@@ -75,5 +100,91 @@ describe("acp-event-mapper", () => {
       params: { update: { sessionUpdate: "future_kind_xyz" } },
     });
     expect(unknown).toEqual([]);
+  });
+
+  it("[A-SMC-001] maps rich tool.call / tool.result / failed / redacted fields", () => {
+    const call = mapAcpSessionUpdate({
+      turnId: "t-rich",
+      sessionId: "s1",
+      params: {
+        sessionUpdate: "tool_call",
+        toolCallId: "tc-rich",
+        toolName: "search_files",
+        title: "Search Files",
+        status: "in_progress",
+        rawInput: { query: "README", path: "/docs" },
+        redacted: false,
+        truncated: false,
+      },
+    });
+    expect(call).toEqual([
+      {
+        type: "tool.call",
+        turnId: "t-rich",
+        toolCallId: "tc-rich",
+        toolName: "search_files",
+        title: "Search Files",
+        status: "in_progress",
+        rawInput: { query: "README", path: "/docs" },
+        redacted: false,
+        truncated: false,
+      },
+    ]);
+    assertNoForbidden(call);
+
+    const result = mapAcpSessionUpdate({
+      turnId: "t-rich",
+      sessionId: "s1",
+      params: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "tc-rich",
+        status: "completed",
+        content: "found 2 files",
+        structuredContent: { files: ["a.md", "b.md"] },
+        truncated: true,
+      },
+    });
+    expect(result).toEqual([
+      {
+        type: "tool.result",
+        turnId: "t-rich",
+        toolCallId: "tc-rich",
+        status: "completed",
+        content: "found 2 files",
+        structuredContent: { files: ["a.md", "b.md"] },
+        errorCode: undefined,
+        errorMessage: undefined,
+        redacted: undefined,
+        truncated: true,
+      },
+    ]);
+    assertNoForbidden(result);
+
+    const failed = mapAcpSessionUpdate({
+      turnId: "t-rich",
+      sessionId: "s1",
+      params: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "tc-fail",
+        status: "failed",
+        error: { code: "TOOL_DENIED", message: "permission denied" },
+        redacted: true,
+      },
+    });
+    expect(failed).toEqual([
+      {
+        type: "tool.result",
+        turnId: "t-rich",
+        toolCallId: "tc-fail",
+        status: "failed",
+        content: undefined,
+        structuredContent: undefined,
+        errorCode: "TOOL_DENIED",
+        errorMessage: "permission denied",
+        redacted: true,
+        truncated: undefined,
+      },
+    ]);
+    assertNoForbidden(failed);
   });
 });

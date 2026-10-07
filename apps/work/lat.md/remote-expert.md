@@ -40,9 +40,15 @@ Closing a Remote Expert Chat tab best-effort `session/cancel` then `session/clos
 
 `session/prompt` has no RPC timer; long turns follow the socket lifecycle.
 
-Only socket close, `session/cancel`, or a Provider error frame ends the prompt Promise. Control methods keep a short timeout. Overlapping submit while `PROMPT_ACTIVE` / reconnecting is hard-rejected (toast). After prompt is in flight, Renderer keeps the turn mapping on disconnect until real `turn.end` or `expired` (HF-6 cleanup is pre-prompt only).
+Only socket close, `session/cancel`, or a Provider error frame ends the prompt Promise. Control methods keep a short timeout. Overlapping submit while `PROMPT_ACTIVE` / reconnecting is hard-rejected (toast). After prompt is in flight, Renderer keeps the turn mapping on disconnect until real `turn.end` or `expired` (HF-6 cleanup is pre-prompt only). Settled prompt result/error emits exactly one `turn.end`; pre-prompt / IN_FLIGHT disconnect does not.
 
-Transcript materialize skips empty assistant/reasoning inserts and upserts final content on the second write. [[src/main/remote-expert/acp-event-mapper.ts]] accepts top-level `sessionUpdate` strings and nested `params.update.sessionUpdate`, plus nested `toolCall.{toolCallId,title}`.
+Seq dedupe is **turn-scoped**: [[src/main/remote-expert/remote-acp-client.ts#resetTurnCursor]] zeros `lastSeq` before each `session/prompt`. Between-turn `session/resume` / capability remint always use `afterSeq=0`. `desktop_remote_acp_sessions.last_seq` remains a diagnostic watermark only.
+
+Transcript materialize skips empty assistant/reasoning inserts and upserts final content on the second write. [[src/main/remote-expert/acp-event-mapper.ts]] maps rich tool fields (`status`, `rawInput`, `structuredContent`, `error*`, `redacted`, `truncated`) with tolerant parsing; Chat upserts tool cards by `(turnId,toolCallId)` and must not paint failed as completed.
+
+## Build provenance
+
+Packaged `resources/work-build-info.json` (schema `smc.work.build.v1`) records `version/gitCommit/gitBranch/buildTime/dirty`. G7 A-SMC-006 records those fields in evidence without tokens or capability material. Pin remains frontend-contract **v2.0.0**; v2.1.0 pin-finalization is BLOCKED until Provider freeze (`REMOTE_EXPERT_PIN_FINALIZATION_STATUS`).
 
 ## Transport
 
@@ -56,6 +62,6 @@ Public attachments become ResourceLink `nodeskclaw://attachment/att_*` via [[src
 
 ## Evidence gates
 
-G6 (`scripts/remote-expert-g6.mjs`) maps vitest titles containing `[A-…-nnn]` into commit-bound `test-results/remote-expert-g6.json`. Dirty worktree or uncovered Required Acceptance cannot PASS. Use `--release-worktree` for clean release evidence.
+G6 (`scripts/remote-expert-g6.mjs`) maps vitest titles containing `[A-…-nnn]` into commit-bound `test-results/remote-expert-g6.json`, including rich-process Required Acceptance `A-SMC-001`..`A-SMC-006` (`A-SMC-007` deferred). Dirty worktree or uncovered Required Acceptance cannot PASS. Use `--release-worktree` for clean release evidence.
 
-G7 (`scripts/remote-expert-g7.mjs`) is a conditional live harness over production consumer modules (`tests/remote-expert/live/`). Missing env or dirty consumer yields `BLOCKED` (exit != 0); complete prerequisites execute A-G7-LIVE-001..015 against a designated test Expert.
+G7 (`scripts/remote-expert-g7.mjs`) is a conditional live harness over production consumer modules (`tests/remote-expert/live/`). Missing env or dirty consumer yields `BLOCKED` (exit != 0); complete prerequisites execute A-G7-LIVE-* plus rich/seq-reset/multi-turn/provenance cases against a designated test Expert.

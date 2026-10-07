@@ -1,4 +1,3 @@
-import { useI18n } from "../../components/useI18n";
 import { RemoteExpertSelector } from "./RemoteExpertSelector";
 import type {
   RemoteAcpSessionRef,
@@ -25,8 +24,6 @@ export function RemoteExpertContextControl(props: {
   onRetryAvailability?: () => void;
   onRefreshCatalog?: () => void;
 }) {
-  const { t } = useI18n();
-  const expired = props.session?.connectionState === "expired";
   const mismatches = props.availability?.mismatches ?? [];
   const mismatchTitle =
     mismatches.length > 0
@@ -37,44 +34,6 @@ export function RemoteExpertContextControl(props: {
           )
           .join("\n")
       : props.availability?.reason;
-  const showRetry =
-    props.availabilityStatus === "checking" ||
-    props.availabilityStatus === "unavailable" ||
-    props.availabilityStatus === "incompatible";
-  const showRefresh =
-    props.availabilityStatus === "compatible" &&
-    (props.catalogStatus === "error" ||
-      props.catalogStatus === "empty" ||
-      props.catalogStatus === "ready");
-
-  let statusText: string | null = null;
-  if (props.availabilityStatus === "checking") {
-    statusText = t("chat.remoteExpert.checking");
-  } else if (props.availabilityStatus === "unavailable") {
-    statusText = t("chat.remoteExpert.unavailableEntry");
-  } else if (props.availabilityStatus === "incompatible") {
-    statusText =
-      mismatches.length > 0
-        ? `${t("chat.remoteExpert.incompatible")} — ${t(
-            "chat.remoteExpert.mismatchFields",
-            { fields: mismatches.map((m) => m.field).join(", ") },
-          )}`
-        : t("chat.remoteExpert.incompatible");
-  } else if (props.catalogStatus === "empty") {
-    statusText = t("chat.remoteExpert.noExperts");
-  } else if (props.catalogStatus === "error") {
-    statusText = t("chat.remoteExpert.catalogUnavailable");
-  } else if (expired) {
-    statusText = t("chat.remoteExpert.sessionExpired");
-  } else if (props.blocked) {
-    statusText = t("chat.remoteExpert.resumeBlocked");
-  } else if (props.session) {
-    statusText = `${t("chat.remoteExpert.label")}: ${props.session.agentRef}`;
-  } else if (props.selected) {
-    statusText = `${t("chat.remoteExpert.label")}: ${props.selected.displayName}`;
-  } else if (props.availabilityStatus === "compatible") {
-    statusText = t("chat.remoteExpert.label");
-  }
 
   return (
     <div

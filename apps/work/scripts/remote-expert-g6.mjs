@@ -101,10 +101,21 @@ const CLOSURE_ACCEPTANCE = [
   "A-NEG-G7-RUNNER-002",
 ];
 
+/** Rich process / terminal closure (PRD v6.3.1). A-SMC-007 blocked until Provider freeze. */
+const RICH_PROCESS_ACCEPTANCE = [
+  "A-SMC-001",
+  "A-SMC-002",
+  "A-SMC-003",
+  "A-SMC-004",
+  "A-SMC-005",
+  "A-SMC-006",
+];
+
 const ACCEPTANCE = [
   ...LEGACY_ACCEPTANCE,
   ...CLOSURE_ACCEPTANCE,
   ...TURN_LIFECYCLE_ACCEPTANCE,
+  ...RICH_PROCESS_ACCEPTANCE,
 ];
 
 const args = process.argv.slice(2);
@@ -186,8 +197,10 @@ const vitest = run(vitestTool.cmd, [
   "src/main/remote-expert",
   "src/renderer/src/modules/remote-expert",
   "src/renderer/src/screens/Chat/Chat.remote-expert-hotfix.test.tsx",
+  "src/renderer/src/screens/Chat/Chat.remote-expert-tool-upsert.test.tsx",
   "src/renderer/src/screens/Chat/Chat.remote-expert-entry.test.tsx",
   "src/renderer/src/screens/Chat/Chat.remote-expert-entry-mutation.test.tsx",
+  "src/main/build-info.test.ts",
   "src/renderer/src/screens/Layout/chatRuns.test.ts",
   "src/renderer/src/screens/Layout/useRemoteExpertRunTransition.test.ts",
   "src/shared/remote-expert.test.ts",

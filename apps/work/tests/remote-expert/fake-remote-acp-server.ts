@@ -12,7 +12,9 @@ export type FakeAcpScenario =
   | "cancel"
   | "artifact"
   | "replay"
-  | "resume-lost";
+  | "resume-lost"
+  | "turn-seq-reset"
+  | "prompt-error";
 
 export interface FakeAcpServer {
   url: string;
@@ -40,6 +42,7 @@ export async function startFakeRemoteAcpServer(options?: {
     lastHeaders: {} as Record<string, string>,
   };
   let seq = 0;
+  let promptCount = 0;
 
   const httpServer: Server = createServer((_req, res) => {
     res.statusCode = 404;
@@ -142,6 +145,35 @@ export async function startFakeRemoteAcpServer(options?: {
     }
     if (method === "session/prompt") {
       lastPromptId = id;
+      promptCount += 1;
+      if (scenario === "prompt-error") {
+        send(ws, {
+          id,
+          error: {
+            code: -32000,
+            message: "execution context denied",
+            data: { error_code: "ACP_CONTEXT_REVALIDATION_DENIED" },
+          },
+        });
+        return;
+      }
+      if (scenario === "turn-seq-reset") {
+        // Each prompt restarts Provider turn-local seq at 1.
+        const count = promptCount === 1 ? 72 : 5;
+        for (let i = 1; i <= count; i += 1) {
+          send(ws, {
+            method: "session/update",
+            params: {
+              sessionId,
+              seq: i,
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: `t${promptCount}-${i}` },
+            },
+          });
+        }
+        send(ws, { id, result: { stopReason: "end_turn" } });
+        return;
+      }
       if (scenario === "hang-prompt") {
         seq += 1;
         send(ws, {

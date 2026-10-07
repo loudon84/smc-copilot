@@ -22,6 +22,16 @@ export const REQUIRED_CONSUMER_LOCK_KEYS = [
   "transportProfile",
 ] as const;
 
+/**
+ * Lock types stay on v2.0.0. When Provider freezes v2.1.0, widen literals and
+ * point resolveFrontendContractRoot at contracts/remote-expert-frontend/v2.1.0
+ * using exact frozen digests (never placeholders).
+ */
+/**
+ * Lock types stay on v2.0.0. When Provider freezes v2.1.0, widen literals and
+ * point resolveFrontendContractRoot at contracts/remote-expert-frontend/v2.1.0
+ * using exact frozen digests (never placeholders).
+ */
 export type ConsumerLock = {
   contractName: "REMOTE-EXPERT-FRONTEND-CONTRACT";
   contractVersion: "2.0.0";

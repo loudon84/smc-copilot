@@ -224,7 +224,6 @@ async function refreshAcpCapability(runtime: Runtime): Promise<Runtime> {
   const stored = getRemoteAcpSessionRef(desktopSessionId);
   const acpSessionId =
     runtime.client.acpSessionId ?? stored?.acpSessionId ?? null;
-  const lastSeq = Math.max(runtime.client.lastSeq, stored?.lastSeq ?? 0);
   const carry = {
     submitLock: runtime.submitLock,
     assistantText: runtime.assistantText,
@@ -244,7 +243,8 @@ async function refreshAcpCapability(runtime: Runtime): Promise<Runtime> {
   next.turnId = carry.turnId;
   if (acpSessionId && acpSessionId !== "pending") {
     const cwd = ensureRemoteExpertSessionCwd(desktopSessionId);
-    await next.client.sessionResume(acpSessionId, lastSeq, cwd);
+    // Between-turn remint: never carry previous Turn seq into the new prompt.
+    await next.client.sessionResume(acpSessionId, 0, cwd);
     persistRef(next, "active");
   }
   return next;
@@ -393,9 +393,10 @@ export async function submitRemoteExpertTurn(
       }
       if (stored?.acpSessionId) {
         try {
+          // New prompt after terminal: resume with afterSeq=0 (Turn cursor owns dedupe).
           await runtime.client.sessionResume(
             stored.acpSessionId,
-            stored.lastSeq,
+            0,
             sessionCwd,
           );
         } catch (err) {
@@ -481,6 +482,18 @@ export async function submitRemoteExpertTurn(
     }
     let result: { stopReason: string };
     let promptSessionId = acpSessionId;
+    let turnEndEmitted = false;
+    const emitFailedTurnEnd = (errorCode: string) => {
+      if (turnEndEmitted) return;
+      turnEndEmitted = true;
+      emitToRenderer({
+        type: "turn.end",
+        turnId: input.requestId,
+        sessionId: input.desktopSessionId,
+        outcome: "failed",
+        errorCode,
+      });
+    };
     try {
       result = await runtime.client.sessionPrompt(
         promptSessionId,
@@ -534,14 +547,47 @@ export async function submitRemoteExpertTurn(
           request_id: input.requestId,
           error_code: "REMOTE_EXPERT_FORBIDDEN",
         });
-        runtime = await refreshAcpCapability(runtime);
-        promptSessionId = runtime.client.acpSessionId ?? promptSessionId;
-        result = await runtime.client.sessionPrompt(
-          promptSessionId,
-          blocks,
-          input.requestId,
-        );
+        try {
+          runtime = await refreshAcpCapability(runtime);
+          promptSessionId = runtime.client.acpSessionId ?? promptSessionId;
+          result = await runtime.client.sessionPrompt(
+            promptSessionId,
+            blocks,
+            input.requestId,
+          );
+        } catch (retryErr) {
+          if (isInFlightDisconnect(retryErr)) {
+            const stored = getRemoteAcpSessionRef(input.desktopSessionId);
+            if (
+              stored?.connectionState !== "closed" &&
+              runtime.client.phase !== "CLOSED"
+            ) {
+              persistRef(runtime, "disconnected", promptSessionId);
+              emitToRenderer({
+                type: "connection",
+                sessionId: input.desktopSessionId,
+                state: "disconnected",
+              });
+            }
+            throw new RemoteExpertError(
+              "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
+              `IN_FLIGHT_DISCONNECTED: ${(retryErr as Error).message}`,
+              { retryable: true },
+            );
+          }
+          const code =
+            retryErr instanceof RemoteExpertError
+              ? retryErr.code
+              : "REMOTE_EXPERT_PROMPT_FAILED";
+          emitFailedTurnEnd(code);
+          throw retryErr;
+        }
       } else {
+        const code =
+          err instanceof RemoteExpertError
+            ? err.code
+            : "REMOTE_EXPERT_PROMPT_FAILED";
+        emitFailedTurnEnd(code);
         throw err;
       }
     }
@@ -568,13 +614,16 @@ export async function submitRemoteExpertTurn(
         : result.stopReason === "end_turn"
           ? "completed"
           : "failed";
-    emitToRenderer({
-      type: "turn.end",
-      turnId: input.requestId,
-      sessionId: input.desktopSessionId,
-      outcome,
-      stopReason: result.stopReason,
-    });
+    if (!turnEndEmitted) {
+      turnEndEmitted = true;
+      emitToRenderer({
+        type: "turn.end",
+        turnId: input.requestId,
+        sessionId: input.desktopSessionId,
+        outcome,
+        stopReason: result.stopReason,
+      });
+    }
     emitRemoteExpertLog({
       operation_id: input.requestId,
       trace_id: runtime.client.traceId,
@@ -608,11 +657,8 @@ export async function resumeRemoteExpertSession(input: {
   runtime.client.markReconnecting(true);
   try {
     const cwd = ensureRemoteExpertSessionCwd(input.sessionId);
-    await runtime.client.sessionResume(
-      stored.acpSessionId,
-      stored.lastSeq,
-      cwd,
-    );
+    // Between-turn / reconnect resume uses afterSeq=0; last_seq is diagnostic only.
+    await runtime.client.sessionResume(stored.acpSessionId, 0, cwd);
     persistRef(runtime, "active");
     return getRemoteAcpSessionRef(input.sessionId);
   } catch (err) {

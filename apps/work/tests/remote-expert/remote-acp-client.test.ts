@@ -139,7 +139,7 @@ describe("RemoteAcpClient transport", () => {
     }
   }, 20_000);
 
-  it("[A-TL-PROMPT-001] session/prompt survives beyond the 10s control-plane timer", async () => {
+  it("[A-TL-PROMPT-001] [A-SMC-005] session/prompt survives beyond the 10s control-plane timer", async () => {
     const server = await startFakeRemoteAcpServer({ scenario: "slow-prompt" });
     try {
       const client = new RemoteAcpClient({
@@ -188,6 +188,66 @@ describe("RemoteAcpClient transport", () => {
         code: "REMOTE_EXPERT_SESSION_NOT_ACTIVE",
         retryable: true,
       });
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
+
+  it("[A-SMC-004] three prompts keep the same ACP sessionId", async () => {
+    const server = await startFakeRemoteAcpServer({ scenario: "prompt" });
+    try {
+      const client = new RemoteAcpClient({
+        baseUrl: server.url,
+        agentRef: "sales-expert",
+        getAccessToken: () => "tok",
+        getOrgId: () => "org-1",
+      });
+      await client.connect();
+      await client.initialize();
+      const sid = await client.sessionNew();
+      for (let i = 0; i < 3; i += 1) {
+        await client.sessionPrompt(
+          sid,
+          [{ type: "text", text: `m${i}` }],
+          randomUUID(),
+        );
+        expect(client.acpSessionId).toBe(sid);
+      }
+      client.disconnect();
+    } finally {
+      await server.close();
+    }
+  }, 20_000);
+
+  it("[A-SMC-003] [N-SMC-002] turn cursor reset accepts Turn2 seq=1 after Turn1 seq=72", async () => {
+    const server = await startFakeRemoteAcpServer({
+      scenario: "turn-seq-reset",
+    });
+    try {
+      const client = new RemoteAcpClient({
+        baseUrl: server.url,
+        agentRef: "sales-expert",
+        getAccessToken: () => "tok",
+        getOrgId: () => "org-1",
+      });
+      const turn2Seq: number[] = [];
+      let turn = 0;
+      client.on("session/update", (params: { seq?: number }) => {
+        if (turn === 2 && typeof params.seq === "number") {
+          turn2Seq.push(params.seq);
+        }
+      });
+      await client.connect();
+      await client.initialize();
+      const sid = await client.sessionNew();
+      turn = 1;
+      await client.sessionPrompt(sid, [{ type: "text", text: "t1" }], randomUUID());
+      expect(client.lastSeq).toBe(72);
+      turn = 2;
+      await client.sessionPrompt(sid, [{ type: "text", text: "t2" }], randomUUID());
+      expect(turn2Seq).toEqual([1, 2, 3, 4, 5]);
+      expect(client.lastSeq).toBe(5);
+      client.disconnect();
     } finally {
       await server.close();
     }

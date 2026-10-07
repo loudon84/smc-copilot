@@ -7,10 +7,22 @@ import type { RemoteAcpSessionRef } from "../../src/shared/remote-expert";
 
 const store = new Map<string, RemoteAcpSessionRef>();
 const upsertArtifact = vi.fn();
+const rendererEvents: Array<{ type?: string; outcome?: string }> = [];
 let backendUrl = "http://127.0.0.1:9";
 
 vi.mock("electron", () => ({
-  BrowserWindow: class {},
+  BrowserWindow: {
+    getAllWindows: () => [
+      {
+        isDestroyed: () => false,
+        webContents: {
+          send: (_channel: string, event: { type?: string; outcome?: string }) => {
+            rendererEvents.push(event);
+          },
+        },
+      },
+    ],
+  },
   app: {
     isPackaged: false,
     getPath: (name: string) =>
@@ -82,6 +94,7 @@ import {
   disposeRemoteExpertSubsystem,
   invalidateRemoteExpertAuth,
   resumeRemoteExpertSession,
+  setRemoteExpertWindowGetter,
   submitRemoteExpertTurn,
 } from "../../src/main/remote-expert/remote-expert-turn-service";
 
@@ -120,6 +133,17 @@ function turnInput(sessionId: string) {
 describe("remote-expert turn service", () => {
   beforeEach(() => {
     store.clear();
+    rendererEvents.length = 0;
+    setRemoteExpertWindowGetter(() =>
+      ({
+        isDestroyed: () => false,
+        webContents: {
+          send: (_channel: string, event: { type?: string; outcome?: string }) => {
+            rendererEvents.push(event);
+          },
+        },
+      }) as never,
+    );
     upsertArtifact.mockReset();
     upsertArtifact.mockImplementation((input: { uri: string; name?: string }) => ({
       fileId: "f1",
@@ -132,7 +156,34 @@ describe("remote-expert turn service", () => {
     disposeRemoteExpertSubsystem();
   });
 
-  it("[A-RECONNECT-001] rebuilds a disconnected runtime then resumes after_seq", async () => {
+  it("[A-SMC-005] emits exactly one turn.end on prompt success and on provider error", async () => {
+    const okServer = await startFakeRemoteAcpServer({ scenario: "prompt" });
+    backendUrl = okServer.url;
+    const sessionOk = randomUUID();
+    try {
+      await submitRemoteExpertTurn(turnInput(sessionOk));
+      const ends = rendererEvents.filter((e) => e.type === "turn.end");
+      expect(ends).toHaveLength(1);
+      expect(ends[0]?.outcome).toBe("completed");
+    } finally {
+      await okServer.close();
+    }
+
+    rendererEvents.length = 0;
+    const errServer = await startFakeRemoteAcpServer({ scenario: "prompt-error" });
+    backendUrl = errServer.url;
+    const sessionErr = randomUUID();
+    try {
+      await expect(submitRemoteExpertTurn(turnInput(sessionErr))).rejects.toBeTruthy();
+      const ends = rendererEvents.filter((e) => e.type === "turn.end");
+      expect(ends).toHaveLength(1);
+      expect(ends[0]?.outcome).toBe("failed");
+    } finally {
+      await errServer.close();
+    }
+  }, 20_000);
+
+  it("[A-RECONNECT-001] rebuilds a disconnected runtime then resumes afterSeq=0", async () => {
     const server = await startFakeRemoteAcpServer({ scenario: "prompt" });
     backendUrl = server.url;
     const sessionId = randomUUID();
@@ -150,14 +201,12 @@ describe("remote-expert turn service", () => {
       );
       expect(frames.length).toBeGreaterThan(0);
       const resumeParams = frames[0]?.params as Record<string, unknown>;
+      // Between-turn / reconnect resume must not carry prior Turn seq.
       expect(
         (resumeParams._meta as { nodeskclaw?: { after_seq?: number } } | undefined)
           ?.nodeskclaw?.after_seq,
-      ).toBe(first?.lastSeq);
+      ).toBeUndefined();
       expect(store.get(sessionId)?.connectionState).toBe("active");
-      expect(store.get(sessionId)?.lastSeq).toBeGreaterThanOrEqual(
-        first?.lastSeq ?? 0,
-      );
     } finally {
       await server.close();
     }

@@ -149,7 +149,10 @@ export class RemoteAcpClient extends EventEmitter {
     | "CANCELLING"
     | "DISCONNECTED"
     | "CLOSED" = "IDLE";
+  /** Turn-scoped cursor: max accepted Provider seq for currentPromptRequestId. */
   lastSeq = 0;
+  /** Active prompt request id that owns lastSeq dedupe scope. */
+  currentPromptRequestId = "";
   acpSessionId: string | null = null;
   traceId = "";
   /** Wall clock when the current WSS became CONNECTED (capability mint time). */
@@ -171,6 +174,15 @@ export class RemoteAcpClient extends EventEmitter {
 
   get isReconnecting(): boolean {
     return this.reconnecting;
+  }
+
+  /**
+   * Reset Turn-scoped seq cursor before a new session/prompt.
+   * Dedup identity is (currentPromptRequestId, seq), not session-global seq.
+   */
+  resetTurnCursor(requestId: string): void {
+    this.currentPromptRequestId = requestId.trim();
+    this.lastSeq = 0;
   }
 
   async connect(): Promise<void> {
@@ -362,6 +374,7 @@ export class RemoteAcpClient extends EventEmitter {
         "requestId must be a UUID string",
       );
     }
+    this.resetTurnCursor(requestId);
     this.phase = "PROMPT_ACTIVE";
     try {
       const result = (await this.request(

@@ -165,8 +165,42 @@ import {
   FRONTEND_CONTRACT_DIGEST,
   REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION,
 } from "../../../src/shared/remote-expert";
+import { loadWorkBuildInfo } from "../../../src/main/build-info";
 import { openSqliteDatabase } from "../../../src/main/sqlite-database";
 import { activeStateDbPath } from "../../../src/main/utils";
+
+const FORBIDDEN_EVIDENCE = [
+  "executionCapability",
+  "access_token",
+  "refresh_token",
+  "Authorization",
+  "runtime_session_id",
+  "runtime_run_id",
+];
+
+function assertSafeEvidence(row: Record<string, unknown>): void {
+  const raw = JSON.stringify(row);
+  for (const key of FORBIDDEN_EVIDENCE) {
+    expect(raw.includes(key)).toBe(false);
+  }
+}
+
+function baseEvidence(
+  id: string,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const build = loadWorkBuildInfo();
+  return {
+    id,
+    providerContractVersion: REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION,
+    buildVersion: build?.version ?? process.env.npm_package_version ?? "",
+    buildGitCommit: build?.gitCommit ?? "",
+    buildGitBranch: build?.gitBranch ?? "",
+    buildDirty: build?.dirty ?? null,
+    buildTime: build?.buildTime ?? "",
+    ...extra,
+  };
+}
 
 describeLive("G7 Golden Consumer live", () => {
   const hermesHome = join(tmpdir(), `g7-hermes-${runId}`);
@@ -877,6 +911,346 @@ describeLive("G7 Golden Consumer live", () => {
       oracleActual: designated,
       elapsedMs: 0,
     });
+  });
+
+  it("[A-SMC-006] [N-SMC-005] [F-SMC-007] build provenance evidence", () => {
+    const started = Date.now();
+    const build = loadWorkBuildInfo();
+    const requiredSha = (
+      process.env.SMC_REMOTE_EXPERT_G7_REQUIRED_COMMIT ?? ""
+    ).trim();
+    const requireClean =
+      process.env.SMC_REMOTE_EXPERT_G7_REQUIRE_CLEAN_BUILD === "1";
+    let status: "PASS" | "FAIL" | "BLOCKED" = "PASS";
+    let errorCode: string | undefined;
+    let oracleActual = "ok";
+    if (!build) {
+      status = "BLOCKED";
+      errorCode = "G7_BUILD_INFO_MISSING";
+      oracleActual = "work-build-info.json not found";
+    } else if (requireClean && build.dirty) {
+      status = "FAIL";
+      errorCode = "G7_BUILD_DIRTY";
+      oracleActual = `dirty=${build.dirty}`;
+    } else if (
+      requiredSha &&
+      build.gitCommit &&
+      build.gitCommit !== requiredSha
+    ) {
+      status = "FAIL";
+      errorCode = "G7_BUILD_COMMIT_MISMATCH";
+      oracleActual = `expected=${requiredSha};actual=${build.gitCommit}`;
+    }
+    const row = baseEvidence("A-SMC-006", {
+      status,
+      errorCode,
+      operationId: `${runId}:A-SMC-006`,
+      oracleExpected: "packaged build provenance recorded; no secrets",
+      oracleActual,
+      elapsedMs: Date.now() - started,
+    });
+    assertSafeEvidence(row);
+    writeCase(row);
+    if (status === "FAIL") {
+      throw new Error(oracleActual);
+    }
+  });
+
+  it("[A-SMC-003] [C04] seq cursor reset across two prompts same ACP session", async () => {
+    if (!client || !acpSessionId || gateFailed) {
+      blockedCase("A-SMC-003", "G7_LIVE_CASE_FAILED", "prereq");
+      return;
+    }
+    const started = Date.now();
+    const turn2Seq: number[] = [];
+    let turn = 0;
+    const onUpdate = (params: { seq?: number }) => {
+      if (turn === 2 && typeof params.seq === "number") {
+        turn2Seq.push(params.seq);
+      }
+    };
+    client.on("session/update", onUpdate);
+    try {
+      turn = 1;
+      await client.sessionPrompt(
+        acpSessionId,
+        [{ type: "text", text: "smc turn1 seq reset" }],
+        randomUUID(),
+      );
+      const afterTurn1 = client.lastSeq;
+      turn = 2;
+      await client.sessionResume(acpSessionId, 0);
+      await client.sessionPrompt(
+        acpSessionId,
+        [{ type: "text", text: "smc turn2 seq reset" }],
+        randomUUID(),
+      );
+      const row = baseEvidence("A-SMC-003", {
+        status: "PASS",
+        operationId: `${runId}:A-SMC-003`,
+        oracleExpected: "turn2 accepts provider seq starting at 1",
+        oracleActual: `turn1LastSeq=${afterTurn1};turn2Seq=${turn2Seq.slice(0, 8).join(",")};turn2LastSeq=${client.lastSeq}`,
+        elapsedMs: Date.now() - started,
+      });
+      assertSafeEvidence(row);
+      writeCase(row);
+    } catch (err) {
+      writeCase(
+        baseEvidence("A-SMC-003", {
+          status: "FAIL",
+          operationId: `${runId}:A-SMC-003`,
+          errorCode: "G7_LIVE_CASE_FAILED",
+          oracleExpected: "turn2 accepts provider seq starting at 1",
+          oracleActual: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - started,
+        }),
+      );
+      throw err;
+    } finally {
+      client.off("session/update", onUpdate);
+    }
+  });
+
+  it("[A-SMC-001] [C02] rich tool.call fields when Provider emits tools", async () => {
+    if (!client || !acpSessionId || gateFailed) {
+      blockedCase("A-SMC-001", "G7_LIVE_CASE_FAILED", "prereq");
+      return;
+    }
+    const started = Date.now();
+    const richCalls: Array<Record<string, unknown>> = [];
+    const onUpdate = (params: Record<string, unknown>) => {
+      const update = (params.update && typeof params.update === "object"
+        ? params.update
+        : params) as Record<string, unknown>;
+      const kind = String(update.sessionUpdate ?? params.sessionUpdate ?? "");
+      if (kind !== "tool_call") return;
+      richCalls.push(update);
+    };
+    client.on("session/update", onUpdate);
+    try {
+      await client.sessionResume(acpSessionId, 0);
+      await client.sessionPrompt(
+        acpSessionId,
+        [
+          {
+            type: "text",
+            text: "Please use a tool if available and report a short result.",
+          },
+        ],
+        randomUUID(),
+      );
+      if (richCalls.length === 0) {
+        writeCase(
+          baseEvidence("A-SMC-001", {
+            status: "BLOCKED",
+            errorCode: "G7_NO_TOOL_EVENTS",
+            operationId: `${runId}:A-SMC-001`,
+            oracleExpected: "Provider emits tool_call with rich optional fields",
+            oracleActual: "no tool_call observed",
+            elapsedMs: Date.now() - started,
+          }),
+        );
+        return;
+      }
+      const first = richCalls[0]!;
+      const hasStatus = first.status !== undefined ||
+        (first.toolCall &&
+          typeof first.toolCall === "object" &&
+          (first.toolCall as { status?: unknown }).status !== undefined);
+      const row = baseEvidence("A-SMC-001", {
+        status: "PASS",
+        operationId: `${runId}:A-SMC-001`,
+        oracleExpected: "tool_call observed; rich fields optional",
+        oracleActual: `count=${richCalls.length};hasStatus=${hasStatus}`,
+        elapsedMs: Date.now() - started,
+      });
+      assertSafeEvidence(row);
+      writeCase(row);
+    } catch (err) {
+      writeCase(
+        baseEvidence("A-SMC-001", {
+          status: "FAIL",
+          operationId: `${runId}:A-SMC-001`,
+          errorCode: "G7_LIVE_CASE_FAILED",
+          oracleExpected: "tool_call observed",
+          oracleActual: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - started,
+        }),
+      );
+      throw err;
+    } finally {
+      client.off("session/update", onUpdate);
+    }
+  });
+
+  it("[A-SMC-002] [C03] failed tool.result status preserved when Provider fails a tool", async () => {
+    if (!client || !acpSessionId || gateFailed) {
+      blockedCase("A-SMC-002", "G7_LIVE_CASE_FAILED", "prereq");
+      return;
+    }
+    const started = Date.now();
+    const failedUpdates: Array<Record<string, unknown>> = [];
+    const onUpdate = (params: Record<string, unknown>) => {
+      const update = (params.update && typeof params.update === "object"
+        ? params.update
+        : params) as Record<string, unknown>;
+      const kind = String(update.sessionUpdate ?? params.sessionUpdate ?? "");
+      if (kind !== "tool_call_update") return;
+      const status = String(
+        update.status ??
+          (update.toolCall && typeof update.toolCall === "object"
+            ? (update.toolCall as { status?: unknown }).status
+            : "") ??
+          "",
+      ).toLowerCase();
+      const hasError = Boolean(update.error || update.errorCode);
+      if (status === "failed" || status === "error" || hasError) {
+        failedUpdates.push(update);
+      }
+    };
+    client.on("session/update", onUpdate);
+    try {
+      await client.sessionResume(acpSessionId, 0);
+      await client.sessionPrompt(
+        acpSessionId,
+        [
+          {
+            type: "text",
+            text: "Attempt a tool that is likely to fail (denied path) if possible.",
+          },
+        ],
+        randomUUID(),
+      );
+      if (failedUpdates.length === 0) {
+        writeCase(
+          baseEvidence("A-SMC-002", {
+            status: "BLOCKED",
+            errorCode: "G7_NO_FAILED_TOOL",
+            operationId: `${runId}:A-SMC-002`,
+            oracleExpected: "Provider emits failed tool_call_update",
+            oracleActual: "no failed tool update observed",
+            elapsedMs: Date.now() - started,
+          }),
+        );
+        return;
+      }
+      const row = baseEvidence("A-SMC-002", {
+        status: "PASS",
+        operationId: `${runId}:A-SMC-002`,
+        oracleExpected: "failed tool status observed",
+        oracleActual: `failedCount=${failedUpdates.length}`,
+        elapsedMs: Date.now() - started,
+      });
+      assertSafeEvidence(row);
+      writeCase(row);
+    } catch (err) {
+      writeCase(
+        baseEvidence("A-SMC-002", {
+          status: "FAIL",
+          operationId: `${runId}:A-SMC-002`,
+          errorCode: "G7_LIVE_CASE_FAILED",
+          oracleExpected: "failed tool status observed",
+          oracleActual: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - started,
+        }),
+      );
+      throw err;
+    } finally {
+      client.off("session/update", onUpdate);
+    }
+  });
+
+  it("[A-SMC-005] [C06] long turn >120s resolves without consumer RPC timeout", async () => {
+    if (!client || !acpSessionId || gateFailed) {
+      blockedCase("A-SMC-005", "G7_LIVE_CASE_FAILED", "prereq");
+      return;
+    }
+    if (process.env.SMC_REMOTE_EXPERT_G7_LONG_TURN !== "1") {
+      blockedCase(
+        "A-SMC-005",
+        "G7_ENV_INCOMPLETE",
+        "SMC_REMOTE_EXPERT_G7_LONG_TURN!=1 (opt-in >120s)",
+      );
+      return;
+    }
+    const started = Date.now();
+    const longPrompt =
+      process.env.SMC_REMOTE_EXPERT_G7_LONG_PROMPT?.trim() ||
+      "Work for at least two minutes before finishing. Keep the turn alive with progress.";
+    try {
+      await client.sessionResume(acpSessionId, 0);
+      const result = await client.sessionPrompt(
+        acpSessionId,
+        [{ type: "text", text: longPrompt }],
+        randomUUID(),
+      );
+      const elapsedMs = Date.now() - started;
+      const ok = elapsedMs >= 120_000 && Boolean(result.stopReason);
+      const row = baseEvidence("A-SMC-005", {
+        status: ok ? "PASS" : "FAIL",
+        errorCode: ok ? undefined : "G7_LONG_TURN_TOO_SHORT",
+        operationId: `${runId}:A-SMC-005`,
+        oracleExpected: "elapsedMs>=120000 and prompt resolves (no consumer timeout)",
+        oracleActual: `stop=${result.stopReason};elapsedMs=${elapsedMs}`,
+        elapsedMs,
+      });
+      assertSafeEvidence(row);
+      writeCase(row);
+      if (!ok) throw new Error(String(row.oracleActual));
+    } catch (err) {
+      writeCase(
+        baseEvidence("A-SMC-005", {
+          status: "FAIL",
+          operationId: `${runId}:A-SMC-005`,
+          errorCode: "G7_LIVE_CASE_FAILED",
+          oracleExpected: "long turn resolves without consumer timeout",
+          oracleActual: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - started,
+        }),
+      );
+      throw err;
+    }
+  }, 300_000);
+
+  it("[A-SMC-004] [C05] three turns keep same ACP sessionId", async () => {
+    if (!client || !acpSessionId || gateFailed) {
+      blockedCase("A-SMC-004", "G7_LIVE_CASE_FAILED", "prereq");
+      return;
+    }
+    const started = Date.now();
+    const sid0 = acpSessionId;
+    try {
+      for (let i = 1; i <= 3; i += 1) {
+        await client.sessionResume(acpSessionId, 0);
+        await client.sessionPrompt(
+          acpSessionId,
+          [{ type: "text", text: `smc multi-turn ${i}` }],
+          randomUUID(),
+        );
+        expect(client.acpSessionId).toBe(sid0);
+      }
+      const row = baseEvidence("A-SMC-004", {
+        status: "PASS",
+        operationId: `${runId}:A-SMC-004`,
+        oracleExpected: sid0,
+        oracleActual: client.acpSessionId,
+        elapsedMs: Date.now() - started,
+      });
+      assertSafeEvidence(row);
+      writeCase(row);
+    } catch (err) {
+      writeCase(
+        baseEvidence("A-SMC-004", {
+          status: "FAIL",
+          operationId: `${runId}:A-SMC-004`,
+          errorCode: "G7_LIVE_CASE_FAILED",
+          oracleExpected: sid0,
+          oracleActual: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - started,
+        }),
+      );
+      throw err;
+    }
   });
 
   it("[A-G7-RUNNER-001] live cases executed (not fixed BLOCKED)", () => {

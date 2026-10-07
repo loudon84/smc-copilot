@@ -51,6 +51,7 @@ export function upsertRemoteAcpSessionRef(
   }
   ensureRemoteAcpSessionTable(db);
   const existing = getRemoteAcpSessionRef(ref.desktopSessionId);
+  // Diagnostic watermark only — MUST NOT be used as new-Turn resume cursor.
   const lastSeq = existing
     ? Math.max(existing.lastSeq, ref.lastSeq)
     : ref.lastSeq;

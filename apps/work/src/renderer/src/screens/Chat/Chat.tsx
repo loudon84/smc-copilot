@@ -450,40 +450,96 @@ function Chat({
         });
       }
       if (event.type === "tool.call") {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `remote-tool-${event.toolCallId}`,
-            kind: "tool_call",
-            role: "agent",
+        const cardId = `remote-tool:${event.turnId}:${event.toolCallId}`;
+        const uiStatus =
+          event.status === "failed"
+            ? ("failed" as const)
+            : event.status === "completed"
+              ? ("completed" as const)
+              : ("running" as const);
+        const args =
+          event.rawInput && Object.keys(event.rawInput).length > 0
+            ? JSON.stringify(event.rawInput, null, 2)
+            : event.title || event.toolName || "";
+        const metaBits = [
+          event.redacted ? "[redacted]" : "",
+          event.truncated ? "[truncated]" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        setMessages((prev) => {
+          const idx = prev.findIndex((message) => message.id === cardId);
+          const nextCall = {
+            id: cardId,
+            kind: "tool_call" as const,
+            role: "agent" as const,
             callId: event.toolCallId,
             name: event.toolName,
-            args: event.title || "",
-            status: "running",
-          },
-        ]);
+            args: metaBits ? `${args}\n${metaBits}` : args,
+            status: uiStatus,
+          };
+          if (idx >= 0) {
+            return prev.map((message, i) =>
+              i === idx ? { ...message, ...nextCall } : message,
+            );
+          }
+          return [...prev, nextCall];
+        });
       }
       if (event.type === "tool.result") {
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.kind === "tool_call" && message.callId === event.toolCallId
-              ? { ...message, status: "completed" as const }
+        const cardId = `remote-tool:${event.turnId}:${event.toolCallId}`;
+        const resultId = `remote-tool-result:${event.turnId}:${event.toolCallId}`;
+        const uiStatus =
+          event.status === "failed" ? ("failed" as const) : ("completed" as const);
+        let resultText = "";
+        if (event.status === "failed") {
+          resultText = [event.errorCode, event.errorMessage, event.content]
+            .filter(Boolean)
+            .join(": ");
+        } else if (event.content) {
+          resultText = event.content;
+        } else if (event.structuredContent !== undefined) {
+          try {
+            resultText = JSON.stringify(event.structuredContent, null, 2);
+          } catch {
+            resultText = String(event.structuredContent);
+          }
+        }
+        const metaBits = [
+          event.redacted ? "[redacted]" : "",
+          event.truncated ? "[truncated]" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        if (metaBits) {
+          resultText = resultText ? `${resultText}\n${metaBits}` : metaBits;
+        }
+        setMessages((prev) => {
+          // Identity is (turnId, toolCallId) — never update another turn's card.
+          let next = prev.map((message) =>
+            message.id === cardId && message.kind === "tool_call"
+              ? { ...message, status: uiStatus }
               : message,
-          ).concat(
-            event.content
-              ? [
-                  {
-                    id: `remote-tool-result-${event.toolCallId}`,
-                    kind: "tool_result",
-                    role: "agent",
-                    callId: event.toolCallId,
-                    name: "",
-                    content: event.content,
-                  },
-                ]
-              : [],
-          ),
-        );
+          );
+          if (!resultText) return next;
+          const resultIdx = next.findIndex((message) => message.id === resultId);
+          const resultMsg = {
+            id: resultId,
+            kind: "tool_result" as const,
+            role: "agent" as const,
+            callId: event.toolCallId,
+            name: "",
+            content: resultText,
+          };
+          if (resultIdx >= 0) {
+            next = next.map((message, i) =>
+              i === resultIdx ? resultMsg : message,
+            );
+          } else {
+            next = [...next, resultMsg];
+          }
+          return next;
+        });
       }
       if (event.type === "turn.end") {
         setRemoteExpertBusy(false);

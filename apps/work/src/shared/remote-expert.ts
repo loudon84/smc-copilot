@@ -1,4 +1,11 @@
+/**
+ * Consumer pin remains v2.0.0 until Provider REMOTE-EXPERT-FRONTEND-CONTRACT
+ * v2.1.0 is frozen. Pin-finalization (A-SMC-007) is BLOCKED — do not invent digests.
+ * Target after freeze: contractVersion "2.1.0" + exact SHA256SUMS digests.
+ */
 export const REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION = "2.0.0" as const;
+export const REMOTE_EXPERT_PIN_FINALIZATION_STATUS =
+  "BLOCKED_UNTIL_PROVIDER_V2_1_0_FROZEN" as const;
 export const FRONTEND_CONTRACT_DIGEST =
   "22ad68dd1132a073f6df5d2bf9f219b683c73ebb7ea1fa48933c9b92a744ecd5";
 export const CATALOG_CONTRACT_VERSION = "1.1.0" as const;
@@ -226,12 +233,22 @@ export type RemoteExpertSemanticEvent = {
       toolCallId: string;
       toolName: string;
       title?: string;
+      status: "in_progress" | "completed" | "failed";
+      rawInput?: Record<string, unknown>;
+      redacted?: boolean;
+      truncated?: boolean;
     }
   | {
       type: "tool.result";
       turnId: string;
       toolCallId: string;
+      status: "completed" | "failed";
       content?: string;
+      structuredContent?: unknown;
+      errorCode?: string;
+      errorMessage?: string;
+      redacted?: boolean;
+      truncated?: boolean;
     }
   | {
       type: "permission.requested";
