@@ -62,7 +62,7 @@ export function scanForbiddenHits(
 }
 
 describe("remote-expert migration gate", () => {
-  it("[A-MIGRATE-001] production source has zero forbidden legacy Remote Expert / Work Expert hits", () => {
+  it("[A-MIGRATE-001] [A-MIG-2101] production source has zero forbidden legacy Remote Expert / Work Expert hits", () => {
     const hits = scanForbiddenHits(SRC_ROOT);
     expect(hits).toEqual([]);
   });

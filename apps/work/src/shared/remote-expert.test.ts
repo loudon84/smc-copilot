@@ -13,8 +13,8 @@ import {
 
 function contractRoot(): string {
   for (const candidate of [
-    join(process.cwd(), "contracts/remote-expert-frontend/v2.0.0"),
-    join(process.cwd(), "../../contracts/remote-expert-frontend/v2.0.0"),
+    join(process.cwd(), "contracts/remote-expert-frontend/v2.1.0"),
+    join(process.cwd(), "../../contracts/remote-expert-frontend/v2.1.0"),
   ]) {
     if (existsSync(join(candidate, "consumer-lock.json"))) return candidate;
   }

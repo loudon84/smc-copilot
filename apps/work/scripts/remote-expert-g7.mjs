@@ -66,7 +66,7 @@ function writeBlocked(errorCode, reason) {
       dirty: meta.dirty,
     },
     provider: {
-      frontendContractVersion: "2.0.0",
+      frontendContractVersion: "2.1.0",
       frontendContractDigest: null,
       agentRef: process.env.SMC_REMOTE_EXPERT_G7_AGENT_REF ?? null,
     },
@@ -240,7 +240,7 @@ const evidence = {
     dirty: meta.dirty,
   },
   provider: {
-    frontendContractVersion: "2.0.0",
+    frontendContractVersion: "2.1.0",
     frontendContractDigest: null,
     agentRef: prereq.agentRef,
   },

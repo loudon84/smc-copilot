@@ -62,6 +62,8 @@ type Runtime = {
   assistantText: string;
   reasoningText: string;
   turnId: string;
+  /** Set when streamed deltas disagree with a Provider assistant.snapshot. */
+  reconciliationMismatch?: boolean;
 };
 
 const runtimes = new Map<string, Runtime>();
@@ -130,7 +132,25 @@ function wireClient(runtime: Runtime): void {
       params,
     });
     for (const event of events) {
-      if (event.type === "assistant.delta") runtime.assistantText += event.text;
+      if (event.type === "assistant.delta") {
+        runtime.assistantText += event.text;
+      }
+      if (event.type === "assistant.snapshot") {
+        const streamed = runtime.assistantText;
+        const snap = event.text;
+        if (
+          streamed.length > 0 &&
+          snap.length > 0 &&
+          streamed !== snap &&
+          !snap.startsWith(streamed)
+        ) {
+          // Keep streamed text; do not second-append snapshot (Q6 fail-closed).
+          runtime.reconciliationMismatch = true;
+        } else {
+          // Matching snapshot is authoritative — replace, never second-append.
+          runtime.assistantText = snap;
+        }
+      }
       if (event.type === "reasoning.delta") runtime.reasoningText += event.text;
       emitToRenderer({ ...event, sessionId: runtime.desktopSessionId });
     }
@@ -229,6 +249,7 @@ async function refreshAcpCapability(runtime: Runtime): Promise<Runtime> {
     assistantText: runtime.assistantText,
     reasoningText: runtime.reasoningText,
     turnId: runtime.turnId,
+    reconciliationMismatch: runtime.reconciliationMismatch,
   };
   runtime.client.disconnect();
   runtimes.delete(desktopSessionId);
@@ -241,6 +262,7 @@ async function refreshAcpCapability(runtime: Runtime): Promise<Runtime> {
   next.assistantText = carry.assistantText;
   next.reasoningText = carry.reasoningText;
   next.turnId = carry.turnId;
+  next.reconciliationMismatch = carry.reconciliationMismatch;
   if (acpSessionId && acpSessionId !== "pending") {
     const cwd = ensureRemoteExpertSessionCwd(desktopSessionId);
     // Between-turn remint: never carry previous Turn seq into the new prompt.
@@ -355,6 +377,7 @@ export async function submitRemoteExpertTurn(
   runtime.turnId = input.requestId;
   runtime.assistantText = "";
   runtime.reasoningText = "";
+  runtime.reconciliationMismatch = false;
   try {
     const catalog = await fetchRemoteExpertCatalog();
     const item = catalog.items.find((entry) => entry.agentRef === input.agentRef);
@@ -619,14 +642,11 @@ export async function submitRemoteExpertTurn(
         desktop_session_id: input.desktopSessionId,
       });
     }
-    // If Provider ACP errored the prompt RPC as ACP_REMOTE_RUN_FAILED but we
-    // already received assistant deltas, prefer completed (ops often shows run OK).
+    // ACP_REMOTE_RUN_FAILED stays failed even when streamed text exists (Q3/Q8).
+    // Keep assistant body via materialize above; never rewrite to end_turn/completed.
     let stopReason = result.stopReason;
-    if (
-      stopReason === "ACP_REMOTE_RUN_FAILED" &&
-      runtime.assistantText.trim().length > 0
-    ) {
-      stopReason = "end_turn";
+    if (runtime.reconciliationMismatch) {
+      stopReason = "ACP_STREAM_RECONCILIATION_MISMATCH";
     }
     const outcome =
       stopReason === "cancelled"
@@ -642,18 +662,20 @@ export async function submitRemoteExpertTurn(
         sessionId: input.desktopSessionId,
         outcome,
         stopReason,
+        errorCode: outcome === "failed" ? stopReason : undefined,
       });
     }
     emitRemoteExpertLog({
       operation_id: input.requestId,
       trace_id: runtime.client.traceId,
       stage: "PROMPT",
-      status: "PASS",
+      status: outcome === "completed" ? "PASS" : "FAIL",
       agent_ref: input.agentRef,
       desktop_session_id: input.desktopSessionId,
       acp_session_id: acpSessionId,
       request_id: input.requestId,
       last_seq: runtime.client.lastSeq,
+      error_code: outcome === "failed" ? stopReason : undefined,
     });
     return { requestId: input.requestId, sessionId: input.desktopSessionId };
   } finally {
@@ -797,6 +819,8 @@ function isSessionLost(err: unknown): boolean {
   if (!(err instanceof RemoteExpertError)) return false;
   return (
     err.code === "REMOTE_EXPERT_SESSION_LOST" ||
+    err.code === "ACP_RUNTIME_SESSION_BINDING_MISSING" ||
+    err.code === "ACP_RUNTIME_SESSION_CONTINUITY_LOST" ||
     /session not found/i.test(err.message)
   );
 }

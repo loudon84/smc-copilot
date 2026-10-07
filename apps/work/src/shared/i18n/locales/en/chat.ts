@@ -204,8 +204,15 @@ export default {
     unavailable: "unavailable",
     checking: "Checking Remote Experts…",
     unavailableEntry: "Remote Expert unavailable",
-    incompatible: "Remote Expert contract incompatible",
+    incompatible:
+      "Remote Expert contract incompatible (expected 2.1.0). Local chat remains available.",
     mismatchFields: "Mismatch: {{fields}}",
+    continuityLost:
+      "Remote Expert session continuity was lost. Start a new chat to continue.",
+    remoteRunFailed:
+      "Remote Expert run failed on the provider. Streamed answer is kept where available.",
+    reconciliationMismatch:
+      "Remote Expert stream reconciliation failed. Start a new request.",
     noExperts: "No Remote Experts available",
     catalogUnavailable: "Catalog unavailable",
     retry: "Retry",

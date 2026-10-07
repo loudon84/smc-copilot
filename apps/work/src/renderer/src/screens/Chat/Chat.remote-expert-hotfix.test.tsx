@@ -337,7 +337,7 @@ describe("Chat remote-expert hotfix routing", () => {
     expect(handleSend).not.toHaveBeenCalled();
   });
 
-  it("[A-SESSION-LOST-UI-001] maps binding-missing to sessionExpired toast/copy", async () => {
+  it("[A-SESSION-LOST-UI-001] [A-SMC-2106] maps binding-missing to continuityLost toast/copy", async () => {
     remoteSubmit.mockRejectedValue(
       new Error(
         "Error invoking remote method 'remote-expert:submit': RemoteExpertError: prior runtime session binding missing",
@@ -369,10 +369,10 @@ describe("Chat remote-expert hotfix routing", () => {
     fireEvent.click(screen.getByTestId("send-remote"));
     await waitFor(() => expect(remoteSubmit).toHaveBeenCalled());
     await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith("chat.remoteExpert.sessionExpired"),
+      expect(toastError).toHaveBeenCalledWith("chat.remoteExpert.continuityLost"),
     );
     await waitFor(() =>
-      expect(screen.getByText("chat.remoteExpert.sessionExpired")).toBeTruthy(),
+      expect(screen.getByText("chat.remoteExpert.continuityLost")).toBeTruthy(),
     );
     expect(screen.queryByText(/prior runtime session binding missing/i)).toBeNull();
   });

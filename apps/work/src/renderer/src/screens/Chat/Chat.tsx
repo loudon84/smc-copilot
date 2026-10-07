@@ -425,6 +425,33 @@ function Chat({
           ),
         );
       }
+      if (event.type === "assistant.snapshot") {
+        // Matching snapshot replaces streamed body; never second-append (Q6).
+        const assistantId = remoteAssistantByTurnRef.current.get(event.turnId);
+        if (!assistantId) return;
+        setMessages((prev) =>
+          prev.map((message) => {
+            if (message.id !== assistantId || !("content" in message)) {
+              return message;
+            }
+            const streamed = String(message.content ?? "");
+            const snap = event.text;
+            if (
+              streamed.length > 0 &&
+              snap.length > 0 &&
+              streamed !== snap &&
+              !snap.startsWith(streamed)
+            ) {
+              return {
+                ...message,
+                pending: false,
+                error: "ACP_STREAM_RECONCILIATION_MISMATCH",
+              };
+            }
+            return { ...message, content: snap };
+          }),
+        );
+      }
       if (event.type === "reasoning.delta") {
         const assistantId = remoteAssistantByTurnRef.current.get(event.turnId);
         if (!assistantId) return;
@@ -1756,6 +1783,8 @@ function Chat({
             setRemoteExpertBusy(false);
             const sessionLost =
               /REMOTE_EXPERT_SESSION_LOST/i.test(errorText) ||
+              /ACP_RUNTIME_SESSION_BINDING_MISSING/i.test(errorText) ||
+              /ACP_RUNTIME_SESSION_CONTINUITY_LOST/i.test(errorText) ||
               /prior runtime session binding missing/i.test(errorText) ||
               /session not found/i.test(errorText) ||
               /resume sessionId mismatch/i.test(errorText);
@@ -1766,13 +1795,19 @@ function Chat({
             } else if (/execution context denied/i.test(errorText)) {
               userFacing = t("chat.remoteExpert.executionContextDenied");
               toast.error(userFacing);
+            } else if (/ACP_STREAM_RECONCILIATION_MISMATCH/i.test(errorText)) {
+              userFacing = t("chat.remoteExpert.reconciliationMismatch");
+              toast.error(userFacing);
             } else if (sessionLost) {
-              // ADR-039: binding-missing / session lost → expire UX, not raw Provider text.
+              // Continuity / binding lost → expire UX; keep streamed body.
               setRemoteResumeBlocked(true);
               setRemoteExpertSession((prev) =>
                 prev ? { ...prev, connectionState: "expired" } : prev,
               );
-              userFacing = t("chat.remoteExpert.sessionExpired");
+              userFacing = t("chat.remoteExpert.continuityLost");
+              toast.error(userFacing);
+            } else if (/ACP_REMOTE_RUN_FAILED/i.test(errorText)) {
+              userFacing = t("chat.remoteExpert.remoteRunFailed");
               toast.error(userFacing);
             } else {
               toast.error(errorText);

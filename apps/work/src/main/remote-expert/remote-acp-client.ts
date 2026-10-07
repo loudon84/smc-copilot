@@ -88,15 +88,33 @@ export function mapAcpRpcError(error: {
   ) {
     return new RemoteExpertError("REMOTE_EXPERT_FORBIDDEN", message);
   }
+  // Continuity codes: passthrough Provider symbols (Q7). Do not wrap first.
+  if (
+    raw === "ACP_RUNTIME_SESSION_BINDING_MISSING" ||
+    /prior runtime session binding missing/i.test(message)
+  ) {
+    return new RemoteExpertError(
+      "ACP_RUNTIME_SESSION_BINDING_MISSING",
+      message,
+    );
+  }
+  if (raw === "ACP_RUNTIME_SESSION_CONTINUITY_LOST") {
+    return new RemoteExpertError(
+      "ACP_RUNTIME_SESSION_CONTINUITY_LOST",
+      message,
+    );
+  }
+  if (raw === "ACP_STREAM_RECONCILIATION_MISMATCH") {
+    return new RemoteExpertError(
+      "ACP_STREAM_RECONCILIATION_MISMATCH",
+      message,
+    );
+  }
   if (
     raw === "ACP_SESSION_NOT_FOUND" ||
     raw === "REMOTE_EXPERT_SESSION_LOST" ||
-    raw === "ACP_SESSION_RESUME_FORBIDDEN" ||
-    /prior runtime session binding missing/i.test(message)
+    raw === "ACP_SESSION_RESUME_FORBIDDEN"
   ) {
-    // Provider lost the runtime↔session binding (e.g. after restart/resume).
-    // Treat as session lost so the turn service marks expired instead of
-    // surfacing a raw ACP_PROTOCOL_ERROR.
     return new RemoteExpertError("REMOTE_EXPERT_SESSION_LOST", message);
   }
   if (raw === "ACP_REMOTE_RUN_FAILED" || /remote run failed/i.test(message)) {

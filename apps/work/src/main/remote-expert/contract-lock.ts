@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 
 export const FRONTEND_BUNDLE_DIGEST =
-  "3de6c671bd9b22c5d6e35855f9dbb3f8432a6f0291df21b4824dc6ff9a0df43a";
+  "aa2e1671c6bb1d4c5e8fc5c5c13886fdd94224644b44b3f1c714b04b4ff7e02d";
 
 export const REQUIRED_CONSUMER_LOCK_KEYS = [
   "contractName",
@@ -22,27 +22,17 @@ export const REQUIRED_CONSUMER_LOCK_KEYS = [
   "transportProfile",
 ] as const;
 
-/**
- * Lock types stay on v2.0.0. When Provider freezes v2.1.0, widen literals and
- * point resolveFrontendContractRoot at contracts/remote-expert-frontend/v2.1.0
- * using exact frozen digests (never placeholders).
- */
-/**
- * Lock types stay on v2.0.0. When Provider freezes v2.1.0, widen literals and
- * point resolveFrontendContractRoot at contracts/remote-expert-frontend/v2.1.0
- * using exact frozen digests (never placeholders).
- */
 export type ConsumerLock = {
   contractName: "REMOTE-EXPERT-FRONTEND-CONTRACT";
-  contractVersion: "2.0.0";
+  contractVersion: "2.1.0";
   providerRepository: "loudon84/nodeskclaw";
-  tagName: "remote-expert-frontend-contract-v2.0.0";
-  tagTargetCommit: "5d36d6f7bebe1e70e7e031eaf384e124c76d98bc";
-  frontendContractVersion: "2.0.0";
+  tagName: "remote-expert-frontend-contract-v2.1.0";
+  tagTargetCommit: "9982d57510581cb3e1bc4b45b59eac11c99b3a52";
+  frontendContractVersion: "2.1.0";
   frontendContractDigest: string;
   catalogContractVersion: "1.1.0";
   catalogContractDigest: string;
-  remoteAcpContractVersion: "1.0.0";
+  remoteAcpContractVersion: "1.1.0";
   remoteAcpContractDigest: string;
   acpProtocolVersion: 1;
   transportProfile: "nodeskclaw.remote-acp.v1";
@@ -73,10 +63,10 @@ export function sha256CanonicalLf(path: string): string {
 export function resolveFrontendContractRoot(cwd = process.cwd()): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    join(cwd, "contracts/remote-expert-frontend/v2.0.0"),
-    join(cwd, "../contracts/remote-expert-frontend/v2.0.0"),
-    join(cwd, "../../contracts/remote-expert-frontend/v2.0.0"),
-    resolve(here, "../../../../../contracts/remote-expert-frontend/v2.0.0"),
+    join(cwd, "contracts/remote-expert-frontend/v2.1.0"),
+    join(cwd, "../contracts/remote-expert-frontend/v2.1.0"),
+    join(cwd, "../../contracts/remote-expert-frontend/v2.1.0"),
+    resolve(here, "../../../../../contracts/remote-expert-frontend/v2.1.0"),
   ];
   for (const candidate of candidates) {
     if (existsSync(join(candidate, "consumer-lock.json"))) {
@@ -85,7 +75,7 @@ export function resolveFrontendContractRoot(cwd = process.cwd()): string {
   }
   throw new RemoteExpertLockError(
     "ACP_CONTRACT_LOCK_MISSING",
-    "REMOTE-EXPERT-FRONTEND-CONTRACT v2.0.0 consumer-lock.json not found",
+    "REMOTE-EXPERT-FRONTEND-CONTRACT v2.1.0 consumer-lock.json not found",
   );
 }
 
@@ -188,4 +178,3 @@ export function verifyConsumerLock(root: string): ConsumerLock {
   }
   return lock;
 }
-

@@ -1,26 +1,28 @@
 /**
- * Consumer pin remains v2.0.0 until Provider REMOTE-EXPERT-FRONTEND-CONTRACT
- * v2.1.0 is frozen. Pin-finalization (A-SMC-007) is BLOCKED — do not invent digests.
- * Target after freeze: contractVersion "2.1.0" + exact SHA256SUMS digests.
+ * Unique Consumer pin: REMOTE-EXPERT-FRONTEND-CONTRACT v2.1.0 (Provider FROZEN).
+ * Digests from contracts/remote-expert-frontend/v2.1.0/ (G4 freeze SHA256SUMS).
+ * RUNTIME_CONTRACT_DIGEST is observational only — never fail-closed on it alone.
  */
-export const REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION = "2.0.0" as const;
-export const REMOTE_EXPERT_PIN_FINALIZATION_STATUS =
-  "BLOCKED_UNTIL_PROVIDER_V2_1_0_FROZEN" as const;
+export const REMOTE_EXPERT_FRONTEND_CONTRACT_VERSION = "2.1.0" as const;
+export const REMOTE_EXPERT_PIN_FINALIZATION_STATUS = "PINNED_V2_1_0" as const;
 export const FRONTEND_CONTRACT_DIGEST =
-  "22ad68dd1132a073f6df5d2bf9f219b683c73ebb7ea1fa48933c9b92a744ecd5";
+  "b25a9edbf2fa5afd6f15cb1cc1f8b17d6cb63b613bf18a2212e75002c61b4aba";
 export const CATALOG_CONTRACT_VERSION = "1.1.0" as const;
 export const CATALOG_CONTRACT_DIGEST =
   "d51d27a33e6776be780bf3556ffa4ef4f6dab7f731c0a48421683708364efd2c";
-export const REMOTE_ACP_CONTRACT_VERSION = "1.0.0" as const;
+export const REMOTE_ACP_CONTRACT_VERSION = "1.1.0" as const;
 export const REMOTE_ACP_CONTRACT_DIGEST =
-  "8a48e74e363c71875739c33b2bcdcb6f6f2ea7ee15897ae9fb9b8e9407ee9d06";
+  "86668a0a013ca3aef08f11611c6c32cb7643918caf21f5d530049b0d0a1a28be";
+/** Observational only — must not enter listDiscoveryMismatches fail-closed set. */
+export const RUNTIME_CONTRACT_DIGEST =
+  "0c796f63391a5585f7a57318d7b202eb57a65039ee27555adabefce53287e17a";
 export const ACP_PROTOCOL_VERSION = 1 as const;
 export const TRANSPORT_PROFILE = "nodeskclaw.remote-acp.v1" as const;
-export const PROVIDER_TAG = "remote-expert-frontend-contract-v2.0.0" as const;
+export const PROVIDER_TAG = "remote-expert-frontend-contract-v2.1.0" as const;
 export const PROVIDER_TAG_TARGET =
-  "5d36d6f7bebe1e70e7e031eaf384e124c76d98bc" as const;
+  "9982d57510581cb3e1bc4b45b59eac11c99b3a52" as const;
 export const FRONTEND_BUNDLE_DIGEST =
-  "3de6c671bd9b22c5d6e35855f9dbb3f8432a6f0291df21b4824dc6ff9a0df43a";
+  "aa2e1671c6bb1d4c5e8fc5c5c13886fdd94224644b44b3f1c714b04b4ff7e02d";
 
 export const REMOTE_EXPERT_EXECUTION_PROVIDER = "remote-expert-acp" as const;
 export const REMOTE_EXPERT_CHAT_MODE = "remote-expert" as const;
@@ -82,7 +84,13 @@ export const REMOTE_EXPERT_ERROR_CODES = [
   "FILE_INTEGRITY_MISMATCH",
   "ACP_SESSION_BUSY",
   "ACP_REMOTE_RUN_FAILED",
+  "ACP_RUNTIME_SESSION_BINDING_MISSING",
+  "ACP_RUNTIME_SESSION_CONTINUITY_LOST",
+  "ACP_STREAM_RECONCILIATION_MISMATCH",
   "ACP_PROTOCOL_ERROR",
+  "REMOTE_EXPERT_CONNECTION_FAILED",
+  "REMOTE_EXPERT_TURN_FAILED",
+  "REMOTE_EXPERT_SESSION_FAILED",
   "REMOTE_IPC_INVALID_INPUT",
   "ACP_CONTRACT_LOCK_MISSING",
   "REMOTE_EXPERT_UI_AVAILABILITY_FAILED",
@@ -227,6 +235,7 @@ export type RemoteExpertSemanticEvent = {
   sessionId?: string;
 } & (
   | { type: "assistant.delta"; turnId: string; text: string }
+  | { type: "assistant.snapshot"; turnId: string; text: string }
   | { type: "reasoning.delta"; turnId: string; text: string }
   | {
       type: "tool.call";

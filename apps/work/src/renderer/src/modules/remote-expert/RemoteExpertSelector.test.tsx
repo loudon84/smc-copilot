@@ -7,15 +7,16 @@ vi.mock("../../components/useI18n", () => ({
   useI18n: () => ({
     t: (key: string) =>
       ({
-        "remoteExpert.label": "Remote Expert",
-        "remoteExpert.localChat": "Local chat",
-        "remoteExpert.unavailable": "unavailable",
-        "remoteExpert.checking": "Checking Remote Experts…",
-        "remoteExpert.unavailableEntry": "Remote Expert unavailable",
-        "remoteExpert.incompatible": "Remote Expert contract incompatible",
-        "remoteExpert.noExperts": "No Remote Experts available",
-        "remoteExpert.catalogUnavailable": "Catalog unavailable",
-        "remoteExpert.gateUnavailable":
+        "chat.remoteExpert.label": "Remote Expert",
+        "chat.remoteExpert.localChat": "Local chat",
+        "chat.remoteExpert.unavailable": "unavailable",
+        "chat.remoteExpert.checking": "Checking Remote Experts…",
+        "chat.remoteExpert.unavailableEntry": "Remote Expert unavailable",
+        "chat.remoteExpert.incompatible":
+          "Remote Expert contract incompatible (expected 2.1.0). Local chat remains available.",
+        "chat.remoteExpert.noExperts": "No Remote Experts available",
+        "chat.remoteExpert.catalogUnavailable": "Catalog unavailable",
+        "chat.remoteExpert.gateUnavailable":
           "Remote Expert is unavailable. Sending is blocked.",
       }[key] ?? key),
   }),

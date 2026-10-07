@@ -23,6 +23,32 @@ describe("mapAcpRpcError", () => {
     });
     expect(bySymbol.code).toBe("REMOTE_EXPERT_FORBIDDEN");
   });
+
+  it("[A-SMC-2106] passthrough continuity Provider codes without wrapping", () => {
+    expect(
+      mapAcpRpcError({
+        message: "prior runtime session binding missing",
+        data: { error_code: "ACP_RUNTIME_SESSION_BINDING_MISSING" },
+      }).code,
+    ).toBe("ACP_RUNTIME_SESSION_BINDING_MISSING");
+    expect(
+      mapAcpRpcError({
+        message: "prior runtime session binding missing",
+      }).code,
+    ).toBe("ACP_RUNTIME_SESSION_BINDING_MISSING");
+    expect(
+      mapAcpRpcError({
+        message: "continuity lost",
+        data: { error_code: "ACP_RUNTIME_SESSION_CONTINUITY_LOST" },
+      }).code,
+    ).toBe("ACP_RUNTIME_SESSION_CONTINUITY_LOST");
+    expect(
+      mapAcpRpcError({
+        message: "mismatch",
+        data: { error_code: "ACP_STREAM_RECONCILIATION_MISMATCH" },
+      }).code,
+    ).toBe("ACP_STREAM_RECONCILIATION_MISMATCH");
+  });
 });
 
 describe("RemoteAcpClient transport", () => {
@@ -56,7 +82,7 @@ describe("RemoteAcpClient transport", () => {
     }
   });
 
-  it("[A-TRANSPORT-001] [A-SESSION-001] [A-PROMPT-001] handshakes, streams prompt updates, then terminals", async () => {
+  it("[A-TRANSPORT-001] [A-SESSION-001] [A-PROMPT-001] [A-SMC-2102] handshakes, streams prompt updates, then terminals", async () => {
     const server = await startFakeRemoteAcpServer({ scenario: "prompt" });
     try {
       const client = new RemoteAcpClient({
@@ -219,7 +245,7 @@ describe("RemoteAcpClient transport", () => {
     }
   }, 20_000);
 
-  it("[A-SMC-003] [N-SMC-002] turn cursor reset accepts Turn2 seq=1 after Turn1 seq=72", async () => {
+  it("[A-SMC-003] [A-SMC-2105] [N-SMC-002] turn cursor reset accepts Turn2 seq=1 after Turn1 seq=72", async () => {
     const server = await startFakeRemoteAcpServer({
       scenario: "turn-seq-reset",
     });

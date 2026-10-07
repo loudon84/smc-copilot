@@ -12,11 +12,11 @@ import {
 } from "./remote-expert-contract-gate";
 
 const MATCHING = {
-  frontendContractVersion: "2.0.0",
+  frontendContractVersion: "2.1.0",
   frontendContractDigest: FRONTEND_CONTRACT_DIGEST,
   catalogContractVersion: "1.1.0",
   catalogContractDigest: CATALOG_CONTRACT_DIGEST,
-  remoteAcpContractVersion: "1.0.0",
+  remoteAcpContractVersion: "1.1.0",
   remoteAcpContractDigest: REMOTE_ACP_CONTRACT_DIGEST,
   acpProtocolVersion: 1,
   transportProfile: "nodeskclaw.remote-acp.v1",
@@ -39,11 +39,11 @@ describe("remote expert contract gate", () => {
     expect(getContractGateState()).toBe("COMPATIBLE");
   });
 
-  it("[A-NEG-CONTRACT-001] fails closed when one digest hex digit changes", async () => {
+  it("[A-NEG-CONTRACT-001] [A-SMC-2101] fails closed when one digest hex digit changes", async () => {
     const tampered = {
       ...MATCHING,
       frontendContractDigest:
-        "32ad68dd1132a073f6df5d2bf9f219b683c73ebb7ea1fa48933c9b92a744ecd5",
+        "c25a9edbf2fa5afd6f15cb1cc1f8b17d6cb63b613bf18a2212e75002c61b4aba",
     };
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify(tampered), { status: 200 }),

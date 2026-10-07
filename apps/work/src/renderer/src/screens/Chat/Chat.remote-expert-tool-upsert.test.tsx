@@ -223,7 +223,7 @@ describe("Chat remote-expert tool upsert", () => {
     resetSkillRunStoreForTests();
   });
 
-  it("[A-SMC-002] [N-SMC-001] [F-SMC-003] upserts same toolCallId and keeps failed status", async () => {
+  it("[A-SMC-002] [A-SMC-2104] [N-SMC-001] [F-SMC-003] upserts same toolCallId and keeps failed status", async () => {
     const sessionId = "desktop-tool-1";
     render(
       <Chat

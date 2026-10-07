@@ -165,13 +165,14 @@ export async function startFakeRemoteAcpServer(options?: {
           error: {
             code: -32000,
             message: "prior runtime session binding missing",
+            data: { error_code: "ACP_RUNTIME_SESSION_BINDING_MISSING" },
           },
         });
         return;
       }
       if (scenario === "remote-run-failed") {
-        // Stream assistant text then close prompt via JSON-RPC error
-        // (Provider mis-channel; Consumer must still complete the turn).
+        // Stream assistant text then close prompt via JSON-RPC error.
+        // Consumer MUST keep text and emit turn.end outcome=failed (not completed).
         seq += 1;
         send(ws, {
           method: "session/update",

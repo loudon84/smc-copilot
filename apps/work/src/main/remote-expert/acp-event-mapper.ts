@@ -176,13 +176,24 @@ export function mapAcpSessionUpdate(input: {
       update.type ??
       "",
   );
-  if (kind === "agent_message_chunk" || kind === "agent_message") {
+  if (kind === "agent_message_chunk") {
     const text = extractText(update.content && isRecord(update.content) ? update.content : update);
     if (isRecord(update.content) && update.content.type === "resource_link") {
       return [];
     }
     if (text) {
       return [{ type: "assistant.delta", turnId: input.turnId, text }];
+    }
+    return [];
+  }
+  if (kind === "agent_message") {
+    // Full-message snapshot is reconciliation authority — never a second append.
+    const text = extractText(update.content && isRecord(update.content) ? update.content : update);
+    if (isRecord(update.content) && update.content.type === "resource_link") {
+      return [];
+    }
+    if (text) {
+      return [{ type: "assistant.snapshot", turnId: input.turnId, text }];
     }
     return [];
   }

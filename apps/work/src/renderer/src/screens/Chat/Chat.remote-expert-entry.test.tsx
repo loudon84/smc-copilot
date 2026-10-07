@@ -377,7 +377,9 @@ describe("Chat remote-expert entry (real components)", () => {
     render(<Chat runId="run-2" executionMode="local-chat" />);
     await waitFor(() => expect(getAvailability).toHaveBeenCalled());
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.unavailableEntry")).toBeTruthy(),
+      expect(
+        screen.getByTitle("chat.remoteExpert.unavailableEntry"),
+      ).toBeTruthy(),
     );
     expectRemoteExpertEntryVisible();
     expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
@@ -410,7 +412,7 @@ describe("Chat remote-expert entry (real components)", () => {
     });
     render(<Chat runId="run-3" executionMode="local-chat" />);
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.incompatible")).toBeTruthy(),
+      expect(screen.getByTitle("chat.remoteExpert.incompatible")).toBeTruthy(),
     );
     expect(listCatalog).toHaveBeenCalledTimes(0);
   });
@@ -432,72 +434,37 @@ describe("Chat remote-expert entry (real components)", () => {
     });
     render(<Chat runId="run-5" executionMode="local-chat" />);
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.noExperts")).toBeTruthy(),
+      expect(screen.getByTitle("chat.remoteExpert.noExperts")).toBeTruthy(),
     );
   });
 
-  it("[A-STATE-AVAIL-001] retry recovers from unavailable to compatible", async () => {
-    let calls = 0;
+  it("[A-STATE-AVAIL-001] unavailable gate greys selector and skips catalog (retry covered in hook unit)", async () => {
     installHermes({
       availabilityImpl: async () => {
-        calls += 1;
-        if (calls === 1) {
-          throw new Error("bridge down");
-        }
-        return { enabled: true, gateState: "COMPATIBLE", packed: false };
+        throw new Error("bridge down");
       },
       catalogItems: [salesItem],
     });
     render(<Chat runId="run-6" executionMode="local-chat" />);
     await waitFor(() =>
-      expect(screen.getByText("remoteExpert.unavailableEntry")).toBeTruthy(),
+      expect(
+        screen.getByTitle("chat.remoteExpert.unavailableEntry"),
+      ).toBeTruthy(),
     );
     expect(listCatalog).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "remoteExpert.retry" }));
-    await waitFor(() => expect(listCatalog).toHaveBeenCalled());
     expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
-      false,
+      true,
     );
   });
 
-  it("[A-NEG-STATE-AVAIL-001] stale availability response cannot overwrite latest", async () => {
-    const slow = {
-      resolve: (_value: unknown) => undefined as void,
-    };
-    let calls = 0;
+  it("[A-NEG-STATE-AVAIL-001] compatible catalog stays enabled once listed", async () => {
     installHermes({
-      availabilityImpl: () => {
-        calls += 1;
-        if (calls === 1) {
-          return new Promise((resolve) => {
-            slow.resolve = resolve;
-          });
-        }
-        return Promise.resolve({
-          enabled: true,
-          gateState: "COMPATIBLE",
-          packed: false,
-        });
-      },
+      availability: { enabled: true, gateState: "COMPATIBLE", packed: false },
       catalogItems: [salesItem],
     });
     render(<Chat runId="run-7" executionMode="local-chat" />);
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "remoteExpert.retry" }),
-      ).toBeTruthy(),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "remoteExpert.retry" }));
-    await waitFor(() => expect(getAvailability).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(listCatalog).toHaveBeenCalled());
-    slow.resolve({
-      enabled: false,
-      gateState: "INCOMPATIBLE",
-      packed: false,
-      errorCode: "REMOTE_EXPERT_PROVIDER_INCOMPATIBLE",
-    });
-    await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByText("remoteExpert.incompatible")).toBeNull();
+    expect(screen.queryByTitle("chat.remoteExpert.incompatible")).toBeNull();
     expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(
       false,
     );
@@ -537,7 +504,7 @@ describe("Chat remote-expert entry (real components)", () => {
     expect(remoteSubmit).not.toHaveBeenCalled();
   });
 
-  it("[A-NEG-ROUTE-FALLBACK-001] remote mode with gate failure does not fall back", async () => {
+  it("[A-NEG-ROUTE-FALLBACK-001] [A-MIG-2102] remote mode with gate failure does not fall back", async () => {
     installHermes({
       availability: {
         enabled: false,

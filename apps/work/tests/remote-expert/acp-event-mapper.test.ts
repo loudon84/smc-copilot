@@ -102,7 +102,34 @@ describe("acp-event-mapper", () => {
     expect(unknown).toEqual([]);
   });
 
-  it("[A-SMC-001] maps rich tool.call / tool.result / failed / redacted fields", () => {
+  it("[A-SMC-2103] chunk appends as delta; agent_message is snapshot not delta", () => {
+    const chunk = mapAcpSessionUpdate({
+      turnId: "t-snap",
+      sessionId: "s1",
+      params: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "Hello" },
+      },
+    });
+    expect(chunk).toEqual([
+      { type: "assistant.delta", turnId: "t-snap", text: "Hello" },
+    ]);
+
+    const snap = mapAcpSessionUpdate({
+      turnId: "t-snap",
+      sessionId: "s1",
+      params: {
+        sessionUpdate: "agent_message",
+        content: { type: "text", text: "Hello world" },
+      },
+    });
+    expect(snap).toEqual([
+      { type: "assistant.snapshot", turnId: "t-snap", text: "Hello world" },
+    ]);
+    assertNoForbidden(snap);
+  });
+
+  it("[A-SMC-001] [A-SMC-2104] maps rich tool.call / tool.result / failed / redacted fields", () => {
     const call = mapAcpSessionUpdate({
       turnId: "t-rich",
       sessionId: "s1",
