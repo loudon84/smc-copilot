@@ -225,7 +225,7 @@ export function createKnowledgeHttpProvider(
     path: string,
     init: RequestInit & { idempotencyKey?: string },
     operationId: string,
-    stage: string,
+    _stage: string,
     _options: { allowNonIdempotentRetry?: boolean } = {},
   ): Promise<{ status: number; body: unknown }> {
     try {

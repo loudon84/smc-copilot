@@ -39,6 +39,7 @@ import {
   bootstrapRuntimeProvider,
   clearRuntimeProvider,
   getRuntimeProviderPublicState,
+  settleTransientRuntimeProviderFailure,
   type RuntimeProviderPublicState,
 } from "../runtime-provider/runtime-provider-orchestrator";
 import {
@@ -106,8 +107,17 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
         const result = await bootstrapRuntimeProvider("login");
         notifyAcceptedRuntimeBootstrap(result);
       }
-    } catch {
-      /* scheduler failure must not fail portal login */
+    } catch (err) {
+      /* Portal login must succeed even if enterprise apply throws. */
+      console.error(
+        "[runtime-provider] login bootstrap failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+      settleTransientRuntimeProviderFailure(
+        undefined,
+        undefined,
+        "RUNTIME_PROVIDER_APPLY_FAILED",
+      );
     }
     restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
@@ -185,8 +195,16 @@ async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState>
       }
     }
     return result.state;
-  } catch {
-    return getRuntimeProviderPublicState();
+  } catch (err) {
+    console.error(
+      "[runtime-provider] restore failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return settleTransientRuntimeProviderFailure(
+      undefined,
+      undefined,
+      "RUNTIME_PROVIDER_APPLY_FAILED",
+    );
   }
 }
 

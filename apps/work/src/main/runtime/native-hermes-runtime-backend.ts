@@ -101,6 +101,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 }
 
+// Health-check window after `gateway start` / `gateway restart`. The Python
+// gateway cold-starts well beyond 15s on AV-scanned Windows machines (Defender
+// real-time scan of the bundle + first-run bytecode compilation): the process
+// comes up healthy a few seconds AFTER a 15s deadline, the caller then rolls
+// back a perfectly good apply and reports RUNTIME_GATEWAY_RESTART_FAILED
+// (field incident 2026-10-08, Windows Server VM). 60s covers the observed
+// cold-start envelope; a healthy gateway still returns on the first poll.
+const GATEWAY_START_HEALTH_TIMEOUT_MS = 60_000;
+
 async function waitForGatewayHealth(
   endpoint: string,
   timeoutMs = 15_000,
@@ -306,6 +315,7 @@ export class NativeHermesRuntimeAdapter implements HermesRuntimeAdapter {
       invokeGatewayCli("start", profile);
       const healthy = await waitForGatewayHealth(
         probe.endpoint ?? "http://127.0.0.1:8642",
+        GATEWAY_START_HEALTH_TIMEOUT_MS,
       );
       if (healthy) {
         probe = await this.probe(profile);
@@ -330,7 +340,10 @@ export class NativeHermesRuntimeAdapter implements HermesRuntimeAdapter {
     }
 
     invokeGatewayCli("restart", profile);
-    const healthy = await waitForGatewayHealth(loc.endpoint);
+    const healthy = await waitForGatewayHealth(
+      loc.endpoint,
+      GATEWAY_START_HEALTH_TIMEOUT_MS,
+    );
     if (!healthy) {
       return {
         ok: false,

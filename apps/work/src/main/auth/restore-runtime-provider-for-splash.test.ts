@@ -7,6 +7,7 @@ const {
   getRuntimeProviderPublicState,
   notifyAcceptedRuntimeBootstrap,
   readStoredSessionSync,
+  settleTransientRuntimeProviderFailure,
 } = vi.hoisted(() => {
   const connection = { mode: "local" as "local" | "remote" | "ssh" };
   return {
@@ -16,6 +17,12 @@ const {
     getRuntimeProviderPublicState: vi.fn((): { state: string } => ({
       state: "UNBOUND",
     })),
+    settleTransientRuntimeProviderFailure: vi.fn(
+      (): { state: string; errorCode: string } => ({
+        state: "ERROR",
+        errorCode: "RUNTIME_PROVIDER_APPLY_FAILED",
+      }),
+    ),
     notifyAcceptedRuntimeBootstrap: vi.fn(),
     readStoredSessionSync: vi.fn((): { accessToken: string } | null => ({
       accessToken: "token",
@@ -62,6 +69,7 @@ vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
   bootstrapRuntimeProvider,
   clearRuntimeProvider: vi.fn(),
   getRuntimeProviderPublicState,
+  settleTransientRuntimeProviderFailure,
 }));
 
 vi.mock("../runtime-provider/runtime-provider-reconcile-bindings", () => ({
@@ -168,12 +176,18 @@ describe("restoreRuntimeProviderForSplash", () => {
     expect(notifyAcceptedRuntimeBootstrap).not.toHaveBeenCalled();
   });
 
-  it("returns the public state and keeps the session when bootstrap throws", async () => {
+  it("settles transient APPLYING/FETCHING to ERROR when bootstrap throws", async () => {
     bootstrapRuntimeProvider.mockRejectedValue(new Error("boom"));
     getRuntimeProviderPublicState.mockReturnValue({ state: "FETCHING" });
     await expect(restoreRuntimeProviderForSplash()).resolves.toEqual({
-      state: "FETCHING",
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_APPLY_FAILED",
     });
+    expect(settleTransientRuntimeProviderFailure).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      "RUNTIME_PROVIDER_APPLY_FAILED",
+    );
     expect(clearStoredSession).not.toHaveBeenCalled();
   });
 });

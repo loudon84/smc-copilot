@@ -196,10 +196,22 @@ export function projectManagedRuntime(
   input: ManagedProjectionInput,
 ): { ok: true } | { ok: false; error: "MANAGED_PROVIDER_IDENTITY_CONFLICT" } {
   const normalized = profileForFiles(profile);
+  const step = (name: string): void => {
+    console.info(
+      JSON.stringify({
+        event: "runtime_provider_project_step",
+        step: name,
+        profile: normalized || "default",
+      }),
+    );
+  };
+  step("identity_check");
   if (detectManagedIdentityConflict(normalized)) {
     return { ok: false, error: "MANAGED_PROVIDER_IDENTITY_CONFLICT" };
   }
+  step("adoption");
   rememberAdoption(normalized);
+  step("upsert_yaml_provider");
   upsertAgentUserProvider(normalized, {
     name: NODESKCLAW_DISPLAY_NAME,
     baseUrl: input.baseUrl,
@@ -207,6 +219,7 @@ export function projectManagedRuntime(
     apiMode: NODESKCLAW_API_MODE,
     slug: NODESKCLAW_PROVIDER_KEY,
   });
+  step("registry_write");
   const registry = readProviderRegistry(normalized);
   const existing = registry.providers.find(
     (row) => row.providerKey === NODESKCLAW_PROVIDER_KEY,
@@ -227,6 +240,7 @@ export function projectManagedRuntime(
   providers.push(record);
   writeProviderRegistry(normalized, { version: 2, providers });
 
+  step("models_write");
   const rows = readModelsRaw(normalized).filter(
     (row) => row.providerRef !== NODESKCLAW_PROVIDER_REF,
   );
@@ -241,6 +255,7 @@ export function projectManagedRuntime(
     createdAt: Date.now(),
   }));
   writeModels([...rows, ...managed], normalized);
+  step("active_model");
   setModelConfig(NODESKCLAW_PROVIDER_KEY, input.defaultModel, "", normalized);
   const { configFile } = profilePaths(normalized);
   if (existsSync(configFile)) {
@@ -249,6 +264,7 @@ export function projectManagedRuntime(
       removeBlockChild(readFileSync(configFile, "utf-8"), "model", "base_url"),
     );
   }
+  step("session_overrides");
   const allowed = new Set(input.models.map((model) => model.id));
   for (const row of listSessionModelOverrides()) {
     if (
@@ -273,5 +289,6 @@ export function projectManagedRuntime(
       migrationStatus: "canonical",
     });
   }
+  step("done");
   return { ok: true };
 }

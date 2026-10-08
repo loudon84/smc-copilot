@@ -683,21 +683,27 @@ function readTopLevelBlock(
   blockBodyStart: number | null;
   childIndent: string;
 } {
+  // Tolerate a UTF-8 BOM: it would otherwise hide a block header sitting on
+  // line 1 from the ^-anchored match below (the BOM char occupies column 0).
+  // Scan a BOM-free view, then shift returned offsets back into the caller's
+  // coordinate space so writers splice the original string correctly.
+  const bom = content.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const view = bom === 1 ? content.slice(1) : content;
   const startRe = new RegExp(`^${escapeRegex(blockName)}:[ \\t]*\\r?\\n`, "m");
-  const start = content.match(startRe);
+  const start = view.match(startRe);
   if (!start || start.index === undefined) {
     return { children: new Map(), blockBodyStart: null, childIndent: "  " };
   }
 
-  const blockBodyStart = start.index + start[0].length;
+  const viewBodyStart = start.index + start[0].length;
   const children = new Map<string, BlockChild>();
   let firstChildIndent: string | null = null;
-  let cursor = blockBodyStart;
+  let cursor = viewBodyStart;
 
-  while (cursor < content.length) {
-    const lineEnd = content.indexOf("\n", cursor);
-    const lineEndExclusive = lineEnd === -1 ? content.length : lineEnd;
-    const line = content.slice(cursor, lineEndExclusive);
+  while (cursor < view.length) {
+    const lineEnd = view.indexOf("\n", cursor);
+    const lineEndExclusive = lineEnd === -1 ? view.length : lineEnd;
+    const line = view.slice(cursor, lineEndExclusive);
 
     // Stop at a non-indented, non-empty line (= next top-level key).
     if (line.trim() !== "" && !/^\s/.test(line)) break;
@@ -731,14 +737,28 @@ function readTopLevelBlock(
     }
 
     cursor =
-      lineEndExclusive === content.length
-        ? content.length
+      lineEndExclusive === view.length
+        ? view.length
         : lineEndExclusive + 1;
   }
 
+  const shiftedChildren: Map<string, BlockChild> =
+    bom === 1
+      ? new Map(
+          Array.from(children, ([key, child]) => [
+            key,
+            {
+              ...child,
+              valueStart: child.valueStart + bom,
+              valueEnd: child.valueEnd + bom,
+            },
+          ]),
+        )
+      : children;
+
   return {
-    children,
-    blockBodyStart,
+    children: shiftedChildren,
+    blockBodyStart: viewBodyStart + bom,
     childIndent: firstChildIndent ?? "  ",
   };
 }
@@ -987,15 +1007,19 @@ function pickAutoApiKeyForCustomProvider(
 function findModelBlockBody(
   content: string,
 ): { start: number; end: number } | null {
-  const headerMatch = content.match(/^model:[^\S\r\n]*\r?\n/m);
+  // BOM-tolerant: see readTopLevelBlock. Offsets are shifted back into the
+  // original string's coordinate space before returning.
+  const bom = content.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const view = bom === 1 ? content.slice(1) : content;
+  const headerMatch = view.match(/^model:[^\S\r\n]*\r?\n/m);
   if (!headerMatch) return null;
   const start = headerMatch.index! + headerMatch[0].length;
   // The body runs until the next line that starts at column 0 (next
   // top-level key) or end of file.  Blank lines stay inside the block.
-  const after = content.slice(start);
+  const after = view.slice(start);
   const nextTopMatch = after.match(/^\S/m);
-  const end = nextTopMatch ? start + nextTopMatch.index! : content.length;
-  return { start, end };
+  const end = nextTopMatch ? start + nextTopMatch.index! : view.length;
+  return { start: start + bom, end: end + bom };
 }
 
 // @lat: [[model-context#Model context window#Storage and propagation]]

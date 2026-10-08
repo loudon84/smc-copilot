@@ -98,12 +98,17 @@ interface ProvidersBlock {
  *  direct children are recorded as fields, so nested maps (e.g. a `models:`
  *  sub-dict) can't shadow `name`/`base_url`/`key_env`. */
 function findProvidersBlock(content: string): ProvidersBlock | null {
-  const header = content.match(/^providers[^\S\r\n]*:[^\S\r\n]*(#.*)?\r?\n/m);
+  // BOM-tolerant: a UTF-8 BOM at offset 0 would hide a `providers:` header on
+  // line 1 from the ^-anchored match. Scan a BOM-free view and shift all
+  // returned offsets back into the original string's coordinate space.
+  const bom = content.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const view = bom === 1 ? content.slice(1) : content;
+  const header = view.match(/^providers[^\S\r\n]*:[^\S\r\n]*(#.*)?\r?\n/m);
   if (!header || header.index === undefined) return null;
-  if (header.index > 0 && content[header.index - 1] !== "\n") return null;
+  if (header.index > 0 && view[header.index - 1] !== "\n") return null;
 
   const bodyStart = header.index + header[0].length;
-  const lines = content.slice(bodyStart).split(/(?<=\n)/);
+  const lines = view.slice(bodyStart).split(/(?<=\n)/);
   const entries: ProviderEntrySpan[] = [];
   let childIndent = "";
   let offset = bodyStart;
@@ -156,6 +161,18 @@ function findProvidersBlock(content: string): ProvidersBlock | null {
       bodyEnd = offset + line.length;
     }
     offset += line.length;
+  }
+  if (bom === 1) {
+    for (const entry of entries) {
+      entry.start += bom;
+      entry.end += bom;
+      entry.headerEnd += bom;
+      for (const field of entry.fields.values()) {
+        field.valueStart += bom;
+        field.valueEnd += bom;
+      }
+    }
+    return { bodyEnd: bodyEnd + bom, childIndent: childIndent || "  ", entries };
   }
   return { bodyEnd, childIndent: childIndent || "  ", entries };
 }

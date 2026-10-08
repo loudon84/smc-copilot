@@ -451,6 +451,8 @@ describe("runtime provider orchestrator", () => {
     const background = await pending;
     expect(background.accepted).toBe(false);
     expect(background.outcome).toBe("superseded");
+    // Must not stick in APPLYING — quit supersede settles the transient card.
+    expect(getRuntimeProviderPublicState().state).not.toBe("APPLYING");
     expect(getRuntimeProviderPublicState().state).not.toBe("ACTIVE");
     expect(events.filter((state) => state === "ACTIVE")).toHaveLength(0);
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).toContain(
@@ -459,6 +461,32 @@ describe("runtime provider orchestrator", () => {
     expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).not.toContain(
       "member-key",
     );
+  });
+
+  it("maps projectManagedRuntime throw to RUNTIME_PROVIDER_PROJECT_FAILED", async () => {
+    fetchMock.mockResolvedValue(ready("rev-project-boom"));
+    vi.doMock("./runtime-provider-projection", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./runtime-provider-projection")>();
+      return {
+        ...actual,
+        projectManagedRuntime: () => {
+          throw new Error("project boom");
+        },
+      };
+    });
+    vi.resetModules();
+    const { bootstrapRuntimeProvider, getRuntimeProviderPublicState } =
+      await import("./runtime-provider-orchestrator");
+    const result = await bootstrapRuntimeProvider("login");
+    expect(result.state).toEqual({
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+    });
+    expect(getRuntimeProviderPublicState()).toEqual({
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+    });
+    vi.doUnmock("./runtime-provider-projection");
   });
 
   it("rolls back when the post-apply projection check is not a match", async () => {

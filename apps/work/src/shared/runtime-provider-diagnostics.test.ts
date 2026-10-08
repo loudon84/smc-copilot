@@ -65,7 +65,21 @@ describe("runtime provider diagnostics schema", () => {
         errorCode: null,
         gatewayHealthy: false,
       }),
-    ).toEqual([]);
+    ).toEqual(["export", "retry"]);
+    expect(
+      recoveryActions({
+        runtimeState: "APPLYING",
+        errorCode: null,
+        gatewayHealthy: true,
+      }),
+    ).toEqual(["export", "retry"]);
+    expect(
+      recoveryActions({
+        runtimeState: "ERROR",
+        errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+        gatewayHealthy: null,
+      }),
+    ).toEqual(["export", "retry"]);
     expect(
       enterpriseRuntimeHidesDiagnostics({
         summaryStatus: "READY",

@@ -268,6 +268,51 @@ function rollbackOwned(
   return false;
 }
 
+const TRANSIENT_PUBLIC = new Set(["FETCHING", "APPLYING", "CLEARING"]);
+
+/**
+ * When an apply is superseded or throws, never leave the card stuck in a
+ * transient state with empty recovery actions.
+ */
+export function settleTransientRuntimeProviderFailure(
+  profile?: string,
+  previous?: RuntimeProviderPublicState,
+  errorCode:
+    | "RUNTIME_PROVIDER_APPLY_FAILED"
+    | "RUNTIME_PROVIDER_APPLY_SUPERSEDED"
+    | "RUNTIME_PROVIDER_PROJECT_FAILED" = "RUNTIME_PROVIDER_APPLY_FAILED",
+): RuntimeProviderPublicState {
+  const normalized = fileProfile(profile);
+  const current = getRuntimeProviderPublicState(normalized);
+  if (!TRANSIENT_PUBLIC.has(current.state)) return current;
+  if (logoutIntentIsWaiting()) return current;
+  if (
+    previous &&
+    (previous.state === "ACTIVE" || previous.state === "STALE_ACTIVE")
+  ) {
+    setState(normalized, previous);
+    return getRuntimeProviderPublicState(normalized);
+  }
+  setState(normalized, { state: "ERROR", errorCode });
+  return getRuntimeProviderPublicState(normalized);
+}
+
+function abandonApplyIfSuperseded(
+  generationId: number,
+  snapshot: ManagedTransactionSnapshot,
+  trace: Record<string, unknown>,
+  previous: RuntimeProviderPublicState,
+  normalized: string | undefined,
+): RuntimeProviderPublicState | null {
+  if (runtimeIntentCurrent(generationId)) return null;
+  rollbackOwned(snapshot, trace);
+  return settleTransientRuntimeProviderFailure(
+    normalized,
+    previous,
+    "RUNTIME_PROVIDER_APPLY_SUPERSEDED",
+  );
+}
+
 async function purgeRuntime(
   reason: "logout" | "not_ready",
   profile: string | undefined,
@@ -408,17 +453,40 @@ async function applyReady(
   } else {
     setState(normalized, { state: "APPLYING" });
     logRuntimeProviderOperation({ ...trace, stage: "PROJECT", status: "START" });
-    const projected = projectManagedRuntime(normalized, ready);
+    let projected: { ok: true } | { ok: false; error: "MANAGED_PROVIDER_IDENTITY_CONFLICT" };
+    try {
+      projected = projectManagedRuntime(normalized, ready);
+    } catch (err) {
+      mark.outcome = "error";
+      const message = err instanceof Error ? err.message : String(err);
+      logRuntimeProviderOperation({
+        ...trace,
+        stage: "PROJECT",
+        status: "FAIL",
+        errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+        message,
+      });
+      console.error("[runtime-provider] PROJECT failed:", message);
+      setState(normalized, {
+        state: "ERROR",
+        errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+      });
+      return getRuntimeProviderPublicState(normalized);
+    }
     logRuntimeProviderOperation({ ...trace, stage: "SESSION_OVERRIDE", status: "PASS" });
     if (!projected.ok) {
       mark.outcome = "error";
       setState(normalized, { state: "ERROR", errorCode: projected.error });
       return getRuntimeProviderPublicState(normalized);
     }
-    if (!runtimeIntentCurrent(generationId)) {
-      rollbackOwned(snapshot, trace);
-      return getRuntimeProviderPublicState(normalized);
-    }
+    const abandoned = abandonApplyIfSuperseded(
+      generationId,
+      snapshot,
+      trace,
+      previous,
+      normalized,
+    );
+    if (abandoned) return abandoned;
     logRuntimeProviderOperation({ ...trace, stage: "SECRET", status: "START" });
     installManagedSecret({
       profile: normalized,
@@ -432,9 +500,15 @@ async function applyReady(
   logRuntimeProviderOperation({ ...trace, stage: "RESTART", status: "START" });
   const restarted = await restartGateway(normalized);
   logRuntimeProviderOperation({ ...trace, stage: "VERIFY", status: restarted ? "PASS" : "FAIL" });
-  if (!runtimeIntentCurrent(generationId)) {
-    rollbackOwned(snapshot, trace);
-    return getRuntimeProviderPublicState(normalized);
+  {
+    const abandoned = abandonApplyIfSuperseded(
+      generationId,
+      snapshot,
+      trace,
+      previous,
+      normalized,
+    );
+    if (abandoned) return abandoned;
   }
   if (!restarted) {
     const restored = rollbackOwned(snapshot, trace);
@@ -458,6 +532,19 @@ async function applyReady(
   }
   rememberProjection(normalized, post, ready.revision);
   if (post.status !== "MATCH") {
+    // Surface the exact drift axes — without this the only evidence is the
+    // opaque RUNTIME_PROVIDER_POST_APPLY_DRIFT code and the next debug cycle
+    // starts blind.
+    const driftDetail =
+      post.status === "DRIFTED" ? post.reasons.join(",") : post.status;
+    console.error(`[runtime-provider] post-apply drift: ${driftDetail}`);
+    logRuntimeProviderOperation({
+      ...trace,
+      stage: "POST_CHECK",
+      status: "FAIL",
+      errorCode: "RUNTIME_PROVIDER_POST_APPLY_DRIFT",
+      message: driftDetail,
+    });
     const restored = rollbackOwned(snapshot, trace);
     if (restored && !logoutIntentIsWaiting()) {
       mark.outcome = "error";
@@ -510,7 +597,14 @@ export async function bootstrapRuntimeProvider(
   logRuntimeProviderOperation({ ...trace, stage: "FETCH", status: "START" });
   const fetched = await fetchRuntimeBootstrap();
   if (!runtimeIntentCurrent(mine)) {
-    return settle(getRuntimeProviderPublicState(normalized), "superseded");
+    return settle(
+      settleTransientRuntimeProviderFailure(
+        normalized,
+        previous,
+        "RUNTIME_PROVIDER_APPLY_SUPERSEDED",
+      ),
+      "superseded",
+    );
   }
   if (!fetched.ok) {
     if (fetched.error === "RUNTIME_BOOTSTRAP_UNAVAILABLE") {
@@ -530,14 +624,52 @@ export async function bootstrapRuntimeProvider(
   const mark = { outcome: "reconciled" as "noop" | "reconciled" | "error" };
   const result = await enqueueRuntimeMutation(mine, async () => {
     logRuntimeProviderOperation({ ...trace, stage: "LOCK_ACQUIRED", status: "PASS" });
-    if (!runtimeIntentCurrent(mine)) return getRuntimeProviderPublicState(normalized);
+    if (!runtimeIntentCurrent(mine)) {
+      return settleTransientRuntimeProviderFailure(
+        normalized,
+        previous,
+        "RUNTIME_PROVIDER_APPLY_SUPERSEDED",
+      );
+    }
     if (!fetched.contract.ready) {
       return purgeRuntime("not_ready", normalized, mine, fetched.contract.state, trace);
     }
-    return applyReady(fetched.contract, normalized, mine, trace, previous, mark);
+    try {
+      return await applyReady(
+        fetched.contract,
+        normalized,
+        mine,
+        trace,
+        previous,
+        mark,
+      );
+    } catch (err) {
+      mark.outcome = "error";
+      const message = err instanceof Error ? err.message : String(err);
+      logRuntimeProviderOperation({
+        ...trace,
+        stage: "APPLY",
+        status: "FAIL",
+        errorCode: "RUNTIME_PROVIDER_APPLY_FAILED",
+        message,
+      });
+      console.error("[runtime-provider] applyReady failed:", message);
+      return settleTransientRuntimeProviderFailure(
+        normalized,
+        previous,
+        "RUNTIME_PROVIDER_APPLY_FAILED",
+      );
+    }
   });
   if (!runtimeIntentCurrent(mine) || (result && typeof result === "object" && "superseded" in result)) {
-    return settle(getRuntimeProviderPublicState(normalized), "superseded");
+    return settle(
+      settleTransientRuntimeProviderFailure(
+        normalized,
+        previous,
+        "RUNTIME_PROVIDER_APPLY_SUPERSEDED",
+      ),
+      "superseded",
+    );
   }
   const state = result as RuntimeProviderPublicState;
   const outcome: RuntimeBootstrapOutcome =

@@ -70,7 +70,8 @@ export function setAuxiliaryField(
 ): string {
   const escapedValue = escapeYamlValue(value);
   const lines = content.split("\n");
-  const auxIdx = lines.findIndex((l) => /^auxiliary:[ \t]*$/.test(l));
+  // Tolerate a UTF-8 BOM when the block header sits on line 1.
+  const auxIdx = lines.findIndex((l) => /^\uFEFF?auxiliary:[ \t]*$/.test(l));
 
   // No `auxiliary:` block at all → append a fresh one.
   if (auxIdx === -1) {
@@ -142,7 +143,7 @@ export function removeAuxiliaryField(
   field: string,
 ): string {
   const lines = content.split("\n");
-  const auxIdx = lines.findIndex((line) => /^auxiliary:[ \t]*$/.test(line));
+  const auxIdx = lines.findIndex((line) => /^\uFEFF?auxiliary:[ \t]*$/.test(line));
   if (auxIdx === -1) return content;
   let auxEnd = lines.length;
   for (let i = auxIdx + 1; i < lines.length; i++) {

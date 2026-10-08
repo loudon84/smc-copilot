@@ -84,6 +84,11 @@ vi.mock("./ensure-access-token", () => ({
 vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
   bootstrapRuntimeProvider: vi.fn(async () => ({ state: "UNBOUND" })),
   clearRuntimeProvider: vi.fn(async () => undefined),
+  getRuntimeProviderPublicState: vi.fn(() => ({ state: "UNBOUND" })),
+  settleTransientRuntimeProviderFailure: vi.fn(() => ({
+    state: "ERROR",
+    errorCode: "RUNTIME_PROVIDER_APPLY_FAILED",
+  })),
 }));
 
 vi.mock("../expert/expert-ipc", () => ({

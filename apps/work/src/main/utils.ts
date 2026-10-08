@@ -235,13 +235,20 @@ export function safeWriteFile(filePath: string, content: string): void {
       renameSync(tempPath, filePath);
     } catch (renameErr) {
       // Windows often returns EPERM/EACCES when renaming over a file that
-      // another process (Hermes gateway, AV, Explorer) still has open. Direct
-      // overwrite usually still works in that case.
+      // another process (Hermes gateway, AV, Explorer) still has open. EXDEV
+      // appears when the hermes home sits on a reparse point / redirected
+      // profile (cross-device link) — same-directory temp rename still fails.
+      // Direct overwrite usually still works in those cases.
       const code =
         renameErr && typeof renameErr === "object" && "code" in renameErr
           ? String((renameErr as NodeJS.ErrnoException).code)
           : "";
-      if (code !== "EPERM" && code !== "EACCES" && code !== "EEXIST") {
+      if (
+        code !== "EPERM" &&
+        code !== "EACCES" &&
+        code !== "EEXIST" &&
+        code !== "EXDEV"
+      ) {
         throw renameErr;
       }
       writeFileSync(filePath, content, "utf-8");
