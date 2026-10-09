@@ -20,12 +20,10 @@ import {
   getKnowledgeUploadJobCoordinator,
   KnowledgeJobNotFoundError,
   KnowledgeJobPartitionDeniedError,
+  type KnowledgeUploadJobCoordinator,
 } from "../knowledge/knowledge-upload-job-coordinator";
 import { readDesktopFilesConfig } from "./file-config";
-import {
-  assertImportAllowed,
-  FilePlatformError,
-} from "./file-security";
+import { assertImportAllowed, FilePlatformError } from "./file-security";
 import {
   logContentCheckEvent,
   validateFileContent,
@@ -43,7 +41,11 @@ import {
   upsertManagedFile,
 } from "./file-association-store";
 import { scheduleParseAfterImport } from "./file-parse-service";
-import { extensionFromName, resolveFileCategory, resolveMime } from "./file-category";
+import {
+  extensionFromName,
+  resolveFileCategory,
+  resolveMime,
+} from "./file-category";
 import {
   hashOrError,
   nowIso,
@@ -72,14 +74,20 @@ type ResolvedImportConsumer =
       kind: "knowledge";
       knowledgeJobId: string;
       job: KnowledgeJobSnapshot;
+      coordinator: KnowledgeUploadJobCoordinator;
+      identityEpoch: number;
       /** Always Job workProfileId — never Renderer context.profile. */
       profileKey: string;
       profileId: string;
     };
 
 function sanitizeKnowledgeLookupError(err: unknown): FileError {
+  if (err instanceof FilePlatformError) return err.fileError;
   if (err instanceof KnowledgeJobNotFoundError) {
-    return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", "KNOWLEDGE_JOB_NOT_FOUND");
+    return makeFileError(
+      "FILE_ASSOCIATION_SAVE_FAILED",
+      "KNOWLEDGE_JOB_NOT_FOUND",
+    );
   }
   if (err instanceof KnowledgeJobPartitionDeniedError) {
     return makeFileError("PROFILE_MISMATCH", "KNOWLEDGE_JOB_PARTITION_DENIED");
@@ -87,16 +95,25 @@ function sanitizeKnowledgeLookupError(err: unknown): FileError {
   if (err instanceof Error) {
     const code = err.message.split(/\s/)[0] ?? "";
     if (code === "KNOWLEDGE_JOB_NOT_FOUND") {
-      return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", "KNOWLEDGE_JOB_NOT_FOUND");
+      return makeFileError(
+        "FILE_ASSOCIATION_SAVE_FAILED",
+        "KNOWLEDGE_JOB_NOT_FOUND",
+      );
     }
     if (code === "KNOWLEDGE_JOB_PARTITION_DENIED") {
-      return makeFileError("PROFILE_MISMATCH", "KNOWLEDGE_JOB_PARTITION_DENIED");
+      return makeFileError(
+        "PROFILE_MISMATCH",
+        "KNOWLEDGE_JOB_PARTITION_DENIED",
+      );
     }
     if (code === "KNOWLEDGE_JOB_COORDINATOR_UNCONFIGURED") {
       return makeFileError(
         "FILE_ASSOCIATION_SAVE_FAILED",
         "KNOWLEDGE_JOB_COORDINATOR_UNCONFIGURED",
       );
+    }
+    if (/^[A-Z][A-Z0-9_]+$/.test(code)) {
+      return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", code);
     }
   }
   return makeFileError("FILE_ASSOCIATION_SAVE_FAILED", "KNOWLEDGE_JOB_ERROR");
@@ -125,12 +142,15 @@ function resolveImportConsumer(
 
   if (hasJob) {
     try {
-      const job = getKnowledgeUploadJobCoordinator().getSnapshot(knowledgeJobId);
+      const coordinator = getKnowledgeUploadJobCoordinator();
+      const job = coordinator.getSnapshot(knowledgeJobId);
       const profileKey = job.partition.workProfileId;
       return {
         kind: "knowledge",
         knowledgeJobId,
         job,
+        coordinator,
+        identityEpoch: coordinator.getIdentityEpoch(),
         profileKey,
         profileId: profileOrDefault(profileKey),
       };
@@ -147,6 +167,30 @@ function resolveImportConsumer(
   };
 }
 
+function importStillCurrent(
+  resolved: ResolvedImportConsumer,
+): FileError | undefined {
+  if (resolved.kind !== "knowledge") return undefined;
+  try {
+    const coordinator = getKnowledgeUploadJobCoordinator();
+    const current = coordinator.getSnapshot(resolved.knowledgeJobId);
+    if (
+      coordinator === resolved.coordinator &&
+      coordinator.getIdentityEpoch() === resolved.identityEpoch &&
+      current.attempt === resolved.job.attempt &&
+      current.dataMode === resolved.job.dataMode &&
+      current.status === "draft"
+    )
+      return undefined;
+    return makeFileError(
+      "FILE_ASSOCIATION_SAVE_FAILED",
+      "KNOWLEDGE_JOB_IMPORT_STALE",
+    );
+  } catch (err) {
+    return sanitizeKnowledgeLookupError(err);
+  }
+}
+
 export async function importOnePath(
   filePath: string,
   context: FileImportContext,
@@ -155,13 +199,16 @@ export async function importOnePath(
   if ("error" in resolved) {
     return { ok: false, error: resolved.error };
   }
+  const initialError = importStillCurrent(resolved);
+  if (initialError) return { ok: false, error: initialError };
 
   const { profileId, profileKey } = resolved;
   const config = readDesktopFilesConfig(profileKey);
 
   let canonical: string;
   try {
-    const pathResolved = await defaultFilePathPolicy.resolveAndValidate(filePath);
+    const pathResolved =
+      await defaultFilePathPolicy.resolveAndValidate(filePath);
     canonical = pathResolved.realPath;
   } catch (err) {
     const fe =
@@ -230,26 +277,37 @@ export async function importOnePath(
   const hashResult = await hashOrError(canonical);
   if ("error" in hashResult) return { ok: false, error: hashResult.error };
   const hash = hashResult.hash;
+  const beforeCopyError = importStillCurrent(resolved);
+  if (beforeCopyError) return { ok: false, error: beforeCopyError };
 
-  const existing = findByHash(profileId, hash);
-  const ts = nowIso();
+  let existing = findByHash(profileId, hash);
   let managedPath: string | undefined = existing?.managedPath;
   const shouldCopy =
     config.managedStorage &&
-    (context.source === "clipboard" || config.copyPickerFiles);
+    (resolved.kind === "knowledge" ||
+      context.source === "clipboard" ||
+      config.copyPickerFiles);
 
-  if (shouldCopy && !managedPath) {
+  if (shouldCopy && (!managedPath || !existsSync(managedPath))) {
     try {
       managedPath = await storeManagedCopy(canonical, hash, profileKey);
     } catch (err) {
       const fe =
         err instanceof FilePlatformError
           ? err.fileError
-          : makeFileError("FILE_STORAGE_FAILED", "Failed to store managed copy");
+          : makeFileError(
+              "FILE_STORAGE_FAILED",
+              "Failed to store managed copy",
+            );
       return { ok: false, error: fe };
     }
   }
+  const beforeWriteError = importStillCurrent(resolved);
+  if (beforeWriteError) return { ok: false, error: beforeWriteError };
 
+  // A concurrent import may have persisted this hash while copying yielded.
+  existing = findByHash(profileId, hash);
+  const ts = nowIso();
   const mime = resolveMime(name);
   const category = resolveFileCategory(name, mime);
   const file: ManagedFile = existing
@@ -285,7 +343,7 @@ export async function importOnePath(
       };
 
   upsertManagedFile(file);
-  scheduleParseAfterImport(profileKey, file.id);
+  if (resolved.kind === "chat") scheduleParseAfterImport(profileKey, file.id);
 
   const assoc: FileAssociation =
     resolved.kind === "knowledge"
@@ -316,23 +374,26 @@ export async function importOnePath(
 
   if (resolved.kind === "knowledge") {
     try {
-      const { bindJobManagedFile, updateJobRecord } = await import(
-        "../knowledge/knowledge-upload-job-store"
-      );
-      bindJobManagedFile(resolved.knowledgeJobId, file.id);
-      updateJobRecord({
-        jobId: resolved.knowledgeJobId,
-        status: resolved.job.status,
-        attempt: resolved.job.attempt,
-        fileSummary: {
+      const snapshot = getKnowledgeUploadJobCoordinator().bindImportedFile(
+        resolved.knowledgeJobId,
+        file.id,
+        {
           displayName: file.name,
           byteSize: file.size,
           mimeType: file.mime,
         },
-      });
-      getKnowledgeUploadJobCoordinator().enqueue(resolved.knowledgeJobId);
-    } catch {
-      // Import already bound; enqueue failure is visible on the Job snapshot.
+        resolved.job.attempt,
+      );
+      if (!snapshot)
+        return {
+          ok: false,
+          error: makeFileError(
+            "FILE_ASSOCIATION_SAVE_FAILED",
+            "KNOWLEDGE_JOB_IMPORT_STALE",
+          ),
+        };
+    } catch (err) {
+      return { ok: false, error: sanitizeKnowledgeLookupError(err) };
     }
   }
 
@@ -394,9 +455,13 @@ export async function stageClipboardImport(
   } catch (err) {
     return {
       ok: false,
-      error: makeFileError("FILE_STORAGE_FAILED", "Failed to stage clipboard file", {
-        detail: err instanceof Error ? err.message : String(err),
-      }),
+      error: makeFileError(
+        "FILE_STORAGE_FAILED",
+        "Failed to stage clipboard file",
+        {
+          detail: err instanceof Error ? err.message : String(err),
+        },
+      ),
     };
   }
 

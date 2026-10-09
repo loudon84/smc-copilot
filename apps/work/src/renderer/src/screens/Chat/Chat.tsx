@@ -44,6 +44,7 @@ import type { SessionModelOverride } from "../../../../shared/model-override";
 import type { ActiveTurn, ChatMessage, UsageState } from "./types";
 import {
   dbItemsToChatMessages,
+  reconcileAfterDbRefresh,
   type DbHistoryItem,
 } from "./sessionHistory";
 import type { ContextUsage } from "./ContextGauge";
@@ -223,6 +224,8 @@ export function resolveRestoredSkillSelection(
   };
 }
 
+export type ChatActivity = "idle" | "running" | "waiting" | "completed" | "failed" | "stopping" | "stopped";
+
 interface ChatProps {
   /** Stable id for this conversation/run. One <Chat> is mounted per run; all
    *  remain mounted (background sessions) and only the active one is shown. */
@@ -230,6 +233,8 @@ interface ChatProps {
   executionMode?: ChatExecutionMode;
   /** Seed transcript when re-opening a session from history; empty for new chats. */
   initialMessages?: ChatMessage[];
+  /** Parent already loaded history, including a valid empty transcript. */
+  initialHistoryLoaded?: boolean;
   /** Gateway session id when resuming a known session; null for a new chat. */
   initialSessionId?: string | null;
   /** Sidebar / Sessions title carried through resume even when seed is empty. */
@@ -246,6 +251,7 @@ interface ChatProps {
   /** Reports the agent generating state so the sidebar / active-sessions bar
    *  can show a spinner on each running session. */
   onLoadingChange?: (runId: string, loading: boolean) => void;
+  onActivityChange?: (runId: string, activity: ChatActivity) => void;
   /** Reports the gateway session id once known, so the parent can map
    *  runId ↔ sessionId (live re-attach, spinners, titles). */
   onSessionIdChange?: (runId: string, sessionId: string | null) => void;
@@ -269,6 +275,7 @@ function Chat({
   runId,
   executionMode = "local-chat",
   initialMessages,
+  initialHistoryLoaded = false,
   initialSessionId,
   initialTitle,
   active = true,
@@ -277,6 +284,7 @@ function Chat({
   onNewChat,
   onOpenDiagnose,
   onLoadingChange,
+  onActivityChange,
   onSessionIdChange,
   onTitleChange,
   agentAppearance,
@@ -301,8 +309,15 @@ function Chat({
   const [messages, setMessages] = useState<ChatMessage[]>(
     initialMessages ?? [],
   );
+  const activeTurnRef = useRef<ActiveTurn | null>(null);
+  const mountedSessionRef = useRef(initialSessionId ?? null);
+  const historyRequestRef = useRef(0);
   const [resumeRetrying, setResumeRetrying] = useState(false);
+  const [resumeRetryError, setResumeRetryError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [stopState, setStopState] = useState<"none" | "stopping" | "stopped">("none");
+  const stopPendingRef = useRef(false);
+  const activityRef = useRef<ChatActivity>("idle");
   const [activeSkillProjection, setActiveSkillProjection] = useState<SkillRunProjection | null>(null);
   const isSkillRunMode = executionMode === "skill-run";
   const [featureMode, setFeatureMode] = useState<SkillRunFeatureMode | null>(
@@ -337,11 +352,28 @@ function Chat({
       !isSkillRunTerminalPhase(activeSkillProjection.phase),
     [activeSkillProjection],
   );
-  const chatBusy = isLoading || skillRunBusy;
+  const chatBusy = isLoading || skillRunBusy || stopState === "stopping";
 
   useEffect(() => {
     onLoadingChange?.(runId, chatBusy);
   }, [runId, chatBusy, onLoadingChange]);
+
+  useEffect(() => {
+    if (isLoading && stopState === "stopped") setStopState("none");
+    let start = messages.length - 1;
+    while (start > 0 && messages[start].role !== "user") start--;
+    const latest = messages.slice(Math.max(0, start));
+    let activity = activityRef.current;
+    if (stopState === "stopping") activity = "stopping";
+    else if (chatBusy)
+      activity = latest.some((m) => m.kind === "clarify" && !m.resolved) ? "waiting" : "running";
+    else if (stopState === "stopped") activity = "stopped";
+    else if (latest.some((m) => "error" in m && m.error)) activity = "failed";
+    else if (!messages.length) activity = "idle";
+    else if (["running", "waiting", "stopping"].includes(activity)) activity = "completed";
+    activityRef.current = activity;
+    onActivityChange?.(runId, activity);
+  }, [runId, chatBusy, isLoading, messages, stopState, onActivityChange]);
 
   // Play a notification sound when the agent finishes responding
   const prevLoadingRef = useRef(isLoading);
@@ -355,6 +387,11 @@ function Chat({
   const [hermesSessionId, setHermesSessionId] = useState<string | null>(
     initialSessionId ?? null,
   );
+  const historySessionRef = useRef(hermesSessionId);
+  historySessionRef.current = hermesSessionId;
+  useEffect(() => () => {
+    historyRequestRef.current += 1;
+  }, []);
   // Surface the gateway session id upward whenever it resolves/changes.
   useEffect(() => {
     onSessionIdChange?.(runId, hermesSessionId);
@@ -382,18 +419,26 @@ function Chat({
   // Resume race: Layout may open before state.db has rows. Re-fetch once on
   // mount when a session id is bound but the seed transcript is empty.
   useEffect(() => {
-    if (!initialSessionId) return;
+    if (initialHistoryLoaded) return;
+    if (!initialSessionId || initialSessionId !== mountedSessionRef.current)
+      return;
     if ((initialMessages?.length ?? 0) > 0) return;
+    const request = ++historyRequestRef.current;
     let cancelled = false;
     void (async () => {
       try {
         const items = (await window.hermesAPI.getSessionMessages(
           initialSessionId,
         )) as DbHistoryItem[];
-        if (cancelled || items.length === 0) return;
+        if (
+          cancelled || request !== historyRequestRef.current ||
+          initialSessionId !== historySessionRef.current || items.length === 0
+        ) return;
         const mapped = dbItemsToChatMessages(items);
         if (mapped.length === 0) return;
-        setMessages(mapped);
+        setMessages((previous) => reconcileAfterDbRefresh(previous, mapped, {
+          activeTurn: activeTurnRef.current,
+        }));
       } catch {
         /* best-effort — resume empty UI still offers Retry */
       }
@@ -401,7 +446,7 @@ function Chat({
     return () => {
       cancelled = true;
     };
-  }, [initialSessionId, initialMessages?.length]);
+  }, [initialSessionId, initialMessages?.length, initialHistoryLoaded]);
 
   const [toolProgress, setToolProgress] = useState<string | null>(null);
   const [usage, setUsage] = useState<UsageState | null>(null);
@@ -661,7 +706,6 @@ function Chat({
     !isSkillRunMode && expertSelection.expertSlug && expertSelection.skillName,
   );
   const expertSelected = expertSelection.expertSlug != null;
-  const activeTurnRef = useRef<ActiveTurn | null>(null);
   const dashboardChatEnabled = knowledgeChatForcesLegacyTransport(
     knowledgeRequired,
     connectionMode,
@@ -1171,10 +1215,14 @@ function Chat({
   );
 
   const handleClear = useCallback(() => {
-    if (isLoading) {
-      window.hermesAPI.abortChat(runId);
-      setIsLoading(false);
+    if (chatBusy) {
+      toast.error(t("knowledge.chat.stopBeforeDelete"));
+      return;
     }
+    historyRequestRef.current += 1;
+    setResumeRetrying(false);
+    setResumeRetryError(false);
+    setStopState("none");
     const idToDelete = hermesSessionId;
     if (idToDelete) {
       void window.hermesAPI.deleteSession(idToDelete);
@@ -1192,7 +1240,7 @@ function Chat({
     setToolProgress(null);
     queueRef.current = [];
     setQueuedMessages([]);
-  }, [isLoading, runId, hermesSessionId, setMessages, modelConfig.reload]);
+  }, [chatBusy, hermesSessionId, setMessages, modelConfig.reload, t]);
 
   const localCommands = useLocalCommands({
     profile,
@@ -1360,6 +1408,21 @@ function Chat({
     knowledgeRequired,
     knowledgeContext,
   });
+
+  const handleStop = useCallback(async (): Promise<void> => {
+    if (stopPendingRef.current) return;
+    stopPendingRef.current = true;
+    setStopState("stopping");
+    try {
+      await actions.handleAbort();
+      setStopState("stopped");
+    } catch {
+      setStopState("none");
+      toast.error(t("knowledge.chat.stopFailed"));
+    } finally {
+      stopPendingRef.current = false;
+    }
+  }, [actions.handleAbort, t]);
 
   // Stable ref to handleSend so the drain effect doesn't re-trigger on
   // identity changes (regression #5 from PR #315).
@@ -1717,25 +1780,35 @@ function Chat({
   );
 
   const handleResumeTranscriptRetry = useCallback(async (): Promise<void> => {
-    if (!initialSessionId || resumeRetrying) return;
+    if (
+      !initialSessionId || initialSessionId !== historySessionRef.current ||
+      resumeRetrying
+    ) return;
+    const request = ++historyRequestRef.current;
+    const isCurrent = (): boolean => request === historyRequestRef.current &&
+      initialSessionId === historySessionRef.current;
     setResumeRetrying(true);
+    setResumeRetryError(false);
     try {
       try {
         await window.hermesAPI.syncSessionCache();
       } catch {
         /* sync is best-effort before re-read */
       }
+      if (!isCurrent()) return;
       const items = (await window.hermesAPI.getSessionMessages(
         initialSessionId,
       )) as DbHistoryItem[];
       const mapped = dbItemsToChatMessages(items);
-      if (mapped.length > 0) {
-        setMessages(mapped);
+      if (isCurrent() && mapped.length > 0) {
+        setMessages((previous) => reconcileAfterDbRefresh(previous, mapped, {
+          activeTurn: activeTurnRef.current,
+        }));
       }
     } catch {
-      /* keep resume-empty UI */
+      if (isCurrent()) setResumeRetryError(true);
     } finally {
-      setResumeRetrying(false);
+      if (isCurrent()) setResumeRetrying(false);
     }
   }, [initialSessionId, resumeRetrying]);
 
@@ -1974,12 +2047,15 @@ function Chat({
               />
             ) : messages.length === 0 ? (
               initialSessionId ? (
+                <>
+                {resumeRetryError && <p role="alert">{t("knowledge.chat.historyFailed")}</p>}
                 <ChatResumeEmptyState
                   title={initialTitle}
                   retrying={resumeRetrying}
                   onRetry={() => void handleResumeTranscriptRetry()}
                   onNewChat={onNewChat}
                 />
+                </>
               ) : (
                 <ChatEmptyState onSelectSuggestion={handleSuggestion} />
               )
@@ -2180,7 +2256,7 @@ function Chat({
                     });
                   }
                 }
-              : actions.handleAbort
+              : () => { void handleStop(); }
           }
           onPreviewFile={(fileId) => handleOpenManagedPreview(fileId)}
           toolbarExtras={

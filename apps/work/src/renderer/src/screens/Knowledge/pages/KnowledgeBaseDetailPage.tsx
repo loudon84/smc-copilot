@@ -1,10 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { BusinessModuleUISurface } from "@/components/common/business-module-ui-surface";
-import {
-  readRootWorkThemeId,
-  resolveModuleTheme,
-  type ModuleTheme,
-} from "@/components/common/resolve-module-theme";
 import { EmptyState } from "@/components/common/empty-state";
 import { PageHeader } from "@/components/common/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -25,13 +20,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { useI18n } from "../../../components/useI18n";
 import {
   useKnowledgeFacade,
@@ -51,6 +39,7 @@ import {
 } from "../../../../../shared/knowledge/knowledge-base-ipc";
 import type {
   HermesKnowledgeFacadeAPI,
+  HermesKnowledgeJobsAPI,
   KnowledgeCapabilitySnapshot,
   KnowledgeJobSnapshot,
   KnowledgeModeSnapshot,
@@ -60,8 +49,13 @@ import { KnowledgeLoading } from "../knowledge-page-chrome";
 import { KnowledgeBaseSettingsForm } from "../features/bases/edit/KnowledgeBaseSettingsForm";
 import { KnowledgeBaseDeleteConfirm } from "../features/bases/delete/KnowledgeBaseDeleteConfirm";
 import { KnowledgeUploadPanel } from "../features/file-job/KnowledgeUploadPanel";
+import {
+  knowledgeUploadErrorCode,
+  knowledgeUploadErrorKey,
+} from "../features/file-job/KnowledgeFileJobQueue";
 
 export type KnowledgeBaseDetailPageProps = {
+  active?: boolean;
   params?: KnowledgeRouteParams;
   onNavigate?: (target: {
     page: string;
@@ -72,22 +66,28 @@ export type KnowledgeBaseDetailPageProps = {
   mode?: KnowledgeModeSnapshot | null;
   facade?: HermesKnowledgeFacadeAPI | null;
   bases?: HermesKnowledgeBasesAPI | null;
-  createDraft?: (input?: {
-    knowledgeBaseId?: string;
-  }) => Promise<KnowledgeJobSnapshot>;
+  pickAndUpload?: HermesKnowledgeJobsAPI["pickAndUpload"];
   listSnapshots?: () => Promise<KnowledgeJobSnapshot[]>;
   onSnapshotChanged?: (
     callback: (snapshot: KnowledgeJobSnapshot) => void,
   ) => () => void;
   cancelJob?: (input: { jobId: string }) => Promise<KnowledgeJobSnapshot>;
   retryJob?: (input: { jobId: string }) => Promise<KnowledgeJobSnapshot>;
+  refreshStatus?: HermesKnowledgeJobsAPI["refreshStatus"];
+  onRefreshCapability?: () => Promise<KnowledgeCapabilitySnapshot | null>;
 };
 
-type DetailLoadState = "loading" | "unavailable" | "not-found" | "content" | "error";
-type DetailTab = "documents" | "settings";
+type DetailLoadState =
+  | "loading"
+  | "unavailable"
+  | "not-found"
+  | "content"
+  | "error";
+type DetailTab = "documents" | "uploads" | "settings";
 
 function errorCode(error: unknown): string {
-  if (error instanceof Error) return error.message.split(/\s/)[0] ?? error.message;
+  if (error instanceof Error)
+    return error.message.split(/\s/)[0] ?? error.message;
   return "KNOWLEDGE_UNAVAILABLE";
 }
 
@@ -102,6 +102,7 @@ function chunkReadinessLabel(
 }
 
 export function KnowledgeBaseDetailPage({
+  active = true,
   params = {},
   onNavigate,
   onBack,
@@ -109,11 +110,13 @@ export function KnowledgeBaseDetailPage({
   mode: injectedMode,
   facade: injectedFacade,
   bases: injectedBases,
-  createDraft,
+  pickAndUpload,
   listSnapshots,
   onSnapshotChanged,
   cancelJob,
   retryJob,
+  refreshStatus,
+  onRefreshCapability,
 }: KnowledgeBaseDetailPageProps): ReactElement {
   const { t } = useI18n();
   const probe = useKnowledgeFacade({
@@ -127,10 +130,11 @@ export function KnowledgeBaseDetailPage({
   const [detail, setDetail] = useState<KnowledgeBaseSnapshot | null>(null);
   const [files, setFiles] = useState<KnowledgeBaseFileSnapshot[]>([]);
   const [indexes, setIndexes] = useState<KnowledgeIndexState[]>([]);
-  const [buildProfile, setBuildProfile] = useState<KnowledgeBuildProfileView | null>(
+  const [buildProfile, setBuildProfile] =
+    useState<KnowledgeBuildProfileView | null>(null);
+  const [buildJob, setBuildJob] = useState<KnowledgeBuildJobSnapshot | null>(
     null,
   );
-  const [buildJob, setBuildJob] = useState<KnowledgeBuildJobSnapshot | null>(null);
   const [indexRequested, setIndexRequested] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [draftName, setDraftName] = useState("");
@@ -138,34 +142,64 @@ export function KnowledgeBaseDetailPage({
   const [draftVisibility, setDraftVisibility] =
     useState<KnowledgeBaseVisibility>("organization");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [moduleTheme, setModuleTheme] = useState<ModuleTheme>("dark");
   const [detailTab, setDetailTab] = useState<DetailTab>("documents");
   const [submitting, setSubmitting] = useState(false);
   const skipNextDocumentsRefresh = useRef(true);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const filesScope = useRef(0);
+  const [reloadVersion, setReloadVersion] = useState(0);
+  const [recovering, setRecovering] = useState(false);
+  const recoveringRef = useRef(false);
+  const observeCompleted = useRef<(snapshots: KnowledgeJobSnapshot[]) => void>(
+    () => undefined,
+  );
+  const readLocalJobs = useRef<() => Promise<void>>(async () => undefined);
 
   useEffect(() => {
-    const apply = (): void => {
-      try {
-        setModuleTheme(resolveModuleTheme(readRootWorkThemeId()));
-      } catch {
-        setModuleTheme("dark");
-      }
+    filesScope.current += 1;
+    recoveringRef.current = false;
+    setRecovering(false);
+    return () => {
+      filesScope.current += 1;
     };
-    apply();
-    const observer = new MutationObserver(apply);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    return () => observer.disconnect();
-  }, []);
+  }, [detailId, probe.bases]);
 
   const refreshFiles = async (): Promise<void> => {
     if (!probe.bases || !detailId) return;
-    const listed = await probe.bases.listFiles({ knowledgeBaseId: detailId });
-    setFiles(listed.items);
+    const scope = filesScope.current;
+    try {
+      const listed = await probe.bases.listFiles({ knowledgeBaseId: detailId });
+      if (filesScope.current === scope) setFiles(listed.items);
+    } catch (error) {
+      if (filesScope.current === scope) throw error;
+    }
   };
+
+  const recheckCapability =
+    async (): Promise<KnowledgeCapabilitySnapshot | null> => {
+      if (recoveringRef.current) return probe.capability ?? null;
+      const scope = filesScope.current;
+      recoveringRef.current = true;
+      setRecovering(true);
+      try {
+        await onRefreshCapability?.();
+        if (scope !== filesScope.current) return null;
+        const capability = await probe.refreshCapability();
+        if (scope === filesScope.current)
+          setReloadVersion((value) => value + 1);
+        return capability;
+      } catch (error) {
+        if (scope === filesScope.current)
+          setErrorMessage(knowledgeUploadErrorCode(error));
+        return null;
+      } finally {
+        if (scope === filesScope.current) {
+          recoveringRef.current = false;
+          setRecovering(false);
+        }
+      }
+    };
 
   const refreshIndexes = async (): Promise<void> => {
     if (!probe.bases || !detailId) return;
@@ -222,7 +256,7 @@ export function KnowledgeBaseDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [probe.presentation, probe.bases, detailId]);
+  }, [probe.presentation, probe.bases, detailId, reloadVersion]);
 
   useEffect(() => {
     if (loadState !== "content" || detailTab !== "documents" || !probe.bases) {
@@ -237,12 +271,125 @@ export function KnowledgeBaseDetailPage({
     });
   }, [detailTab, loadState, probe.bases, detailId]);
 
+  useEffect(() => {
+    if (loadState !== "content" || !probe.bases || !detailId) return;
+    const api = window.hermesAPI?.knowledgeJobs;
+    const subscribe = onSnapshotChanged ?? api?.onSnapshotChanged?.bind(api);
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let running = false;
+    let pending = false;
+    const completedAttempts = new Map<string, number>();
+    const revisions = new Map<string, number>();
+    const refreshCompletedFiles = async (): Promise<void> => {
+      if (running) return;
+      running = true;
+      while (
+        pending &&
+        !disposed &&
+        activeRef.current &&
+        document.visibilityState !== "hidden"
+      ) {
+        pending = false;
+        try {
+          const listed = await probe.bases!.listFiles({
+            knowledgeBaseId: detailId,
+          });
+          if (!disposed) setFiles(listed.items);
+        } catch (error) {
+          if (!disposed) {
+            pending = true;
+            setErrorMessage(errorCode(error));
+          }
+          break;
+        }
+      }
+      running = false;
+    };
+    const observe = (snapshots: KnowledgeJobSnapshot[]): void => {
+      if (disposed) return;
+      for (const snapshot of snapshots) {
+        if (snapshot.knowledgeBaseId !== detailId) continue;
+        const revision = snapshot.revision ?? 0;
+        if (revision < (revisions.get(snapshot.jobId) ?? -1)) continue;
+        revisions.set(snapshot.jobId, revision);
+        if (
+          snapshot.status !== "completed" ||
+          completedAttempts.get(snapshot.jobId) === snapshot.attempt
+        )
+          continue;
+        completedAttempts.set(snapshot.jobId, snapshot.attempt);
+        pending = true;
+      }
+      if (
+        !pending ||
+        !activeRef.current ||
+        document.visibilityState === "hidden"
+      )
+        return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = undefined;
+        void refreshCompletedFiles();
+      }, 100);
+    };
+    observeCompleted.current = observe;
+    const unsubscribe = subscribe?.((snapshot) => observe([snapshot]));
+    const list = listSnapshots ?? api?.listSnapshots?.bind(api);
+    let localInFlight: Promise<void> | undefined;
+    readLocalJobs.current = (): Promise<void> => {
+      if (
+        disposed ||
+        !list ||
+        !activeRef.current ||
+        document.visibilityState === "hidden"
+      )
+        return Promise.resolve();
+      observe([]);
+      if (localInFlight) return localInFlight;
+      localInFlight = Promise.resolve()
+        .then(() => list())
+        .then((snapshots) => {
+          if (!disposed) observe(snapshots);
+        })
+        .catch((error) => {
+          if (!disposed) setErrorMessage(errorCode(error));
+        })
+        .finally(() => {
+          localInFlight = undefined;
+        });
+      return localInFlight;
+    };
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      unsubscribe?.();
+    };
+  }, [loadState, probe.bases, detailId, onSnapshotChanged, listSnapshots]);
+
+  const previouslyActive = useRef(active);
+  useEffect(() => {
+    if (active && !previouslyActive.current) void readLocalJobs.current();
+    previouslyActive.current = active;
+    const onVisible = (): void => {
+      if (active && document.visibilityState !== "hidden")
+        void readLocalJobs.current();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [active]);
+
   const hasActiveSource = files.some((file) => file.status === "active");
   const shouldLoadIndexes =
     hasActiveSource || indexRequested || Boolean(buildJob);
 
   useEffect(() => {
-    if (loadState !== "content" || !probe.bases || !detailId || !shouldLoadIndexes) {
+    if (
+      loadState !== "content" ||
+      !probe.bases ||
+      !detailId ||
+      !shouldLoadIndexes
+    ) {
       return;
     }
     let cancelled = false;
@@ -274,11 +421,14 @@ export function KnowledgeBaseDetailPage({
   }, [probe.bases, detailId]);
 
   const saveEnabled =
-    probe.mutationsEnabled && knowledgeBaseActionAllowed(detail?.status, "save");
+    probe.mutationsEnabled &&
+    knowledgeBaseActionAllowed(detail?.status, "save");
   const deleteEnabled =
-    probe.mutationsEnabled && knowledgeBaseActionAllowed(detail?.status, "delete");
+    probe.mutationsEnabled &&
+    knowledgeBaseActionAllowed(detail?.status, "delete");
   const uploadEnabled =
-    probe.mutationsEnabled && knowledgeBaseActionAllowed(detail?.status, "upload");
+    probe.mutationsEnabled &&
+    knowledgeBaseActionAllowed(detail?.status, "upload");
   const fileMutationsEnabled = saveEnabled;
 
   const replaceFile = (updated: KnowledgeBaseFileSnapshot): void => {
@@ -301,7 +451,9 @@ export function KnowledgeBaseDetailPage({
     }
   };
 
-  const handleActivate = async (file: KnowledgeBaseFileSnapshot): Promise<void> => {
+  const handleActivate = async (
+    file: KnowledgeBaseFileSnapshot,
+  ): Promise<void> => {
     if (!probe.bases) return;
     await runFileAction(async () => {
       const versions = await probe.bases!.listFileVersions({
@@ -318,9 +470,13 @@ export function KnowledgeBaseDetailPage({
     });
   };
 
-  const handleReparse = async (file: KnowledgeBaseFileSnapshot): Promise<void> => {
+  const handleReparse = async (
+    file: KnowledgeBaseFileSnapshot,
+  ): Promise<void> => {
     if (!probe.bases) return;
-    await runFileAction(() => probe.bases!.reparseFile({ sourceFileId: file.id }));
+    await runFileAction(() =>
+      probe.bases!.reparseFile({ sourceFileId: file.id }),
+    );
   };
 
   const handleArchiveToggle = async (
@@ -368,7 +524,8 @@ export function KnowledgeBaseDetailPage({
   };
 
   const handleBuild = async (): Promise<void> => {
-    if (!fileMutationsEnabled || !probe.bases || !detailId || submitting) return;
+    if (!fileMutationsEnabled || !probe.bases || !detailId || submitting)
+      return;
     setSubmitting(true);
     setIndexRequested(true);
     try {
@@ -377,7 +534,7 @@ export function KnowledgeBaseDetailPage({
         indexTypes: ["chunk"],
       });
       setBuildJob(snapshot);
-      if (isKnowledgeBuildJobTerminal(snapshot.status)) {
+      if (!snapshot || isKnowledgeBuildJobTerminal(snapshot.status)) {
         await refreshIndexes();
       } else {
         await probe.bases.watchBuild({ buildId: snapshot.id });
@@ -410,11 +567,28 @@ export function KnowledgeBaseDetailPage({
             disabled={!uploadEnabled}
             onClick={() => {
               if (!uploadEnabled) return;
-              setUploadOpen(true);
+              setDetailTab("uploads");
             }}
           >
             {t("knowledge.bases.uploadAction")}
           </Button>
+          {loadState === "unavailable" || loadState === "error" ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!active || recovering}
+              data-testid="knowledge-base-recheck"
+              onClick={() => {
+                void recheckCapability();
+              }}
+            >
+              {t(
+                recovering
+                  ? "knowledge.uploads.reconnectCheckingLabel"
+                  : "knowledge.uploads.reconnectLabel",
+              )}
+            </Button>
+          ) : null}
         </div>
         {loadState === "loading" ? (
           <KnowledgeLoading label={t("knowledge.loading")} />
@@ -435,13 +609,17 @@ export function KnowledgeBaseDetailPage({
         {loadState === "error" ? (
           <EmptyState
             title={t("knowledge.host.errorTitle")}
-            description={errorMessage}
+            description={t(
+              `knowledge.uploads.${knowledgeUploadErrorKey(errorMessage)}`,
+            )}
           />
         ) : null}
         {loadState === "content" && detail ? (
           <section className="grid gap-3" data-testid="knowledge-base-detail">
             <PageHeader title={detail.name}>
-              <Badge data-testid="knowledge-base-detail-status">{detail.status}</Badge>
+              <Badge data-testid="knowledge-base-detail-status">
+                {detail.status}
+              </Badge>
             </PageHeader>
             <p data-testid="knowledge-base-detail-id">{detail.id}</p>
             <p data-testid="knowledge-base-detail-owner">
@@ -456,13 +634,7 @@ export function KnowledgeBaseDetailPage({
               className="flex flex-col gap-3"
               value={detailTab}
               onValueChange={(value) => {
-                const next = value as DetailTab;
-                setDetailTab(next);
-                if (next === "documents" && loadState === "content") {
-                  void refreshFiles().catch((error) => {
-                    setErrorMessage(errorCode(error));
-                  });
-                }
+                setDetailTab(value as DetailTab);
               }}
             >
               <TabsList>
@@ -473,12 +645,41 @@ export function KnowledgeBaseDetailPage({
                   {t("knowledge.bases.tabDocuments")}
                 </TabsTrigger>
                 <TabsTrigger
+                  value="uploads"
+                  data-testid="knowledge-section-tab-uploads"
+                >
+                  {t("knowledge.bases.tabUploads")}
+                </TabsTrigger>
+                <TabsTrigger
                   value="settings"
                   data-testid="knowledge-section-tab-settings"
                 >
                   {t("knowledge.bases.tabSettings")}
                 </TabsTrigger>
               </TabsList>
+              <TabsContent value="uploads" className="min-w-0">
+                {detailTab === "uploads" ? (
+                  <KnowledgeUploadPanel
+                    active={active}
+                    knowledgeBaseId={detailId}
+                    baseName={detail.name}
+                    capability={injectedCapability ?? probe.capability}
+                    mode={injectedMode}
+                    facade={injectedFacade}
+                    bases={injectedBases}
+                    pickAndUpload={pickAndUpload}
+                    listSnapshots={listSnapshots}
+                    onSnapshotChanged={onSnapshotChanged}
+                    cancelJob={cancelJob}
+                    retryJob={retryJob}
+                    refreshStatus={refreshStatus}
+                    onRefreshCapability={recheckCapability}
+                    onSnapshotsReconciled={(snapshots) =>
+                      observeCompleted.current(snapshots)
+                    }
+                  />
+                ) : null}
+              </TabsContent>
               <TabsContent forceMount value="documents">
                 <p>{t("knowledge.bases.documentsNote")}</p>
                 {files.length === 0 ? (
@@ -491,9 +692,15 @@ export function KnowledgeBaseDetailPage({
                         <TableHead>{t("knowledge.bases.fileStatus")}</TableHead>
                         <TableHead>{t("knowledge.host.owner")}</TableHead>
                         <TableHead>{t("knowledge.host.createdAt")}</TableHead>
-                        <TableHead>{t("knowledge.bases.fileVersion")}</TableHead>
-                        <TableHead>{t("knowledge.bases.fileLastError")}</TableHead>
-                        <TableHead>{t("knowledge.bases.fileActions")}</TableHead>
+                        <TableHead>
+                          {t("knowledge.bases.fileVersion")}
+                        </TableHead>
+                        <TableHead>
+                          {t("knowledge.bases.fileLastError")}
+                        </TableHead>
+                        <TableHead>
+                          {t("knowledge.bases.fileActions")}
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -504,13 +711,19 @@ export function KnowledgeBaseDetailPage({
                         >
                           <TableCell>{file.fileName}</TableCell>
                           <TableCell>{file.status}</TableCell>
-                          <TableCell data-testid={`knowledge-base-file-owner-${file.id}`}>
+                          <TableCell
+                            data-testid={`knowledge-base-file-owner-${file.id}`}
+                          >
                             {file.ownerMemberId ?? ""}
                           </TableCell>
-                          <TableCell data-testid={`knowledge-base-file-created-${file.id}`}>
+                          <TableCell
+                            data-testid={`knowledge-base-file-created-${file.id}`}
+                          >
                             {file.createdAt ?? ""}
                           </TableCell>
-                          <TableCell data-testid={`knowledge-base-file-version-${file.id}`}>
+                          <TableCell
+                            data-testid={`knowledge-base-file-version-${file.id}`}
+                          >
                             {file.activeVersionId ?? ""}
                           </TableCell>
                           <TableCell>{file.lastError ?? ""}</TableCell>
@@ -578,7 +791,10 @@ export function KnowledgeBaseDetailPage({
                     </TableBody>
                   </Table>
                 )}
-                <div className="mt-4 grid gap-2" data-testid="knowledge-base-indexes">
+                <div
+                  className="mt-4 grid gap-2"
+                  data-testid="knowledge-base-indexes"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-medium">
                       {t("knowledge.bases.indexTitle")}
@@ -598,7 +814,8 @@ export function KnowledgeBaseDetailPage({
                   </div>
                   {buildProfile ? (
                     <p data-testid="knowledge-base-build-profile">
-                      {t("knowledge.bases.buildProfile")}: {buildProfile.profileName}
+                      {t("knowledge.bases.buildProfile")}:{" "}
+                      {buildProfile.profileName}
                     </p>
                   ) : null}
                   {buildJob ? (
@@ -609,7 +826,9 @@ export function KnowledgeBaseDetailPage({
                   ) : null}
                   <p
                     data-testid="knowledge-base-retrieval-ready"
-                    data-ready={readinessKey === "retrievalReady" ? "true" : "false"}
+                    data-ready={
+                      readinessKey === "retrievalReady" ? "true" : "false"
+                    }
                   >
                     {t(`knowledge.bases.${readinessKey}`)}
                   </p>
@@ -619,7 +838,8 @@ export function KnowledgeBaseDetailPage({
                       data-testid={`knowledge-base-index-${index.indexType}`}
                     >
                       {index.indexType}: {t("knowledge.bases.indexBuildStatus")}{" "}
-                      {index.buildStatus}; {t("knowledge.bases.indexRetrievalStatus")}{" "}
+                      {index.buildStatus};{" "}
+                      {t("knowledge.bases.indexRetrievalStatus")}{" "}
                       {index.retrievalStatus}
                     </p>
                   ))}
@@ -647,14 +867,18 @@ export function KnowledgeBaseDetailPage({
                   organizationLabel={t("knowledge.host.organization")}
                 />
                 <div className="mt-6 grid gap-2">
-                  <h3 className="text-sm font-medium">{t("knowledge.bases.dangerZone")}</h3>
+                  <h3 className="text-sm font-medium">
+                    {t("knowledge.bases.dangerZone")}
+                  </h3>
                   <Button
                     type="button"
                     variant="destructive"
                     data-testid="knowledge-base-delete"
                     disabled={!deleteEnabled || submitting}
                     title={
-                      deleteEnabled ? undefined : t("knowledge.bases.mutateDisabled")
+                      deleteEnabled
+                        ? undefined
+                        : t("knowledge.bases.mutateDisabled")
                     }
                     onClick={() => setConfirmDelete(true)}
                   >
@@ -667,7 +891,19 @@ export function KnowledgeBaseDetailPage({
               </TabsContent>
             </Tabs>
 
-            {errorMessage ? <p>{errorMessage}</p> : null}
+            {errorMessage ? (
+              <div className="text-xs">
+                <p role="alert">
+                  {t(
+                    `knowledge.uploads.${knowledgeUploadErrorKey(errorMessage)}`,
+                  )}
+                </p>
+                <details>
+                  <summary>{t("knowledge.uploads.detailsLabel")}</summary>
+                  {t("knowledge.uploads.errorCodeLabel")}: {errorMessage}
+                </details>
+              </div>
+            ) : null}
 
             <AlertDialog
               open={confirmDelete}
@@ -678,7 +914,9 @@ export function KnowledgeBaseDetailPage({
             >
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{t("knowledge.bases.deleteLabel")}</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {t("knowledge.bases.deleteLabel")}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
                     {t("knowledge.bases.mutateDisabled")}
                   </AlertDialogDescription>
@@ -699,49 +937,6 @@ export function KnowledgeBaseDetailPage({
           </section>
         ) : null}
       </div>
-      <Sheet
-        open={uploadOpen}
-        onOpenChange={(open) => {
-          setUploadOpen(open);
-          if (!open) {
-            void refreshFiles().catch((error) => {
-              setErrorMessage(errorCode(error));
-            });
-          }
-        }}
-      >
-        <SheetContent
-          side="right"
-          overlayClassName="bg-black/30"
-          className="work-business-module-ui max-w-md gap-0 p-0"
-          data-testid="knowledge-upload-drawer"
-          data-business-module-ui="true"
-          data-business-module="knowledge"
-          data-module-theme={moduleTheme}
-        >
-          <SheetHeader>
-            <SheetTitle>
-              {t("knowledge.uploads.drawerTitle")} {detail?.name ?? detailId}
-            </SheetTitle>
-            <SheetDescription>{t("knowledge.uploads.lockedTarget")}</SheetDescription>
-          </SheetHeader>
-          {uploadOpen && detailId ? (
-            <KnowledgeUploadPanel
-              knowledgeBaseId={detailId}
-              baseName={detail?.name}
-              capability={injectedCapability}
-              mode={injectedMode}
-              facade={injectedFacade}
-              bases={injectedBases}
-              createDraft={createDraft}
-              listSnapshots={listSnapshots}
-              onSnapshotChanged={onSnapshotChanged}
-              cancelJob={cancelJob}
-              retryJob={retryJob}
-            />
-          ) : null}
-        </SheetContent>
-      </Sheet>
     </BusinessModuleUISurface>
   );
 }

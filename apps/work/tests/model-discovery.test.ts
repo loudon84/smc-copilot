@@ -229,7 +229,7 @@ describe("model-discovery", () => {
     expect(result.models).toEqual(["claude-3-5-sonnet"]);
   });
 
-  it("returns status=ok with empty list when upstream returns malformed JSON", async () => {
+  it("reports an error when upstream returns malformed JSON", async () => {
     server = http.createServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end("not-json-at-all");
@@ -242,11 +242,11 @@ describe("model-discovery", () => {
       "sk-test",
       undefined,
     );
-    expect(result.status).toBe("ok");
+    expect(result.status).toBe("error");
     expect(result.models).toEqual([]);
   });
 
-  it("returns status=ok with empty list when upstream returns 4xx/5xx", async () => {
+  it("reports an error when upstream rejects the model request", async () => {
     server = http.createServer((_req, res) => {
       res.writeHead(401);
       res.end(JSON.stringify({ error: "unauthorized" }));
@@ -259,7 +259,7 @@ describe("model-discovery", () => {
       "sk-bad",
       undefined,
     );
-    expect(result.status).toBe("ok");
+    expect(result.status).toBe("error");
     expect(result.models).toEqual([]);
   });
 
@@ -360,22 +360,14 @@ describe("model-discovery", () => {
 
     const { discoverProviderModels } = await loadDiscovery();
     const result = await discoverProviderModels(
-      "custom",
-      "https://api.deepseek.com/v1",
+      "deepseek",
+      baseUrl,
       undefined,
       undefined,
     );
-    // The fetch shouldn't reach our server because the canonical URL
-    // isn't loopback — but the resolver should still produce the right
-    // shape.  Since the canonical URL is unreachable in tests, status
-    // ends up "ok" with an empty list (network failure → empty).
-    // What we *do* care about is that the resolver picked up the .env
-    // key (not that the request succeeded against the real DeepSeek).
-    expect(["ok"]).toContain(result.status);
-    // No assertion on receivedAuth — the real call goes to the canonical
-    // URL which isn't our loopback server.  Sanity check the .env load
-    // path separately:
-    expect(receivedAuth).toBe(""); // confirms the canonical URL was used, not our test server
+    expect(result.status).toBe("ok");
+    expect(result.models).toEqual(["m"]);
+    expect(receivedAuth).toBe("Bearer sk-from-dotenv");
   });
 
   // Issue #367 — Nous Portal model discovery uses the curated OAuth

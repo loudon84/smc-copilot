@@ -16,6 +16,7 @@ export type KnowledgeJobStatus =
   | "queued"
   | "uploading"
   | "processing"
+  | "awaiting_confirmation"
   | "completed"
   | "interrupted"
   | "failed"
@@ -45,6 +46,14 @@ export interface KnowledgeJobFileSummary {
   mimeType?: string;
 }
 
+export type KnowledgeJobPhase =
+  | "importing"
+  | "waiting_parse"
+  | "parsing"
+  | "validating"
+  | "confirming"
+  | "cancelling";
+
 export interface KnowledgeJobSnapshot {
   jobId: string;
   knowledgeBaseId: string;
@@ -58,6 +67,53 @@ export interface KnowledgeJobSnapshot {
   fileSummary?: KnowledgeJobFileSummary;
   errorCode?: string;
   updatedAt: string;
+  /** Last accepted remote confirmation; local changes never refresh this time. */
+  lastRemoteConfirmedAt?: string;
+  batchId?: string;
+  phase?: KnowledgeJobPhase;
+  revision?: number;
+  createdAt?: string;
+  canCancel?: boolean;
+  canRetry?: boolean;
+  /** Main has a remote task ID that manual status confirmation can query. */
+  canQueryRemoteStatus?: boolean;
+}
+
+export interface KnowledgeJobPickAndUploadInput {
+  knowledgeBaseId: string;
+}
+
+export interface KnowledgeJobRefreshInput {
+  knowledgeBaseId: string;
+}
+
+export interface KnowledgeJobRefreshResult {
+  jobs: KnowledgeJobSnapshot[];
+  attempted: number;
+  confirmed: number;
+  failed: number;
+  skipped: number;
+  changed: number;
+  checkedAt: string;
+}
+
+export const MAX_KNOWLEDGE_BATCH_FILES = 500;
+
+/** Renderer hands File objects to preload; native paths never return to Renderer. */
+export interface KnowledgeJobDropUploadInput {
+  knowledgeBaseId: string;
+  files: File[];
+}
+
+/** Private preload-to-Main payload; all paths are revalidated in Main. */
+export interface KnowledgeJobDropPathsInput {
+  knowledgeBaseId: string;
+  paths: string[];
+}
+
+export interface KnowledgeJobBatchResult {
+  batchId: string | null;
+  jobs: KnowledgeJobSnapshot[];
 }
 
 export type KnowledgeCapabilityStatus =
@@ -78,6 +134,16 @@ export interface KnowledgeJobCreateDraftInput {
 export interface KnowledgeJobCommandInput {
   jobId: string;
   commandId?: string;
+}
+
+export interface KnowledgeJobDeleteInput {
+  jobId: string;
+  expectedRevision: number;
+}
+
+export interface KnowledgeJobRemoved {
+  jobId: string;
+  knowledgeBaseId: string;
 }
 
 /** Sanitized Main-owned mode snapshot for badge / diagnostics (no tokens). */
@@ -129,13 +195,18 @@ export interface KnowledgeFacadeMutateInput {
 }
 
 export const KNOWLEDGE_JOB_IPC_CHANNELS = {
+  pickAndUpload: "knowledge-job:pick-and-upload",
+  dropAndUpload: "knowledge-job:drop-and-upload",
   createDraft: "knowledge-job:create-draft",
   getSnapshot: "knowledge-job:get-snapshot",
   listSnapshots: "knowledge-job:list-snapshots",
+  refreshStatus: "knowledge-job:refresh-status",
   cancel: "knowledge-job:cancel",
+  deleteCancelled: "knowledge-job:delete-cancelled",
   retry: "knowledge-job:retry",
   getCapability: "knowledge-job:get-capability",
   snapshotChanged: "knowledge-job:snapshot-changed",
+  jobRemoved: "knowledge-job:removed",
 } as const;
 
 export const KNOWLEDGE_MODE_IPC_CHANNELS = {
@@ -158,17 +229,29 @@ export type KnowledgeFacadeIpcChannel =
   (typeof KNOWLEDGE_FACADE_IPC_CHANNELS)[keyof typeof KNOWLEDGE_FACADE_IPC_CHANNELS];
 
 export interface HermesKnowledgeJobsAPI {
+  pickAndUpload(
+    input: KnowledgeJobPickAndUploadInput,
+  ): Promise<KnowledgeJobBatchResult>;
+  dropAndUpload(
+    input: KnowledgeJobDropUploadInput,
+  ): Promise<KnowledgeJobBatchResult>;
   createDraft(
     input?: KnowledgeJobCreateDraftInput,
   ): Promise<KnowledgeJobSnapshot>;
   getSnapshot(jobId: string): Promise<KnowledgeJobSnapshot>;
   listSnapshots(): Promise<KnowledgeJobSnapshot[]>;
+  refreshStatus(
+    input: KnowledgeJobRefreshInput,
+  ): Promise<KnowledgeJobRefreshResult>;
   cancel(input: KnowledgeJobCommandInput): Promise<KnowledgeJobSnapshot>;
+  /** Legacy method name; deletes failed local task records only. */
+  deleteCancelled(input: KnowledgeJobDeleteInput): Promise<KnowledgeJobRemoved>;
   retry(input: KnowledgeJobCommandInput): Promise<KnowledgeJobSnapshot>;
   getCapability(): Promise<KnowledgeCapabilitySnapshot>;
   onSnapshotChanged(
     callback: (snapshot: KnowledgeJobSnapshot) => void,
   ): () => void;
+  onJobRemoved(callback: (removed: KnowledgeJobRemoved) => void): () => void;
 }
 
 export interface HermesKnowledgeModeAPI {
@@ -196,8 +279,6 @@ export const KNOWLEDGE_JOB_TERMINAL_STATUSES: ReadonlySet<KnowledgeJobStatus> =
     "blocked_provider_unavailable",
   ]);
 
-export function isKnowledgeJobTerminal(
-  status: KnowledgeJobStatus,
-): boolean {
+export function isKnowledgeJobTerminal(status: KnowledgeJobStatus): boolean {
   return KNOWLEDGE_JOB_TERMINAL_STATUSES.has(status);
 }

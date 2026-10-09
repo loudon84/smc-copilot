@@ -4,11 +4,12 @@
  * Mode/facade invokes share this curated surface (no second hermesAPI root).
  */
 
-import { ipcRenderer } from "electron";
+import { ipcRenderer, webUtils } from "electron";
 import {
   KNOWLEDGE_FACADE_IPC_CHANNELS,
   KNOWLEDGE_JOB_IPC_CHANNELS,
   KNOWLEDGE_MODE_IPC_CHANNELS,
+  MAX_KNOWLEDGE_BATCH_FILES,
   type HermesKnowledgeFacadeAPI,
   type HermesKnowledgeJobsAPI,
   type HermesKnowledgeModeAPI,
@@ -17,6 +18,11 @@ import {
   type KnowledgeFacadeMutateInput,
   type KnowledgeJobCommandInput,
   type KnowledgeJobCreateDraftInput,
+  type KnowledgeJobDeleteInput,
+  type KnowledgeJobRemoved,
+  type KnowledgeJobDropUploadInput,
+  type KnowledgeJobPickAndUploadInput,
+  type KnowledgeJobRefreshInput,
   type KnowledgeJobSnapshot,
   type KnowledgeModeSnapshot,
 } from "../shared/knowledge/knowledge-job-ipc";
@@ -69,9 +75,7 @@ export type HermesKnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
   sets: HermesKnowledgeSetsAPI;
 };
 
-async function unwrapChunkIpcResult<T>(
-  raw: unknown,
-): Promise<T> {
+async function unwrapChunkIpcResult<T>(raw: unknown): Promise<T> {
   if (!isKnowledgeChunkIpcResult<T>(raw)) {
     throw new KnowledgeFacadeError({
       code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
@@ -86,6 +90,29 @@ async function unwrapChunkIpcResult<T>(
 
 export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
   return {
+    pickAndUpload: (input: KnowledgeJobPickAndUploadInput) =>
+      ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.pickAndUpload, input),
+
+    dropAndUpload: (input: KnowledgeJobDropUploadInput) => {
+      if (
+        !Array.isArray(input?.files) ||
+        input.files.length === 0 ||
+        input.files.length > MAX_KNOWLEDGE_BATCH_FILES
+      )
+        return Promise.reject(new Error("KNOWLEDGE_JOB_FILE_INVALID"));
+      const paths = input.files.map((file) => {
+        try {
+          return webUtils.getPathForFile(file) || "";
+        } catch {
+          return "";
+        }
+      });
+      return ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.dropAndUpload, {
+        knowledgeBaseId: input.knowledgeBaseId,
+        paths,
+      });
+    },
+
     createDraft: (input?: KnowledgeJobCreateDraftInput) =>
       ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.createDraft, input),
 
@@ -95,8 +122,14 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
     listSnapshots: () =>
       ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.listSnapshots),
 
+    refreshStatus: (input: KnowledgeJobRefreshInput) =>
+      ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.refreshStatus, input),
+
     cancel: (input: KnowledgeJobCommandInput) =>
       ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.cancel, input),
+
+    deleteCancelled: (input: KnowledgeJobDeleteInput) =>
+      ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.deleteCancelled, input),
 
     retry: (input: KnowledgeJobCommandInput) =>
       ipcRenderer.invoke(KNOWLEDGE_JOB_IPC_CHANNELS.retry, input),
@@ -118,6 +151,19 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
           handler,
         );
       };
+    },
+
+    onJobRemoved: (callback) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        payload: KnowledgeJobRemoved,
+      ): void => callback(payload);
+      ipcRenderer.on(KNOWLEDGE_JOB_IPC_CHANNELS.jobRemoved, handler);
+      return () =>
+        ipcRenderer.removeListener(
+          KNOWLEDGE_JOB_IPC_CHANNELS.jobRemoved,
+          handler,
+        );
     },
 
     getMode: (): Promise<KnowledgeModeSnapshot> =>
@@ -152,7 +198,10 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
       addFileVersion: (input: KnowledgeAddFileVersionInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.addFileVersion, input),
       activateFileVersion: (input: KnowledgeActivateFileVersionInput) =>
-        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.activateFileVersion, input),
+        ipcRenderer.invoke(
+          KNOWLEDGE_BASE_IPC_CHANNELS.activateFileVersion,
+          input,
+        ),
       archiveFile: (input: KnowledgeFileIdInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.archiveFile, input),
       unarchiveFile: (input: KnowledgeFileIdInput) =>
@@ -171,7 +220,10 @@ export function createKnowledgeJobApi(): HermesKnowledgeJobsSurface {
       getBuildProfile: (input: KnowledgeBaseGetInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.getBuildProfile, input),
       updateBuildProfile: (input: KnowledgeUpdateBuildProfileInput) =>
-        ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.updateBuildProfile, input),
+        ipcRenderer.invoke(
+          KNOWLEDGE_BASE_IPC_CHANNELS.updateBuildProfile,
+          input,
+        ),
       startBuild: (input: KnowledgeStartBuildInput) =>
         ipcRenderer.invoke(KNOWLEDGE_BASE_IPC_CHANNELS.startBuild, input),
       getBuild: (input: KnowledgeBuildIdInput) =>

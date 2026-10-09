@@ -14153,6 +14153,59 @@ body:has(.shell-vibrant),
   container-name: knowledge-content;
 }
 
+/* Constrain Chat to the remaining viewport; messages and history scroll separately. */
+.knowledge-host[data-page="chat"] {
+  overflow: hidden;
+}
+
+.knowledge-host[data-page="chat"] > .knowledge-host-body {
+  display: flex;
+  overflow: hidden;
+}
+
+.knowledge-chat-slot,
+.knowledge-chat-page,
+.knowledge-chat-run {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.knowledge-chat-run > .chat-container {
+  flex: 1;
+  height: auto;
+}
+
+.knowledge-chat-history,
+.knowledge-chat-page .chat-messages-scroll {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.knowledge-chat-notice {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.knowledge-chat-history::-webkit-scrollbar,
+.knowledge-chat-page .chat-messages-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.knowledge-chat-history::-webkit-scrollbar-thumb,
+.knowledge-chat-page .chat-messages-scroll::-webkit-scrollbar-thumb {
+  min-height: 28px;
+}
+
+.knowledge-chat-session-status {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .knowledge-module-nav {
   flex-wrap: wrap;
 }

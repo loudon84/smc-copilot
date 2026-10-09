@@ -95,7 +95,7 @@ describe("Knowledge Chat page (V06)", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("KNOWLEDGE_BINDING_NOT_FOUND")).toBeTruthy();
+      expect(screen.getByText(knowledgeEn.chat.bindingMissing)).toBeTruthy();
     });
     expect(createSession).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();

@@ -315,14 +315,14 @@ function parseModelContextLengths(body: string): Record<string, number> {
   return out;
 }
 
-function parseModelIds(body: string): string[] {
+function parseModelIds(body: string): string[] | null {
   let json: unknown;
   try {
     json = JSON.parse(body);
   } catch {
-    return [];
+    return null;
   }
-  if (!json || typeof json !== "object") return [];
+  if (!json || typeof json !== "object") return null;
   const j = json as DiscoveryRawResponse;
   // OpenAI shape: { data: [{ id: "..." }, ...] }
   if (Array.isArray(j.data)) {
@@ -344,7 +344,7 @@ function parseModelIds(body: string): string[] {
         .filter(Boolean),
     );
   }
-  return [];
+  return null;
 }
 
 function uniqueSorted(values: string[]): string[] {
@@ -358,7 +358,7 @@ function buildUrl(base: string): string {
 
 interface FetchModelsResult {
   models: string[];
-  reachable: boolean;
+  ok: boolean;
   /** Per-model context-window sizes parsed from the response, when present. */
   contextLengths?: Record<string, number>;
 }
@@ -395,7 +395,7 @@ function fetchModelsHttp(
     try {
       u = new URL(url);
     } catch {
-      resolve({ models: [], reachable: false });
+      resolve({ models: [], ok: false });
       return;
     }
     const mod = u.protocol === "https:" ? https : http;
@@ -410,9 +410,9 @@ function fetchModelsHttp(
         timeout: timeoutMs,
       },
       (res) => {
-        if (!res.statusCode || res.statusCode >= 400) {
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
           res.resume();
-          resolve({ models: [], reachable: true });
+          resolve({ models: [], ok: false });
           return;
         }
         let body = "";
@@ -420,20 +420,21 @@ function fetchModelsHttp(
         res.on("data", (chunk) => {
           body += chunk;
         });
-        res.on("end", () =>
+        res.on("end", () => {
+          const models = parseModelIds(body);
           resolve({
-            models: parseModelIds(body),
-            reachable: true,
-            contextLengths: parseModelContextLengths(body),
-          }),
-        );
-        res.on("error", () => resolve({ models: [], reachable: false }));
+            models: models ?? [],
+            ok: models !== null,
+            contextLengths: models === null ? undefined : parseModelContextLengths(body),
+          });
+        });
+        res.on("error", () => resolve({ models: [], ok: false }));
       },
     );
-    req.on("error", () => resolve({ models: [], reachable: false }));
+    req.on("error", () => resolve({ models: [], ok: false }));
     req.on("timeout", () => {
       req.destroy();
-      resolve({ models: [], reachable: false });
+      resolve({ models: [], ok: false });
     });
     req.end();
   });
@@ -441,10 +442,10 @@ function fetchModelsHttp(
 
 export interface DiscoverModelsResult {
   models: string[];
-  /** ``"ok"`` when the call succeeded (even if zero models came back).
+  /** ``"ok"`` when the endpoint returned a valid model list (possibly empty).
    *  ``"no-key"`` when the caller didn't pass one and we couldn't find a
-   *  matching ``<NAME>_API_KEY``.  ``"error"`` when the provider could not
-   *  be reached.  ``"unsupported"`` for providers we know don't expose this
+   *  matching ``<NAME>_API_KEY``.  ``"error"`` on network, HTTP, or response
+   *  errors.  ``"unsupported"`` for providers we know don't expose this
    *  endpoint.  ``"unknown-host"`` when neither caller nor mapping table can
    *  resolve a base URL. */
   status: "ok" | "no-key" | "error" | "unsupported" | "unknown-host";
@@ -527,7 +528,7 @@ export async function discoverProviderModels(
   }
 
   const result = await fetchAndCacheModels(lowerProvider, baseUrl, apiKey);
-  if (!result.reachable) {
+  if (!result.ok) {
     return { models: [], status: "error", cached: false };
   }
   return { models: result.models, status: "ok", cached: false };
@@ -551,7 +552,7 @@ async function fetchAndCacheModels(
   const url = buildUrl(baseUrl);
   const headers = authHeaders(lowerProvider, apiKey);
   const result = await fetchModelsHttp(url, headers, 10_000);
-  if (result.reachable) {
+  if (result.ok) {
     setCache(lowerProvider, baseUrl, result.models);
     _ctxCache.set(
       cacheKey(lowerProvider, baseUrl),

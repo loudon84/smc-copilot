@@ -210,8 +210,8 @@ function ProviderModelsManager({
   });
   const listId = `provider-models-${envKey || normUrl(route.baseUrl) || "custom"}`;
 
-  async function add(): Promise<void> {
-    const model = modelId.trim();
+  async function add(id = modelId): Promise<void> {
+    const model = id.trim();
     if (!model || busy) return;
     setBusy(true);
     try {
@@ -276,6 +276,7 @@ function ProviderModelsManager({
   // verification pill + "used by N models"). Destructure to primitives so the
   // effect only fires on real changes, not on every object re-creation.
   const { tone: statusTone, text: statusText } = status;
+  const savedModelIds = new Set(models.map((m) => m.model));
   useEffect(() => {
     onStatusChange?.({ tone: statusTone, text: statusText });
   }, [statusTone, statusText, onStatusChange]);
@@ -363,6 +364,22 @@ function ProviderModelsManager({
                 {t("providers.models.less")}
               </button>
             )}
+
+            {discovery.models
+              .filter((id) => !savedModelIds.has(id))
+              .slice(0, MODELS_COLLAPSED)
+              .map((id) => (
+                <button
+                  key={`discovered:${id}`}
+                  type="button"
+                  className="provider-model-add-pill"
+                  onClick={() => void add(id)}
+                  title={t("providers.models.addModelId")}
+                >
+                  <Plus size={13} aria-hidden />
+                  {id}
+                </button>
+              ))}
 
             {adding ? (
               <span className="provider-model-chip provider-model-chip-input">

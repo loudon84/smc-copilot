@@ -153,6 +153,26 @@ async function saveRemoteArtifactAs(
   return destination;
 }
 
+/** Main-only picker. Paths never cross the Knowledge IPC boundary. */
+export async function selectFilePaths(
+  options?: FilePickerOptions,
+): Promise<string[]> {
+  const win = BrowserWindow.getFocusedWindow();
+  const properties: Array<"openFile" | "multiSelections"> = ["openFile"];
+  if (options?.multiple !== false) properties.push("multiSelections");
+  const dialogOpts = {
+    properties,
+    filters: options?.filters?.map((f) => ({
+      name: f.name,
+      extensions: f.extensions,
+    })),
+  };
+  const result = win
+    ? await dialog.showOpenDialog(win, dialogOpts)
+    : await dialog.showOpenDialog(dialogOpts);
+  return result.canceled ? [] : (result.filePaths ?? []);
+}
+
 // @lat: [[file-platform#FileService]]
 export const fileService: HermesFilesAPI = {
   async getCapabilities(profile?: string): Promise<FilesCapabilities> {
@@ -175,26 +195,13 @@ export const fileService: HermesFilesAPI = {
     options: FilePickerOptions | undefined,
     context: FileImportContext,
   ): Promise<FileImportResult[]> {
-    const win = BrowserWindow.getFocusedWindow();
-    const properties: Array<"openFile" | "multiSelections"> = ["openFile"];
-    if (options?.multiple !== false) properties.push("multiSelections");
-    const dialogOpts = {
-      properties,
-      filters: options?.filters?.map((f) => ({
-        name: f.name,
-        extensions: f.extensions,
-      })),
-    };
-    const result = win
-      ? await dialog.showOpenDialog(win, dialogOpts)
-      : await dialog.showOpenDialog(dialogOpts);
-    if (result.canceled || !result.filePaths?.length) return [];
+    const paths = await selectFilePaths(options);
     const pickerContext: FileImportContext = {
       ...context,
       source: "picker",
     };
     const out: FileImportResult[] = [];
-    for (const p of result.filePaths) {
+    for (const p of paths) {
       out.push(await importOnePath(p, pickerContext));
     }
     return out;

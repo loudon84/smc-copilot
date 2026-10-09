@@ -1,4 +1,4 @@
-import { type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { useI18n } from "../../components/useI18n";
 import {
   type KnowledgeNavigateTarget,
@@ -30,6 +30,7 @@ export type { KnowledgeNavigateTarget } from "./knowledge-route-descriptor";
 
 export type KnowledgePagesProps = {
   page: KnowledgePageId;
+  active?: boolean;
   /** Route-scope params from the keep-alive KnowledgeView (no window URL). */
   params?: KnowledgeRouteParams;
   /** Layout active Hermes profile — Knowledge chat follows this (G5). */
@@ -61,6 +62,7 @@ export type KnowledgePagesProps = {
  */
 export function KnowledgePages({
   page,
+  active = true,
   params = {},
   profile = "default",
   onNavigate,
@@ -83,6 +85,15 @@ export function KnowledgePages({
   const probe = useKnowledgeFacade(probeOptions);
   const { presentation, mode } = probe;
   const showMockBadge = mode?.dataMode === "mock";
+  const [lastChatParams, setLastChatParams] =
+    useState<KnowledgeRouteParams | null>(page === "chat" ? params : null);
+  useEffect(() => {
+    if (page === "chat")
+      setLastChatParams({
+        sessionId: params.sessionId,
+        knowledgeSetId: params.knowledgeSetId,
+      });
+  }, [page, params.sessionId, params.knowledgeSetId]);
 
   const pageOverrides = {
     capability: injectedCapability,
@@ -92,7 +103,7 @@ export function KnowledgePages({
     sets: injectedSets,
   };
 
-  let pageBody: ReactElement;
+  let pageBody: ReactElement | null;
   switch (page) {
     case "home":
       pageBody = (
@@ -102,6 +113,8 @@ export function KnowledgePages({
     case "bases":
       pageBody = params.knowledgeBaseId ? (
         <KnowledgeBaseDetailPage
+          active={active}
+          onRefreshCapability={probe.refreshCapability}
           params={params}
           onNavigate={onNavigate}
           onBack={onBack}
@@ -151,14 +164,7 @@ export function KnowledgePages({
       );
       break;
     case "chat":
-      pageBody = (
-        <KnowledgeChatPage
-          params={params}
-          profile={profile}
-          onNavigate={onNavigate}
-          onReplace={onReplace}
-        />
-      );
+      pageBody = null;
       break;
     default: {
       const _exhaustive: never = page;
@@ -188,7 +194,26 @@ export function KnowledgePages({
       ) : null}
       <KnowledgeModuleNav page={page} onNavigate={onNavigate} />
 
-      <div className="knowledge-host-body">{pageBody}</div>
+      <div className="knowledge-host-body">
+        {pageBody}
+        {(page === "chat" || lastChatParams !== null) && (
+          <div
+            className="knowledge-chat-slot"
+            style={{
+              display: page === "chat" ? "flex" : "none",
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
+            <KnowledgeChatPage
+              params={page === "chat" ? params : (lastChatParams ?? {})}
+              profile={profile}
+              active={active && page === "chat"}
+              onReplace={onReplace}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

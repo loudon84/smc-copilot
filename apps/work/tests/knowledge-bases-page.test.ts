@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import knowledgeEn from "../src/shared/i18n/locales/en/knowledge";
 import { KnowledgeBasesPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeBasesPage";
 import { KnowledgeBaseDetailPage } from "../src/renderer/src/screens/Knowledge/pages/KnowledgeBaseDetailPage";
 import type { KnowledgeBaseSnapshot } from "../src/shared/knowledge/knowledge-base-ipc";
+import type { KnowledgeJobSnapshot } from "../src/shared/knowledge/knowledge-job-ipc";
 import { makeBasesApi } from "./helpers/knowledge-bases-api";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
@@ -44,11 +52,11 @@ function base(
   };
 }
 
-
 describe("Knowledge Bases pages", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    delete (window as unknown as { hermesAPI?: unknown }).hermesAPI;
   });
 
   it("supports list/search and typed create", async () => {
@@ -74,10 +82,12 @@ describe("Knowledge Bases pages", () => {
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-base-list")).toBeTruthy();
     });
-    expect(screen.getByTestId("knowledge-base-owner-b1").textContent).toContain("b1-owner");
-    expect(screen.getByTestId("knowledge-base-created-b1").textContent).toContain(
-      "2026-01-02T00:00:00.000Z",
+    expect(screen.getByTestId("knowledge-base-owner-b1").textContent).toContain(
+      "b1-owner",
     );
+    expect(
+      screen.getByTestId("knowledge-base-created-b1").textContent,
+    ).toContain("2026-01-02T00:00:00.000Z");
 
     await act(async () => {
       fireEvent.change(screen.getByTestId("knowledge-bases-search"), {
@@ -119,10 +129,12 @@ describe("Knowledge Bases pages", () => {
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-base-detail")).toBeTruthy();
     });
-    expect(screen.getByTestId("knowledge-base-detail-owner").textContent).toContain("b2-owner");
-    expect(screen.getByTestId("knowledge-base-detail-created").textContent).toContain(
-      "2026-01-02T00:00:00.000Z",
-    );
+    expect(
+      screen.getByTestId("knowledge-base-detail-owner").textContent,
+    ).toContain("b2-owner");
+    expect(
+      screen.getByTestId("knowledge-base-detail-created").textContent,
+    ).toContain("2026-01-02T00:00:00.000Z");
     await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-section-tab-settings"));
     });
@@ -304,24 +316,29 @@ describe("Knowledge Bases pages", () => {
     expect(bases.delete).not.toHaveBeenCalled();
   });
 
-  it("opens a locked upload drawer and refreshes Documents on close", async () => {
+  it("opens upload jobs for the locked base and refreshes Documents on return", async () => {
     const store = [base("b2", "Beta Base")];
     const bases = makeBasesApi(store);
     const onNavigate = vi.fn();
-    const createDraft = vi.fn(async () => ({
-      jobId: "j-drawer",
-      knowledgeBaseId: "b2",
-      status: "queued" as const,
-      attempt: 1,
-      partition: {
-        workProfileId: "wp",
-        authSubject: "user",
-        tenantScope: { kind: "personal" as const },
-      },
-      dataMode: "provider" as const,
-      synthetic: false,
-      progress: 0,
-      updatedAt: new Date().toISOString(),
+    const pickAndUpload = vi.fn(async () => ({
+      batchId: "batch-drawer",
+      jobs: [
+        {
+          jobId: "j-drawer",
+          knowledgeBaseId: "b2",
+          status: "queued" as const,
+          attempt: 1,
+          partition: {
+            workProfileId: "wp",
+            authSubject: "user",
+            tenantScope: { kind: "personal" as const },
+          },
+          dataMode: "provider" as const,
+          synthetic: false,
+          progress: 0,
+          updatedAt: new Date().toISOString(),
+        },
+      ],
     }));
 
     await act(async () => {
@@ -338,7 +355,7 @@ describe("Knowledge Bases pages", () => {
           },
           bases,
           listSnapshots: async () => [],
-          createDraft,
+          pickAndUpload,
         }),
       );
     });
@@ -351,24 +368,33 @@ describe("Knowledge Bases pages", () => {
       fireEvent.click(screen.getByTestId("knowledge-base-upload"));
     });
     await waitFor(() => {
-      expect(screen.getByTestId("knowledge-upload-drawer")).toBeTruthy();
+      expect(screen.getByTestId("knowledge-upload-panel")).toBeTruthy();
+      expect(
+        screen
+          .getByTestId("knowledge-section-tab-uploads")
+          .getAttribute("data-state"),
+      ).toBe("active");
     });
     expect(onNavigate).not.toHaveBeenCalled();
     expect(screen.getByTestId("knowledge-upload-target").textContent).toContain(
       "Beta Base",
     );
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(
+      screen
+        .getByRole("group", { name: knowledgeEn.uploads.filterLabel })
+        .getAttribute("data-testid"),
+    ).toBe("knowledge-upload-filter");
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-upload-picker"));
     });
-    expect(createDraft).toHaveBeenCalledWith({ knowledgeBaseId: "b2" });
+    expect(pickAndUpload).toHaveBeenCalledWith({ knowledgeBaseId: "b2" });
 
     await act(async () => {
-      fireEvent.keyDown(screen.getByTestId("knowledge-upload-drawer"), {
-        key: "Escape",
-        code: "Escape",
-      });
+      fireEvent.mouseDown(
+        screen.getByTestId("knowledge-section-tab-documents"),
+        { button: 0 },
+      );
     });
     await waitFor(() => {
       expect(bases.listFiles).toHaveBeenCalledTimes(2);
@@ -376,7 +402,9 @@ describe("Knowledge Bases pages", () => {
   });
 
   it("disables Upload while the base is provisioning", async () => {
-    const store = [{ ...base("b2", "Beta Base"), status: "provisioning" as const }];
+    const store = [
+      { ...base("b2", "Beta Base"), status: "provisioning" as const },
+    ];
     const bases = makeBasesApi(store);
 
     await act(async () => {
@@ -399,6 +427,304 @@ describe("Knowledge Bases pages", () => {
       expect(screen.getByTestId("knowledge-base-detail")).toBeTruthy();
     });
     expect(screen.getByTestId("knowledge-base-upload")).toBeDisabled();
+  });
+
+  it("opens upload jobs in a tab and returns to documents without manual controls", async () => {
+    const bases = makeBasesApi([base("b2", "Beta Base")]);
+    const onNavigate = vi.fn();
+    await act(async () =>
+      render(
+        React.createElement(KnowledgeBaseDetailPage, {
+          params: { knowledgeBaseId: "b2" },
+          capability: { available: true, status: "available" },
+          mode: { dataMode: "provider", allowSyntheticData: false },
+          bases,
+          onNavigate,
+          listSnapshots: async () => [],
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-upload")).not.toBeDisabled(),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("knowledge-base-upload")),
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByTestId("knowledge-section-tab-uploads")
+          .getAttribute("data-state"),
+      ).toBe("active"),
+    );
+    expect(screen.getByTestId("knowledge-upload-panel")).toBeTruthy();
+    expect(screen.queryByTestId("knowledge-upload-query")).toBeNull();
+    expect(screen.queryByTestId("knowledge-upload-reload")).toBeNull();
+    expect(screen.queryByTestId("knowledge-upload-view-files")).toBeNull();
+    await act(async () =>
+      fireEvent.mouseDown(
+        screen.getByTestId("knowledge-section-tab-documents"),
+        { button: 0 },
+      ),
+    );
+    expect(
+      screen
+        .getByTestId("knowledge-section-tab-documents")
+        .getAttribute("data-state"),
+    ).toBe("active");
+    expect(screen.queryByTestId("knowledge-upload-panel")).toBeNull();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+  it("reconciles missed completion on document visibility while Upload jobs is closed", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(
+      () => visibility,
+    );
+    const bases = makeBasesApi([base("b2", "Beta Base")]);
+    const listSnapshots = vi.fn(async () => [
+      {
+        jobId: "missed",
+        knowledgeBaseId: "b2",
+        status: "completed" as const,
+        attempt: 1,
+        partition: {
+          workProfileId: "wp",
+          authSubject: "user",
+          tenantScope: { kind: "personal" as const },
+        },
+        dataMode: "provider" as const,
+        synthetic: false,
+        progress: 100,
+        revision: 3,
+        updatedAt: "2026-10-08T10:00:00Z",
+      },
+    ]);
+    await act(async () =>
+      render(
+        React.createElement(KnowledgeBaseDetailPage, {
+          params: { knowledgeBaseId: "b2" },
+          capability: { available: true, status: "available" },
+          mode: { dataMode: "provider", allowSyntheticData: false },
+          bases,
+          listSnapshots,
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-detail")).toBeTruthy(),
+    );
+    vi.mocked(bases.listFiles).mockResolvedValue({
+      items: [
+        {
+          id: "missed-file",
+          knowledgeBaseId: "b2",
+          fileName: "missed.pdf",
+          status: "active",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    });
+    visibility = "hidden";
+    fireEvent(document, new Event("visibilitychange"));
+    expect(listSnapshots).not.toHaveBeenCalled();
+    visibility = "visible";
+    await act(async () => fireEvent(document, new Event("visibilitychange")));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("knowledge-base-file-missed-file"),
+      ).toBeTruthy(),
+    );
+    const calls = vi.mocked(bases.listFiles).mock.calls.length;
+    await act(async () => {
+      fireEvent(document, new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+    expect(bases.listFiles).toHaveBeenCalledTimes(calls);
+    expect(screen.queryByTestId("knowledge-upload-panel")).toBeNull();
+  });
+
+  it("recovers detail capability and restores its upload button", async () => {
+    const bases = makeBasesApi([base("b2", "Beta Base")]);
+    const getCapability = vi
+      .fn()
+      .mockResolvedValueOnce({
+        available: false,
+        status: "blocked_provider_unavailable",
+      })
+      .mockResolvedValue({ available: true, status: "available" });
+    (window as unknown as { hermesAPI: unknown }).hermesAPI = {
+      knowledgeJobs: { getCapability },
+    };
+    await act(async () =>
+      render(
+        React.createElement(KnowledgeBaseDetailPage, {
+          params: { knowledgeBaseId: "b2" },
+          mode: { dataMode: "provider", allowSyntheticData: false },
+          bases,
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-recheck")).not.toBeDisabled(),
+    );
+    expect(screen.getByTestId("knowledge-base-upload")).toBeDisabled();
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("knowledge-base-recheck")),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-upload")).not.toBeDisabled(),
+    );
+    delete (window as unknown as { hermesAPI?: unknown }).hermesAPI;
+  });
+
+  it("ignores a late file-list rejection from a previous base", async () => {
+    const bases = makeBasesApi([
+      base("b2", "Beta Base"),
+      base("b3", "Gamma Base"),
+    ]);
+    let rejectPrevious!: (error: Error) => void;
+    vi.mocked(bases.listFiles)
+      .mockResolvedValueOnce({ items: [], total: 0, page: 1, pageSize: 50 })
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectPrevious = reject;
+          }),
+      )
+      .mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 });
+    const props = {
+      params: { knowledgeBaseId: "b2" },
+      capability: { available: true, status: "available" as const },
+      mode: { dataMode: "provider" as const, allowSyntheticData: false },
+      bases,
+      listSnapshots: async () => [],
+    };
+    const view = render(React.createElement(KnowledgeBaseDetailPage, props));
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-detail-id").textContent).toBe(
+        "b2",
+      ),
+    );
+    fireEvent.click(screen.getByTestId("knowledge-base-upload"));
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-upload-panel")).toBeTruthy(),
+    );
+    fireEvent.mouseDown(screen.getByTestId("knowledge-section-tab-documents"), {
+      button: 0,
+    });
+    await waitFor(() => expect(rejectPrevious).toBeTypeOf("function"));
+    view.rerender(
+      React.createElement(KnowledgeBaseDetailPage, {
+        ...props,
+        params: { knowledgeBaseId: "b3" },
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-detail-id").textContent).toBe(
+        "b3",
+      ),
+    );
+    await act(async () => rejectPrevious(new Error("KNOWLEDGE_AUTH_REQUIRED")));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("knowledge-base-detail-id").textContent).toBe(
+      "b3",
+    );
+  });
+
+  it("merges completed events and refreshes Documents after leaving the upload tab", async () => {
+    const bases = makeBasesApi([base("b2", "Beta Base")]);
+    const listeners = new Set<(snapshot: KnowledgeJobSnapshot) => void>();
+    const subscribe = (listener: (snapshot: KnowledgeJobSnapshot) => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    };
+    const props = {
+      params: { knowledgeBaseId: "b2" },
+      capability: { available: true, status: "available" as const },
+      mode: { dataMode: "provider" as const, allowSyntheticData: false },
+      bases,
+      listSnapshots: async () => [],
+      onSnapshotChanged: subscribe,
+      pickAndUpload: async () => ({ batchId: null, jobs: [] }),
+    };
+    await act(async () =>
+      render(React.createElement(KnowledgeBaseDetailPage, props)),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-detail")).toBeTruthy(),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("knowledge-base-upload")),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-upload-panel")).toBeTruthy(),
+    );
+    await act(async () =>
+      fireEvent.mouseDown(
+        screen.getByTestId("knowledge-section-tab-documents"),
+        { button: 0 },
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("knowledge-upload-panel")).toBeNull(),
+    );
+    const before = vi.mocked(bases.listFiles).mock.calls.length;
+    vi.mocked(bases.listFiles).mockResolvedValue({
+      items: [
+        {
+          id: "uploaded",
+          knowledgeBaseId: "b2",
+          fileName: "new.pdf",
+          status: "active",
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+    });
+    const snapshot: KnowledgeJobSnapshot = {
+      jobId: "completed-1",
+      knowledgeBaseId: "b2",
+      status: "completed",
+      attempt: 1,
+      partition: {
+        workProfileId: "wp",
+        authSubject: "user",
+        tenantScope: { kind: "personal" },
+      },
+      dataMode: "provider",
+      synthetic: false,
+      progress: 100,
+      revision: 4,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    await act(async () => {
+      for (const listener of listeners) {
+        listener(snapshot);
+        listener({ ...snapshot, jobId: "completed-2" });
+        listener({
+          ...snapshot,
+          jobId: "other-base",
+          knowledgeBaseId: "other",
+        });
+      }
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-file-uploaded")).toBeTruthy(),
+    );
+    expect(bases.listFiles).toHaveBeenCalledTimes(before + 1);
+    await act(async () => {
+      for (const listener of listeners) {
+        listener(snapshot);
+        listener({ ...snapshot, revision: 3 });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+    expect(bases.listFiles).toHaveBeenCalledTimes(before + 1);
   });
 
   it("shows Documents rows and source lifecycle actions", async () => {
@@ -453,15 +779,15 @@ describe("Knowledge Bases pages", () => {
     await waitFor(() => {
       expect(screen.getByTestId("knowledge-base-file-sf-1")).toBeTruthy();
     });
-    expect(screen.getByTestId("knowledge-base-file-version-sf-1").textContent).toBe(
-      "ver-1",
-    );
-    expect(screen.getByTestId("knowledge-base-file-owner-sf-1").textContent).toBe(
-      "file-owner-1",
-    );
-    expect(screen.getByTestId("knowledge-base-file-created-sf-1").textContent).toBe(
-      "2026-01-03T00:00:00.000Z",
-    );
+    expect(
+      screen.getByTestId("knowledge-base-file-version-sf-1").textContent,
+    ).toBe("ver-1");
+    expect(
+      screen.getByTestId("knowledge-base-file-owner-sf-1").textContent,
+    ).toBe("file-owner-1");
+    expect(
+      screen.getByTestId("knowledge-base-file-created-sf-1").textContent,
+    ).toBe("2026-01-03T00:00:00.000Z");
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("knowledge-base-file-activate-sf-1"));
@@ -533,7 +859,7 @@ describe("Knowledge Bases pages", () => {
     expect(bases.getFile).not.toHaveBeenCalled();
   });
 
-  it("marks retrieval-ready only when chunk build and retrieval are ready", async () => {
+  it.each([false, true])("chunk readiness (empty jobs: %s)", async (empty) => {
     const store = [base("b2", "Beta Base")];
     const bases = makeBasesApi(store, {
       files: [
@@ -553,6 +879,7 @@ describe("Knowledge Bases pages", () => {
         },
       ],
     });
+    if (empty) bases.startBuild = vi.fn(async () => null);
 
     await act(async () => {
       render(
@@ -570,12 +897,14 @@ describe("Knowledge Bases pages", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId("knowledge-base-retrieval-ready").textContent).toBe(
-        knowledgeEn.bases.indexedNotRetrievalReady,
-      );
+      expect(
+        screen.getByTestId("knowledge-base-retrieval-ready").textContent,
+      ).toBe(knowledgeEn.bases.indexedNotRetrievalReady);
     });
     expect(
-      screen.getByTestId("knowledge-base-retrieval-ready").getAttribute("data-ready"),
+      screen
+        .getByTestId("knowledge-base-retrieval-ready")
+        .getAttribute("data-ready"),
     ).toBe("false");
     expect(document.body.textContent).not.toMatch(/dataset_id|ragflow_/);
 
@@ -586,6 +915,11 @@ describe("Knowledge Bases pages", () => {
       knowledgeBaseId: "b2",
       indexTypes: ["chunk"],
     });
+    expect(bases.listIndexes).toHaveBeenCalledTimes(2);
+    expect(bases.watchBuild).not.toHaveBeenCalled();
+    expect(
+      screen.getByTestId("knowledge-base-retrieval-ready").textContent,
+    ).toBe(knowledgeEn.bases.indexedNotRetrievalReady);
   });
 
   it("reloads Documents when Detail remounts after Uploads", async () => {
@@ -615,5 +949,3 @@ describe("Knowledge Bases pages", () => {
     view.unmount();
   });
 });
-
-

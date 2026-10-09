@@ -17,6 +17,7 @@ export async function composeWireMessageWithSessionContext(
   options: {
     profile?: string;
     sessionId?: string | null;
+    maxChars?: number;
   },
 ): Promise<string> {
   const sessionId = options.sessionId?.trim();
@@ -28,6 +29,7 @@ export async function composeWireMessageWithSessionContext(
       profile: options.profile,
       sessionId,
       query: query || undefined,
+      maxChars: options.maxChars,
     });
     const contextText = result.text.trim();
     if (!contextText) return message;

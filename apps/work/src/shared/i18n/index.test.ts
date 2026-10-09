@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ACTIVE_LOCALE, getLocaleDirection, setLocale, t } from "./index";
+import {
+  DEFAULT_ACTIVE_LOCALE,
+  getLocaleDirection,
+  setLocale,
+  sharedI18n,
+  t,
+} from "./index";
+import knowledgeEn from "./locales/en/knowledge";
 
 describe("shared i18n", () => {
   it("returns zh-CN text for the product default locale", () => {
@@ -13,6 +20,32 @@ describe("shared i18n", () => {
 
   it("returns zh-CN text when available", () => {
     expect(t("welcome.title", "zh-CN")).toBe("欢迎使用 SMC Copilot");
+  });
+
+  it("shows Chinese upload labels without falling back to English", () => {
+    const translateChinese = sharedI18n.getFixedT("zh-CN");
+    const checkTranslations = (node: object, prefix: string): void => {
+      for (const [name, value] of Object.entries(node)) {
+        const key = `${prefix}.${name}`;
+        if (typeof value === "string") {
+          expect(translateChinese(key), key).not.toBe(value);
+          expect(translateChinese(key), key).toMatch(/[\u3400-\u9fff]/);
+        } else if (value && typeof value === "object") {
+          checkTranslations(value, key);
+        }
+      }
+    };
+    checkTranslations(knowledgeEn.uploads, "knowledge.uploads");
+    expect(translateChinese("knowledge.uploads.pickerLabel")).toBe("选择文件");
+    expect(translateChinese("knowledge.uploads.progressLabel")).toBe(
+      "处理阶段进度",
+    );
+    expect(translateChinese("knowledge.uploads.summary.completed")).toBe(
+      "已加入知识库",
+    );
+    expect(
+      translateChinese("knowledge.uploads.status.awaiting_confirmation"),
+    ).toBe("待确认");
   });
 
   it("returns zh-TW text when available", () => {

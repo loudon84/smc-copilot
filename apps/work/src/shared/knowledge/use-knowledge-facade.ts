@@ -2,7 +2,7 @@
  * Shared Knowledge mode / capability / facade probe for Work Knowledge pages.
  * Injectable overrides keep host/page tests off the live IPC surface.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   HermesKnowledgeFacadeAPI,
   HermesKnowledgeJobsAPI,
@@ -42,6 +42,7 @@ export type KnowledgeFacadeProbe = {
   mutationsEnabled: boolean;
   /** Remaining mock-only surfaces (e.g. Chat synthetic). */
   syntheticMutationsEnabled: boolean;
+  refreshCapability: () => Promise<KnowledgeCapabilitySnapshot | null>;
 };
 
 type KnowledgeJobsSurface = HermesKnowledgeJobsAPI & {
@@ -99,6 +100,10 @@ export function useKnowledgeFacade(
     bases: injectedBases,
     sets: injectedSets,
   } = options;
+  const capabilityRequest = useRef(0);
+  const mounted = useRef(true);
+  const capabilityOverride = useRef(injectedCapability);
+  capabilityOverride.current = injectedCapability;
 
   const [capability, setCapability] = useState<
     KnowledgeCapabilitySnapshot | null | undefined
@@ -127,31 +132,43 @@ export function useKnowledgeFacade(
   });
 
   useEffect(() => {
-    if (injectedCapability !== undefined) {
-      setCapability(injectedCapability);
-      return;
-    }
-
-    const api = readLiveJobsApi();
-    if (!api?.getCapability) {
-      setCapability(blockedCapability());
-      return;
-    }
-
-    let cancelled = false;
-    void api
-      .getCapability()
-      .then((snapshot) => {
-        if (!cancelled) setCapability(snapshot);
-      })
-      .catch(() => {
-        if (!cancelled) setCapability(blockedCapability());
-      });
-
+    mounted.current = true;
     return () => {
-      cancelled = true;
+      mounted.current = false;
+      capabilityRequest.current += 1;
     };
-  }, [injectedCapability]);
+  }, []);
+
+  const refreshCapability = useCallback(async () => {
+    const request = ++capabilityRequest.current;
+    const override = capabilityOverride.current;
+    let snapshot = override;
+    if (override === undefined) {
+      try {
+        snapshot =
+          (await readLiveJobsApi()?.getCapability?.()) ?? blockedCapability();
+      } catch {
+        snapshot = blockedCapability();
+      }
+    }
+    if (
+      mounted.current &&
+      request === capabilityRequest.current &&
+      capabilityOverride.current === override
+    ) {
+      setCapability(snapshot);
+    }
+    return capabilityOverride.current !== undefined
+      ? capabilityOverride.current
+      : (snapshot ?? null);
+  }, []);
+
+  useEffect(() => {
+    void refreshCapability();
+    return () => {
+      capabilityRequest.current += 1;
+    };
+  }, [injectedCapability, refreshCapability]);
 
   useEffect(() => {
     if (injectedMode !== undefined) {
@@ -235,5 +252,6 @@ export function useKnowledgeFacade(
     presentation,
     mutationsEnabled,
     syntheticMutationsEnabled,
+    refreshCapability,
   };
 }

@@ -35,6 +35,7 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[office-world-actions]] — chat-commanded errands: the agent's LLM emits world-action blocks from the office chat, its avatar walks the trip route to the bank/showroom, and the rep modal auto-opens running the requested action on arrival.
 - [[mcp-servers]] — add / edit / remove / enable / test MCP servers from the Capabilities → MCP tab; the shared add+edit modal and the in-place atomic `updateMcpServer` upsert (config.yaml locally, gateway REST in Remote/SSH).
 - [[file-platform]] — Phase 0–6 File Platform: config, security, storage, associations, parsers, context builder, cleanup, FileService/IPC.
+- [[knowledge-upload]] — Knowledge batch selection, bounded uploads, persisted status, safe cancellation/retry, identity isolation, and recovery.
 - [[file-domain]] — ManagedFile / FileAssociation identity, status, and local vs remote transport rules.
 - [[file-ui-components]] — Renderer file cards, Session Files panel, preview footer actions, AgentOutputFileCard.
 - [[session-file-context]] — Explicit session context associations, FTS search, and ephemeral context builder.

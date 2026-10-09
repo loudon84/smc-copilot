@@ -1,7 +1,7 @@
 {
   "generated_note": "salt-migration-inventory v3 (codeGate/liveGate)",
-  "runtime_root": "E:/git/smc-copilot/services/runtime",
-  "capabilities_path": "E:/git/smc-copilot/infra/salt/migration-capabilities.yaml",
+  "runtime_root": "D:/knowledge/smc-copilot/services/runtime",
+  "capabilities_path": "D:/knowledge/smc-copilot/infra/salt/migration-capabilities.yaml",
   "weights": {
     "FULL": 1.0,
     "PARTIAL": 0.5,
@@ -134,7 +134,7 @@
     {
       "kind": "router",
       "name": "approvals",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/approvals.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/approvals.py",
       "loc": 45,
       "classification": "NO",
       "weight": 0.0,
@@ -145,7 +145,7 @@
     {
       "kind": "router",
       "name": "attachments",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/attachments.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/attachments.py",
       "loc": 45,
       "classification": "NO",
       "weight": 0.0,
@@ -156,7 +156,7 @@
     {
       "kind": "router",
       "name": "bootstrap",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/bootstrap.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/bootstrap.py",
       "loc": 40,
       "classification": "FULL",
       "weight": 1.0,
@@ -169,7 +169,7 @@
     {
       "kind": "router",
       "name": "chat",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/chat.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/chat.py",
       "loc": 74,
       "classification": "NO",
       "weight": 0.0,
@@ -180,7 +180,7 @@
     {
       "kind": "router",
       "name": "chat_commands",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/chat_commands.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/chat_commands.py",
       "loc": 19,
       "classification": "NO",
       "weight": 0.0,
@@ -191,7 +191,7 @@
     {
       "kind": "router",
       "name": "chat_runs",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/chat_runs.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/chat_runs.py",
       "loc": 199,
       "classification": "NO",
       "weight": 0.0,
@@ -202,7 +202,7 @@
     {
       "kind": "router",
       "name": "configurations",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/configurations.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/configurations.py",
       "loc": 122,
       "classification": "FULL",
       "weight": 1.0,
@@ -215,7 +215,7 @@
     {
       "kind": "router",
       "name": "desktop_workbench",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/desktop_workbench.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/desktop_workbench.py",
       "loc": 38,
       "classification": "NO",
       "weight": 0.0,
@@ -226,7 +226,7 @@
     {
       "kind": "router",
       "name": "diagnostics",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/diagnostics.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/diagnostics.py",
       "loc": 213,
       "classification": "FULL",
       "weight": 1.0,
@@ -239,7 +239,7 @@
     {
       "kind": "router",
       "name": "endpoint",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/endpoint.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/endpoint.py",
       "loc": 50,
       "classification": "FULL",
       "weight": 1.0,
@@ -252,7 +252,7 @@
     {
       "kind": "router",
       "name": "experience",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/experience.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/experience.py",
       "loc": 92,
       "classification": "NO",
       "weight": 0.0,
@@ -263,7 +263,7 @@
     {
       "kind": "router",
       "name": "expert_mcp",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/expert_mcp.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/expert_mcp.py",
       "loc": 89,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -276,7 +276,7 @@
     {
       "kind": "router",
       "name": "gateways",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/gateways.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/gateways.py",
       "loc": 39,
       "classification": "FULL",
       "weight": 1.0,
@@ -289,7 +289,7 @@
     {
       "kind": "router",
       "name": "health",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/health.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/health.py",
       "loc": 42,
       "classification": "FULL",
       "weight": 1.0,
@@ -302,7 +302,7 @@
     {
       "kind": "router",
       "name": "hermes_runs",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/hermes_runs.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/hermes_runs.py",
       "loc": 53,
       "classification": "NO",
       "weight": 0.0,
@@ -313,7 +313,7 @@
     {
       "kind": "router",
       "name": "instance_chat",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/instance_chat.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/instance_chat.py",
       "loc": 103,
       "classification": "NO",
       "weight": 0.0,
@@ -324,7 +324,7 @@
     {
       "kind": "router",
       "name": "instances",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/instances.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/instances.py",
       "loc": 119,
       "classification": "FULL",
       "weight": 1.0,
@@ -337,7 +337,7 @@
     {
       "kind": "router",
       "name": "kanban",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/kanban.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/kanban.py",
       "loc": 153,
       "classification": "NO",
       "weight": 0.0,
@@ -348,7 +348,7 @@
     {
       "kind": "router",
       "name": "memory",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/memory.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/memory.py",
       "loc": 78,
       "classification": "NO",
       "weight": 0.0,
@@ -359,7 +359,7 @@
     {
       "kind": "router",
       "name": "metrics",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/metrics.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/metrics.py",
       "loc": 9,
       "classification": "FULL",
       "weight": 1.0,
@@ -372,7 +372,7 @@
     {
       "kind": "router",
       "name": "pairings",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/pairings.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/pairings.py",
       "loc": 44,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -383,7 +383,7 @@
     {
       "kind": "router",
       "name": "profiles",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/profiles.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/profiles.py",
       "loc": 117,
       "classification": "FULL",
       "weight": 1.0,
@@ -396,7 +396,7 @@
     {
       "kind": "router",
       "name": "remote_tasks",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/remote_tasks.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/remote_tasks.py",
       "loc": 41,
       "classification": "NO",
       "weight": 0.0,
@@ -407,7 +407,7 @@
     {
       "kind": "router",
       "name": "resources",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/resources.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/resources.py",
       "loc": 41,
       "classification": "FULL",
       "weight": 1.0,
@@ -420,7 +420,7 @@
     {
       "kind": "router",
       "name": "role_library",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/role_library.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/role_library.py",
       "loc": 35,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -431,7 +431,7 @@
     {
       "kind": "router",
       "name": "runtime",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/runtime.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/runtime.py",
       "loc": 217,
       "classification": "FULL",
       "weight": 1.0,
@@ -444,7 +444,7 @@
     {
       "kind": "router",
       "name": "secrets",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/secrets.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/secrets.py",
       "loc": 33,
       "classification": "FULL",
       "weight": 1.0,
@@ -457,7 +457,7 @@
     {
       "kind": "router",
       "name": "service",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/service.py",
       "loc": 58,
       "classification": "FULL",
       "weight": 1.0,
@@ -470,7 +470,7 @@
     {
       "kind": "router",
       "name": "service_center",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/service_center.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/service_center.py",
       "loc": 42,
       "classification": "FULL",
       "weight": 1.0,
@@ -483,7 +483,7 @@
     {
       "kind": "router",
       "name": "session_chat",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/session_chat.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/session_chat.py",
       "loc": 118,
       "classification": "NO",
       "weight": 0.0,
@@ -494,7 +494,7 @@
     {
       "kind": "router",
       "name": "sessions",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/sessions.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/sessions.py",
       "loc": 55,
       "classification": "NO",
       "weight": 0.0,
@@ -505,7 +505,7 @@
     {
       "kind": "router",
       "name": "sync",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/sync.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/sync.py",
       "loc": 61,
       "classification": "FULL",
       "weight": 1.0,
@@ -518,7 +518,7 @@
     {
       "kind": "router",
       "name": "system",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/system.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/system.py",
       "loc": 16,
       "classification": "FULL",
       "weight": 1.0,
@@ -531,7 +531,7 @@
     {
       "kind": "router",
       "name": "task_routing",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/task_routing.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/task_routing.py",
       "loc": 31,
       "classification": "NO",
       "weight": 0.0,
@@ -542,7 +542,7 @@
     {
       "kind": "router",
       "name": "tasks",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/tasks.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/tasks.py",
       "loc": 157,
       "classification": "NO",
       "weight": 0.0,
@@ -553,7 +553,7 @@
     {
       "kind": "router",
       "name": "team_tasks",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/team_tasks.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/team_tasks.py",
       "loc": 84,
       "classification": "NO",
       "weight": 0.0,
@@ -564,7 +564,7 @@
     {
       "kind": "router",
       "name": "work_tasks",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/work_tasks.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/work_tasks.py",
       "loc": 212,
       "classification": "NO",
       "weight": 0.0,
@@ -575,7 +575,7 @@
     {
       "kind": "router",
       "name": "workers",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/workers.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/workers.py",
       "loc": 36,
       "classification": "NO",
       "weight": 0.0,
@@ -586,7 +586,7 @@
     {
       "kind": "router",
       "name": "workspaces",
-      "path": "E:/git/smc-copilot/services/runtime/src/api/v1/workspaces.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/api/v1/workspaces.py",
       "loc": 96,
       "classification": "NO",
       "weight": 0.0,
@@ -597,7 +597,7 @@
     {
       "kind": "service",
       "name": "approval_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/approval_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/approval_service.py",
       "loc": 126,
       "classification": "NO",
       "weight": 0.0,
@@ -608,7 +608,7 @@
     {
       "kind": "service",
       "name": "artifact_delivery_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/artifact_delivery_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/artifact_delivery_service.py",
       "loc": 148,
       "classification": "NO",
       "weight": 0.0,
@@ -619,7 +619,7 @@
     {
       "kind": "service",
       "name": "attachment_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/attachment_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/attachment_service.py",
       "loc": 206,
       "classification": "NO",
       "weight": 0.0,
@@ -630,7 +630,7 @@
     {
       "kind": "service",
       "name": "background_chat_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/background_chat_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/background_chat_service.py",
       "loc": 184,
       "classification": "NO",
       "weight": 0.0,
@@ -641,7 +641,7 @@
     {
       "kind": "service",
       "name": "backup_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/backup_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/backup_service.py",
       "loc": 221,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -652,7 +652,7 @@
     {
       "kind": "service",
       "name": "bootstrap_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/bootstrap_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/bootstrap_service.py",
       "loc": 197,
       "classification": "FULL",
       "weight": 1.0,
@@ -665,7 +665,7 @@
     {
       "kind": "service",
       "name": "chat_command_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_command_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_command_service.py",
       "loc": 189,
       "classification": "NO",
       "weight": 0.0,
@@ -676,7 +676,7 @@
     {
       "kind": "service",
       "name": "chat_event_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_event_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_event_service.py",
       "loc": 157,
       "classification": "NO",
       "weight": 0.0,
@@ -687,7 +687,7 @@
     {
       "kind": "service",
       "name": "chat_interaction_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_interaction_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_interaction_service.py",
       "loc": 91,
       "classification": "NO",
       "weight": 0.0,
@@ -698,7 +698,7 @@
     {
       "kind": "service",
       "name": "chat_model_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_model_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_model_service.py",
       "loc": 161,
       "classification": "NO",
       "weight": 0.0,
@@ -709,7 +709,7 @@
     {
       "kind": "service",
       "name": "chat_queue_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_queue_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_queue_service.py",
       "loc": 98,
       "classification": "NO",
       "weight": 0.0,
@@ -720,7 +720,7 @@
     {
       "kind": "service",
       "name": "chat_run_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_run_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_run_service.py",
       "loc": 220,
       "classification": "NO",
       "weight": 0.0,
@@ -731,7 +731,7 @@
     {
       "kind": "service",
       "name": "chat_session_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_session_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_session_service.py",
       "loc": 44,
       "classification": "NO",
       "weight": 0.0,
@@ -742,7 +742,7 @@
     {
       "kind": "service",
       "name": "chat_stream_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_stream_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_stream_service.py",
       "loc": 242,
       "classification": "NO",
       "weight": 0.0,
@@ -753,7 +753,7 @@
     {
       "kind": "service",
       "name": "chat_turn_recovery",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_turn_recovery.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_turn_recovery.py",
       "loc": 69,
       "classification": "NO",
       "weight": 0.0,
@@ -764,7 +764,7 @@
     {
       "kind": "service",
       "name": "chat_turn_scheduler",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_turn_scheduler.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_turn_scheduler.py",
       "loc": 88,
       "classification": "NO",
       "weight": 0.0,
@@ -775,7 +775,7 @@
     {
       "kind": "service",
       "name": "chat_turn_worker",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/chat_turn_worker.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/chat_turn_worker.py",
       "loc": 305,
       "classification": "NO",
       "weight": 0.0,
@@ -786,7 +786,7 @@
     {
       "kind": "service",
       "name": "compatibility_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/compatibility_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/compatibility_service.py",
       "loc": 80,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -799,7 +799,7 @@
     {
       "kind": "service",
       "name": "configuration_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/configuration_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/configuration_service.py",
       "loc": 210,
       "classification": "FULL",
       "weight": 1.0,
@@ -812,7 +812,7 @@
     {
       "kind": "service",
       "name": "desired_state_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/desired_state_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/desired_state_service.py",
       "loc": 362,
       "classification": "FULL",
       "weight": 1.0,
@@ -825,7 +825,7 @@
     {
       "kind": "service",
       "name": "dev_hermes_registration_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/dev_hermes_registration_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/dev_hermes_registration_service.py",
       "loc": 168,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -836,7 +836,7 @@
     {
       "kind": "service",
       "name": "diagnostic_bundle_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/diagnostic_bundle_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/diagnostic_bundle_service.py",
       "loc": 150,
       "classification": "FULL",
       "weight": 1.0,
@@ -849,7 +849,7 @@
     {
       "kind": "service",
       "name": "doctor_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/doctor_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/doctor_service.py",
       "loc": 3,
       "classification": "FULL",
       "weight": 1.0,
@@ -862,7 +862,7 @@
     {
       "kind": "service",
       "name": "endpoint_enrollment_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/endpoint_enrollment_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/endpoint_enrollment_service.py",
       "loc": 211,
       "classification": "FULL",
       "weight": 1.0,
@@ -875,7 +875,7 @@
     {
       "kind": "service",
       "name": "endpoint_inventory_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/endpoint_inventory_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/endpoint_inventory_service.py",
       "loc": 71,
       "classification": "FULL",
       "weight": 1.0,
@@ -888,7 +888,7 @@
     {
       "kind": "service",
       "name": "experience_auto_capture",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/experience_auto_capture.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/experience_auto_capture.py",
       "loc": 165,
       "classification": "NO",
       "weight": 0.0,
@@ -899,7 +899,7 @@
     {
       "kind": "service",
       "name": "experience_candidate_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/experience_candidate_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/experience_candidate_service.py",
       "loc": 118,
       "classification": "NO",
       "weight": 0.0,
@@ -910,7 +910,7 @@
     {
       "kind": "service",
       "name": "experience_capture_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/experience_capture_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/experience_capture_service.py",
       "loc": 76,
       "classification": "NO",
       "weight": 0.0,
@@ -921,7 +921,7 @@
     {
       "kind": "service",
       "name": "expert_mcp_gateway_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/expert_mcp_gateway_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/expert_mcp_gateway_service.py",
       "loc": 179,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -934,7 +934,7 @@
     {
       "kind": "service",
       "name": "gateway_credential_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/gateway_credential_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/gateway_credential_service.py",
       "loc": 92,
       "classification": "FULL",
       "weight": 1.0,
@@ -947,7 +947,7 @@
     {
       "kind": "service",
       "name": "gateway_ownership_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/gateway_ownership_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/gateway_ownership_service.py",
       "loc": 708,
       "classification": "FULL",
       "weight": 1.0,
@@ -960,7 +960,7 @@
     {
       "kind": "service",
       "name": "gateway_supervisor",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/gateway_supervisor.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/gateway_supervisor.py",
       "loc": 454,
       "classification": "FULL",
       "weight": 1.0,
@@ -973,7 +973,7 @@
     {
       "kind": "service",
       "name": "hermes_chat_event_mapper",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_chat_event_mapper.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/hermes_chat_event_mapper.py",
       "loc": 163,
       "classification": "NO",
       "weight": 0.0,
@@ -984,7 +984,7 @@
     {
       "kind": "service",
       "name": "hermes_chat_executor",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_chat_executor.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/hermes_chat_executor.py",
       "loc": 275,
       "classification": "NO",
       "weight": 0.0,
@@ -995,7 +995,7 @@
     {
       "kind": "service",
       "name": "hermes_gateway_client",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_gateway_client.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/hermes_gateway_client.py",
       "loc": 46,
       "classification": "NO",
       "weight": 0.0,
@@ -1006,7 +1006,7 @@
     {
       "kind": "service",
       "name": "hermes_local_config_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_local_config_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/hermes_local_config_service.py",
       "loc": 210,
       "classification": "FULL",
       "weight": 1.0,
@@ -1019,7 +1019,7 @@
     {
       "kind": "service",
       "name": "hermes_model_catalog_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/hermes_model_catalog_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/hermes_model_catalog_service.py",
       "loc": 333,
       "classification": "NO",
       "weight": 0.0,
@@ -1030,7 +1030,7 @@
     {
       "kind": "service",
       "name": "installation_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/installation_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/installation_service.py",
       "loc": 456,
       "classification": "FULL",
       "weight": 1.0,
@@ -1043,7 +1043,7 @@
     {
       "kind": "service",
       "name": "instance_chat_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/instance_chat_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/instance_chat_service.py",
       "loc": 497,
       "classification": "NO",
       "weight": 0.0,
@@ -1054,7 +1054,7 @@
     {
       "kind": "service",
       "name": "instance_gateway_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/instance_gateway_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/instance_gateway_service.py",
       "loc": 1324,
       "classification": "FULL",
       "weight": 1.0,
@@ -1067,7 +1067,7 @@
     {
       "kind": "service",
       "name": "instance_ref_resolver",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/instance_ref_resolver.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/instance_ref_resolver.py",
       "loc": 97,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1078,7 +1078,7 @@
     {
       "kind": "service",
       "name": "instance_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/instance_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/instance_service.py",
       "loc": 174,
       "classification": "FULL",
       "weight": 1.0,
@@ -1091,7 +1091,7 @@
     {
       "kind": "service",
       "name": "kanban_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/kanban_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/kanban_service.py",
       "loc": 206,
       "classification": "NO",
       "weight": 0.0,
@@ -1102,7 +1102,7 @@
     {
       "kind": "service",
       "name": "mcp_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/mcp_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/mcp_service.py",
       "loc": 273,
       "classification": "FULL",
       "weight": 1.0,
@@ -1115,7 +1115,7 @@
     {
       "kind": "service",
       "name": "memory_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/memory_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/memory_service.py",
       "loc": 70,
       "classification": "NO",
       "weight": 0.0,
@@ -1126,7 +1126,7 @@
     {
       "kind": "service",
       "name": "metrics_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/metrics_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/metrics_service.py",
       "loc": 79,
       "classification": "FULL",
       "weight": 1.0,
@@ -1139,7 +1139,7 @@
     {
       "kind": "service",
       "name": "pairing_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/pairing_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/pairing_service.py",
       "loc": 106,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1150,7 +1150,7 @@
     {
       "kind": "service",
       "name": "profile_ref_resolver",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/profile_ref_resolver.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/profile_ref_resolver.py",
       "loc": 78,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1161,7 +1161,7 @@
     {
       "kind": "service",
       "name": "profile_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/profile_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/profile_service.py",
       "loc": 77,
       "classification": "FULL",
       "weight": 1.0,
@@ -1174,7 +1174,7 @@
     {
       "kind": "service",
       "name": "remote_task_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/remote_task_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/remote_task_service.py",
       "loc": 214,
       "classification": "NO",
       "weight": 0.0,
@@ -1185,7 +1185,7 @@
     {
       "kind": "service",
       "name": "resource_sync_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/resource_sync_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/resource_sync_service.py",
       "loc": 207,
       "classification": "FULL",
       "weight": 1.0,
@@ -1198,7 +1198,7 @@
     {
       "kind": "service",
       "name": "role_library_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/role_library_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/role_library_service.py",
       "loc": 262,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1209,7 +1209,7 @@
     {
       "kind": "service",
       "name": "rollback_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/rollback_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/rollback_service.py",
       "loc": 3,
       "classification": "FULL",
       "weight": 1.0,
@@ -1222,7 +1222,7 @@
     {
       "kind": "service",
       "name": "runtime_job_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_job_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_job_service.py",
       "loc": 442,
       "classification": "FULL",
       "weight": 1.0,
@@ -1235,7 +1235,7 @@
     {
       "kind": "service",
       "name": "runtime_service_update",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_service_update.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_service_update.py",
       "loc": 210,
       "classification": "FULL",
       "weight": 1.0,
@@ -1248,7 +1248,7 @@
     {
       "kind": "service",
       "name": "runtime_status_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_status_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_status_service.py",
       "loc": 264,
       "classification": "FULL",
       "weight": 1.0,
@@ -1261,7 +1261,7 @@
     {
       "kind": "service",
       "name": "runtime_sync_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_sync_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_sync_service.py",
       "loc": 435,
       "classification": "FULL",
       "weight": 1.0,
@@ -1274,7 +1274,7 @@
     {
       "kind": "service",
       "name": "runtime_update_plan_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_update_plan_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_update_plan_service.py",
       "loc": 103,
       "classification": "FULL",
       "weight": 1.0,
@@ -1287,7 +1287,7 @@
     {
       "kind": "service",
       "name": "runtime_version_pin_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_version_pin_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_version_pin_service.py",
       "loc": 66,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1300,7 +1300,7 @@
     {
       "kind": "service",
       "name": "runtime_version_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/runtime_version_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/runtime_version_service.py",
       "loc": 91,
       "classification": "FULL",
       "weight": 1.0,
@@ -1313,7 +1313,7 @@
     {
       "kind": "service",
       "name": "secret_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/secret_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/secret_service.py",
       "loc": 241,
       "classification": "FULL",
       "weight": 1.0,
@@ -1326,7 +1326,7 @@
     {
       "kind": "service",
       "name": "session_chat_settings_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/session_chat_settings_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/session_chat_settings_service.py",
       "loc": 105,
       "classification": "NO",
       "weight": 0.0,
@@ -1337,7 +1337,7 @@
     {
       "kind": "service",
       "name": "session_file_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/session_file_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/session_file_service.py",
       "loc": 144,
       "classification": "NO",
       "weight": 0.0,
@@ -1348,7 +1348,7 @@
     {
       "kind": "service",
       "name": "sse_helpers",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/sse_helpers.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/sse_helpers.py",
       "loc": 50,
       "classification": "NO",
       "weight": 0.0,
@@ -1359,7 +1359,7 @@
     {
       "kind": "service",
       "name": "staffdeck_bridge_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/staffdeck_bridge_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/staffdeck_bridge_service.py",
       "loc": 75,
       "classification": "NO",
       "weight": 0.0,
@@ -1370,7 +1370,7 @@
     {
       "kind": "service",
       "name": "task_approval_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_approval_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_approval_service.py",
       "loc": 110,
       "classification": "NO",
       "weight": 0.0,
@@ -1381,7 +1381,7 @@
     {
       "kind": "service",
       "name": "task_delivery_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_delivery_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_delivery_service.py",
       "loc": 79,
       "classification": "NO",
       "weight": 0.0,
@@ -1392,7 +1392,7 @@
     {
       "kind": "service",
       "name": "task_event_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_event_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_event_service.py",
       "loc": 108,
       "classification": "NO",
       "weight": 0.0,
@@ -1403,7 +1403,7 @@
     {
       "kind": "service",
       "name": "task_routing_registry",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_routing_registry.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_routing_registry.py",
       "loc": 51,
       "classification": "NO",
       "weight": 0.0,
@@ -1414,7 +1414,7 @@
     {
       "kind": "service",
       "name": "task_run_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_run_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_run_service.py",
       "loc": 54,
       "classification": "NO",
       "weight": 0.0,
@@ -1425,7 +1425,7 @@
     {
       "kind": "service",
       "name": "task_runtime",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_runtime.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_runtime.py",
       "loc": 420,
       "classification": "NO",
       "weight": 0.0,
@@ -1436,7 +1436,7 @@
     {
       "kind": "service",
       "name": "task_state_machine",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_state_machine.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_state_machine.py",
       "loc": 48,
       "classification": "NO",
       "weight": 0.0,
@@ -1447,7 +1447,7 @@
     {
       "kind": "service",
       "name": "task_sync_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/task_sync_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/task_sync_service.py",
       "loc": 36,
       "classification": "NO",
       "weight": 0.0,
@@ -1458,7 +1458,7 @@
     {
       "kind": "service",
       "name": "update_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/update_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/update_service.py",
       "loc": 466,
       "classification": "FULL",
       "weight": 1.0,
@@ -1471,7 +1471,7 @@
     {
       "kind": "service",
       "name": "work_task_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/work_task_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/work_task_service.py",
       "loc": 790,
       "classification": "NO",
       "weight": 0.0,
@@ -1482,7 +1482,7 @@
     {
       "kind": "service",
       "name": "workbench_event_stream",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/workbench_event_stream.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/workbench_event_stream.py",
       "loc": 112,
       "classification": "NO",
       "weight": 0.0,
@@ -1493,7 +1493,7 @@
     {
       "kind": "service",
       "name": "workbench_summary",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/workbench_summary.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/workbench_summary.py",
       "loc": 33,
       "classification": "NO",
       "weight": 0.0,
@@ -1504,7 +1504,7 @@
     {
       "kind": "service",
       "name": "worker_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/worker_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/worker_service.py",
       "loc": 32,
       "classification": "NO",
       "weight": 0.0,
@@ -1515,7 +1515,7 @@
     {
       "kind": "service",
       "name": "workspace_browse_service",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/workspace_browse_service.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/workspace_browse_service.py",
       "loc": 131,
       "classification": "NO",
       "weight": 0.0,
@@ -1526,7 +1526,7 @@
     {
       "kind": "service",
       "name": "workspace_guard",
-      "path": "E:/git/smc-copilot/services/runtime/src/services/workspace_guard.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/services/workspace_guard.py",
       "loc": 52,
       "classification": "NO",
       "weight": 0.0,
@@ -1537,7 +1537,7 @@
     {
       "kind": "runtime_pkg",
       "name": "activation_manager",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/activation_manager.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/activation_manager.py",
       "loc": 3,
       "classification": "FULL",
       "weight": 1.0,
@@ -1550,7 +1550,7 @@
     {
       "kind": "runtime_pkg",
       "name": "archive_policy",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/archive_policy.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/archive_policy.py",
       "loc": 119,
       "classification": "FULL",
       "weight": 1.0,
@@ -1563,7 +1563,7 @@
     {
       "kind": "runtime_pkg",
       "name": "artifact_downloader",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/artifact_downloader.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/artifact_downloader.py",
       "loc": 148,
       "classification": "FULL",
       "weight": 1.0,
@@ -1576,7 +1576,7 @@
     {
       "kind": "runtime_pkg",
       "name": "artifact_signature",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/artifact_signature.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/artifact_signature.py",
       "loc": 75,
       "classification": "FULL",
       "weight": 1.0,
@@ -1589,7 +1589,7 @@
     {
       "kind": "runtime_pkg",
       "name": "bundle_security",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/bundle_security.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/bundle_security.py",
       "loc": 183,
       "classification": "FULL",
       "weight": 1.0,
@@ -1602,7 +1602,7 @@
     {
       "kind": "runtime_pkg",
       "name": "cancellation_token",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/cancellation_token.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/cancellation_token.py",
       "loc": 24,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1613,7 +1613,7 @@
     {
       "kind": "runtime_pkg",
       "name": "checksum_verifier",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/checksum_verifier.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/checksum_verifier.py",
       "loc": 20,
       "classification": "FULL",
       "weight": 1.0,
@@ -1626,7 +1626,7 @@
     {
       "kind": "runtime_pkg",
       "name": "db_path_migration",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/db_path_migration.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/db_path_migration.py",
       "loc": 55,
       "classification": "NO",
       "weight": 0.0,
@@ -1637,7 +1637,7 @@
     {
       "kind": "runtime_pkg",
       "name": "delivery_backoff",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/delivery_backoff.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/delivery_backoff.py",
       "loc": 19,
       "classification": "NO",
       "weight": 0.0,
@@ -1648,7 +1648,7 @@
     {
       "kind": "runtime_pkg",
       "name": "desired_state_reconciler",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/desired_state_reconciler.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/desired_state_reconciler.py",
       "loc": 100,
       "classification": "FULL",
       "weight": 1.0,
@@ -1661,7 +1661,7 @@
     {
       "kind": "runtime_pkg",
       "name": "environment_probe",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/environment_probe.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/environment_probe.py",
       "loc": 180,
       "classification": "FULL",
       "weight": 1.0,
@@ -1674,7 +1674,7 @@
     {
       "kind": "runtime_pkg",
       "name": "executable_policy",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/executable_policy.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/executable_policy.py",
       "loc": 38,
       "classification": "FULL",
       "weight": 1.0,
@@ -1687,7 +1687,7 @@
     {
       "kind": "runtime_pkg",
       "name": "experience_fingerprint",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/experience_fingerprint.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/experience_fingerprint.py",
       "loc": 85,
       "classification": "NO",
       "weight": 0.0,
@@ -1698,7 +1698,7 @@
     {
       "kind": "runtime_pkg",
       "name": "experience_redactor",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/experience_redactor.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/experience_redactor.py",
       "loc": 31,
       "classification": "NO",
       "weight": 0.0,
@@ -1709,7 +1709,7 @@
     {
       "kind": "runtime_pkg",
       "name": "gateway_command_hash",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_command_hash.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/gateway_command_hash.py",
       "loc": 33,
       "classification": "FULL",
       "weight": 1.0,
@@ -1722,7 +1722,7 @@
     {
       "kind": "runtime_pkg",
       "name": "gateway_environment",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_environment.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/gateway_environment.py",
       "loc": 166,
       "classification": "FULL",
       "weight": 1.0,
@@ -1735,7 +1735,7 @@
     {
       "kind": "runtime_pkg",
       "name": "gateway_listener",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_listener.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/gateway_listener.py",
       "loc": 110,
       "classification": "FULL",
       "weight": 1.0,
@@ -1748,7 +1748,7 @@
     {
       "kind": "runtime_pkg",
       "name": "gateway_process",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/gateway_process.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/gateway_process.py",
       "loc": 602,
       "classification": "FULL",
       "weight": 1.0,
@@ -1761,7 +1761,7 @@
     {
       "kind": "runtime_pkg",
       "name": "hermes_profile_paths",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/hermes_profile_paths.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/hermes_profile_paths.py",
       "loc": 24,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1774,7 +1774,7 @@
     {
       "kind": "runtime_pkg",
       "name": "hermes_supervisor_metrics",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/hermes_supervisor_metrics.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/hermes_supervisor_metrics.py",
       "loc": 65,
       "classification": "FULL",
       "weight": 1.0,
@@ -1787,7 +1787,7 @@
     {
       "kind": "runtime_pkg",
       "name": "instance_operation_lock",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/instance_operation_lock.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/instance_operation_lock.py",
       "loc": 23,
       "classification": "FULL",
       "weight": 1.0,
@@ -1800,7 +1800,7 @@
     {
       "kind": "runtime_pkg",
       "name": "local_hermes_profile_policy",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/local_hermes_profile_policy.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/local_hermes_profile_policy.py",
       "loc": 18,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1811,7 +1811,7 @@
     {
       "kind": "runtime_pkg",
       "name": "mcp_config_compiler",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/mcp_config_compiler.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/mcp_config_compiler.py",
       "loc": 131,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1824,7 +1824,7 @@
     {
       "kind": "runtime_pkg",
       "name": "platform_paths",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/platform_paths.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/platform_paths.py",
       "loc": 61,
       "classification": "FULL",
       "weight": 1.0,
@@ -1837,7 +1837,7 @@
     {
       "kind": "runtime_pkg",
       "name": "port_allocator",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/port_allocator.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/port_allocator.py",
       "loc": 27,
       "classification": "FULL",
       "weight": 1.0,
@@ -1850,7 +1850,7 @@
     {
       "kind": "runtime_pkg",
       "name": "process_lock",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/process_lock.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/process_lock.py",
       "loc": 112,
       "classification": "FULL",
       "weight": 1.0,
@@ -1863,7 +1863,7 @@
     {
       "kind": "runtime_pkg",
       "name": "resource_bundle",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/resource_bundle.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/resource_bundle.py",
       "loc": 95,
       "classification": "FULL",
       "weight": 1.0,
@@ -1876,7 +1876,7 @@
     {
       "kind": "runtime_pkg",
       "name": "runtime_identity",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/runtime_identity.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/runtime_identity.py",
       "loc": 15,
       "classification": "PARTIAL",
       "weight": 0.5,
@@ -1889,7 +1889,7 @@
     {
       "kind": "runtime_pkg",
       "name": "sync_protocol",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/sync_protocol.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/sync_protocol.py",
       "loc": 64,
       "classification": "FULL",
       "weight": 1.0,
@@ -1902,7 +1902,7 @@
     {
       "kind": "runtime_pkg",
       "name": "version_layout",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/version_layout.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/version_layout.py",
       "loc": 3,
       "classification": "FULL",
       "weight": 1.0,
@@ -1915,7 +1915,7 @@
     {
       "kind": "runtime_pkg",
       "name": "windows_program_paths",
-      "path": "E:/git/smc-copilot/services/runtime/src/runtime/windows_program_paths.py",
+      "path": "D:/knowledge/smc-copilot/services/runtime/src/runtime/windows_program_paths.py",
       "loc": 81,
       "classification": "FULL",
       "weight": 1.0,

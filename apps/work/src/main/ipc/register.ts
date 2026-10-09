@@ -12,7 +12,11 @@ import {
 import { extname } from "path";
 import { randomUUID } from "crypto";
 import { readdir, readFile, stat } from "fs/promises";
-import { getActiveProfileNameSync } from "../utils";
+import {
+  getActiveProfileNameSync,
+  isValidProfileName,
+  PROFILE_NAME_ERROR,
+} from "../utils";
 import type { Attachment } from "../../shared/attachments";
 import type { SessionModelOverride } from "../../shared/model-override";
 import type { AppLocale } from "../../shared/i18n/types";
@@ -22,7 +26,11 @@ import type {
 } from "../../shared/session-continuation";
 import { stageAttachment, clearStagedAttachments } from "../attachment-staging";
 import { registerFilesIpcHandlers } from "../files";
-import { registerKnowledgeJobIpcHandlers } from "../knowledge/register-knowledge-job-ipc";
+import {
+  pauseKnowledgeJobsForProfileChange,
+  registerKnowledgeJobIpcHandlers,
+  resumeKnowledgeJobsForActiveProfile,
+} from "../knowledge/register-knowledge-job-ipc";
 import { registerKnowledgeModeIpcHandlers } from "../knowledge/register-knowledge-mode-ipc";
 import { registerKnowledgeBaseIpcHandlers } from "../knowledge/register-knowledge-base-ipc";
 import { registerKnowledgeSetIpcHandlers } from "../knowledge/register-knowledge-set-ipc";
@@ -1697,6 +1705,7 @@ export function registerIpcHandlers(context: IpcContext): void {
       let wireMessage = await composeWireMessageWithSessionContext(message, {
         profile,
         sessionId: resumeSessionId,
+        maxChars: knowledgeSetIdForSend ? 12_000 : undefined,
       });
       if (knowledgeSetIdForSend) {
         const { composeKnowledgeScopedPrompt } = await import(
@@ -2502,15 +2511,22 @@ export function registerIpcHandlers(context: IpcContext): void {
     return deleteProfile(name);
   });
   ipcMain.handle("set-active-profile", async (_event, name: string) => {
+    if (!isValidProfileName(name)) throw new Error(PROFILE_NAME_ERROR);
     const previous = getActiveProfileNameSync();
+    const switchingProfile = previous !== name;
+    if (switchingProfile) pauseKnowledgeJobsForProfileChange();
     clearManagedSecret(previous);
     // Persist the selection LOCALLY in every mode (incl. SSH) �?the desktop
     // tracks "which profile is active" via the local ~/.hermes/active_profile,
     // so without this an SSH session forgot the choice and reset to `default`
     // on every relaunch. Then drop the cached health flag so the next check
     // probes the newly-active profile's gateway, not the previous one's.
-    setActiveProfile(name);
-    notifyProfileSwitched();
+    try {
+      setActiveProfile(name);
+      notifyProfileSwitched();
+    } finally {
+      if (switchingProfile) resumeKnowledgeJobsForActiveProfile();
+    }
     // Bring the activated profile's own gateway up if it isn't already �?
     // without stopping any other profile's gateway (their bots stay online).
     const conn = getConnectionConfig();

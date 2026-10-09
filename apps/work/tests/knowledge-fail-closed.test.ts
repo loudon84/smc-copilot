@@ -52,11 +52,15 @@ type MockKnowledgeJobsOptions = {
 };
 
 function mockKnowledgeJobs(
-  capabilityOrOptions: KnowledgeCapabilitySnapshot | null | MockKnowledgeJobsOptions,
+  capabilityOrOptions:
+    | KnowledgeCapabilitySnapshot
+    | null
+    | MockKnowledgeJobsOptions,
 ): {
   getCapability: ReturnType<typeof vi.fn>;
   listSnapshots: ReturnType<typeof vi.fn>;
   createDraft: ReturnType<typeof vi.fn>;
+  pickAndUpload: ReturnType<typeof vi.fn>;
   getMode: ReturnType<typeof vi.fn>;
 } {
   const options: MockKnowledgeJobsOptions =
@@ -78,6 +82,9 @@ function mockKnowledgeJobs(
   const listSnapshots = vi.fn(async () => []);
   const createDraft = vi.fn(async () => {
     throw new Error("createDraft must not be called in fail-closed UI");
+  });
+  const pickAndUpload = vi.fn(async () => {
+    throw new Error("pickAndUpload must not be called in fail-closed UI");
   });
   const getMode = vi.fn(async () => {
     if (mode === null) {
@@ -109,6 +116,7 @@ function mockKnowledgeJobs(
           getCapability,
           listSnapshots,
           createDraft,
+          pickAndUpload,
           getSnapshot: vi.fn(),
           cancel: vi.fn(),
           retry: vi.fn(),
@@ -152,11 +160,10 @@ function mockKnowledgeJobs(
     onStateChanged: vi.fn(() => () => undefined),
   };
 
-  (
-    window as unknown as { hermesAPI: typeof hermesAPI }
-  ).hermesAPI = asChatWindowApi(hermesAPI);
+  (window as unknown as { hermesAPI: typeof hermesAPI }).hermesAPI =
+    asChatWindowApi(hermesAPI);
 
-  return { getCapability, listSnapshots, createDraft, getMode };
+  return { getCapability, listSnapshots, createDraft, pickAndUpload, getMode };
 }
 
 function collectProductionTsSources(root: string): string[] {
@@ -168,7 +175,10 @@ function collectProductionTsSources(root: string): string[] {
       if (skip.has(entry.name)) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) {
+        if (
+          entry.name.endsWith(".test.ts") ||
+          entry.name.endsWith(".test.tsx")
+        ) {
           continue;
         }
         walk(full);
@@ -193,21 +203,23 @@ describe("Knowledge fail-closed pages (V05)", () => {
       disconnect(): void {}
     } as unknown as typeof ResizeObserver;
     scope = createKnowledgeRouteScope({ routeScopeId: "fail-closed" });
-    (
-      window as unknown as { hermesAPI: Record<string, unknown> }
-    ).hermesAPI = asChatWindowApi({
-      getConnectionConfig: vi.fn(async () => ({ mode: "local", remoteUrl: "" })),
-      onConnectionConfigChanged: vi.fn(() => () => undefined),
-      getSessionMessages: vi.fn(async () => []),
-      getSessionContextFolder: vi.fn(async () => null),
-      setSessionContextFolder: vi.fn(async () => true),
-      skillRun: {
-        getFeatureMode: vi.fn(async () => ({ mode: "off" })),
-        onProjectionChanged: vi.fn(() => () => undefined),
-      },
-      onContextMenuCopyChat: vi.fn(() => () => undefined),
-      onContextMenuSelectBubble: vi.fn(() => () => undefined),
-    });
+    (window as unknown as { hermesAPI: Record<string, unknown> }).hermesAPI =
+      asChatWindowApi({
+        getConnectionConfig: vi.fn(async () => ({
+          mode: "local",
+          remoteUrl: "",
+        })),
+        onConnectionConfigChanged: vi.fn(() => () => undefined),
+        getSessionMessages: vi.fn(async () => []),
+        getSessionContextFolder: vi.fn(async () => null),
+        setSessionContextFolder: vi.fn(async () => true),
+        skillRun: {
+          getFeatureMode: vi.fn(async () => ({ mode: "off" })),
+          onProjectionChanged: vi.fn(() => () => undefined),
+        },
+        onContextMenuCopyChat: vi.fn(() => () => undefined),
+        onContextMenuSelectBubble: vi.fn(() => () => undefined),
+      });
     window.desktopAuth = {
       getState: async () => ({
         authenticated: false,
@@ -254,9 +266,7 @@ describe("Knowledge fail-closed pages (V05)", () => {
     ]);
     for (const page of KNOWLEDGE_ROUTE_PAGES) {
       expect(typeof KnowledgePages).toBe("function");
-      const { unmount } = render(
-        React.createElement(KnowledgePages, { page }),
-      );
+      const { unmount } = render(React.createElement(KnowledgePages, { page }));
       expect(screen.getByTestId(`knowledge-page-${page}`)).toBeTruthy();
       unmount();
     }
@@ -266,9 +276,7 @@ describe("Knowledge fail-closed pages (V05)", () => {
     mockKnowledgeJobs(null);
 
     await act(async () => {
-      render(
-        React.createElement(KnowledgeView, { active: true, scope }),
-      );
+      render(React.createElement(KnowledgeView, { active: true, scope }));
     });
 
     for (const page of KNOWLEDGE_ROUTE_PAGES) {
@@ -284,7 +292,9 @@ describe("Knowledge fail-closed pages (V05)", () => {
           );
         } else {
           expect(panel.textContent).toContain(knowledgeEn.unavailableTitle);
-          expect(panel.textContent).toContain(knowledgeEn.unavailableDescription);
+          expect(panel.textContent).toContain(
+            knowledgeEn.unavailableDescription,
+          );
         }
         expect(panel.textContent).not.toMatch(/fixture|mock q&a|sample file/i);
       });
@@ -314,47 +324,51 @@ describe("Knowledge fail-closed pages (V05)", () => {
     expect(listSnapshots).not.toHaveBeenCalled();
   });
 
-  it("disables Detail upload without a provider and never submits picker jobs", async () => {
-    const { createDraft } = mockKnowledgeJobs({
-      available: false,
-      status: "blocked_provider_unavailable",
-    });
-    const bases = makeBasesApi([
-      {
-        id: "b1",
-        name: "Alpha",
-        description: null,
-        status: "active",
-        visibility: "private",
-      },
-    ]);
+  it.each(["blocked_provider_unavailable", "auth_required"] as const)(
+    "disables Detail upload for %s and never submits picker jobs",
+    async (status) => {
+      const { createDraft, pickAndUpload } = mockKnowledgeJobs({
+        available: false,
+        status,
+      });
+      const bases = makeBasesApi([
+        {
+          id: "b1",
+          name: "Alpha",
+          description: null,
+          status: "active",
+          visibility: "private",
+        },
+      ]);
 
-    await act(async () => {
-      render(
-        React.createElement(KnowledgeBaseDetailPage, {
-          params: { knowledgeBaseId: "b1" },
-          capability: {
-            available: false,
-            status: "blocked_provider_unavailable",
-          },
-          mode: {
-            dataMode: "provider",
-            allowSyntheticData: false,
-            configSource: "default",
-          },
-          bases,
-          createDraft,
-          listSnapshots: async () => [],
-        }),
-      );
-    });
+      await act(async () => {
+        render(
+          React.createElement(KnowledgeBaseDetailPage, {
+            params: { knowledgeBaseId: "b1" },
+            capability: {
+              available: false,
+              status,
+            },
+            mode: {
+              dataMode: "provider",
+              allowSyntheticData: false,
+              configSource: "default",
+            },
+            bases,
+            pickAndUpload,
+            listSnapshots: async () => [],
+          }),
+        );
+      });
 
-    await waitFor(() => {
-      expect(screen.getByTestId("knowledge-base-upload")).toBeDisabled();
-    });
-    expect(screen.queryByTestId("knowledge-upload-drawer")).toBeNull();
-    expect(createDraft).not.toHaveBeenCalled();
-  });
+      await waitFor(() => {
+        expect(screen.getByTestId("knowledge-base-upload")).toBeDisabled();
+      });
+      expect(screen.queryByTestId("knowledge-upload-drawer")).toBeNull();
+      expect(createDraft).not.toHaveBeenCalled();
+      expect(pickAndUpload).not.toHaveBeenCalled();
+    },
+  );
 
   it("Knowledge Chat is not sendable and does not call Chat Run / Skill Run", async () => {
     mockKnowledgeJobs({
@@ -413,7 +427,9 @@ describe("Knowledge fail-closed pages (V05)", () => {
       expect(badge.textContent).toContain(knowledgeEn.mockDemoBadge);
       expect(badge.getAttribute("data-persistent")).toBe("true");
     });
-    expect(screen.queryByTestId("knowledge-mock-demo-badge-dismiss")).toBeNull();
+    expect(
+      screen.queryByTestId("knowledge-mock-demo-badge-dismiss"),
+    ).toBeNull();
 
     // Renderer must not be able to hide the badge while Main reports mock.
     await act(async () => {
@@ -445,7 +461,9 @@ describe("Knowledge fail-closed pages (V05)", () => {
     expect(screen.queryByTestId("knowledge-mock-demo-badge")).toBeNull();
     expect(screen.queryByTestId("knowledge-fixture-list")).toBeNull();
     expect(screen.queryByTestId("knowledge-home-metrics")).toBeNull();
-    expect(screen.getByTestId("knowledge-home-provider-no-metrics")).toBeTruthy();
+    expect(
+      screen.getByTestId("knowledge-home-provider-no-metrics"),
+    ).toBeTruthy();
     expect(document.body.textContent).not.toMatch(
       /fixture|mock q&a|sample file|synthetic base/i,
     );
@@ -484,7 +502,11 @@ describe("Knowledge fail-closed pages (V05)", () => {
       const text = fs.readFileSync(file, "utf8");
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
-        if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+        if (
+          trimmed.startsWith("//") ||
+          trimmed.startsWith("*") ||
+          trimmed.startsWith("/*")
+        ) {
           continue;
         }
         if (
@@ -531,10 +553,7 @@ describe("Knowledge fail-closed pages (V05)", () => {
 
   it("latches Knowledge mode IPC before Job recoverOnStart (AC-05)", () => {
     const registerSrc = fs.readFileSync(
-      path.join(
-        process.cwd(),
-        "src/main/ipc/register.ts",
-      ),
+      path.join(process.cwd(), "src/main/ipc/register.ts"),
       "utf8",
     );
     const modeCall = registerSrc.indexOf(

@@ -17,6 +17,14 @@ let cache: KnowledgeCapabilitySnapshotEx = {
   status: "blocked_provider_unavailable",
 };
 let inFlight: Promise<KnowledgeCapabilitySnapshotEx> | null = null;
+let epoch = 0;
+
+/** Identity changes must not reuse a probe made for the previous account/profile. */
+export function invalidateKnowledgeCapability(): void {
+  epoch++;
+  cache = { available: false, status: "blocked_provider_unavailable" };
+  inFlight = null;
+}
 
 export function getCachedKnowledgeCapability(): KnowledgeCapabilitySnapshotEx {
   return cache;
@@ -28,16 +36,18 @@ export function isKnowledgeProviderAvailable(): boolean {
 
 export async function refreshKnowledgeCapability(): Promise<KnowledgeCapabilitySnapshotEx> {
   if (inFlight) return inFlight;
+  const probeEpoch = epoch;
   inFlight = (async () => {
     try {
       const next = await getKnowledgeHttpProvider().probeCapability();
-      cache = next;
+      if (probeEpoch === epoch) cache = next;
       return cache;
     } catch {
-      cache = { available: false, status: "blocked_provider_unavailable" };
+      if (probeEpoch === epoch)
+        cache = { available: false, status: "blocked_provider_unavailable" };
       return cache;
     } finally {
-      inFlight = null;
+      if (probeEpoch === epoch) inFlight = null;
     }
   })();
   return inFlight;
@@ -50,8 +60,7 @@ export async function ensureKnowledgeCapability(): Promise<KnowledgeCapabilitySn
 }
 
 export function resetKnowledgeCapabilityForTests(): void {
-  cache = { available: false, status: "blocked_provider_unavailable" };
-  inFlight = null;
+  invalidateKnowledgeCapability();
 }
 
 export function setKnowledgeCapabilityForTests(

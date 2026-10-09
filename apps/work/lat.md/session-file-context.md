@@ -8,13 +8,15 @@ Session-scoped managed files can be explicitly added to model context without re
 
 ## Context builder
 
-[[src/main/files/file-context-builder.ts#buildSessionFileContext]] injects only `context-file` associations within a token budget — never into message history.
+[[src/main/files/file-context-builder.ts#buildSessionFileContext]] injects only `context-file` associations within an explicit character budget, including wrappers, XML escaping and separators. This is a text-size limit, not an exact token count.
 
-Small files inline full text (≤ `maxInlineTextChars` from [[src/main/files/file-config.ts#readDesktopFilesConfig]]); medium files get a summary plus chunks; large files use FTS (or leading chunks). Output is ephemeral wire text plus source refs.
+Small files inline text (≤ `maxInlineTextChars` from [[src/main/files/file-config.ts#readDesktopFilesConfig]]); other files use FTS or leading chunks, without duplicating a leading summary. Repeated identical passages within a file are emitted once. Truncation preserves complete wrappers and adds an ellipsis; source refs only describe emitted blocks. Files without matching chunks retain a short `no-matches` reference.
 
 ## Wire injection on send
 
 [[src/main/files/compose-wire-session-context.ts#composeWireMessageWithSessionContext]] runs in `send-message` before the agent call: context XML is prepended to the wire string only. Dual-write and UI history keep the original user text.
+
+[[src/main/ipc/register.ts]] passes a 12,000-character limit for knowledge chats; other sends retain the previous 32,000-character ceiling. The dashboard transport uses its existing attachment path and does not call this local context-file injector. Full-request accounting and history compression remain owned by Hermes.
 
 ## Session Files Panel
 

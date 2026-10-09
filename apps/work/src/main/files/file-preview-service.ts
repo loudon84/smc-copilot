@@ -1,10 +1,18 @@
 /**
  * Builds `FilePreviewDescriptor`s for the File Preview Panel.
- * Reads are capped and streamed — Main never buffers an entire large file
- * before answering a preview request (PRD §26 perf constraints).
+ * Text preview reads are capped and streamed; Office cache misses reuse
+ * size-limited parsing.
  */
 
-import { createReadStream, existsSync, readFileSync, renameSync, rmSync, statSync } from "fs";
+import {
+  createReadStream,
+  existsSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "fs";
+import { stat } from "fs/promises";
 import { protocol } from "electron";
 import {
   makeFileError,
@@ -26,6 +34,7 @@ import {
   upsertManagedFile,
 } from "./file-association-store";
 import { readDesktopFilesConfig } from "./file-config";
+import { parseFile } from "./file-parse-service";
 import { FilePlatformError } from "./file-security";
 import {
   invalidatePreviewCache,
@@ -265,10 +274,7 @@ async function getRemotePreviewDescriptor(
 ): Promise<FilePreviewDescriptor | { error: FileError }> {
   if (file.availability === "forbidden") {
     return {
-      error: makeFileError(
-        "FILE_REMOTE_FORBIDDEN",
-        "Artifact is forbidden",
-      ),
+      error: makeFileError("FILE_REMOTE_FORBIDDEN", "Artifact is forbidden"),
     };
   }
   if (file.availability === "not-found") {
@@ -292,7 +298,10 @@ async function getRemotePreviewDescriptor(
   const artifactId = file.remoteArtifactId;
   if (!artifactId || !file.provider) {
     return {
-      error: makeFileError("FILE_NOT_FOUND", "Remote artifact identity missing"),
+      error: makeFileError(
+        "FILE_NOT_FOUND",
+        "Remote artifact identity missing",
+      ),
     };
   }
 
@@ -522,7 +531,17 @@ export async function getPreviewDescriptor(
   }
 
   if (type === "office") {
-    const doc = getParsedDocument(fileId);
+    let doc = getParsedDocument(fileId);
+    if (!doc) {
+      try {
+        const size = (await stat(path)).size;
+        const maxBytes =
+          Math.max(1, readDesktopFilesConfig(profile).maxParseMb) * 1024 * 1024;
+        if (size <= maxBytes) doc = await parseFile(profile, fileId);
+      } catch {
+        // Keep the existing unsupported fallback when lazy parsing fails.
+      }
+    }
     if (doc && doc.text) {
       return {
         fileId,
@@ -541,7 +560,12 @@ export async function getPreviewDescriptor(
     return unsupported(fileId, file.name, file.mime, "Parse in Phase 4");
   }
 
-  if (type === "text" || type === "markdown" || type === "code" || type === "html") {
+  if (
+    type === "text" ||
+    type === "markdown" ||
+    type === "code" ||
+    type === "html"
+  ) {
     try {
       const limit = Math.max(1, options?.limit ?? PREVIEW_TEXT_LIMIT);
       const offset = Math.max(0, options?.offset ?? 0);
@@ -615,7 +639,9 @@ export function registerFilePreviewProtocolHandler(): void {
   protocol.handle(FILE_PREVIEW_SCHEME, (request) => {
     try {
       const url = new URL(request.url);
-      const fileId = decodeURIComponent(url.hostname || url.pathname.replace(/^\//, ""));
+      const fileId = decodeURIComponent(
+        url.hostname || url.pathname.replace(/^\//, ""),
+      );
       let path = previewCacheByFileId.get(fileId);
       if (!path || !existsSync(path)) {
         // Local managed files (image/pdf) register on getPreview; if map missed,

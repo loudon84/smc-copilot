@@ -3,16 +3,12 @@
  * V04 / TA-WK01-IMPORT — Knowledge Job file-import consumer (C08).
  * Must not import React, renderer, or composerFilePlatform.
  */
-import {
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-  existsSync,
-} from "fs";
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDbConnection } from "../db";
+import { openSqliteDatabase, type SqliteDatabase } from "../sqlite-database";
 import type { KnowledgeJobPartition } from "../knowledge/knowledge-upload-job-coordinator";
 import type {
   FileAssociation,
@@ -31,6 +27,9 @@ const mockState = vi.hoisted(() => ({
   parseProfiles: [] as string[],
   configProfiles: [] as string[],
   copyProfiles: [] as string[],
+  managedStorage: true,
+  copyPickerFiles: false,
+  beforeCopy: null as (() => Promise<void>) | null,
 }));
 
 vi.mock("../runtime/hermes-runtime-paths", () => ({
@@ -48,26 +47,24 @@ vi.mock("electron", () => ({
 }));
 
 vi.mock("./file-config", async () => {
-  const actual = await vi.importActual<typeof import("./file-config")>(
-    "./file-config",
-  );
+  const actual =
+    await vi.importActual<typeof import("./file-config")>("./file-config");
   return {
     ...actual,
     readDesktopFilesConfig: (profile?: string) => {
       mockState.configProfiles.push(profile ?? "default");
       return {
         ...actual.readDesktopFilesConfig(profile),
-        managedStorage: true,
-        copyPickerFiles: true,
+        managedStorage: mockState.managedStorage,
+        copyPickerFiles: mockState.copyPickerFiles,
       };
     },
   };
 });
 
 vi.mock("./file-store", async () => {
-  const actual = await vi.importActual<typeof import("./file-store")>(
-    "./file-store",
-  );
+  const actual =
+    await vi.importActual<typeof import("./file-store")>("./file-store");
   return {
     ...actual,
     storeManagedCopy: async (
@@ -76,6 +73,7 @@ vi.mock("./file-store", async () => {
       profile?: string,
     ) => {
       mockState.copyProfiles.push(profile ?? "default");
+      await mockState.beforeCopy?.();
       return actual.storeManagedCopy(sourcePath, hash, profile);
     },
   };
@@ -86,107 +84,6 @@ vi.mock("./jobs/parse-file-job", () => ({
     mockState.parseProfiles.push(profile ?? "default");
   },
 }));
-
-type JobRow = {
-  job_id: string;
-  knowledge_base_id: string;
-  work_profile_id: string;
-  auth_subject: string;
-  tenant_scope_kind: string;
-  tenant_id: string | null;
-  status: string;
-  attempt: number;
-  last_command_id: string | null;
-  error_code: string | null;
-  created_at: string;
-  updated_at: string;
-  data_mode?: string | null;
-  synthetic?: number | null;
-  progress?: number | null;
-  file_summary_json?: string | null;
-};
-
-const TABLE = "knowledge_upload_jobs";
-
-class FakeStatement {
-  constructor(
-    private readonly sql: string,
-    private readonly db: FakeDb,
-  ) {}
-
-  get(...args: unknown[]): unknown {
-    if (this.sql.includes("sqlite_master")) {
-      const name = String(args[0] ?? "");
-      return this.db.tables.has(name) ? { name } : undefined;
-    }
-    if (this.sql.includes(`FROM ${TABLE}`) && this.sql.includes("job_id")) {
-      const jobId = String(args[0]);
-      return this.db.jobs.get(jobId);
-    }
-    return undefined;
-  }
-
-  all(): unknown[] {
-    return [];
-  }
-
-  run(...args: unknown[]): void {
-    if (this.sql.includes(`INSERT INTO ${TABLE}`)) {
-      const [
-        job_id,
-        knowledge_base_id,
-        work_profile_id,
-        auth_subject,
-        tenant_scope_kind,
-        tenant_id,
-        status,
-        attempt,
-        last_command_id,
-        error_code,
-        created_at,
-        updated_at,
-        data_mode,
-        synthetic,
-        progress,
-        file_summary_json,
-      ] = args;
-      this.db.jobs.set(String(job_id), {
-        job_id: String(job_id),
-        knowledge_base_id: String(knowledge_base_id),
-        work_profile_id: String(work_profile_id),
-        auth_subject: String(auth_subject),
-        tenant_scope_kind: String(tenant_scope_kind),
-        tenant_id: tenant_id == null ? null : String(tenant_id),
-        status: String(status),
-        attempt: Number(attempt),
-        last_command_id:
-          last_command_id == null ? null : String(last_command_id),
-        error_code: error_code == null ? null : String(error_code),
-        created_at: String(created_at),
-        updated_at: String(updated_at),
-        data_mode: data_mode == null ? null : String(data_mode),
-        synthetic:
-          synthetic == null ? null : Number(synthetic),
-        progress: progress == null ? null : Number(progress),
-        file_summary_json:
-          file_summary_json == null ? null : String(file_summary_json),
-      });
-    }
-  }
-}
-
-class FakeDb {
-  readonly tables = new Set<string>();
-  readonly jobs = new Map<string, JobRow>();
-
-  exec(): void {
-    this.tables.add(TABLE);
-  }
-
-  prepare(sql: string): FakeStatement {
-    return new FakeStatement(sql.trim(), this);
-  }
-}
 
 const PARTITION_A: KnowledgeJobPartition = {
   workProfileId: "profile-job",
@@ -204,6 +101,9 @@ function resetTrackers(): void {
   mockState.configProfiles = [];
   mockState.copyProfiles = [];
   mockState.parseProfiles = [];
+  mockState.managedStorage = true;
+  mockState.copyPickerFiles = false;
+  mockState.beforeCopy = null;
 }
 
 function sampleFile(name = "note.txt"): string {
@@ -260,27 +160,27 @@ async function draftJob(
   knowledgeBaseId: string,
   dataMode: "mock" | "provider" = "provider",
 ) {
-  const { insertDraftJob } = await import(
-    "../knowledge/knowledge-upload-job-store"
-  );
+  const { insertDraftJob } =
+    await import("../knowledge/knowledge-upload-job-store");
   return insertDraftJob({ partition, knowledgeBaseId, dataMode });
 }
 
 describe("file-import Knowledge Job consumer (V04)", () => {
-  let fakeDb: FakeDb;
+  let jobDb: SqliteDatabase;
 
   beforeEach(async () => {
     mockState.hermesHome = mkdtempSync(
       join(tmpdir(), "hermes-files-import-kj-"),
     );
     resetTrackers();
-    fakeDb = new FakeDb();
-    mockedGetDbConnection.mockReturnValue(fakeDb as never);
+    jobDb = openSqliteDatabase(":memory:");
+    mockedGetDbConnection.mockReturnValue(jobDb);
     vi.resetModules();
     await bootCoordinator(PARTITION_A);
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     try {
       const store = await import("./file-association-store");
       store.closeFileIndexDb("profile-job");
@@ -291,9 +191,8 @@ describe("file-import Knowledge Job consumer (V04)", () => {
       // ignore
     }
     try {
-      const { resetKnowledgeUploadJobCoordinatorForTests } = await import(
-        "../knowledge/knowledge-upload-job-coordinator"
-      );
+      const { resetKnowledgeUploadJobCoordinatorForTests } =
+        await import("../knowledge/knowledge-upload-job-coordinator");
       resetKnowledgeUploadJobCoordinatorForTests();
     } catch {
       // ignore
@@ -303,14 +202,14 @@ describe("file-import Knowledge Job consumer (V04)", () => {
     } catch {
       // Windows may hold WAL locks briefly; best-effort cleanup.
     }
+    jobDb.close();
   });
 
   it("binds Knowledge import to Job workProfileId without sessionId", async () => {
     const job = await draftJob(PARTITION_A, "kb-1");
     const { importOnePath } = await import("./file-import-service");
-    const { findAssociation, getManagedFile, listBySession } = await import(
-      "./file-association-store"
-    );
+    const { findAssociation, getManagedFile, listBySession } =
+      await import("./file-association-store");
 
     const result = await importOnePath(
       sampleFile("knowledge.txt"),
@@ -322,11 +221,15 @@ describe("file-import Knowledge Job consumer (V04)", () => {
 
     expect(mockState.configProfiles).toEqual(["profile-job"]);
     expect(mockState.copyProfiles).toEqual(["profile-job"]);
-    expect(mockState.parseProfiles).toEqual(["profile-job"]);
+    expect(mockState.parseProfiles).toEqual([]);
     expect(mockState.configProfiles).not.toContain("renderer-spoofed-profile");
 
     const managed = getManagedFile("profile-job", result.file.id);
     expect(managed?.profileId).toBe("profile-job");
+    expect(managed?.managedPath && existsSync(managed.managedPath)).toBe(true);
+    const { getJobRow } =
+      await import("../knowledge/knowledge-upload-job-store");
+    expect(getJobRow(job.jobId)?.managed_file_id).toBe(result.file.id);
 
     const assoc = findAssociation({
       profileId: "profile-job",
@@ -342,6 +245,56 @@ describe("file-import Knowledge Job consumer (V04)", () => {
     });
     expect(assoc?.sessionId).toBeUndefined();
     expect(listBySession("profile-job", "any-session")).toHaveLength(0);
+  });
+
+  it("reuses one managed file for concurrent same-content Knowledge imports", async () => {
+    const firstJob = await draftJob(PARTITION_A, "kb-concurrent");
+    const secondJob = await draftJob(PARTITION_A, "kb-concurrent");
+    const { importOnePath } = await import("./file-import-service");
+    const store = await import("./file-association-store");
+    const { getJobRow } =
+      await import("../knowledge/knowledge-upload-job-store");
+    let releaseCopies!: () => void;
+    let bothCopiesStarted!: () => void;
+    const copyGate = new Promise<void>((resolve) => {
+      releaseCopies = resolve;
+    });
+    const copiesStarted = new Promise<void>((resolve) => {
+      bothCopiesStarted = resolve;
+    });
+    let arrivals = 0;
+    mockState.beforeCopy = async () => {
+      if (++arrivals === 2) bothCopiesStarted();
+      await copyGate;
+    };
+    const sourcePath = sampleFile("concurrent-shared.txt");
+    const imports = [
+      importOnePath(sourcePath, knowledgeContext(firstJob.jobId)),
+      importOnePath(sourcePath, knowledgeContext(secondJob.jobId)),
+    ];
+    await copiesStarted;
+    expect(getJobRow(firstJob.jobId)?.managed_file_id).toBeNull();
+    expect(getJobRow(secondJob.jobId)?.managed_file_id).toBeNull();
+    releaseCopies();
+    const [first, second] = await Promise.all(imports);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.file.id).toBe(first.file.id);
+    expect(getJobRow(firstJob.jobId)?.managed_file_id).toBe(first.file.id);
+    expect(getJobRow(secondJob.jobId)?.managed_file_id).toBe(first.file.id);
+    for (const job of [firstJob, secondJob]) {
+      expect(
+        store.findAssociation({
+          profileId: "profile-job",
+          fileId: first.file.id,
+          knowledgeJobId: job.jobId,
+          role: "prompt-attachment",
+        }),
+      ).toMatchObject({ fileId: first.file.id, knowledgeJobId: job.jobId });
+    }
+    expect(store.countAssociations(first.file.id, "profile-job")).toBe(2);
+    expect(mockState.parseProfiles).toEqual([]);
   });
 
   it("rejects unknown and cross-partition Knowledge imports before any File Platform write", async () => {
@@ -393,6 +346,118 @@ describe("file-import Knowledge Job consumer (V04)", () => {
       source: "picker",
     } as FileImportContext);
     expect(empty.ok).toBe(false);
+  });
+
+  it("keeps Chat picker copies opt-in and respects disabled managed storage for Knowledge", async () => {
+    const { importOnePath } = await import("./file-import-service");
+    const chat = await importOnePath(
+      sampleFile("chat-original.txt"),
+      chatContext("session-original"),
+    );
+    expect(chat.ok).toBe(true);
+    if (chat.ok) expect(chat.file.hasManagedCopy).toBe(false);
+    expect(mockState.copyProfiles).toEqual([]);
+    expect(mockState.parseProfiles).toEqual(["chat-profile"]);
+
+    mockState.managedStorage = false;
+    const job = await draftJob(PARTITION_A, "kb-original");
+    const knowledge = await importOnePath(
+      sampleFile("knowledge-original.txt"),
+      knowledgeContext(job.jobId),
+    );
+    expect(knowledge.ok).toBe(true);
+    if (knowledge.ok) expect(knowledge.file.hasManagedCopy).toBe(false);
+    expect(mockState.copyProfiles).toEqual([]);
+    expect(mockState.parseProfiles).toEqual(["chat-profile"]);
+  });
+
+  it.each(["cancel", "new-attempt", "identity-change"])(
+    "does not bind a file after %s during an asynchronous import",
+    async (change) => {
+      const job = await draftJob(PARTITION_A, "kb-stale");
+      const { importOnePath } = await import("./file-import-service");
+      const { getJobRow, updateJobRecord } =
+        await import("../knowledge/knowledge-upload-job-store");
+      mockState.beforeCopy = async () => {
+        if (change === "identity-change") {
+          await bootCoordinator(PARTITION_B);
+        } else {
+          updateJobRecord({
+            jobId: job.jobId,
+            status: change === "cancel" ? "cancelled" : "draft",
+            attempt: change === "cancel" ? 1 : 2,
+            expectedAttempt: 1,
+          });
+        }
+      };
+      const result = await importOnePath(
+        sampleFile(`stale-${change}.txt`),
+        knowledgeContext(job.jobId),
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok)
+        expect(result.error.message).toMatch(
+          /KNOWLEDGE_JOB_(IMPORT_STALE|PARTITION_DENIED)/,
+        );
+      expect(getJobRow(job.jobId)?.managed_file_id).toBeNull();
+      expect(mockState.parseProfiles).toEqual([]);
+    },
+  );
+
+  it("returns a sanitized binding failure instead of reporting import success", async () => {
+    const job = await draftJob(PARTITION_A, "kb-bind-fail");
+    const { getKnowledgeUploadJobCoordinator } =
+      await import("../knowledge/knowledge-upload-job-coordinator");
+    vi.spyOn(
+      getKnowledgeUploadJobCoordinator(),
+      "bindImportedFile",
+    ).mockImplementation(() => {
+      throw new Error("KNOWLEDGE_JOB_STORE_UNAVAILABLE private path");
+    });
+    const { importOnePath } = await import("./file-import-service");
+    const result = await importOnePath(
+      sampleFile("binding-failed.txt"),
+      knowledgeContext(job.jobId),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "FILE_ASSOCIATION_SAVE_FAILED",
+        message: "KNOWLEDGE_JOB_STORE_UNAVAILABLE",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("private path");
+  });
+
+  it("does not bind a stale import after the account changes away and back", async () => {
+    const { createKnowledgeUploadJobCoordinator } =
+      await import("../knowledge/knowledge-upload-job-coordinator");
+    let acting = PARTITION_A;
+    const coordinator = createKnowledgeUploadJobCoordinator({
+      getPartition: () => acting,
+      isProviderAvailable: () => false,
+      getDataMode: () => "provider",
+    });
+    const job = await draftJob(PARTITION_A, "kb-roundtrip");
+    const { importOnePath } = await import("./file-import-service");
+    const { getJobRow } =
+      await import("../knowledge/knowledge-upload-job-store");
+    mockState.beforeCopy = async () => {
+      acting = PARTITION_B;
+      coordinator.pauseForIdentityChange();
+      acting = PARTITION_A;
+      coordinator.pauseForIdentityChange();
+    };
+    const result = await importOnePath(
+      sampleFile("roundtrip.txt"),
+      knowledgeContext(job.jobId),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: { message: "KNOWLEDGE_JOB_IMPORT_STALE" },
+    });
+    expect(getJobRow(job.jobId)?.managed_file_id).toBeNull();
+    expect(mockState.parseProfiles).toEqual([]);
   });
 
   it("is idempotent for (profileId, fileId, knowledgeJobId, role)", async () => {
@@ -475,6 +540,7 @@ describe("file-import Knowledge Job consumer (V04)", () => {
       }),
     );
     expect(chatClip.ok).toBe(true);
+    expect(mockState.parseProfiles).toEqual(["chat-profile"]);
     if (chatClip.ok) {
       const store = await import("./file-association-store");
       const assoc = store.findAssociation({
@@ -534,8 +600,10 @@ describe("file-import Knowledge Job consumer (V04)", () => {
     const { cleanupOrphanFiles } = await import("./file-cleanup-service");
     cleanupOrphanFiles("profile-job");
     expect(store.getManagedFile("profile-job", chat.file.id)).not.toBeNull();
-    const managedPath = store.getManagedFile("profile-job", chat.file.id)
-      ?.managedPath;
+    const managedPath = store.getManagedFile(
+      "profile-job",
+      chat.file.id,
+    )?.managedPath;
     if (managedPath) {
       expect(existsSync(managedPath)).toBe(true);
     }

@@ -4,7 +4,9 @@
  * Must not import React or renderer modules.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DatabaseSync } from "node:sqlite";
 import { getDbConnection } from "../db";
+import { openSqliteDatabase } from "../sqlite-database";
 import {
   isKnowledgeJobTerminal,
   type KnowledgeJobFileSummary,
@@ -13,14 +15,17 @@ import {
 } from "../../shared/knowledge/knowledge-job-ipc";
 import {
   allocateJobId,
+  deleteCancelledJob,
   ensureKnowledgeUploadJobsSchema,
   insertDraftJob,
+  insertDraftJobs,
   isMigrationReadOnly,
   isMockJobId,
   listNonTerminalJobs,
   resetKnowledgeUploadJobStoreForTests,
   updateJobRecord,
   getJobById,
+  getJobRow,
 } from "./knowledge-upload-job-store";
 
 vi.mock("../db", () => ({
@@ -54,6 +59,10 @@ const MODE_COLUMNS = [
   "managed_file_id",
   "remote_source_file_id",
   "remote_ingestion_job_id",
+  "batch_id",
+  "phase",
+  "revision",
+  "last_remote_confirmed_at",
 ] as const;
 
 type JobRow = {
@@ -73,6 +82,13 @@ type JobRow = {
   synthetic?: number | null;
   progress?: number | null;
   file_summary_json?: string | null;
+  batch_id?: string | null;
+  phase?: string | null;
+  revision?: number;
+  managed_file_id?: string | null;
+  remote_source_file_id?: string | null;
+  remote_ingestion_job_id?: string | null;
+  last_remote_confirmed_at?: string | null;
 };
 
 class FakeStatement {
@@ -106,7 +122,9 @@ class FakeStatement {
         "blocked_provider_unavailable",
         "completed",
       ]);
-      return [...this.db.jobs.values()].filter((row) => !terminal.has(row.status));
+      return [...this.db.jobs.values()].filter(
+        (row) => !terminal.has(row.status),
+      );
     }
     if (
       this.sql.includes(`FROM ${TABLE}`) &&
@@ -149,6 +167,9 @@ class FakeStatement {
         synthetic,
         progress,
         file_summary_json,
+        batch_id,
+        phase,
+        revision,
       ] = args;
       this.db.jobs.set(String(job_id), {
         job_id: String(job_id),
@@ -169,6 +190,9 @@ class FakeStatement {
         progress: progress == null ? null : Number(progress),
         file_summary_json:
           file_summary_json == null ? null : String(file_summary_json),
+        batch_id: batch_id == null ? null : String(batch_id),
+        phase: phase == null ? null : String(phase),
+        revision: Number(revision ?? 0),
       });
       return;
     }
@@ -200,6 +224,11 @@ class FakeStatement {
           data_mode,
           synthetic,
           updated_at,
+          phase,
+          managed_file_id,
+          remote_source_file_id,
+          remote_ingestion_job_id,
+          last_remote_confirmed_at,
         ] = args;
         this.db.jobs.set(jobId, {
           ...existing,
@@ -233,6 +262,22 @@ class FakeStatement {
                 ? existing.synthetic
                 : Number(synthetic),
           updated_at: String(updated_at),
+          phase: phase == null ? null : String(phase),
+          managed_file_id:
+            managed_file_id == null ? null : String(managed_file_id),
+          remote_source_file_id:
+            remote_source_file_id == null
+              ? null
+              : String(remote_source_file_id),
+          remote_ingestion_job_id:
+            remote_ingestion_job_id == null
+              ? null
+              : String(remote_ingestion_job_id),
+          last_remote_confirmed_at:
+            last_remote_confirmed_at == null
+              ? null
+              : String(last_remote_confirmed_at),
+          revision: Number(existing.revision ?? 0) + 1,
         });
       }
     }
@@ -322,6 +367,100 @@ describe("knowledge-upload-job-store (V03)", () => {
     resetKnowledgeUploadJobStoreForTests();
   });
 
+  it("refuses deletion of cancelled and draft task records", () => {
+    const db = openSqliteDatabase(":memory:");
+    mockedGetDbConnection.mockReturnValue(db);
+    try {
+      const draft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb-1",
+      });
+      const cancelled = updateJobRecord({
+        jobId: draft.jobId,
+        status: "cancelled",
+        attempt: draft.attempt,
+      });
+      const other = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb-1",
+      });
+      const input = {
+        jobId: cancelled.jobId,
+        expectedRevision: cancelled.revision!,
+        partition: PARTITION,
+      };
+      expect(
+        deleteCancelledJob({
+          ...input,
+          jobId: other.jobId,
+          expectedRevision: other.revision!,
+        }),
+      ).toBe(false);
+      expect(deleteCancelledJob(input)).toBe(false);
+      expect(getJobById(cancelled.jobId)?.status).toBe("cancelled");
+      expect(getJobById(other.jobId)?.status).toBe("draft");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("deletes a failed local task with a remote ID but refuses unconfirmed tasks", () => {
+    const db = openSqliteDatabase(":memory:");
+    mockedGetDbConnection.mockReturnValue(db);
+    try {
+      const failedDraft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb-1",
+      });
+      const failed = updateJobRecord({
+        jobId: failedDraft.jobId,
+        status: "failed",
+        attempt: failedDraft.attempt,
+        remoteIngestionJobId: "remote-failed",
+        errorCode: "INGESTION_FAILED",
+      });
+      const pendingDraft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb-1",
+      });
+      const pending = updateJobRecord({
+        jobId: pendingDraft.jobId,
+        status: "awaiting_confirmation",
+        attempt: pendingDraft.attempt,
+        errorCode: "INTERRUPTED",
+      });
+      const input = {
+        jobId: failed.jobId,
+        expectedRevision: failed.revision!,
+        partition: PARTITION,
+      };
+      expect(
+        deleteCancelledJob({
+          ...input,
+          partition: { ...PARTITION, authSubject: "other" },
+        }),
+      ).toBe(false);
+      expect(
+        deleteCancelledJob({
+          ...input,
+          expectedRevision: input.expectedRevision - 1,
+        }),
+      ).toBe(false);
+      expect(
+        deleteCancelledJob({
+          ...input,
+          jobId: pending.jobId,
+          expectedRevision: pending.revision!,
+        }),
+      ).toBe(false);
+      expect(deleteCancelledJob(input)).toBe(true);
+      expect(getJobById(failed.jobId)).toBeNull();
+      expect(getJobById(pending.jobId)?.status).toBe("awaiting_confirmation");
+    } finally {
+      db.close();
+    }
+  });
+
   it("migrates legacy rows without mode to legacy-unclassified (not mock-active)", () => {
     const db = bindDb(new FakeDb());
     db.seedLegacyTable({
@@ -345,6 +484,10 @@ describe("knowledge-upload-job-store (V03)", () => {
     expect(snap!.dataMode).toBe("legacy-unclassified");
     expect(snap!.dataMode).not.toBe("mock");
     expect(snap!.synthetic).toBe(false);
+    expect(snap!.revision).toBe(0);
+    expect(snap!.lastRemoteConfirmedAt).toBeUndefined();
+    expect(snap!.createdAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(snap!.batchId).toBeUndefined();
     // Must not display as mock uploading/processing/completed.
     expect(snap!.status).toBe("uploading");
     expect(snap!.dataMode === "mock" && snap!.status === "uploading").toBe(
@@ -408,6 +551,62 @@ describe("knowledge-upload-job-store (V03)", () => {
     expect(isMockJobId(draft.jobId)).toBe(false);
     expect(draft.progress).toBe(0);
   });
+
+  it("creates all batch drafts in one SQLite transaction", () => {
+    const db = openSqliteDatabase(":memory:");
+    mockedGetDbConnection.mockReturnValue(db);
+    try {
+      const jobs = insertDraftJobs(
+        ["first.pdf", "second.pdf"].map((displayName) => ({
+          partition: PARTITION,
+          knowledgeBaseId: "kb_batch",
+          batchId: "batch-1",
+          phase: "importing" as const,
+          fileSummary: { displayName },
+        })),
+      );
+      expect(jobs).toHaveLength(2);
+      for (const job of jobs) {
+        expect(getJobById(job.jobId)).toMatchObject({
+          status: "draft",
+          batchId: "batch-1",
+          phase: "importing",
+          revision: 0,
+        });
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it.each(["invalid mode", "failed INSERT"])(
+    "rolls back the first batch draft when the second has %s",
+    (failure) => {
+      const db = openSqliteDatabase(":memory:");
+      mockedGetDbConnection.mockReturnValue(db);
+      try {
+        const first = {
+          partition: PARTITION,
+          knowledgeBaseId: "kb_batch",
+          batchId: "batch-1",
+          jobId: "first-job",
+        };
+        const second =
+          failure === "invalid mode"
+            ? {
+                ...first,
+                jobId: "second-job",
+                dataMode: "legacy-unclassified" as const,
+              }
+            : { ...first };
+        expect(() => insertDraftJobs([first, second])).toThrow();
+        expect(getJobById("first-job")).toBeNull();
+        expect(getJobById("second-job")).toBeNull();
+      } finally {
+        db.close();
+      }
+    },
+  );
 
   it("blocks mock inserts when migration fails and marks store read-only", () => {
     const db = bindDb(new FakeDb());
@@ -484,5 +683,312 @@ describe("knowledge-upload-job-store (V03)", () => {
     expect(draft.dataMode).toBe("provider");
     expect(second.tables.has(TABLE)).toBe(true);
     expect(getJobById(draft.jobId)?.jobId).toBe(draft.jobId);
+  });
+
+  it("resets a failed migration latch when the profile database changes", () => {
+    const failed = bindDb(new FakeDb());
+    failed.tables.add(TABLE);
+    failed.columns.set(TABLE, new Set(LEGACY_COLUMNS));
+    failed.failAlter = true;
+    ensureKnowledgeUploadJobsSchema();
+    expect(isMigrationReadOnly()).toBe(true);
+
+    bindDb(new FakeDb());
+    const draft = insertDraftJob({
+      partition: PARTITION,
+      knowledgeBaseId: "kb_next",
+    });
+    expect(isMigrationReadOnly()).toBe(false);
+    expect(draft.revision).toBe(0);
+  });
+
+  it("atomically binds receipts, preserves command ids, and rejects stale attempts and identities in SQLite", () => {
+    const db = new DatabaseSync(":memory:");
+    mockedGetDbConnection.mockReturnValue(db as never);
+    try {
+      const draft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb_batch",
+        batchId: "batch-1",
+        phase: "importing",
+        fileSummary: { displayName: "C:\\private\\sample.txt" },
+      });
+      expect(draft).toMatchObject({
+        batchId: "batch-1",
+        phase: "importing",
+        revision: 0,
+        canCancel: true,
+        canRetry: false,
+        fileSummary: { displayName: "sample.txt" },
+      });
+      const accepted = updateJobRecord({
+        jobId: draft.jobId,
+        status: "processing",
+        attempt: 1,
+        expectedAttempt: 1,
+        partition: PARTITION,
+        phase: "waiting_parse",
+        managedFileId: "mf-1",
+        remoteSourceFileId: "sf-1",
+        remoteIngestionJobId: "remote-1",
+        lastCommandId: "command-1",
+        progress: 1,
+      });
+      expect(accepted).toMatchObject({
+        revision: 1,
+        progress: 1,
+        phase: "waiting_parse",
+        createdAt: draft.createdAt,
+      });
+      expect(getJobRow(draft.jobId)).toMatchObject({
+        managed_file_id: "mf-1",
+        remote_source_file_id: "sf-1",
+        remote_ingestion_job_id: "remote-1",
+        last_command_id: "command-1",
+      });
+      const progressed = updateJobRecord({
+        jobId: draft.jobId,
+        status: "processing",
+        attempt: 1,
+        expectedAttempt: 1,
+        progress: 2,
+      });
+      expect(progressed.revision).toBe(2);
+      expect(getJobRow(draft.jobId)?.last_command_id).toBe("command-1");
+      const failed = updateJobRecord({
+        jobId: draft.jobId,
+        status: "failed",
+        attempt: 1,
+        errorCode: "INGESTION_FAILED",
+      });
+      expect(failed.canRetry).toBe(true);
+      const retried = updateJobRecord({
+        jobId: draft.jobId,
+        status: "queued",
+        attempt: 2,
+        expectedAttempt: 1,
+        phase: null,
+      });
+      expect(retried.revision).toBe(4);
+      expect(
+        updateJobRecord({
+          jobId: draft.jobId,
+          status: "completed",
+          attempt: 1,
+          expectedAttempt: 1,
+          remoteIngestionJobId: "stale-remote",
+        }),
+      ).toEqual(retried);
+      const foreign = { ...PARTITION, authSubject: "other-user" };
+      expect(
+        updateJobRecord({
+          jobId: draft.jobId,
+          status: "completed",
+          attempt: 2,
+          partition: foreign,
+        }),
+      ).toEqual(retried);
+      expect(listNonTerminalJobs(foreign)).toEqual([]);
+      expect(listNonTerminalJobs(PARTITION).map((job) => job.jobId)).toEqual([
+        draft.jobId,
+      ]);
+      const cancelled = updateJobRecord({
+        jobId: draft.jobId,
+        status: "cancelled",
+        attempt: 2,
+        expectedAttempt: 2,
+      });
+      expect(
+        updateJobRecord({
+          jobId: draft.jobId,
+          status: "completed",
+          attempt: 2,
+          expectedAttempt: 2,
+          remoteIngestionJobId: "late-remote",
+        }),
+      ).toEqual(cancelled);
+      expect(getJobRow(draft.jobId)?.remote_ingestion_job_id).toBe("remote-1");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("persists remote confirmation atomically, preserves it on local writes, and resets it for a new attempt", () => {
+    const db = new DatabaseSync(":memory:");
+    mockedGetDbConnection.mockReturnValue(db as never);
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-10-08T10:00:00Z");
+    try {
+      const draft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb_sync",
+      });
+      expect(draft.lastRemoteConfirmedAt).toBeUndefined();
+      const confirmed = updateJobRecord({
+        jobId: draft.jobId,
+        status: "processing",
+        attempt: 1,
+        remoteIngestionJobId: "remote-1",
+        remoteConfirmed: true,
+      });
+      expect(confirmed.lastRemoteConfirmedAt).toBe("2026-10-08T10:00:00.000Z");
+      expect(getJobRow(draft.jobId)).toMatchObject({
+        remote_ingestion_job_id: "remote-1",
+        last_remote_confirmed_at: confirmed.lastRemoteConfirmedAt,
+      });
+      vi.setSystemTime("2026-10-08T10:01:00Z");
+      const failed = updateJobRecord({
+        jobId: draft.jobId,
+        status: "failed",
+        attempt: 1,
+        errorCode: "INGESTION_FAILED",
+      });
+      expect(failed.updatedAt).toBe("2026-10-08T10:01:00.000Z");
+      expect(failed.lastRemoteConfirmedAt).toBe(
+        confirmed.lastRemoteConfirmedAt,
+      );
+      const retry = updateJobRecord({
+        jobId: draft.jobId,
+        status: "queued",
+        attempt: 2,
+        expectedAttempt: 1,
+      });
+      expect(retry.lastRemoteConfirmedAt).toBeUndefined();
+      expect(
+        updateJobRecord({
+          jobId: draft.jobId,
+          status: "completed",
+          attempt: 1,
+          expectedAttempt: 1,
+          remoteConfirmed: true,
+        }),
+      ).toEqual(retry);
+      const reconfirmed = updateJobRecord({
+        jobId: draft.jobId,
+        status: "processing",
+        attempt: 3,
+        expectedAttempt: 2,
+        remoteConfirmed: true,
+      });
+      expect(reconfirmed.lastRemoteConfirmedAt).toBe(
+        "2026-10-08T10:01:00.000Z",
+      );
+      const mock = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb_sync",
+        dataMode: "mock",
+      });
+      expect(
+        updateJobRecord({
+          jobId: mock.jobId,
+          status: "completed",
+          attempt: 1,
+          remoteConfirmed: true,
+        }).lastRemoteConfirmedAt,
+      ).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+      db.close();
+    }
+  });
+
+  it("rejects a receipt when cancellation changes the row between read and conditional SQL write", () => {
+    const db = new DatabaseSync(":memory:");
+    mockedGetDbConnection.mockReturnValue(db as never);
+    try {
+      const draft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb_race",
+      });
+      const prepare = db.prepare.bind(db);
+      let race = true;
+      vi.spyOn(db, "prepare").mockImplementation((sql) => {
+        const statement = prepare(sql);
+        if (sql.includes("SET status = ?")) {
+          const run = statement.run.bind(statement);
+          vi.spyOn(statement, "run").mockImplementation((...args) => {
+            if (race) {
+              race = false;
+              db.exec(
+                "UPDATE knowledge_upload_jobs SET status = 'cancelled', revision = revision + 1",
+              );
+            }
+            return run(...args);
+          });
+        }
+        return statement;
+      });
+      const result = updateJobRecord({
+        jobId: draft.jobId,
+        status: "processing",
+        attempt: 1,
+        expectedAttempt: 1,
+        remoteIngestionJobId: "late-receipt",
+        remoteConfirmed: true,
+      });
+      expect(result).toMatchObject({ status: "draft", revision: 0 });
+      expect(getJobById(draft.jobId)).toMatchObject({
+        status: "cancelled",
+        revision: 1,
+      });
+      expect(getJobRow(draft.jobId)?.remote_ingestion_job_id).toBeNull();
+      expect(getJobById(draft.jobId)?.lastRemoteConfirmedAt).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("derives capabilities without allowing unknown submissions or invalid files to retry", () => {
+    const db = new DatabaseSync(":memory:");
+    mockedGetDbConnection.mockReturnValue(db as never);
+    try {
+      const draft = insertDraftJob({
+        partition: PARTITION,
+        knowledgeBaseId: "kb_caps",
+      });
+      const failed = updateJobRecord({
+        jobId: draft.jobId,
+        status: "failed",
+        attempt: 1,
+        managedFileId: "mf-1",
+        errorCode: "FILE_STORAGE_FAILED",
+      });
+      expect(failed.canRetry).toBe(true);
+      const unknown = updateJobRecord({
+        jobId: draft.jobId,
+        status: "awaiting_confirmation",
+        attempt: 2,
+        expectedAttempt: 1,
+        phase: "confirming",
+      });
+      expect(unknown).toMatchObject({ canCancel: false, canRetry: false });
+      expect(unknown.canQueryRemoteStatus).toBe(false);
+      const pausedUnknown = updateJobRecord({
+        jobId: draft.jobId,
+        status: "interrupted",
+        attempt: 2,
+      });
+      expect(pausedUnknown.canRetry).toBe(false);
+      const invalid = updateJobRecord({
+        jobId: draft.jobId,
+        status: "failed",
+        attempt: 2,
+        phase: null,
+        errorCode: "FILE_UPLOAD_CONTENT_UNREADABLE",
+      });
+      expect(invalid.canRetry).toBe(false);
+      const cancelling = updateJobRecord({
+        jobId: draft.jobId,
+        status: "awaiting_confirmation",
+        attempt: 3,
+        expectedAttempt: 2,
+        phase: "cancelling",
+        remoteIngestionJobId: "remote-1",
+      });
+      expect(cancelling).toMatchObject({ canCancel: false, canRetry: false });
+      expect(cancelling.canQueryRemoteStatus).toBe(true);
+    } finally {
+      db.close();
+    }
   });
 });

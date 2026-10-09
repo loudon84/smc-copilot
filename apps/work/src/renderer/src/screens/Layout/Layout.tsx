@@ -874,7 +874,7 @@ function Layout(): React.JSX.Element {
                   executionMode={run.executionMode}
                   initialMessages={run.seed}
                   initialSessionId={run.sessionId}
-                  active={run.runId === activeRunId}
+                  active={view === "chat" && run.runId === activeRunId}
                   profile={run.profile}
                   onNewChat={handleNewChat}
                   onOpenDiagnose={(section?: string) =>

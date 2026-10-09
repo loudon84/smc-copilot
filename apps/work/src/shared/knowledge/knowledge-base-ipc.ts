@@ -396,7 +396,10 @@ export interface HermesKnowledgeBasesAPI {
   updateBuildProfile(
     input: KnowledgeUpdateBuildProfileInput,
   ): Promise<KnowledgeBuildProfileView>;
-  startBuild(input: KnowledgeStartBuildInput): Promise<KnowledgeBuildJobSnapshot>;
+  /** Null means no additional build job was scheduled (e.g. ingestion-owned chunk). */
+  startBuild(
+    input: KnowledgeStartBuildInput,
+  ): Promise<KnowledgeBuildJobSnapshot | null>;
   getBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
   retryBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
   watchBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;

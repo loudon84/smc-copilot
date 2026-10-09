@@ -3,17 +3,10 @@
  */
 
 import { createHash, randomUUID } from "crypto";
-import {
-  copyFileSync,
-  createReadStream,
-  existsSync,
-  mkdirSync,
-} from "fs";
+import { constants, createReadStream, existsSync, mkdirSync } from "fs";
+import { copyFile, rename, stat, unlink } from "fs/promises";
 import { join } from "path";
-import {
-  clearStagedAttachments,
-  stageAttachment,
-} from "../attachment-staging";
+import { clearStagedAttachments, stageAttachment } from "../attachment-staging";
 import { profileHome } from "../utils";
 import { FilePlatformError } from "./file-security";
 
@@ -63,11 +56,9 @@ export function hashFileStream(filePath: string): Promise<string> {
     });
     stream.on("error", (err) => {
       reject(
-        FilePlatformError.fromCode(
-          "FILE_READ_FAILED",
-          "Failed to hash file",
-          { detail: err instanceof Error ? err.message : String(err) },
-        ),
+        FilePlatformError.fromCode("FILE_READ_FAILED", "Failed to hash file", {
+          detail: err instanceof Error ? err.message : String(err),
+        }),
       );
     });
     stream.on("end", () => {
@@ -97,18 +88,84 @@ export async function storeManagedCopy(
   const dir = join(layout.objects, prefix);
   ensureDir(dir);
   const target = join(dir, normalized);
-  if (!existsSync(target)) {
+  const storageError = (err: unknown): FilePlatformError =>
+    FilePlatformError.fromCode(
+      "FILE_STORAGE_FAILED",
+      "Failed to copy file into managed storage",
+      {
+        detail:
+          err &&
+          typeof err === "object" &&
+          "code" in err &&
+          typeof err.code === "string"
+            ? err.code
+            : undefined,
+      },
+    );
+  try {
+    const existing = await stat(target);
+    if (existing.isFile()) return target;
+    throw storageError(undefined);
+  } catch (err) {
+    if (
+      !(
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        err.code === "ENOENT"
+      )
+    )
+      throw storageError(err);
+  }
+  const temporary = join(dir, `.${normalized}-${randomUUID()}.tmp`);
+  let cleanupTemporary = true;
+  try {
     try {
-      copyFileSync(sourcePath, target);
+      await copyFile(sourcePath, temporary, constants.COPYFILE_EXCL);
     } catch (err) {
-      throw FilePlatformError.fromCode(
-        "FILE_STORAGE_FAILED",
-        "Failed to copy file into managed storage",
-        { detail: err instanceof Error ? err.message : String(err) },
-      );
+      // An exclusive-copy collision belongs to another writer.
+      if (
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        err.code === "EEXIST"
+      )
+        cleanupTemporary = false;
+      throw err;
+    }
+    try {
+      await rename(temporary, target);
+    } catch (err) {
+      let reusable = false;
+      try {
+        reusable =
+          (await stat(target)).isFile() &&
+          (await hashFileStream(target)) === normalized;
+      } catch {
+        reusable = false;
+      }
+      if (!reusable) throw err;
+    }
+    return target;
+  } catch (err) {
+    throw storageError(err);
+  } finally {
+    if (cleanupTemporary) {
+      try {
+        await unlink(temporary);
+      } catch (err) {
+        if (
+          !(
+            err &&
+            typeof err === "object" &&
+            "code" in err &&
+            err.code === "ENOENT"
+          )
+        )
+          throw storageError(err);
+      }
     }
   }
-  return target;
 }
 
 /** Write clipboard bytes through the existing staging helper. */
@@ -121,10 +178,7 @@ export function stageClipboardBytes(
 }
 
 /** Allocate a unique temp path under the profile files temp directory. */
-export function allocateTempPath(
-  filename: string,
-  profile?: string,
-): string {
+export function allocateTempPath(filename: string, profile?: string): string {
   const layout = ensureFilesLayout(profile);
   const safe = (filename || "file").replace(/[<>:"/\\|?*\x00-\x1F]/g, "_");
   return join(layout.temp, `${randomUUID()}-${safe.slice(0, 120)}`);

@@ -96,7 +96,7 @@ interface UseChatActionsResult {
     question: string,
     attachments?: Attachment[],
   ) => Promise<void>;
-  handleAbort: () => void;
+  handleAbort: () => Promise<void>;
   handleApprove: () => void;
   handleDeny: () => void;
 }
@@ -445,9 +445,9 @@ export function useChatActions({
     [runBackground],
   );
 
-  const handleAbort = useCallback(() => {
-    abortDashboard?.();
-    window.hermesAPI.abortChat(runId);
+  const handleAbort = useCallback(async (): Promise<void> => {
+    await abortDashboard?.();
+    await window.hermesAPI.abortChat(runId);
     activeTurnRef.current = null;
     setIsLoading(false);
     setTimeout(() => chatInputRef.current?.focus(), 50);

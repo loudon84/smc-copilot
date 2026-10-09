@@ -26,6 +26,8 @@ Main reads `desktop.files.*` from profile `config.yaml` via [[src/main/files/fil
 
 Per-profile layout lives at `profileHome/desktop/files/{objects,parsed,previews,temp}/file-index.db`. [[src/main/files/file-store.ts#ensureFilesLayout]] creates it; content-hash dedup copies go under `objects/<prefix>/<hash>`. Clipboard staging reuses [[src/main/attachment-staging.ts#stageAttachment]].
 
+[[src/main/files/file-store.ts#storeManagedCopy]] copies asynchronously into a unique temporary file in the object's directory and publishes the completed object with an asynchronous rename. Concurrent imports can reuse a completed content-addressed object without observing a partial copy; failed operations clean up their exact temporary path. After copying, import rechecks the profile/hash record before its synchronous upsert to preserve one managed ID and separate consumer associations.
+
 ## Association store
 
 [[src/main/files/file-association-store.ts]] owns `managed_files`, `file_associations`, `parsed_documents`, `file_chunks` (+ FTS5 when available) in `file-index.db`, not `state.db`. Reference counting uses [[src/main/files/file-association-store.ts#countAssociations]].
@@ -48,9 +50,15 @@ After send, [[src/main/files/persist-managed-message-associations.ts#persistMana
 
 Agent paths register only under profile home or the session context folder via [[src/main/files/file-service.ts#registerAgentOutputFile]].
 
+[[knowledge-upload#Batch selection and import]] reuses the Main-only multi-file picker and import pipeline. Knowledge imports retain a managed copy when managed storage is enabled, while Chat keeps its own picker-copy preference.
+
+Knowledge imports defer local parsing and FTS indexing instead of scheduling them during remote upload. Chat path imports and clipboard imports continue scheduling local parsing. Existing content checks, stored hashes, and Knowledge identity/attempt checks remain in place.
+
 ## File preview
 
-[[src/main/files/file-preview-service.ts#getPreviewDescriptor]] builds Renderer-safe [[src/shared/files/file-preview.ts#FilePreviewDescriptor]]s with capped streamed reads — never buffering an entire large file in Main.
+[[src/main/files/file-preview-service.ts#getPreviewDescriptor]] builds Renderer-safe [[src/shared/files/file-preview.ts#FilePreviewDescriptor]]s with bounded text reads and per-profile file lookup.
+
+Local Office previews reuse cached parsed content. On a cache miss they check the actual file size asynchronously against the requested profile's `maxParseMb`, then request [[src/main/files/file-parse-service.ts#parseFile]] with its normal concurrency and parser limits. Oversized files and parsing failures retain the unsupported fallback. Image/PDF/text and remote preview paths keep their existing behavior.
 
 For Expert remote resources (`locality: remote`), Main uses Gateway Provider Preview JSON or authorized download into a Main-only preview cache served as `hermes-file-preview://{fileId}` — Renderer never receives absolute cache paths, JWT, or Provider URLs. Offline cached copy is off by default.
 
@@ -87,6 +95,8 @@ Built-ins: text/markdown/code, MarkItDown (pdf/office when configured), Office (
 ## File job queue
 
 [[src/main/files/jobs/file-job-queue.ts#FileJobQueue]] bounds parse concurrency (default 2) and broadcasts [[src/shared/files/file-job.ts#FileJobEvent]] via `file-job:event`. Import uses [[src/main/files/jobs/parse-file-job.ts#scheduleParseJob]]; Composer subscribes through `hermesAPI.files.onFileJobEvent`.
+
+The queue limits execution in Main; it does not move synchronous parser or indexing work to a worker thread. Knowledge uploads skip automatic local parsing, while an explicit Office preview can request it on demand.
 
 ## Index and session context
 

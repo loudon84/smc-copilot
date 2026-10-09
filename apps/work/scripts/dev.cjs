@@ -41,9 +41,9 @@ function withKnowledgeMode(env) {
 }
 
 // Main process: attach debugger at chrome://inspect or VS Code "Attach to 9229"
-console.log("[dev] electron-vite dev --inspect=9229 --sourcemap (Main attach port 9229)");
+console.log("[dev] electron-vite dev --watch --inspect=9229 --sourcemap (Main attach port 9229)");
 
-const child = spawn("npx", ["electron-vite", "dev", "--inspect=9229", "--sourcemap"], {
+const child = spawn("npx", ["electron-vite", "dev", "--watch", "--inspect=9229", "--sourcemap"], {
   cwd: projectRoot,
   stdio: "inherit",
   shell: true,

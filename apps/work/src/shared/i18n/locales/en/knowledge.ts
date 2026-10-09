@@ -13,12 +13,14 @@ export default {
     pagePendingDescription:
       "This Knowledge page is ready for Work-native content.",
     paramsLabel: "Selected",
-    mockOperableHint: "Mock mode can show synthetic Knowledge data from Facade.",
+    mockOperableHint:
+      "Mock mode can show synthetic Knowledge data from Facade.",
     back: "Back",
     errorTitle: "Something went wrong",
     notFoundTitle: "Not found",
     notFoundDescription: "The selected Knowledge item is not available.",
-    mutationsDisabled: "Editing is unavailable until Knowledge is authenticated and available.",
+    mutationsDisabled:
+      "Editing is unavailable until Knowledge is authenticated and available.",
     authRequired:
       "Sign in with your Work account so Knowledge can call the local service.",
     department: "Department",
@@ -85,6 +87,7 @@ export default {
     descriptionLabel: "Description",
     uploadAction: "Upload files",
     tabDocuments: "Documents",
+    tabUploads: "Upload jobs",
     tabSettings: "Settings",
     tabMembers: "Members",
     tabRuntime: "Runtime",
@@ -259,13 +262,135 @@ export default {
     listTitle: "Upload jobs",
     emptyList: "No upload jobs yet.",
     pickerLabel: "Choose files",
+    dropHint:
+      "Drop files here, or choose files below (folders are not supported)",
+    dropRequiresRestart:
+      "Restart the desktop app to enable drag and drop. File selection still works.",
+    pickingLabel: "Choosing files…",
     pickerBlocked:
       "File upload is unavailable until a Knowledge provider is configured.",
     pickerDisabledProvider:
       "File upload is unavailable until Knowledge is available.",
+    pickerRequiresRestart:
+      "Restart the desktop app to load the updated file upload interface.",
     cancelLabel: "Cancel",
+    deleteLabel: "Delete record",
+    deleteHint: "Removes this upload task record only; files are not deleted.",
+    deleteRequiresRestart: "Restart the desktop app to enable task deletion.",
+    deletingLabel: "Deleting…",
+    deleteConflict:
+      "This task changed or was already deleted. Reopen Upload jobs to update the list.",
+    deleteError: "Could not delete this task. Try again later.",
     retryLabel: "Retry",
-    progressLabel: "Progress",
+    progressLabel: "Processing stage progress",
+    cancellingLabel: "Cancelling…",
+    retryingLabel: "Retrying…",
+    batchLabel: "Batch",
+    earlierUploads: "Earlier uploads",
+    cancelBatchLabel: "Cancel all unfinished in this batch",
+    retryBatchLabel: "Retry all recoverable failures in this batch",
+    fullBatchScope:
+      "Batch actions apply to every eligible file in this batch, including files hidden by filters.",
+    queryLabel: "Query service status",
+    queryingLabel: "Querying service status…",
+    reloadLabel: "Reload local jobs",
+    moreActionsLabel: "More actions",
+    reloadingLabel: "Loading jobs…",
+    reloadDone: "Local jobs loaded.",
+    reconnectLabel: "Retry connection",
+    reconnectCheckingLabel: "Checking connection…",
+    reconnectDone: "Connection check finished.",
+    reconnectUnavailable: "Connection checked; Knowledge remains unavailable.",
+    queryNone: "No remote jobs are eligible for a status check.",
+    queryNoRemoteId:
+      "Some unconfirmed uploads have no remote job ID, so their status cannot be queried. Check the server record before uploading those files again.",
+    queryFailed: "Service status check failed. Try again later.",
+    queryPartial: "Some service status checks failed.",
+    queryChanged: "Service status updated.",
+    queryUnchanged: "Status checked; no job state changed.",
+    queryLegacy:
+      "Job list read. Restart the desktop app for detailed check results.",
+    queryCounts: "Confirmed/attempted:",
+    lastRemoteConfirmed: "Last successful service sync",
+    notRemoteConfirmed: "No successful service sync yet",
+    detailsLabel: "Details",
+    errorCodeLabel: "Error code",
+    progressHint:
+      "This percentage is returned by the service. It does not predict remaining time or indicate completion.",
+    stagesLabel: "Upload stages",
+    stages: {
+      check: "Check file",
+      upload: "Upload",
+      process: "Parse and validate",
+      complete: "Added to base",
+    },
+    searchPlaceholder: "Search file names…",
+    filterLabel: "Filter upload status",
+    filters: {
+      all: "All jobs",
+      inProgress: "In progress",
+      needsAttention: "Needs attention",
+      completed: "Completed",
+    },
+    noMatches: "No files match the current search and filter.",
+    batchNoMatches: "No files in this batch match the current filter.",
+    clearFilters: "Clear filters",
+    showBatchLabel: "Show files",
+    hideBatchLabel: "Hide files",
+    showMoreFiles: "Show more files",
+    viewFilesLabel: "View knowledge base files",
+    authError: "Sign in with your Work account, then reopen Upload jobs.",
+    identityChanged:
+      "The account or profile changed. Reopen the current knowledge base and check its tasks.",
+    contractError:
+      "The service returned an unrecognized result. Check the server record before uploading this file again.",
+    serviceError:
+      "The service could not be reached. Task status updates resume when the connection returns. Do not upload an uncertain file again.",
+    partialSuccess: "Partially successful",
+    awaitingHint:
+      "The remote result is still unknown. Do not upload this file again until it is confirmed.",
+    remoteResultUnknown:
+      "The upload was interrupted before its remote result could be confirmed. Do not upload this file again until the server record is checked.",
+    localImportInterrupted:
+      "Local file import was interrupted. Select the file again to start a new upload.",
+    ingestionFailed:
+      "The server could not process this file. Check the error code and file before retrying.",
+    fileTooLarge: "This file exceeds the upload size limit.",
+    fileReselect:
+      "The local file is missing, unreadable, or changed. Choose it again.",
+    fileForbidden:
+      "This file cannot be uploaded with the current permissions or file policy.",
+    fileConflict: "A conflicting file already exists in this knowledge base.",
+    uploadRejected:
+      "The service rejected this upload. Check the file and its details before choosing it again.",
+    fileError: "This file could not be processed.",
+    summary: {
+      total: "Total",
+      queued: "Queued",
+      inProgress: "In progress",
+      completed: "Added to base",
+      failed: "Failed",
+      cancelled: "Cancelled",
+      awaitingConfirmation: "Awaiting confirmation",
+    },
+    status: {
+      draft: "Waiting to upload",
+      queued: "Waiting to upload",
+      importing: "Checking local file",
+      uploading: "Uploading",
+      processing: "Processing",
+      waiting_parse: "Waiting to parse",
+      parsing: "Parsing",
+      validating: "Validating parsed content",
+      confirming: "Confirming remote result",
+      cancelling: "Confirming cancellation",
+      awaiting_confirmation: "Awaiting confirmation",
+      completed: "Added to base",
+      failed: "Failed",
+      interrupted: "Interrupted",
+      cancelled: "Cancelled",
+      blocked_provider_unavailable: "Knowledge unavailable",
+    },
     targetBase: "Target base",
     drawerTitle: "Upload to",
     lockedTarget: "This upload is locked to the current knowledge base.",
@@ -275,6 +400,41 @@ export default {
       "Content cannot be read as its declared type; upload forbidden",
   },
   chat: {
+    loadingHistory: "Loading conversation history…",
+    loadMore: "Load more conversations",
+    listFailed:
+      "Conversation history could not be refreshed. Previously loaded conversations are still available.",
+    retry: "Retry",
+    retryConversation: "Retry conversation recovery",
+    bindingMissing:
+      "This conversation's knowledge binding could not be found. Retry recovery or choose another conversation.",
+    scopeConflict:
+      "This conversation belongs to a different profile. Switch to its profile to continue.",
+    setInactive:
+      "This knowledge set is no longer active. You can read this conversation, but sending is disabled.",
+    setMissing:
+      "This knowledge set could not be found. You can read this conversation, but sending is disabled.",
+    serviceUnavailable:
+      "The knowledge service could not be reached. Retry when the connection is available.",
+    historyFailed:
+      "The conversation's messages could not be loaded. Retry to recover them.",
+    stopFailed:
+      "The conversation could not be stopped. Please retry before deleting it.",
+    status: {
+      running: "Running",
+      waiting: "Waiting for your response",
+      completed: "Completed",
+      failed: "Failed",
+      stopping: "Stopping…",
+      stopped: "Stopped",
+    },
+    newKnowledgeChat: "New knowledge chat",
+    draftSession: "Unsent draft",
+    restoringSession: "Restoring conversation…",
+    stopBeforeDelete: "Stop this conversation before deleting it.",
+    deleteSession: "Delete {{title}}",
+    deleteConfirm: 'Delete knowledge chat "{{title}}"?\nThis cannot be undone.',
+    deleteFailed: "Failed to delete session: {{message}}",
     title: "Knowledge Chat",
     description:
       "Ask questions against knowledge sets. This view does not start Work Chat or Skill Run.",

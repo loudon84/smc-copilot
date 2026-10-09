@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import knowledgeEn from "../src/shared/i18n/locales/en/knowledge";
 import {
@@ -8,15 +15,22 @@ import {
   type KnowledgePageId,
 } from "../src/renderer/src/screens/Knowledge/knowledge-route-descriptor";
 import { KnowledgePages } from "../src/renderer/src/screens/Knowledge/KnowledgePages";
+import { KnowledgeView } from "../src/renderer/src/screens/Knowledge/KnowledgeView";
+import { createKnowledgeRouteScope } from "../src/renderer/src/screens/Knowledge/knowledge-route-scope";
+import type { DesktopAuthState } from "../src/shared/auth/auth-contract";
 import { asChatWindowApi } from "./knowledge-chat-window";
 import type {
   HermesKnowledgeFacadeAPI,
   KnowledgeCapabilitySnapshot,
   KnowledgeModeSnapshot,
+  KnowledgeJobSnapshot,
 } from "../src/shared/knowledge/knowledge-job-ipc";
 import type { HermesKnowledgeBasesAPI } from "../src/shared/knowledge/knowledge-base-ipc";
 import type { HermesKnowledgeSetsAPI } from "../src/shared/knowledge/knowledge-set-ipc";
-import { makeBasesApi, unusedKnowledgeBaseOps } from "./helpers/knowledge-bases-api";
+import {
+  makeBasesApi,
+  unusedKnowledgeBaseOps,
+} from "./helpers/knowledge-bases-api";
 import { makeSetsApi } from "./helpers/knowledge-sets-api";
 
 vi.mock("../src/renderer/src/components/useI18n", () => ({
@@ -484,5 +498,457 @@ describe("Knowledge page host (V01)", () => {
       expect(screen.getByTestId("knowledge-set-detail")).toBeTruthy();
     });
     expect(screen.queryByTestId("knowledge-sets-page")).toBeNull();
+  });
+
+  it("rechecks host and detail capability so the file picker works after the service recovers", async () => {
+    const bases = makeBasesApi([
+      {
+        id: "kb-recovered",
+        name: "Alpha",
+        description: null,
+        status: "active",
+        visibility: "private",
+      },
+    ]);
+    mockJobs({ bases });
+    const api = window.hermesAPI.knowledgeJobs;
+    let available = false;
+    api.getCapability = vi.fn(
+      async (): Promise<KnowledgeCapabilitySnapshot> => ({
+        available,
+        status: available ? "available" : "blocked_provider_unavailable",
+      }),
+    );
+    api.pickAndUpload = vi.fn(async () => ({ batchId: null, jobs: [] }));
+    const scope = createKnowledgeRouteScope({
+      initial: { page: "bases", params: { knowledgeBaseId: "kb-recovered" } },
+    });
+    render(React.createElement(KnowledgeView, { active: true, scope }));
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-base-recheck")).toBeTruthy(),
+    );
+    expect(screen.getByTestId("knowledge-base-upload")).toBeDisabled();
+    available = true;
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("knowledge-base-recheck")),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("knowledge-base-upload")).not.toBeDisabled();
+      expect(
+        screen.getByTestId("knowledge-page-bases").getAttribute("data-state"),
+      ).toBe("empty");
+    });
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("knowledge-base-upload")),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("knowledge-upload-picker")).not.toBeDisabled(),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByTestId("knowledge-upload-picker")),
+    );
+    expect(api.pickAndUpload).toHaveBeenCalledWith({
+      knowledgeBaseId: "kb-recovered",
+    });
+  });
+
+  it("reconciles missed completion when the Knowledge view becomes active with the drawer closed", async () => {
+    const files = [
+      {
+        id: "original-file",
+        knowledgeBaseId: "kb-active",
+        fileName: "original.pdf",
+        status: "active" as const,
+      },
+    ];
+    const bases = makeBasesApi(
+      [
+        {
+          id: "kb-active",
+          name: "Alpha",
+          description: null,
+          status: "active",
+          visibility: "private",
+        },
+      ],
+      { files },
+    );
+    mockJobs({ capability: { available: true, status: "available" }, bases });
+    const api = window.hermesAPI.knowledgeJobs;
+    let localJobs: KnowledgeJobSnapshot[] = [];
+    api.listSnapshots = vi.fn(async () => localJobs);
+    const listFiles = vi.spyOn(bases, "listFiles");
+    const scope = createKnowledgeRouteScope({
+      initial: { page: "bases", params: { knowledgeBaseId: "kb-active" } },
+    });
+    const view = render(
+      React.createElement(KnowledgeView, { active: true, scope }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("knowledge-base-file-original-file"),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByTestId("knowledge-upload-panel")).toBeNull();
+    await act(async () =>
+      view.rerender(
+        React.createElement(KnowledgeView, { active: false, scope }),
+      ),
+    );
+    files.push({
+      id: "completed-file",
+      knowledgeBaseId: "kb-active",
+      fileName: "completed.pdf",
+      status: "active",
+    });
+    const completed: KnowledgeJobSnapshot = {
+      jobId: "missed-completion",
+      knowledgeBaseId: "kb-active",
+      status: "completed",
+      attempt: 1,
+      partition: {
+        workProfileId: "default",
+        authSubject: "user-1",
+        tenantScope: { kind: "personal" },
+      },
+      dataMode: "provider",
+      synthetic: false,
+      revision: 2,
+      updatedAt: "2026-10-08T00:00:00Z",
+    };
+    localJobs = [completed];
+    const callsBeforeReturn = listFiles.mock.calls.length;
+    await act(async () =>
+      view.rerender(
+        React.createElement(KnowledgeView, { active: true, scope }),
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("knowledge-base-file-completed-file"),
+      ).toBeTruthy(),
+    );
+    expect(listFiles.mock.calls.length).toBe(callsBeforeReturn + 1);
+    expect(api.listSnapshots).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("knowledge-upload-panel")).toBeNull();
+  });
+
+  it.each(["profile", "account", "tenant", "logout"] as const)(
+    "clears cached files and uploads on %s change and ignores old asynchronous snapshots",
+    async (change) => {
+      let authState: DesktopAuthState = {
+        authenticated: true,
+        endpointConfig: null,
+        expiresAt: null,
+        user: { id: "user-1", username: "alice", tenantId: "tenant-1" },
+      };
+      let authChanged!: (state: DesktopAuthState) => void;
+      const files = [
+        {
+          id: "old-source",
+          knowledgeBaseId: "kb-1",
+          fileName: "old-source.pdf",
+          status: "active" as const,
+        },
+      ];
+      const bases = makeBasesApi(
+        [
+          {
+            id: "kb-1",
+            name: "Alpha",
+            description: null,
+            status: "active",
+            visibility: "private",
+          },
+        ],
+        { files },
+      );
+      mockJobs({
+        capability: { available: true, status: "available" },
+        mode: { dataMode: "provider", allowSyntheticData: false },
+        bases,
+      });
+      window.desktopAuth.getState = async () => authState;
+      window.desktopAuth.onStateChanged = (listener) => {
+        authChanged = listener;
+        return () => undefined;
+      };
+      const api = window.hermesAPI.knowledgeJobs;
+      const callbacks = new Set<(snapshot: KnowledgeJobSnapshot) => void>();
+      api.onSnapshotChanged = (listener) => {
+        callbacks.add(listener);
+        return () => {
+          callbacks.delete(listener);
+        };
+      };
+      const oldJob: KnowledgeJobSnapshot = {
+        jobId: "old-job",
+        knowledgeBaseId: "kb-1",
+        status: "queued",
+        attempt: 1,
+        partition: {
+          workProfileId: "profile-a",
+          authSubject: "user-1",
+          tenantScope: { kind: "tenant", tenantId: "tenant-1" },
+        },
+        dataMode: "provider",
+        synthetic: false,
+        progress: 0,
+        revision: 1,
+        batchId: "old-batch",
+        fileSummary: { displayName: "old-upload.pdf" },
+        updatedAt: "2026-01-01T00:00:00Z",
+      };
+      const newJob = {
+        ...oldJob,
+        jobId: "new-job",
+        batchId: "new-batch",
+        fileSummary: { displayName: "new-upload.pdf" },
+      };
+      let resolveOldList!: (jobs: KnowledgeJobSnapshot[]) => void;
+      api.listSnapshots = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<KnowledgeJobSnapshot[]>((resolve) => {
+              resolveOldList = resolve;
+            }),
+        )
+        .mockResolvedValue([newJob]);
+      const scope = createKnowledgeRouteScope({
+        initial: { page: "bases", params: { knowledgeBaseId: "kb-1" } },
+      });
+      const props = { active: true, profile: "profile-a", scope };
+      const view = render(React.createElement(KnowledgeView, props));
+      await waitFor(() =>
+        expect(
+          screen.getByTestId("knowledge-base-file-old-source"),
+        ).toBeTruthy(),
+      );
+      await act(async () =>
+        fireEvent.click(screen.getByTestId("knowledge-base-upload")),
+      );
+      await waitFor(() => expect(resolveOldList).toBeTruthy());
+      const oldCallbacks = [...callbacks];
+      await act(async () => {
+        for (const callback of callbacks) callback(oldJob);
+      });
+      await waitFor(() =>
+        expect(
+          screen.getByTestId("knowledge-upload-batch-old-batch"),
+        ).toBeTruthy(),
+      );
+
+      await act(async () =>
+        authChanged({ ...authState, expiresAt: "2099-01-01T00:00:00Z" }),
+      );
+      expect(
+        screen.getByTestId("knowledge-upload-batch-old-batch"),
+      ).toBeTruthy();
+      files.length = 0;
+      if (change === "profile") {
+        await act(async () =>
+          view.rerender(
+            React.createElement(KnowledgeView, {
+              ...props,
+              profile: "profile-b",
+            }),
+          ),
+        );
+      } else {
+        authState =
+          change === "logout"
+            ? { ...authState, authenticated: false, user: null }
+            : {
+                ...authState,
+                user: {
+                  ...authState.user!,
+                  ...(change === "account"
+                    ? { id: "user-2" }
+                    : { tenantId: "tenant-2" }),
+                },
+              };
+        if (change === "logout")
+          api.getCapability = async () => ({
+            available: false,
+            status: "auth_required",
+          });
+        await act(async () => authChanged(authState));
+      }
+      expect(
+        screen.queryByTestId("knowledge-upload-batch-old-batch"),
+      ).toBeNull();
+      expect(screen.queryByTestId("knowledge-base-file-old-source")).toBeNull();
+      await act(async () => {
+        resolveOldList([oldJob]);
+        for (const callback of oldCallbacks)
+          callback({ ...oldJob, revision: 2, status: "completed" });
+      });
+      expect(document.body.textContent).not.toContain("old-upload.pdf");
+      expect(document.body.textContent).not.toContain("old-source.pdf");
+      if (change === "logout") {
+        await waitFor(() =>
+          expect(
+            screen
+              .getByTestId("knowledge-page-bases")
+              .getAttribute("data-state"),
+          ).toBe("unavailable"),
+        );
+      } else {
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("knowledge-base-upload"),
+          ).not.toBeDisabled(),
+        );
+        await act(async () =>
+          fireEvent.click(screen.getByTestId("knowledge-base-upload")),
+        );
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("knowledge-upload-batch-new-batch"),
+          ).toBeTruthy(),
+        );
+        expect(screen.queryByTestId("knowledge-upload-job-old-job")).toBeNull();
+      }
+    },
+  );
+
+  it.each([null, "session-a"])(
+    "retains the actual draft and conversation across internal page switches (session %s)",
+    async (sessionId) => {
+      window.hermesAPI.getSessionKnowledgeContext = vi.fn(async (id) => ({
+        sessionId: id,
+        profileId: "default",
+        sessionKind: "kb-set",
+        executionProvider: "hermes-chat",
+        knowledgeSetId: "set-a",
+      }));
+      const params = {
+        ...(sessionId ? { sessionId } : {}),
+        knowledgeSetId: "set-a",
+      };
+      const scope = createKnowledgeRouteScope({
+        initial: { page: "chat", params },
+      });
+      await act(async () => {
+        render(React.createElement(KnowledgeView, { active: true, scope }));
+      });
+      const input = document.querySelector<HTMLTextAreaElement>(
+        "textarea.chat-input",
+      )!;
+      expect(input).toBeTruthy();
+      fireEvent.change(input, {
+        target: { value: "keep this unsent question" },
+      });
+      const original = document.querySelector("[data-knowledge-run]");
+      for (const page of ["documents", "sets", "chat"]) {
+        await act(async () => {
+          fireEvent.click(screen.getByTestId(`knowledge-nav-${page}`));
+        });
+        if (page !== "chat")
+          fireEvent.keyDown(window, { key: "n", ctrlKey: true });
+      }
+      expect(document.querySelector("textarea.chat-input")).toBe(input);
+      expect(input).toHaveValue("keep this unsent question");
+      expect(document.querySelectorAll("[data-knowledge-run]")).toHaveLength(1);
+      expect(document.querySelector("[data-knowledge-run]")).toBe(original);
+      expect(scope.getSnapshot().current).toEqual({ page: "chat", params });
+    },
+  );
+
+  it("keeps background session binding on the documents page and restores it on return", async () => {
+    let started!: Parameters<typeof window.hermesAPI.onChatSessionStarted>[0];
+    window.hermesAPI.onChatSessionStarted = vi.fn((listener) => {
+      started = listener;
+      return () => undefined;
+    });
+    window.hermesAPI.getSessionKnowledgeContext = vi.fn(async (id) => ({
+      sessionId: id,
+      profileId: "default",
+      sessionKind: "kb-set",
+      executionProvider: "hermes-chat",
+      knowledgeSetId: "set-a",
+    }));
+    const scope = createKnowledgeRouteScope({
+      initial: { page: "chat", params: { knowledgeSetId: "set-a" } },
+    });
+    await act(async () => {
+      render(React.createElement(KnowledgeView, { active: true, scope }));
+    });
+    const original = document.querySelector<HTMLElement>(
+      "[data-knowledge-run]",
+    )!;
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-nav-documents"));
+    });
+    await act(async () => {
+      started(original.dataset.knowledgeRun!, "session-created");
+    });
+    expect(scope.getSnapshot().current.page).toBe("documents");
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-nav-chat"));
+    });
+    expect(scope.getSnapshot().current).toEqual({
+      page: "chat",
+      params: { sessionId: "session-created", knowledgeSetId: "set-a" },
+    });
+    expect(document.querySelector("[data-knowledge-run]")).toBe(original);
+  });
+
+  it("clears the chat draft and route history on profile change", async () => {
+    const scope = createKnowledgeRouteScope({
+      initial: { page: "chat", params: { knowledgeSetId: "set-a" } },
+    });
+    const props = { active: true, profile: "profile-a", scope };
+    const view = render(React.createElement(KnowledgeView, props));
+    await waitFor(() =>
+      expect(document.querySelector("textarea.chat-input")).toBeTruthy(),
+    );
+    const input = document.querySelector<HTMLTextAreaElement>(
+      "textarea.chat-input",
+    )!;
+    fireEvent.change(input, { target: { value: "private draft" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-nav-documents"));
+    });
+    await act(async () => {
+      view.rerender(
+        React.createElement(KnowledgeView, { ...props, profile: "profile-b" }),
+      );
+    });
+    expect(scope.getSnapshot().backStack).toHaveLength(0);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("knowledge-nav-chat"));
+    });
+    expect(document.querySelector("textarea.chat-input")).not.toBe(input);
+    expect(document.querySelector("textarea.chat-input")).toHaveValue("");
+    expect(scope.getSnapshot().current.params).toEqual({});
+  });
+
+  it("does not restore an old account when the initial auth read arrives after an identity push", async () => {
+    let resolveAuth!: (state: DesktopAuthState) => void;
+    let authChanged!: (state: DesktopAuthState) => void;
+    window.desktopAuth.getState = () =>
+      new Promise((resolve) => {
+        resolveAuth = resolve;
+      });
+    window.desktopAuth.onStateChanged = (listener) => {
+      authChanged = listener;
+      return () => undefined;
+    };
+    render(React.createElement(KnowledgeView, { active: false }));
+    const latest: DesktopAuthState = {
+      authenticated: true,
+      endpointConfig: null,
+      expiresAt: null,
+      user: { id: "new-user", username: "new" },
+    };
+    await act(async () => authChanged(latest));
+    await act(async () =>
+      resolveAuth({ ...latest, user: { id: "old-user", username: "old" } }),
+    );
+    expect(
+      screen.getByTestId("knowledge-view").getAttribute("data-auth-subject"),
+    ).toBe("new-user");
   });
 });

@@ -24,6 +24,7 @@ describe("useKnowledgeChatScope", () => {
       }
     ).hermesAPI = {
       getSessionKnowledgeContext: getBinding,
+      getSessionMessages: vi.fn(async () => []),
       listKbSetSessions: listKb,
       deleteSession,
       knowledgeJobs: { sets: { get: getSet, list: vi.fn() } },
@@ -51,6 +52,96 @@ describe("useKnowledgeChatScope", () => {
       page: "chat",
       params: { knowledgeSetId: "KS-A" },
     });
+  });
+
+  it("loads beyond 50 rows and keeps loaded rows when a later page fails", async () => {
+    const rows = Array.from({ length: 125 }, (_, i) => ({
+      id: `session-${i}`,
+      title: `Conversation ${i}`,
+    }));
+    listKb.mockImplementation(async (_profile, limit) => rows.slice(0, limit));
+    const { result } = renderHook(() =>
+      useKnowledgeChatScope({ params: {}, profile: "default" }),
+    );
+    await waitFor(() => expect(result.current.kbSetSessions).toHaveLength(50));
+    expect(result.current.sessionsHasMore).toBe(true);
+    act(() => {
+      result.current.loadMoreSessions();
+      result.current.loadMoreSessions();
+    });
+    await waitFor(() => expect(result.current.kbSetSessions).toHaveLength(100));
+    expect(listKb).toHaveBeenCalledTimes(2);
+    listKb.mockRejectedValueOnce(new Error("offline"));
+    act(() => result.current.loadMoreSessions());
+    await waitFor(() => expect(result.current.sessionsError).toBe(true));
+    expect(result.current.kbSetSessions).toHaveLength(100);
+    await act(async () => {
+      await result.current.reloadSessions();
+    });
+    expect(result.current.kbSetSessions).toHaveLength(125);
+    expect(result.current.sessionsHasMore).toBe(false);
+    expect(result.current.sessionsError).toBe(false);
+    expect(listKb).toHaveBeenLastCalledWith("default", 151);
+  });
+
+  it("refreshes the loaded window on cache changes and unsubscribes on unmount", async () => {
+    let changed!: Parameters<typeof window.hermesAPI.onSessionCacheChanged>[0];
+    const unsubscribe = vi.fn();
+    window.hermesAPI.onSessionCacheChanged = vi.fn((listener) => {
+      changed = listener;
+      return unsubscribe;
+    });
+    const rows = Array.from({ length: 70 }, (_, i) => ({
+      id: `session-${i}`,
+      title: "Old title",
+    }));
+    listKb.mockImplementation(async (_profile, limit) => rows.slice(0, limit));
+    const { result, unmount } = renderHook(() =>
+      useKnowledgeChatScope({ params: {}, profile: "default" }),
+    );
+    await waitFor(() => expect(result.current.kbSetSessions).toHaveLength(50));
+    act(() => result.current.loadMoreSessions());
+    await waitFor(() => expect(result.current.kbSetSessions).toHaveLength(70));
+    rows[0] = { ...rows[0], title: "Updated title" };
+    await act(async () => {
+      changed({ sessionId: rows[0].id, reason: "updated" });
+    });
+    expect(result.current.kbSetSessions[0].title).toBe("Updated title");
+    expect(result.current.kbSetSessions).toHaveLength(70);
+    expect(listKb).toHaveBeenLastCalledWith("default", 101);
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    const calls = listKb.mock.calls.length;
+    changed({ sessionId: "late", reason: "created" });
+    expect(listKb).toHaveBeenCalledTimes(calls);
+  });
+
+  it("keeps the list and the active conversation when history recovery fails, then retries", async () => {
+    getBinding.mockResolvedValue({
+      sessionId: "A",
+      profileId: "default",
+      sessionKind: "kb-set",
+      knowledgeSetId: "KS-A",
+    });
+    getSet.mockResolvedValue({ status: "active" });
+    listKb.mockResolvedValue([{ id: "A", title: "A" }]);
+    vi.mocked(window.hermesAPI.getSessionMessages).mockRejectedValueOnce(
+      new Error("offline"),
+    );
+    const { result } = renderHook(() =>
+      useKnowledgeChatScope({ params: { sessionId: "A" }, profile: "default" }),
+    );
+    await waitFor(() =>
+      expect(result.current.sendBlockedReason).toBe(
+        "KNOWLEDGE_HISTORY_LOAD_FAILED",
+      ),
+    );
+    expect(result.current.kbSetSessions).toHaveLength(1);
+    expect(result.current.sendBlocked).toBe(true);
+    const id = result.current.activeRunId;
+    act(() => result.current.activateRun(id));
+    await waitFor(() => expect(result.current.phase).toBe("BOUND"));
+    expect(result.current.activeRunId).toBe(id);
   });
 
   it("resumes BOUND when kb-set row and active set exist", async () => {
@@ -117,7 +208,7 @@ describe("useKnowledgeChatScope", () => {
     });
   });
 
-  it("keeps READY when binding missing but route still has knowledgeSetId", async () => {
+  it("blocks a missing binding even when route carries a knowledgeSetId", async () => {
     getBinding.mockResolvedValue(null);
     const { result } = renderHook(() =>
       useKnowledgeChatScope({
@@ -126,10 +217,97 @@ describe("useKnowledgeChatScope", () => {
       }),
     );
     await waitFor(() => {
-      expect(result.current.phase).toBe("READY");
+      expect(result.current.phase).toBe("RESUME_BLOCKED");
     });
     expect(result.current.selectedSetId).toBe("KS-A");
     expect(result.current.sessionId).toBe("pending");
+    expect(result.current.sendBlocked).toBe(true);
+  });
+
+  it("blocks sending until the requested session has finished loading its own history", async () => {
+    getBinding.mockResolvedValue({
+      sessionId: "A",
+      profileId: "default",
+      sessionKind: "kb-set",
+      knowledgeSetId: "KS-A",
+    });
+    getSet.mockResolvedValue({ status: "active" });
+    let finish!: () => void;
+    vi.mocked(window.hermesAPI.getSessionMessages).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve([]);
+        }),
+    );
+    const { result } = renderHook(() =>
+      useKnowledgeChatScope({ params: { sessionId: "A" }, profile: "default" }),
+    );
+    await waitFor(() => expect(finish).toBeTypeOf("function"));
+    expect(result.current.phase).toBe("RESOLVING");
+    expect(result.current.sendBlocked).toBe(true);
+    expect(result.current.runs[0].initialized).toBe(false);
+    await act(async () => {
+      finish();
+    });
+    expect(result.current.phase).toBe("BOUND");
+    expect(result.current.runs[0].initialized).toBe(true);
+  });
+
+  it("ignores old-profile session-list results", async () => {
+    let finish!: (rows: Array<{ id: string; title: string }>) => void;
+    listKb
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValueOnce([{ id: "B", title: "Current profile" }]);
+    const { result, rerender } = renderHook(
+      ({ profile }) => useKnowledgeChatScope({ params: {}, profile }),
+      { initialProps: { profile: "a" } },
+    );
+    rerender({ profile: "b" });
+    await waitFor(() => expect(result.current.kbSetSessions[0]?.id).toBe("B"));
+    await act(async () => {
+      finish([{ id: "A", title: "Old profile" }]);
+    });
+    expect(result.current.kbSetSessions.map((row) => row.id)).toEqual(["B"]);
+  });
+
+  it("rejects deleting a running conversation before calling the API", async () => {
+    const { result } = renderHook(() =>
+      useKnowledgeChatScope({
+        params: { knowledgeSetId: "KS-A" },
+        profile: "default",
+      }),
+    );
+    const id = result.current.activeRunId;
+    act(() => result.current.onLoadingChange(id, true));
+    await expect(result.current.deleteKbSetSession(id)).rejects.toThrow(
+      "KNOWLEDGE_SESSION_RUNNING",
+    );
+    expect(deleteSession).not.toHaveBeenCalled();
+    expect(result.current.runs).toHaveLength(1);
+  });
+
+  it("fails closed after a binding error and retries when reopening the same row", async () => {
+    getBinding.mockRejectedValueOnce(new Error("offline"));
+    const { result } = renderHook(() =>
+      useKnowledgeChatScope({ params: { sessionId: "A" }, profile: "default" }),
+    );
+    await waitFor(() => expect(result.current.phase).toBe("RESUME_BLOCKED"));
+    expect(result.current.sendBlocked).toBe(true);
+    expect(window.hermesAPI.getSessionMessages).not.toHaveBeenCalled();
+    getBinding.mockResolvedValue({
+      sessionId: "A",
+      profileId: "default",
+      sessionKind: "kb-set",
+      knowledgeSetId: "KS-A",
+    });
+    getSet.mockResolvedValue({ status: "active" });
+    act(() => result.current.openSession("A"));
+    await waitFor(() => expect(result.current.phase).toBe("BOUND"));
   });
 
   it("unloads to UNBOUND on profile switch", async () => {

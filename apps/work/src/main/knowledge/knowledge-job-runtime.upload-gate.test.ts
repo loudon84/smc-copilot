@@ -109,6 +109,13 @@ vi.mock("./knowledge-upload-job-store", () => ({
     if (input.status) j.status = input.status;
     if (input.attempt != null) j.attempt = input.attempt;
     if (input.errorCode !== undefined) j.errorCode = input.errorCode;
+    return {
+      ...j,
+      dataMode: "provider",
+      synthetic: false,
+      progress: input.progress ?? 0,
+      updatedAt: new Date().toISOString(),
+    };
   },
   bindJobRemoteIds: () => undefined,
 }));
@@ -168,9 +175,8 @@ describe("runProviderUpload upload-byte gate", () => {
 
   it("rejects unreadable pdf with zero HTTP (A-UBG-002/003)", async () => {
     seedJob("cipher.pdf", Buffer.alloc(32, 0xab));
-    const { runProviderUpload, FILE_UPLOAD_CONTENT_UNREADABLE } = await import(
-      "./knowledge-job-runtime"
-    );
+    const { runProviderUpload, FILE_UPLOAD_CONTENT_UNREADABLE } =
+      await import("./knowledge-job-runtime");
     await runProviderUpload("job-1");
     expect(mockState.uploadCalls).toBe(0);
     const job = mockState.jobs.get("job-1");
@@ -193,9 +199,8 @@ describe("runProviderUpload upload-byte gate", () => {
 
 describe("addFileVersion upload-byte gate helper", () => {
   it("assertUploadBytesReadable rejects bad pdf for A-UBG-006 contract", async () => {
-    const { assertUploadBytesReadable } = await import(
-      "../files/upload-byte-gate"
-    );
+    const { assertUploadBytesReadable } =
+      await import("../files/upload-byte-gate");
     const r = assertUploadBytesReadable("v.pdf", Buffer.from("xxxx"));
     expect(r.status).toBe("REJECT");
   });

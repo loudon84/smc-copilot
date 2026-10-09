@@ -88,16 +88,29 @@ export type KnowledgeHttpProvider = {
   createBase(input: KnowledgeBaseCreateInput): Promise<KnowledgeBaseSnapshot>;
   updateBase(input: KnowledgeBaseUpdateInput): Promise<KnowledgeBaseSnapshot>;
   deleteBase(input: KnowledgeBaseDeleteInput): Promise<void>;
-  listBaseFiles(input: KnowledgeBaseListFilesInput): Promise<KnowledgeBaseFilePage>;
+  listBaseFiles(
+    input: KnowledgeBaseListFilesInput,
+  ): Promise<KnowledgeBaseFilePage>;
   uploadBaseFile(input: {
     knowledgeBaseId: string;
     fileName: string;
     bytes: Uint8Array;
     mimeType?: string;
+    signal?: AbortSignal;
+    timeoutMs?: number;
   }): Promise<ParsedUploadAccepted>;
-  getIngestionJob(jobId: string): Promise<ParsedIngestionJob>;
-  retryIngestionJob(jobId: string): Promise<ParsedIngestionJob>;
-  cancelIngestionJob(jobId: string): Promise<ParsedIngestionJob>;
+  getIngestionJob(
+    jobId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ParsedIngestionJob>;
+  retryIngestionJob(
+    jobId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ParsedIngestionJob>;
+  cancelIngestionJob(
+    jobId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<ParsedIngestionJob>;
   getFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
   listFileVersions(
     input: KnowledgeFileIdInput,
@@ -112,7 +125,9 @@ export type KnowledgeHttpProvider = {
     input: KnowledgeActivateFileVersionInput,
   ): Promise<KnowledgeBaseFileSnapshot>;
   archiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
-  unarchiveFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
+  unarchiveFile(
+    input: KnowledgeFileIdInput,
+  ): Promise<KnowledgeBaseFileSnapshot>;
   reparseFile(input: KnowledgeFileIdInput): Promise<KnowledgeBaseFileSnapshot>;
   deleteFile(input: KnowledgeFileIdInput): Promise<void>;
   /**
@@ -130,7 +145,9 @@ export type KnowledgeHttpProvider = {
   updateBuildProfile(
     input: KnowledgeUpdateBuildProfileInput,
   ): Promise<KnowledgeBuildProfileView>;
-  startBuild(input: KnowledgeStartBuildInput): Promise<KnowledgeBuildJobSnapshot>;
+  startBuild(
+    input: KnowledgeStartBuildInput,
+  ): Promise<KnowledgeBuildJobSnapshot | null>;
   getBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
   retryBuild(input: KnowledgeBuildIdInput): Promise<KnowledgeBuildJobSnapshot>;
   listSets(input?: KnowledgeSetListInput): Promise<KnowledgeSetPage>;
@@ -138,7 +155,9 @@ export type KnowledgeHttpProvider = {
   createSet(input: KnowledgeSetCreateInput): Promise<KnowledgeSetSnapshot>;
   updateSet(input: KnowledgeSetUpdateInput): Promise<KnowledgeSetSnapshot>;
   bindSetBase(input: KnowledgeSetBindBaseInput): Promise<KnowledgeSetSnapshot>;
-  unbindSetBase(input: KnowledgeSetUnbindBaseInput): Promise<KnowledgeSetSnapshot>;
+  unbindSetBase(
+    input: KnowledgeSetUnbindBaseInput,
+  ): Promise<KnowledgeSetSnapshot>;
   listRetrievalProfiles(
     input: KnowledgeSetListProfilesInput,
   ): Promise<KnowledgeRetrievalProfileSnapshot[]>;
@@ -223,9 +242,9 @@ export function createKnowledgeHttpProvider(
 ): KnowledgeHttpProvider {
   async function requestJson(
     path: string,
-    init: RequestInit & { idempotencyKey?: string },
+    init: RequestInit & { idempotencyKey?: string; timeoutMs?: number },
     operationId: string,
-    stage: string,
+    _stage: string,
     _options: { allowNonIdempotentRetry?: boolean } = {},
   ): Promise<{ status: number; body: unknown }> {
     try {
@@ -304,7 +323,9 @@ export function createKnowledgeHttpProvider(
       const operationId = randomUUID();
       const payload = {
         name: input.name.trim(),
-        description: input.description?.trim() ? input.description.trim() : null,
+        description: input.description?.trim()
+          ? input.description.trim()
+          : null,
         visibility: input.visibility ?? "organization",
       };
       const { body } = await requestJson(
@@ -367,25 +388,30 @@ export function createKnowledgeHttpProvider(
     async uploadBaseFile(input): Promise<ParsedUploadAccepted> {
       const operationId = randomUUID();
       const form = new FormData();
-      const blob = new Blob([Uint8Array.from(input.bytes)], {
+      const blob = new Blob([input.bytes as Uint8Array<ArrayBuffer>], {
         type: input.mimeType || "application/octet-stream",
       });
       form.append("file", blob, input.fileName);
       form.append("metadata", JSON.stringify({}));
       const { body } = await requestJson(
         `/api/v1/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}/files`,
-        { method: "POST", body: form },
+        {
+          method: "POST",
+          body: form,
+          signal: input.signal,
+          timeoutMs: input.timeoutMs ?? 180_000,
+        },
         operationId,
         "uploadBaseFile",
       );
       return parseUploadAccepted(body, operationId);
     },
 
-    async getIngestionJob(jobId): Promise<ParsedIngestionJob> {
+    async getIngestionJob(jobId, options = {}): Promise<ParsedIngestionJob> {
       const operationId = randomUUID();
       const { body } = await requestJson(
         `/api/v1/ingestion-jobs/${encodeURIComponent(jobId)}`,
-        { method: "GET" },
+        { method: "GET", signal: options.signal },
         operationId,
         "getIngestionJob",
       );
@@ -393,11 +419,11 @@ export function createKnowledgeHttpProvider(
       return parseIngestionJob(data, operationId);
     },
 
-    async retryIngestionJob(jobId): Promise<ParsedIngestionJob> {
+    async retryIngestionJob(jobId, options = {}): Promise<ParsedIngestionJob> {
       const operationId = randomUUID();
       const { body } = await requestJson(
         `/api/v1/ingestion-jobs/${encodeURIComponent(jobId)}/retry`,
-        { method: "POST" },
+        { method: "POST", signal: options.signal },
         operationId,
         "retryIngestionJob",
         { allowNonIdempotentRetry: false },
@@ -406,11 +432,11 @@ export function createKnowledgeHttpProvider(
       return parseIngestionJob(data, operationId);
     },
 
-    async cancelIngestionJob(jobId): Promise<ParsedIngestionJob> {
+    async cancelIngestionJob(jobId, options = {}): Promise<ParsedIngestionJob> {
       const operationId = randomUUID();
       const { body } = await requestJson(
         `/api/v1/ingestion-jobs/${encodeURIComponent(jobId)}/cancel`,
-        { method: "POST" },
+        { method: "POST", signal: options.signal },
         operationId,
         "cancelIngestionJob",
         { allowNonIdempotentRetry: false },
@@ -445,7 +471,7 @@ export function createKnowledgeHttpProvider(
     async addFileVersion(input): Promise<ParsedUploadAccepted> {
       const operationId = randomUUID();
       const form = new FormData();
-      const blob = new Blob([Uint8Array.from(input.bytes)], {
+      const blob = new Blob([input.bytes as Uint8Array<ArrayBuffer>], {
         type: input.mimeType || "application/octet-stream",
       });
       form.append("file", blob, input.fileName);
@@ -606,7 +632,7 @@ export function createKnowledgeHttpProvider(
       return parseKnowledgeBuildProfileView(body, operationId);
     },
 
-    async startBuild(input): Promise<KnowledgeBuildJobSnapshot> {
+    async startBuild(input): Promise<KnowledgeBuildJobSnapshot | null> {
       const operationId = randomUUID();
       const { body } = await requestJson(
         `/api/v2/knowledge-bases/${encodeURIComponent(input.knowledgeBaseId)}/builds`,
@@ -621,18 +647,7 @@ export function createKnowledgeHttpProvider(
         "startBuild",
         { allowNonIdempotentRetry: false },
       );
-      try {
-        const jobs = parseKnowledgeBuildJobList(body, operationId);
-        if (jobs[0]) return jobs[0];
-      } catch (err) {
-        if (
-          !(err instanceof KnowledgeFacadeError) ||
-          err.code !== KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID
-        ) {
-          throw err;
-        }
-      }
-      return parseKnowledgeBuildJobSnapshot(body, operationId);
+      return parseKnowledgeBuildJobList(body, operationId)[0] ?? null;
     },
 
     async getBuild(input): Promise<KnowledgeBuildJobSnapshot> {
@@ -692,7 +707,9 @@ export function createKnowledgeHttpProvider(
       const operationId = randomUUID();
       const payload = {
         name: input.name.trim(),
-        description: input.description?.trim() ? input.description.trim() : null,
+        description: input.description?.trim()
+          ? input.description.trim()
+          : null,
         visibility: input.visibility ?? "organization",
       };
       const { body } = await requestJson(
@@ -955,9 +972,7 @@ export function createKnowledgeHttpProvider(
       return parseKnowledgeFileChunkAvailabilityResult(body, operationId);
     },
 
-    async getFileChunkImage(
-      input,
-    ): Promise<KnowledgeFileChunkImageResult> {
+    async getFileChunkImage(input): Promise<KnowledgeFileChunkImageResult> {
       const operationId = randomUUID();
       const sourceFileId = input.sourceFileId?.trim() ?? "";
       const chunkId = input.chunkId?.trim() ?? "";
@@ -991,7 +1006,11 @@ export function createKnowledgeHttpProvider(
         }
         const contentType = response.headers.get("content-type");
         const buffer = Buffer.from(await response.arrayBuffer());
-        const bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+        const bytes = new Uint8Array(
+          buffer.buffer,
+          buffer.byteOffset,
+          buffer.byteLength,
+        );
         const result = parseKnowledgeFileChunkImageResult(
           contentType,
           bytes,

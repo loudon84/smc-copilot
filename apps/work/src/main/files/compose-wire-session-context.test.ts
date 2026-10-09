@@ -33,6 +33,7 @@ describe("composeWireMessageWithSessionContext", () => {
     const out = await composeWireMessageWithSessionContext("hello", {
       profile: "default",
       sessionId: "sess-1",
+      maxChars: 12000,
     });
     expect(out.startsWith("<session_file")).toBe(true);
     expect(out.endsWith("hello")).toBe(true);
@@ -40,6 +41,7 @@ describe("composeWireMessageWithSessionContext", () => {
       expect.objectContaining({
         sessionId: "sess-1",
         query: "hello",
+        maxChars: 12000,
       }),
     );
   });

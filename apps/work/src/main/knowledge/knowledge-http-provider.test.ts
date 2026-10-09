@@ -47,6 +47,90 @@ describe("KnowledgeHttpProvider", () => {
     resetKnowledgeHttpProviderForTests();
   });
 
+  it("forwards upload timeout and abort signals without changing ingestion contract paths", async () => {
+    const signal = new AbortController().signal;
+    const calls: Array<{
+      path: string;
+      signal?: AbortSignal | null;
+      timeoutMs?: number;
+    }> = [];
+    const job = {
+      id: "ing-1",
+      source_file_id: "sf-1",
+      status: "parse_dispatched",
+      progress: 1,
+    };
+    const provider = createKnowledgeHttpProvider({
+      getBaseUrl: () => "http://knowledge.test",
+      joinUrl: (path) => `http://knowledge.test${path}`,
+      withAuthRetry: (op) => op(),
+      authorizedFetch: async (path, init) => {
+        calls.push({ path, signal: init?.signal, timeoutMs: init?.timeoutMs });
+        if (path.endsWith("/files")) {
+          expect(init?.body).toBeInstanceOf(FormData);
+          return jsonResponse(200, {
+            data: {
+              source_file: { id: "sf-1" },
+              file_version_id: "ver-1",
+              job,
+            },
+          });
+        }
+        return jsonResponse(200, { data: job });
+      },
+    });
+    const input = {
+      knowledgeBaseId: "kb_1",
+      fileName: "file.pdf",
+      bytes: Buffer.from("%PDF-1.7"),
+      signal,
+    };
+    await provider.uploadBaseFile(input);
+    await provider.uploadBaseFile({ ...input, timeoutMs: 240_000 });
+    await provider.getIngestionJob("ing-1", { signal });
+    await provider.retryIngestionJob("ing-1", { signal });
+    await provider.cancelIngestionJob("ing-1", { signal });
+    expect(calls.map((call) => call.path)).toEqual([
+      "/api/v1/knowledge-bases/kb_1/files",
+      "/api/v1/knowledge-bases/kb_1/files",
+      "/api/v1/ingestion-jobs/ing-1",
+      "/api/v1/ingestion-jobs/ing-1/retry",
+      "/api/v1/ingestion-jobs/ing-1/cancel",
+    ]);
+    expect(calls.every((call) => call.signal === signal)).toBe(true);
+    expect(calls[0]?.timeoutMs).toBe(180_000);
+    expect(calls[1]?.timeoutMs).toBe(240_000);
+  });
+
+  it("uploads only the supplied byte view", async () => {
+    let uploaded: Uint8Array | undefined;
+    const provider = createKnowledgeHttpProvider(
+      transport(async (_path, init) => {
+        const file = (init?.body as FormData).get("file") as Blob;
+        uploaded = new Uint8Array(await file.arrayBuffer());
+        return jsonResponse(200, {
+          data: {
+            source_file: { id: "sf-1" },
+            file_version_id: "ver-1",
+            job: {
+              id: "ing-1",
+              source_file_id: "sf-1",
+              status: "parse_dispatched",
+              progress: 1,
+            },
+          },
+        });
+      }),
+    );
+    const bytes = new Uint8Array([0, 37, 80, 68, 70, 0]).subarray(1, 5);
+    await provider.uploadBaseFile({
+      knowledgeBaseId: "kb_1",
+      fileName: "file.pdf",
+      bytes,
+    });
+    expect(uploaded).toEqual(new Uint8Array([37, 80, 68, 70]));
+  });
+
   it("lists bases after schema validation", async () => {
     const provider = createKnowledgeHttpProvider(
       transport(async () =>
@@ -100,8 +184,16 @@ describe("KnowledgeHttpProvider", () => {
 
   it("maps 401/403/404/409/5xx and malformed payloads", async () => {
     const cases: Array<[number, string, unknown]> = [
-      [401, KNOWLEDGE_ERROR_CODES.AUTH_REQUIRED, { message_key: "errors.auth" }],
-      [403, KNOWLEDGE_ERROR_CODES.FORBIDDEN, { message_key: "errors.forbidden" }],
+      [
+        401,
+        KNOWLEDGE_ERROR_CODES.AUTH_REQUIRED,
+        { message_key: "errors.auth" },
+      ],
+      [
+        403,
+        KNOWLEDGE_ERROR_CODES.FORBIDDEN,
+        { message_key: "errors.forbidden" },
+      ],
       [404, KNOWLEDGE_ERROR_CODES.NOT_FOUND, { message_key: "errors.missing" }],
       [409, KNOWLEDGE_ERROR_CODES.CONFLICT, { message_key: "errors.conflict" }],
       [503, KNOWLEDGE_ERROR_CODES.UNAVAILABLE, { message_key: "errors.down" }],
@@ -110,7 +202,9 @@ describe("KnowledgeHttpProvider", () => {
       const provider = createKnowledgeHttpProvider(
         transport(async () => jsonResponse(status, body)),
       );
-      await expect(provider.getBase({ knowledgeBaseId: "kb_1" })).rejects.toMatchObject({
+      await expect(
+        provider.getBase({ knowledgeBaseId: "kb_1" }),
+      ).rejects.toMatchObject({
         code,
       });
     }
@@ -185,9 +279,8 @@ describe("knowledge schema fail-closed", () => {
   });
 
   it("parses source-file activeVersionId and refuses to invent it", async () => {
-    const {
-      parseKnowledgeBaseFileSnapshot,
-    } = await import("./knowledge-schema");
+    const { parseKnowledgeBaseFileSnapshot } =
+      await import("./knowledge-schema");
     const parsed = parseKnowledgeBaseFileSnapshot({
       id: "sf-1",
       knowledge_base_id: "kb_1",
@@ -215,10 +308,8 @@ describe("knowledge schema fail-closed", () => {
   });
 
   it("maps owner and created fields from contract payloads", async () => {
-    const {
-      parseKnowledgeBaseSnapshot,
-      parseKnowledgeFileVersionSnapshot,
-    } = await import("./knowledge-schema");
+    const { parseKnowledgeBaseSnapshot, parseKnowledgeFileVersionSnapshot } =
+      await import("./knowledge-schema");
     const base = parseKnowledgeBaseSnapshot({
       id: "kb_1",
       name: "Alpha",
@@ -243,9 +334,8 @@ describe("knowledge schema fail-closed", () => {
 
   it("requires both chunk flags before retrieval-ready", async () => {
     const { parseKnowledgeIndexStates } = await import("./knowledge-schema");
-    const { isKnowledgeIndexRetrievalReady } = await import(
-      "../../shared/knowledge/knowledge-base-ipc"
-    );
+    const { isKnowledgeIndexRetrievalReady } =
+      await import("../../shared/knowledge/knowledge-base-ipc");
     const states = parseKnowledgeIndexStates({
       data: {
         chunk: { build_status: "ready", retrieval_status: "unavailable" },
@@ -380,11 +470,13 @@ describe("knowledge schema fail-closed", () => {
       }),
     ).toThrowError(/KNOWLEDGE_CONTRACT_INVALID/);
 
-    const {
-      parseKnowledgeFileChunkImageResult,
-    } = await import("./knowledge-schema");
+    const { parseKnowledgeFileChunkImageResult } =
+      await import("./knowledge-schema");
     expect(
-      parseKnowledgeFileChunkImageResult("image/png", new Uint8Array([1, 2, 3])),
+      parseKnowledgeFileChunkImageResult(
+        "image/png",
+        new Uint8Array([1, 2, 3]),
+      ),
     ).toEqual({ mimeType: "image/png", bytes: new Uint8Array([1, 2, 3]) });
     expect(() =>
       parseKnowledgeFileChunkImageResult("image/svg+xml", new Uint8Array([1])),
@@ -487,15 +579,15 @@ describe("KnowledgeHttpProvider sets and retrieval profiles", () => {
     const provider = createKnowledgeHttpProvider(
       transport(async (path, init) => {
         seen.push(`${init?.method ?? "GET"} ${path}`);
-        if (path.startsWith("/api/v2/knowledge-sets?") && (init?.method ?? "GET") === "GET") {
+        if (
+          path.startsWith("/api/v2/knowledge-sets?") &&
+          (init?.method ?? "GET") === "GET"
+        ) {
           return jsonResponse(200, {
             data: { items: [validSet], total: 1, page: 1, page_size: 50 },
           });
         }
-        if (
-          path === "/api/v2/knowledge-sets" &&
-          init?.method === "POST"
-        ) {
+        if (path === "/api/v2/knowledge-sets" && init?.method === "POST") {
           return jsonResponse(200, { data: validSet });
         }
         if (
@@ -533,7 +625,10 @@ describe("KnowledgeHttpProvider sets and retrieval profiles", () => {
             data: { ...validProfile, status: "active" },
           });
         }
-        if (path === "/api/v1/retrieval-profiles/rp_1" && init?.method === "PATCH") {
+        if (
+          path === "/api/v1/retrieval-profiles/rp_1" &&
+          init?.method === "PATCH"
+        ) {
           return jsonResponse(200, {
             data: { ...validProfile, config: { top_k: 5 } },
           });
@@ -605,6 +700,39 @@ describe("KnowledgeHttpProvider source file and build", () => {
     resetKnowledgeHttpProviderForTests();
   });
 
+  it("accepts an empty build job list for ingestion-owned chunk indexes", async () => {
+    const provider = createKnowledgeHttpProvider(
+      transport(async (path, init) => {
+        expect(path).toBe("/api/v2/knowledge-bases/kb_1/builds");
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          index_types: ["chunk"],
+          force: false,
+        });
+        return jsonResponse(200, { data: { jobs: [] } });
+      }),
+    );
+    await expect(
+      provider.startBuild({ knowledgeBaseId: "kb_1", indexTypes: ["chunk"] }),
+    ).resolves.toBeNull();
+  });
+
+  it("still rejects malformed build job lists", async () => {
+    for (const data of [
+      {},
+      { jobs: null },
+      { jobs: [{}] },
+      { jobs: [{ id: "build-1", status: "queued", progress: 0 }, {}] },
+    ]) {
+      const provider = createKnowledgeHttpProvider(
+        transport(async () => jsonResponse(200, { data })),
+      );
+      await expect(
+        provider.startBuild({ knowledgeBaseId: "kb_1", indexTypes: ["chunk"] }),
+      ).rejects.toMatchObject({ code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID });
+    }
+  });
+
   it("calls source-file lifecycle and index/build contract paths", async () => {
     const seen: string[] = [];
     const provider = createKnowledgeHttpProvider(
@@ -635,7 +763,11 @@ describe("KnowledgeHttpProvider source file and build", () => {
             },
           });
         }
-        if (path.includes("/archive") || path.includes("/unarchive") || path.includes("/reparse")) {
+        if (
+          path.includes("/archive") ||
+          path.includes("/unarchive") ||
+          path.includes("/reparse")
+        ) {
           return jsonResponse(200, {
             data: {
               id: "sf-1",
@@ -700,38 +832,53 @@ describe("KnowledgeHttpProvider source file and build", () => {
       }),
     );
 
-    await expect(provider.getFile({ sourceFileId: "sf-1" })).resolves.toMatchObject({
+    await expect(
+      provider.getFile({ sourceFileId: "sf-1" }),
+    ).resolves.toMatchObject({
       id: "sf-1",
       activeVersionId: "ver-1",
     });
-    await expect(provider.listFileVersions({ sourceFileId: "sf-1" })).resolves.toEqual([
+    await expect(
+      provider.listFileVersions({ sourceFileId: "sf-1" }),
+    ).resolves.toEqual([
       expect.objectContaining({ id: "ver-1", versionNo: 1 }),
     ]);
     await expect(
-      provider.activateFileVersion({ sourceFileId: "sf-1", versionId: "ver-2" }),
+      provider.activateFileVersion({
+        sourceFileId: "sf-1",
+        versionId: "ver-2",
+      }),
     ).resolves.toMatchObject({ activeVersionId: "ver-2" });
     await provider.archiveFile({ sourceFileId: "sf-1" });
     await provider.unarchiveFile({ sourceFileId: "sf-1" });
     await provider.reparseFile({ sourceFileId: "sf-1" });
     await provider.deleteFile({ sourceFileId: "sf-1" });
-    await expect(provider.listIndexes({ knowledgeBaseId: "kb_1" })).resolves.toEqual([
+    await expect(
+      provider.listIndexes({ knowledgeBaseId: "kb_1" }),
+    ).resolves.toEqual([
       { indexType: "chunk", buildStatus: "ready", retrievalStatus: "ready" },
     ]);
-    await expect(provider.getBuildProfile({ knowledgeBaseId: "kb_1" })).resolves.toMatchObject({
+    await expect(
+      provider.getBuildProfile({ knowledgeBaseId: "kb_1" }),
+    ).resolves.toMatchObject({
       profileId: "bp-1",
       profileName: "Default",
     });
     await expect(
       provider.startBuild({ knowledgeBaseId: "kb_1", indexTypes: ["chunk"] }),
     ).resolves.toMatchObject({ id: "build-1", status: "queued" });
-    await expect(provider.getBuild({ buildId: "build-1" })).resolves.toMatchObject({
+    await expect(
+      provider.getBuild({ buildId: "build-1" }),
+    ).resolves.toMatchObject({
       status: "running",
       progress: 40,
     });
     await provider.retryBuild({ buildId: "build-1" });
 
     expect(seen).toContain("GET /api/v1/source-files/sf-1");
-    expect(seen).toContain("POST /api/v1/source-files/sf-1/versions/ver-2/activate");
+    expect(seen).toContain(
+      "POST /api/v1/source-files/sf-1/versions/ver-2/activate",
+    );
     expect(seen).toContain("GET /api/v2/knowledge-bases/kb_1/indexes");
     expect(seen).toContain("POST /api/v2/knowledge-bases/kb_1/builds");
     expect(seen).toContain("GET /api/v2/builds/build-1");
@@ -784,9 +931,9 @@ describe("KnowledgeHttpProvider source file and build", () => {
       keywords: "  hi  ",
     });
     expect(page.items[0]?.id).toBe("c1");
-    expect(seen.some((s) => s.startsWith("GET ") && s.includes("/chunks?"))).toBe(
-      true,
-    );
+    expect(
+      seen.some((s) => s.startsWith("GET ") && s.includes("/chunks?")),
+    ).toBe(true);
     expect(seen.some((s) => s.includes("keywords=hi"))).toBe(true);
 
     await expect(

@@ -531,7 +531,7 @@ export function registerKnowledgeBaseIpcHandlers(ipcMain: IpcMain): void {
           };
         }
         const snapshot = await getKnowledgeHttpProvider().startBuild(input);
-        buildPoller.watch(snapshot.id);
+        if (snapshot) buildPoller.watch(snapshot.id);
         return snapshot;
       } catch (err) {
         throw sanitizeIpcError(err);

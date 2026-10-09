@@ -2,7 +2,7 @@
  * Isolated sqlite persistence for Knowledge Upload Jobs.
  * Uses getDbConnection — does not rewrite Chat/Skill Run file rows.
  *
- * Additive data_mode / progress columns; legacy rows → legacy-unclassified.
+ * Additive mode / batch / revision columns; legacy rows → legacy-unclassified.
  * Migration failure keeps the old table read-only and blocks new mock Jobs.
  */
 
@@ -10,14 +10,17 @@ import { randomUUID } from "crypto";
 import type Database from "better-sqlite3";
 import { getDbConnection } from "../db";
 import {
+  isKnowledgeJobTerminal,
   KNOWLEDGE_BASE_ID_UNBOUND,
   type KnowledgeDataMode,
   type KnowledgeJobFileSummary,
   type KnowledgeJobPartition,
+  type KnowledgeJobPhase,
   type KnowledgeJobSnapshot,
   type KnowledgeJobStatus,
   type KnowledgeTenantScope,
 } from "../../shared/knowledge/knowledge-job-ipc";
+import { KNOWLEDGE_ERROR_CODES } from "../../shared/knowledge/knowledge-base-ipc";
 
 const TABLE = "knowledge_upload_jobs";
 const KB_ID_MAX = 128;
@@ -32,10 +35,15 @@ const MODE_COLUMN_DEFS: ReadonlyArray<[string, string]> = [
   ["managed_file_id", "TEXT"],
   ["remote_source_file_id", "TEXT"],
   ["remote_ingestion_job_id", "TEXT"],
+  ["batch_id", "TEXT"],
+  ["phase", "TEXT"],
+  ["revision", "INTEGER NOT NULL DEFAULT 0"],
+  ["last_remote_confirmed_at", "TEXT"],
 ];
 
 type MigrationState = "unknown" | "ok" | "failed";
 let migrationState: MigrationState = "unknown";
+let migrationDb: Database.Database | null = null;
 
 export class KnowledgeJobStoreUnavailableError extends Error {
   constructor(message = "KNOWLEDGE_JOB_STORE_UNAVAILABLE") {
@@ -78,6 +86,10 @@ interface JobRow {
   managed_file_id?: string | null;
   remote_source_file_id?: string | null;
   remote_ingestion_job_id?: string | null;
+  batch_id?: string | null;
+  phase?: KnowledgeJobPhase | null;
+  revision?: number | null;
+  last_remote_confirmed_at?: string | null;
 }
 
 function nowIso(): string {
@@ -154,6 +166,7 @@ function migrateSchema(db: Database.Database): void {
 /** Reset migration latch for vitest isolation. */
 export function resetKnowledgeUploadJobStoreForTests(): void {
   migrationState = "unknown";
+  migrationDb = null;
 }
 
 export function isMigrationReadOnly(): boolean {
@@ -161,15 +174,18 @@ export function isMigrationReadOnly(): boolean {
 }
 
 /**
- * Ensure mode/progress columns exist; backfill legacy-unclassified.
- * On failure, latch read-only and refuse new mock Job inserts.
- * Success is not a hard skip: migrate must stay idempotent so a new
- * connection/FakeDb still gets CREATE/ALTER (tests reset DBs per case).
+ * Migrate once per database connection. A profile switch resets both successful
+ * and failed migration latches; failures keep that database read-only.
  */
 export function ensureKnowledgeUploadJobsSchema(): void {
-  if (migrationState === "failed") return;
+  const db = getDbConnection(false);
+  if (db !== migrationDb) {
+    migrationDb = db;
+    migrationState = "unknown";
+  }
+  if (migrationState !== "unknown") return;
   try {
-    const db = requireDb(false);
+    if (!db) throw new KnowledgeJobStoreUnavailableError();
     migrateSchema(db);
     migrationState = "ok";
   } catch {
@@ -210,7 +226,8 @@ export function sanitizeFileSummary(
   if (!displayName) return undefined;
   displayName = displayName.replace(/\\/g, "/");
   const segments = displayName.split("/").filter(Boolean);
-  displayName = segments.length > 0 ? segments[segments.length - 1]! : displayName;
+  displayName =
+    segments.length > 0 ? segments[segments.length - 1]! : displayName;
   if (!displayName || displayName === "." || displayName === "..") {
     return undefined;
   }
@@ -255,11 +272,7 @@ export function sanitizeKnowledgeBaseId(raw: unknown): string {
   if (raw == null || raw === "") return KNOWLEDGE_BASE_ID_UNBOUND;
   if (typeof raw !== "string") throw new KnowledgeBaseIdInvalidError();
   const trimmed = raw.trim();
-  if (
-    !trimmed ||
-    trimmed.length > KB_ID_MAX ||
-    !KB_ID_RE.test(trimmed)
-  ) {
+  if (!trimmed || trimmed.length > KB_ID_MAX || !KB_ID_RE.test(trimmed)) {
     throw new KnowledgeBaseIdInvalidError();
   }
   return trimmed;
@@ -294,20 +307,80 @@ export function rowToSnapshot(row: JobRow): KnowledgeJobSnapshot {
     partition: {
       workProfileId: row.work_profile_id,
       authSubject: row.auth_subject,
-      tenantScope: columnsToTenantScope(
-        row.tenant_scope_kind,
-        row.tenant_id,
-      ),
+      tenantScope: columnsToTenantScope(row.tenant_scope_kind, row.tenant_id),
     },
     dataMode: normalizeDataMode(row.data_mode),
     synthetic: Boolean(row.synthetic),
     progress: clampProgress(Number(row.progress ?? 0)),
     updatedAt: row.updated_at,
+    ...(row.last_remote_confirmed_at
+      ? { lastRemoteConfirmedAt: row.last_remote_confirmed_at }
+      : {}),
+    createdAt: row.created_at,
+    revision: Number(row.revision ?? 0),
+    canCancel:
+      row.phase !== "cancelling" &&
+      (["draft", "queued", "uploading", "processing"].includes(row.status) ||
+        (row.status === "awaiting_confirmation" &&
+          Boolean(row.remote_ingestion_job_id)) ||
+        (row.status === "blocked_provider_unavailable" &&
+          !row.remote_ingestion_job_id &&
+          row.phase !== "confirming")),
+    canRetry: canRetryRow(row),
+    canQueryRemoteStatus:
+      row.data_mode === "provider" &&
+      Boolean(row.remote_ingestion_job_id) &&
+      row.status !== "queued" &&
+      (!isKnowledgeJobTerminal(row.status as KnowledgeJobStatus) ||
+        row.status === "blocked_provider_unavailable"),
   };
+  if (row.batch_id) snapshot.batchId = row.batch_id;
+  if (row.phase) snapshot.phase = row.phase;
   const fileSummary = parseFileSummaryJson(row.file_summary_json);
   if (fileSummary) snapshot.fileSummary = fileSummary;
   if (row.error_code) snapshot.errorCode = row.error_code;
   return snapshot;
+}
+
+const NON_RETRYABLE_ERRORS: ReadonlySet<string> = new Set([
+  KNOWLEDGE_ERROR_CODES.AUTH_REQUIRED,
+  KNOWLEDGE_ERROR_CODES.FORBIDDEN,
+  KNOWLEDGE_ERROR_CODES.CONFLICT,
+  KNOWLEDGE_ERROR_CODES.JOB_TARGET_MISMATCH,
+  KNOWLEDGE_ERROR_CODES.JOB_FILE_MISSING,
+  "KNOWLEDGE_JOB_FILE_CHANGED",
+  "KNOWLEDGE_UPLOAD_REJECTED",
+  "FILE_NOT_FOUND",
+  "FILE_TOO_LARGE",
+  "FILE_TYPE_DENIED",
+  "FILE_CONTENT_ENCRYPTED_OR_INVALID",
+  "FILE_UPLOAD_CONTENT_UNREADABLE",
+  "FILE_INTEGRITY_MISMATCH",
+  "FILE_PATH_OUTSIDE_POLICY",
+  "FILE_PATH_DENIED",
+  "PROFILE_MISMATCH",
+]);
+
+function canRetryRow(row: JobRow): boolean {
+  if (
+    ![
+      "failed",
+      "cancelled",
+      "interrupted",
+      "blocked_provider_unavailable",
+    ].includes(row.status)
+  )
+    return false;
+  if (NON_RETRYABLE_ERRORS.has(row.error_code ?? "")) return false;
+  if (row.data_mode === "mock") return true;
+  if (row.data_mode !== "provider") return false;
+  if (row.remote_ingestion_job_id)
+    return row.status !== "blocked_provider_unavailable";
+  return (
+    row.status !== "cancelled" &&
+    row.phase !== "confirming" &&
+    Boolean(row.managed_file_id)
+  );
 }
 
 export function insertDraftJob(input: {
@@ -316,6 +389,9 @@ export function insertDraftJob(input: {
   jobId?: string;
   dataMode?: KnowledgeDataMode;
   synthetic?: boolean;
+  batchId?: string;
+  phase?: KnowledgeJobPhase;
+  fileSummary?: KnowledgeJobFileSummary;
 }): KnowledgeJobSnapshot {
   assertWritable();
   const dataMode: KnowledgeDataMode = input.dataMode ?? "provider";
@@ -340,8 +416,8 @@ export function insertDraftJob(input: {
       job_id, knowledge_base_id, work_profile_id, auth_subject,
       tenant_scope_kind, tenant_id, status, attempt, last_command_id,
       error_code, created_at, updated_at,
-      data_mode, synthetic, progress, file_summary_json
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      data_mode, synthetic, progress, file_summary_json, batch_id, phase, revision
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     jobId,
     input.knowledgeBaseId,
@@ -358,9 +434,22 @@ export function insertDraftJob(input: {
     dataMode,
     synthetic ? 1 : 0,
     0,
-    null,
+    input.fileSummary
+      ? JSON.stringify(sanitizeFileSummary(input.fileSummary) ?? null)
+      : null,
+    input.batchId ?? null,
+    input.phase ?? null,
+    0,
   );
   return getJobById(jobId)!;
+}
+
+/** Create the whole batch before its caller publishes any draft snapshots. */
+export function insertDraftJobs(
+  inputs: Parameters<typeof insertDraftJob>[0][],
+): KnowledgeJobSnapshot[] {
+  assertWritable();
+  return requireDb(false).transaction(() => inputs.map(insertDraftJob))();
 }
 
 export function getJobById(jobId: string): KnowledgeJobSnapshot | null {
@@ -393,6 +482,13 @@ export function updateJobRecord(input: {
   fileSummary?: KnowledgeJobFileSummary | null;
   dataMode?: KnowledgeDataMode;
   synthetic?: boolean;
+  expectedAttempt?: number;
+  partition?: KnowledgeJobPartition;
+  phase?: KnowledgeJobPhase | null;
+  managedFileId?: string | null;
+  remoteSourceFileId?: string | null;
+  remoteIngestionJobId?: string | null;
+  remoteConfirmed?: boolean;
 }): KnowledgeJobSnapshot {
   assertWritable();
   const db = requireDb(false);
@@ -400,13 +496,30 @@ export function updateJobRecord(input: {
   if (!existing) {
     throw new KnowledgeJobStoreUnavailableError("KNOWLEDGE_JOB_NOT_FOUND");
   }
+  const sameAttempt = input.attempt === existing.attempt;
+  if (
+    input.attempt < existing.attempt ||
+    (input.expectedAttempt !== undefined &&
+      input.expectedAttempt !== existing.attempt) ||
+    (input.partition &&
+      !partitionsEqual(rowToSnapshot(existing).partition, input.partition)) ||
+    (sameAttempt &&
+      ((["cancelled", "completed"].includes(existing.status) &&
+        (input.status !== existing.status ||
+          input.managedFileId !== undefined ||
+          input.remoteSourceFileId !== undefined ||
+          input.remoteIngestionJobId !== undefined)) ||
+        (isKnowledgeJobTerminal(existing.status as KnowledgeJobStatus) &&
+          !isKnowledgeJobTerminal(input.status))))
+  ) {
+    return rowToSnapshot(existing);
+  }
   const updatedAt = nowIso();
   const progress =
     input.progress !== undefined
       ? clampProgress(input.progress)
       : clampProgress(Number(existing.progress ?? 0));
-  let fileSummaryJson: string | null =
-    existing.file_summary_json ?? null;
+  let fileSummaryJson: string | null = existing.file_summary_json ?? null;
   if (input.fileSummary !== undefined) {
     const sanitized = sanitizeFileSummary(input.fileSummary);
     fileSummaryJson = sanitized ? JSON.stringify(sanitized) : null;
@@ -415,31 +528,70 @@ export function updateJobRecord(input: {
     input.dataMode !== undefined
       ? input.dataMode
       : normalizeDataMode(existing.data_mode);
+  const lastRemoteConfirmedAt =
+    input.remoteConfirmed && dataMode === "provider"
+      ? updatedAt
+      : sameAttempt
+        ? (existing.last_remote_confirmed_at ?? null)
+        : null;
   const synthetic =
     input.synthetic !== undefined
       ? input.synthetic
       : Boolean(existing.synthetic);
+  const cols = tenantScopeToColumns(
+    (input.partition ?? rowToSnapshot(existing).partition).tenantScope,
+  );
 
-  db.prepare(
-    `UPDATE ${TABLE}
+  const result = db
+    .prepare(
+      `UPDATE ${TABLE}
      SET status = ?, attempt = ?, last_command_id = ?, error_code = ?,
          progress = ?, file_summary_json = ?, data_mode = ?, synthetic = ?,
-         updated_at = ?
-     WHERE job_id = ?`,
-  ).run(
-    input.status,
-    input.attempt,
-    input.lastCommandId ?? null,
-    input.errorCode ?? null,
-    progress,
-    fileSummaryJson,
-    dataMode,
-    synthetic ? 1 : 0,
-    updatedAt,
-    input.jobId,
-  );
+         updated_at = ?, phase = ?, managed_file_id = ?,
+         remote_source_file_id = ?, remote_ingestion_job_id = ?, last_remote_confirmed_at = ?,
+         revision = COALESCE(revision, 0) + 1
+     WHERE attempt = ? AND COALESCE(revision, 0) = ? AND status = ?
+       AND work_profile_id = ? AND auth_subject = ? AND tenant_scope_kind = ?
+       AND ((? IS NULL AND tenant_id IS NULL) OR tenant_id = ?)
+       AND job_id = ?`,
+    )
+    .run(
+      input.status,
+      input.attempt,
+      input.lastCommandId === undefined
+        ? existing.last_command_id
+        : input.lastCommandId,
+      input.errorCode ?? null,
+      progress,
+      fileSummaryJson,
+      dataMode,
+      synthetic ? 1 : 0,
+      updatedAt,
+      input.phase === undefined ? (existing.phase ?? null) : input.phase,
+      input.managedFileId === undefined
+        ? (existing.managed_file_id ?? null)
+        : input.managedFileId,
+      input.remoteSourceFileId === undefined
+        ? (existing.remote_source_file_id ?? null)
+        : input.remoteSourceFileId,
+      input.remoteIngestionJobId === undefined
+        ? (existing.remote_ingestion_job_id ?? null)
+        : input.remoteIngestionJobId,
+      lastRemoteConfirmedAt,
+      input.expectedAttempt ?? existing.attempt,
+      Number(existing.revision ?? 0),
+      existing.status,
+      input.partition?.workProfileId ?? existing.work_profile_id,
+      input.partition?.authSubject ?? existing.auth_subject,
+      cols.tenant_scope_kind,
+      cols.tenant_id,
+      cols.tenant_id,
+      input.jobId,
+    );
+  if (result?.changes === 0) return rowToSnapshot(existing);
   const snap = getJobById(input.jobId);
-  if (!snap) throw new KnowledgeJobStoreUnavailableError("KNOWLEDGE_JOB_NOT_FOUND");
+  if (!snap)
+    throw new KnowledgeJobStoreUnavailableError("KNOWLEDGE_JOB_NOT_FOUND");
   return snap;
 }
 
@@ -468,7 +620,40 @@ export function listJobsForPartition(
   return rows.map(rowToSnapshot);
 }
 
-export function listNonTerminalJobs(): KnowledgeJobSnapshot[] {
+/** Remove only a failed local job still owned by the acting identity and revision. */
+export function deleteCancelledJob(input: {
+  jobId: string;
+  expectedRevision: number;
+  partition: KnowledgeJobPartition;
+}): boolean {
+  assertWritable();
+  const cols = tenantScopeToColumns(input.partition.tenantScope);
+  const result = requireDb(false)
+    .prepare(
+      `DELETE FROM ${TABLE}
+       WHERE job_id = ? AND status = 'failed' AND revision = ?
+         AND work_profile_id = ? AND auth_subject = ? AND tenant_scope_kind = ?
+         AND ((? IS NULL AND tenant_id IS NULL) OR tenant_id = ?)`,
+    )
+    .run(
+      input.jobId,
+      input.expectedRevision,
+      input.partition.workProfileId,
+      input.partition.authSubject,
+      cols.tenant_scope_kind,
+      cols.tenant_id,
+      cols.tenant_id,
+    );
+  return result.changes === 1;
+}
+
+export function listNonTerminalJobs(
+  partition?: KnowledgeJobPartition,
+): KnowledgeJobSnapshot[] {
+  if (partition)
+    return listJobsForPartition(partition).filter(
+      (job) => !isKnowledgeJobTerminal(job.status),
+    );
   ensureKnowledgeUploadJobsSchema();
   const db = getDbConnection(true) ?? getDbConnection(false);
   if (!db || !tableExists(db)) return [];
@@ -528,15 +713,17 @@ export function findCompletedJobsByRemoteSourceFileId(input: {
   }));
 }
 
-export function bindJobManagedFile(
-  jobId: string,
-  managedFileId: string,
-): void {
-  assertWritable();
-  const db = requireDb(false);
-  db.prepare(
-    `UPDATE ${TABLE} SET managed_file_id = ?, updated_at = ? WHERE job_id = ?`,
-  ).run(managedFileId, nowIso(), jobId);
+export function bindJobManagedFile(jobId: string, managedFileId: string): void {
+  const current = getJobById(jobId);
+  if (!current)
+    throw new KnowledgeJobStoreUnavailableError("KNOWLEDGE_JOB_NOT_FOUND");
+  updateJobRecord({
+    jobId,
+    status: current.status,
+    attempt: current.attempt,
+    expectedAttempt: current.attempt,
+    managedFileId,
+  });
 }
 
 export function bindJobRemoteIds(
@@ -546,22 +733,16 @@ export function bindJobRemoteIds(
     remoteIngestionJobId?: string | null;
   },
 ): void {
-  assertWritable();
-  const db = requireDb(false);
-  const existing = getJobRow(jobId);
-  if (!existing) {
+  const current = getJobById(jobId);
+  if (!current)
     throw new KnowledgeJobStoreUnavailableError("KNOWLEDGE_JOB_NOT_FOUND");
-  }
-  db.prepare(
-    `UPDATE ${TABLE}
-     SET remote_source_file_id = ?, remote_ingestion_job_id = ?, updated_at = ?
-     WHERE job_id = ?`,
-  ).run(
-    ids.remoteSourceFileId ?? existing.remote_source_file_id ?? null,
-    ids.remoteIngestionJobId ?? existing.remote_ingestion_job_id ?? null,
-    nowIso(),
+  updateJobRecord({
     jobId,
-  );
+    status: current.status,
+    attempt: current.attempt,
+    expectedAttempt: current.attempt,
+    ...ids,
+  });
 }
 
 export function partitionsEqual(

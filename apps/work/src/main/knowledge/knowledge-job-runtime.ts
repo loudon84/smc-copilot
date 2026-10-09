@@ -1,8 +1,6 @@
-/**
- * Provider FileJob runtime: POST files + poll ingestion.
- * One Job / one file / one Base. Main-only remote ids.
- */
+/** Provider upload submission and independently scheduled ingestion polling. */
 
+import { createHash } from "crypto";
 import { readFile } from "fs/promises";
 import { getManagedFile } from "../files/file-association-store";
 import {
@@ -11,10 +9,18 @@ import {
 } from "../files/upload-byte-gate";
 import { FILE_UPLOAD_CONTENT_UNREADABLE_CODE } from "../../shared/files";
 import { KNOWLEDGE_ERROR_CODES } from "../../shared/knowledge/knowledge-base-ipc";
-import type { KnowledgeJobStatus } from "../../shared/knowledge/knowledge-job-ipc";
+import {
+  isKnowledgeJobTerminal,
+  type KnowledgeJobPhase,
+  type KnowledgeJobSnapshot,
+  type KnowledgeJobStatus,
+} from "../../shared/knowledge/knowledge-job-ipc";
+import {
+  KnowledgeFacadeError,
+  toKnowledgeFacadeError,
+} from "../../shared/knowledge/knowledge-errors";
 import { getKnowledgeHttpProvider } from "./knowledge-http-provider";
 import {
-  bindJobRemoteIds,
   getJobById,
   getJobRow,
   updateJobRecord,
@@ -22,130 +28,281 @@ import {
 import type { ParsedIngestionJob } from "./knowledge-schema";
 
 /** @deprecated use FILE_UPLOAD_CONTENT_UNREADABLE_CODE from shared/files */
-export const FILE_UPLOAD_CONTENT_UNREADABLE = FILE_UPLOAD_CONTENT_UNREADABLE_CODE;
+export const FILE_UPLOAD_CONTENT_UNREADABLE =
+  FILE_UPLOAD_CONTENT_UNREADABLE_CODE;
 
-const POLL_MS = 1500;
-const POLL_MAX = 40;
+export interface ProviderJobRuntimeOptions {
+  attempt?: number;
+  signal?: AbortSignal;
+  update?: (
+    input: Parameters<typeof updateJobRecord>[0],
+  ) => KnowledgeJobSnapshot | null;
+  query?: (
+    remoteJobId: string,
+    signal?: AbortSignal,
+  ) => Promise<ParsedIngestionJob>;
+  confirm?: (
+    remoteJobId: string,
+    signal?: AbortSignal,
+  ) => Promise<KnowledgeJobSnapshot | null>;
+}
+
+const POLL_MS = 2_000;
+const ERROR_BACKOFF_MS = [5_000, 10_000, 30_000];
 
 export function mapIngestionStatus(status: string): KnowledgeJobStatus {
   if (status === "active") return "completed";
   if (status === "failed") return "failed";
   if (status === "cancelled") return "cancelled";
-  if (
-    status === "pending" ||
-    status === "uploading" ||
-    status === "upload_unknown"
-  ) {
-    return "uploading";
-  }
+  if (status === "upload_unknown") return "awaiting_confirmation";
+  if (status === "pending" || status === "uploading") return "uploading";
   return "processing";
 }
 
-function ingestionProgress(job: ParsedIngestionJob): number {
-  if (job.status === "active") return 100;
-  const raw = Number(job.progress);
-  if (!Number.isFinite(raw)) return 0;
-  return Math.max(0, Math.min(99, Math.round(raw <= 1 ? raw * 100 : raw)));
+function ingestionPhase(status: string): KnowledgeJobPhase | null {
+  if (status === "upload_unknown") return "confirming";
+  if (status === "parsing") return "parsing";
+  if (status === "validating") return "validating";
+  if (
+    ["ragflow_uploaded", "metadata_synced", "parse_dispatched"].includes(status)
+  ) {
+    return "waiting_parse";
+  }
+  return null;
 }
 
-async function persistMapped(
+function currentJob(
   jobId: string,
   attempt: number,
-  remote: ParsedIngestionJob,
-  extras: { errorCode?: string | null } = {},
-): Promise<void> {
-  updateJobRecord({
+  signal?: AbortSignal,
+): KnowledgeJobSnapshot | null {
+  if (signal?.aborted) return null;
+  const current = getJobById(jobId);
+  return current &&
+    current.attempt === attempt &&
+    !isKnowledgeJobTerminal(current.status)
+    ? current
+    : null;
+}
+
+function write(
+  jobId: string,
+  attempt: number,
+  options: ProviderJobRuntimeOptions,
+  patch: Omit<Parameters<typeof updateJobRecord>[0], "jobId" | "attempt">,
+): KnowledgeJobSnapshot | null {
+  const current = currentJob(jobId, attempt, options.signal);
+  if (!current) return null;
+  return (options.update ?? updateJobRecord)({
+    ...patch,
     jobId,
-    status: mapIngestionStatus(remote.status),
     attempt,
-    progress: ingestionProgress(remote),
-    errorCode:
-      extras.errorCode ??
-      (remote.status === "failed" ? remote.errorCode || "INGESTION_FAILED" : null),
+    expectedAttempt: attempt,
+    partition: current.partition,
   });
 }
 
-export async function runProviderUpload(jobId: string): Promise<void> {
+function persistMapped(
+  jobId: string,
+  attempt: number,
+  remote: ParsedIngestionJob,
+  options: ProviderJobRuntimeOptions,
+  ids: { remoteSourceFileId?: string; remoteIngestionJobId?: string } = {},
+): KnowledgeJobSnapshot | null {
+  const raw = Number(remote.progress);
+  return write(jobId, attempt, options, {
+    ...ids,
+    status: mapIngestionStatus(remote.status),
+    phase: ingestionPhase(remote.status),
+    progress:
+      remote.status === "active"
+        ? 100
+        : Number.isFinite(raw)
+          ? Math.max(0, Math.min(100, Math.round(raw)))
+          : 0,
+    errorCode:
+      remote.status === "failed"
+        ? remote.errorCode || "INGESTION_FAILED"
+        : null,
+    remoteConfirmed: true,
+  });
+}
+
+function assertRemoteJobId(
+  remote: ParsedIngestionJob,
+  remoteJobId: string,
+): void {
+  if (remote.id !== remoteJobId)
+    throw new KnowledgeFacadeError({
+      code: KNOWLEDGE_ERROR_CODES.CONTRACT_INVALID,
+      messageKey: "errors.knowledge.contract_invalid",
+    });
+}
+
+export async function confirmProviderJobOnce(
+  jobId: string,
+  remoteJobId: string,
+  attempt: number,
+  options: ProviderJobRuntimeOptions = {},
+): Promise<KnowledgeJobSnapshot | null> {
+  if (
+    !currentJob(jobId, attempt, options.signal) ||
+    getJobRow(jobId)?.remote_ingestion_job_id !== remoteJobId
+  )
+    return null;
+  const query =
+    options.query ??
+    ((id, signal) =>
+      getKnowledgeHttpProvider().getIngestionJob(id, { signal }));
+  try {
+    const remote = await query(remoteJobId, options.signal);
+    if (
+      !currentJob(jobId, attempt, options.signal) ||
+      getJobRow(jobId)?.remote_ingestion_job_id !== remoteJobId
+    )
+      return null;
+    assertRemoteJobId(remote, remoteJobId);
+    return persistMapped(jobId, attempt, remote, options);
+  } catch (err) {
+    if (
+      !currentJob(jobId, attempt, options.signal) ||
+      getJobRow(jobId)?.remote_ingestion_job_id !== remoteJobId
+    )
+      return null;
+    write(jobId, attempt, options, {
+      status: "awaiting_confirmation",
+      phase: "confirming",
+      errorCode: toKnowledgeFacadeError(err).code,
+    });
+    throw err;
+  }
+}
+
+function waitForPoll(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = (): void => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener("abort", finish, { once: true });
+  });
+}
+
+export async function runProviderUpload(
+  jobId: string,
+  options: ProviderJobRuntimeOptions = {},
+): Promise<void> {
   const snap = getJobById(jobId);
   const row = getJobRow(jobId);
-  if (!snap || !row) return;
+  const attempt = options.attempt ?? snap?.attempt;
+  if (
+    !snap ||
+    !row ||
+    attempt == null ||
+    !currentJob(jobId, attempt, options.signal)
+  )
+    return;
+  if (row.remote_ingestion_job_id || snap.status !== "queued") return;
   if (snap.knowledgeBaseId === "unbound") {
-    updateJobRecord({
-      jobId,
+    write(jobId, attempt, options, {
       status: "failed",
-      attempt: snap.attempt,
       errorCode: KNOWLEDGE_ERROR_CODES.JOB_TARGET_MISMATCH,
     });
     return;
   }
-  if (!row.managed_file_id) {
-    return;
-  }
+  if (!row.managed_file_id) return;
 
-  const file = getManagedFile(snap.partition.workProfileId, row.managed_file_id);
+  const file = getManagedFile(
+    snap.partition.workProfileId,
+    row.managed_file_id,
+  );
   const filePath = file?.managedPath || file?.originalPath;
   if (!file || !filePath) {
-    updateJobRecord({
-      jobId,
+    write(jobId, attempt, options, {
       status: "failed",
-      attempt: snap.attempt,
       errorCode: KNOWLEDGE_ERROR_CODES.JOB_FILE_MISSING,
     });
     return;
   }
 
-  updateJobRecord({
-    jobId,
-    status: "uploading",
-    attempt: snap.attempt,
-    progress: 20,
-    errorCode: null,
-  });
-
+  let submitted = false;
   try {
-    const bytes = await readFile(filePath);
-    const gate = assertUploadBytesReadable(file.name, bytes);
-    if (gate.status === "REJECT") {
-      logUploadByteCheckEvent({
-        result: gate,
-        errorCode: FILE_UPLOAD_CONTENT_UNREADABLE_CODE,
-        fileName: file.name,
-      });
-      updateJobRecord({
-        jobId,
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    const bytes = await readFile(filePath, { signal: options.signal });
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    if (
+      file.contentHash &&
+      createHash("sha256").update(bytes).digest("hex") !== file.contentHash
+    ) {
+      write(jobId, attempt, options, {
         status: "failed",
-        attempt: snap.attempt,
+        errorCode: "KNOWLEDGE_JOB_FILE_CHANGED",
+      });
+      return;
+    }
+    const gate = assertUploadBytesReadable(file.name, bytes);
+    logUploadByteCheckEvent({
+      result: gate,
+      errorCode:
+        gate.status === "REJECT" ? FILE_UPLOAD_CONTENT_UNREADABLE_CODE : null,
+      fileName: file.name,
+    });
+    if (gate.status === "REJECT") {
+      write(jobId, attempt, options, {
+        status: "failed",
         errorCode: FILE_UPLOAD_CONTENT_UNREADABLE_CODE,
       });
       return;
     }
-    logUploadByteCheckEvent({
-      result: gate,
-      errorCode: null,
-      fileName: file.name,
-    });
+    if (
+      !write(jobId, attempt, options, {
+        status: "uploading",
+        phase: null,
+        progress: 0,
+        errorCode: null,
+      })
+    )
+      return;
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    submitted = true;
     const accepted = await getKnowledgeHttpProvider().uploadBaseFile({
       knowledgeBaseId: snap.knowledgeBaseId,
       fileName: file.name,
       bytes,
       mimeType: file.mime,
+      signal: options.signal,
     });
-    bindJobRemoteIds(jobId, {
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    persistMapped(jobId, attempt, accepted.job, options, {
       remoteSourceFileId: accepted.sourceFileId,
       remoteIngestionJobId: accepted.job.id,
     });
-    await persistMapped(jobId, snap.attempt, accepted.job);
-    await pollIngestionUntilTerminal(jobId, accepted.job.id, snap.attempt);
   } catch (err) {
-    const code =
-      err instanceof Error && /^[A-Z][A-Z0-9_]+$/.test(err.message.split(/\s/)[0] ?? "")
-        ? err.message.split(/\s/)[0]!
-        : "KNOWLEDGE_UNAVAILABLE";
-    updateJobRecord({
-      jobId,
-      status: "failed",
-      attempt: snap.attempt,
-      errorCode: code,
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    const error = toKnowledgeFacadeError(err);
+    const unknown =
+      submitted &&
+      (!error.httpStatus ||
+        error.httpStatus < 400 ||
+        error.httpStatus === 408 ||
+        error.httpStatus >= 500);
+    const rejectionCode =
+      error.messageKey === "errors.knowledge.file_exists"
+        ? KNOWLEDGE_ERROR_CODES.CONFLICT
+        : error.messageKey === "errors.knowledge.upload_too_large"
+          ? "FILE_TOO_LARGE"
+          : [400, 413, 415, 422].includes(error.httpStatus ?? 0)
+            ? "KNOWLEDGE_UPLOAD_REJECTED"
+            : error.code;
+    write(jobId, attempt, options, {
+      status: unknown ? "awaiting_confirmation" : "failed",
+      phase: unknown ? "confirming" : null,
+      errorCode: submitted
+        ? rejectionCode
+        : KNOWLEDGE_ERROR_CODES.JOB_FILE_MISSING,
     });
   }
 }
@@ -154,74 +311,108 @@ export async function pollIngestionUntilTerminal(
   jobId: string,
   remoteJobId: string,
   attempt: number,
+  options: ProviderJobRuntimeOptions = {},
 ): Promise<void> {
-  const provider = getKnowledgeHttpProvider();
-  for (let i = 0; i < POLL_MAX; i += 1) {
-    const current = getJobById(jobId);
-    if (!current || current.status === "cancelled") return;
-    const remote = await provider.getIngestionJob(remoteJobId);
-    await persistMapped(jobId, attempt, remote);
-    if (
-      remote.status === "active" ||
-      remote.status === "failed" ||
-      remote.status === "cancelled"
-    ) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-  }
-  updateJobRecord({
-    jobId,
-    status: "interrupted",
-    attempt,
-    errorCode: KNOWLEDGE_ERROR_CODES.TIMEOUT,
-  });
-}
-
-export async function retryProviderJob(jobId: string): Promise<void> {
-  const row = getJobRow(jobId);
-  const snap = getJobById(jobId);
-  if (!row || !snap) return;
-  if (row.remote_ingestion_job_id) {
+  const confirm =
+    options.confirm ??
+    ((id: string) => confirmProviderJobOnce(jobId, id, attempt, options));
+  let errors = 0;
+  while (currentJob(jobId, attempt, options.signal)) {
+    let delay = POLL_MS;
     try {
-      const remote = await getKnowledgeHttpProvider().retryIngestionJob(
-        row.remote_ingestion_job_id,
-      );
-      await persistMapped(jobId, snap.attempt, remote);
-      await pollIngestionUntilTerminal(jobId, remote.id, snap.attempt);
-      return;
-    } catch {
-      // Fall through to re-upload when retry endpoint fails without a live job.
+      if (!currentJob(jobId, attempt, options.signal)) return;
+      const updated = await confirm(remoteJobId, options.signal);
+      if (!currentJob(jobId, attempt, options.signal)) return;
+      errors = 0;
+      if (!updated || isKnowledgeJobTerminal(updated.status)) return;
+    } catch (err) {
+      if (!currentJob(jobId, attempt, options.signal)) return;
+      const error = toKnowledgeFacadeError(err);
+      if (
+        error.httpStatus &&
+        error.httpStatus >= 400 &&
+        error.httpStatus < 500 &&
+        ![408, 429].includes(error.httpStatus)
+      )
+        return;
+      delay =
+        ERROR_BACKOFF_MS[Math.min(errors++, ERROR_BACKOFF_MS.length - 1)]!;
     }
-  }
-  if (row.managed_file_id) {
-    await runProviderUpload(jobId);
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    await waitForPoll(delay, options.signal);
+    if (!currentJob(jobId, attempt, options.signal)) return;
   }
 }
 
-export async function cancelProviderJob(jobId: string): Promise<void> {
+export async function retryProviderJob(
+  jobId: string,
+  options: ProviderJobRuntimeOptions = {},
+): Promise<void> {
   const row = getJobRow(jobId);
-  if (!row?.remote_ingestion_job_id) return;
+  const snap = getJobById(jobId);
+  const attempt = options.attempt ?? snap?.attempt;
+  if (!row || attempt == null || !currentJob(jobId, attempt, options.signal))
+    return;
+  if (!row.remote_ingestion_job_id) {
+    await runProviderUpload(jobId, options);
+    return;
+  }
   try {
-    await getKnowledgeHttpProvider().cancelIngestionJob(row.remote_ingestion_job_id);
-  } catch {
-    // Local cancel still wins; remote cancel is best-effort.
+    const remote = await getKnowledgeHttpProvider().retryIngestionJob(
+      row.remote_ingestion_job_id,
+      { signal: options.signal },
+    );
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    assertRemoteJobId(remote, row.remote_ingestion_job_id);
+    persistMapped(jobId, attempt, remote, options);
+  } catch (err) {
+    if (!currentJob(jobId, attempt, options.signal)) return;
+    write(jobId, attempt, options, {
+      status: "awaiting_confirmation",
+      phase: "confirming",
+      errorCode: toKnowledgeFacadeError(err).code,
+    });
   }
 }
 
-export async function reconcileProviderJob(jobId: string): Promise<void> {
+export async function cancelProviderJob(
+  jobId: string,
+  options: ProviderJobRuntimeOptions = {},
+): Promise<ParsedIngestionJob | null> {
+  const row = getJobRow(jobId);
+  const snap = getJobById(jobId);
+  const attempt = options.attempt ?? snap?.attempt;
+  if (
+    !row?.remote_ingestion_job_id ||
+    attempt == null ||
+    !currentJob(jobId, attempt, options.signal)
+  )
+    return null;
+  const remote = await getKnowledgeHttpProvider().cancelIngestionJob(
+    row.remote_ingestion_job_id,
+    { signal: options.signal },
+  );
+  if (!currentJob(jobId, attempt, options.signal)) return null;
+  assertRemoteJobId(remote, row.remote_ingestion_job_id);
+  return remote;
+}
+
+export async function reconcileProviderJob(
+  jobId: string,
+  options: ProviderJobRuntimeOptions = {},
+): Promise<void> {
   const row = getJobRow(jobId);
   const snap = getJobById(jobId);
   if (!row || !snap) return;
+  const attempt = options.attempt ?? snap.attempt;
   if (row.remote_ingestion_job_id) {
     await pollIngestionUntilTerminal(
       jobId,
       row.remote_ingestion_job_id,
-      snap.attempt,
+      attempt,
+      options,
     );
-    return;
-  }
-  if (row.managed_file_id && snap.status !== "draft") {
-    await runProviderUpload(jobId);
+  } else if (snap.status === "queued" && row.managed_file_id) {
+    await runProviderUpload(jobId, options);
   }
 }

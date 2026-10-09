@@ -12,11 +12,6 @@ import {
   searchChunks,
 } from "./file-association-store";
 
-const SUMMARY_MAX_CHARS = 12_000;
-/** Medium files sit between full-inline and large FTS retrieval. */
-const MEDIUM_MULTIPLIER = 3;
-const CHARS_PER_TOKEN = 4;
-
 export interface SessionFileContextSource {
   fileId: string;
   fileName: string;
@@ -27,8 +22,7 @@ export interface BuildSessionFileContextInput {
   profile?: string;
   sessionId: string;
   query?: string;
-  /** Soft cap in tokens; converted to chars via ~4 chars/token. */
-  tokenBudget?: number;
+  maxChars?: number;
 }
 
 export interface SessionFileContextResult {
@@ -46,12 +40,15 @@ function escapeXmlAttr(value: string): string {
 
 function truncate(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(0, maxChars - 1))}…`;
+  const prefix = text.slice(0, Math.max(0, maxChars - 1));
+  const boundary = prefix.lastIndexOf("\n");
+  const clipped = boundary > prefix.length / 2 ? prefix.slice(0, boundary) : prefix;
+  return `${clipped.replace(/&[^;]*$/, "").replace(/[\uD800-\uDBFF]$/, "")}…`;
 }
 
 /**
  * Assemble context XML for files explicitly marked `context-file` in the session.
- * Small → full text; medium → summary + chunks; large → FTS (or leading chunks).
+ * Small files inline text; other files use relevant or leading chunks.
  */
 // @lat: [[session-file-context#Context builder]]
 export async function buildSessionFileContext(
@@ -60,10 +57,10 @@ export async function buildSessionFileContext(
   const profileId = normalizeProfileId(input.profile);
   const config = readDesktopFilesConfig(input.profile);
   const maxInline = Math.max(1, config.maxInlineTextChars);
-  const mediumCap = maxInline * MEDIUM_MULTIPLIER;
   const maxChunks = Math.max(1, config.indexing.maxResults);
-  const tokenBudget = Math.max(256, input.tokenBudget ?? 8_000);
-  const charBudget = tokenBudget * CHARS_PER_TOKEN;
+  const charBudget = Number.isFinite(input.maxChars ?? 32_000)
+    ? Math.max(0, Math.floor(input.maxChars ?? 32_000))
+    : 0;
 
   const contextRows = listBySession(profileId, input.sessionId).filter(
     (row) => row.association.role === "context-file",
@@ -81,13 +78,15 @@ export async function buildSessionFileContext(
   const sources: SessionFileContextSource[] = [];
   let usedChars = 0;
 
-  const pushPart = (chunk: string): boolean => {
-    if (usedChars + chunk.length > charBudget && usedChars > 0) return false;
-    const room = Math.max(0, charBudget - usedChars);
-    const clipped = chunk.length > room ? truncate(chunk, room) : chunk;
-    parts.push(clipped);
-    usedChars += clipped.length;
-    return usedChars < charBudget;
+  const pushPart = (open: string, content = "", close = ""): boolean => {
+    const separatorSize = parts.length ? 2 : 0;
+    const room =
+      charBudget - usedChars - separatorSize - open.length - close.length;
+    if (room < (content ? 1 : 0)) return false;
+    const part = `${open}${truncate(escapeXmlAttr(content), room)}${close}`;
+    parts.push(part);
+    usedChars += separatorSize + part.length;
+    return true;
   };
 
   for (const file of files) {
@@ -107,33 +106,12 @@ export async function buildSessionFileContext(
     }
 
     if (text.length <= maxInline) {
-      const block = `<session_file id="${escapeXmlAttr(file.id)}" name="${nameAttr}" type="${typeAttr}">\n${text}\n</session_file>`;
-      if (!pushPart(block)) break;
+      const open = `<session_file id="${escapeXmlAttr(file.id)}" name="${nameAttr}" type="${typeAttr}">\n`;
+      if (!pushPart(open, text, "\n</session_file>")) continue;
       sources.push({ fileId: file.id, fileName: file.name, chunkIndex: 0 });
       continue;
     }
 
-    if (text.length <= mediumCap) {
-      const summary = truncate(text, SUMMARY_MAX_CHARS);
-      const chunks = listChunksForFile(file.id, profileId, {
-        limit: Math.min(3, maxChunks),
-      });
-      const chunkXml = chunks
-        .map((c) => {
-          sources.push({
-            fileId: file.id,
-            fileName: file.name,
-            chunkIndex: c.chunkIndex,
-          });
-          return `  <chunk index="${c.chunkIndex}">${c.content}</chunk>`;
-        })
-        .join("\n");
-      const block = `<session_file id="${escapeXmlAttr(file.id)}" name="${nameAttr}" type="${typeAttr}" mode="summary">\n<summary>${summary}</summary>\n${chunkXml}\n</session_file>`;
-      if (!pushPart(block)) break;
-      continue;
-    }
-
-    // Large: FTS when a query is provided; otherwise leading chunks.
     const query = (input.query || "").trim();
     const hits = query
       ? searchChunks(profileId, query, {
@@ -149,22 +127,27 @@ export async function buildSessionFileContext(
           }),
         );
 
-    const sourceXml = hits
-      .map((hit) => {
+    if (!hits.length) {
+      const stub = `<session_file id="${escapeXmlAttr(file.id)}" name="${nameAttr}" type="${typeAttr}" mode="no-matches" />`;
+      if (pushPart(stub)) {
+        sources.push({ fileId: file.id, fileName: file.name, chunkIndex: -1 });
+      }
+      continue;
+    }
+
+    const seenContent = new Set<string>();
+    for (const hit of hits) {
+      if (!hit.content || seenContent.has(hit.content)) continue;
+      seenContent.add(hit.content);
+      const open = `<retrieved_file_context file="${nameAttr}">\n<source file="${nameAttr}" chunk="${hit.chunkIndex}">\n`;
+      if (pushPart(open, hit.content, "\n</source>\n</retrieved_file_context>")) {
         sources.push({
           fileId: file.id,
           fileName: file.name,
           chunkIndex: hit.chunkIndex,
         });
-        return `  <source file="${nameAttr}" chunk="${hit.chunkIndex}">\n    ${hit.content}\n  </source>`;
-      })
-      .join("\n");
-
-    const block = sourceXml
-      ? `<retrieved_file_context file="${nameAttr}">\n${sourceXml}\n</retrieved_file_context>`
-      : `<session_file id="${escapeXmlAttr(file.id)}" name="${nameAttr}" type="${typeAttr}" mode="large-empty" />`;
-
-    if (!pushPart(block)) break;
+      }
+    }
   }
 
   return { text: parts.join("\n\n"), sources };
