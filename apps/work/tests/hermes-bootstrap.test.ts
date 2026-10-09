@@ -31,6 +31,7 @@ import {
   recoverBootstrapIfGatewayHealthy,
   runHermesBootstrap,
   candidateInstallPs1Paths,
+  isHermesBuilderManagedRoot,
   type BootstrapSpawnCall,
 } from "../src/main/runtime/hermes-bootstrap";
 import {
@@ -381,6 +382,64 @@ describe("hermes-bootstrap", () => {
       ),
     ).toBe(false);
     expect(getBootstrapState()).toBe("REPO_MISMATCH");
+  });
+
+  it("isHermesBuilderManagedRoot detects MSI markers and non-git payload", () => {
+    expect(isHermesBuilderManagedRoot(root)).toBe(false);
+    writeFileSync(join(root, "runtime-manifest.json"), "{}");
+    expect(isHermesBuilderManagedRoot(root)).toBe(true);
+    rmSync(join(root, "runtime-manifest.json"));
+    mkdirSync(join(root, "hermes-agent", "hermes_cli"), { recursive: true });
+    writeFileSync(join(root, "hermes-agent", "pyproject.toml"), "");
+    expect(isHermesBuilderManagedRoot(root)).toBe(true);
+    mkdirSync(join(root, "hermes-agent", ".git"), { recursive: true });
+    expect(isHermesBuilderManagedRoot(root)).toBe(false);
+  });
+
+  it("hermes-builder MSI + unhealthy gateway starts CLI only — never NATIVE_INSTALL", async () => {
+    const calls: BootstrapSpawnCall[] = [];
+    mkdirSync(join(root, "bin"), { recursive: true });
+    writeFileSync(join(root, "bin", "hermes.exe"), "");
+    writeFileSync(join(root, "runtime-manifest.json"), "{}");
+    mkdirSync(join(root, "hermes-agent"), { recursive: true });
+    writeFileSync(join(root, "hermes-agent", "pyproject.toml"), "");
+    let gatewayStarts = 0;
+    const result = await runHermesBootstrap({
+      ...baseDeps(calls),
+      getConnectionMode: () => "local",
+      existsSync: (p: string) => existsSync(p),
+      // Soft-skip fails; bundle-managed path must recover via CLI start only.
+      probeHealth: async () => false,
+      installAndStartGateway: async () => {
+        gatewayStarts += 1;
+        return true;
+      },
+    });
+    expect(result.state).toBe("READY");
+    expect(result.skipped).toBe(true);
+    expect(getBootstrapStatus().skippedReason).toBe(
+      "bundle-managed-no-reinstall",
+    );
+    expect(gatewayStarts).toBe(1);
+    expect(
+      calls.some(
+        (c) => c.kind === "powershell" && c.args.includes("-RepoUrl"),
+      ),
+    ).toBe(false);
+    expect(
+      calls.some((c) => c.kind === "powershell" && c.args.includes("-Stage")),
+    ).toBe(false);
+  });
+
+  it("hermes-builder MSI refuses origin repair rename+reclone", async () => {
+    writeFileSync(join(root, "runtime-manifest.json"), "{}");
+    const result = await repairHermesOrigin({
+      confirm: true,
+      hermesRoot: root,
+      userDataPath: userData,
+    });
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("HERMES_BUNDLE_MANAGED_REPAIR_FORBIDDEN");
   });
 });
 
