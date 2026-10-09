@@ -39,17 +39,37 @@ describe("auxiliary adoption sidecar", () => {
     expect(readFileSync(auxiliaryAdoptionPath(), "utf-8")).toBe(first);
   });
 
-  it("blocks a nodeskclaw profile that has no sidecar", async () => {
+  it("captures when nodeskclaw has no sidecar", async () => {
     writeFileSync(join(testHome, "config.yaml"), "model:\n  provider: nodeskclaw\n");
     const { inspectAuxiliaryAdoption, auxiliaryAdoptionPath } = await import(
       "./runtime-provider-auxiliary-adoption"
     );
     const { existsSync } = await import("fs");
+    expect(inspectAuxiliaryAdoption()).toEqual({ action: "capture" });
+    expect(existsSync(auxiliaryAdoptionPath())).toBe(false);
+  });
+
+  it("captures when a non-nodeskclaw profile has no sidecar", async () => {
+    writeFileSync(join(testHome, "config.yaml"), "model:\n  provider: localhost\n");
+    const { inspectAuxiliaryAdoption } = await import(
+      "./runtime-provider-auxiliary-adoption"
+    );
+    expect(inspectAuxiliaryAdoption()).toEqual({ action: "capture" });
+  });
+
+  it("blocks a corrupt sidecar as INVALID", async () => {
+    writeFileSync(join(testHome, "config.yaml"), "model:\n  provider: nodeskclaw\n");
+    writeFileSync(
+      join(testHome, "runtime-provider-auxiliary-adoption.json"),
+      "{not-json",
+    );
+    const { inspectAuxiliaryAdoption } = await import(
+      "./runtime-provider-auxiliary-adoption"
+    );
     expect(inspectAuxiliaryAdoption()).toEqual({
       action: "block",
-      error: "RUNTIME_AUXILIARY_ADOPTION_MISSING",
+      error: "RUNTIME_AUXILIARY_ADOPTION_INVALID",
     });
-    expect(existsSync(auxiliaryAdoptionPath())).toBe(false);
   });
 
   it("treats a reappearing slot key as routing drift", async () => {

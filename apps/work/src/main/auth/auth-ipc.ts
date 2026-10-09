@@ -35,6 +35,7 @@ import {
 import { disposeSkillRunSubsystem } from "../skill-run/skill-run-ipc";
 import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
 import { getConnectionConfig } from "../config";
+import { getActiveProfileNameSync } from "../utils";
 import {
   bootstrapRuntimeProvider,
   clearRuntimeProvider,
@@ -104,7 +105,10 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
     await writeStoredSession(session);
     try {
       if (getConnectionConfig().mode === "local") {
-        const result = await bootstrapRuntimeProvider("login");
+        const result = await bootstrapRuntimeProvider(
+          "login",
+          getActiveProfileNameSync(),
+        );
         notifyAcceptedRuntimeBootstrap(result);
       }
     } catch (err) {
@@ -186,7 +190,10 @@ async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState>
     return getRuntimeProviderPublicState();
   }
   try {
-    const result = await bootstrapRuntimeProvider("restore");
+    const result = await bootstrapRuntimeProvider(
+      "restore",
+      getActiveProfileNameSync(),
+    );
     if (result.accepted) {
       try {
         notifyAcceptedRuntimeBootstrap(result);

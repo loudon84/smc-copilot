@@ -526,6 +526,242 @@ describe("runtime provider orchestrator", () => {
     }
   });
 
+  it("unbinds on logout when nodeskclaw has no auxiliary sidecar", async () => {
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      "model:\n  provider: nodeskclaw\n  default: enterprise-a\n",
+    );
+    const { clearRuntimeProvider, getRuntimeProviderPublicState } = await import(
+      "./runtime-provider-orchestrator"
+    );
+    const { getModelConfig } = await import("../config");
+    await clearRuntimeProvider("logout");
+    expect(getRuntimeProviderPublicState()).toEqual({ state: "UNBOUND" });
+    expect(getModelConfig().provider).toBe("nodeskclaw");
+  });
+
+  it("re-captures after in-place apply, logout, and login again", async () => {
+    const { existsSync } = await import("fs");
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      [
+        "model:",
+        "  provider: nodeskclaw",
+        "  default: enterprise-a",
+        "providers:",
+        "  nodeskclaw:",
+        "    name: SMC Enterprise Model",
+        "    base_url: https://models.example.test/v1",
+        "    key_env: NODESKCLAW_RUNTIME_MODEL_API_KEY",
+        "    api_mode: chat_completions",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(testHome, "providers.json"),
+      JSON.stringify({
+        version: 2,
+        providers: [
+          {
+            id: "nodeskclaw",
+            name: "SMC Enterprise Model",
+            baseUrl: "https://models.example.test/v1",
+            createdAt: 1,
+            providerKey: "nodeskclaw",
+            keyEnv: "NODESKCLAW_RUNTIME_MODEL_API_KEY",
+            apiMode: "chat_completions",
+          },
+        ],
+      }),
+    );
+    writeFileSync(
+      join(testHome, "models.json"),
+      JSON.stringify([
+        {
+          id: "enterprise-a",
+          name: "Enterprise A",
+          provider: "nodeskclaw",
+          model: "enterprise-a",
+          baseUrl: "https://models.example.test/v1",
+          providerRef: "named:nodeskclaw",
+          createdAt: 1,
+        },
+        {
+          id: "enterprise-b",
+          name: "Enterprise B",
+          provider: "nodeskclaw",
+          model: "enterprise-b",
+          baseUrl: "https://models.example.test/v1",
+          providerRef: "named:nodeskclaw",
+          createdAt: 1,
+        },
+      ]),
+    );
+    fetchMock.mockResolvedValue(ready("rev-relogin"));
+    const {
+      bootstrapRuntimeProvider,
+      clearRuntimeProvider,
+      getRuntimeProviderPublicState,
+    } = await import("./runtime-provider-orchestrator");
+    const { getModelConfig } = await import("../config");
+    const first = await bootstrapRuntimeProvider("login");
+    expect(first.state.state).toBe("ACTIVE");
+    await clearRuntimeProvider("logout");
+    expect(getRuntimeProviderPublicState()).toEqual({ state: "UNBOUND" });
+    expect(getModelConfig().provider).toBe("nodeskclaw");
+    expect(
+      existsSync(join(testHome, "runtime-provider-auxiliary-adoption.json")),
+    ).toBe(false);
+    const second = await bootstrapRuntimeProvider("login");
+    expect(second.state.state).toBe("ACTIVE");
+    expect(
+      existsSync(join(testHome, "runtime-provider-auxiliary-adoption.json")),
+    ).toBe(true);
+  });
+
+  it("in-place captures when yaml is already nodeskclaw and sidecar is missing", async () => {
+    const { existsSync } = await import("fs");
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      [
+        "model:",
+        "  provider: nodeskclaw",
+        "  default: enterprise-a",
+        "providers:",
+        "  nodeskclaw:",
+        "    name: SMC Enterprise Model",
+        "    base_url: https://models.example.test/v1",
+        "    key_env: NODESKCLAW_RUNTIME_MODEL_API_KEY",
+        "    api_mode: chat_completions",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(testHome, "providers.json"),
+      JSON.stringify({
+        version: 2,
+        providers: [
+          {
+            id: "nodeskclaw",
+            name: "SMC Enterprise Model",
+            baseUrl: "https://models.example.test/v1",
+            createdAt: 1,
+            providerKey: "nodeskclaw",
+            keyEnv: "NODESKCLAW_RUNTIME_MODEL_API_KEY",
+            apiMode: "chat_completions",
+          },
+        ],
+      }),
+    );
+    writeFileSync(
+      join(testHome, "models.json"),
+      JSON.stringify([
+        {
+          id: "enterprise-a",
+          name: "Enterprise A",
+          provider: "nodeskclaw",
+          model: "enterprise-a",
+          baseUrl: "https://models.example.test/v1",
+          providerRef: "named:nodeskclaw",
+          createdAt: 1,
+        },
+        {
+          id: "enterprise-b",
+          name: "Enterprise B",
+          provider: "nodeskclaw",
+          model: "enterprise-b",
+          baseUrl: "https://models.example.test/v1",
+          providerRef: "named:nodeskclaw",
+          createdAt: 1,
+        },
+      ]),
+    );
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, "info").mockImplementation((line) => {
+      logs.push(String(line));
+    });
+    fetchMock.mockResolvedValue(ready("rev-inplace"));
+    const { bootstrapRuntimeProvider } = await import(
+      "./runtime-provider-orchestrator"
+    );
+    const result = await bootstrapRuntimeProvider("login");
+    spy.mockRestore();
+    expect(result.state.state).toBe("ACTIVE");
+    const config = readFileSync(join(testHome, "config.yaml"), "utf-8");
+    expect(config).toContain("nodeskclaw");
+    expect(config).not.toMatch(/provider:\s*["']?localhost/);
+    expect(
+      existsSync(join(testHome, "runtime-provider-auxiliary-adoption.json")),
+    ).toBe(true);
+    expect(existsSync(join(testHome, "runtime-provider-adoption.json"))).toBe(
+      false,
+    );
+    expect(logs.some((line) => line.includes("adoption_captured_in_place"))).toBe(
+      true,
+    );
+  });
+
+  it("maps writeAuxiliaryAdoption throw to RUNTIME_PROVIDER_PROJECT_FAILED", async () => {
+    fetchMock.mockResolvedValue(ready("rev-sidecar-boom"));
+    vi.doMock("./runtime-provider-auxiliary-adoption", async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import("./runtime-provider-auxiliary-adoption")>();
+      return {
+        ...actual,
+        writeAuxiliaryAdoption: () => {
+          throw new Error("sidecar write boom");
+        },
+      };
+    });
+    vi.resetModules();
+    const before = readFileSync(join(testHome, "config.yaml"), "utf-8");
+    const { bootstrapRuntimeProvider, getRuntimeProviderPublicState } =
+      await import("./runtime-provider-orchestrator");
+    const result = await bootstrapRuntimeProvider("login");
+    expect(result.state).toEqual({
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+    });
+    expect(getRuntimeProviderPublicState()).toEqual({
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+    });
+    expect(readFileSync(join(testHome, "config.yaml"), "utf-8")).toBe(before);
+    vi.doUnmock("./runtime-provider-auxiliary-adoption");
+  });
+
+  it("keeps auxiliary sidecar when projectManagedRuntime throws after capture", async () => {
+    const { existsSync } = await import("fs");
+    fetchMock.mockResolvedValue(ready("rev-project-after-capture"));
+    vi.doMock("./runtime-provider-projection", async (importOriginal) => {
+      const actual =
+        await importOriginal<typeof import("./runtime-provider-projection")>();
+      return {
+        ...actual,
+        projectManagedRuntime: () => {
+          throw new Error("project after capture");
+        },
+      };
+    });
+    vi.resetModules();
+    const { bootstrapRuntimeProvider } = await import(
+      "./runtime-provider-orchestrator"
+    );
+    const { inspectAuxiliaryAdoption } = await import(
+      "./runtime-provider-auxiliary-adoption"
+    );
+    const result = await bootstrapRuntimeProvider("login");
+    expect(result.state).toMatchObject({
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+    });
+    expect(
+      existsSync(join(testHome, "runtime-provider-auxiliary-adoption.json")),
+    ).toBe(true);
+    expect(inspectAuxiliaryAdoption()).toEqual({ action: "reuse" });
+    vi.doUnmock("./runtime-provider-projection");
+  });
+
   it("captures auxiliary routing once, removes slot keys, and restores only the route", async () => {
     const { existsSync } = await import("fs");
     writeFileSync(

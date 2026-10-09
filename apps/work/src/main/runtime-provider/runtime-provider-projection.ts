@@ -19,6 +19,7 @@ import {
 import { listSessionProfileIds } from "../session-metadata-store";
 import { profileHome, profilePaths, safeWriteFile } from "../utils";
 import { auxiliaryAdoptionPath } from "./runtime-provider-auxiliary-adoption";
+import { logRuntimeProviderOperation } from "./runtime-provider-observability";
 import {
   NODESKCLAW_API_MODE,
   NODESKCLAW_DISPLAY_NAME,
@@ -175,7 +176,20 @@ export function restoreSessionOverrides(
 
 function rememberAdoption(profile: string | undefined): void {
   const current = getModelConfig(profile);
-  if (current.provider === NODESKCLAW_PROVIDER_KEY) return;
+  if (current.provider === NODESKCLAW_PROVIDER_KEY) {
+    // Never write nodeskclaw as the "original" provider. Missing sidecar is
+    // a diagnostic only — logout will leave model.provider as nodeskclaw.
+    if (!existsSync(adoptionPath(profile))) {
+      logRuntimeProviderOperation({
+        stage: "ADOPTION",
+        status: "PASS",
+        message: "skip_active_model_adoption_already_nodeskclaw",
+        profile: profileForFiles(profile) || "default",
+        provider: current.provider,
+      });
+    }
+    return;
+  }
   safeWriteFile(
     adoptionPath(profile),
     JSON.stringify({ provider: current.provider, model: current.model }),

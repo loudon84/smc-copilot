@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import { randomUUID } from "crypto";
 import { getConnectionConfig, getModelConfig } from "../config";
-import { profilePaths, safeWriteFile } from "../utils";
+import { profileHome, profilePaths, safeWriteFile } from "../utils";
 import { fetchRuntimeBootstrap } from "./nodeskclaw-bootstrap-client";
 import {
   checkManagedRuntimeProjection,
@@ -330,14 +331,9 @@ async function purgeRuntime(
     const adoptionPath = auxiliaryAdoptionPath(normalized);
     const adopted = readAuxiliaryAdoption(normalized);
     if (!existsSync(adoptionPath)) {
-      if (getModelConfig(normalized).provider === NODESKCLAW_PROVIDER_KEY) {
-        setState(normalized, {
-          state: "ERROR",
-          errorCode: "RUNTIME_AUXILIARY_ADOPTION_MISSING",
-        });
-      } else {
-        auxiliaryRestored = true;
-      }
+      // Missing sidecar: skip restore, do not invent localhost, leave
+      // model.provider as-is (may remain nodeskclaw). Still unbound.
+      auxiliaryRestored = true;
     } else if (!adopted) {
       setState(normalized, {
         state: "ERROR",
@@ -442,7 +438,40 @@ async function applyReady(
   logRuntimeProviderOperation({ ...trace, stage: "SNAPSHOT", status: "START" });
   const snapshot = captureManagedTransaction(normalized, previous.state);
   if (adoption.action === "capture") {
-    writeAuxiliaryAdoption(normalized, snapshot.files.config || "");
+    const providerBefore = getModelConfig(normalized).provider;
+    const hasActiveModelSidecar = existsSync(
+      join(profileHome(normalized), "runtime-provider-adoption.json"),
+    );
+    try {
+      writeAuxiliaryAdoption(normalized, snapshot.files.config || "");
+    } catch (err) {
+      mark.outcome = "error";
+      const message = err instanceof Error ? err.message : String(err);
+      logRuntimeProviderOperation({
+        ...trace,
+        stage: "PROJECT",
+        status: "FAIL",
+        errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+        message,
+      });
+      console.error("[runtime-provider] PROJECT failed:", message);
+      setState(normalized, {
+        state: "ERROR",
+        errorCode: "RUNTIME_PROVIDER_PROJECT_FAILED",
+      });
+      return getRuntimeProviderPublicState(normalized);
+    }
+    if (providerBefore === NODESKCLAW_PROVIDER_KEY) {
+      logRuntimeProviderOperation({
+        ...trace,
+        stage: "SNAPSHOT",
+        status: "PASS",
+        adoption_captured_in_place: true,
+        profile: profileKey(normalized),
+        provider: providerBefore,
+        has_active_model_sidecar: hasActiveModelSidecar,
+      });
+    }
   }
   if (integrity.status === "MATCH" && secret && secret !== ready.apiKey) {
     installManagedSecret({

@@ -65,6 +65,14 @@ vi.mock("../config", () => ({
   getConnectionConfig: () => connection,
 }));
 
+vi.mock("../utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils")>();
+  return {
+    ...actual,
+    getActiveProfileNameSync: () => "work",
+  };
+});
+
 vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
   bootstrapRuntimeProvider,
   clearRuntimeProvider: vi.fn(),
@@ -145,7 +153,7 @@ describe("restoreRuntimeProviderForSplash", () => {
     expect(notifyAcceptedRuntimeBootstrap).toHaveBeenCalledTimes(1);
   });
 
-  it("bootstraps restore without a profile and notifies when accepted", async () => {
+  it("bootstraps restore with the active profile and notifies when accepted", async () => {
     const state = {
       state: "NOT_READY" as const,
       backendState: "MODEL_LIST_EMPTY",
@@ -160,7 +168,7 @@ describe("restoreRuntimeProviderForSplash", () => {
     bootstrapRuntimeProvider.mockResolvedValue(result);
     await expect(restoreRuntimeProviderForSplash()).resolves.toEqual(state);
     expect(bootstrapRuntimeProvider).toHaveBeenCalledTimes(1);
-    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("restore");
+    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("restore", "work");
     expect(notifyAcceptedRuntimeBootstrap).toHaveBeenCalledWith(result);
   });
 

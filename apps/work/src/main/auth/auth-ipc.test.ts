@@ -91,9 +91,32 @@ vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
   })),
 }));
 
+vi.mock("../runtime-provider/runtime-provider-reconcile-bindings", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../runtime-provider/runtime-provider-reconcile-bindings")
+    >();
+  return {
+    ...actual,
+    notifyAcceptedRuntimeBootstrap: vi.fn(),
+  };
+});
+
+vi.mock("../utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils")>();
+  return {
+    ...actual,
+    getActiveProfileNameSync: () => "work",
+  };
+});
+
 vi.mock("../expert/expert-ipc", () => ({
   disposeExpertSubsystem: vi.fn(),
   restoreExpertSubsystemAfterAuth: vi.fn(),
+}));
+
+vi.mock("../skill-run/skill-run-ipc", () => ({
+  disposeSkillRunSubsystem: vi.fn(),
 }));
 
 vi.mock("../files/file-cleanup-service", () => ({
@@ -215,7 +238,7 @@ describe("auth-ipc session state push", () => {
     });
     expect(result?.authenticated).toBe(true);
     expect(bootstrapRuntimeProvider).toHaveBeenCalledTimes(1);
-    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("login");
+    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("login", "work");
     expect(JSON.stringify(result)).not.toContain("secret-access");
   });
 
