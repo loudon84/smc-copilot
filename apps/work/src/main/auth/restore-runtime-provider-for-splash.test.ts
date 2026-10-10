@@ -7,6 +7,7 @@ const {
   getRuntimeProviderPublicState,
   notifyAcceptedRuntimeBootstrap,
   readStoredSessionSync,
+  settleTransientRuntimeProviderFailure,
 } = vi.hoisted(() => {
   const connection = { mode: "local" as "local" | "remote" | "ssh" };
   return {
@@ -16,6 +17,12 @@ const {
     getRuntimeProviderPublicState: vi.fn((): { state: string } => ({
       state: "UNBOUND",
     })),
+    settleTransientRuntimeProviderFailure: vi.fn(
+      (): { state: string; errorCode: string } => ({
+        state: "ERROR",
+        errorCode: "RUNTIME_PROVIDER_APPLY_FAILED",
+      }),
+    ),
     notifyAcceptedRuntimeBootstrap: vi.fn(),
     readStoredSessionSync: vi.fn((): { accessToken: string } | null => ({
       accessToken: "token",
@@ -58,10 +65,19 @@ vi.mock("../config", () => ({
   getConnectionConfig: () => connection,
 }));
 
+vi.mock("../utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils")>();
+  return {
+    ...actual,
+    getActiveProfileNameSync: () => "work",
+  };
+});
+
 vi.mock("../runtime-provider/runtime-provider-orchestrator", () => ({
   bootstrapRuntimeProvider,
   clearRuntimeProvider: vi.fn(),
   getRuntimeProviderPublicState,
+  settleTransientRuntimeProviderFailure,
 }));
 
 vi.mock("../runtime-provider/runtime-provider-reconcile-bindings", () => ({
@@ -137,7 +153,7 @@ describe("restoreRuntimeProviderForSplash", () => {
     expect(notifyAcceptedRuntimeBootstrap).toHaveBeenCalledTimes(1);
   });
 
-  it("bootstraps restore without a profile and notifies when accepted", async () => {
+  it("bootstraps restore with the active profile and notifies when accepted", async () => {
     const state = {
       state: "NOT_READY" as const,
       backendState: "MODEL_LIST_EMPTY",
@@ -152,7 +168,7 @@ describe("restoreRuntimeProviderForSplash", () => {
     bootstrapRuntimeProvider.mockResolvedValue(result);
     await expect(restoreRuntimeProviderForSplash()).resolves.toEqual(state);
     expect(bootstrapRuntimeProvider).toHaveBeenCalledTimes(1);
-    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("restore");
+    expect(bootstrapRuntimeProvider).toHaveBeenCalledWith("restore", "work");
     expect(notifyAcceptedRuntimeBootstrap).toHaveBeenCalledWith(result);
   });
 
@@ -168,12 +184,18 @@ describe("restoreRuntimeProviderForSplash", () => {
     expect(notifyAcceptedRuntimeBootstrap).not.toHaveBeenCalled();
   });
 
-  it("returns the public state and keeps the session when bootstrap throws", async () => {
+  it("settles transient APPLYING/FETCHING to ERROR when bootstrap throws", async () => {
     bootstrapRuntimeProvider.mockRejectedValue(new Error("boom"));
     getRuntimeProviderPublicState.mockReturnValue({ state: "FETCHING" });
     await expect(restoreRuntimeProviderForSplash()).resolves.toEqual({
-      state: "FETCHING",
+      state: "ERROR",
+      errorCode: "RUNTIME_PROVIDER_APPLY_FAILED",
     });
+    expect(settleTransientRuntimeProviderFailure).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      "RUNTIME_PROVIDER_APPLY_FAILED",
+    );
     expect(clearStoredSession).not.toHaveBeenCalled();
   });
 });

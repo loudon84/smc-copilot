@@ -75,6 +75,49 @@ describe("managed runtime projection", () => {
     expect(config).toContain('default: "enterprise-a"');
   });
 
+  it("does not invent an active-model adoption when already nodeskclaw", async () => {
+    const { existsSync } = await import("fs");
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      "model:\n  provider: nodeskclaw\n  default: enterprise-a\n",
+    );
+    const { projectManagedRuntime } = await import("./runtime-provider-projection");
+    const result = projectManagedRuntime(undefined, {
+      baseUrl: "https://models.example.test/v1",
+      defaultModel: "enterprise-a",
+      models: [{ id: "enterprise-a", displayName: "Enterprise A" }],
+    });
+    expect(result.ok).toBe(true);
+    expect(existsSync(join(testHome, "runtime-provider-adoption.json"))).toBe(
+      false,
+    );
+  });
+
+  it("does not overwrite an existing localhost active-model adoption", async () => {
+    writeFileSync(
+      join(testHome, "runtime-provider-adoption.json"),
+      JSON.stringify({ provider: "localhost", model: "deepseek-v4-flash" }),
+    );
+    writeFileSync(
+      join(testHome, "config.yaml"),
+      "model:\n  provider: nodeskclaw\n  default: enterprise-a\n",
+    );
+    const before = readFileSync(
+      join(testHome, "runtime-provider-adoption.json"),
+      "utf-8",
+    );
+    const { projectManagedRuntime } = await import("./runtime-provider-projection");
+    const result = projectManagedRuntime(undefined, {
+      baseUrl: "https://models.example.test/v1",
+      defaultModel: "enterprise-a",
+      models: [{ id: "enterprise-a", displayName: "Enterprise A" }],
+    });
+    expect(result.ok).toBe(true);
+    expect(
+      readFileSync(join(testHome, "runtime-provider-adoption.json"), "utf-8"),
+    ).toBe(before);
+  });
+
   it("refuses an occupied provider key with zero mutation", async () => {
     writeFileSync(
       join(testHome, "providers.json"),

@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
+import { describe, expect, it, vi } from "vitest";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { safeWriteFile } from "../src/main/utils";
@@ -28,5 +34,38 @@ describe("safeWriteFile", () => {
     expect(readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual(
       [],
     );
+  });
+
+  it("falls back to overwrite when rename fails with EXDEV", async () => {
+    vi.resetModules();
+    vi.doMock("fs", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("fs")>();
+      return {
+        ...actual,
+        renameSync: () => {
+          const err = new Error(
+            "cross-device link not permitted",
+          ) as NodeJS.ErrnoException;
+          err.code = "EXDEV";
+          throw err;
+        },
+      };
+    });
+    const { safeWriteFile: writeWithExdev } = await import("../src/main/utils");
+    const dir = join(TEST_DIR, "exdev");
+    const filePath = join(dir, "runtime-provider-adoption.json");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(filePath, "old", "utf-8");
+
+    writeWithExdev(filePath, '{"provider":"custom","model":"kimi"}');
+
+    expect(readFileSync(filePath, "utf-8")).toBe(
+      '{"provider":"custom","model":"kimi"}',
+    );
+    expect(readdirSync(dir).filter((name) => name.endsWith(".tmp"))).toEqual(
+      [],
+    );
+    vi.doUnmock("fs");
+    vi.resetModules();
   });
 });

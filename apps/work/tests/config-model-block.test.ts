@@ -491,3 +491,61 @@ describe("setModelConfig — api_mode override", () => {
     );
   });
 });
+
+describe("BOM tolerance (UTF-8 BOM before a line-1 block header)", () => {
+  // A config.yaml written with a UTF-8 BOM (e.g. by a Windows tool using
+  // utf-8-sig) hides the `model:` header on line 1 from ^-anchored scans.
+  // Readers must still see the block, and writers must update it in place —
+  // appending a duplicate `model:` block at EOF corrupts the YAML for the
+  // gateway (duplicate key) and previously looped the runtime provider into
+  // RUNTIME_PROVIDER_POST_APPLY_DRIFT.
+  const BOM = "\uFEFF";
+  it("getModelConfig reads a model: block on line 1 behind a BOM", async () => {
+    writeFileSync(
+      join(TEST_DIR, "config.yaml"),
+      BOM +
+        [
+          "model:",
+          '  default: "deepseek-v4-flash"',
+          '  provider: "nodeskclaw"',
+          "providers:",
+          "  nodeskclaw:",
+          '    base_url: "http://192.168.102.247:3900/v1"',
+          "",
+        ].join("\n"),
+      "utf-8",
+    );
+
+    const { getModelConfig } = await importConfigWithHome(TEST_DIR);
+    const mc = getModelConfig();
+    expect(mc.provider).toBe("nodeskclaw");
+    expect(mc.model).toBe("deepseek-v4-flash");
+  });
+
+  it("setModelConfig updates the line-1 block in place instead of appending a duplicate", async () => {
+    writeFileSync(
+      join(TEST_DIR, "config.yaml"),
+      BOM +
+        [
+          "model:",
+          '  default: "old-model"',
+          '  provider: "custom"',
+          "display:",
+          "  compact: false",
+          "",
+        ].join("\n"),
+      "utf-8",
+    );
+
+    const { setModelConfig } = await importConfigWithHome(TEST_DIR);
+    setModelConfig("nodeskclaw", "deepseek-v4-flash", "");
+
+    const after = readFileSync(join(TEST_DIR, "config.yaml"), "utf-8");
+    // Exactly one top-level model: block, still at the top of the file.
+    expect(after.match(/^\uFEFF?model:/gm)).toHaveLength(1);
+    expect(after).toContain('default: "deepseek-v4-flash"');
+    expect(after).toContain('provider: "nodeskclaw"');
+    // The BOM is preserved (writers splice the original string).
+    expect(after.charCodeAt(0)).toBe(0xfeff);
+  });
+});

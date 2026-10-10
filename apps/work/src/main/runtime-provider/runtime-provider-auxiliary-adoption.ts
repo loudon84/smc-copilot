@@ -2,8 +2,6 @@ import { existsSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { getYamlPath } from "../yaml-path";
 import { AUX_TASK_SLOTS, removeAuxiliaryField, setAuxiliaryField } from "../auxiliary-config";
-import { getModelConfig } from "../config";
-import { NODESKCLAW_PROVIDER_KEY } from "./runtime-provider-contract";
 import { profileHome, safeWriteFile } from "../utils";
 
 const FILE_NAME = "runtime-provider-auxiliary-adoption.json";
@@ -131,9 +129,8 @@ export function inspectAuxiliaryAdoption(profile?: string): AuxiliaryAdoptionDec
       ? { action: "reuse" }
       : { action: "block", error: "RUNTIME_AUXILIARY_ADOPTION_INVALID" };
   }
-  if (getModelConfig(profile).provider === NODESKCLAW_PROVIDER_KEY) {
-    return { action: "block", error: "RUNTIME_AUXILIARY_ADOPTION_MISSING" };
-  }
+  // Missing sidecar is always capture — including when yaml is already
+  // nodeskclaw (half-initialized / field-machine). Never invent localhost.
   return { action: "capture" };
 }
 

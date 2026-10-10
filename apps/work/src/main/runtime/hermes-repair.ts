@@ -19,6 +19,7 @@ import { join } from "path";
 import { HIDDEN_SUBPROCESS_OPTIONS } from "../process-options";
 import {
   BOOTSTRAP_TIMEOUT_MS,
+  isHermesBuilderManagedRoot,
   powershellExe,
   resolveInstallPs1,
   runHermesBootstrap,
@@ -116,6 +117,15 @@ export async function repairHermesOrigin(
 
   const operationId = randomUUID();
   const hermesRoot = opts.hermesRoot ?? getHermesRoot();
+  if (isHermesBuilderManagedRoot(hermesRoot)) {
+    return {
+      success: false,
+      errorCode: "HERMES_BUNDLE_MANAGED_REPAIR_FORBIDDEN",
+      errorMessage:
+        "hermes-builder MSI ownership forbids Electron origin repair (rename + re-clone); use MSI Repair / bootstrap\\Repair-Hermes.ps1",
+      operationId,
+    };
+  }
   const userData = getUserDataPath(opts.userDataPath);
   const source = loadReleaseSource();
   const installPs1 = resolveInstallPs1();

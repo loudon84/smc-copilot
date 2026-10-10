@@ -35,10 +35,12 @@ import {
 import { disposeSkillRunSubsystem } from "../skill-run/skill-run-ipc";
 import { runFilesCleanupBestEffort } from "../files/file-cleanup-service";
 import { getConnectionConfig } from "../config";
+import { getActiveProfileNameSync } from "../utils";
 import {
   bootstrapRuntimeProvider,
   clearRuntimeProvider,
   getRuntimeProviderPublicState,
+  settleTransientRuntimeProviderFailure,
   type RuntimeProviderPublicState,
 } from "../runtime-provider/runtime-provider-orchestrator";
 import {
@@ -103,11 +105,23 @@ export function registerAuthIpc(options: RegisterAuthIpcOptions = {}): void {
     await writeStoredSession(session);
     try {
       if (getConnectionConfig().mode === "local") {
-        const result = await bootstrapRuntimeProvider("login");
+        const result = await bootstrapRuntimeProvider(
+          "login",
+          getActiveProfileNameSync(),
+        );
         notifyAcceptedRuntimeBootstrap(result);
       }
-    } catch {
-      /* scheduler failure must not fail portal login */
+    } catch (err) {
+      /* Portal login must succeed even if enterprise apply throws. */
+      console.error(
+        "[runtime-provider] login bootstrap failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+      settleTransientRuntimeProviderFailure(
+        undefined,
+        undefined,
+        "RUNTIME_PROVIDER_APPLY_FAILED",
+      );
     }
     restoreExpertSubsystemAfterAuth();
     return toPublicState(session, endpoint);
@@ -176,7 +190,10 @@ async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState>
     return getRuntimeProviderPublicState();
   }
   try {
-    const result = await bootstrapRuntimeProvider("restore");
+    const result = await bootstrapRuntimeProvider(
+      "restore",
+      getActiveProfileNameSync(),
+    );
     if (result.accepted) {
       try {
         notifyAcceptedRuntimeBootstrap(result);
@@ -185,8 +202,16 @@ async function restoreRuntimeProviderOnce(): Promise<RuntimeProviderPublicState>
       }
     }
     return result.state;
-  } catch {
-    return getRuntimeProviderPublicState();
+  } catch (err) {
+    console.error(
+      "[runtime-provider] restore failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return settleTransientRuntimeProviderFailure(
+      undefined,
+      undefined,
+      "RUNTIME_PROVIDER_APPLY_FAILED",
+    );
   }
 }
 

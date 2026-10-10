@@ -179,13 +179,13 @@ export function recoveryActions(input: {
   errorCode: string | null;
   gatewayHealthy: boolean | null;
 }): RecoveryAction[] {
-  if (
-    input.runtimeState === "UNBOUND" ||
-    input.runtimeState === "FETCHING" ||
-    input.runtimeState === "APPLYING" ||
-    input.runtimeState === "CLEARING"
-  ) {
+  if (input.runtimeState === "UNBOUND" || input.runtimeState === "CLEARING") {
     return [];
+  }
+  // Cold-start / apply can stick in FETCHING|APPLYING with no dialog; keep
+  // export + retry so support can pull a bundle and the user can unblock.
+  if (input.runtimeState === "FETCHING" || input.runtimeState === "APPLYING") {
+    return ["export", "retry"];
   }
   const actions: RecoveryAction[] = [];
   if (input.runtimeState === "NOT_READY") {
@@ -197,6 +197,9 @@ export function recoveryActions(input: {
     if (
       code === "RUNTIME_PROVIDER_ROLLBACK_FAILED" ||
       code === "RUNTIME_PROVIDER_POST_APPLY_DRIFT" ||
+      code === "RUNTIME_PROVIDER_PROJECT_FAILED" ||
+      code === "RUNTIME_PROVIDER_APPLY_FAILED" ||
+      code === "RUNTIME_PROVIDER_APPLY_SUPERSEDED" ||
       code === "RUNTIME_BOOTSTRAP_UNAVAILABLE"
     ) {
       actions.push("export", "retry");

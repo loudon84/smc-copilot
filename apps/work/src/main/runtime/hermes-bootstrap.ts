@@ -1,10 +1,14 @@
 /**
  * Hermes Native Bootstrap orchestrator (PRD REQ-INSTALL-001 / C-007).
  *
- * Sequence (local only):
+ * Sequence (local only, non-MSI):
  * PRECHECK → ENSURE_GIT → ls-remote → install(if absent) →
  * official-source.json → SMC policy → gateway install/start →
  * health + supportsHermesRunsTransport.
+ *
+ * hermes-builder per-user MSI (PROGRAM_MANAGED): after soft-skip fails, only
+ * Native CLI gateway start is allowed — never install.ps1 NATIVE_INSTALL /
+ * hermes-agent.broken-* rename / git clone of release-source installUrl.
  *
  * Mutex: userData/hermes-bootstrap.lock (see hermes-bootstrap-lock.ts).
  */
@@ -423,6 +427,103 @@ function hermesCliPresent(
   );
 }
 
+/**
+ * Hermes Root owned by the hermes-builder per-user MSI (PROGRAM_MANAGED).
+ *
+ * That payload is NOT a git checkout of loudon84/copilot-hermes — `hermes-agent`
+ * is laid down by the MSI and often has no `.git`. Electron Native Bootstrap
+ * must never run install.ps1 NATIVE_INSTALL / Move-Item …broken-* / git clone
+ * against it (field incident 2026-10-08: gateway blip → full bootstrap →
+ * destroyed MSI tree).
+ *
+ * @see https://github.com/smc-copilot/hermes-builder
+ */
+export function isHermesBuilderManagedRoot(
+  hermesRoot: string,
+  exists: (path: string) => boolean = existsSync,
+): boolean {
+  if (exists(join(hermesRoot, "runtime-manifest.json"))) return true;
+  if (exists(join(hermesRoot, "offline", "bundle-settings.json"))) return true;
+  if (exists(join(hermesRoot, "bootstrap", "Verify-Installation.ps1"))) {
+    return true;
+  }
+  if (exists(join(hermesRoot, "bootstrap", "Repair-Hermes.ps1"))) return true;
+
+  const agent = join(hermesRoot, "hermes-agent");
+  if (!exists(agent) || exists(join(agent, ".git"))) return false;
+  // MSI copies the source tree without initializing a git repo.
+  return (
+    exists(join(agent, "pyproject.toml")) || exists(join(agent, "hermes_cli"))
+  );
+}
+
+/**
+ * MSI / hermes-builder ownership: recover gateway only — never re-clone.
+ * Returns null when the root is not bundle-managed (caller may continue).
+ */
+async function tryBundleManagedBootstrap(
+  deps: HermesBootstrapDeps,
+  operationId: string,
+  log: (line: string) => void,
+): Promise<BootstrapRunResult | null> {
+  const hermesRoot = deps.getHermesRoot();
+  if (!isHermesBuilderManagedRoot(hermesRoot, deps.existsSync)) return null;
+
+  log(
+    "BUNDLE_MANAGED: hermes-builder MSI ownership detected — " +
+      "refusing install.ps1 / git clone / hermes-agent.broken-* rename",
+  );
+
+  if (!hermesCliPresent(deps)) {
+    setBootstrapState("FAIL", {
+      operationId,
+      errorCode: "HERMES_BUNDLE_MANAGED_CLI_MISSING",
+      errorMessage:
+        "hermes-builder MSI tree present but bin/hermes missing; repair via MSI, not Electron bootstrap",
+    });
+    return {
+      state: "FAIL",
+      operationId,
+      errorCode: "HERMES_BUNDLE_MANAGED_CLI_MISSING",
+      errorMessage:
+        "hermes-builder MSI tree present but bin/hermes missing; repair via MSI, not Electron bootstrap",
+      skipped: true,
+    };
+  }
+
+  // Gateway may still be coming up after reboot — start via Native CLI only.
+  const started = await deps.installAndStartGateway();
+  const healthy = started
+    ? true
+    : await waitForGatewayHealth(deps, {
+        attempts: RUNTIME_READY_HEALTH_ATTEMPTS,
+        intervalMs: RUNTIME_READY_HEALTH_INTERVAL_MS,
+        log,
+        label: "BUNDLE_MANAGED_GATEWAY",
+      });
+
+  if (healthy) {
+    return markRuntimeReady(operationId, "bundle-managed-no-reinstall", log);
+  }
+
+  setBootstrapState("FAIL", {
+    operationId,
+    errorCode: "HERMES_BUNDLE_MANAGED_GATEWAY_UNHEALTHY",
+    errorMessage:
+      "hermes-builder MSI runtime present; gateway unhealthy. " +
+      "Use MSI Repair / bootstrap\\Repair-Hermes.ps1 — Electron will not re-clone",
+  });
+  return {
+    state: "FAIL",
+    operationId,
+    errorCode: "HERMES_BUNDLE_MANAGED_GATEWAY_UNHEALTHY",
+    errorMessage:
+      "hermes-builder MSI runtime present; gateway unhealthy. " +
+      "Use MSI Repair / bootstrap\\Repair-Hermes.ps1 — Electron will not re-clone",
+    skipped: true,
+  };
+}
+
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -709,6 +810,25 @@ async function runBootstrapBody(
       };
     }
   } else {
+    // Defense in depth: MSI payload has no .git — never treat as "absent clone".
+    if (isHermesBuilderManagedRoot(hermesRoot, deps.existsSync)) {
+      log(
+        "BUNDLE_MANAGED: refuse NATIVE_INSTALL (would rename hermes-agent.broken-* and git clone)",
+      );
+      setBootstrapState("FAIL", {
+        operationId,
+        errorCode: "HERMES_BUNDLE_MANAGED_REINSTALL_FORBIDDEN",
+        errorMessage:
+          "hermes-builder MSI ownership forbids Electron install.ps1 re-clone",
+      });
+      return {
+        state: "FAIL",
+        operationId,
+        errorCode: "HERMES_BUNDLE_MANAGED_REINSTALL_FORBIDDEN",
+        errorMessage:
+          "hermes-builder MSI ownership forbids Electron install.ps1 re-clone",
+      };
+    }
     deps.onSpawnCall?.({
       kind: "powershell",
       args: [
@@ -877,6 +997,17 @@ export async function runHermesBootstrap(
   const runtimeReady = await tryRuntimeAlreadyReadySkip(deps, operationId, log);
   if (runtimeReady) {
     return { ...runtimeReady, logPath };
+  }
+
+  // hermes-builder MSI: never fall through to ENSURE_GIT / NATIVE_INSTALL /
+  // Move-Item hermes-agent.broken-* / git clone of release-source installUrl.
+  const bundleManaged = await tryBundleManagedBootstrap(
+    deps,
+    operationId,
+    log,
+  );
+  if (bundleManaged) {
+    return { ...bundleManaged, logPath };
   }
 
   setBootstrapState("INSTALLING", { operationId });
